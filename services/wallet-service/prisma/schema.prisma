@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Wallet {
+  id        Int                 @id @default(autoincrement())
+  userId    Int                 @unique
+  userType  String              // e.g., 'customer', 'partner', 'gobhi'
+  balance   Float               @default(0)
+  currency  String              @default("INR") // ISO currency code
+  status    WalletStatus        @default(active)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  deletedAt DateTime?           // Soft delete
+  transactions WalletTransaction[]
+}
+
+enum WalletStatus {
+  active
+  frozen
+  closed
+}
+
+model WalletTransaction {
+  id          Int      @id @default(autoincrement())
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+  walletId    Int
+  type        TransactionType
+  amount      Float
+  currency    String   @default("INR") // ISO currency code
+  status      TransactionStatus @default(success)
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+enum TransactionType {
+  credit
+  debit
+  transfer
+  bonus
+  payout
+  topup
+  withdrawal
+}
+
+enum TransactionStatus {
+  pending
+  success
+  failed
+  reversed
+}

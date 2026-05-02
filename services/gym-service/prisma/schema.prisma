@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Gym {
+  id           Int         @id @default(autoincrement())
+  partnerId    Int
+  name         String
+  description  String?
+  address      String
+  city         String
+  state        String
+  lat          Float
+  lng          Float
+  amenities    String[]
+  phone        String
+  sessionPrice Float
+  openTime     String
+  closeTime    String
+  slotDuration Int         @default(60)
+  capacity     Int         @default(20)
+  rating       Float       @default(0)
+  ratingCount  Int         @default(0)
+  isApproved   Boolean     @default(false)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  images       GymImage[]
+  reviews      GymReview[]
+}
+
+model GymImage {
+  id        Int      @id @default(autoincrement())
+  gymId     Int
+  url       String
+  publicId  String?
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model GymReview {
+  id         Int      @id @default(autoincrement())
+  gymId      Int
+  customerId Int
+  rating     Float
+  comment    String?
+  gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([gymId, customerId])
+}

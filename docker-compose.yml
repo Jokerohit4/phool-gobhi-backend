@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  gateway:
+    build: .
+    ports:
+      - "5050:5000"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - USER_SERVICE_URL=http://user-service:5002
+      - WALLET_SERVICE_URL=http://wallet-service:5003
+      - GYM_SERVICE_URL=http://gym-service:5004
+      - BOOKING_SERVICE_URL=http://booking-service:5005
+      - PAYMENT_SERVICE_URL=http://payment-wallet-service:5006
+    depends_on:
+      - auth-service
+      - user-service
+      - wallet-service
+      - gym-service
+      - booking-service
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/authdb
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - AUTH_SERVICE_PORT=5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  user-service:
+    build: ./services/user-service
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/userdb
+      - USER_SERVICE_PORT=5002
+    depends_on:
+      - mongo
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  wallet-service:
+    build: ./services/wallet-service
+    environment:
+      - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/walletdb
+      - WALLET_SERVICE_PORT=5003
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  gym-service:
+    build: ./services/gym-service
+    environment:
+      - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/gymdb
+      - GYM_SERVICE_PORT=5004
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  booking-service:
+    build: ./services/booking-service
+    environment:
+      - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/bookingdb
+      - BOOKING_SERVICE_PORT=5005
+      - WALLET_SERVICE_URL=http://wallet-service:5003
+      - GYM_SERVICE_URL=http://gym-service:5004
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wallet-service:
+        condition: service_started
+      gym-service:
+        condition: service_started
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpass
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - phool-gobhi-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pguser"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:6-jammy
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - phool-gobhi-net
+
+networks:
+  phool-gobhi-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:

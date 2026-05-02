@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  name      String
+  email     String     @unique
+  password  String
+  role      Role
+  type      UserType
+  gobhiType GobhiType?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Wallet {
+  id                Int                 @id @default(autoincrement())
+  userId            Int                 @unique
+  userType          UserType
+  balance           Float               @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  WalletTransaction WalletTransaction[]
+}
+
+model WalletTransaction {
+  id          Int             @id @default(autoincrement())
+  walletId    Int
+  type        TransactionType
+  amount      Float
+  description String?
+  createdAt   DateTime        @default(now())
+  Wallet      Wallet          @relation(fields: [walletId], references: [id])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model transaction {
+  id          BigInt    @id @default(autoincrement())
+  amount      Float
+  created_at  DateTime? @db.Timestamp(6)
+  currency    String?   @db.VarChar(255)
+  description String?   @db.VarChar(255)
+  status      String    @db.VarChar(255)
+  type        String    @db.VarChar(255)
+  wallet_id   BigInt
+  wallet      wallet    @relation(fields: [wallet_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fktfwlfspv2h4wcgc9rjd1658a6")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model wallet {
+  id          BigInt        @id @default(autoincrement())
+  balance     Float?
+  created_at  DateTime?     @db.Timestamp(6)
+  currency    String?       @db.VarChar(255)
+  deleted_at  DateTime?     @db.Timestamp(6)
+  status      String        @db.VarChar(255)
+  updated_at  DateTime?     @db.Timestamp(6)
+  user_id     BigInt        @unique(map: "uk_hgee4p1hiwadqinr0avxlq4eb")
+  user_type   String        @db.VarChar(255)
+  transaction transaction[]
+}
+
+enum GobhiType {
+  trainer
+  cleaner
+  manager
+}
+
+enum Role {
+  customer
+  partner
+  gobhi
+}
+
+enum TransactionType {
+  credit
+  debit
+  transfer
+  bonus
+  payout
+  topup
+  withdrawal
+}
+
+enum UserType {
+  general
+  sub_premium
+  premium
+}
