@@ -43,7 +43,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         throw { status: 409, error: 'This slot has been blocked by the gym' };
       }
     } catch (err) {
-      if (err.status) throw err;
+      if (err.error) throw err;
       // If block check fails, allow booking (non-critical)
     }
 
@@ -98,7 +98,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
     return booking;
   } catch (err) {
-    if (err.status) throw err;
+    if (err.error) throw err;
     console.error('createBooking error:', err);
     throw {
       status: 500,
@@ -159,7 +159,7 @@ export async function cancelBooking(bookingId, customerId) {
     // 6. Return updated booking
     return updatedBooking;
   } catch (err) {
-    if (err.status) throw err;
+    if (err.error) throw err;
     console.error('cancelBooking error:', err);
     throw {
       status: 500,
@@ -220,7 +220,7 @@ export async function completeBooking(bookingId, gymId) {
 
     return { ...updatedBooking, locationVerified: booking.locationVerified ?? false };
   } catch (err) {
-    if (err.status) throw err;
+    if (err.error) throw err;
     console.error('completeBooking error:', err);
     throw {
       status: 500,
@@ -254,7 +254,7 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
 
     return { bookingId, locationVerified };
   } catch (err) {
-    if (err.status) throw err;
+    if (err.error) throw err;
     throw { status: 500, error: err.message || 'Server error' };
   }
 }
