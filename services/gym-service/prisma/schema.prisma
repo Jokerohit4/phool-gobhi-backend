@@ -32,6 +32,9 @@ model Gym {
   updatedAt    DateTime    @updatedAt
   images       GymImage[]
   reviews      GymReview[]
+  slotBlocks   SlotBlock[]
+
+  @@index([partnerId])
 }
 
 model GymImage {
@@ -53,4 +56,16 @@ model GymReview {
   createdAt  DateTime @default(now())
 
   @@unique([gymId, customerId])
+}
+
+model SlotBlock {
+  id        Int      @id @default(autoincrement())
+  gymId     Int
+  date      String
+  startTime String
+  endTime   String
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([gymId, date])
 }

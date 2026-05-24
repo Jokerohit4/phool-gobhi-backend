@@ -6,6 +6,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phone: { type: String, default: '' },
   profileImageUrl: { type: String, default: '' },
+  fcmToken: { type: String, default: '' },
   role: { type: String, enum: ['customer', 'partner', 'gobhi'], default: 'customer' },
 }, { timestamps: true });
 

@@ -15,10 +15,12 @@ model Booking {
   startTime  String
   endTime    String
   amount     Float
-  status     BookingStatus @default(confirmed)
-  walletTxId Int?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  status            BookingStatus @default(confirmed)
+  walletTxId        Int?
+  checkinRequested  Boolean       @default(false)
+  locationVerified  Boolean?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
 
 enum BookingStatus {

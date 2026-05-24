@@ -11,7 +11,6 @@ const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://user-service:50
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
-const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://payment-wallet-service:5006';
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
@@ -51,7 +50,6 @@ app.use('/api/users', proxy(USER_SERVICE_URL));
 app.use('/api/wallet', proxy(WALLET_SERVICE_URL));
 app.use('/api/gyms', proxy(GYM_SERVICE_URL));
 app.use('/api/bookings', proxy(BOOKING_SERVICE_URL));
-app.use('/api/payment', proxy(PAYMENT_SERVICE_URL));
 
 const PORT = process.env.GATEWAY_PORT || 5000;
 app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));

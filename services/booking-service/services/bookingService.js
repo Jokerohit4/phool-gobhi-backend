@@ -1,5 +1,15 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import { notifyPartner } from '../utils/notifyPartner.js';
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const prisma = new PrismaClient();
 
@@ -11,7 +21,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // 1. Fetch gym details from gym-service
     let gym;
     try {
-      const response = await axios.get(`${GYM_SERVICE_URL}/api/gyms/${gymId}`);
+      const response = await axios.get(`${GYM_SERVICE_URL}/${gymId}`);
       gym = response.data.data || response.data;
     } catch (err) {
       throw {
@@ -21,6 +31,21 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     }
 
     const capacity = gym.capacity;
+
+    // 1b. Check if slot is blocked
+    try {
+      const blockRes = await axios.get(
+        `${GYM_SERVICE_URL}/${gymId}/blocks?date=${date}`
+      );
+      const blocks = blockRes.data?.data || [];
+      const isBlocked = blocks.some(b => b.startTime === startTime);
+      if (isBlocked) {
+        throw { status: 409, error: 'This slot has been blocked by the gym' };
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      // If block check fails, allow booking (non-critical)
+    }
 
     // 2. Count existing non-cancelled bookings for this slot
     const bookingCount = await prisma.booking.count({
@@ -44,7 +69,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
     // 4. Debit customer wallet
     try {
-      await axios.post(`${WALLET_SERVICE_URL}/api/wallet/${customerId}/debit`, {
+      await axios.post(`${WALLET_SERVICE_URL}/${customerId}/debit`, {
         amount,
         description: 'Gym session booking'
       });
@@ -67,6 +92,9 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         status: 'confirmed'
       }
     });
+
+    // 6. Fire-and-forget notification — never block booking creation
+    notifyPartner(gymId, booking).catch(() => {});
 
     return booking;
   } catch (err) {
@@ -111,7 +139,7 @@ export async function cancelBooking(bookingId, customerId) {
 
     // 4. Credit wallet
     try {
-      await axios.post(`${WALLET_SERVICE_URL}/api/wallet/${customerId}/credit`, {
+      await axios.post(`${WALLET_SERVICE_URL}/${customerId}/credit`, {
         amount: booking.amount,
         description: 'Booking cancellation refund'
       });
@@ -176,7 +204,21 @@ export async function completeBooking(bookingId, gymId) {
       data: { status: 'completed' }
     });
 
-    return updatedBooking;
+    // 5. Credit partner wallet — best-effort, never blocks completion
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/${gymId}`);
+      const gym = gymRes.data?.data || gymRes.data;
+      if (gym?.partnerId) {
+        await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
+          amount: booking.amount,
+          description: 'Gym session payout'
+        });
+      }
+    } catch (payoutErr) {
+      console.error('Partner payout failed for booking', bookingId, payoutErr.message);
+    }
+
+    return { ...updatedBooking, locationVerified: booking.locationVerified ?? false };
   } catch (err) {
     if (err.status) throw err;
     console.error('completeBooking error:', err);
@@ -184,6 +226,36 @@ export async function completeBooking(bookingId, gymId) {
       status: 500,
       error: err.message || 'Server error'
     };
+  }
+}
+
+export async function requestCheckIn(bookingId, customerId, lat, lng) {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw { status: 404, error: 'Booking not found' };
+    if (booking.customerId !== customerId) throw { status: 403, error: 'Forbidden' };
+    if (booking.status !== 'confirmed') throw { status: 400, error: 'Booking is not confirmed' };
+
+    let locationVerified = false;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/${booking.gymId}`);
+      const gym = gymRes.data.data || gymRes.data;
+      if (lat && lng && gym.lat && gym.lng) {
+        locationVerified = distanceMeters(lat, lng, gym.lat, gym.lng) <= 300;
+      }
+    } catch (_) {
+      // soft check — gym service failure does not block check-in
+    }
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { checkinRequested: true, locationVerified },
+    });
+
+    return { bookingId, locationVerified };
+  } catch (err) {
+    if (err.status) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
   }
 }
 

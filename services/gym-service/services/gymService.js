@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 export async function listGyms({ city, minPrice, maxPrice, search, amenities }) {
   const where = {
     isActive: true,
+    isApproved: true,
   };
 
   if (city) {
@@ -69,7 +70,7 @@ export async function getGymById(id) {
     include: { images: true, reviews: true },
   });
 
-  if (!gym || !gym.isActive) {
+  if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
   }
 
@@ -315,4 +316,76 @@ export async function getGymReviews(gymId) {
   });
 
   return reviews;
+}
+
+export async function approveGym(gymId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  return prisma.gym.update({
+    where: { id: gymId },
+    data: { isApproved: true },
+  });
+}
+
+export async function getAvailableSlots(gymId, date) {
+  const gym = await prisma.gym.findUnique({
+    where: { id: gymId },
+    select: { openTime: true, closeTime: true, slotDuration: true, capacity: true, isApproved: true, isActive: true },
+  });
+
+  if (!gym || !gym.isActive || !gym.isApproved) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+
+  const blocks = await prisma.slotBlock.findMany({
+    where: { gymId, date },
+    select: { startTime: true, endTime: true },
+  });
+
+  const blockedTimes = new Set(blocks.map(b => b.startTime));
+
+  return { gym, blockedTimes: [...blockedTimes] };
+}
+
+export async function getSlotBlocks(gymId, date) {
+  return prisma.slotBlock.findMany({
+    where: { gymId, ...(date ? { date } : {}) },
+    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+  });
+}
+
+export async function createSlotBlock(gymId, partnerId, { date, startTime, endTime }) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  // Prevent duplicate blocks
+  const existing = await prisma.slotBlock.findFirst({
+    where: { gymId, date, startTime },
+  });
+  if (existing) return existing;
+
+  return prisma.slotBlock.create({
+    data: { gymId, date, startTime, endTime },
+  });
+}
+
+export async function deleteSlotBlock(blockId, partnerId) {
+  const block = await prisma.slotBlock.findUnique({
+    where: { id: blockId },
+    include: { gym: { select: { partnerId: true } } },
+  });
+  if (!block) throw { status: 404, error: 'Block not found' };
+  if (block.gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  await prisma.slotBlock.delete({ where: { id: blockId } });
+  return { message: 'Block removed' };
+}
+
+export async function isSlotBlocked(gymId, date, startTime) {
+  const block = await prisma.slotBlock.findFirst({
+    where: { gymId, date, startTime },
+  });
+  return !!block;
 }

@@ -24,8 +24,8 @@ export const updateUser = async (req, res) => {
     const requestingUserId = req.userId; // from gateway header
     const targetUserId = parseInt(req.params.userId);
     if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
-    const { name, phone, profileImageUrl } = req.body;
-    const user = await userService.updateUserProfile(targetUserId, { name, phone, profileImageUrl });
+    const { name, phone, profileImageUrl, fcmToken } = req.body;
+    const user = await userService.updateUserProfile(targetUserId, { name, phone, profileImageUrl, fcmToken });
     res.json({ data: user });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message });

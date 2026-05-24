@@ -23,7 +23,16 @@ router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) =>
   res.json({ url: req.file.path });
 });
 
+// Admin-only route — requires role 'gobhi'
+// To approve: create an account with role:'gobhi' via POST /api/auth/signup, login, use the JWT
+router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
+
 // Customer routes
 router.post('/:id/reviews', requireRole('customer'), ctrl.addReview);
+
+// Slot block routes (partner only)
+router.get('/:id/blocks', requireRole('partner'), ctrl.getSlotBlocks);
+router.post('/:id/blocks', requireRole('partner'), ctrl.createSlotBlock);
+router.delete('/:id/blocks/:blockId', requireRole('partner'), ctrl.deleteSlotBlock);
 
 export default router;

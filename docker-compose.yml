@@ -82,12 +82,16 @@ services:
       - BOOKING_SERVICE_PORT=5005
       - WALLET_SERVICE_URL=http://wallet-service:5003
       - GYM_SERVICE_URL=http://gym-service:5004
+      - USER_SERVICE_URL=http://user-service:5002
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
     depends_on:
       postgres:
         condition: service_healthy
       wallet-service:
         condition: service_started
       gym-service:
+        condition: service_started
+      user-service:
         condition: service_started
     networks:
       - phool-gobhi-net

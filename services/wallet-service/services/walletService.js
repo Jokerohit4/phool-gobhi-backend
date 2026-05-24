@@ -62,4 +62,44 @@ export async function debitWalletService(userId, amount, description) {
     });
     return updated;
   });
-} 
+}
+
+export async function createRazorpayOrderService(userId, orderId, amount) {
+  try {
+    return await prisma.razorpayOrder.create({
+      data: {
+        userId,
+        orderId,
+        amount,
+        status: 'PENDING'
+      }
+    });
+  } catch (err) {
+    throw new Error('Could not create Razorpay order: ' + err.message);
+  }
+}
+
+export async function getRazorpayOrderService(orderId) {
+  try {
+    return await prisma.razorpayOrder.findUnique({
+      where: { orderId }
+    });
+  } catch (err) {
+    throw new Error('Could not get Razorpay order: ' + err.message);
+  }
+}
+
+export async function updateRazorpayOrderStatusService(orderId, status, razorpayPaymentId = null) {
+  try {
+    const data = { status };
+    if (razorpayPaymentId) {
+      data.razorpayPaymentId = razorpayPaymentId;
+    }
+    return await prisma.razorpayOrder.update({
+      where: { orderId },
+      data
+    });
+  } catch (err) {
+    throw new Error('Could not update Razorpay order: ' + err.message);
+  }
+}

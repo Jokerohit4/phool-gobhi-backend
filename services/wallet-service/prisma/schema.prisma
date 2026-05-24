@@ -35,6 +35,8 @@ model WalletTransaction {
   currency    String   @default("INR") // ISO currency code
   status      TransactionStatus @default(success)
   description String?
+  razorpayOrderId String?
+  razorpayPaymentId String?
   createdAt   DateTime @default(now())
 }
 
@@ -53,4 +55,15 @@ enum TransactionStatus {
   success
   failed
   reversed
+}
+
+model RazorpayOrder {
+  id Int @id @default(autoincrement())
+  userId Int
+  orderId String @unique
+  amount Float
+  status String // "PENDING", "SUCCESS", "FAILED"
+  razorpayPaymentId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

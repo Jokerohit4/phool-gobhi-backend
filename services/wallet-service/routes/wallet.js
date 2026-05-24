@@ -4,7 +4,10 @@ import {
   getWallet,
   getWalletTransactions,
   creditWallet,
-  debitWallet
+  debitWallet,
+  createTopUpOrder,
+  verifyAndCreditWallet,
+  handleRazorpayWebhook
 } from '../controllers/walletController.js';
 
 const router = Router();
@@ -15,4 +18,9 @@ router.get('/:userId/transactions', getWalletTransactions); // Get transactions
 router.post('/:userId/credit', creditWallet); // Credit wallet
 router.post('/:userId/debit', debitWallet); // Debit wallet
 
-export default router; 
+// Razorpay routes
+router.post('/orders', createTopUpOrder); // Create Razorpay order
+router.post('/verify', verifyAndCreditWallet); // Verify and credit wallet
+router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (no auth)
+
+export default router;

@@ -28,8 +28,19 @@ export const getGym = async (req, res) => {
 
 export const getGymSlots = async (req, res) => {
   try {
-    const gym = await gymService.getGymById(parseInt(req.params.id));
-    const slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
+    const gymId = parseInt(req.params.id);
+    const { date } = req.query;
+
+    const gym = await gymService.getGymById(gymId);
+    let slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
+
+    // Filter out blocked slots for the requested date
+    if (date) {
+      const blocks = await gymService.getSlotBlocks(gymId, date);
+      const blockedTimes = new Set(blocks.map(b => b.startTime));
+      slots = slots.filter(s => !blockedTimes.has(s.startTime));
+    }
+
     res.json({ data: { slots, capacity: gym.capacity } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -126,5 +137,49 @@ export const getGymReviews = async (req, res) => {
     res.json({ data: reviews });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const approveGym = async (req, res) => {
+  try {
+    const gym = await gymService.approveGym(parseInt(req.params.id));
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getSlotBlocks = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const blocks = await gymService.getSlotBlocks(parseInt(req.params.id), date);
+    res.json({ data: blocks });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message });
+  }
+};
+
+export const createSlotBlock = async (req, res) => {
+  try {
+    const block = await gymService.createSlotBlock(
+      parseInt(req.params.id),
+      req.userId,
+      req.body
+    );
+    res.status(201).json({ data: block });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message });
+  }
+};
+
+export const deleteSlotBlock = async (req, res) => {
+  try {
+    const result = await gymService.deleteSlotBlock(
+      parseInt(req.params.blockId),
+      req.userId
+    );
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message });
   }
 };

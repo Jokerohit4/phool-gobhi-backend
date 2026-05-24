@@ -49,6 +49,17 @@ export const cancelBooking = async (req, res) => {
   }
 };
 
+export const requestCheckIn = async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id);
+    const { lat, lng } = req.body;
+    const result = await bookingService.requestCheckIn(bookingId, req.userId, lat, lng);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const completeBooking = async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);
