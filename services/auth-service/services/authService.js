@@ -160,13 +160,63 @@ export async function refreshTokenService(token) {
 // In-memory OTP store: phone → { code, expiresAt }
 const otpStore = new Map();
 
+function normalizeToE164(phone) {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
+async function sendWhatsAppOtp(phone, code) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const templateName = process.env.WHATSAPP_TEMPLATE_NAME;
+  if (!phoneNumberId || !accessToken || !templateName) return false;
+  try {
+    const res = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: normalizeToE164(phone),
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en' },
+          components: [{ type: 'body', parameters: [{ type: 'text', text: code }] }],
+        },
+      }),
+    });
+    if (!res.ok) { console.error('WhatsApp OTP failed:', await res.text()); return false; }
+    return true;
+  } catch (err) {
+    console.error('WhatsApp OTP error:', err.message);
+    return false;
+  }
+}
+
+async function sendFast2SmsOtp(phone, code) {
+  const apiKey = process.env.FAST2SMS_API_KEY;
+  if (!apiKey) return false;
+  const digits = phone.replace(/\D/g, '').slice(-10);
+  try {
+    const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=otp&variables_values=${code}&numbers=${digits}`, {
+      headers: { 'cache-control': 'no-cache' },
+    });
+    if (!res.ok) { console.error('Fast2SMS OTP failed:', res.status); return false; }
+    return true;
+  } catch (err) {
+    console.error('Fast2SMS OTP error:', err.message);
+    return false;
+  }
+}
+
 export async function sendOtpService(phone) {
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
   otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
-  console.log(`OTP for ${phone}: ${code}`); // TODO: replace with SMS provider (e.g. Fast2SMS)
+  const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
+  if (!sent) console.log(`OTP for ${phone}: ${code}`);
   const response = { message: 'OTP sent successfully' };
   if (process.env.NODE_ENV !== 'production') response.otp = code;
   return response;
