@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["gym"]
 }
 
 model Gym {
@@ -35,6 +37,7 @@ model Gym {
   slotBlocks   SlotBlock[]
 
   @@index([partnerId])
+  @@schema("gym")
 }
 
 model GymImage {
@@ -44,6 +47,8 @@ model GymImage {
   publicId  String?
   gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@schema("gym")
 }
 
 model GymReview {
@@ -56,6 +61,7 @@ model GymReview {
   createdAt  DateTime @default(now())
 
   @@unique([gymId, customerId])
+  @@schema("gym")
 }
 
 model SlotBlock {
@@ -68,4 +74,5 @@ model SlotBlock {
   createdAt DateTime @default(now())
 
   @@index([gymId, date])
+  @@schema("gym")
 }

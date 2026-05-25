@@ -39,7 +39,7 @@ app.get('/debug/db-test', async (req, res) => {
 });
 
 // Start server
-const PORT = process.env.GYM_SERVICE_PORT || 5004;
+const PORT = process.env.PORT || process.env.GYM_SERVICE_PORT || 5004;
 app.listen(PORT, () => {
   console.log(`Gym Service running on port ${PORT}`);
 });

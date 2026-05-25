@@ -34,5 +34,5 @@ app.get('/debug/db-test', async (req, res) => {
   }
 });
 
-const PORT = process.env.BOOKING_SERVICE_PORT || 5005;
+const PORT = process.env.PORT || process.env.BOOKING_SERVICE_PORT || 5005;
 app.listen(PORT, () => console.log(`Booking Service running on port ${PORT}`));

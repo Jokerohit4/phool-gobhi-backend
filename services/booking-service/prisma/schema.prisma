@@ -1,26 +1,30 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["booking"]
 }
 
 model Booking {
-  id         Int           @id @default(autoincrement())
-  customerId Int
-  gymId      Int
-  date       String
-  startTime  String
-  endTime    String
-  amount     Float
-  status            BookingStatus @default(confirmed)
-  walletTxId        Int?
-  checkinRequested  Boolean       @default(false)
-  locationVerified  Boolean?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id               Int           @id @default(autoincrement())
+  customerId       Int
+  gymId            Int
+  date             String
+  startTime        String
+  endTime          String
+  amount           Float
+  status           BookingStatus @default(confirmed)
+  walletTxId       Int?
+  checkinRequested Boolean       @default(false)
+  locationVerified Boolean?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@schema("booking")
 }
 
 enum BookingStatus {
@@ -28,4 +32,6 @@ enum BookingStatus {
   confirmed
   cancelled
   completed
+
+  @@schema("booking")
 }

@@ -13,7 +13,7 @@ app.get('/health', (req, res) => {
 
 app.use('/', walletRoutes);
 
-const PORT = process.env.WALLET_SERVICE_PORT || 5003;
+const PORT = process.env.PORT || process.env.WALLET_SERVICE_PORT || 5003;
 app.listen(PORT, () => {
   console.log(`🚀 Wallet Service running on port ${PORT}`);
 }); 

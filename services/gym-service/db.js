@@ -6,14 +6,17 @@ const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('supabase.co') || process.env.DATABASE_URL?.includes('railway.app')
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: { rejectUnauthorized: false },
+});
+
+pool.on('error', (err) => {
+  console.error('pg pool error (will reconnect):', err.message);
 });
 
 const connectDB = async () => {
   try {
-    await pool.connect();
+    const client = await pool.connect();
+    client.release();
     console.log('PostgreSQL connected (gym-service)');
   } catch (err) {
     console.error('PostgreSQL connection error:', err.message);

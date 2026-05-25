@@ -1,43 +1,51 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["wallet"]
 }
 
 model Wallet {
-  id        Int                 @id @default(autoincrement())
-  userId    Int                 @unique
-  userType  String              // e.g., 'customer', 'partner', 'gobhi'
-  balance   Float               @default(0)
-  currency  String              @default("INR") // ISO currency code
-  status    WalletStatus        @default(active)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-  deletedAt DateTime?           // Soft delete
+  id           Int                 @id @default(autoincrement())
+  userId       Int                 @unique
+  userType     String
+  balance      Float               @default(0)
+  currency     String              @default("INR")
+  status       WalletStatus        @default(active)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
   transactions WalletTransaction[]
+
+  @@schema("wallet")
 }
 
 enum WalletStatus {
   active
   frozen
   closed
+
+  @@schema("wallet")
 }
 
 model WalletTransaction {
-  id          Int      @id @default(autoincrement())
-  wallet      Wallet   @relation(fields: [walletId], references: [id])
-  walletId    Int
-  type        TransactionType
-  amount      Float
-  currency    String   @default("INR") // ISO currency code
-  status      TransactionStatus @default(success)
-  description String?
-  razorpayOrderId String?
+  id                Int               @id @default(autoincrement())
+  wallet            Wallet            @relation(fields: [walletId], references: [id])
+  walletId          Int
+  type              TransactionType
+  amount            Float
+  currency          String            @default("INR")
+  status            TransactionStatus @default(success)
+  description       String?
+  razorpayOrderId   String?
   razorpayPaymentId String?
-  createdAt   DateTime @default(now())
+  createdAt         DateTime          @default(now())
+
+  @@schema("wallet")
 }
 
 enum TransactionType {
@@ -48,6 +56,8 @@ enum TransactionType {
   payout
   topup
   withdrawal
+
+  @@schema("wallet")
 }
 
 enum TransactionStatus {
@@ -55,15 +65,19 @@ enum TransactionStatus {
   success
   failed
   reversed
+
+  @@schema("wallet")
 }
 
 model RazorpayOrder {
-  id Int @id @default(autoincrement())
-  userId Int
-  orderId String @unique
-  amount Float
-  status String // "PENDING", "SUCCESS", "FAILED"
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  orderId           String   @unique
+  amount            Float
+  status            String
   razorpayPaymentId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@schema("wallet")
 }
