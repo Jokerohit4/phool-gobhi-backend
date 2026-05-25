@@ -39,7 +39,7 @@ app.get('/debug/db-test', async (req, res) => {
 });
 
 // Start server
-const PORT = process.env.AUTH_SERVICE_PORT || 5001;
+const PORT = process.env.PORT || process.env.AUTH_SERVICE_PORT || 5001;
 app.listen(PORT, () => {
   console.log(`🚀 Auth Service running on port ${PORT}`);
 }); 

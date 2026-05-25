@@ -14,7 +14,7 @@ const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-s
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password)$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp)$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
@@ -51,5 +51,5 @@ app.use('/api/wallet', proxy(WALLET_SERVICE_URL));
 app.use('/api/gyms', proxy(GYM_SERVICE_URL));
 app.use('/api/bookings', proxy(BOOKING_SERVICE_URL));
 
-const PORT = process.env.GATEWAY_PORT || 5000;
+const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
 app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));

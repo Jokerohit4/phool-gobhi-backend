@@ -156,3 +156,68 @@ export async function refreshTokenService(token) {
     throw { status: 403, error: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.message, errorCode: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.code };
   }
 }
+
+// In-memory OTP store: phone → { code, expiresAt }
+const otpStore = new Map();
+
+export async function sendOtpService(phone) {
+  if (!phone) {
+    throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+  console.log(`OTP for ${phone}: ${code}`); // TODO: replace with SMS provider (e.g. Fast2SMS)
+  const response = { message: 'OTP sent successfully' };
+  if (process.env.NODE_ENV !== 'production') response.otp = code;
+  return response;
+}
+
+export async function verifyOtpService({ phone, otp, name, email, role = 'customer', type = 'general', gobhiType }) {
+  if (!phone) {
+    throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
+  }
+  if (!VALID_ROLES.includes(role)) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_ROLE.message, errorCode: ERROR_MESSAGES.INVALID_ROLE.code };
+  }
+  if (!VALID_TYPES.includes(type)) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_TYPE.message, errorCode: ERROR_MESSAGES.INVALID_TYPE.code };
+  }
+  const entry = otpStore.get(phone);
+  if (!entry || Date.now() > entry.expiresAt) {
+    otpStore.delete(phone);
+    throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
+  }
+  if (entry.code !== otp) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
+  }
+  otpStore.delete(phone);
+
+  let user = await prisma.user.findUnique({ where: { phone } });
+  const isNewUser = !user;
+
+  if (!user) {
+    if (!name) {
+      throw { status: 400, error: ERROR_MESSAGES.NAME_REQUIRED.message, errorCode: ERROR_MESSAGES.NAME_REQUIRED.code };
+    }
+    user = await prisma.user.create({
+      data: {
+        name,
+        phone,
+        email: email || null,
+        role,
+        type,
+        gobhiType: role === ROLES.GOBHI ? gobhiType : null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  const accessToken = generateAccessToken(user.id, user.role, user.type);
+  const refreshToken = generateRefreshToken(user.id);
+  return {
+    accessToken,
+    refreshToken,
+    isNewUser,
+    user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType },
+  };
+}

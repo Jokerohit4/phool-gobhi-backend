@@ -9,5 +9,9 @@ export const ERROR_MESSAGES = {
   ERROR_DELETING_USER: { code: 'E107', message: 'Error deleting user' },
   NO_REFRESH_TOKEN: { code: 'E108', message: 'No refresh token provided' },
   INVALID_OR_EXPIRED_REFRESH: { code: 'E109', message: 'Invalid or expired refresh token' },
-  EMAIL_EXISTS: { code: 'E110', message: 'Email already exists' }
+  EMAIL_EXISTS: { code: 'E110', message: 'Email already exists' },
+  OTP_EXPIRED: { code: 'E111', message: 'OTP expired or not found' },
+  INVALID_OTP: { code: 'E112', message: 'Invalid OTP' },
+  NAME_REQUIRED: { code: 'E113', message: 'Name is required for new users' },
+  PHONE_REQUIRED: { code: 'E114', message: 'Phone number is required' },
 }; 

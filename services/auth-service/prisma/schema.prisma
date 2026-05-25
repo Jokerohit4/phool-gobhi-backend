@@ -1,38 +1,49 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["auth"]
 }
 
 model User {
   id        Int        @id @default(autoincrement())
   name      String
-  email     String     @unique
-  password  String
+  phone     String?    @unique
+  email     String?    @unique
+  password  String?
   role      Role
   type      UserType
   gobhiType GobhiType?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@schema("auth")
 }
 
 enum GobhiType {
   trainer
   cleaner
   manager
+
+  @@schema("auth")
 }
 
 enum Role {
   customer
   partner
   gobhi
+
+  @@schema("auth")
 }
 
 enum UserType {
   general
   sub_premium
   premium
+
+  @@schema("auth")
 }

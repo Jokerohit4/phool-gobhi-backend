@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp } from '../controllers/authController.js';
 import verifyToken from '../middleware/verifyToken.js';
 
 router.post('/signup', signup);
@@ -12,5 +12,7 @@ router.post('/forgot-password', async (req, res) => {
   // For now, always return success so the frontend works
   res.json({ message: 'If an account exists for this email, a password reset link has been sent.' });
 });
+router.post('/send-otp', sendOtp);
+router.post('/verify-otp', verifyOtp);
 
 export default router;
