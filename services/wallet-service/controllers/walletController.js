@@ -99,7 +99,8 @@ export const createTopUpOrder = async (req, res) => {
 
 export const verifyAndCreditWallet = async (req, res) => {
   try {
-    const { userId, orderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const userId = req.userId;
 
     // Verify signature
     const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_SECRET);

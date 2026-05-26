@@ -26,6 +26,15 @@ export const getGym = async (req, res) => {
   }
 };
 
+export const getGymInternal = async (req, res) => {
+  try {
+    const gym = await gymService.getGymByIdRaw(parseInt(req.params.id));
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getGymSlots = async (req, res) => {
   try {
     const gymId = parseInt(req.params.id);

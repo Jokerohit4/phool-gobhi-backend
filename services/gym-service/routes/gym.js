@@ -7,6 +7,7 @@ const router = Router();
 
 // Public routes (no auth needed)
 router.get('/', ctrl.listGyms);
+router.get('/internal/:id', ctrl.getGymInternal);
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/reviews', ctrl.getGymReviews);

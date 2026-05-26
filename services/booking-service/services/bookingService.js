@@ -21,7 +21,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // 1. Fetch gym details from gym-service
     let gym;
     try {
-      const response = await axios.get(`${GYM_SERVICE_URL}/${gymId}`);
+      const response = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
       gym = response.data.data || response.data;
     } catch (err) {
       throw {
@@ -206,7 +206,7 @@ export async function completeBooking(bookingId, gymId) {
 
     // 5. Credit partner wallet — best-effort, never blocks completion
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/${gymId}`);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
       const gym = gymRes.data?.data || gymRes.data;
       if (gym?.partnerId) {
         await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
@@ -238,7 +238,7 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
 
     let locationVerified = false;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/${booking.gymId}`);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`);
       const gym = gymRes.data.data || gymRes.data;
       if (lat && lng && gym.lat && gym.lng) {
         locationVerified = distanceMeters(lat, lng, gym.lat, gym.lng) <= 300;

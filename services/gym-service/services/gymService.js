@@ -77,6 +77,16 @@ export async function getGymById(id) {
   return gym;
 }
 
+
+export async function getGymByIdRaw(id) {
+  const gym = await prisma.gym.findUnique({
+    where: { id },
+    include: { images: true },
+  });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  return gym;
+}
+
 export async function getGymCapacity(id) {
   const gym = await prisma.gym.findUnique({
     where: { id },
