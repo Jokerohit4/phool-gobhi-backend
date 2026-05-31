@@ -1,0 +1,107 @@
+services:
+  - type: web
+    name: pg-gateway
+    runtime: docker
+    rootDir: .
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: AUTH_SERVICE_URL
+        sync: false
+      - key: USER_SERVICE_URL
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+      - key: GYM_SERVICE_URL
+        sync: false
+      - key: BOOKING_SERVICE_URL
+        sync: false
+
+  - type: web
+    name: pg-auth-service
+    runtime: docker
+    rootDir: ./services/auth-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: FAST2SMS_API_KEY
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_TEMPLATE_NAME
+        sync: false
+
+  - type: web
+    name: pg-user-service
+    runtime: docker
+    rootDir: ./services/user-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+
+  - type: web
+    name: pg-wallet-service
+    runtime: docker
+    rootDir: ./services/wallet-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
+  - type: web
+    name: pg-gym-service
+    runtime: docker
+    rootDir: ./services/gym-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+  - type: web
+    name: pg-booking-service
+    runtime: docker
+    rootDir: ./services/booking-service
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: WALLET_SERVICE_URL
+        sync: false
+      - key: GYM_SERVICE_URL
+        sync: false
+      - key: USER_SERVICE_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false

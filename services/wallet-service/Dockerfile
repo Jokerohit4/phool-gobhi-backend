@@ -7,4 +7,4 @@ COPY prisma ./prisma
 RUN npx prisma generate
 COPY . .
 EXPOSE 5003
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node app.js"]
+CMD ["sh", "-c", "npx prisma db push && node app.js"]

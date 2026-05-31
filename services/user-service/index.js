@@ -21,7 +21,7 @@ app.use('/', userRoutes);
 app.get('/health', (req, res) => res.json({ status: 'User Service is healthy' }));
 
 // Start server
-const PORT = process.env.USER_SERVICE_PORT || 5002;
+const PORT = process.env.PORT || process.env.USER_SERVICE_PORT || 5002;
 app.listen(PORT, () => {
   console.log(`🚀 User Service running on port ${PORT}`);
 }); 
