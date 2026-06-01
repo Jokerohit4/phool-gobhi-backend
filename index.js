@@ -7,7 +7,6 @@ import jwt from 'jsonwebtoken';
 const app = express();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
-const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://user-service:5002';
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
@@ -46,7 +45,9 @@ app.use(authMiddleware);
 app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timestamp: new Date().toISOString() }));
 
 app.use('/api/auth', proxy(AUTH_SERVICE_URL));
-app.use('/api/users', proxy(USER_SERVICE_URL));
+app.use('/api/users', proxy(AUTH_SERVICE_URL, {
+  proxyReqPathResolver: req => '/users' + req.url,
+}));
 app.use('/api/wallet', proxy(WALLET_SERVICE_URL));
 app.use('/api/gyms', proxy(GYM_SERVICE_URL));
 app.use('/api/bookings', proxy(BOOKING_SERVICE_URL));

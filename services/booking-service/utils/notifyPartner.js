@@ -6,7 +6,7 @@ import admin from 'firebase-admin';
 import axios from 'axios';
 
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
-const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://user-service:5002';
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 
 let initialized = false;
 
@@ -34,8 +34,8 @@ export async function notifyPartner(gymId, booking) {
     const partnerId = gymRes.data?.data?.partnerId;
     if (!partnerId) return;
 
-    // Get partner FCM token from user-service
-    const userRes = await axios.get(`${USER_SERVICE_URL}/api/users/${partnerId}`, {
+    // Get partner FCM token from auth-service
+    const userRes = await axios.get(`${AUTH_SERVICE_URL}/users/${partnerId}`, {
       headers: { 'x-user-id': String(partnerId), 'x-user-role': 'partner' },
     });
     const fcmToken = userRes.data?.data?.fcmToken;

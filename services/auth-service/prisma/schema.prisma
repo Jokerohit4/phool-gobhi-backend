@@ -18,6 +18,8 @@ model User {
   role      Role
   type      UserType
   gobhiType GobhiType?
+  profileImageUrl String    @default("")
+  fcmToken        String    @default("")
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
