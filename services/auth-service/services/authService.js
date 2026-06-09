@@ -250,12 +250,9 @@ export async function verifyOtpService({ phone, otp, name, email, role = 'custom
   const isNewUser = !user;
 
   if (!user) {
-    if (!name) {
-      throw { status: 400, error: ERROR_MESSAGES.NAME_REQUIRED.message, errorCode: ERROR_MESSAGES.NAME_REQUIRED.code };
-    }
     user = await prisma.user.create({
       data: {
-        name,
+        name: name || 'User',
         phone,
         email: email || null,
         role,
