@@ -9,15 +9,15 @@ import {
   verifyAndCreditWallet,
   handleRazorpayWebhook
 } from '../controllers/walletController.js';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
 
 const router = Router();
 
-router.post('/', createWallet); // Create wallet
-router.get('/:userId', getWallet); // Get wallet by userId
-router.get('/:userId/transactions', getWalletTransactions); // Get transactions
-router.post('/:userId/credit', creditWallet); // Credit wallet
-router.post('/:userId/debit', debitWallet); // Debit wallet
+router.post('/', requireInternal, createWallet); // Create wallet (internal)
+router.get('/:userId', requireAuth, getWallet); // Get wallet by userId
+router.get('/:userId/transactions', requireAuth, getWalletTransactions); // Get transactions
+router.post('/:userId/credit', requireInternal, creditWallet); // Credit wallet (internal: payouts, refunds, verified top-ups)
+router.post('/:userId/debit', requireInternal, debitWallet); // Debit wallet (internal: booking charges)
 
 // Razorpay routes
 router.post('/orders', requireAuth, createTopUpOrder); // Create Razorpay order

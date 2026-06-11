@@ -19,6 +19,17 @@ export const getMyBookings = async (req, res) => {
   }
 };
 
+export const getSlotCounts = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const { date } = req.query;
+    const counts = await bookingService.getSlotCounts(gymId, date);
+    res.json({ data: counts });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getGymBookings = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);

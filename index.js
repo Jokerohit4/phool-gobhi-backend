@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews/ },
+  { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'GET', pattern: /^\/health/ },
 ];
 
@@ -26,6 +27,13 @@ function isPublicRoute(method, path) {
 }
 
 function authMiddleware(req, res, next) {
+  // Never let a client inject identity/internal headers — the gateway is the only
+  // component allowed to set these, derived from a verified JWT.
+  delete req.headers['x-user-id'];
+  delete req.headers['x-user-role'];
+  delete req.headers['x-user-type'];
+  delete req.headers['x-internal-key'];
+
   if (isPublicRoute(req.method, req.path)) return next();
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });

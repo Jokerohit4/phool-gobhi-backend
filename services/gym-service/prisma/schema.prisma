@@ -22,6 +22,9 @@ model Gym {
   amenities    String[]
   phone        String
   sessionPrice Float
+  quotedPrice  Float?
+  established  Int?
+  brandDocs    String[]
   openTime     String
   closeTime    String
   slotDuration Int         @default(60)

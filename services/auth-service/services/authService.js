@@ -218,7 +218,9 @@ export async function sendOtpService(phone) {
   const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
   if (!sent) console.log(`OTP for ${phone}: ${code}`);
   const response = { message: 'OTP sent successfully' };
-  if (process.env.NODE_ENV !== 'production') response.otp = code;
+  // Echoing the OTP is opt-in (set ALLOW_DEV_OTP=true in dev only) so an
+  // incomplete prod env can never leak codes.
+  if (process.env.ALLOW_DEV_OTP === 'true') response.otp = code;
   return response;
 }
 
@@ -232,8 +234,8 @@ export async function verifyOtpService({ phone, otp, name, email, role = 'custom
   if (!VALID_TYPES.includes(type)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_TYPE.message, errorCode: ERROR_MESSAGES.INVALID_TYPE.code };
   }
-  const isDev = process.env.NODE_ENV !== 'production';
-  const DEV_OTP = '12345';
+  const isDev = process.env.ALLOW_DEV_OTP === 'true';
+  const DEV_OTP = '123456';
   if (!(isDev && otp === DEV_OTP)) {
     const entry = otpStore.get(phone);
     if (!entry || Date.now() > entry.expiresAt) {

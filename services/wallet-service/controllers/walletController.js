@@ -15,7 +15,7 @@ export const createWallet = async (req, res) => {
   try {
     const { userId, userType } = req.body;
     const wallet = await createWalletService(userId, userType);
-    res.status(201).json(wallet);
+    res.status(201).json({ data: wallet });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -24,8 +24,14 @@ export const createWallet = async (req, res) => {
 export const getWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const wallet = await getWalletService(Number(userId));
-    res.json(wallet);
+    let wallet;
+    try {
+      wallet = await getWalletService(Number(userId));
+    } catch (err) {
+      // Auto-provision a wallet on first read so the client never 404s
+      wallet = await createWalletService(Number(userId), req.userRole || 'customer');
+    }
+    res.json({ data: wallet });
   } catch (err) {
     res.status(404).json({ error: err.message });
   }
@@ -35,7 +41,7 @@ export const getWalletTransactions = async (req, res) => {
   try {
     const { userId } = req.params;
     const transactions = await getWalletTransactionsService(Number(userId));
-    res.json(transactions);
+    res.json({ data: transactions });
   } catch (err) {
     res.status(404).json({ error: err.message });
   }
@@ -46,7 +52,7 @@ export const creditWallet = async (req, res) => {
     const { userId } = req.params;
     const { amount, description } = req.body;
     const result = await creditWalletService(Number(userId), amount, description);
-    res.json(result);
+    res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -57,7 +63,7 @@ export const debitWallet = async (req, res) => {
     const { userId } = req.params;
     const { amount, description } = req.body;
     const result = await debitWalletService(Number(userId), amount, description);
-    res.json(result);
+    res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -87,10 +93,13 @@ export const createTopUpOrder = async (req, res) => {
     await createRazorpayOrderService(userId, order.id, amount);
 
     res.status(201).json({
-      orderId: order.id,
-      amount,
-      currency: 'INR',
-      keyId: process.env.RAZORPAY_KEY_ID
+      data: {
+        id: order.id,
+        orderId: order.id,
+        amount,
+        currency: 'INR',
+        keyId: process.env.RAZORPAY_KEY_ID
+      }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -127,9 +136,11 @@ export const verifyAndCreditWallet = async (req, res) => {
     await updateRazorpayOrderStatusService(orderId, 'SUCCESS', razorpayPaymentId);
 
     res.json({
-      success: true,
-      balance: result.balance,
-      transactionId: orderId
+      data: {
+        success: true,
+        balance: result.balance,
+        transactionId: orderId
+      }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 const signup = async (req, res) => {
   try {
     console.log('Signup request body:', req.body);
-    const result = await signupService(req.body);
+    const result = await signupService(req.body ?? {});
     res.status(201).json(result);
   } catch (err) {
     console.error('Signup controller error:', JSON.stringify(err, null, 2));
@@ -32,7 +32,7 @@ const signup = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const result = await loginService(req.body);
+    const result = await loginService(req.body ?? {});
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
@@ -52,7 +52,7 @@ const deleteUser = async (req, res) => {
 
 const refreshToken = async (req, res) => {
   try {
-    const result = await refreshTokenService(req.body.token);
+    const result = await refreshTokenService(req.body?.token);
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
@@ -61,7 +61,7 @@ const refreshToken = async (req, res) => {
 
 const sendOtp = async (req, res) => {
   try {
-    const result = await sendOtpService(req.body.phone);
+    const result = await sendOtpService(req.body?.phone);
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });
@@ -70,7 +70,7 @@ const sendOtp = async (req, res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    const result = await verifyOtpService(req.body);
+    const result = await verifyOtpService(req.body ?? {});
     res.status(201).json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });

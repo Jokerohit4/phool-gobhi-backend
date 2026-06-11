@@ -12,6 +12,10 @@ let initialized = false;
 
 function initAdmin() {
   if (initialized) return true;
+  if (admin.apps.length) {
+    initialized = true;
+    return true;
+  }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) return false;
   try {
@@ -29,8 +33,8 @@ export async function notifyPartner(gymId, booking) {
   try {
     if (!initAdmin()) return;
 
-    // Get partnerId from gym-service
-    const gymRes = await axios.get(`${GYM_SERVICE_URL}/api/gyms/${gymId}`);
+    // Get partnerId from gym-service (gym routes are mounted at '/', so use /internal/:id)
+    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
     const partnerId = gymRes.data?.data?.partnerId;
     if (!partnerId) return;
 

@@ -1,6 +1,8 @@
 import * as gymService from '../services/gymService.js';
 import { generateTimeSlots } from '../utils/slots.js';
 
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+
 export const listGyms = async (req, res) => {
   try {
     const { city, minPrice, maxPrice, search, amenities } = req.query;
@@ -50,7 +52,32 @@ export const getGymSlots = async (req, res) => {
       slots = slots.filter(s => !blockedTimes.has(s.startTime));
     }
 
-    res.json({ data: { slots, capacity: gym.capacity } });
+    // Annotate each slot with real availability from existing bookings (best-effort).
+    // If booking-service is unreachable, fall back to assuming all slots are open.
+    let counts = {};
+    if (date) {
+      try {
+        const resp = await fetch(
+          `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`
+        );
+        if (resp.ok) {
+          const body = await resp.json();
+          counts = body.data || {};
+        }
+      } catch (_) {
+        // booking-service down — leave counts empty so slots still render
+      }
+    }
+
+    const annotated = slots
+      .map(s => {
+        const booked = counts[s.startTime] || 0;
+        const available = Math.max(gym.capacity - booked, 0);
+        return { ...s, booked, available };
+      })
+      .filter(s => s.available > 0);
+
+    res.json({ data: { slots: annotated, capacity: gym.capacity } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

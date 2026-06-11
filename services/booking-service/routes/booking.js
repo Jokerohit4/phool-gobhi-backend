@@ -4,6 +4,9 @@ import * as ctrl from '../controllers/bookingController.js';
 
 const router = Router();
 
+// Internal service-to-service endpoint (gym-service calls this to compute slot availability)
+router.get('/internal/slot-counts/:gymId', ctrl.getSlotCounts);
+
 router.post('/', requireRole('customer'), ctrl.createBooking);
 router.get('/mine', requireRole('customer'), ctrl.getMyBookings);
 router.get('/gym/:gymId', requireRole('partner'), ctrl.getGymBookings);
