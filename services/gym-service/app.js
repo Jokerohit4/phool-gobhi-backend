@@ -12,10 +12,12 @@ const prisma = new PrismaClient();
 // Middleware
 app.use(express.json());
 
+// Health must be registered before the router: gymRoutes is mounted at '/'
+// and its GET /:id would otherwise capture /health as a gym id.
+app.get('/health', (req, res) => res.json({ status: 'Gym Service is healthy' }));
+
 // Routes
 app.use('/', gymRoutes);
-
-app.get('/health', (req, res) => res.json({ status: 'Gym Service is healthy' }));
 
 // Debug endpoint to test database connection
 app.get('/debug/db-test', async (req, res) => {
