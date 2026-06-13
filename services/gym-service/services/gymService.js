@@ -292,6 +292,58 @@ export async function deleteGymImage(gymId, imageId, partnerId) {
   return { message: 'Image deleted' };
 }
 
+// Derive a Cloudinary public id from a delivery URL, e.g.
+// https://res.cloudinary.com/<cloud>/image/upload/v123/phool-gobhi/docs/abc.pdf
+// -> phool-gobhi/docs/abc
+function cloudinaryPublicIdFromUrl(url) {
+  try {
+    const match = String(url).match(/\/upload\/(?:v\d+\/)?(.+)$/);
+    if (!match) return null;
+    return match[1].replace(/\.[^/.]+$/, '');
+  } catch {
+    return null;
+  }
+}
+
+export async function addGymDoc(gymId, partnerId, url) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  const updated = await prisma.gym.update({
+    where: { id: gymId },
+    data: { brandDocs: { push: url } },
+    select: { brandDocs: true },
+  });
+  return updated.brandDocs;
+}
+
+export async function deleteGymDoc(gymId, partnerId, url) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  const remaining = (gym.brandDocs || []).filter((d) => d !== url);
+
+  // Best-effort Cloudinary cleanup. brandDocs stores only URLs, so derive the
+  // public id; resource_type 'auto'/raw uploads need to be destroyed as such.
+  const publicId = cloudinaryPublicIdFromUrl(url);
+  if (publicId) {
+    try {
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+    } catch (err) {
+      console.error('Error deleting doc from Cloudinary:', err.message);
+    }
+  }
+
+  const updated = await prisma.gym.update({
+    where: { id: gymId },
+    data: { brandDocs: { set: remaining } },
+    select: { brandDocs: true },
+  });
+  return updated.brandDocs;
+}
+
 export async function addReview(gymId, customerId, rating, comment) {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },

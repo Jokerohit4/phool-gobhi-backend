@@ -5,10 +5,11 @@ const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME &&
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET;
 
-let storage;
+let imageStorage;
+let docStorage;
 if (hasCloudinary) {
   const { CloudinaryStorage } = await import('multer-storage-cloudinary');
-  storage = new CloudinaryStorage({
+  imageStorage = new CloudinaryStorage({
     cloudinary,
     params: {
       folder: 'phool-gobhi/gyms',
@@ -16,8 +17,24 @@ if (hasCloudinary) {
       transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
     },
   });
+  // Brand/verification documents: allow PDFs alongside images and skip the
+  // image transformation. resource_type 'auto' lets Cloudinary store PDFs (raw)
+  // and images under the same uploader.
+  docStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+      folder: 'phool-gobhi/docs',
+      resource_type: 'auto',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+    },
+  });
 } else {
-  storage = multer.memoryStorage();
+  imageStorage = multer.memoryStorage();
+  docStorage = multer.memoryStorage();
 }
 
-export const uploadGymImage = multer({ storage });
+export const uploadGymImage = multer({ storage: imageStorage });
+export const uploadGymDoc = multer({
+  storage: docStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for documents
+});

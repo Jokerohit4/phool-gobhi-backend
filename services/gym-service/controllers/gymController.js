@@ -149,6 +149,39 @@ export const deleteGymImage = async (req, res) => {
   }
 };
 
+export const addGymDoc = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No document provided' });
+    }
+    const brandDocs = await gymService.addGymDoc(
+      parseInt(req.params.id),
+      req.userId,
+      req.file.path
+    );
+    res.status(201).json({ data: { url: req.file.path, brandDocs } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const deleteGymDoc = async (req, res) => {
+  try {
+    const url = req.body?.url || req.query?.url;
+    if (!url) {
+      return res.status(400).json({ error: 'Document url is required' });
+    }
+    const brandDocs = await gymService.deleteGymDoc(
+      parseInt(req.params.id),
+      req.userId,
+      url
+    );
+    res.json({ data: { brandDocs } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;

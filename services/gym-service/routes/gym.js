@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
-import { uploadGymImage } from '../utils/upload.js';
+import { uploadGymImage, uploadGymDoc } from '../utils/upload.js';
 import * as ctrl from '../controllers/gymController.js';
 
 const router = Router();
@@ -19,6 +19,9 @@ router.put('/:id', requireRole('partner'), ctrl.updateGym);
 router.delete('/:id', requireRole('partner'), ctrl.deleteGym);
 router.post('/:id/images', requireRole('partner'), uploadGymImage.single('image'), ctrl.addGymImage);
 router.delete('/:id/images/:imageId', requireRole('partner'), ctrl.deleteGymImage);
+// Brand/verification documents (field 'file'); stored as URLs in Gym.brandDocs[]
+router.post('/:id/docs', requireRole('partner'), uploadGymDoc.single('file'), ctrl.addGymDoc);
+router.delete('/:id/docs', requireRole('partner'), ctrl.deleteGymDoc);
 router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: req.file.path });
