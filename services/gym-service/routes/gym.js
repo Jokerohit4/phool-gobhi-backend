@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { uploadGymImage, uploadGymDoc } from '../utils/upload.js';
 import * as ctrl from '../controllers/gymController.js';
 
@@ -8,6 +8,8 @@ const router = Router();
 // Public routes (no auth needed)
 router.get('/', ctrl.listGyms);
 router.get('/internal/:id', ctrl.getGymInternal);
+// Internal service-to-service: partner onboarding summary (auth-service, at login)
+router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/reviews', ctrl.getGymReviews);

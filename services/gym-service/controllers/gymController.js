@@ -92,6 +92,16 @@ export const getPartnerGyms = async (req, res) => {
   }
 };
 
+// Internal: onboarding summary for a partner (auth-service calls this at login).
+export const getPartnerGymSummaryInternal = async (req, res) => {
+  try {
+    const summary = await gymService.getPartnerGymSummary(parseInt(req.params.partnerId));
+    res.json({ data: summary });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const createGym = async (req, res) => {
   try {
     const gym = await gymService.createGym(req.userId, req.body);

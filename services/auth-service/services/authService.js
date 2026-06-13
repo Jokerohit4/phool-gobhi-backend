@@ -7,6 +7,26 @@ import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 
 const prisma = new PrismaClient();
 
+const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
+
+// Best-effort onboarding summary for a partner, fetched from gym-service. Lets
+// the partner app route on login (dashboard vs. resume onboarding) from the
+// server's source of truth — gym existence — instead of trusting local state.
+// Returns null if gym-service is unreachable so the app can fall back gracefully.
+async function fetchPartnerGymSummary(partnerId) {
+  try {
+    const res = await fetch(`${GYM_SERVICE_URL}/internal/partner/${partnerId}/summary`, {
+      headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' },
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body.data || null;
+  } catch (err) {
+    console.error('fetchPartnerGymSummary error:', err.message);
+    return null;
+  }
+}
+
 export async function signupService({ name, email, password, role, type, gobhiType }) {
   // Validate role and type
   if (!VALID_ROLES.includes(role)) {
@@ -267,10 +287,22 @@ export async function verifyOtpService({ phone, otp, name, email, role = 'custom
 
   const accessToken = generateAccessToken(user.id, user.role, user.type);
   const refreshToken = generateRefreshToken(user.id);
+
+  // Tell partners, at login, whether their gym already exists so the app can
+  // route to the dashboard vs. onboarding without relying on local state. A
+  // brand-new user has no gym yet; otherwise ask gym-service.
+  let onboarding;
+  if (user.role === ROLES.PARTNER) {
+    onboarding = isNewUser
+      ? { hasGym: false, approved: false, gymId: null }
+      : await fetchPartnerGymSummary(user.id);
+  }
+
   return {
     accessToken,
     refreshToken,
     isNewUser,
+    ...(onboarding !== undefined && { onboarding }),
     user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType },
   };
 }

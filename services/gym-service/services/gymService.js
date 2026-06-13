@@ -232,6 +232,22 @@ export async function getPartnerGyms(partnerId) {
   return gyms;
 }
 
+// Compact onboarding summary for a partner — does an active gym exist yet, and
+// is it approved. Used by auth-service to tell the partner app, at login, where
+// to route (dashboard vs. resume onboarding) without trusting local state.
+export async function getPartnerGymSummary(partnerId) {
+  const gym = await prisma.gym.findFirst({
+    where: { partnerId, isActive: true },
+    orderBy: { id: 'asc' },
+    select: { id: true, isApproved: true },
+  });
+  return {
+    hasGym: !!gym,
+    approved: gym?.isApproved ?? false,
+    gymId: gym?.id ?? null,
+  };
+}
+
 export async function addGymImage(gymId, partnerId, url, publicId) {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },
