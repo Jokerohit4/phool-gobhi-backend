@@ -1,5 +1,6 @@
 import * as gymService from '../services/gymService.js';
 import { generateTimeSlots } from '../utils/slots.js';
+import { track } from '../utils/analytics.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -105,6 +106,10 @@ export const getPartnerGymSummaryInternal = async (req, res) => {
 export const createGym = async (req, res) => {
   try {
     const gym = await gymService.createGym(req.userId, req.body);
+    // Supply funnel: a gym is created already submitted for approval (isApproved=false).
+    track('gym_created', req.userId, {
+      gym_id: gym.id, city: gym.city, session_price: gym.sessionPrice,
+    });
     res.status(201).json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -222,6 +227,8 @@ export const getGymReviews = async (req, res) => {
 export const approveGym = async (req, res) => {
   try {
     const gym = await gymService.approveGym(parseInt(req.params.id));
+    // Supply funnel: gobhi approved the gym; keyed to the owning partner.
+    track('gym_approved', gym.partnerId, { gym_id: gym.id, city: gym.city });
     res.json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

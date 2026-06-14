@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
+import { track } from '../utils/analytics.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -66,6 +67,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
     // 3. Check if slot is full
     if (bookingCount >= capacity) {
+      track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime });
       throw {
         status: 409,
         error: 'Slot is full'
@@ -79,6 +81,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         description: 'Gym session booking'
       }, internalHeaders);
     } catch (err) {
+      track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount });
       throw {
         status: 400,
         error: err.response?.data?.error || 'Insufficient wallet balance'
@@ -96,6 +99,11 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         amount,
         status: 'confirmed'
       }
+    });
+
+    // Money funnel: booking created and paid (wallet debited) in one synchronous step.
+    track('booking_confirmed', customerId, {
+      booking_id: booking.id, gym_id: gymId, amount, date, start_time: startTime,
     });
 
     // 6. Fire-and-forget notifications — never block booking creation
@@ -164,6 +172,10 @@ export async function cancelBooking(bookingId, customerId) {
     const updatedBooking = await prisma.booking.update({
       where: { id: bookingId },
       data: { status: 'cancelled' }
+    });
+
+    track('booking_cancelled', customerId, {
+      booking_id: booking.id, gym_id: booking.gymId, amount: booking.amount, date: booking.date,
     });
 
     notifyCustomer(customerId, {
@@ -244,6 +256,11 @@ export async function completeBooking(bookingId, gymId) {
       console.error('Partner payout failed for booking', bookingId, payoutErr.message);
     }
 
+    // Fulfillment funnel: the session actually happened (partner verified at the gym).
+    track('booking_completed', booking.customerId, {
+      booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+    });
+
     notifyCustomer(booking.customerId, {
       title: 'Session completed',
       body: `Your session on ${booking.date} is marked complete. See you next time!`,
@@ -282,6 +299,10 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
     await prisma.booking.update({
       where: { id: bookingId },
       data: { checkinRequested: true, locationVerified },
+    });
+
+    track('checkin_requested', customerId, {
+      booking_id: bookingId, gym_id: booking.gymId, location_verified: locationVerified,
     });
 
     return { bookingId, locationVerified };

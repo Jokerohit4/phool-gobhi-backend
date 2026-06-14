@@ -10,6 +10,7 @@ import {
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import { track } from '../utils/analytics.js';
 
 export const createWallet = async (req, res) => {
   try {
@@ -92,6 +93,8 @@ export const createTopUpOrder = async (req, res) => {
     // Store order in DB
     await createRazorpayOrderService(userId, order.id, amount);
 
+    track('wallet_topup_order_created', userId, { amount, order_id: order.id });
+
     res.status(201).json({
       data: {
         id: order.id,
@@ -135,6 +138,8 @@ export const verifyAndCreditWallet = async (req, res) => {
     // Update order status
     await updateRazorpayOrderStatusService(orderId, 'SUCCESS', razorpayPaymentId);
 
+    track('wallet_topup_succeeded', userId, { amount: order.amount, order_id: orderId });
+
     res.json({
       data: {
         success: true,
@@ -171,6 +176,7 @@ export const handleRazorpayWebhook = async (req, res) => {
       if (order && order.status === 'PENDING') {
         await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
         await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+        track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
       }
     } else if (event === 'payment.failed') {
       const { order_id: orderId } = req.body.payload.payment.entity;
@@ -178,6 +184,7 @@ export const handleRazorpayWebhook = async (req, res) => {
 
       if (order && order.status === 'PENDING') {
         await updateRazorpayOrderStatusService(orderId, 'FAILED', null);
+        track('wallet_topup_failed', order.userId, { amount: order.amount, order_id: orderId });
       }
     }
 

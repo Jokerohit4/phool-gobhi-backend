@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { generateAccessToken, generateRefreshToken } from '../utils/generateTokens.js';
 import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
+import { track } from '../utils/analytics.js';
 
 const prisma = new PrismaClient();
 
@@ -287,6 +288,14 @@ export async function verifyOtpService({ phone, otp, name, email, role = 'custom
 
   const accessToken = generateAccessToken(user.id, user.role, user.type);
   const refreshToken = generateRefreshToken(user.id);
+
+  // Activation funnel: signup_completed (new) vs login_completed (returning).
+  // distinct_id is the userId so this stitches with the client's pre-login
+  // anonymous events once the app calls identify(userId).
+  track(isNewUser ? 'signup_completed' : 'login_completed', user.id, {
+    role: user.role,
+    user_type: user.type,
+  });
 
   // Tell partners, at login, whether their gym already exists so the app can
   // route to the dashboard vs. onboarding without relying on local state. A
