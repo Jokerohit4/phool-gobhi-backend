@@ -46,7 +46,13 @@ function authMiddleware(req, res, next) {
     req.headers['x-user-type'] = payload.type || '';
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    // An expired/invalid token is an authentication failure (401), not an
+    // authorization failure (403). Returning 401 lets clients trigger their
+    // refresh-token flow; 403 is reserved for authenticated-but-not-permitted.
+    const expired = err.name === 'TokenExpiredError';
+    return res.status(401).json({
+      error: expired ? 'Token expired' : 'Invalid token',
+    });
   }
 }
 
