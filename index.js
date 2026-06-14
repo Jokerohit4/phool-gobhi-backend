@@ -3,6 +3,7 @@ dotenv.config();
 import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
+import { ingest } from './utils/analytics.js';
 
 const app = express();
 
@@ -19,6 +20,7 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
+  { method: 'POST', pattern: /^\/api\/events$/ },
   { method: 'GET', pattern: /^\/health/ },
 ];
 
@@ -51,6 +53,26 @@ function authMiddleware(req, res, next) {
 app.use(authMiddleware);
 
 app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timestamp: new Date().toISOString() }));
+
+// Client analytics ingestion. Public (anonymous pre-login events are valid) and
+// fire-and-forget — the client must never be blocked or fail on analytics. The
+// app sends its own distinct_id (anon id pre-login, userId after identify).
+// express.json is scoped to this route so it can't interfere with the proxied
+// request bodies below. Accepts a single event or { events: [...] }.
+app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
+  try {
+    const body = req.body || {};
+    const list = Array.isArray(body.events) ? body.events : [body];
+    for (const e of list) {
+      if (e && e.event) {
+        ingest({ event: e.event, distinctId: e.distinct_id, properties: e.properties || {}, source: 'client' });
+      }
+    }
+  } catch (_) {
+    // swallow — analytics never fails the client
+  }
+  res.status(202).json({ ok: true });
+});
 
 app.use('/api/auth', proxy(AUTH_SERVICE_URL));
 app.use('/api/users', proxy(AUTH_SERVICE_URL, {

@@ -3,9 +3,11 @@
 How product events are captured across the Flutter apps and the Node backend, and
 how they roll up into the funnels that matter for the business.
 
-> **Status:** instrumentation shipped (backend + both apps). The default sink is
-> `none` in production and `console` in debug — i.e. **no data leaves anywhere
-> until you opt in** by setting a provider. See [Turning it on](#turning-it-on).
+> **Status:** instrumentation shipped (backend + both apps). The **active sink is
+> first-party Postgres** — events are written to an `analytics_events` table we
+> own (no third party). Server events write directly; client events POST to the
+> gateway `/api/events` route. PostHog remains a drop-in alternative. A dashboard
+> over the table is a future step; query funnels with the SQL in §8 meanwhile.
 
 ---
 
@@ -140,22 +142,25 @@ In PostHog: Product → Funnels → add these events as ordered steps, breakdown
 
 | Var | Values | Notes |
 |---|---|---|
-| `ANALYTICS_PROVIDER` | `none` (default) · `console` · `posthog` | set on every service |
-| `POSTHOG_API_KEY` | project key | required for `posthog` |
-| `POSTHOG_HOST` | `https://us.i.posthog.com` (default) or `eu.i.posthog.com` | |
-| `ANALYTICS_SERVICE_NAME` | `auth-service`/`booking-service`/… | tags the event source |
+| `ANALYTICS_PROVIDER` | `none` · `console` · **`postgres`** (active on dev) · `posthog` | set on every service **and the gateway** |
+| `ANALYTICS_DATABASE_URL` | Postgres connection string | required for `postgres`; the shared event store (any Neon DB; currently the booking DB — point at a dedicated DB later) |
+| `ANALYTICS_SERVICE_NAME` | `auth-service`/`booking-service`/…/`gateway` | tags the event source |
+| `POSTHOG_API_KEY` / `POSTHOG_HOST` | — | only for the `posthog` sink |
+
+The `analytics_events` table is created automatically on first write
+(`CREATE TABLE IF NOT EXISTS`), so there's no migration to run.
 
 ### Apps (build-time `--dart-define`)
 
 ```
 flutter run \
-  --dart-define=ANALYTICS_PROVIDER=posthog \
-  --dart-define=POSTHOG_KEY=phc_xxx \
-  --dart-define=POSTHOG_HOST=https://us.i.posthog.com
+  --dart-define=ANALYTICS_PROVIDER=firstparty   # posts to <gateway>/api/events
+# or =console (dev logs), =none (off), =posthog (+ POSTHOG_KEY)
 ```
 
-Default: `console` in debug builds, `none` in release. With no key, `posthog`
-silently downgrades to no-op.
+Default: `console` in debug, **`firstparty` in release** (uses the app's existing
+gateway base URL — no extra config). `posthog`/`firstparty` downgrade to no-op if
+their required config is missing.
 
 ---
 
@@ -176,18 +181,65 @@ To verify locally without PostHog, set `ANALYTICS_PROVIDER=console` and watch th
 
 ---
 
-## 8. Swapping the sink later (first-party option)
+## 8. First-party store & funnel SQL (active)
 
-If data residency (India DPDP) or cost ever requires owning the data:
+Events land in one append-only table (created automatically):
 
-- **Backend:** add a `firstparty` branch in `utils/analytics.js` that `INSERT`s
-  into a Postgres `events` table (append-only: `event, distinct_id, properties
-  jsonb, ts`). Build funnels with SQL / Metabase.
-- **Apps:** add a `FirstPartyAnalyticsService` that POSTs to a gateway
-  `/api/events` ingestion route.
+```sql
+CREATE TABLE analytics_events (
+  id          BIGSERIAL PRIMARY KEY,
+  event       TEXT NOT NULL,
+  distinct_id TEXT,
+  properties  JSONB NOT NULL DEFAULT '{}',
+  source      TEXT,          -- 'server' | 'client'
+  service     TEXT,          -- auth-service / gym-service / gateway / jim_customer / ...
+  ts          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
 
-No call sites change — only the sink and one env value. That's the whole point of
-the facade.
+- **Server events** are inserted in-process by each service's `track()`.
+- **Client events** POST to the gateway `POST /api/events`
+  (`{event, distinct_id, properties}`), which calls `ingest()` → same table.
+- Identity stitching: the app sends an `identify` event carrying
+  `anon_distinct_id`; join pre-login anon events to the user via that mapping.
+
+### Sample funnel queries
+
+Booking conversion (last 30 days), per step:
+```sql
+SELECT event, count(DISTINCT distinct_id) AS users
+FROM analytics_events
+WHERE event IN ('gym_viewed','slot_selected','book_tapped','booking_confirmed')
+  AND ts > now() - interval '30 days'
+GROUP BY event
+ORDER BY array_position(
+  ARRAY['gym_viewed','slot_selected','book_tapped','booking_confirmed'], event);
+```
+
+Partner onboarding drop-off by step:
+```sql
+SELECT properties->>'step' AS step, count(*) AS completions
+FROM analytics_events
+WHERE event = 'onboarding_step_completed'
+GROUP BY 1 ORDER BY 1;
+```
+
+Activation (signups vs OTP requests) this week:
+```sql
+SELECT event, count(*) FROM analytics_events
+WHERE event IN ('otp_requested','signup_completed','login_completed')
+  AND ts > now() - interval '7 days'
+GROUP BY event;
+```
+
+A BI dashboard (Metabase/Grafana/PostHog-on-the-table) over `analytics_events` is
+the natural next step — the schema is intentionally generic so any of them fits.
+
+### Switching providers
+
+`ANALYTICS_PROVIDER` is the only lever. `posthog` (set `POSTHOG_API_KEY`) sends to
+PostHog instead; `none` turns everything off. No call sites change — that's the
+point of the facade.
 
 ---
 
