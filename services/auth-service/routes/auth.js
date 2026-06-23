@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, getMe, updateFcmToken } from '../controllers/authController.js';
 import verifyToken from '../middleware/verifyToken.js';
 
 router.post('/signup', signup);
@@ -14,5 +14,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
+router.get('/me', verifyToken, getMe);
+router.post('/fcm-token', verifyToken, updateFcmToken);
 
 export default router;

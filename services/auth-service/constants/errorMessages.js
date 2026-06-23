@@ -14,4 +14,5 @@ export const ERROR_MESSAGES = {
   INVALID_OTP: { code: 'E112', message: 'Invalid OTP' },
   NAME_REQUIRED: { code: 'E113', message: 'Name is required for new users' },
   PHONE_REQUIRED: { code: 'E114', message: 'Phone number is required' },
+  INVALID_PHONE: { code: 'E115', message: 'Enter a valid 10-digit Indian mobile number' },
 }; 

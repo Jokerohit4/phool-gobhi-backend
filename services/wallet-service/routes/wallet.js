@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createWallet,
+  getMyWallet,
   getWallet,
   getWalletTransactions,
   creditWallet,
@@ -14,6 +15,7 @@ import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
 const router = Router();
 
 router.post('/', requireInternal, createWallet); // Create wallet (internal)
+router.get('/balance', requireAuth, getMyWallet); // Get wallet for logged-in user
 router.get('/:userId', requireAuth, getWallet); // Get wallet by userId
 router.get('/:userId/transactions', requireAuth, getWalletTransactions); // Get transactions
 router.post('/:userId/credit', requireInternal, creditWallet); // Credit wallet (internal: payouts, refunds, verified top-ups)

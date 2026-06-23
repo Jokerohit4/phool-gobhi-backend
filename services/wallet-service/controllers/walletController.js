@@ -22,6 +22,20 @@ export const createWallet = async (req, res) => {
   }
 };
 
+export const getMyWallet = async (req, res) => {
+  try {
+    let wallet;
+    try {
+      wallet = await getWalletService(req.userId);
+    } catch (_) {
+      wallet = await createWalletService(req.userId, req.userRole || 'customer');
+    }
+    res.json({ data: wallet });
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+};
+
 export const getWallet = async (req, res) => {
   try {
     const { userId } = req.params;

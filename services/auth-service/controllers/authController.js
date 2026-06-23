@@ -77,6 +77,27 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp };
+const getMe = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ id: user.id, phone: user.phone, name: user.name, email: user.email, role: user.role, type: user.type });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateFcmToken = async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) return res.status(400).json({ error: 'fcmToken required' });
+    await prisma.user.update({ where: { id: req.user.id }, data: { fcmToken } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, getMe, updateFcmToken };
 
 

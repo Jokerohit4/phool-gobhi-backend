@@ -178,8 +178,15 @@ export async function refreshTokenService(token) {
   }
 }
 
-// In-memory OTP store: phone → { code, expiresAt }
+// In-memory OTP store: phone → { code, expiresAt, sentAt }
 const otpStore = new Map();
+
+// Accepts +91XXXXXXXXXX, 91XXXXXXXXXX, or plain XXXXXXXXXX.
+function isValidIndianMobile(phone) {
+  const digits = String(phone).replace(/\D/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+  return /^[6-9]\d{9}$/.test(local);
+}
 
 function normalizeToE164(phone) {
   const digits = phone.replace(/\D/g, '');
@@ -234,8 +241,15 @@ export async function sendOtpService(phone) {
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
   }
+  if (!isValidIndianMobile(phone)) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
+  }
+  const existing = otpStore.get(phone);
+  if (existing?.sentAt && Date.now() - existing.sentAt < 60 * 1000) {
+    throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
+  }
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+  otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
   const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
   if (!sent) console.log(`OTP for ${phone}: ${code}`);
   const response = { message: 'OTP sent successfully' };
