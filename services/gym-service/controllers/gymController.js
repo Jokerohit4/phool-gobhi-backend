@@ -7,12 +7,16 @@ const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-s
 export const listGyms = async (req, res) => {
   try {
     const { city, minPrice, maxPrice, search, amenities } = req.query;
+    const userLat = parseFloat(req.headers['x-user-lat']);
+    const userLng = parseFloat(req.headers['x-user-lng']);
     const gyms = await gymService.listGyms({
       city,
       minPrice: minPrice ? parseFloat(minPrice) : undefined,
       maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
       search,
       amenities,
+      userLat: isNaN(userLat) ? null : userLat,
+      userLng: isNaN(userLng) ? null : userLng,
     });
     res.json({ data: gyms });
   } catch (err) {

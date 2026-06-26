@@ -3,7 +3,19 @@ import cloudinary from '../config/cloudinary.js';
 
 const prisma = new PrismaClient();
 
-export async function listGyms({ city, minPrice, maxPrice, search, amenities }) {
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function listGyms({ city, minPrice, maxPrice, search, amenities, userLat, userLng }) {
   const where = {
     isActive: true,
     isApproved: true,
@@ -59,6 +71,21 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities }) 
     gyms = gyms.filter(gym =>
       amenitiesArray.every(amenity => gym.amenities.includes(amenity))
     );
+  }
+
+  if (userLat != null && userLng != null) {
+    gyms = gyms.map(gym => ({
+      ...gym,
+      distanceKm:
+        gym.lat != null && gym.lng != null
+          ? Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10
+          : null,
+    }));
+    gyms.sort((a, b) => {
+      if (a.distanceKm == null) return 1;
+      if (b.distanceKm == null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
   }
 
   return gyms;
