@@ -17,7 +17,14 @@ app.use(express.json());
 app.use('/', authRoutes);
 app.use('/users', userProfileRoutes);
 
-app.get('/health', (req, res) => res.json({ status: 'Auth Service is healthy' }));
+app.get('/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'Auth Service is healthy' });
+  } catch (err) {
+    res.status(503).json({ status: 'unhealthy', error: err.message });
+  }
+});
 
 // Debug endpoint to test database connection
 app.get('/debug/db-test', async (req, res) => {

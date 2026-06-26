@@ -14,7 +14,14 @@ app.use(express.json());
 
 // Health must be registered before the router: gymRoutes is mounted at '/'
 // and its GET /:id would otherwise capture /health as a gym id.
-app.get('/health', (req, res) => res.json({ status: 'Gym Service is healthy' }));
+app.get('/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'Gym Service is healthy' });
+  } catch (err) {
+    res.status(503).json({ status: 'unhealthy', error: err.message });
+  }
+});
 
 // Routes
 app.use('/', gymRoutes);

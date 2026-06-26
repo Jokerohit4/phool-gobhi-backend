@@ -74,7 +74,7 @@ app.get('/wake', async (req, res) => {
   const results = await Promise.all(
     Object.entries(services).map(async ([name, url]) => {
       try {
-        const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(10000) });
+        const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(60000) });
         return { name, status: r.status, ok: r.ok };
       } catch (err) {
         return { name, status: 0, ok: false, error: err.message };
