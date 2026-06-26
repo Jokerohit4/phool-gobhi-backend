@@ -17,3 +17,10 @@ export const requireRole = (...roles) => (req, res, next) => {
   req.userType = req.headers['x-user-type'];
   next();
 };
+
+export const requireInternal = (req, res, next) => {
+  const key = req.headers['x-internal-key'];
+  const expected = process.env.INTERNAL_API_KEY;
+  if (!expected || key !== expected) return res.status(403).json({ error: 'Forbidden' });
+  next();
+};

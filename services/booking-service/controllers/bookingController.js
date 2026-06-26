@@ -2,8 +2,8 @@ import * as bookingService from '../services/bookingService.js';
 
 export const createBooking = async (req, res) => {
   try {
-    const { gymId, date, startTime, endTime, amount } = req.body;
-    const booking = await bookingService.createBooking(req.userId, { gymId, date, startTime, endTime, amount });
+    const { gymId, date, startTime, endTime } = req.body;
+    const booking = await bookingService.createBooking(req.userId, { gymId, date, startTime, endTime });
     res.status(201).json({ data: booking });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -33,7 +33,7 @@ export const getSlotCounts = async (req, res) => {
 export const getGymBookings = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
-    const bookings = await bookingService.getGymBookings(gymId);
+    const bookings = await bookingService.getGymBookings(gymId, req.userId);
     res.json({ data: bookings });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -43,7 +43,7 @@ export const getGymBookings = async (req, res) => {
 export const getGymSalesSummary = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
-    const summary = await bookingService.getGymSalesSummary(gymId);
+    const summary = await bookingService.getGymSalesSummary(gymId, req.userId);
     res.json({ data: summary });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -75,7 +75,8 @@ export const completeBooking = async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);
     const gymId = parseInt(req.query.gymId || req.body.gymId);
-    const booking = await bookingService.completeBooking(bookingId, gymId);
+    if (isNaN(gymId)) return res.status(400).json({ error: 'gymId is required' });
+    const booking = await bookingService.completeBooking(bookingId, gymId, req.userId);
     res.json({ data: booking });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

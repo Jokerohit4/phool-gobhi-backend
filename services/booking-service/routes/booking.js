@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { requireRole } from '../middleware/requireAuth.js';
+import { requireRole, requireInternal } from '../middleware/requireAuth.js';
 import * as ctrl from '../controllers/bookingController.js';
 
 const router = Router();
 
 // Internal service-to-service endpoint (gym-service calls this to compute slot availability)
-router.get('/internal/slot-counts/:gymId', ctrl.getSlotCounts);
+router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
 
 router.post('/', requireRole('customer'), ctrl.createBooking);
 router.get('/mine', requireRole('customer'), ctrl.getMyBookings);

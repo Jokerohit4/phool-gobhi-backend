@@ -63,7 +63,8 @@ export const getGymSlots = async (req, res) => {
     if (date) {
       try {
         const resp = await fetch(
-          `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`
+          `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`,
+          { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' } }
         );
         if (resp.ok) {
           const body = await resp.json();
@@ -204,6 +205,10 @@ export const deleteGymDoc = async (req, res) => {
 export const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
+    const r = Number(rating);
+    if (!rating || r < 1 || r > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
     const review = await gymService.addReview(
       parseInt(req.params.id),
       req.userId,

@@ -39,6 +39,7 @@ export const getMyWallet = async (req, res) => {
 export const getWallet = async (req, res) => {
   try {
     const { userId } = req.params;
+    if (parseInt(userId) !== req.userId) return res.status(403).json({ error: 'Forbidden' });
     let wallet;
     try {
       wallet = await getWalletService(Number(userId));
@@ -55,6 +56,7 @@ export const getWallet = async (req, res) => {
 export const getWalletTransactions = async (req, res) => {
   try {
     const { userId } = req.params;
+    if (parseInt(userId) !== req.userId) return res.status(403).json({ error: 'Forbidden' });
     const transactions = await getWalletTransactionsService(Number(userId));
     res.json({ data: transactions });
   } catch (err) {

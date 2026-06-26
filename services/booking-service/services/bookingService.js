@@ -22,7 +22,7 @@ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 // Shared header for service-to-service wallet mutations (credit/debit are internal-only)
 const internalHeaders = { headers: { 'x-internal-key': INTERNAL_API_KEY } };
 
-export async function createBooking(customerId, { gymId, date, startTime, endTime, amount }) {
+export async function createBooking(customerId, { gymId, date, startTime, endTime }) {
   try {
     // 1. Fetch gym details from gym-service
     let gym;
@@ -37,6 +37,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     }
 
     const capacity = gym.capacity;
+    const amount = gym.sessionPrice;
 
     // 1b. Check if slot is blocked
     try {
@@ -196,7 +197,7 @@ export async function cancelBooking(bookingId, customerId) {
   }
 }
 
-export async function completeBooking(bookingId, gymId) {
+export async function completeBooking(bookingId, gymId, partnerId) {
   try {
     // 1. Find booking
     const booking = await prisma.booking.findUnique({
@@ -236,17 +237,27 @@ export async function completeBooking(bookingId, gymId) {
       };
     }
 
-    // 5. Update status to 'completed'
+    // 5. Verify partner owns this gym (fetch gym once — reused for payout)
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) {
+      throw { status: 403, error: 'Forbidden' };
+    }
+
+    // 6. Update status to 'completed'
     const updatedBooking = await prisma.booking.update({
       where: { id: bookingId },
       data: { status: 'completed' }
     });
 
-    // 6. Credit partner wallet — best-effort, never blocks completion
+    // 7. Credit partner wallet — best-effort, never blocks completion
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
-      const gym = gymRes.data?.data || gymRes.data;
-      if (gym?.partnerId) {
+      if (gym.partnerId) {
         await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
           amount: booking.amount,
           description: 'Gym session payout'
@@ -284,6 +295,8 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
     if (!booking) throw { status: 404, error: 'Booking not found' };
     if (booking.customerId !== customerId) throw { status: 403, error: 'Forbidden' };
     if (booking.status !== 'confirmed') throw { status: 400, error: 'Booking is not confirmed' };
+    const todayString = new Date().toISOString().split('T')[0];
+    if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
 
     let locationVerified = false;
     try {
@@ -364,14 +377,25 @@ export async function getSlotCounts(gymId, date) {
   return counts;
 }
 
-export async function getGymBookings(gymId) {
+export async function getGymBookings(gymId, partnerId) {
   try {
+    // Verify partner owns this gym before exposing bookings
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
     const bookings = await prisma.booking.findMany({
       where: { gymId },
       orderBy: { createdAt: 'desc' }
     });
     return bookings;
   } catch (err) {
+    if (err.error) throw err;
     console.error('getGymBookings error:', err);
     throw {
       status: 500,
@@ -380,8 +404,18 @@ export async function getGymBookings(gymId) {
   }
 }
 
-export async function getGymSalesSummary(gymId) {
+export async function getGymSalesSummary(gymId, partnerId) {
   try {
+    // Verify partner owns this gym before exposing revenue data
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
     const today = new Date();
     // All buckets key off the session `date` (YYYY-MM-DD string) for consistency.
     // YYYY-MM-DD sorts lexicographically, so string >= comparisons are valid date ranges.
@@ -454,6 +488,7 @@ export async function getGymSalesSummary(gymId) {
       }
     };
   } catch (err) {
+    if (err.error) throw err;
     console.error('getGymSalesSummary error:', err);
     throw {
       status: 500,

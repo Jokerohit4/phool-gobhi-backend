@@ -71,7 +71,7 @@ const sendOtp = async (req, res) => {
 const verifyOtp = async (req, res) => {
   try {
     const result = await verifyOtpService(req.body ?? {});
-    res.status(201).json(result);
+    res.status(result.isNewUser ? 201 : 200).json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });
   }
