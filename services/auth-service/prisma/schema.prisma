@@ -18,6 +18,9 @@ model User {
   role      Role
   type      UserType
   gobhiType GobhiType?
+  gender        Gender?
+  dateOfBirth   DateTime?     @db.Date
+  fitnessGoals  FitnessGoal[]
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   createdAt DateTime   @default(now())
@@ -46,6 +49,26 @@ enum UserType {
   general
   sub_premium
   premium
+
+  @@schema("auth")
+}
+
+enum Gender {
+  male
+  female
+  other
+  prefer_not_to_say
+
+  @@schema("auth")
+}
+
+enum FitnessGoal {
+  weight_loss
+  muscle_gain
+  general_fitness
+  flexibility_yoga
+  sports_training
+  rehabilitation
 
   @@schema("auth")
 }

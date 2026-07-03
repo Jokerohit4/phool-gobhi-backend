@@ -81,7 +81,17 @@ const getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ id: user.id, phone: user.phone, name: user.name, email: user.email, role: user.role, type: user.type });
+    res.json({
+      id: user.id,
+      phone: user.phone,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      type: user.type,
+      gender: user.gender,
+      dateOfBirth: user.dateOfBirth,
+      fitnessGoals: user.fitnessGoals,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
