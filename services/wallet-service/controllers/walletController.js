@@ -103,7 +103,7 @@ export const createTopUpOrder = async (req, res) => {
     const order = await razorpay.orders.create({
       amount: Math.round(amount * 100), // Convert to paise
       currency: 'INR',
-      metadata: { userId }
+      notes: { userId }
     });
 
     // Store order in DB
@@ -121,7 +121,7 @@ export const createTopUpOrder = async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.error?.description || err.message || 'Server error' });
   }
 };
 
