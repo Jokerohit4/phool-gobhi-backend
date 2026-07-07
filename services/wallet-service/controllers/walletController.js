@@ -4,6 +4,8 @@ import {
   getWalletTransactionsService,
   creditWalletService,
   debitWalletService,
+  getPartnerBalancesService,
+  payoutWalletService,
   createRazorpayOrderService,
   getRazorpayOrderService,
   updateRazorpayOrderStatusService
@@ -80,6 +82,27 @@ export const debitWallet = async (req, res) => {
     const { userId } = req.params;
     const { amount, description } = req.body;
     const result = await debitWalletService(Number(userId), amount, description);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const listPartnerBalances = async (req, res) => {
+  try {
+    const wallets = await getPartnerBalancesService();
+    res.json({ data: wallets });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const payoutPartner = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { amount, description } = req.body;
+    const result = await payoutWalletService(Number(userId), amount, description);
+    track('partner_payout_recorded', Number(userId), { amount: result.transaction.amount });
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });

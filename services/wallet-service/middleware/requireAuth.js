@@ -10,6 +10,12 @@ export const requireAuth = (req, res, next) => {
   next();
 };
 
+export const requireRole = (...roles) => (req, res, next) => {
+  if (!req.userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!roles.includes(req.userRole)) return res.status(403).json({ error: 'Forbidden' });
+  next();
+};
+
 // Guards service-to-service endpoints (credit/debit). The shared secret is known
 // only to backend services; the gateway strips any client-supplied x-internal-key,
 // so external callers can never satisfy this check.

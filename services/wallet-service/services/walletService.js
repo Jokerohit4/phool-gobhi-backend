@@ -64,6 +64,36 @@ export async function debitWalletService(userId, amount, description) {
   });
 }
 
+export async function getPartnerBalancesService() {
+  return await prisma.wallet.findMany({
+    where: { userType: 'partner', balance: { gt: 0 } },
+    orderBy: { balance: 'desc' }
+  });
+}
+
+export async function payoutWalletService(userId, amount, description) {
+  return await prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.findUnique({ where: { userId } });
+    if (!wallet) throw new Error('Wallet not found');
+    const payoutAmount = amount ?? wallet.balance;
+    if (payoutAmount <= 0) throw new Error('Nothing to pay out');
+    if (wallet.balance < payoutAmount) throw new Error('Insufficient balance');
+    const updated = await tx.wallet.update({
+      where: { userId },
+      data: { balance: { decrement: payoutAmount } }
+    });
+    const transaction = await tx.walletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        type: 'payout',
+        amount: payoutAmount,
+        description: description || 'Manual payout to partner'
+      }
+    });
+    return { wallet: updated, transaction };
+  });
+}
+
 export async function createRazorpayOrderService(userId, orderId, amount) {
   try {
     return await prisma.razorpayOrder.create({
