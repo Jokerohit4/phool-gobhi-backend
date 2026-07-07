@@ -225,11 +225,24 @@ async function sendFast2SmsOtp(phone, code) {
   const apiKey = process.env.FAST2SMS_API_KEY;
   if (!apiKey) return false;
   const digits = phone.replace(/\D/g, '').slice(-10);
+  // App hash lines let Android's SMS Retriever API auto-read the OTP without any
+  // SMS permission; each hash is an 11-char string tied to a specific app's
+  // package name + signing certificate (see SmsAutoFill().getAppSignature).
+  const hashes = [process.env.SMS_APP_HASH_CUSTOMER, process.env.SMS_APP_HASH_PARTNER]
+    .filter(Boolean)
+    .join('\n');
+  const message = `<#> ${code} is your Phool Gobhi verification code.${hashes ? `\n${hashes}` : ''}`;
   try {
-    const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=otp&variables_values=${code}&numbers=${digits}`, {
+    const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=q&message=${encodeURIComponent(message)}&language=english&flash=0&numbers=${digits}`, {
       headers: { 'cache-control': 'no-cache' },
     });
-    if (!res.ok) { console.error('Fast2SMS OTP failed:', res.status); return false; }
+    const body = await res.json().catch(() => null);
+    // Fast2SMS sometimes returns HTTP 200 with {return:false} on logical failures
+    // (e.g. account gates) — res.ok alone isn't enough to detect that.
+    if (!res.ok || body?.return === false) {
+      console.error('Fast2SMS OTP failed:', res.status, body);
+      return false;
+    }
     return true;
   } catch (err) {
     console.error('Fast2SMS OTP error:', err.message);
