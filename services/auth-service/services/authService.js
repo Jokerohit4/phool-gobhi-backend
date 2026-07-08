@@ -225,12 +225,11 @@ async function sendFast2SmsOtp(phone, code) {
   const apiKey = process.env.FAST2SMS_API_KEY;
   if (!apiKey) return false;
   const digits = phone.replace(/\D/g, '').slice(-10);
-  // Plain text only — the "<#> ...<hash>" SMS Retriever format gets silently
-  // dropped by Indian carrier DLT/spam filters on this unverified route
-  // (confirmed by live test), so Android auto-read isn't supported here.
-  const message = `${code} is your Phool Gobhi verification code.`;
+  // route=otp requires no DLT registration (Fast2SMS delivers it via their own
+  // pre-approved template), but the message is fixed as "Your OTP: {value}" —
+  // no custom/branded text or Sender ID is possible on this route.
   try {
-    const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=q&message=${encodeURIComponent(message)}&language=english&flash=0&numbers=${digits}`, {
+    const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=otp&variables_values=${code}&numbers=${digits}`, {
       headers: { 'cache-control': 'no-cache' },
     });
     const body = await res.json().catch(() => null);
