@@ -225,13 +225,10 @@ async function sendFast2SmsOtp(phone, code) {
   const apiKey = process.env.FAST2SMS_API_KEY;
   if (!apiKey) return false;
   const digits = phone.replace(/\D/g, '').slice(-10);
-  // App hash lines let Android's SMS Retriever API auto-read the OTP without any
-  // SMS permission; each hash is an 11-char string tied to a specific app's
-  // package name + signing certificate (see SmsAutoFill().getAppSignature).
-  const hashes = [process.env.SMS_APP_HASH_CUSTOMER, process.env.SMS_APP_HASH_PARTNER]
-    .filter(Boolean)
-    .join('\n');
-  const message = `<#> ${code} is your Phool Gobhi verification code.${hashes ? `\n${hashes}` : ''}`;
+  // Plain text only — the "<#> ...<hash>" SMS Retriever format gets silently
+  // dropped by Indian carrier DLT/spam filters on this unverified route
+  // (confirmed by live test), so Android auto-read isn't supported here.
+  const message = `${code} is your Phool Gobhi verification code.`;
   try {
     const res = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=q&message=${encodeURIComponent(message)}&language=english&flash=0&numbers=${digits}`, {
       headers: { 'cache-control': 'no-cache' },
