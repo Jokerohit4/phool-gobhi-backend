@@ -1,6 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
-import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService } from '../services/authService.js';
 
 const prisma = new PrismaClient();
 
@@ -77,6 +77,19 @@ const verifyOtp = async (req, res) => {
   }
 };
 
+const verifyFirebaseToken = async (req, res) => {
+  try {
+    const result = await verifyFirebaseTokenService(req.body ?? {});
+    res.status(result.isNewUser ? 201 : 200).json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });
+  }
+};
+
+const getOtpConfig = (req, res) => {
+  res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
+};
+
 const getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -108,6 +121,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, getMe, updateFcmToken };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, updateFcmToken };
 
 

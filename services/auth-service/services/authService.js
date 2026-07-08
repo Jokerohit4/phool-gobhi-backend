@@ -268,28 +268,15 @@ export async function sendOtpService(phone) {
   return response;
 }
 
-export async function verifyOtpService({ phone, otp, name, email, role = 'customer', type = 'general', gobhiType }) {
-  if (!phone) {
-    throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
-  }
+// Shared by both the OTP-store path (verifyOtpService) and the Firebase
+// ID-token path (verifyFirebaseTokenService) — everything that happens once a
+// phone number is confirmed verified, regardless of how it got verified.
+async function issueSessionForUser({ phone, name, email, role = 'customer', type = 'general', gobhiType }) {
   if (!VALID_ROLES.includes(role)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_ROLE.message, errorCode: ERROR_MESSAGES.INVALID_ROLE.code };
   }
   if (!VALID_TYPES.includes(type)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_TYPE.message, errorCode: ERROR_MESSAGES.INVALID_TYPE.code };
-  }
-  const isDev = process.env.ALLOW_DEV_OTP === 'true';
-  const DEV_OTP = '123456';
-  if (!(isDev && otp === DEV_OTP)) {
-    const entry = otpStore.get(phone);
-    if (!entry || Date.now() > entry.expiresAt) {
-      otpStore.delete(phone);
-      throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
-    }
-    if (entry.code !== otp) {
-      throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
-    }
-    otpStore.delete(phone);
   }
 
   let user = await prisma.user.findUnique({ where: { phone } });
@@ -337,4 +324,49 @@ export async function verifyOtpService({ phone, otp, name, email, role = 'custom
     ...(onboarding !== undefined && { onboarding }),
     user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType },
   };
+}
+
+export async function verifyOtpService({ phone, otp, name, email, role = 'customer', type = 'general', gobhiType }) {
+  if (!phone) {
+    throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
+  }
+  const isDev = process.env.ALLOW_DEV_OTP === 'true';
+  const DEV_OTP = '123456';
+  if (!(isDev && otp === DEV_OTP)) {
+    const entry = otpStore.get(phone);
+    if (!entry || Date.now() > entry.expiresAt) {
+      otpStore.delete(phone);
+      throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
+    }
+    if (entry.code !== otp) {
+      throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
+    }
+    otpStore.delete(phone);
+  }
+
+  return issueSessionForUser({ phone, name, email, role, type, gobhiType });
+}
+
+export async function verifyFirebaseTokenService({ idToken, name, email, role = 'customer', type = 'general', gobhiType }) {
+  if (!idToken) {
+    throw { status: 400, error: 'idToken is required', errorCode: 'ID_TOKEN_REQUIRED' };
+  }
+  const { verifyFirebaseIdToken } = await import('../utils/firebaseAdmin.js');
+  let decoded;
+  try {
+    decoded = await verifyFirebaseIdToken(idToken);
+  } catch (err) {
+    console.error('Firebase ID token verification failed:', err.message);
+    throw { status: 401, error: 'Invalid or expired Firebase token', errorCode: 'INVALID_FIREBASE_TOKEN' };
+  }
+  if (!decoded.phone_number) {
+    throw { status: 400, error: 'Firebase token has no verified phone number', errorCode: 'NO_PHONE_IN_TOKEN' };
+  }
+  // Firebase returns E.164 (+91XXXXXXXXXX); existing users are keyed on the
+  // raw 10-digit phone the OTP-store path has always used — normalize so the
+  // same person resolves to the same account regardless of which provider
+  // verified them.
+  const phone = decoded.phone_number.replace(/\D/g, '').slice(-10);
+
+  return issueSessionForUser({ phone, name, email, role, type, gobhiType });
 }
