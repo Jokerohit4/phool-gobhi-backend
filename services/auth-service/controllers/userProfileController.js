@@ -42,6 +42,25 @@ export const getProfile = async (req, res) => {
   }
 };
 
+// POST /users/:userId/profile-picture — multipart upload (field "image"),
+// stores to Cloudinary and persists the resulting URL.
+export const uploadProfilePicture = async (req, res) => {
+  try {
+    const requestingUserId = parseInt(req.headers['x-user-id']);
+    const targetUserId = parseInt(req.params.userId);
+    if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
+    if (!req.file) return res.status(400).json({ error: 'No image provided' });
+
+    const user = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { profileImageUrl: req.file.path },
+    });
+    res.status(201).json({ data: formatUser(user) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 // PUT /users/:userId — update name, phone, profileImageUrl, fcmToken
 export const updateProfile = async (req, res) => {
   try {
