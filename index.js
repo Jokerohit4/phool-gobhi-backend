@@ -19,6 +19,7 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/availability/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
