@@ -29,7 +29,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // 1. Fetch gym details from gym-service
     let gym;
     try {
-      const response = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      const response = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
       gym = response.data.data || response.data;
     } catch (err) {
       throw {
@@ -272,7 +272,7 @@ export async function completeBooking(bookingId, gymId, partnerId) {
     // 5. Verify partner owns this gym (fetch gym once — reused for payout)
     let gym;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
       gym = gymRes.data?.data || gymRes.data;
     } catch (_) {
       throw { status: 404, error: 'Gym not found' };
@@ -332,7 +332,7 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
 
     let locationVerified = false;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, internalHeaders);
       const gym = gymRes.data.data || gymRes.data;
       if (lat && lng && gym.lat && gym.lng) {
         locationVerified = distanceMeters(lat, lng, gym.lat, gym.lng) <= 300;
@@ -370,7 +370,9 @@ export async function getCustomerBookings(customerId) {
     const gymMap = {};
     await Promise.all(uniqueGymIds.map(async (gymId) => {
       try {
-        const resp = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`);
+        const resp = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
+          headers: { 'x-internal-key': INTERNAL_API_KEY }
+        });
         if (resp.ok) {
           const body = await resp.json();
           const gym = body.data || body;
@@ -414,7 +416,7 @@ export async function getGymBookings(gymId, partnerId) {
     // Verify partner owns this gym before exposing bookings
     let gym;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
       gym = gymRes.data?.data || gymRes.data;
     } catch (_) {
       throw { status: 404, error: 'Gym not found' };
@@ -441,7 +443,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
     // Verify partner owns this gym before exposing revenue data
     let gym;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
       gym = gymRes.data?.data || gymRes.data;
     } catch (_) {
       throw { status: 404, error: 'Gym not found' };

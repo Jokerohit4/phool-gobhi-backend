@@ -32,6 +32,7 @@ model Gym {
   rating       Float       @default(0)
   ratingCount  Int         @default(0)
   isApproved   Boolean     @default(false)
+  rejectionReason String?
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt

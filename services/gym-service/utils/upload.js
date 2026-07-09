@@ -33,7 +33,10 @@ if (hasCloudinary) {
   docStorage = multer.memoryStorage();
 }
 
-export const uploadGymImage = multer({ storage: imageStorage });
+export const uploadGymImage = multer({
+  storage: imageStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap, same as documents below
+});
 export const uploadGymDoc = multer({
   storage: docStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for documents

@@ -7,7 +7,10 @@ const router = Router();
 
 // Public routes (no auth needed)
 router.get('/', ctrl.listGyms);
-router.get('/internal/:id', ctrl.getGymInternal);
+// Internal service-to-service only (e.g. booking-service resolving a gym by
+// id) — returns the full row with no approval/active filtering, so this must
+// never be reachable without the shared secret.
+router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
 router.get('/:id', ctrl.getGym);
@@ -32,6 +35,7 @@ router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) =>
 
 // Admin-only route — requires role 'gobhi'
 // To approve: create an account with role:'gobhi' via POST /api/auth/signup, login, use the JWT
+// Body: {} or {approved:true} to approve; {approved:false, reason:"..."} to reject (reason required)
 router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
 
 // Customer routes

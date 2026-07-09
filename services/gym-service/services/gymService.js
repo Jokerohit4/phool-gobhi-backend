@@ -3,6 +3,41 @@ import cloudinary from '../config/cloudinary.js';
 
 const prisma = new PrismaClient();
 
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Validates the fields that flow into slot generation (utils/slots.js). A
+// non-positive slotDuration in particular isn't just bad data — it makes
+// generateTimeSlots loop forever, since its termination check assumes a
+// positive step. Called with the FINAL values that will actually be stored
+// (post-defaulting on create), not the raw request body.
+function validateGymFields({ sessionPrice, quotedPrice, capacity, slotDuration, openTime, closeTime }) {
+  if (sessionPrice !== undefined && (typeof sessionPrice !== 'number' || !(sessionPrice > 0))) {
+    throw { status: 400, error: 'sessionPrice must be a positive number' };
+  }
+  if (quotedPrice !== undefined && quotedPrice !== null && (typeof quotedPrice !== 'number' || !(quotedPrice > 0))) {
+    throw { status: 400, error: 'quotedPrice must be a positive number' };
+  }
+  if (capacity !== undefined && (!Number.isInteger(capacity) || capacity <= 0)) {
+    throw { status: 400, error: 'capacity must be a positive integer' };
+  }
+  if (slotDuration !== undefined && (!Number.isInteger(slotDuration) || slotDuration <= 0)) {
+    throw { status: 400, error: 'slotDuration must be a positive integer number of minutes' };
+  }
+  if (openTime !== undefined && !TIME_RE.test(openTime)) {
+    throw { status: 400, error: 'openTime must be in HH:MM 24-hour format' };
+  }
+  if (closeTime !== undefined && !TIME_RE.test(closeTime)) {
+    throw { status: 400, error: 'closeTime must be in HH:MM 24-hour format' };
+  }
+  if (openTime !== undefined && closeTime !== undefined && TIME_RE.test(openTime) && TIME_RE.test(closeTime)) {
+    const [oh, om] = openTime.split(':').map(Number);
+    const [ch, cm] = closeTime.split(':').map(Number);
+    if (oh * 60 + om >= ch * 60 + cm) {
+      throw { status: 400, error: 'closeTime must be after openTime' };
+    }
+  }
+}
+
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -133,6 +168,13 @@ export async function getGymCapacity(id) {
 }
 
 export async function createGym(partnerId, data) {
+  const existing = await prisma.gym.findFirst({
+    where: { partnerId, isActive: true },
+  });
+  if (existing) {
+    throw { status: 409, error: 'You already have a gym listed. Edit your existing gym instead of creating a new one.' };
+  }
+
   const {
     name,
     description,
@@ -153,6 +195,17 @@ export async function createGym(partnerId, data) {
     capacity,
   } = data;
 
+  const finalSlotDuration = slotDuration || 60;
+  const finalCapacity = capacity || 20;
+  validateGymFields({
+    sessionPrice,
+    quotedPrice,
+    capacity: finalCapacity,
+    slotDuration: finalSlotDuration,
+    openTime,
+    closeTime,
+  });
+
   const gym = await prisma.gym.create({
     data: {
       partnerId,
@@ -171,8 +224,8 @@ export async function createGym(partnerId, data) {
       brandDocs: brandDocs || [],
       openTime,
       closeTime,
-      slotDuration: slotDuration || 60,
-      capacity: capacity || 20,
+      slotDuration: finalSlotDuration,
+      capacity: finalCapacity,
       isApproved: false,
       isActive: true,
     },
@@ -221,6 +274,26 @@ export async function updateGym(gymId, partnerId, data) {
     }
   });
 
+  validateGymFields(updateData);
+
+  // Approval only vouches for the gym as it looked at review time — if a
+  // partner changes what's actually being reviewed (identity, location,
+  // price) after approval, that approval no longer means anything and has
+  // to be re-earned. Cosmetic fields (description, phone, hours, amenities,
+  // capacity) don't trigger this.
+  const MATERIAL_FIELDS = ['name', 'address', 'city', 'state', 'lat', 'lng', 'sessionPrice'];
+  const changedMaterialField = MATERIAL_FIELDS.some(
+    field => field in updateData && updateData[field] !== gym[field]
+  );
+  if (gym.isApproved && changedMaterialField) {
+    updateData.isApproved = false;
+  } else if (!gym.isApproved && gym.rejectionReason && Object.keys(updateData).length > 0) {
+    // A rejected gym being edited at all counts as a resubmission — clear
+    // the stale reason so the app shows "pending review" again, not the
+    // old rejection message for changes that may have already fixed it.
+    updateData.rejectionReason = null;
+  }
+
   const updated = await prisma.gym.update({
     where: { id: gymId },
     data: updateData,
@@ -266,12 +339,13 @@ export async function getPartnerGymSummary(partnerId) {
   const gym = await prisma.gym.findFirst({
     where: { partnerId, isActive: true },
     orderBy: { id: 'asc' },
-    select: { id: true, isApproved: true },
+    select: { id: true, isApproved: true, rejectionReason: true },
   });
   return {
     hasGym: !!gym,
     approved: gym?.isApproved ?? false,
     gymId: gym?.id ?? null,
+    rejectionReason: gym?.rejectionReason ?? null,
   };
 }
 
@@ -392,7 +466,7 @@ export async function addReview(gymId, customerId, rating, comment) {
     where: { id: gymId },
   });
 
-  if (!gym) {
+  if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
   }
 
@@ -424,6 +498,11 @@ export async function addReview(gymId, customerId, rating, comment) {
 }
 
 export async function getGymReviews(gymId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym || !gym.isActive || !gym.isApproved) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+
   const reviews = await prisma.gymReview.findMany({
     where: { gymId },
     orderBy: { createdAt: 'desc' },
@@ -432,13 +511,20 @@ export async function getGymReviews(gymId) {
   return reviews;
 }
 
-export async function approveGym(gymId) {
+export async function approveGym(gymId, { approved = true, reason = null } = {}) {
   const gym = await prisma.gym.findUnique({ where: { id: gymId } });
   if (!gym) throw { status: 404, error: 'Gym not found' };
 
+  if (!approved && !reason) {
+    throw { status: 400, error: 'A reason is required when rejecting a gym' };
+  }
+
   return prisma.gym.update({
     where: { id: gymId },
-    data: { isApproved: true },
+    data: {
+      isApproved: approved,
+      rejectionReason: approved ? null : reason,
+    },
   });
 }
 

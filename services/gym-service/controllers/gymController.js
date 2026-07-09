@@ -274,9 +274,13 @@ export const getGymReviews = async (req, res) => {
 
 export const approveGym = async (req, res) => {
   try {
-    const gym = await gymService.approveGym(parseInt(req.params.id));
-    // Supply funnel: gobhi approved the gym; keyed to the owning partner.
-    track('gym_approved', gym.partnerId, { gym_id: gym.id, city: gym.city });
+    const { approved, reason } = req.body || {};
+    const gym = await gymService.approveGym(parseInt(req.params.id), {
+      approved: approved !== false,
+      reason,
+    });
+    // Supply funnel: gobhi approved/rejected the gym; keyed to the owning partner.
+    track(gym.isApproved ? 'gym_approved' : 'gym_rejected', gym.partnerId, { gym_id: gym.id, city: gym.city });
     res.json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
