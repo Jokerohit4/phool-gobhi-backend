@@ -18,6 +18,7 @@ const prisma = new PrismaClient();
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
 // Shared header for service-to-service wallet mutations (credit/debit are internal-only)
@@ -44,6 +45,29 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       throw {
         status: 400,
         error: 'This slot has already passed or starts too soon to book'
+      };
+    }
+
+    // 1a. Require a complete profile (name + date of birth) before booking —
+    // both are optional at OTP signup, so a customer can otherwise reach
+    // this endpoint before ever filling them in. Mirrors the app's own
+    // pre-booking check, enforced here too since that check is client-side only.
+    try {
+      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, internalHeaders);
+      const profile = profileRes.data;
+      if (!profile?.name?.trim() || !profile?.dateOfBirth) {
+        throw {
+          status: 400,
+          error: 'Please add your name and date of birth before booking'
+        };
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      // auth-service unreachable — fail closed, same as a missing profile,
+      // rather than silently letting an unverifiable booking through.
+      throw {
+        status: 400,
+        error: 'Could not verify your profile — please try again'
       };
     }
 

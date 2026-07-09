@@ -110,6 +110,23 @@ const getMe = async (req, res) => {
   }
 };
 
+// Internal: minimal profile lookup for other services to enforce "profile
+// must be complete before X" rules (e.g. booking-service before createBooking)
+// without duplicating user data or exposing it through a public route.
+const getUserInternal = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({
+      id: user.id,
+      name: user.name,
+      dateOfBirth: user.dateOfBirth,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
@@ -121,6 +138,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, updateFcmToken };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, getUserInternal, updateFcmToken };
 
 

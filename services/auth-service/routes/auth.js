@@ -1,7 +1,8 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, updateFcmToken } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, getUserInternal, updateFcmToken } from '../controllers/authController.js';
 import verifyToken from '../middleware/verifyToken.js';
+import requireInternal from '../middleware/requireInternal.js';
 
 router.post('/signup', signup);
 router.post('/login', login);
@@ -17,6 +18,7 @@ router.post('/verify-otp', verifyOtp);
 router.post('/verify-firebase-token', verifyFirebaseToken);
 router.get('/otp-config', getOtpConfig);
 router.get('/me', verifyToken, getMe);
+router.get('/internal/:id', requireInternal, getUserInternal);
 router.post('/fcm-token', verifyToken, updateFcmToken);
 
 export default router;
