@@ -8,7 +8,8 @@ import {
   payoutWalletService,
   createRazorpayOrderService,
   getRazorpayOrderService,
-  updateRazorpayOrderStatusService
+  updateRazorpayOrderStatusService,
+  claimRazorpayOrderService
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -162,12 +163,25 @@ export const verifyAndCreditWallet = async (req, res) => {
       return res.status(400).json({ error: 'Invalid signature' });
     }
 
-    // Check order exists and is pending (idempotency)
     const order = await getRazorpayOrderService(orderId);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    if (order.status !== 'PENDING') {
+
+    // Atomically claim the order so a concurrent webhook delivery for the
+    // same order can't also credit it.
+    const claimed = await claimRazorpayOrderService(orderId);
+    if (!claimed) {
+      // Lost the race — most likely the webhook already credited this order.
+      // If so, the top-up did succeed, so tell the client that instead of
+      // surfacing an "already processed" error for money that did land.
+      const latest = await getRazorpayOrderService(orderId);
+      if (latest?.status === 'SUCCESS') {
+        const wallet = await getWalletService(userId);
+        return res.json({
+          data: { success: true, balance: wallet.balance, transactionId: orderId }
+        });
+      }
       return res.status(400).json({ error: 'Order already processed' });
     }
 
@@ -187,6 +201,7 @@ export const verifyAndCreditWallet = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('verifyAndCreditWallet error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
@@ -195,11 +210,12 @@ export const handleRazorpayWebhook = async (req, res) => {
   try {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
-    const body = JSON.stringify(req.body);
 
-    // Verify webhook signature
+    // Verify webhook signature against the exact raw bytes Razorpay signed —
+    // not a JSON.stringify of the parsed body, which can differ byte-for-byte
+    // and would make every real webhook delivery fail signature checks.
     const hmac = crypto.createHmac('sha256', secret);
-    hmac.update(body);
+    hmac.update(req.rawBody);
     const hash = hmac.digest('hex');
 
     if (hash !== signature) {
@@ -212,18 +228,24 @@ export const handleRazorpayWebhook = async (req, res) => {
       const { id: paymentId, order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
 
-      if (order && order.status === 'PENDING') {
-        await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
-        await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
-        track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
+      if (order) {
+        const claimed = await claimRazorpayOrderService(orderId);
+        if (claimed) {
+          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+          await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+          track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
+        }
       }
     } else if (event === 'payment.failed') {
       const { order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
 
-      if (order && order.status === 'PENDING') {
-        await updateRazorpayOrderStatusService(orderId, 'FAILED', null);
-        track('wallet_topup_failed', order.userId, { amount: order.amount, order_id: orderId });
+      if (order) {
+        const claimed = await claimRazorpayOrderService(orderId);
+        if (claimed) {
+          await updateRazorpayOrderStatusService(orderId, 'FAILED', null);
+          track('wallet_topup_failed', order.userId, { amount: order.amount, order_id: orderId });
+        }
       }
     }
 

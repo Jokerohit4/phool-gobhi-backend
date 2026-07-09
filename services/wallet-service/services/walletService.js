@@ -119,6 +119,17 @@ export async function getRazorpayOrderService(orderId) {
   }
 }
 
+export async function claimRazorpayOrderService(orderId) {
+  // Atomic UPDATE...WHERE status='PENDING' — the DB row lock makes this the
+  // single point of truth for "who gets to credit this order," so the client
+  // /verify call and the webhook can never both credit the same top-up.
+  const result = await prisma.razorpayOrder.updateMany({
+    where: { orderId, status: 'PENDING' },
+    data: { status: 'PROCESSING' }
+  });
+  return result.count === 1;
+}
+
 export async function updateRazorpayOrderStatusService(orderId, status, razorpayPaymentId = null) {
   try {
     const data = { status };

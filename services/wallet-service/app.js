@@ -7,7 +7,13 @@ import { pool } from './db.js';
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+// Razorpay signs the exact raw bytes of the webhook payload — stash them here
+// since express.json() only exposes the re-parsed object, and re-serializing
+// that with JSON.stringify is not guaranteed to match byte-for-byte (key
+// order, whitespace, number formatting can all differ).
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(extractUser);
 
 app.get('/health', async (req, res) => {
