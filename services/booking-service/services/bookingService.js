@@ -3,6 +3,7 @@ import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
+import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -38,6 +39,13 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
     const capacity = gym.capacity;
     const amount = gym.sessionPrice;
+
+    if (isSlotInPastOrTooSoon(date, startTime)) {
+      throw {
+        status: 400,
+        error: 'This slot has already passed or starts too soon to book'
+      };
+    }
 
     // 1b. Check if slot is blocked
     try {

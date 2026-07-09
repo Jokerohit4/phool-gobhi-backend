@@ -1,6 +1,7 @@
 import * as gymService from '../services/gymService.js';
 import { generateTimeSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
+import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -81,7 +82,8 @@ export const getGymSlots = async (req, res) => {
         const available = Math.max(gym.capacity - booked, 0);
         return { ...s, booked, available };
       })
-      .filter(s => s.available > 0);
+      .filter(s => s.available > 0)
+      .filter(s => !date || !isSlotInPastOrTooSoon(date, s.startTime));
 
     res.json({ data: { slots: annotated, capacity: gym.capacity } });
   } catch (err) {
