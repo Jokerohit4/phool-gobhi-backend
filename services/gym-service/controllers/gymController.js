@@ -43,49 +43,86 @@ export const getGymInternal = async (req, res) => {
   }
 };
 
+async function getAnnotatedSlotsForDate(gym, gymId, date) {
+  let slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
+
+  // Filter out blocked slots for the requested date
+  if (date) {
+    const blocks = await gymService.getSlotBlocks(gymId, date);
+    const blockedTimes = new Set(blocks.map(b => b.startTime));
+    slots = slots.filter(s => !blockedTimes.has(s.startTime));
+  }
+
+  // Annotate each slot with real availability from existing bookings (best-effort).
+  // If booking-service is unreachable, fall back to assuming all slots are open.
+  let counts = {};
+  if (date) {
+    try {
+      const resp = await fetch(
+        `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`,
+        { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' } }
+      );
+      if (resp.ok) {
+        const body = await resp.json();
+        counts = body.data || {};
+      }
+    } catch (_) {
+      // booking-service down — leave counts empty so slots still render
+    }
+  }
+
+  return slots
+    .map(s => {
+      const booked = counts[s.startTime] || 0;
+      const available = Math.max(gym.capacity - booked, 0);
+      return { ...s, booked, available };
+    })
+    .filter(s => s.available > 0)
+    .filter(s => !date || !isSlotInPastOrTooSoon(date, s.startTime));
+}
+
 export const getGymSlots = async (req, res) => {
   try {
     const gymId = parseInt(req.params.id);
     const { date } = req.query;
 
     const gym = await gymService.getGymById(gymId);
-    let slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
-
-    // Filter out blocked slots for the requested date
-    if (date) {
-      const blocks = await gymService.getSlotBlocks(gymId, date);
-      const blockedTimes = new Set(blocks.map(b => b.startTime));
-      slots = slots.filter(s => !blockedTimes.has(s.startTime));
-    }
-
-    // Annotate each slot with real availability from existing bookings (best-effort).
-    // If booking-service is unreachable, fall back to assuming all slots are open.
-    let counts = {};
-    if (date) {
-      try {
-        const resp = await fetch(
-          `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`,
-          { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' } }
-        );
-        if (resp.ok) {
-          const body = await resp.json();
-          counts = body.data || {};
-        }
-      } catch (_) {
-        // booking-service down — leave counts empty so slots still render
-      }
-    }
-
-    const annotated = slots
-      .map(s => {
-        const booked = counts[s.startTime] || 0;
-        const available = Math.max(gym.capacity - booked, 0);
-        return { ...s, booked, available };
-      })
-      .filter(s => s.available > 0)
-      .filter(s => !date || !isSlotInPastOrTooSoon(date, s.startTime));
+    const annotated = await getAnnotatedSlotsForDate(gym, gymId, date);
 
     res.json({ data: { slots: annotated, capacity: gym.capacity } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Which of the next `days` dates have at least one bookable slot — lets the
+// app grey out/hide date picker entries without re-deriving availability
+// client-side from a full slot fetch per day.
+export const getGymAvailability = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.id);
+    const days = Math.min(Math.max(parseInt(req.query.days) || 7, 1), 30);
+
+    const gym = await gymService.getGymById(gymId);
+
+    // Anchor on the IST calendar day (not the server's UTC date) so this
+    // stays aligned with isSlotInPastOrTooSoon's IST-based comparison —
+    // otherwise the day list would be off by one for ~5.5 hours a day.
+    const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+    const istNow = new Date(Date.now() + IST_OFFSET_MS);
+    const anchor = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate());
+    const dates = Array.from({ length: days }, (_, i) =>
+      new Date(anchor + i * 86400000).toISOString().split('T')[0]
+    );
+
+    const results = await Promise.all(
+      dates.map(async date => ({
+        date,
+        available: (await getAnnotatedSlotsForDate(gym, gymId, date)).length > 0
+      }))
+    );
+
+    res.json({ data: { dates: results } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

@@ -12,6 +12,7 @@ router.get('/internal/:id', ctrl.getGymInternal);
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
+router.get('/:id/availability', ctrl.getGymAvailability);
 router.get('/:id/reviews', ctrl.getGymReviews);
 
 // Partner routes
