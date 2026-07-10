@@ -108,11 +108,18 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
 });
 
 app.use('/api/auth', proxy(AUTH_SERVICE_URL));
+// express-http-proxy buffers the whole request body itself (via raw-body)
+// before forwarding, with its own default limit far smaller than the
+// multipart uploads these two routes carry (gym photos/docs, profile
+// pictures) — raised to match the receiving service's own multer cap so
+// that cap is what actually rejects an oversized file, not this proxy
+// buffer failing first with an unparseable HTML error.
 app.use('/api/users', proxy(AUTH_SERVICE_URL, {
   proxyReqPathResolver: req => '/users' + req.url,
+  limit: '15mb',
 }));
 app.use('/api/wallet', proxy(WALLET_SERVICE_URL));
-app.use('/api/gyms', proxy(GYM_SERVICE_URL));
+app.use('/api/gyms', proxy(GYM_SERVICE_URL, { limit: '15mb' }));
 app.use('/api/bookings', proxy(BOOKING_SERVICE_URL));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
