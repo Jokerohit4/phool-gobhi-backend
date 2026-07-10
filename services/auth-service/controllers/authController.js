@@ -120,6 +120,7 @@ const getUserInternal = async (req, res) => {
     res.json({
       id: user.id,
       name: user.name,
+      phone: user.phone,
       dateOfBirth: user.dateOfBirth,
     });
   } catch (err) {

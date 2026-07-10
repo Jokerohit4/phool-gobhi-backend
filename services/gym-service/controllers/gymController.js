@@ -25,9 +25,36 @@ export const listGyms = async (req, res) => {
   }
 };
 
+export const listGymsAdmin = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const gyms = await gymService.listGymsAdmin({ status });
+    res.json({ data: gyms });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Admin (gobhi) single-gym lookup — unlike getGym above, this doesn't 404
+// on a pending/rejected gym, so staff can open the detail view before approving.
+export const getGymAdmin = async (req, res) => {
+  try {
+    const gym = await gymService.getGymByIdRaw(parseInt(req.params.id));
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getGym = async (req, res) => {
   try {
-    const gym = await gymService.getGymById(parseInt(req.params.id));
+    const userLat = parseFloat(req.headers['x-user-lat']);
+    const userLng = parseFloat(req.headers['x-user-lng']);
+    const gym = await gymService.getGymById(
+      parseInt(req.params.id),
+      isNaN(userLat) ? null : userLat,
+      isNaN(userLng) ? null : userLng
+    );
     res.json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

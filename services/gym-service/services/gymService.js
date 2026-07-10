@@ -50,6 +50,10 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Gyms further than this from the user are not shown in the list at all —
+// a business rule, not just a sort/display concern.
+const MAX_DISTANCE_KM = 40;
+
 export async function listGyms({ city, minPrice, maxPrice, search, amenities, userLat, userLng }) {
   const where = {
     isActive: true,
@@ -109,24 +113,46 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, us
   }
 
   if (userLat != null && userLng != null) {
-    gyms = gyms.map(gym => ({
-      ...gym,
-      distanceKm:
-        gym.lat != null && gym.lng != null
-          ? Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10
-          : null,
-    }));
-    gyms.sort((a, b) => {
-      if (a.distanceKm == null) return 1;
-      if (b.distanceKm == null) return -1;
-      return a.distanceKm - b.distanceKm;
-    });
+    gyms = gyms
+      .map(gym => ({
+        ...gym,
+        distanceKm:
+          gym.lat != null && gym.lng != null
+            ? Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10
+            : null,
+      }))
+      // Gyms without coordinates can't be confirmed within range, so they're
+      // dropped along with anything beyond MAX_DISTANCE_KM.
+      .filter(gym => gym.distanceKm != null && gym.distanceKm <= MAX_DISTANCE_KM);
+    gyms.sort((a, b) => a.distanceKm - b.distanceKm);
   }
 
   return gyms;
 }
 
-export async function getGymById(id) {
+// Admin (gobhi) listing — unlike listGyms above, this has no isActive/
+// isApproved filter by default so staff can see gyms pending review.
+export async function listGymsAdmin({ status } = {}) {
+  const where = {};
+
+  if (status === 'pending') {
+    where.isApproved = false;
+    where.rejectionReason = null;
+  } else if (status === 'rejected') {
+    where.isApproved = false;
+    where.rejectionReason = { not: null };
+  } else if (status === 'approved') {
+    where.isApproved = true;
+  }
+
+  return prisma.gym.findMany({
+    where,
+    include: { images: true },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function getGymById(id, userLat, userLng) {
   const gym = await prisma.gym.findUnique({
     where: { id },
     include: { images: true, reviews: true },
@@ -134,6 +160,13 @@ export async function getGymById(id) {
 
   if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
+  }
+
+  if (userLat != null && userLng != null && gym.lat != null && gym.lng != null) {
+    return {
+      ...gym,
+      distanceKm: Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10,
+    };
   }
 
   return gym;

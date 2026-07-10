@@ -1,5 +1,29 @@
 import { PrismaClient } from '@prisma/client';
+import axios from 'axios';
 const prisma = new PrismaClient();
+
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+const internalHeaders = { headers: { 'x-internal-key': INTERNAL_API_KEY } };
+
+// Batch-fetches {name, phone} per userId from auth-service's internal
+// endpoint so admin views never show a bare numeric userId when real money
+// is about to move. Best-effort: a lookup failure degrades to nulls rather
+// than blocking the balances/payout view.
+async function enrichWithUserInfo(rows) {
+  const infoByUserId = await Promise.all(
+    rows.map(async (row) => {
+      try {
+        const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${row.userId}`, internalHeaders);
+        return [row.userId, { name: res.data?.name ?? null, phone: res.data?.phone ?? null }];
+      } catch (_) {
+        return [row.userId, { name: null, phone: null }];
+      }
+    })
+  );
+  const infoMap = new Map(infoByUserId);
+  return rows.map((row) => ({ ...row, ...infoMap.get(row.userId) }));
+}
 
 export async function createWalletService(userId, userType) {
   try {
@@ -65,10 +89,27 @@ export async function debitWalletService(userId, amount, description) {
 }
 
 export async function getPartnerBalancesService() {
-  return await prisma.wallet.findMany({
+  const wallets = await prisma.wallet.findMany({
     where: { userType: 'partner', balance: { gt: 0 } },
     orderBy: { balance: 'desc' }
   });
+  return enrichWithUserInfo(wallets);
+}
+
+export async function getPayoutHistoryService() {
+  const transactions = await prisma.walletTransaction.findMany({
+    where: { type: 'payout' },
+    include: { wallet: true },
+    orderBy: { createdAt: 'desc' }
+  });
+  const rows = transactions.map((t) => ({
+    id: t.id,
+    userId: t.wallet.userId,
+    amount: t.amount,
+    description: t.description,
+    createdAt: t.createdAt,
+  }));
+  return enrichWithUserInfo(rows);
 }
 
 export async function payoutWalletService(userId, amount, description) {

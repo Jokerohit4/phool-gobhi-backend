@@ -33,10 +33,14 @@ router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) =>
   res.json({ url: req.file.path });
 });
 
-// Admin-only route — requires role 'gobhi'
+// Admin-only routes — require role 'gobhi'
 // To approve: create an account with role:'gobhi' via POST /api/auth/signup, login, use the JWT
 // Body: {} or {approved:true} to approve; {approved:false, reason:"..."} to reject (reason required)
 router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
+// List all gyms regardless of owner/approval status; ?status=pending|approved|rejected
+router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
+// Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)
+router.get('/admin/:id', requireRole('gobhi'), ctrl.getGymAdmin);
 
 // Customer routes
 router.post('/:id/reviews', requireRole('customer'), ctrl.addReview);

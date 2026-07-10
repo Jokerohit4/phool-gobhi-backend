@@ -5,6 +5,7 @@ import {
   creditWalletService,
   debitWalletService,
   getPartnerBalancesService,
+  getPayoutHistoryService,
   payoutWalletService,
   createRazorpayOrderService,
   getRazorpayOrderService,
@@ -93,6 +94,15 @@ export const listPartnerBalances = async (req, res) => {
   try {
     const wallets = await getPartnerBalancesService();
     res.json({ data: wallets });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const listPayoutHistory = async (req, res) => {
+  try {
+    const payouts = await getPayoutHistoryService();
+    res.json({ data: payouts });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
