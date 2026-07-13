@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
@@ -22,6 +22,7 @@ router.post('/google', googleSignIn);
 router.get('/otp-config', getOtpConfig);
 router.get('/me', verifyToken, getMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
+router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 router.post('/fcm-token', verifyToken, updateFcmToken);
 
 // Pitch-deck access allowlist (moved off a hardcoded file in the website repo)

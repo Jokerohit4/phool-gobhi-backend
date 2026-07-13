@@ -24,6 +24,7 @@ model User {
   fitnessGoals  FitnessGoal[]
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
+  savedAddresses  SavedAddress[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -44,6 +45,19 @@ model PitchAccessContact {
 enum PitchContactType {
   email
   phone
+
+  @@schema("auth")
+}
+
+model SavedAddress {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  label            String
+  formattedAddress String
+  lat              Float
+  lng              Float
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id])
 
   @@schema("auth")
 }

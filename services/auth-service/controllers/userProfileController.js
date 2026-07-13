@@ -3,6 +3,25 @@ import { VALID_GENDERS, VALID_FITNESS_GOALS } from '../constants/userEnums.js';
 
 const prisma = new PrismaClient();
 
+const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+
+// Fire-and-forget: keeps buddy-service's denormalized gender/dateOfBirth/
+// fitnessGoals cache from drifting after a profile edit (see
+// services/buddy-service/services/buddyService.js#syncProfileFromAuth).
+// Buddy-service also lazily re-pulls on profile creation and exposes a
+// manual refresh endpoint, so a dropped call here just means a slightly
+// stale cache until one of those fallbacks runs — never blocks or fails
+// this request.
+function syncBuddyProfile(userId) {
+  fetch(`${BUDDY_SERVICE_URL}/internal/profile-sync/${userId}`, {
+    method: 'POST',
+    headers: { 'x-internal-key': INTERNAL_API_KEY },
+  }).catch((err) => {
+    console.error('[buddy-sync] notify failed:', err.message);
+  });
+}
+
 function formatUser(user) {
   return {
     authId: user.id,
@@ -31,10 +50,15 @@ export const getOrCreateProfile = async (req, res) => {
   }
 };
 
-// GET /users/:userId
+// GET /users/:userId — unlike the other routes here, this had no ownership
+// check at all: any authenticated user could read any other user's full
+// profile (name, email, DOB, gender, fitness goals) just by guessing an id.
 export const getProfile = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.userId) } });
+    const requestingUserId = parseInt(req.headers['x-user-id']);
+    const targetUserId = parseInt(req.params.userId);
+    if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
+    const user = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ data: formatUser(user) });
   } catch (err) {
@@ -88,6 +112,11 @@ export const updateProfile = async (req, res) => {
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
     const user = await prisma.user.update({ where: { id: targetUserId }, data: updates });
+
+    if (gender !== undefined || dateOfBirth !== undefined || fitnessGoals !== undefined) {
+      syncBuddyProfile(targetUserId);
+    }
+
     res.json({ data: formatUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

@@ -149,6 +149,9 @@ const getMe = async (req, res) => {
 // Internal: minimal profile lookup for other services to enforce "profile
 // must be complete before X" rules (e.g. booking-service before createBooking)
 // without duplicating user data or exposing it through a public route.
+// Extended for buddy-service: gender/fitnessGoals seed its denormalized
+// discovery-filter cache, profileImageUrl/fcmToken back match/chat display
+// and push notifications (services/buddy-service/services/authClient.js).
 const getUserInternal = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });
@@ -158,7 +161,30 @@ const getUserInternal = async (req, res) => {
       name: user.name,
       phone: user.phone,
       dateOfBirth: user.dateOfBirth,
+      gender: user.gender,
+      fitnessGoals: user.fitnessGoals,
+      profileImageUrl: user.profileImageUrl,
+      fcmToken: user.fcmToken,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Internal: batched display-field lookup so a caller resolving N user ids
+// (e.g. buddy-service rendering a discovery page or matches list) can do it
+// in one round trip instead of N. Deliberately returns only name/
+// profileImageUrl — display-only fields that are safe to fan out widely,
+// unlike getUserInternal's fuller payload above.
+const getUsersBatchInternal = async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isFinite) : [];
+    if (!ids.length) return res.json({ data: [] });
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, profileImageUrl: true },
+    });
+    res.json({ data: users });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -175,6 +201,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

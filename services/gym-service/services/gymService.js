@@ -299,6 +299,10 @@ export async function updateGym(gymId, partnerId, data) {
     'closeTime',
     'slotDuration',
     'capacity',
+    // Lets a partner reactivate a gym that was deactivated via DELETE
+    // /:id (softDeleteGym) — that route only ever sets isActive=false,
+    // with no corresponding endpoint to flip it back until now.
+    'isActive',
   ];
 
   allowedFields.forEach(field => {

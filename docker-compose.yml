@@ -13,12 +13,14 @@ services:
       - GYM_SERVICE_URL=http://gym-service:5004
       - BOOKING_SERVICE_URL=http://booking-service:5005
       - PAYMENT_SERVICE_URL=http://payment-wallet-service:5006
+      - BUDDY_SERVICE_URL=http://buddy-service:5007
     depends_on:
       - auth-service
       - user-service
       - wallet-service
       - gym-service
       - booking-service
+      - buddy-service
     networks:
       - phool-gobhi-net
     restart: on-failure
@@ -33,6 +35,10 @@ services:
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      # Outbound fire-and-forget call to keep buddy-service's denormalized
+      # profile cache in sync (see controllers/userProfileController.js).
+      - BUDDY_SERVICE_URL=http://buddy-service:5007
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,6 +107,29 @@ services:
       gym-service:
         condition: service_started
       user-service:
+        condition: service_started
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  buddy-service:
+    build: ./services/buddy-service
+    environment:
+      - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/buddydb
+      - BUDDY_SERVICE_PORT=5007
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=buddy-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
         condition: service_started
     networks:
       - phool-gobhi-net

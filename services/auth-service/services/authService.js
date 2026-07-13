@@ -183,16 +183,23 @@ export async function refreshTokenService(token) {
 // In-memory OTP store: phone → { code, expiresAt, sentAt }
 const otpStore = new Map();
 
-// Accepts +91XXXXXXXXXX, 91XXXXXXXXXX, or plain XXXXXXXXXX.
-function isValidIndianMobile(phone) {
-  const digits = String(phone).replace(/\D/g, '');
-  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
-  return /^[6-9]\d{9}$/.test(local);
+// Canonical phone key for everything in this service — OTP-store lookups,
+// User.phone storage/matching, and both the OTP-store and Firebase verify
+// paths — so "+919354859197", "919354859197", and "9354859197" all resolve
+// to the exact same OTP entry and the exact same account. Without this, the
+// two client apps (which formatted phone differently) could each reach a
+// different account for the same real phone number. Returns null if the
+// input isn't a valid 10-digit Indian mobile number.
+function normalizePhone(input) {
+  const digits = String(input || '').replace(/\D/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2)
+    : digits.length === 11 && digits.startsWith('0') ? digits.slice(1)
+    : digits;
+  return /^[6-9]\d{9}$/.test(local) ? local : null;
 }
 
 function normalizeToE164(phone) {
-  const digits = phone.replace(/\D/g, '');
-  return digits.length === 10 ? `91${digits}` : digits;
+  return `91${phone}`;
 }
 
 async function sendWhatsAppOtp(phone, code) {
@@ -248,11 +255,12 @@ async function sendFast2SmsOtp(phone, code) {
   }
 }
 
-export async function sendOtpService(phone) {
-  if (!phone) {
+export async function sendOtpService(rawPhone) {
+  if (!rawPhone) {
     throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
   }
-  if (!isValidIndianMobile(phone)) {
+  const phone = normalizePhone(rawPhone);
+  if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
   const existing = otpStore.get(phone);
@@ -261,7 +269,12 @@ export async function sendOtpService(phone) {
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
   otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
-  const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
+  // Skip paid SMS while ALLOW_DEV_OTP is on — the 123456 bypass makes a real
+  // send pointless, and this ties "stop spending on SMS" to the same flag
+  // that has to be flipped back for real verification to resume, so the two
+  // can't drift out of sync.
+  const skipPaidSms = process.env.ALLOW_DEV_OTP === 'true';
+  const sent = await sendWhatsAppOtp(phone, code) || (!skipPaidSms && await sendFast2SmsOtp(phone, code));
   if (!sent) console.log(`OTP for ${phone}: ${code}`);
   const response = { message: 'OTP sent successfully' };
   // Echoing the OTP is opt-in (set ALLOW_DEV_OTP=true in dev only) so an
@@ -330,9 +343,13 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   };
 }
 
-export async function verifyOtpService({ phone, otp, name, email, role = 'customer', type = 'general', gobhiType }) {
-  if (!phone) {
+export async function verifyOtpService({ phone: rawPhone, otp, name, email, role = 'customer', type = 'general', gobhiType }) {
+  if (!rawPhone) {
     throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
+  }
+  const phone = normalizePhone(rawPhone);
+  if (!phone) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
   const isDev = process.env.ALLOW_DEV_OTP === 'true';
   const DEV_OTP = '123456';
@@ -367,10 +384,13 @@ export async function verifyFirebaseTokenService({ idToken, name, email, role = 
     throw { status: 400, error: 'Firebase token has no verified phone number', errorCode: 'NO_PHONE_IN_TOKEN' };
   }
   // Firebase returns E.164 (+91XXXXXXXXXX); existing users are keyed on the
-  // raw 10-digit phone the OTP-store path has always used — normalize so the
-  // same person resolves to the same account regardless of which provider
-  // verified them.
-  const phone = decoded.phone_number.replace(/\D/g, '').slice(-10);
+  // same canonical bare-10-digit phone the OTP-store path uses — normalize so
+  // the same person resolves to the same account regardless of which
+  // provider verified them.
+  const phone = normalizePhone(decoded.phone_number);
+  if (!phone) {
+    throw { status: 400, error: 'Firebase token has an invalid phone number', errorCode: 'INVALID_PHONE_IN_TOKEN' };
+  }
 
   return issueSessionForUser({ phone, name, email, role, type, gobhiType });
 }

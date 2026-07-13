@@ -11,6 +11,7 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:50
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
@@ -24,7 +25,6 @@ const PUBLIC_ROUTES = [
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
   { method: 'GET', pattern: /^\/health/ },
-  { method: 'GET', pattern: /^\/wake/ },
 ];
 
 function isPublicRoute(method, path) {
@@ -63,30 +63,6 @@ app.use(authMiddleware);
 
 app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timestamp: new Date().toISOString() }));
 
-// Pings all downstream services so a single external monitor keeps the entire
-// cluster warm. Render free-tier services hibernate after 15 min of inactivity;
-// hitting this endpoint every 14 min prevents 429/502 cold-start errors.
-app.get('/wake', async (req, res) => {
-  const services = {
-    auth:    AUTH_SERVICE_URL,
-    wallet:  WALLET_SERVICE_URL,
-    gym:     GYM_SERVICE_URL,
-    booking: BOOKING_SERVICE_URL,
-  };
-  const results = await Promise.all(
-    Object.entries(services).map(async ([name, url]) => {
-      try {
-        const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(60000) });
-        return { name, status: r.status, ok: r.ok };
-      } catch (err) {
-        return { name, status: 0, ok: false, error: err.message };
-      }
-    })
-  );
-  const allOk = results.every(r => r.ok);
-  res.status(allOk ? 200 : 207).json({ gateway: 'ok', services: results });
-});
-
 // Client analytics ingestion. Public (anonymous pre-login events are valid) and
 // fire-and-forget — the client must never be blocked or fail on analytics. The
 // app sends its own distinct_id (anon id pre-login, userId after identify).
@@ -121,6 +97,10 @@ app.use('/api/users', proxy(AUTH_SERVICE_URL, {
 app.use('/api/wallet', proxy(WALLET_SERVICE_URL));
 app.use('/api/gyms', proxy(GYM_SERVICE_URL, { limit: '15mb' }));
 app.use('/api/bookings', proxy(BOOKING_SERVICE_URL));
+// Buddy matchmaking: no public routes (nothing added to PUBLIC_ROUTES above)
+// — discovery/swipes/matches/chat all require a verified JWT. Raised limit
+// to match the multi-photo profile upload, same reasoning as /api/gyms.
+app.use('/api/buddy', proxy(BUDDY_SERVICE_URL, { limit: '15mb' }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
 app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
