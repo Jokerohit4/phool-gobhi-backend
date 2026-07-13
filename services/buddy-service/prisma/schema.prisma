@@ -1,0 +1,167 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["buddy"]
+}
+
+// Mirrors auth-service's Gender enum (services/auth-service/prisma/schema.prisma).
+// Prisma's multiSchema mode can't share an enum across schemas, so this is a
+// duplicated definition — keep the values identical to auth-service's by convention.
+enum Gender {
+  male
+  female
+  other
+  prefer_not_to_say
+
+  @@schema("buddy")
+}
+
+// Mirrors auth-service's FitnessGoal enum — same convention as Gender above.
+enum FitnessGoal {
+  weight_loss
+  muscle_gain
+  general_fitness
+  flexibility_yoga
+  sports_training
+  rehabilitation
+
+  @@schema("buddy")
+}
+
+enum SwipeAction {
+  like
+  pass
+
+  @@schema("buddy")
+}
+
+enum MatchStatus {
+  active
+  unmatched
+
+  @@schema("buddy")
+}
+
+model BuddyProfile {
+  id             Int           @id @default(autoincrement())
+  userId         Int           @unique
+  bio            String?       @db.VarChar(500)
+  // Denormalized cache of auth-service fields, needed for SQL-level discovery
+  // filtering (WHERE gender IN / dateOfBirth BETWEEN / fitnessGoals && ...).
+  // auth-service remains the source of truth; refreshed on profile create and
+  // via POST /internal/profile-sync/:userId (called by auth-service on edit)
+  // or POST /api/buddy/profile/refresh (manual client fallback).
+  gender         Gender?
+  dateOfBirth    DateTime?     @db.Date
+  fitnessGoals   FitnessGoal[]
+  lastSyncedAt   DateTime?
+  // Approximate "home" location for vicinity matching, set at profile
+  // creation from the app's location picker/GPS, editable via PUT profile.
+  lat            Float
+  lng            Float
+  isDiscoverable Boolean       @default(true)
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  photos         BuddyPhoto[]
+  filter         BuddyFilter?
+
+  // NOTE (upgrade path, not built now): at scale, replace the lat/lng
+  // BETWEEN pre-filter with a proper geo index (PostGIS earthdistance/GiST,
+  // or a ll_to_earth() functional index) instead of plain btree ranges.
+  @@index([lat, lng])
+  @@index([isDiscoverable, isActive])
+  @@schema("buddy")
+}
+
+model BuddyPhoto {
+  id             Int          @id @default(autoincrement())
+  buddyProfileId Int
+  url            String
+  publicId       String?
+  order          Int          @default(0)
+  createdAt      DateTime     @default(now())
+  buddyProfile   BuddyProfile @relation(fields: [buddyProfileId], references: [id], onDelete: Cascade)
+
+  @@index([buddyProfileId, order])
+  @@schema("buddy")
+}
+
+model BuddyFilter {
+  id           Int           @id @default(autoincrement())
+  userId       Int           @unique
+  buddyProfile BuddyProfile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  radiusKm     Int           @default(25)
+  minAge       Int           @default(18)
+  maxAge       Int           @default(60)
+  genders      Gender[]
+  fitnessGoals FitnessGoal[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@schema("buddy")
+}
+
+model Swipe {
+  id        Int         @id @default(autoincrement())
+  swiperId  Int
+  swipeeId  Int
+  action    SwipeAction
+  createdAt DateTime    @default(now())
+
+  // Idempotency: re-swiping the same target is a no-op, not a duplicate row.
+  @@unique([swiperId, swipeeId])
+  @@index([swipeeId, action])
+  @@schema("buddy")
+}
+
+model Match {
+  id          Int           @id @default(autoincrement())
+  userLowId   Int
+  userHighId  Int
+  status      MatchStatus   @default(active)
+  unmatchedBy Int?
+  unmatchedAt DateTime?
+  matchedAt   DateTime      @default(now())
+  messages    ChatMessage[]
+
+  // Canonical min/max ordering + this unique constraint is the concurrency
+  // guard for near-simultaneous mutual swipes — see swipeService.recordSwipe.
+  @@unique([userLowId, userHighId])
+  @@index([userLowId])
+  @@index([userHighId])
+  @@schema("buddy")
+}
+
+model ChatMessage {
+  id        Int       @id @default(autoincrement())
+  matchId   Int
+  senderId  Int
+  body      String    @db.VarChar(1000)
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@schema("buddy")
+}
+
+// Safety: minimal block support in v1. Full report-with-reason-taxonomy +
+// moderation queue is an explicit fast-follow (no admin console to review
+// reports into yet) — not modeled here.
+model BlockedUser {
+  id        Int      @id @default(autoincrement())
+  blockerId Int
+  blockedId Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@schema("buddy")
+}
