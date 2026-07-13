@@ -1,0 +1,25 @@
+# Cloud Build trigger config for booking-service. See ../../cloudbuild.gateway.yaml
+# for the shared dev/prod-project model and the Artifact Registry setup this
+# depends on.
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/booking-service:$SHORT_SHA', 'services/booking-service']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/booking-service:$SHORT_SHA']
+  - name: 'gcr.io/google-cloud-sdk/slim'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - booking-service
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/booking-service:$SHORT_SHA
+      - --region=${_REGION}
+      - --allow-unauthenticated
+      - --quiet
+
+substitutions:
+  _REGION: asia-south1
+  _REPO: phool-gobhi
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/booking-service:$SHORT_SHA'
