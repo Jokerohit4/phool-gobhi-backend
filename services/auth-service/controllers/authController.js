@@ -1,6 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
-import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService } from '../services/authService.js';
 
 const prisma = new PrismaClient();
 
@@ -99,6 +99,33 @@ const getOtpConfig = (req, res) => {
   res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
 };
 
+const listStaff = async (req, res) => {
+  try {
+    const staff = await listStaffService();
+    res.json({ data: staff });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const createStaff = async (req, res) => {
+  try {
+    const result = await createStaffService(req.body ?? {}, req.user.id);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });
+  }
+};
+
+const updateStaffStatus = async (req, res) => {
+  try {
+    const updated = await updateStaffStatusService(req.params.id, !!req.body?.isActive, req.user.id);
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || 'Server error' });
+  }
+};
+
 const getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -148,6 +175,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

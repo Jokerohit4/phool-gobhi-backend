@@ -126,6 +126,7 @@ export async function loginService({ email, password }) {
     if (!user) throw { status: 404, error: ERROR_MESSAGES.USER_NOT_FOUND.message, errorCode: ERROR_MESSAGES.USER_NOT_FOUND.code };
     const isMatch = await compare(password, user.password);
     if (!isMatch) throw { status: 401, error: ERROR_MESSAGES.INVALID_CREDENTIALS.message, errorCode: ERROR_MESSAGES.INVALID_CREDENTIALS.code };
+    if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
     const accessToken = generateAccessToken(user.id, user.role, user.type);
     const refreshToken = generateRefreshToken(user.id);
     return {
@@ -170,6 +171,7 @@ export async function refreshTokenService(token) {
     const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
     const user = await prisma.user.findUnique({ where: { id: payload.id } });
     if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
+    if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
     const accessToken = generateAccessToken(user.id, user.role, user.type);
     return { accessToken };
   } catch (err) {
@@ -294,6 +296,8 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
         updatedAt: new Date(),
       },
     });
+  } else if (!user.isActive) {
+    throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
   }
 
   const accessToken = generateAccessToken(user.id, user.role, user.type);
@@ -395,6 +399,9 @@ export async function googleSignInService({ idToken }) {
   if (!user || user.role !== ROLES.GOBHI) {
     throw { status: 403, error: 'No staff account exists for this email', errorCode: 'NO_STAFF_ACCOUNT' };
   }
+  if (!user.isActive) {
+    throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
+  }
 
   const accessToken = generateAccessToken(user.id, user.role, user.type);
   const refreshToken = generateRefreshToken(user.id);
@@ -405,4 +412,48 @@ export async function googleSignInService({ idToken }) {
     refreshToken,
     user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType },
   };
+}
+
+// --- Staff (gobhi) management, driven by the admin portal's own Staff page ---
+
+export async function listStaffService() {
+  const staff = await prisma.user.findMany({
+    where: { role: ROLES.GOBHI },
+    select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return staff;
+}
+
+// Reuses signupService's validation/creation, but hardcodes role to gobhi —
+// the client can never smuggle in a different role through this endpoint,
+// unlike the public /signup route this wraps.
+export async function createStaffService({ name, email, password, gobhiType }, actorId) {
+  const result = await signupService({ name, email, password, role: ROLES.GOBHI, type: 'general', gobhiType });
+  track('staff_account_created', actorId, { newUserId: result.user.id, gobhiType });
+  return result;
+}
+
+export async function updateStaffStatusService(targetId, isActive, actorId) {
+  const id = Number(targetId);
+  if (id === actorId) {
+    throw { status: 400, error: 'You cannot change your own access' };
+  }
+  const target = await prisma.user.findUnique({ where: { id } });
+  if (!target || target.role !== ROLES.GOBHI) {
+    throw { status: 404, error: 'Staff account not found' };
+  }
+  if (!isActive) {
+    const activeCount = await prisma.user.count({ where: { role: ROLES.GOBHI, isActive: true } });
+    if (activeCount <= 1) {
+      throw { status: 400, error: 'Cannot deactivate the last remaining active staff account' };
+    }
+  }
+  const updated = await prisma.user.update({
+    where: { id },
+    data: { isActive },
+    select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
+  });
+  track(isActive ? 'staff_account_reactivated' : 'staff_account_revoked', actorId, { targetUserId: id });
+  return updated;
 }

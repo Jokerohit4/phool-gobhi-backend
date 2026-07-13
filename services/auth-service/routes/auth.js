@@ -1,8 +1,10 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
+import requireGobhi from '../middleware/requireGobhi.js';
 
 router.post('/signup', signup);
 router.post('/login', login);
@@ -21,5 +23,16 @@ router.get('/otp-config', getOtpConfig);
 router.get('/me', verifyToken, getMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
 router.post('/fcm-token', verifyToken, updateFcmToken);
+
+// Pitch-deck access allowlist (moved off a hardcoded file in the website repo)
+router.post('/pitch-access/check', checkContact);
+router.get('/admin/pitch-access', requireGobhi, listContacts);
+router.post('/admin/pitch-access', requireGobhi, addContact);
+router.delete('/admin/pitch-access/:id', requireGobhi, removeContact);
+
+// Staff (gobhi) account management, driven by the admin portal's Staff page
+router.get('/admin/staff', requireGobhi, listStaff);
+router.post('/admin/staff', requireGobhi, createStaff);
+router.patch('/admin/staff/:id', requireGobhi, updateStaffStatus);
 
 export default router;
