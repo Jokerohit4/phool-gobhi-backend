@@ -14,7 +14,7 @@ const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-s
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp|verify-firebase-token)$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp|verify-firebase-token|google)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },

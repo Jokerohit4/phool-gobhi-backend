@@ -1,6 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
-import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService } from '../services/authService.js';
 
 const prisma = new PrismaClient();
 
@@ -86,6 +86,15 @@ const verifyFirebaseToken = async (req, res) => {
   }
 };
 
+const googleSignIn = async (req, res) => {
+  try {
+    const result = await googleSignInService(req.body ?? {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });
+  }
+};
+
 const getOtpConfig = (req, res) => {
   res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
 };
@@ -139,6 +148,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, getUserInternal, updateFcmToken };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken };
 
 

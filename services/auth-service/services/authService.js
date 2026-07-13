@@ -370,3 +370,39 @@ export async function verifyFirebaseTokenService({ idToken, name, email, role = 
 
   return issueSessionForUser({ phone, name, email, role, type, gobhiType });
 }
+
+// Staff-only Google sign-in (admin portal). Unlike verifyFirebaseTokenService
+// above, this never creates a user — it only authenticates an email that
+// already has a gobhi-role account (provisioned via the manual signup path),
+// so owning a Google account alone can never grant staff/payout access.
+export async function googleSignInService({ idToken }) {
+  if (!idToken) {
+    throw { status: 400, error: 'idToken is required', errorCode: 'ID_TOKEN_REQUIRED' };
+  }
+  const { verifyFirebaseIdToken } = await import('../utils/firebaseAdmin.js');
+  let decoded;
+  try {
+    decoded = await verifyFirebaseIdToken(idToken);
+  } catch (err) {
+    console.error('Google ID token verification failed:', err.message);
+    throw { status: 401, error: 'Invalid or expired Google sign-in token', errorCode: 'INVALID_FIREBASE_TOKEN' };
+  }
+  if (!decoded.email || !decoded.email_verified) {
+    throw { status: 400, error: 'Google account has no verified email', errorCode: 'NO_EMAIL_IN_TOKEN' };
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: decoded.email } });
+  if (!user || user.role !== ROLES.GOBHI) {
+    throw { status: 403, error: 'No staff account exists for this email', errorCode: 'NO_STAFF_ACCOUNT' };
+  }
+
+  const accessToken = generateAccessToken(user.id, user.role, user.type);
+  const refreshToken = generateRefreshToken(user.id);
+  track('login_completed', user.id, { role: user.role, user_type: user.type, method: 'google' });
+
+  return {
+    accessToken,
+    refreshToken,
+    user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType },
+  };
+}

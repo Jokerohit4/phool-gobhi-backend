@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, getOtpConfig, getMe, getUserInternal, updateFcmToken } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, updateFcmToken } from '../controllers/authController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 
@@ -16,6 +16,7 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/verify-firebase-token', verifyFirebaseToken);
+router.post('/google', googleSignIn);
 router.get('/otp-config', getOtpConfig);
 router.get('/me', verifyToken, getMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
