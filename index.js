@@ -4,6 +4,7 @@ import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
 import { ingest } from './utils/analytics.js';
+import { withGoogleIdToken } from './utils/googleIdToken.js';
 
 const app = express();
 
@@ -83,7 +84,13 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
   res.status(202).json({ ok: true });
 });
 
-app.use('/api/auth', proxy(AUTH_SERVICE_URL));
+// Each proxy call attaches a Google ID token scoped to that specific backend
+// service's URL (see utils/googleIdToken.js) — on Cloud Run this is what lets
+// each service's IAM invoker check confirm the call genuinely came from this
+// gateway, rather than trusting the x-user-id headers alone. No-ops locally.
+app.use('/api/auth', proxy(AUTH_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(AUTH_SERVICE_URL),
+}));
 // express-http-proxy buffers the whole request body itself (via raw-body)
 // before forwarding, with its own default limit far smaller than the
 // multipart uploads these two routes carry (gym photos/docs, profile
@@ -92,15 +99,26 @@ app.use('/api/auth', proxy(AUTH_SERVICE_URL));
 // buffer failing first with an unparseable HTML error.
 app.use('/api/users', proxy(AUTH_SERVICE_URL, {
   proxyReqPathResolver: req => '/users' + req.url,
+  proxyReqOptDecorator: withGoogleIdToken(AUTH_SERVICE_URL),
   limit: '15mb',
 }));
-app.use('/api/wallet', proxy(WALLET_SERVICE_URL));
-app.use('/api/gyms', proxy(GYM_SERVICE_URL, { limit: '15mb' }));
-app.use('/api/bookings', proxy(BOOKING_SERVICE_URL));
+app.use('/api/wallet', proxy(WALLET_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(WALLET_SERVICE_URL),
+}));
+app.use('/api/gyms', proxy(GYM_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(GYM_SERVICE_URL),
+  limit: '15mb',
+}));
+app.use('/api/bookings', proxy(BOOKING_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(BOOKING_SERVICE_URL),
+}));
 // Buddy matchmaking: no public routes (nothing added to PUBLIC_ROUTES above)
 // — discovery/swipes/matches/chat all require a verified JWT. Raised limit
 // to match the multi-photo profile upload, same reasoning as /api/gyms.
-app.use('/api/buddy', proxy(BUDDY_SERVICE_URL, { limit: '15mb' }));
+app.use('/api/buddy', proxy(BUDDY_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(BUDDY_SERVICE_URL),
+  limit: '15mb',
+}));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
 app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));

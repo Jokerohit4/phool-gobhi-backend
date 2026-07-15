@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import axios from 'axios';
+import { googleIdTokenHeader } from './googleIdToken.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 
@@ -30,7 +31,11 @@ export async function notifyCustomer(customerId, { title, body, data = {} }) {
     if (!initAdmin()) return;
 
     const userRes = await axios.get(`${AUTH_SERVICE_URL}/users/${customerId}`, {
-      headers: { 'x-user-id': String(customerId), 'x-user-role': 'customer' },
+      headers: {
+        'x-user-id': String(customerId),
+        'x-user-role': 'customer',
+        ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
+      },
     });
     const fcmToken = userRes.data?.data?.fcmToken;
     if (!fcmToken) return;

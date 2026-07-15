@@ -1,16 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 const prisma = new PrismaClient();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
-const internalHeaders = { headers: { 'x-internal-key': INTERNAL_API_KEY } };
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 // Batch-fetches {name, phone} per userId from auth-service's internal
 // endpoint so admin views never show a bare numeric userId when real money
 // is about to move. Best-effort: a lookup failure degrades to nulls rather
 // than blocking the balances/payout view.
 async function enrichWithUserInfo(rows) {
+  const internalHeaders = { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) } };
   const infoByUserId = await Promise.all(
     rows.map(async (row) => {
       try {

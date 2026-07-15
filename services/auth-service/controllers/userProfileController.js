@@ -1,10 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import { VALID_GENDERS, VALID_FITNESS_GOALS } from '../constants/userEnums.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const prisma = new PrismaClient();
 
 const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 // Fire-and-forget: keeps buddy-service's denormalized gender/dateOfBirth/
 // fitnessGoals cache from drifting after a profile edit (see
@@ -13,13 +14,13 @@ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 // manual refresh endpoint, so a dropped call here just means a slightly
 // stale cache until one of those fallbacks runs — never blocks or fails
 // this request.
-function syncBuddyProfile(userId) {
-  fetch(`${BUDDY_SERVICE_URL}/internal/profile-sync/${userId}`, {
-    method: 'POST',
-    headers: { 'x-internal-key': INTERNAL_API_KEY },
-  }).catch((err) => {
+async function syncBuddyProfile(userId) {
+  try {
+    const headers = { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(BUDDY_SERVICE_URL)) };
+    await fetch(`${BUDDY_SERVICE_URL}/internal/profile-sync/${userId}`, { method: 'POST', headers });
+  } catch (err) {
     console.error('[buddy-sync] notify failed:', err.message);
-  });
+  }
 }
 
 function formatUser(user) {

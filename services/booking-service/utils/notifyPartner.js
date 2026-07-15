@@ -4,11 +4,11 @@
 
 import admin from 'firebase-admin';
 import axios from 'axios';
+import { googleIdTokenHeader } from './googleIdToken.js';
 
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
-const internalHeaders = { headers: { 'x-internal-key': INTERNAL_API_KEY } };
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 let initialized = false;
 
@@ -36,13 +36,19 @@ export async function notifyPartner(gymId, booking) {
     if (!initAdmin()) return;
 
     // Get partnerId from gym-service (gym routes are mounted at '/', so use /internal/:id)
-    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
+    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, {
+      headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(GYM_SERVICE_URL)) },
+    });
     const partnerId = gymRes.data?.data?.partnerId;
     if (!partnerId) return;
 
     // Get partner FCM token from auth-service
     const userRes = await axios.get(`${AUTH_SERVICE_URL}/users/${partnerId}`, {
-      headers: { 'x-user-id': String(partnerId), 'x-user-role': 'partner' },
+      headers: {
+        'x-user-id': String(partnerId),
+        'x-user-role': 'partner',
+        ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
+      },
     });
     const fcmToken = userRes.data?.data?.fcmToken;
     if (!fcmToken) return;

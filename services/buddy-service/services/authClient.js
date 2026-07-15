@@ -1,5 +1,7 @@
 // Wraps calls into auth-service's requireInternal-guarded routes (shared
-// secret via x-internal-key). Deliberately does NOT use the pattern
+// secret via x-internal-key, plus a Google ID token on Cloud Run — see
+// utils/googleIdToken.js — now that auth-service's Cloud Run invoker no
+// longer allows anonymous callers). Deliberately does NOT use the pattern
 // notifyCustomer.js (booking-service) uses — a direct GET /users/:id call
 // with a spoofed x-user-id header that happens to equal the target id.
 // That route just had its ownership check tightened (any authenticated
@@ -7,12 +9,19 @@
 // spoofing trick works by coincidence, not because it's actually secured.
 // The wallet-service already does this the right way (GET /internal/:id +
 // x-internal-key) — this file follows that precedent.
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+// .trim() guards against a stray trailing newline in the Secret Manager
+// value being silently dropped when placed into an HTTP header (undici
+// sanitizes invalid header bytes) while the *unsent* copy used in a direct
+// string comparison elsewhere (auth-service's own requireInternal) keeps
+// it — a 1-character mismatch that looks like a wrong secret but isn't.
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 async function internalGet(path) {
   const res = await fetch(`${AUTH_SERVICE_URL}${path}`, {
-    headers: { 'x-internal-key': INTERNAL_API_KEY },
+    headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) },
   });
   if (!res.ok) {
     throw { status: 502, error: `auth-service internal call failed (${res.status})` };
@@ -33,7 +42,11 @@ export async function getUsersBatchInternal(ids) {
   if (!ids.length) return [];
   const res = await fetch(`${AUTH_SERVICE_URL}/internal/users/batch`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-internal-key': INTERNAL_API_KEY },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-key': INTERNAL_API_KEY,
+      ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
+    },
     body: JSON.stringify({ ids }),
   });
   if (!res.ok) {

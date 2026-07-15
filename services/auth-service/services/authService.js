@@ -5,6 +5,7 @@ import { generateAccessToken, generateRefreshToken } from '../utils/generateToke
 import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const prisma = new PrismaClient();
 
@@ -17,7 +18,10 @@ const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004'
 async function fetchPartnerGymSummary(partnerId) {
   try {
     const res = await fetch(`${GYM_SERVICE_URL}/internal/partner/${partnerId}/summary`, {
-      headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' },
+      headers: {
+        'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+        ...(await googleIdTokenHeader(GYM_SERVICE_URL)),
+      },
     });
     if (!res.ok) return null;
     const body = await res.json();

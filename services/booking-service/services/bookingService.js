@@ -4,6 +4,7 @@ import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -19,17 +20,23 @@ const prisma = new PrismaClient();
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
-const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
-// Shared header for service-to-service wallet mutations (credit/debit are internal-only)
-const internalHeaders = { headers: { 'x-internal-key': INTERNAL_API_KEY } };
+// Per-target headers for service-to-service calls (x-internal-key shared
+// secret, plus a Google ID token on Cloud Run — see utils/googleIdToken.js —
+// now required since each target's Cloud Run invoker no longer allows
+// anonymous callers). Computed per call since the ID token is fetched
+// async (internally cached/refreshed, so this is cheap).
+async function internalHeadersFor(targetUrl) {
+  return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
+}
 
 export async function createBooking(customerId, { gymId, date, startTime, endTime }) {
   try {
     // 1. Fetch gym details from gym-service
     let gym;
     try {
-      const response = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
+      const response = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
       gym = response.data.data || response.data;
     } catch (err) {
       throw {
@@ -53,7 +60,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // this endpoint before ever filling them in. Mirrors the app's own
     // pre-booking check, enforced here too since that check is client-side only.
     try {
-      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, internalHeaders);
+      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
       const profile = profileRes.data;
       if (!profile?.name?.trim() || !profile?.dateOfBirth) {
         throw {
@@ -74,7 +81,8 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // 1b. Check if slot is blocked
     try {
       const blockRes = await axios.get(
-        `${GYM_SERVICE_URL}/${gymId}/blocks?date=${date}`
+        `${GYM_SERVICE_URL}/${gymId}/blocks?date=${date}`,
+        await internalHeadersFor(GYM_SERVICE_URL)
       );
       const blocks = blockRes.data?.data || [];
       const isBlocked = blocks.some(b => b.startTime === startTime);
@@ -112,7 +120,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       await axios.post(`${WALLET_SERVICE_URL}/${customerId}/debit`, {
         amount,
         description: 'Gym session booking'
-      }, internalHeaders);
+      }, await internalHeadersFor(WALLET_SERVICE_URL));
     } catch (err) {
       track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount });
       throw {
@@ -193,7 +201,7 @@ export async function cancelBooking(bookingId, customerId) {
       await axios.post(`${WALLET_SERVICE_URL}/${customerId}/credit`, {
         amount: booking.amount,
         description: 'Booking cancellation refund'
-      }, internalHeaders);
+      }, await internalHeadersFor(WALLET_SERVICE_URL));
     } catch (err) {
       throw {
         status: 400,
@@ -272,7 +280,7 @@ export async function completeBooking(bookingId, gymId, partnerId) {
     // 5. Verify partner owns this gym (fetch gym once — reused for payout)
     let gym;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
       gym = gymRes.data?.data || gymRes.data;
     } catch (_) {
       throw { status: 404, error: 'Gym not found' };
@@ -293,7 +301,7 @@ export async function completeBooking(bookingId, gymId, partnerId) {
         await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
           amount: booking.amount,
           description: 'Gym session payout'
-        }, internalHeaders);
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
       }
     } catch (payoutErr) {
       console.error('Partner payout failed for booking', bookingId, payoutErr.message);
@@ -332,7 +340,7 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
 
     let locationVerified = false;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, internalHeaders);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
       const gym = gymRes.data.data || gymRes.data;
       if (lat && lng && gym.lat && gym.lng) {
         locationVerified = distanceMeters(lat, lng, gym.lat, gym.lng) <= 300;
@@ -371,7 +379,7 @@ export async function getCustomerBookings(customerId) {
     await Promise.all(uniqueGymIds.map(async (gymId) => {
       try {
         const resp = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
-          headers: { 'x-internal-key': INTERNAL_API_KEY }
+          headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(GYM_SERVICE_URL)) }
         });
         if (resp.ok) {
           const body = await resp.json();
@@ -416,7 +424,7 @@ export async function getGymBookings(gymId, partnerId) {
     // Verify partner owns this gym before exposing bookings
     let gym;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
       gym = gymRes.data?.data || gymRes.data;
     } catch (_) {
       throw { status: 404, error: 'Gym not found' };
@@ -443,7 +451,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
     // Verify partner owns this gym before exposing revenue data
     let gym;
     try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, internalHeaders);
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
       gym = gymRes.data?.data || gymRes.data;
     } catch (_) {
       throw { status: 404, error: 'Gym not found' };

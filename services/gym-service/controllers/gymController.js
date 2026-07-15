@@ -2,6 +2,7 @@ import * as gymService from '../services/gymService.js';
 import { generateTimeSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -87,7 +88,12 @@ async function getAnnotatedSlotsForDate(gym, gymId, date) {
     try {
       const resp = await fetch(
         `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`,
-        { headers: { 'x-internal-key': process.env.INTERNAL_API_KEY || '' } }
+        {
+          headers: {
+            'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+            ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
+          },
+        }
       );
       if (resp.ok) {
         const body = await resp.json();
