@@ -10,11 +10,27 @@ import {
   createRazorpayOrderService,
   getRazorpayOrderService,
   updateRazorpayOrderStatusService,
-  claimRazorpayOrderService
+  claimRazorpayOrderService,
+  fetchGymForSubscription,
+  fulfillSubscriptionPurchase,
+  getSubscriptionByOrderIdService,
+  getActiveSubscriptionService,
+  getMySubscriptionsService,
+  getTransactionByIdempotencyKeyService,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
+
+// Buffer-length mismatch makes crypto.timingSafeEqual throw rather than
+// return false, so a shorter/longer signature must be treated as "not
+// equal" before ever reaching the constant-time comparison.
+function safeEqualHex(a, b) {
+  const bufA = Buffer.from(a || '', 'utf8');
+  const bufB = Buffer.from(b || '', 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 export const createWallet = async (req, res) => {
   try {
@@ -71,8 +87,11 @@ export const getWalletTransactions = async (req, res) => {
 export const creditWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description } = req.body;
-    const result = await creditWalletService(Number(userId), amount, description);
+    const { amount, description, idempotencyKey } = req.body;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive finite number' });
+    }
+    const result = await creditWalletService(Number(userId), amount, description, idempotencyKey);
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -82,11 +101,27 @@ export const creditWallet = async (req, res) => {
 export const debitWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description } = req.body;
-    const result = await debitWalletService(Number(userId), amount, description);
+    const { amount, description, idempotencyKey } = req.body;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive finite number' });
+    }
+    const result = await debitWalletService(Number(userId), amount, description, idempotencyKey);
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+// Internal (requireInternal): lets a caller check whether a previous
+// credit/debit call it made under a given idempotency key actually landed —
+// used by booking-service to reconcile a booking stuck in `pending` after a
+// crash between reserving the slot and confirming payment.
+export const getTransactionByKeyInternal = async (req, res) => {
+  try {
+    const transaction = await getTransactionByIdempotencyKeyService(req.params.key);
+    res.json({ data: transaction });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
   }
 };
 
@@ -125,7 +160,7 @@ export const createTopUpOrder = async (req, res) => {
     const { amount } = req.body;
     const userId = req.userId; // from JWT middleware
 
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
@@ -169,7 +204,7 @@ export const verifyAndCreditWallet = async (req, res) => {
     hmac.update(orderId + '|' + razorpayPaymentId);
     const hash = hmac.digest('hex');
 
-    if (hash !== razorpaySignature) {
+    if (!safeEqualHex(hash, razorpaySignature)) {
       return res.status(400).json({ error: 'Invalid signature' });
     }
 
@@ -216,6 +251,120 @@ export const verifyAndCreditWallet = async (req, res) => {
   }
 };
 
+const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'yearly'];
+
+export const createSubscriptionOrder = async (req, res) => {
+  try {
+    const { gymId, planType } = req.body;
+    const userId = req.userId;
+
+    if (!gymId || !VALID_PLAN_TYPES.includes(planType)) {
+      return res.status(400).json({ error: 'gymId and a valid planType are required' });
+    }
+
+    const { price } = await fetchGymForSubscription(Number(gymId), planType);
+
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_SECRET
+    });
+
+    const order = await razorpay.orders.create({
+      amount: Math.round(price * 100), // Convert to paise
+      currency: 'INR',
+      notes: { userId, gymId, planType }
+    });
+
+    await createRazorpayOrderService(userId, order.id, price, {
+      purpose: 'subscription',
+      gymId: Number(gymId),
+      planType,
+    });
+
+    track('subscription_order_created', userId, { amount: price, order_id: order.id, gym_id: gymId, plan_type: planType });
+
+    res.status(201).json({
+      data: {
+        id: order.id,
+        orderId: order.id,
+        amount: price,
+        currency: 'INR',
+        keyId: process.env.RAZORPAY_KEY_ID
+      }
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error?.description || err.error || err.message || 'Server error' });
+  }
+};
+
+export const verifySubscriptionPurchase = async (req, res) => {
+  try {
+    const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const userId = req.userId;
+
+    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_SECRET);
+    hmac.update(orderId + '|' + razorpayPaymentId);
+    const hash = hmac.digest('hex');
+
+    if (!safeEqualHex(hash, razorpaySignature)) {
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
+    const order = await getRazorpayOrderService(orderId);
+    if (!order || order.purpose !== 'subscription') {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (order.userId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const claimed = await claimRazorpayOrderService(orderId);
+    if (!claimed) {
+      // Lost the race — most likely the webhook already fulfilled this order.
+      const latest = await getRazorpayOrderService(orderId);
+      if (latest?.status === 'SUCCESS') {
+        const subscription = await getSubscriptionByOrderIdService(orderId);
+        return res.json({ data: { success: true, subscription } });
+      }
+      return res.status(400).json({ error: 'Order already processed' });
+    }
+
+    const subscription = await fulfillSubscriptionPurchase(order, razorpayPaymentId);
+
+    track('subscription_purchased', userId, {
+      amount: order.amount, order_id: orderId, gym_id: order.gymId, plan_type: order.planType,
+    });
+
+    res.json({ data: { success: true, subscription } });
+  } catch (err) {
+    console.error('verifySubscriptionPurchase error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Internal (requireInternal): booking-service checks this at booking-creation
+// time to decide whether to skip the per-session wallet debit.
+export const getActiveSubscriptionInternal = async (req, res) => {
+  try {
+    const customerId = parseInt(req.query.customerId);
+    const gymId = parseInt(req.query.gymId);
+    const subscription = await getActiveSubscriptionService(customerId, gymId);
+    res.json({ data: { active: !!subscription, subscription } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMySubscriptions = async (req, res) => {
+  try {
+    const gymId = req.query.gymId ? parseInt(req.query.gymId) : undefined;
+    const subscriptions = await getMySubscriptionsService(req.userId, gymId);
+    res.json({ data: subscriptions });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const handleRazorpayWebhook = async (req, res) => {
   try {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -228,7 +377,7 @@ export const handleRazorpayWebhook = async (req, res) => {
     hmac.update(req.rawBody);
     const hash = hmac.digest('hex');
 
-    if (hash !== signature) {
+    if (!safeEqualHex(hash, signature)) {
       return res.status(400).json({ error: 'Invalid webhook signature' });
     }
 
@@ -241,9 +390,14 @@ export const handleRazorpayWebhook = async (req, res) => {
       if (order) {
         const claimed = await claimRazorpayOrderService(orderId);
         if (claimed) {
-          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
-          await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
-          track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
+          if (order.purpose === 'subscription') {
+            await fulfillSubscriptionPurchase(order, paymentId);
+            track('subscription_purchased', order.userId, { amount: order.amount, order_id: orderId, gym_id: order.gymId, plan_type: order.planType, via: 'webhook' });
+          } else {
+            await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+            await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+            track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
+          }
         }
       }
     } else if (event === 'payment.failed') {
@@ -254,7 +408,8 @@ export const handleRazorpayWebhook = async (req, res) => {
         const claimed = await claimRazorpayOrderService(orderId);
         if (claimed) {
           await updateRazorpayOrderStatusService(orderId, 'FAILED', null);
-          track('wallet_topup_failed', order.userId, { amount: order.amount, order_id: orderId });
+          const event = order.purpose === 'subscription' ? 'subscription_purchase_failed' : 'wallet_topup_failed';
+          track(event, order.userId, { amount: order.amount, order_id: orderId });
         }
       }
     }

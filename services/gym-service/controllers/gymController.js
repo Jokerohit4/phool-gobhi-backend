@@ -64,7 +64,7 @@ export const getGym = async (req, res) => {
 
 export const getGymInternal = async (req, res) => {
   try {
-    const gym = await gymService.getGymByIdRaw(parseInt(req.params.id));
+    const gym = await gymService.getGymInternalWithSlotPrice(parseInt(req.params.id), req.query.startTime);
     res.json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -73,6 +73,11 @@ export const getGymInternal = async (req, res) => {
 
 async function getAnnotatedSlotsForDate(gym, gymId, date) {
   let slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
+
+  // Attach each slot's per-time-of-day price (same value every date),
+  // falling back to the gym's flat sessionPrice where no explicit row exists.
+  const priceMap = await gymService.getSlotPriceMap(gymId);
+  slots = slots.map(s => ({ ...s, price: priceMap.has(s.startTime) ? priceMap.get(s.startTime) : gym.sessionPrice }));
 
   // Filter out blocked slots for the requested date
   if (date) {
@@ -315,6 +320,33 @@ export const approveGym = async (req, res) => {
     // Supply funnel: gobhi approved/rejected the gym; keyed to the owning partner.
     track(gym.isApproved ? 'gym_approved' : 'gym_rejected', gym.partnerId, { gym_id: gym.id, city: gym.city });
     res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getSlotPrices = async (req, res) => {
+  try {
+    const slots = await gymService.getSlotPrices(parseInt(req.params.id));
+    res.json({ data: slots });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateSlotPrices = async (req, res) => {
+  try {
+    const slots = await gymService.upsertSlotPrices(parseInt(req.params.id), req.userId, req.body?.prices);
+    res.json({ data: slots });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getSubscriptionPlans = async (req, res) => {
+  try {
+    const plans = await gymService.getSubscriptionPlans(parseInt(req.params.id));
+    res.json({ data: plans });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

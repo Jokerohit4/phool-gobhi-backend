@@ -17,6 +17,7 @@ router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/availability', ctrl.getGymAvailability);
 router.get('/:id/reviews', ctrl.getGymReviews);
+router.get('/:id/subscription-plans', ctrl.getSubscriptionPlans);
 
 // Partner routes
 router.get('/partner/mine', requireRole('partner'), ctrl.getPartnerGyms);
@@ -28,6 +29,8 @@ router.delete('/:id/images/:imageId', requireRole('partner'), ctrl.deleteGymImag
 // Brand/verification documents (field 'file'); stored as URLs in Gym.brandDocs[]
 router.post('/:id/docs', requireRole('partner'), uploadGymDoc.single('file'), ctrl.addGymDoc);
 router.delete('/:id/docs', requireRole('partner'), ctrl.deleteGymDoc);
+router.get('/:id/slot-prices', requireRole('partner'), ctrl.getSlotPrices);
+router.put('/:id/slot-prices', requireRole('partner'), ctrl.updateSlotPrices);
 router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: req.file.path });

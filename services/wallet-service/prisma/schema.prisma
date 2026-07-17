@@ -13,7 +13,7 @@ model Wallet {
   id           Int                 @id @default(autoincrement())
   userId       Int                 @unique
   userType     String
-  balance      Float               @default(0)
+  balance      Decimal             @default(0) @db.Decimal(19, 2)
   currency     String              @default("INR")
   status       WalletStatus        @default(active)
   createdAt    DateTime            @default(now())
@@ -37,12 +37,18 @@ model WalletTransaction {
   wallet            Wallet            @relation(fields: [walletId], references: [id])
   walletId          Int
   type              TransactionType
-  amount            Float
+  amount            Decimal           @db.Decimal(19, 2)
   currency          String            @default("INR")
   status            TransactionStatus @default(success)
   description       String?
-  razorpayOrderId   String?
-  razorpayPaymentId String?
+  razorpayOrderId   String?           @unique
+  razorpayPaymentId String?           @unique
+  // Lets a caller (e.g. booking-service's wallet debit for a reservation)
+  // safely retry/reconcile the exact same operation without double-applying
+  // it — the caller passes a deterministic key (e.g. "booking-debit-<id>"),
+  // and creditWalletService/debitWalletService treat a second call with the
+  // same key as a no-op, returning the wallet state unchanged.
+  idempotencyKey    String?           @unique
   createdAt         DateTime          @default(now())
 
   @@schema("wallet")
@@ -73,11 +79,43 @@ model RazorpayOrder {
   id                Int      @id @default(autoincrement())
   userId            Int
   orderId           String   @unique
-  amount            Float
+  amount            Decimal  @db.Decimal(19, 2)
   status            String
   razorpayPaymentId String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  // "topup" (default, existing behavior) | "subscription" — lets /verify and
+  // the webhook branch to the right fulfillment logic while reusing the same
+  // claim-then-credit idempotency machinery for both purposes.
+  purpose           String   @default("topup")
+  gymId             Int?
+  planType          String?
+
+  @@schema("wallet")
+}
+
+model GymSubscription {
+  id              Int                @id @default(autoincrement())
+  customerId      Int
+  gymId           Int
+  partnerId       Int
+  planType        String
+  price           Decimal            @db.Decimal(19, 2)
+  commissionPct   Decimal            @db.Decimal(5, 2)
+  partnerShare    Decimal            @db.Decimal(19, 2)
+  startDate       DateTime
+  endDate         DateTime
+  status          SubscriptionStatus @default(active)
+  razorpayOrderId String             @unique
+  createdAt       DateTime           @default(now())
+
+  @@index([customerId, gymId, status])
+  @@schema("wallet")
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
 
   @@schema("wallet")
 }

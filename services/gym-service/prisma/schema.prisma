@@ -34,11 +34,16 @@ model Gym {
   isApproved   Boolean     @default(false)
   rejectionReason String?
   isActive     Boolean     @default(true)
+  weeklyPlanPrice    Float?
+  monthlyPlanPrice   Float?
+  quarterlyPlanPrice Float?
+  yearlyPlanPrice    Float?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   images       GymImage[]
   reviews      GymReview[]
   slotBlocks   SlotBlock[]
+  slotPrices   GymSlotPrice[]
 
   @@index([partnerId])
   @@schema("gym")
@@ -78,5 +83,23 @@ model SlotBlock {
   createdAt DateTime @default(now())
 
   @@index([gymId, date])
+  @@schema("gym")
+}
+
+// Price for a time-of-day slot (e.g. "18:00"-"19:00"), the same every day of
+// the week. One row per distinct startTime that generateTimeSlots() produces
+// for this gym; a slot with no row here falls back to Gym.sessionPrice.
+model GymSlotPrice {
+  id        Int      @id @default(autoincrement())
+  gymId     Int
+  startTime String
+  endTime   String
+  price     Float
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gymId, startTime])
+  @@index([gymId])
   @@schema("gym")
 }

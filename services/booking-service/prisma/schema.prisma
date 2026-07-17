@@ -19,11 +19,29 @@ model Booking {
   amount           Float
   status           BookingStatus @default(confirmed)
   walletTxId       Int?
+  // Set when this booking was covered by an active GymSubscription instead of
+  // a per-session wallet debit — null means the normal paid flow (unchanged).
+  // completeBooking/cancelBooking must guard on this: the partner was already
+  // paid upfront at subscription purchase, and the customer never spent
+  // wallet balance on this booking, so neither the completion payout nor the
+  // cancellation refund should fire for it.
+  subscriptionId   Int?
   checkinRequested Boolean       @default(false)
   locationVerified Boolean?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
+  // NOTE: there is also a partial unique index in the DB —
+  // booking_unique_active_slot on (customerId, gymId, date, startTime) WHERE
+  // status <> 'cancelled' — added by hand in the migration SQL, since Prisma's
+  // schema DSL has no syntax for a filtered/partial unique index. It backstops
+  // createBooking's app-level duplicate check against a same-slot double-tap
+  // race, while still allowing a customer to re-book a slot after cancelling
+  // an earlier booking for it. `prisma db push`/introspection will not see
+  // this index and may report drift — that's expected, don't let a `db push`
+  // silently drop it.
+  @@index([gymId, date])
+  @@index([customerId])
   @@schema("booking")
 }
 

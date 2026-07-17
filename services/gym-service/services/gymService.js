@@ -1,9 +1,28 @@
 import { PrismaClient } from '@prisma/client';
 import cloudinary from '../config/cloudinary.js';
+import { generateTimeSlots } from '../utils/slots.js';
 
 const prisma = new PrismaClient();
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const SUBSCRIPTION_PLANS = [
+  { planType: 'weekly', field: 'weeklyPlanPrice', days: 7 },
+  { planType: 'monthly', field: 'monthlyPlanPrice', days: 30 },
+  { planType: 'quarterly', field: 'quarterlyPlanPrice', days: 90 },
+  { planType: 'yearly', field: 'yearlyPlanPrice', days: 365 },
+];
+
+// Approval only vouches for the gym as it looked at review time — shared by
+// updateGym (material fields) and upsertSlotPrices (per-slot pricing) so
+// both call sites reset isApproved/rejectionReason the same way.
+function maybeResetApproval(gym, updateData, changedMaterial) {
+  if (gym.isApproved && changedMaterial) {
+    updateData.isApproved = false;
+  } else if (!gym.isApproved && gym.rejectionReason && Object.keys(updateData).length > 0) {
+    updateData.rejectionReason = null;
+  }
+}
 
 // Validates the fields that flow into slot generation (utils/slots.js). A
 // non-positive slotDuration in particular isn't just bad data — it makes
@@ -299,6 +318,10 @@ export async function updateGym(gymId, partnerId, data) {
     'closeTime',
     'slotDuration',
     'capacity',
+    'weeklyPlanPrice',
+    'monthlyPlanPrice',
+    'quarterlyPlanPrice',
+    'yearlyPlanPrice',
     // Lets a partner reactivate a gym that was deactivated via DELETE
     // /:id (softDeleteGym) — that route only ever sets isActive=false,
     // with no corresponding endpoint to flip it back until now.
@@ -318,23 +341,30 @@ export async function updateGym(gymId, partnerId, data) {
   // price) after approval, that approval no longer means anything and has
   // to be re-earned. Cosmetic fields (description, phone, hours, amenities,
   // capacity) don't trigger this.
-  const MATERIAL_FIELDS = ['name', 'address', 'city', 'state', 'lat', 'lng', 'sessionPrice'];
+  const MATERIAL_FIELDS = [
+    'name', 'address', 'city', 'state', 'lat', 'lng', 'sessionPrice',
+    'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'yearlyPlanPrice',
+  ];
   const changedMaterialField = MATERIAL_FIELDS.some(
     field => field in updateData && updateData[field] !== gym[field]
   );
-  if (gym.isApproved && changedMaterialField) {
-    updateData.isApproved = false;
-  } else if (!gym.isApproved && gym.rejectionReason && Object.keys(updateData).length > 0) {
-    // A rejected gym being edited at all counts as a resubmission — clear
-    // the stale reason so the app shows "pending review" again, not the
-    // old rejection message for changes that may have already fixed it.
-    updateData.rejectionReason = null;
-  }
+  maybeResetApproval(gym, updateData, changedMaterialField);
 
   const updated = await prisma.gym.update({
     where: { id: gymId },
     data: updateData,
   });
+
+  // Changing hours/duration shifts slot boundaries, which can orphan
+  // GymSlotPrice rows whose startTime no longer appears in the regenerated
+  // slot list — clear those out so stale prices don't silently linger.
+  if ('openTime' in updateData || 'closeTime' in updateData || 'slotDuration' in updateData) {
+    const validStartTimes = generateTimeSlots(updated.openTime, updated.closeTime, updated.slotDuration)
+      .map(s => s.startTime);
+    await prisma.gymSlotPrice.deleteMany({
+      where: { gymId, startTime: { notIn: validStartTimes } },
+    });
+  }
 
   return updated;
 }
@@ -507,28 +537,31 @@ export async function addReview(gymId, customerId, rating, comment) {
     throw { status: 404, error: 'Gym not found' };
   }
 
-  const review = await prisma.gymReview.create({
-    data: {
-      gymId,
-      customerId,
-      rating,
-      comment,
-    },
-  });
+  const review = await prisma.$transaction(async (tx) => {
+    const created = await tx.gymReview.create({
+      data: {
+        gymId,
+        customerId,
+        rating,
+        comment,
+      },
+    });
 
-  const allReviews = await prisma.gymReview.findMany({
-    where: { gymId },
-  });
+    const aggregate = await tx.gymReview.aggregate({
+      where: { gymId },
+      _avg: { rating: true },
+      _count: true,
+    });
 
-  const totalRating = allReviews.reduce((sum, r) => sum + r.rating, 0);
-  const avgRating = totalRating / allReviews.length;
+    await tx.gym.update({
+      where: { id: gymId },
+      data: {
+        rating: aggregate._avg.rating,
+        ratingCount: aggregate._count,
+      },
+    });
 
-  await prisma.gym.update({
-    where: { id: gymId },
-    data: {
-      rating: avgRating,
-      ratingCount: allReviews.length,
-    },
+    return created;
   });
 
   return review;
@@ -625,4 +658,119 @@ export async function isSlotBlocked(gymId, date, startTime) {
     where: { gymId, date, startTime },
   });
   return !!block;
+}
+
+// Time-of-day slot pricing & subscription plans -----------------------------
+
+// startTime -> price for every GymSlotPrice row on this gym. Used by
+// getAnnotatedSlotsForDate to attach a resolved price per slot without
+// regenerating the slot list or re-fetching the gym.
+export async function getSlotPriceMap(gymId) {
+  const rows = await prisma.gymSlotPrice.findMany({
+    where: { gymId },
+    select: { startTime: true, price: true },
+  });
+  return new Map(rows.map(r => [r.startTime, r.price]));
+}
+
+export async function getSlotPrices(gymId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  const slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
+  const priceMap = await getSlotPriceMap(gymId);
+
+  return slots.map(s => ({
+    startTime: s.startTime,
+    endTime: s.endTime,
+    price: priceMap.has(s.startTime) ? priceMap.get(s.startTime) : gym.sessionPrice,
+    isDefault: !priceMap.has(s.startTime),
+  }));
+}
+
+export async function upsertSlotPrices(gymId, partnerId, prices) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  if (!Array.isArray(prices) || prices.length === 0) {
+    throw { status: 400, error: 'prices must be a non-empty array of {startTime, price}' };
+  }
+
+  const validSlots = new Map(
+    generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration).map(s => [s.startTime, s.endTime])
+  );
+
+  for (const p of prices) {
+    if (!validSlots.has(p.startTime)) {
+      throw { status: 400, error: `${p.startTime} is not a valid slot for this gym` };
+    }
+    if (typeof p.price !== 'number' || !(p.price > 0)) {
+      throw { status: 400, error: `price for slot ${p.startTime} must be a positive number` };
+    }
+  }
+
+  await prisma.$transaction(
+    prices.map(p =>
+      prisma.gymSlotPrice.upsert({
+        where: { gymId_startTime: { gymId, startTime: p.startTime } },
+        update: { price: p.price },
+        create: { gymId, startTime: p.startTime, endTime: validSlots.get(p.startTime), price: p.price },
+      })
+    )
+  );
+
+  // Slot pricing is reviewed at approval time just like sessionPrice —
+  // saving new prices on an already-approved gym re-earns that approval.
+  const updateData = {};
+  maybeResetApproval(gym, updateData, true);
+  if (Object.keys(updateData).length > 0) {
+    await prisma.gym.update({ where: { id: gymId }, data: updateData });
+  }
+
+  return getSlotPrices(gymId);
+}
+
+// Resolves the price for one specific slot (falls back to sessionPrice),
+// consumed by booking-service via GET /internal/:id?startTime=.
+export async function getGymInternalWithSlotPrice(gymId, startTime) {
+  const gym = await getGymByIdRaw(gymId);
+
+  let resolvedSlotPrice = gym.sessionPrice;
+  if (startTime) {
+    const row = await prisma.gymSlotPrice.findUnique({
+      where: { gymId_startTime: { gymId, startTime } },
+    });
+    resolvedSlotPrice = row ? row.price : gym.sessionPrice;
+  }
+
+  return { ...gym, resolvedSlotPrice };
+}
+
+export async function getSubscriptionPlans(gymId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym || !gym.isActive || !gym.isApproved) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+
+  const slots = await getSlotPrices(gymId);
+  const priciestSlotPrice = slots.length > 0
+    ? Math.max(...slots.map(s => s.price))
+    : gym.sessionPrice;
+
+  const plans = SUBSCRIPTION_PLANS
+    .filter(p => gym[p.field] != null)
+    .map(p => {
+      const price = gym[p.field];
+      const comparablePrice = Math.round(priciestSlotPrice * p.days * 100) / 100;
+      // A partner-set plan price above the comparable per-slot cost would
+      // otherwise show a negative "discount" — clamp to 0 instead of hiding
+      // the plan, since it may still be a legitimate premium/convenience plan.
+      const discountPercent = comparablePrice > 0
+        ? Math.max(0, Math.round((1 - price / comparablePrice) * 100))
+        : 0;
+      return { planType: p.planType, days: p.days, price, comparablePrice, discountPercent };
+    });
+
+  return { gymId, priciestSlotPrice, plans };
 }
