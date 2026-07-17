@@ -3,6 +3,7 @@ import axios from 'axios';
 import { googleIdTokenHeader } from './googleIdToken.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 let initialized = false;
 
@@ -30,14 +31,10 @@ export async function notifyCustomer(customerId, { title, body, data = {} }) {
   try {
     if (!initAdmin()) return;
 
-    const userRes = await axios.get(`${AUTH_SERVICE_URL}/users/${customerId}`, {
-      headers: {
-        'x-user-id': String(customerId),
-        'x-user-role': 'customer',
-        ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
-      },
+    const userRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, {
+      headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) },
     });
-    const fcmToken = userRes.data?.data?.fcmToken;
+    const fcmToken = userRes.data?.fcmToken;
     if (!fcmToken) return;
 
     await admin.messaging().send({

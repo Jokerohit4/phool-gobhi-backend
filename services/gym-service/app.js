@@ -26,27 +26,6 @@ app.get('/health', async (req, res) => {
 // Routes
 app.use('/', gymRoutes);
 
-// Debug endpoint to test database connection
-app.get('/debug/db-test', async (req, res) => {
-  try {
-    const gymCount = await prisma.gym.count();
-    res.json({
-      status: 'Database connected',
-      gymCount,
-      message: 'Prisma client is working correctly'
-    });
-  } catch (err) {
-    res.status(500).json({
-      error: 'Database connection failed',
-      details: {
-        code: err.code,
-        message: err.message,
-        name: err.name,
-      }
-    });
-  }
-});
-
 // Global error handler — catches anything a route/middleware passes to
 // next(err) instead of handling itself (e.g. Multer's file-too-large error,
 // or a Cloudinary storage failure inside multer-storage-cloudinary), so
