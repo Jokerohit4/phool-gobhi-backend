@@ -43,6 +43,8 @@ export const getOrCreateProfile = async (req, res) => {
   try {
     const { authId } = req.body;
     if (!authId) return res.status(400).json({ error: 'authId required' });
+    const requestingUserId = parseInt(req.headers['x-user-id']);
+    if (requestingUserId !== Number(authId)) return res.status(403).json({ error: 'Forbidden' });
     const user = await prisma.user.findUnique({ where: { id: Number(authId) } });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.status(201).json({ data: formatUser(user) });

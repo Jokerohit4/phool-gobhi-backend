@@ -184,8 +184,10 @@ export async function refreshTokenService(token) {
   }
 }
 
-// In-memory OTP store: phone → { code, expiresAt, sentAt }
-const otpStore = new Map();
+// OTP store lives in Postgres (OtpCode model, one row per phone) rather than
+// an in-memory Map — a Cloud Run cold start or scale-out to multiple
+// instances would otherwise silently invalidate in-flight OTPs, since each
+// instance would have its own empty Map.
 
 // Canonical phone key for everything in this service — OTP-store lookups,
 // User.phone storage/matching, and both the OTP-store and Firebase verify
@@ -267,12 +269,17 @@ export async function sendOtpService(rawPhone) {
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
-  const existing = otpStore.get(phone);
-  if (existing?.sentAt && Date.now() - existing.sentAt < 60 * 1000) {
+  const existing = await prisma.otpCode.findUnique({ where: { phone } });
+  if (existing && Date.now() - existing.sentAt.getTime() < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
+  const now = new Date();
+  await prisma.otpCode.upsert({
+    where: { phone },
+    create: { phone, code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
+    update: { code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
+  });
   // Skip paid SMS while ALLOW_DEV_OTP is on — the 123456 bypass makes a real
   // send pointless, and this ties "stop spending on SMS" to the same flag
   // that has to be flipped back for real verification to resume, so the two
@@ -285,6 +292,20 @@ export async function sendOtpService(rawPhone) {
   // incomplete prod env can never leak codes.
   if (process.env.ALLOW_DEV_OTP === 'true') response.otp = code;
   return response;
+}
+
+// Human-facing labels for the cross-app role-mismatch error below — keyed on
+// the account's EXISTING role (not the role the requesting app sent), since
+// that's the account the phone number actually belongs to.
+function roleLabel(role) {
+  if (role === ROLES.PARTNER) return 'gym partner';
+  if (role === ROLES.GOBHI) return 'staff';
+  return 'customer';
+}
+function appLabel(role) {
+  if (role === ROLES.PARTNER) return 'Partner app';
+  if (role === ROLES.GOBHI) return 'admin portal';
+  return 'Customer app';
 }
 
 // Shared by both the OTP-store path (verifyOtpService) and the Firebase
@@ -315,6 +336,16 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     });
   } else if (!user.isActive) {
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
+  } else if (user.role !== role) {
+    // This phone number already has an account, just not of the type the
+    // calling app expects (e.g. a partner's number entered into the customer
+    // app). Reject with a clear, actionable message instead of silently
+    // issuing a token whose role the app's own endpoints will later 403 on.
+    throw {
+      status: 409,
+      error: `This phone number is already registered as a ${roleLabel(user.role)}. Please use the ${appLabel(user.role)} to sign in.`,
+      errorCode: ERROR_MESSAGES.ROLE_MISMATCH.code,
+    };
   }
 
   const accessToken = generateAccessToken(user.id, user.role, user.type);
@@ -358,15 +389,15 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
   const isDev = process.env.ALLOW_DEV_OTP === 'true';
   const DEV_OTP = '123456';
   if (!(isDev && otp === DEV_OTP)) {
-    const entry = otpStore.get(phone);
-    if (!entry || Date.now() > entry.expiresAt) {
-      otpStore.delete(phone);
+    const entry = await prisma.otpCode.findUnique({ where: { phone } });
+    if (!entry || Date.now() > entry.expiresAt.getTime()) {
+      if (entry) await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
     if (entry.code !== otp) {
       throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
     }
-    otpStore.delete(phone);
+    await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
   }
 
   return issueSessionForUser({ phone, name, email, role, type, gobhiType });

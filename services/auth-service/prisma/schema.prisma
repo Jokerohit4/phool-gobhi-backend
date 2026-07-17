@@ -59,6 +59,17 @@ model SavedAddress {
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@schema("auth")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  code      String
+  expiresAt DateTime
+  sentAt    DateTime
+
   @@schema("auth")
 }
 

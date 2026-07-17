@@ -11,9 +11,11 @@ router.post('/login', login);
 router.post('/refresh-token', refreshToken);
 router.delete('/delete', verifyToken, deleteUser);
 router.post('/forgot-password', async (req, res) => {
-  // TODO: Implement email sending (e.g. Nodemailer + SMTP)
-  // For now, always return success so the frontend works
-  res.json({ message: 'If an account exists for this email, a password reset link has been sent.' });
+  // Only email/password accounts (gobhi/staff, via /admin/staff — customer
+  // and partner accounts are phone+OTP only) would ever need this. No email
+  // delivery integration exists yet, so this returns an honest "not
+  // implemented" rather than silently claiming an email was sent.
+  res.status(501).json({ error: 'Password reset isn\'t available yet — contact an admin to reset a staff account.' });
 });
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
