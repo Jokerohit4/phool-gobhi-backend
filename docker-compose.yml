@@ -8,15 +8,15 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - AUTH_SERVICE_URL=http://auth-service:5001
-      - USER_SERVICE_URL=http://user-service:5002
       - WALLET_SERVICE_URL=http://wallet-service:5003
       - GYM_SERVICE_URL=http://gym-service:5004
       - BOOKING_SERVICE_URL=http://booking-service:5005
-      - PAYMENT_SERVICE_URL=http://payment-wallet-service:5006
       - BUDDY_SERVICE_URL=http://buddy-service:5007
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=gateway
     depends_on:
       - auth-service
-      - user-service
       - wallet-service
       - gym-service
       - booking-service
@@ -39,20 +39,12 @@ services:
       # profile cache in sync (see controllers/userProfileController.js).
       - BUDDY_SERVICE_URL=http://buddy-service:5007
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=auth-service
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - phool-gobhi-net
-    restart: on-failure
-
-  user-service:
-    build: ./services/user-service
-    environment:
-      - MONGODB_URI=mongodb://mongo:27017/userdb
-      - USER_SERVICE_PORT=5002
-    depends_on:
-      - mongo
     networks:
       - phool-gobhi-net
     restart: on-failure
@@ -66,6 +58,9 @@ services:
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_SECRET=${RAZORPAY_SECRET}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=wallet-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,6 +77,9 @@ services:
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=gym-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -96,17 +94,17 @@ services:
       - BOOKING_SERVICE_PORT=5005
       - WALLET_SERVICE_URL=http://wallet-service:5003
       - GYM_SERVICE_URL=http://gym-service:5004
-      - USER_SERVICE_URL=http://user-service:5002
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=booking-service
     depends_on:
       postgres:
         condition: service_healthy
       wallet-service:
         condition: service_started
       gym-service:
-        condition: service_started
-      user-service:
         condition: service_started
     networks:
       - phool-gobhi-net
@@ -154,19 +152,9 @@ services:
       timeout: 5s
       retries: 10
 
-  mongo:
-    image: mongo:6-jammy
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - phool-gobhi-net
-
 networks:
   phool-gobhi-net:
     driver: bridge
 
 volumes:
   postgres_data:
-  mongo_data:

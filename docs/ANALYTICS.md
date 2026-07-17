@@ -34,17 +34,17 @@ how they roll up into the funnels that matter for the business.
 ## 2. Architecture
 
 ```
- Flutter apps (jim_customer, jim_partner)        Node backend (per service)
+ Flutter apps (jim_customer, jim_partner)        Node backend (per service + gateway)
  ┌───────────────────────────────┐               ┌──────────────────────────────┐
  │ AnalyticsService (facade)      │               │ utils/analytics.js  track()   │
  │  ├─ ConsoleAnalyticsService    │               │  ├─ console sink              │
  │  ├─ NoopAnalyticsService       │               │  ├─ noop (default)            │
  │  └─ PostHogAnalyticsService ───┼──┐         ┌──┼─ posthog (HTTP /capture)      │
  │     (HTTP /capture, no SDK)    │  │         │  └──────────────────────────────┘
- └───────────────────────────────┘  │         │   auth · booking · wallet · gym
-   identify / track / screen / reset │         │   emit at lifecycle truth points
-                                     ▼         ▼
-                              PostHog (or any sink) — funnels built here
+ └───────────────────────────────┘  │         │  gateway · auth · booking · wallet │
+   identify / track / screen / reset │         │  · gym · buddy                    │
+                                     ▼         ▼   emit at lifecycle truth points
+                              Postgres (or PostHog) — funnels built here
 ```
 
 - **Apps:** `lib/core/analytics/analytics_service.dart` + `analytics_events.dart`.
@@ -52,9 +52,10 @@ how they roll up into the funnels that matter for the business.
   (partner: via `combinedGenerateRoutes`; customer: via `AnalyticsRouteObserver`
   on `navigatorObservers`).
 - **Backend:** an identical `utils/analytics.js` lives in `auth-service`,
-  `booking-service`, `wallet-service`, and `gym-service`. Each service emits the
-  events it owns. The PostHog sink posts to the free HTTP capture API — **no SDK
-  dependency**.
+  `booking-service`, `wallet-service`, `gym-service`, and `buddy-service`, plus
+  the gateway (which also runs `ingest()` for client-emitted events posted to
+  `/api/events`). Each service emits the events it owns. The PostHog sink posts
+  to the free HTTP capture API — **no SDK dependency**.
 
 ---
 
@@ -170,8 +171,9 @@ Costs nothing at our scale (PostHog free tier ≈ 1M events/month; ~5k users ×
 ~50 events ≈ 250k/mo).
 
 1. Create a free PostHog account → project → copy the **Project API Key**.
-2. Backend: set `ANALYTICS_PROVIDER=posthog`, `POSTHOG_API_KEY=phc_…` on all four
-   services (Railway prod + Render dev). Redeploy.
+2. Backend: set `ANALYTICS_PROVIDER=posthog`, `POSTHOG_API_KEY=phc_…` on every
+   `*-prod` Cloud Run service + the gateway (dev already runs the first-party
+   Postgres sink — see §8). Redeploy via `/deploy <service> prod`.
 3. Apps: build with the `--dart-define`s above (wire them into the flavor build
    scripts / CI).
 4. Build the funnels in §5 in the PostHog UI.
