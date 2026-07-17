@@ -9,8 +9,8 @@
 
 -- CreateIndex: Booking had no indexes at all; every capacity check, sales
 -- summary, and slot-count query filters by these columns.
-CREATE INDEX "Booking_gymId_date_idx" ON "booking"."Booking"("gymId", "date");
-CREATE INDEX "Booking_customerId_idx" ON "booking"."Booking"("customerId");
+CREATE INDEX IF NOT EXISTS "Booking_gymId_date_idx" ON "booking"."Booking"("gymId", "date");
+CREATE INDEX IF NOT EXISTS "Booking_customerId_idx" ON "booking"."Booking"("customerId");
 
 -- CreateIndex: partial unique index — backstops createBooking's app-level
 -- duplicate-slot check against a double-tap/retry race. Deliberately
@@ -19,6 +19,10 @@ CREATE INDEX "Booking_customerId_idx" ON "booking"."Booking"("customerId");
 -- Prisma's schema.prisma has no syntax for a filtered/partial unique index,
 -- so this exists only here — `prisma db push`/introspection will not see it
 -- and may report drift; do not let a `db push` silently drop it.
-CREATE UNIQUE INDEX "booking_unique_active_slot"
-  ON "booking"."Booking" ("customerId", "gymId", "date", "startTime")
-  WHERE "status" <> 'cancelled';
+DO $$ BEGIN
+  CREATE UNIQUE INDEX "booking_unique_active_slot"
+    ON "booking"."Booking" ("customerId", "gymId", "date", "startTime")
+    WHERE "status" <> 'cancelled';
+EXCEPTION
+  WHEN duplicate_table THEN null;
+END $$;

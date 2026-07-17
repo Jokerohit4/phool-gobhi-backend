@@ -25,5 +25,13 @@ ALTER TABLE "wallet"."RazorpayOrder"
 -- CreateIndex: Postgres unique indexes allow multiple NULLs, so these still
 -- allow many un-set razorpayOrderId/razorpayPaymentId rows while catching a
 -- real duplicate non-null value.
-CREATE UNIQUE INDEX "WalletTransaction_razorpayOrderId_key" ON "wallet"."WalletTransaction"("razorpayOrderId");
-CREATE UNIQUE INDEX "WalletTransaction_razorpayPaymentId_key" ON "wallet"."WalletTransaction"("razorpayPaymentId");
+DO $$ BEGIN
+  CREATE UNIQUE INDEX "WalletTransaction_razorpayOrderId_key" ON "wallet"."WalletTransaction"("razorpayOrderId");
+EXCEPTION
+  WHEN duplicate_table THEN null;
+END $$;
+DO $$ BEGIN
+  CREATE UNIQUE INDEX "WalletTransaction_razorpayPaymentId_key" ON "wallet"."WalletTransaction"("razorpayPaymentId");
+EXCEPTION
+  WHEN duplicate_table THEN null;
+END $$;
