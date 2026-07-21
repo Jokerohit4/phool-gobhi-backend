@@ -63,6 +63,31 @@ enum PitchContactType {
   @@schema("auth")
 }
 
+// Website /careers listings — staff-managed via the admin portal's Jobs page,
+// publicly readable (active only) at GET /api/auth/jobs.
+model JobOpening {
+  id             Int            @id @default(autoincrement())
+  title          String
+  department     String
+  location       String
+  employmentType EmploymentType
+  description    String
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@schema("auth")
+}
+
+enum EmploymentType {
+  full_time
+  part_time
+  internship
+  contract
+
+  @@schema("auth")
+}
+
 model SavedAddress {
   id               Int      @id @default(autoincrement())
   userId           Int

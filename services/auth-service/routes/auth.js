@@ -3,6 +3,13 @@ const router = Router();
 import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
+import {
+  listPublicJobOpenings,
+  listAdminJobOpenings,
+  addJobOpening,
+  updateJobOpeningStatus,
+  removeJobOpening,
+} from '../controllers/jobOpeningController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import requireGobhi from '../middleware/requireGobhi.js';
@@ -43,5 +50,12 @@ router.patch('/admin/staff/:id', requireGobhi, updateStaffStatus);
 router.post('/contact', submitContact);
 router.get('/admin/contact-messages', requireGobhi, listContact);
 router.patch('/admin/contact-messages/:id', requireGobhi, updateContactRead);
+
+// Website /careers job listings — public read (active only), staff-managed
+router.get('/jobs', listPublicJobOpenings);
+router.get('/admin/jobs', requireGobhi, listAdminJobOpenings);
+router.post('/admin/jobs', requireGobhi, addJobOpening);
+router.patch('/admin/jobs/:id', requireGobhi, updateJobOpeningStatus);
+router.delete('/admin/jobs/:id', requireGobhi, removeJobOpening);
 
 export default router;
