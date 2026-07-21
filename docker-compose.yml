@@ -38,6 +38,9 @@ services:
       # Outbound fire-and-forget call to keep buddy-service's denormalized
       # profile cache in sync (see controllers/userProfileController.js).
       - BUDDY_SERVICE_URL=http://buddy-service:5007
+      # Outbound call to credit the one-time ₹20 profile-completion bonus
+      # (see controllers/userProfileController.js).
+      - WALLET_SERVICE_URL=http://wallet-service:5003
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
       - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}

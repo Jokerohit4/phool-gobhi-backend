@@ -5,7 +5,9 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 const prisma = new PrismaClient();
 
 const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
+const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
+const PROFILE_COMPLETION_BONUS = 20;
 
 // Fire-and-forget: keeps buddy-service's denormalized gender/dateOfBirth/
 // fitnessGoals cache from drifting after a profile edit (see
@@ -20,6 +22,50 @@ async function syncBuddyProfile(userId) {
     await fetch(`${BUDDY_SERVICE_URL}/internal/profile-sync/${userId}`, { method: 'POST', headers });
   } catch (err) {
     console.error('[buddy-sync] notify failed:', err.message);
+  }
+}
+
+// Mirrors the customer app's own completeness check (profile_completion_banner.dart):
+// every field the Edit Profile screen exposes must be filled. Phone is
+// deliberately excluded — it's fixed at OTP signup, never edited here.
+function isProfileComplete(user) {
+  return Boolean(
+    user.name && user.name.trim().length > 0 &&
+    user.gender &&
+    user.dateOfBirth &&
+    Array.isArray(user.fitnessGoals) && user.fitnessGoals.length > 0 &&
+    user.profileImageUrl && user.profileImageUrl.length > 0
+  );
+}
+
+function profileCompletionBonusKey(userId) {
+  return `profile-completion-bonus-${userId}`;
+}
+
+// One-time ₹20 wallet credit the moment a profile crosses from incomplete to
+// complete. idempotencyKey (see wallet-service's creditWalletService) means
+// a later edit — or a retried request — can never pay this out twice, so
+// callers don't need their own "already paid" bookkeeping. Best-effort: a
+// dropped call here shouldn't fail the profile save that triggered it, same
+// tradeoff as syncBuddyProfile above.
+async function creditProfileCompletionBonus(userId) {
+  try {
+    const headers = {
+      'x-internal-key': INTERNAL_API_KEY,
+      'Content-Type': 'application/json',
+      ...(await googleIdTokenHeader(WALLET_SERVICE_URL)),
+    };
+    await fetch(`${WALLET_SERVICE_URL}/${userId}/credit`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        amount: PROFILE_COMPLETION_BONUS,
+        description: 'Profile completion bonus',
+        idempotencyKey: profileCompletionBonusKey(userId),
+      }),
+    });
+  } catch (err) {
+    console.error('[profile-completion-bonus] credit failed:', err.message);
   }
 }
 
@@ -78,10 +124,18 @@ export const uploadProfilePicture = async (req, res) => {
     if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
     if (!req.file) return res.status(400).json({ error: 'No image provided' });
 
+    const before = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!before) return res.status(404).json({ error: 'User not found' });
+
     const user = await prisma.user.update({
       where: { id: targetUserId },
       data: { profileImageUrl: req.file.path },
     });
+
+    if (!isProfileComplete(before) && isProfileComplete(user)) {
+      creditProfileCompletionBonus(targetUserId);
+    }
+
     res.status(201).json({ data: formatUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -105,6 +159,9 @@ export const updateProfile = async (req, res) => {
       }
     }
 
+    const before = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!before) return res.status(404).json({ error: 'User not found' });
+
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
@@ -118,6 +175,10 @@ export const updateProfile = async (req, res) => {
 
     if (gender !== undefined || dateOfBirth !== undefined || fitnessGoals !== undefined) {
       syncBuddyProfile(targetUserId);
+    }
+
+    if (!isProfileComplete(before) && isProfileComplete(user)) {
+      creditProfileCompletionBonus(targetUserId);
     }
 
     res.json({ data: formatUser(user) });
