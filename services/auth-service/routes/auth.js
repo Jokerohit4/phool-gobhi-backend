@@ -10,6 +10,11 @@ import {
   updateJobOpeningStatus,
   removeJobOpening,
 } from '../controllers/jobOpeningController.js';
+import {
+  submitApplication,
+  listApplications,
+  updateApplicationRead,
+} from '../controllers/jobApplicationController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import requireGobhi from '../middleware/requireGobhi.js';
@@ -57,5 +62,10 @@ router.get('/admin/jobs', requireGobhi, listAdminJobOpenings);
 router.post('/admin/jobs', requireGobhi, addJobOpening);
 router.patch('/admin/jobs/:id', requireGobhi, updateJobOpeningStatus);
 router.delete('/admin/jobs/:id', requireGobhi, removeJobOpening);
+
+// Job applications submitted against a listing — public write, staff-only read
+router.post('/jobs/:jobOpeningId/apply', submitApplication);
+router.get('/admin/job-applications', requireGobhi, listApplications);
+router.patch('/admin/job-applications/:id', requireGobhi, updateApplicationRead);
 
 export default router;

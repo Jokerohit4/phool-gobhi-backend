@@ -26,6 +26,7 @@ const PUBLIC_ROUTES = [
   { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
   { method: 'GET', pattern: /^\/api\/auth\/jobs(\?.*)?$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
@@ -95,6 +96,7 @@ const walletAttemptLimiter = rateLimit({
 });
 const RATE_LIMITED_ROUTES = [
   { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact)$/, limiter: authAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
 ];
 app.use((req, res, next) => {

@@ -88,6 +88,24 @@ enum EmploymentType {
   @@schema("auth")
 }
 
+// Applications submitted against a JobOpening (first-party — same rationale
+// as ContactMessage: a mailto "Apply" link fails silently when the visitor
+// has no default mail client). jobOpeningId/jobTitle are a plain snapshot,
+// not a relation — an application stays reviewable even if the listing it
+// was made against is later closed or deleted.
+model JobApplication {
+  id           Int      @id @default(autoincrement())
+  jobOpeningId Int
+  jobTitle     String
+  name         String
+  email        String
+  message      String
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@schema("auth")
+}
+
 model SavedAddress {
   id               Int      @id @default(autoincrement())
   userId           Int
