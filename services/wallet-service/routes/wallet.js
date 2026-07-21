@@ -4,6 +4,7 @@ import {
   getMyWallet,
   getWallet,
   getWalletTransactions,
+  getMyWalletTransactions,
   creditWallet,
   debitWallet,
   listPartnerBalances,
@@ -24,6 +25,7 @@ const router = Router();
 
 router.post('/', requireInternal, createWallet); // Create wallet (internal)
 router.get('/balance', requireAuth, getMyWallet); // Get wallet for logged-in user
+router.get('/transactions', requireAuth, getMyWalletTransactions); // Get transactions for logged-in user
 router.get('/partners/summary', requireRole('gobhi'), listPartnerBalances); // Admin: list partner balances owed
 router.get('/payouts', requireRole('gobhi'), listPayoutHistory); // Admin: payout history (registered before /:userId — literal path)
 router.post('/:userId/payout', requireRole('gobhi'), payoutPartner); // Admin: record a manual payout to a partner

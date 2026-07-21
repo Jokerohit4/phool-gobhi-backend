@@ -84,7 +84,10 @@ export async function getWalletService(userId) {
 }
 
 export async function getWalletTransactionsService(userId) {
-  const wallet = await prisma.wallet.findUnique({ where: { userId }, include: { transactions: true } });
+  const wallet = await prisma.wallet.findUnique({
+    where: { userId },
+    include: { transactions: { orderBy: { createdAt: 'desc' } } },
+  });
   if (!wallet) throw new Error('Wallet not found');
   return wallet.transactions.map(serializeTransaction);
 }
@@ -325,6 +328,25 @@ export async function fetchGymForSubscription(gymId, planType) {
 // (via claimRazorpayOrderService) before calling this.
 export async function fulfillSubscriptionPurchase(order, paymentId) {
   const { gymId, planType, userId: customerId, orderId, amount: price } = order;
+
+  // createSubscriptionOrder only rejects against already-fulfilled
+  // subscriptions, so two orders for the same customer+gym can both be
+  // created (and paid for) before either is fulfilled. Whichever lands here
+  // second must not stack a duplicate subscription — refund that payment to
+  // the customer's wallet instead of creating it.
+  const existingSubscription = await getActiveSubscriptionService(customerId, gymId);
+  if (existingSubscription) {
+    await prisma.wallet.upsert({
+      where: { userId: customerId },
+      update: {},
+      create: { userId: customerId, userType: 'customer' },
+    });
+    await creditWalletService(customerId, price,
+      `Refund - already subscribed to gym ${gymId} (order ${orderId})`);
+    await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+    return { refunded: true, refundAmount: price, existingSubscription };
+  }
+
   const { partnerId } = await fetchGymForSubscription(gymId, planType);
 
   const commissionPct = SUBSCRIPTION_COMMISSION_PERCENT;
