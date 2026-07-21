@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -359,6 +359,18 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
   }
 }
 
+// Tiered cancellation refund policy — how much of the session amount comes
+// back depends on how much notice the customer gave before the slot starts.
+// Mirrored (for display only, never trusted) on the website so it can show
+// the applicable tier before the customer confirms — this function is the
+// only place that actually decides the refund.
+function cancellationRefundRate(hoursUntil) {
+  if (hoursUntil < 1) return null; // too close to the session — cancellation blocked
+  if (hoursUntil < 4) return 0.3;
+  if (hoursUntil < 8) return 0.5;
+  return 1.0;
+}
+
 export async function cancelBooking(bookingId, customerId) {
   try {
     // 1. Find booking
@@ -398,6 +410,16 @@ export async function cancelBooking(bookingId, customerId) {
       }
     }
 
+    // 2b. Tiered cancellation window: blocked inside 1 hour of the slot;
+    // otherwise the refund rate depends on how much notice was given.
+    // Checked before the status flip below — a blocked cancellation must
+    // never touch the booking's status at all.
+    const hoursUntil = hoursUntilSlot(booking.date, booking.startTime);
+    const refundRate = cancellationRefundRate(hoursUntil);
+    if (refundRate === null) {
+      throw { status: 400, error: 'Bookings cannot be cancelled within 1 hour of the session' };
+    }
+
     // 3-4. Atomically flip confirmed -> cancelled first, gating the refund on
     // this single conditional update succeeding. Previously the wallet
     // credit ran BEFORE this status flip: if the process crashed in between,
@@ -426,11 +448,12 @@ export async function cancelBooking(bookingId, customerId) {
     // a known reconciliation gap (same class as the best-effort partner
     // payout in completeBooking below), logged clearly for manual follow-up
     // rather than building a full saga/outbox for it.
+    const refundAmount = Math.round(booking.amount * refundRate * 100) / 100;
     if (!booking.subscriptionId) {
       try {
         await axios.post(`${WALLET_SERVICE_URL}/${customerId}/credit`, {
-          amount: booking.amount,
-          description: 'Booking cancellation refund'
+          amount: refundAmount,
+          description: `Booking cancellation refund (${Math.round(refundRate * 100)}%)`
         }, await internalHeadersFor(WALLET_SERVICE_URL));
       } catch (err) {
         console.error('Refund failed for cancelled booking', bookingId, err.message);
@@ -441,15 +464,18 @@ export async function cancelBooking(bookingId, customerId) {
       }
     }
 
-    const updatedBooking = { ...booking, status: 'cancelled' };
+    const updatedBooking = { ...booking, status: 'cancelled', refundAmount, refundRate };
 
     track('booking_cancelled', customerId, {
       booking_id: booking.id, gym_id: booking.gymId, amount: booking.amount, date: booking.date,
+      refund_rate: refundRate, refund_amount: refundAmount, hours_until_slot: hoursUntil,
     });
 
     notifyCustomer(customerId, {
       title: 'Booking cancelled',
-      body: `Your session on ${booking.date} was cancelled. ₹${booking.amount} refunded to your wallet.`,
+      body: booking.subscriptionId
+        ? `Your session on ${booking.date} was cancelled.`
+        : `Your session on ${booking.date} was cancelled. ₹${refundAmount} (${Math.round(refundRate * 100)}%) refunded to your wallet.`,
       data: { type: 'booking_cancelled', bookingId: booking.id, date: booking.date },
     }).catch(() => {});
 

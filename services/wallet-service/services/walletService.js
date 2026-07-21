@@ -333,6 +333,19 @@ export async function fulfillSubscriptionPurchase(order, paymentId) {
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
 
+  // creditWalletService throws "Wallet not found" for a partner who has never
+  // had a wallet auto-provisioned (that only happens today via the partner's
+  // own GET /balance or /:userId call) — and by the time we get here, the
+  // order has already been atomically claimed (PENDING -> PROCESSING) by the
+  // caller, so a throw here would leave it stuck forever with no retry path.
+  // Upsert on the unique userId is race-safe if two purchases for the same
+  // brand-new partner land concurrently.
+  await prisma.wallet.upsert({
+    where: { userId: partnerId },
+    update: {},
+    create: { userId: partnerId, userType: 'partner' },
+  });
+
   await creditWalletService(partnerId, partnerShare, `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`);
 
   const subscription = await prisma.gymSubscription.create({

@@ -16,3 +16,9 @@ function slotInstantUTC(date, startTime) {
 export function isSlotInPastOrTooSoon(date, startTime) {
   return slotInstantUTC(date, startTime) < Date.now() + MIN_LEAD_MS;
 }
+
+// How many hours from now until this slot starts — used by cancelBooking's
+// tiered refund policy. Negative once the slot has already started.
+export function hoursUntilSlot(date, startTime) {
+  return (slotInstantUTC(date, startTime) - Date.now()) / 3600000;
+}

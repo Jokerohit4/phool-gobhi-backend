@@ -117,6 +117,15 @@ export const getMatches = async (req, res) => {
   }
 };
 
+export const getMatchedProfile = async (req, res) => {
+  try {
+    const profile = await buddyService.getMatchedProfile(req.userId, parseInt(req.params.matchId));
+    res.json({ data: profile });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const unmatch = async (req, res) => {
   try {
     const match = await buddyService.unmatch(req.userId, parseInt(req.params.matchId));

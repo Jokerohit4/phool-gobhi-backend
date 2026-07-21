@@ -1,12 +1,25 @@
 
 import { PrismaClient } from '@prisma/client';
 import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService } from '../services/authService.js';
+import { ROLES } from '../constants/userEnums.js';
+import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 
 const prisma = new PrismaClient();
 
 const signup = async (req, res) => {
   try {
     console.log('Signup request body:', req.body);
+    // This route is public (no auth) — gobhi/staff accounts must only ever be
+    // created via the authenticated POST /admin/staff path (createStaffService),
+    // which calls signupService directly and bypasses this check. Without this,
+    // any anonymous caller could POST role:'gobhi' here and self-provision a
+    // staff account with full admin-portal access.
+    if (req.body?.role === ROLES.GOBHI) {
+      return res.status(403).json({
+        error: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.message,
+        errorCode: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.code,
+      });
+    }
     const result = await signupService(req.body ?? {});
     res.status(201).json(result);
   } catch (err) {

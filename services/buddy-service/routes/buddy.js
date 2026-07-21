@@ -24,6 +24,7 @@ router.get('/discover', requireAuth, ctrl.getDiscoveryFeed);
 router.post('/swipes', requireAuth, ctrl.swipe);
 
 router.get('/matches', requireAuth, ctrl.getMatches);
+router.get('/matches/:matchId/profile', requireAuth, ctrl.getMatchedProfile);
 router.post('/matches/:matchId/unmatch', requireAuth, ctrl.unmatch);
 router.get('/matches/:matchId/messages', requireAuth, ctrl.getMessages);
 router.post('/matches/:matchId/messages', requireAuth, ctrl.sendMessage);

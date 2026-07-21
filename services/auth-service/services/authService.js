@@ -315,6 +315,14 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   if (!VALID_ROLES.includes(role)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_ROLE.message, errorCode: ERROR_MESSAGES.INVALID_ROLE.code };
   }
+  // Phone/OTP and Firebase sign-in are both public, unauthenticated entry
+  // points (customer + partner apps only) — gobhi/staff accounts must only
+  // ever be created via the authenticated POST /admin/staff path. Without
+  // this, anyone could verify an OTP for a brand-new phone number with
+  // role:'gobhi' and self-provision a staff account.
+  if (role === ROLES.GOBHI) {
+    throw { status: 403, error: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.message, errorCode: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.code };
+  }
   if (!VALID_TYPES.includes(type)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_TYPE.message, errorCode: ERROR_MESSAGES.INVALID_TYPE.code };
   }

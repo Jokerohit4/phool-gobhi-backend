@@ -2,6 +2,7 @@ import { Router } from 'express';
 const router = Router();
 import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
+import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import requireGobhi from '../middleware/requireGobhi.js';
@@ -37,5 +38,10 @@ router.delete('/admin/pitch-access/:id', requireGobhi, removeContact);
 router.get('/admin/staff', requireGobhi, listStaff);
 router.post('/admin/staff', requireGobhi, createStaff);
 router.patch('/admin/staff/:id', requireGobhi, updateStaffStatus);
+
+// Website /contact form submissions — public write, staff-only read
+router.post('/contact', submitContact);
+router.get('/admin/contact-messages', requireGobhi, listContact);
+router.patch('/admin/contact-messages/:id', requireGobhi, updateContactRead);
 
 export default router;

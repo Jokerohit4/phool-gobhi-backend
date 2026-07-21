@@ -42,6 +42,20 @@ model PitchAccessContact {
   @@schema("auth")
 }
 
+// Website /contact form submissions (first-party — replaces the previous
+// Formspree integration, whose form id had gone stale/404 with no visible
+// failure to the submitter). Read-only for staff via the admin portal.
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@schema("auth")
+}
+
 enum PitchContactType {
   email
   phone
