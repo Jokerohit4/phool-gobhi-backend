@@ -18,6 +18,7 @@ import {
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import requireGobhi from '../middleware/requireGobhi.js';
+import { uploadResume } from '../utils/gcsResume.js';
 
 router.post('/signup', signup);
 router.post('/login', login);
@@ -64,7 +65,7 @@ router.patch('/admin/jobs/:id', requireGobhi, updateJobOpeningStatus);
 router.delete('/admin/jobs/:id', requireGobhi, removeJobOpening);
 
 // Job applications submitted against a listing — public write, staff-only read
-router.post('/jobs/:jobOpeningId/apply', submitApplication);
+router.post('/jobs/:jobOpeningId/apply', uploadResume.single('resume'), submitApplication);
 router.get('/admin/job-applications', requireGobhi, listApplications);
 router.patch('/admin/job-applications/:id', requireGobhi, updateApplicationRead);
 

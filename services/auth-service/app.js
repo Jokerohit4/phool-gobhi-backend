@@ -33,7 +33,7 @@ app.get('/health', async (req, res) => {
 // instead of falling through to Express's default HTML response.
 app.use((err, req, res, next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'Image is too large (max 5 MB)' });
+    return res.status(413).json({ error: 'File is too large' });
   }
   console.error('Unhandled error:', err);
   res.status(err?.status || 500).json({ error: err?.message || 'Server error' });

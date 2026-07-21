@@ -133,6 +133,9 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
 // gateway, rather than trusting the x-user-id headers alone. No-ops locally.
 app.use('/api/auth', proxy(AUTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(AUTH_SERVICE_URL),
+  // Raised for the same reason as /api/users and /api/gyms below — this
+  // mount now also carries the careers page's resume-upload multipart body.
+  limit: '15mb',
 }));
 // express-http-proxy buffers the whole request body itself (via raw-body)
 // before forwarding, with its own default limit far smaller than the

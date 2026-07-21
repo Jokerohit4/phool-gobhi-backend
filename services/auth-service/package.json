@@ -8,6 +8,7 @@
     "dev": "nodemon app.js"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.21.0",
     "@prisma/client": "^6.8.2",
     "bcrypt": "^5.1.1",
     "cloudinary": "^1.41.3",

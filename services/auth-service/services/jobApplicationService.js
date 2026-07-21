@@ -1,10 +1,11 @@
 import { PrismaClient } from '@prisma/client';
+import { signedResumeUrl } from '../utils/gcsResume.js';
 
 const prisma = new PrismaClient();
 
 const MAX_MESSAGE_LENGTH = 5000;
 
-export async function submitJobApplication(jobOpeningId, { name, email, message }) {
+export async function submitJobApplication(jobOpeningId, { name, email, message, resumePath }) {
   const id = Number(jobOpeningId);
   if (!id) throw { status: 400, error: 'A valid job opening id is required' };
 
@@ -27,12 +28,28 @@ export async function submitJobApplication(jobOpeningId, { name, email, message 
       name: trimmedName,
       email: trimmedEmail,
       message: trimmedMessage,
+      resumePath: resumePath || null,
     },
   });
 }
 
+// Signed URLs are generated fresh here, not stored, so a resume submitted
+// months ago is just as viewable as one from today (see utils/gcsResume.js).
+// A signing failure (e.g. a missing IAM grant) must not take down the whole
+// list — every other application, resume or not, still needs to render.
 export async function listJobApplications() {
-  return prisma.jobApplication.findMany({ orderBy: { createdAt: 'desc' } });
+  const applications = await prisma.jobApplication.findMany({ orderBy: { createdAt: 'desc' } });
+  return Promise.all(
+    applications.map(async (application) => {
+      let resumeUrl = null;
+      try {
+        resumeUrl = await signedResumeUrl(application.resumePath);
+      } catch (err) {
+        console.error(`Failed to sign resume URL for application ${application.id}:`, err.message);
+      }
+      return { ...application, resumeUrl };
+    }),
+  );
 }
 
 export async function markJobApplicationRead(id, isRead) {

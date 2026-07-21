@@ -26,3 +26,5 @@ export const uploadProfilePicture = multer({
   storage: profilePictureStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB cap
 });
+
+// Job application resumes live in GCS, not Cloudinary — see utils/gcsResume.js.
