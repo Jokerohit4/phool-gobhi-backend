@@ -99,6 +99,9 @@ model JobApplication {
   jobTitle     String
   name         String
   email        String
+  phone        String
+  portfolioUrl String?
+  linkedinUrl  String?
   message      String
   resumePath   String?
   isRead       Boolean  @default(false)

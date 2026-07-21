@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 const MAX_MESSAGE_LENGTH = 5000;
 
-export async function submitJobApplication(jobOpeningId, { name, email, message, resumePath }) {
+export async function submitJobApplication(jobOpeningId, { name, email, phone, portfolioUrl, linkedinUrl, message, resumePath }) {
   const id = Number(jobOpeningId);
   if (!id) throw { status: 400, error: 'A valid job opening id is required' };
 
@@ -14,10 +14,15 @@ export async function submitJobApplication(jobOpeningId, { name, email, message,
 
   const trimmedName = String(name ?? '').trim();
   const trimmedEmail = String(email ?? '').trim().toLowerCase();
+  const trimmedPhone = String(phone ?? '').trim();
   const trimmedMessage = String(message ?? '').trim();
+  // Optional — only trimmed, no format enforcement (same light-touch as message).
+  const trimmedPortfolioUrl = String(portfolioUrl ?? '').trim();
+  const trimmedLinkedinUrl = String(linkedinUrl ?? '').trim();
 
   if (!trimmedName) throw { status: 400, error: 'Name is required' };
   if (!trimmedEmail || !trimmedEmail.includes('@')) throw { status: 400, error: 'A valid email is required' };
+  if (!trimmedPhone) throw { status: 400, error: 'Phone number is required' };
   if (!trimmedMessage) throw { status: 400, error: 'Message is required' };
   if (trimmedMessage.length > MAX_MESSAGE_LENGTH) throw { status: 400, error: 'Message is too long' };
 
@@ -27,6 +32,9 @@ export async function submitJobApplication(jobOpeningId, { name, email, message,
       jobTitle: job.title,
       name: trimmedName,
       email: trimmedEmail,
+      phone: trimmedPhone,
+      portfolioUrl: trimmedPortfolioUrl || null,
+      linkedinUrl: trimmedLinkedinUrl || null,
       message: trimmedMessage,
       resumePath: resumePath || null,
     },
