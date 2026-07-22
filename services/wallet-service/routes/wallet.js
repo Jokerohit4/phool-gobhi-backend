@@ -13,8 +13,7 @@ import {
   createTopUpOrder,
   verifyAndCreditWallet,
   handleRazorpayWebhook,
-  createSubscriptionOrder,
-  verifySubscriptionPurchase,
+  purchaseSubscriptionWithWalletHandler,
   getActiveSubscriptionInternal,
   getMySubscriptions,
   getTransactionByKeyInternal,
@@ -40,9 +39,10 @@ router.post('/orders', requireAuth, createTopUpOrder); // Create Razorpay order
 router.post('/verify', requireAuth, verifyAndCreditWallet); // Verify and credit wallet
 router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (no auth)
 
-// Gym subscription routes
-router.post('/subscriptions/orders', requireAuth, createSubscriptionOrder); // Create Razorpay order for a plan
-router.post('/subscriptions/verify', requireAuth, verifySubscriptionPurchase); // Verify + credit partner + create subscription
+// Gym subscription routes — wallet-debit only, no direct Razorpay charge
+// (see purchaseSubscriptionWithWallet for why: RBI's refund-to-original-
+// source rule).
+router.post('/subscriptions/purchase-with-wallet', requireAuth, purchaseSubscriptionWithWalletHandler);
 router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer's own subscriptions (optional ?gymId=)
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check
 

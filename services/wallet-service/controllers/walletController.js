@@ -11,9 +11,7 @@ import {
   getRazorpayOrderService,
   updateRazorpayOrderStatusService,
   claimRazorpayOrderService,
-  fetchGymForSubscription,
-  fulfillSubscriptionPurchase,
-  getSubscriptionByOrderIdService,
+  purchaseSubscriptionWithWallet,
   getActiveSubscriptionService,
   getMySubscriptionsService,
   getTransactionByIdempotencyKeyService,
@@ -268,7 +266,7 @@ export const verifyAndCreditWallet = async (req, res) => {
 
 const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'yearly'];
 
-export const createSubscriptionOrder = async (req, res) => {
+export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
   try {
     const { gymId, planType } = req.body;
     const userId = req.userId;
@@ -277,110 +275,15 @@ export const createSubscriptionOrder = async (req, res) => {
       return res.status(400).json({ error: 'gymId and a valid planType are required' });
     }
 
-    // One active subscription per gym at a time, regardless of plan type —
-    // otherwise a customer can stack overlapping subscriptions (and pay
-    // twice) for the same gym, with no way for the app to even surface the
-    // extra one since it only ever shows a single active subscription.
-    const existing = await getActiveSubscriptionService(userId, Number(gymId));
-    if (existing) {
-      return res.status(409).json({
-        error: `You already have an active ${existing.planType} subscription for this gym until ${new Date(existing.endDate).toDateString()}`
-      });
-    }
-
-    const { price } = await fetchGymForSubscription(Number(gymId), planType);
-
-    const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_SECRET
-    });
-
-    const order = await razorpay.orders.create({
-      amount: Math.round(price * 100), // Convert to paise
-      currency: 'INR',
-      notes: { userId, gymId, planType }
-    });
-
-    await createRazorpayOrderService(userId, order.id, price, {
-      purpose: 'subscription',
-      gymId: Number(gymId),
-      planType,
-    });
-
-    track('subscription_order_created', userId, { amount: price, order_id: order.id, gym_id: gymId, plan_type: planType });
-
-    res.status(201).json({
-      data: {
-        id: order.id,
-        orderId: order.id,
-        amount: price,
-        currency: 'INR',
-        keyId: process.env.RAZORPAY_KEY_ID
-      }
-    });
+    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
+    track('subscription_purchased_wallet', userId, { amount: subscription.price, gym_id: gymId, plan_type: planType });
+    res.status(201).json({ data: { subscription } });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error?.description || err.error || err.message || 'Server error' });
-  }
-};
-
-export const verifySubscriptionPurchase = async (req, res) => {
-  try {
-    const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
-    const userId = req.userId;
-
-    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_SECRET);
-    hmac.update(orderId + '|' + razorpayPaymentId);
-    const hash = hmac.digest('hex');
-
-    if (!safeEqualHex(hash, razorpaySignature)) {
-      return res.status(400).json({ error: 'Invalid signature' });
-    }
-
-    const order = await getRazorpayOrderService(orderId);
-    if (!order || order.purpose !== 'subscription') {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    if (order.userId !== userId) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    const claimed = await claimRazorpayOrderService(orderId);
-    if (!claimed) {
-      // Lost the race — most likely the webhook already fulfilled this order.
-      const latest = await getRazorpayOrderService(orderId);
-      if (latest?.status === 'SUCCESS') {
-        const subscription = await getSubscriptionByOrderIdService(orderId);
-        // A SUCCESS order with no subscription row means the other caller
-        // hit the duplicate-subscription refund path in
-        // fulfillSubscriptionPurchase, not a normal fulfillment — same
-        // response shape (error status, not a 200) as that path below, so
-        // the client's existing error handling covers both without change.
-        if (!subscription) {
-          return res.status(409).json({
-            error: 'You already have an active subscription for this gym — your payment was refunded to your wallet.'
-          });
-        }
-        return res.json({ data: { success: true, subscription } });
-      }
-      return res.status(400).json({ error: 'Order already processed' });
-    }
-
-    const result = await fulfillSubscriptionPurchase(order, razorpayPaymentId);
-
-    if (result.refunded) {
-      return res.status(409).json({
-        error: `You already have an active ${result.existingSubscription.planType} subscription for this gym — ₹${result.refundAmount} was refunded to your wallet.`
-      });
-    }
-
-    track('subscription_purchased', userId, {
-      amount: order.amount, order_id: orderId, gym_id: order.gymId, plan_type: order.planType,
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+      price: err.price,
     });
-
-    res.json({ data: { success: true, subscription: result } });
-  } catch (err) {
-    console.error('verifySubscriptionPurchase error:', err.message);
-    res.status(500).json({ error: err.message });
   }
 };
 
@@ -429,19 +332,17 @@ export const handleRazorpayWebhook = async (req, res) => {
       const { id: paymentId, order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
 
+      // Razorpay orders are only ever created for wallet top-ups now —
+      // subscriptions are paid out of wallet balance (see
+      // purchaseSubscriptionWithWallet), never a direct Razorpay charge, so
+      // there's no `purpose === 'subscription'` case to branch on here
+      // anymore.
       if (order) {
         const claimed = await claimRazorpayOrderService(orderId);
         if (claimed) {
-          if (order.purpose === 'subscription') {
-            const result = await fulfillSubscriptionPurchase(order, paymentId);
-            if (!result.refunded) {
-              track('subscription_purchased', order.userId, { amount: order.amount, order_id: orderId, gym_id: order.gymId, plan_type: order.planType, via: 'webhook' });
-            }
-          } else {
-            await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
-            await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
-            track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
-          }
+          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+          await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+          track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
         }
       }
     } else if (event === 'payment.failed') {
@@ -452,8 +353,7 @@ export const handleRazorpayWebhook = async (req, res) => {
         const claimed = await claimRazorpayOrderService(orderId);
         if (claimed) {
           await updateRazorpayOrderStatusService(orderId, 'FAILED', null);
-          const event = order.purpose === 'subscription' ? 'subscription_purchase_failed' : 'wallet_topup_failed';
-          track(event, order.userId, { amount: order.amount, order_id: orderId });
+          track('wallet_topup_failed', order.userId, { amount: order.amount, order_id: orderId });
         }
       }
     }

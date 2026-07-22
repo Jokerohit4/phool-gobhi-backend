@@ -322,32 +322,50 @@ export async function fetchGymForSubscription(gymId, planType) {
   return { partnerId: gym.partnerId, price: Number(price) };
 }
 
-// Shared by POST /subscriptions/verify and the Razorpay webhook so the
-// commission split + GymSubscription creation logic can't drift between the
-// two call sites. Caller must already hold the atomic claim on `order`
-// (via claimRazorpayOrderService) before calling this.
-export async function fulfillSubscriptionPurchase(order, paymentId) {
-  const { gymId, planType, userId: customerId, orderId, amount: price } = order;
-
-  // createSubscriptionOrder only rejects against already-fulfilled
-  // subscriptions, so two orders for the same customer+gym can both be
-  // created (and paid for) before either is fulfilled. Whichever lands here
-  // second must not stack a duplicate subscription — refund that payment to
-  // the customer's wallet instead of creating it.
-  const existingSubscription = await getActiveSubscriptionService(customerId, gymId);
-  if (existingSubscription) {
-    await prisma.wallet.upsert({
-      where: { userId: customerId },
-      update: {},
-      create: { userId: customerId, userType: 'customer' },
-    });
-    await creditWalletService(customerId, price,
-      `Refund - already subscribed to gym ${gymId} (order ${orderId})`);
-    await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
-    return { refunded: true, refundAmount: price, existingSubscription };
+// Subscriptions are paid for out of wallet balance only — never a direct
+// Razorpay charge. RBI's refund-to-original-source rule requires a reversal
+// to go back to wherever the money actually came from; a direct Razorpay
+// charge for a specific purchase (as opposed to a wallet top-up) would mean
+// any refund has to go back to the card/UPI, not into the wallet — the
+// duplicate-subscription guard below deliberately reverses via
+// creditWalletService (a wallet credit) exactly because the original debit
+// was also a wallet debit, so that's the correct original source. Throws
+// INSUFFICIENT_BALANCE (a `code`, checked by the client to route to a
+// top-up) rather than silently falling back to Razorpay — that's a
+// deliberate client-side decision, not something this function should make
+// on the caller's behalf.
+export async function purchaseSubscriptionWithWallet(customerId, gymId, planType) {
+  const existingBefore = await getActiveSubscriptionService(customerId, gymId);
+  if (existingBefore) {
+    throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const { partnerId } = await fetchGymForSubscription(gymId, planType);
+  const { partnerId, price } = await fetchGymForSubscription(gymId, planType);
+
+  const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
+  if (!wallet || Number(wallet.balance) < price) {
+    throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price };
+  }
+
+  // No real Razorpay order exists for this path — synthesize a unique id so
+  // GymSubscription.razorpayOrderId (required + unique) still has something
+  // to key on, and so the debit's idempotency key is deterministic per order.
+  const syntheticOrderId = `wallet_${customerId}_${gymId}_${Date.now()}`;
+  await debitWalletService(
+    customerId, price,
+    `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
+    `subscription-wallet-order-${syntheticOrderId}`
+  );
+
+  // A concurrent purchase (e.g. a double-tap racing this same function on
+  // another request) could have landed between the check above and this
+  // debit — guard again and reverse the wallet debit if so.
+  const existingAfter = await getActiveSubscriptionService(customerId, gymId);
+  if (existingAfter) {
+    await creditWalletService(customerId, price,
+      `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`);
+    throw { status: 409, error: 'You already have an active subscription for this gym' };
+  }
 
   const commissionPct = SUBSCRIPTION_COMMISSION_PERCENT;
   const partnerShare = Math.round(price * (1 - commissionPct / 100) * 100) / 100;
@@ -355,19 +373,11 @@ export async function fulfillSubscriptionPurchase(order, paymentId) {
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
 
-  // creditWalletService throws "Wallet not found" for a partner who has never
-  // had a wallet auto-provisioned (that only happens today via the partner's
-  // own GET /balance or /:userId call) — and by the time we get here, the
-  // order has already been atomically claimed (PENDING -> PROCESSING) by the
-  // caller, so a throw here would leave it stuck forever with no retry path.
-  // Upsert on the unique userId is race-safe if two purchases for the same
-  // brand-new partner land concurrently.
   await prisma.wallet.upsert({
     where: { userId: partnerId },
     update: {},
     create: { userId: partnerId, userType: 'partner' },
   });
-
   await creditWalletService(partnerId, partnerShare, `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`);
 
   const subscription = await prisma.gymSubscription.create({
@@ -381,18 +391,11 @@ export async function fulfillSubscriptionPurchase(order, paymentId) {
       partnerShare,
       startDate,
       endDate,
-      razorpayOrderId: orderId,
+      razorpayOrderId: syntheticOrderId,
     },
   });
 
-  await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
-
   return serializeSubscription(subscription);
-}
-
-export async function getSubscriptionByOrderIdService(orderId) {
-  const sub = await prisma.gymSubscription.findUnique({ where: { razorpayOrderId: orderId } });
-  return serializeSubscription(sub);
 }
 
 // Used by booking-service (internal, requireInternal) at booking-creation

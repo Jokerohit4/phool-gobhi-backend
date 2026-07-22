@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -361,14 +361,47 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
 // Tiered cancellation refund policy — how much of the session amount comes
 // back depends on how much notice the customer gave before the slot starts.
-// Mirrored (for display only, never trusted) on the website so it can show
-// the applicable tier before the customer confirms — this function is the
-// only place that actually decides the refund.
-function cancellationRefundRate(hoursUntil) {
-  if (hoursUntil < 1) return null; // too close to the session — cancellation blocked
-  if (hoursUntil < 4) return 0.3;
-  if (hoursUntil < 8) return 0.5;
-  return 1.0;
+// Mirrored (for display only, never trusted) on the app's policy screen so it
+// can show the applicable tier before the customer confirms — this function
+// is the only place that actually decides the refund. Admin-portal-editable
+// via CancellationPolicySetting; DEFAULT_TIERS is only the seed/fallback.
+const DEFAULT_CANCELLATION_TIERS = [
+  { maxHoursNotice: 1, blocked: true, refundRate: 0 },
+  { maxHoursNotice: 4, blocked: false, refundRate: 0.3 },
+  { maxHoursNotice: 8, blocked: false, refundRate: 0.5 },
+  { maxHoursNotice: null, blocked: false, refundRate: 1.0 },
+];
+
+export async function getCancellationPolicy() {
+  const row = await prisma.cancellationPolicySetting.findUnique({ where: { id: 1 } });
+  return { tiers: row ? row.tiers : DEFAULT_CANCELLATION_TIERS, updatedAt: row?.updatedAt ?? null };
+}
+
+export async function updateCancellationPolicy(tiers, updatedBy) {
+  if (!Array.isArray(tiers) || !tiers.length) {
+    throw { status: 400, error: 'tiers must be a non-empty array' };
+  }
+  for (const t of tiers) {
+    if (typeof t.refundRate !== 'number' || t.refundRate < 0 || t.refundRate > 1) {
+      throw { status: 400, error: 'each tier needs a refundRate between 0 and 1' };
+    }
+  }
+  const saved = await prisma.cancellationPolicySetting.upsert({
+    where: { id: 1 },
+    create: { id: 1, tiers, updatedBy },
+    update: { tiers, updatedBy },
+  });
+  return { tiers: saved.tiers, updatedAt: saved.updatedAt };
+}
+
+async function cancellationRefundRate(hoursUntil) {
+  const { tiers } = await getCancellationPolicy();
+  for (const tier of tiers) {
+    if (tier.maxHoursNotice === null || hoursUntil < tier.maxHoursNotice) {
+      return tier.blocked ? null : tier.refundRate;
+    }
+  }
+  return null;
 }
 
 export async function cancelBooking(bookingId, customerId) {
@@ -415,7 +448,7 @@ export async function cancelBooking(bookingId, customerId) {
     // Checked before the status flip below — a blocked cancellation must
     // never touch the booking's status at all.
     const hoursUntil = hoursUntilSlot(booking.date, booking.startTime);
-    const refundRate = cancellationRefundRate(hoursUntil);
+    const refundRate = await cancellationRefundRate(hoursUntil);
     if (refundRate === null) {
       throw { status: 400, error: 'Bookings cannot be cancelled within 1 hour of the session' };
     }
@@ -491,7 +524,7 @@ export async function cancelBooking(bookingId, customerId) {
   }
 }
 
-export async function completeBooking(bookingId, gymId, partnerId) {
+export async function completeBooking(bookingId, gymId, partnerId, { override = false, overrideReason } = {}) {
   try {
     // 1. Find booking
     const booking = await prisma.booking.findUnique({
@@ -543,10 +576,31 @@ export async function completeBooking(bookingId, gymId, partnerId) {
       throw { status: 403, error: 'Forbidden' };
     }
 
+    // 5a. Require verified attendance before payout — a scan via
+    // verifyAttendance is the real "this session happened" signal; without
+    // it (or an explicit partner override, e.g. the customer's phone died)
+    // this would just be the old unenforced complete-without-checking-in
+    // behavior this feature exists to close.
+    if (!booking.attendedAt && !override) {
+      throw {
+        status: 400,
+        error: "Attendance must be verified — scan the customer's QR code before completing this booking",
+      };
+    }
+
+    const attendanceData = booking.attendedAt
+      ? {}
+      : {
+          attendedAt: new Date(),
+          attendanceMethod: 'manual_override',
+          attendanceVerifiedBy: partnerId,
+          attendanceOverrideReason: overrideReason || null,
+        };
+
     // 6. Update status to 'completed'
     const updatedBooking = await prisma.booking.update({
       where: { id: bookingId },
-      data: { status: 'completed' }
+      data: { status: 'completed', ...attendanceData }
     });
 
     // 7. Credit partner wallet — best-effort, never blocks completion.
@@ -570,6 +624,7 @@ export async function completeBooking(bookingId, gymId, partnerId) {
     // Fulfillment funnel: the session actually happened (partner verified at the gym).
     track('booking_completed', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+      attendance_method: updatedBooking.attendanceMethod,
     });
 
     notifyCustomer(booking.customerId, {
@@ -586,6 +641,151 @@ export async function completeBooking(bookingId, gymId, partnerId) {
       status: 500,
       error: err.message || 'Server error'
     };
+  }
+}
+
+// Partner scans the customer's QR (raw booking id) at the gym — this is the
+// enforced "the session actually happened" signal completeBooking now
+// requires. Idempotent: re-scanning an already-verified booking just
+// returns its existing verification instead of erroring, since a camera can
+// fire multiple detections for one physical scan.
+export async function verifyAttendance(bookingId, gymId, partnerId) {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw { status: 404, error: 'Booking not found' };
+    if (booking.gymId !== gymId) throw { status: 403, error: 'Forbidden' };
+
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+    if (booking.status === 'cancelled') throw { status: 400, error: 'Booking is cancelled' };
+    if (booking.status === 'completed' && !booking.attendedAt) {
+      // Shouldn't happen post-launch (completeBooking always sets attendedAt
+      // now), but a booking completed before this feature shipped has no
+      // attendance record to verify against.
+      throw { status: 400, error: 'Booking is already completed' };
+    }
+
+    const todayString = new Date().toISOString().split('T')[0];
+    if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
+
+    if (booking.attendedAt) {
+      return {
+        bookingId: booking.id,
+        attendedAt: booking.attendedAt,
+        attendanceMethod: booking.attendanceMethod,
+        alreadyVerified: true,
+      };
+    }
+
+    if (booking.status !== 'confirmed') throw { status: 400, error: 'Booking cannot be checked in' };
+
+    const updated = await prisma.booking.update({
+      where: { id: bookingId },
+      data: { attendedAt: new Date(), attendanceMethod: 'qr_scan', attendanceVerifiedBy: partnerId },
+    });
+
+    track('attendance_verified', booking.customerId, {
+      booking_id: booking.id, gym_id: gymId, method: 'qr_scan',
+    });
+
+    return {
+      bookingId: updated.id,
+      attendedAt: updated.attendedAt,
+      attendanceMethod: updated.attendanceMethod,
+      alreadyVerified: false,
+    };
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('verifyAttendance error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Customer self-check-in via a static per-gym poster QR (a deeplink that
+// just encodes gymId, not a specific booking — unlike verifyAttendance's
+// per-booking QR). Finds whichever of the customer's own confirmed bookings
+// at this gym is actually in-session right now, then gates on geofence
+// instead of a partner's scan. Two distinct, client-branchable error codes
+// (NO_ACTIVE_BOOKING / TOO_FAR) because the customer app shows meaningfully
+// different UI for each (suggest booking a slot vs. "move closer and
+// retry") — every other controller in this file uses a bare {error}
+// string, but string-matching that in the client would be fragile, so this
+// one deliberately carries a `code` alongside it.
+export async function selfCheckIn(gymId, customerId, lat, lng) {
+  try {
+    const todayString = new Date().toISOString().split('T')[0];
+    const candidates = await prisma.booking.findMany({
+      where: { customerId, gymId, date: todayString, status: 'confirmed' },
+    });
+    const booking = candidates.find((b) => isSessionActiveNow(b.date, b.startTime, b.endTime));
+
+    if (!booking) {
+      throw {
+        status: 404,
+        error: "You don't have a session at this gym right now",
+        code: 'NO_ACTIVE_BOOKING',
+      };
+    }
+
+    if (booking.attendedAt) {
+      return {
+        bookingId: booking.id,
+        attendedAt: booking.attendedAt,
+        attendanceMethod: booking.attendanceMethod,
+        alreadyVerified: true,
+      };
+    }
+
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
+    }
+
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+
+    const withinRange = gym?.lat && gym?.lng ? distanceMeters(lat, lng, gym.lat, gym.lng) <= 50 : false;
+    if (!withinRange) {
+      throw {
+        status: 400,
+        error: "You don't seem to be at the gym yet — move closer and try again",
+        code: 'TOO_FAR',
+      };
+    }
+
+    // attendanceVerifiedBy deliberately left null — that field means "which
+    // partner recorded this"; self-check-in has no verifying partner, and
+    // attendanceMethod='qr_geofence_self' already says who/how.
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { attendedAt: new Date(), attendanceMethod: 'qr_geofence_self' },
+    });
+
+    track('attendance_verified', customerId, {
+      booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self',
+    });
+
+    return {
+      bookingId: updated.id,
+      attendedAt: updated.attendedAt,
+      attendanceMethod: updated.attendanceMethod,
+      alreadyVerified: false,
+    };
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('selfCheckIn error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
   }
 }
 
@@ -669,7 +869,12 @@ export async function getCustomerBookings(customerId) {
       } catch (_) { /* leave gym undefined for this id */ }
     }));
 
-    return bookings.map(b => ({ ...b, gym: gymMap[b.gymId] || null }));
+    // Strip the partner's internal override note — it's about the customer,
+    // not for them (e.g. "phone dead, verified manually").
+    return bookings.map(b => {
+      const { attendanceOverrideReason, ...safe } = b;
+      return { ...safe, gym: gymMap[b.gymId] || null };
+    });
   } catch (err) {
     console.error('getCustomerBookings error:', err);
     throw {
@@ -810,5 +1015,172 @@ export async function getGymSalesSummary(gymId, partnerId) {
       status: 500,
       error: err.message || 'Server error'
     };
+  }
+}
+
+function attendanceDateBuckets() {
+  const today = new Date();
+  const toDateString = (d) => d.toISOString().split('T')[0];
+  return {
+    todayString: toDateString(today),
+    weekAgoString: toDateString(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)),
+    monthAgoString: toDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)),
+    yearAgoString: toDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)),
+  };
+}
+
+// Unlike getGymSalesSummary (which only ever counts `completed` bookings —
+// inherently already in the past), "booked" here includes still-`confirmed`
+// sessions, so each bucket's upper bound must be capped at today — otherwise
+// future confirmed bookings would wrongly inflate the no-show count.
+async function attendanceBucket(where) {
+  const [booked, scanned, manualOverride] = await Promise.all([
+    prisma.booking.count({ where }),
+    prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_scan' } }),
+    prisma.booking.count({ where: { ...where, attendanceMethod: 'manual_override' } }),
+  ]);
+  const noShow = booked - scanned - manualOverride;
+  return {
+    booked, scanned, manualOverride, noShow,
+    verifiedAttendanceRate: booked ? scanned / booked : null,
+    completionRate: booked ? (scanned + manualOverride) / booked : null,
+  };
+}
+
+export async function getGymAttendanceSummary(gymId, partnerId) {
+  try {
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+    const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
+    const bookedStatuses = { in: ['confirmed', 'completed'] };
+    const [today, weekly, monthly, yearly] = await Promise.all([
+      attendanceBucket({ gymId, date: { gte: todayString, lte: todayString }, status: bookedStatuses }),
+      attendanceBucket({ gymId, date: { gte: weekAgoString, lte: todayString }, status: bookedStatuses }),
+      attendanceBucket({ gymId, date: { gte: monthAgoString, lte: todayString }, status: bookedStatuses }),
+      attendanceBucket({ gymId, date: { gte: yearAgoString, lte: todayString }, status: bookedStatuses }),
+    ]);
+    return { today, weekly, monthly, yearly };
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('getGymAttendanceSummary error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// First gobhi-gated routes in booking-service. gymId is optional — omitted
+// means platform-wide.
+export async function getAdminAttendanceSummary(gymId) {
+  try {
+    const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
+    const bookedStatuses = { in: ['confirmed', 'completed'] };
+    const base = gymId ? { gymId } : {};
+    const [today, weekly, monthly, yearly] = await Promise.all([
+      attendanceBucket({ ...base, date: { gte: todayString, lte: todayString }, status: bookedStatuses }),
+      attendanceBucket({ ...base, date: { gte: weekAgoString, lte: todayString }, status: bookedStatuses }),
+      attendanceBucket({ ...base, date: { gte: monthAgoString, lte: todayString }, status: bookedStatuses }),
+      attendanceBucket({ ...base, date: { gte: yearAgoString, lte: todayString }, status: bookedStatuses }),
+    ]);
+    return { today, weekly, monthly, yearly };
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('getAdminAttendanceSummary error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Per-gym breakdown for admin triage (spot problem gyms by no-show rate).
+// Uses groupBy rather than looping attendanceBucket once per gym — that
+// per-bucket-aggregate-call style is fine at "one partner's one gym" scale
+// (getGymAttendanceSummary/getGymSalesSummary) but would be an N+1 query
+// pattern run across every gym on the platform.
+export async function getAdminAttendanceByGym(period = 'monthly') {
+  try {
+    const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
+    const fromDateString = { today: todayString, weekly: weekAgoString, monthly: monthAgoString, yearly: yearAgoString }[period] || monthAgoString;
+
+    const where = { date: { gte: fromDateString, lte: todayString }, status: { in: ['confirmed', 'completed'] } };
+    const [bookedGroups, methodGroups] = await Promise.all([
+      prisma.booking.groupBy({ by: ['gymId'], where, _count: true }),
+      prisma.booking.groupBy({ by: ['gymId', 'attendanceMethod'], where, _count: true }),
+    ]);
+
+    const methodByGym = {};
+    for (const row of methodGroups) {
+      methodByGym[row.gymId] = methodByGym[row.gymId] || {};
+      methodByGym[row.gymId][row.attendanceMethod || 'none'] = row._count;
+    }
+
+    const rows = bookedGroups.map((g) => {
+      const methods = methodByGym[g.gymId] || {};
+      const scanned = methods.qr_scan || 0;
+      const manualOverride = methods.manual_override || 0;
+      const booked = g._count;
+      return {
+        gymId: g.gymId,
+        booked,
+        scanned,
+        manualOverride,
+        noShow: booked - scanned - manualOverride,
+        verifiedAttendanceRate: booked ? scanned / booked : null,
+      };
+    });
+    rows.sort((a, b) => b.noShow - a.noShow);
+    return rows;
+  } catch (err) {
+    console.error('getAdminAttendanceByGym error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Streak/calendar logic is deliberately left client-side — "what counts as
+// a day", timezone, and grace-period rules are exactly the kind of thing
+// that shouldn't be locked into the API prematurely. This just returns raw
+// facts (totals + recent attended dates) for a client to compute with.
+export async function getCustomerAttendanceSummary(customerId) {
+  try {
+    const { todayString } = attendanceDateBuckets();
+    const monthStart = `${todayString.slice(0, 7)}-01`;
+    const [totalAttended, thisMonthAttended, recent] = await Promise.all([
+      prisma.booking.count({ where: { customerId, attendedAt: { not: null } } }),
+      prisma.booking.count({ where: { customerId, attendedAt: { not: null }, date: { gte: monthStart } } }),
+      prisma.booking.findMany({
+        where: { customerId, attendedAt: { not: null } },
+        orderBy: { attendedAt: 'desc' },
+        take: 90,
+        select: { date: true, gymId: true, attendedAt: true },
+      }),
+    ]);
+    return {
+      totalAttended,
+      thisMonthAttended,
+      lastAttendedAt: recent[0]?.attendedAt ?? null,
+      attendedDates: recent.map((r) => r.date),
+    };
+  } catch (err) {
+    console.error('getCustomerAttendanceSummary error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Public, unauthenticated — marketing-site aggregate stat only. Zero PII:
+// no customerId/gymId breakdown, just a platform-wide count.
+export async function getPublicAttendanceStats() {
+  try {
+    const { todayString } = attendanceDateBuckets();
+    const monthStart = `${todayString.slice(0, 7)}-01`;
+    const sessionsAttendedThisMonth = await prisma.booking.count({
+      where: { attendedAt: { not: null }, date: { gte: monthStart } },
+    });
+    return { sessionsAttendedThisMonth, month: todayString.slice(0, 7) };
+  } catch (err) {
+    console.error('getPublicAttendanceStats error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
   }
 }

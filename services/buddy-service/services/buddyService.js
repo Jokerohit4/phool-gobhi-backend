@@ -43,6 +43,7 @@ function toPublicCandidate(profile, display) {
     ageYears: ageFromDOB(profile.dateOfBirth),
     gender: profile.gender,
     bio: profile.bio || '',
+    socialMediaUrl: profile.socialMediaUrl || null,
     fitnessGoals: profile.fitnessGoals,
     photos: profile.photos.map((p) => ({ id: p.id, url: p.url, order: p.order })),
     distanceRange: bucketDistanceKm(profile.distanceKm),
@@ -60,7 +61,7 @@ export async function getMyProfile(userId) {
   return profile;
 }
 
-export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscoverable }) {
+export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscoverable, socialMediaUrl }) {
   const existing = await prisma.buddyProfile.findUnique({ where: { userId } });
 
   if (existing) {
@@ -69,6 +70,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
     if (lat !== undefined) data.lat = lat;
     if (lng !== undefined) data.lng = lng;
     if (isDiscoverable !== undefined) data.isDiscoverable = isDiscoverable;
+    if (socialMediaUrl !== undefined) data.socialMediaUrl = socialMediaUrl || null;
     return prisma.buddyProfile.update({ where: { userId }, data });
   }
 
@@ -92,6 +94,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
     data: {
       userId,
       bio: bio || null,
+      socialMediaUrl: socialMediaUrl || null,
       lat,
       lng,
       gender: authUser.gender || null,
@@ -157,6 +160,32 @@ export async function addPhotos(userId, files) {
     )
   );
   return created;
+}
+
+// One-way "use my main profile photo" shortcut — buddy and account photos
+// stay on independent pipelines/models by design, this just clones the
+// current account avatar in as one more buddy photo via Cloudinary's
+// fetch-by-URL upload rather than requiring the client to download+re-upload
+// the bytes itself.
+export async function addPhotoFromUrl(userId, sourceUrl) {
+  const profile = await prisma.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
+  if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
+  if (profile.photos.length + 1 > MAX_BUDDY_PHOTOS) {
+    throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
+  }
+
+  const uploaded = await cloudinary.uploader.upload(sourceUrl, {
+    folder: 'phool-gobhi/buddy-profiles',
+    transformation: [{ width: 1080, height: 1350, crop: 'limit', quality: 'auto' }],
+  });
+  return prisma.buddyPhoto.create({
+    data: {
+      buddyProfileId: profile.id,
+      url: uploaded.secure_url,
+      publicId: uploaded.public_id,
+      order: profile.photos.length,
+    },
+  });
 }
 
 export async function reorderPhotos(userId, order) {

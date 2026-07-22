@@ -14,6 +14,7 @@ router.put('/profile', requireAuth, ctrl.upsertProfile);
 router.post('/profile/refresh', requireAuth, ctrl.refreshProfile);
 
 router.post('/photos', requireAuth, uploadBuddyPhotos.array('photos', MAX_BUDDY_PHOTOS), ctrl.addPhotos);
+router.post('/photos/from-url', requireAuth, ctrl.addPhotoFromUrl);
 router.put('/photos/order', requireAuth, ctrl.reorderPhotos);
 router.delete('/photos/:photoId', requireAuth, ctrl.deletePhoto);
 

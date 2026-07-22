@@ -28,6 +28,17 @@ model Booking {
   subscriptionId   Int?
   checkinRequested Boolean       @default(false)
   locationVerified Boolean?
+
+  // Attendance verification — the enforced signal that gates completeBooking's
+  // payout. attendedAt is the single source of truth for "did this session
+  // count as attended" (drives customer history, partner/admin reporting, and
+  // the public aggregate stat). attendanceMethod records how it was proven;
+  // null means this predates the feature or was never verified.
+  attendedAt               DateTime?
+  attendanceMethod         AttendanceMethod?
+  attendanceVerifiedBy     Int?
+  attendanceOverrideReason String?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -42,6 +53,22 @@ model Booking {
   // silently drop it.
   @@index([gymId, date])
   @@index([customerId])
+  @@index([gymId, date, attendedAt])
+  @@index([attendedAt])
+  @@schema("booking")
+}
+
+// Singleton row (id always 1) — admin-portal-editable cancellation tiers,
+// read by cancelBooking's refund calc and served to clients so the app's
+// policy screen shows the exact same numbers instead of a hand-synced copy.
+// tiers shape: [{ maxHoursNotice: number|null, blocked: bool, refundRate: number }, ...]
+// ordered ascending by maxHoursNotice (null = "8+ hours, no upper bound").
+model CancellationPolicySetting {
+  id        Int      @id @default(1)
+  tiers     Json
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
+
   @@schema("booking")
 }
 
@@ -50,6 +77,20 @@ enum BookingStatus {
   confirmed
   cancelled
   completed
+
+  @@schema("booking")
+}
+
+enum AttendanceMethod {
+  qr_scan
+  manual_override
+  // Customer scans a static per-gym poster QR (a deeplink, not a per-booking
+  // one) and self-verifies via geofence — see bookingService.selfCheckIn.
+  // Distinct from qr_scan (partner-witnessed) purely for reporting/adoption
+  // visibility, not because it's treated as lower-trust: it's gated on an
+  // authenticated session + a real active booking + location, same as any
+  // other verification path.
+  qr_geofence_self
 
   @@schema("booking")
 }
