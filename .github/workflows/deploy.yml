@@ -40,7 +40,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: node scripts/check-analytics-events.cjs
+      # The analytics-drift-check script/registry may not exist yet on every
+      # branch (it landed on dev first) — treat its absence as "not
+      # applicable here yet", not a reason to block every future deploy on
+      # this branch until it's merged.
+      - run: |
+          if [ -f "scripts/check-analytics-events.cjs" ]; then
+            node scripts/check-analytics-events.cjs
+          else
+            echo "scripts/check-analytics-events.cjs not present on this branch — skipping."
+          fi
 
   # PR events never deploy (the WIF provider's attribute-condition wouldn't
   # accept a PR merge ref anyway) — instead just prove each changed service's
