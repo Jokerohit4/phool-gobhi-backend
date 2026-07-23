@@ -22,3 +22,17 @@ export function isSlotInPastOrTooSoon(date, startTime) {
 export function hoursUntilSlot(date, startTime) {
   return (slotInstantUTC(date, startTime) - Date.now()) / 3600000;
 }
+
+const SELF_CHECKIN_EARLY_GRACE_MS = 15 * 60000;
+
+// Is `now` within this session's window — used by the poster-QR/geofence
+// self-check-in flow to find "the booking the customer means right now"
+// from a gym-level (not booking-level) scan. Allows checking in up to 15
+// minutes before the session starts (queueing/changing at the gym) through
+// to the scheduled end time.
+export function isSessionActiveNow(date, startTime, endTime) {
+  const start = slotInstantUTC(date, startTime);
+  const end = slotInstantUTC(date, endTime);
+  const now = Date.now();
+  return now >= start - SELF_CHECKIN_EARLY_GRACE_MS && now <= end;
+}
