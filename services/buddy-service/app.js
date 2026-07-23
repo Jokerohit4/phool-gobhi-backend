@@ -15,6 +15,7 @@ app.use(express.json());
 // Health must be registered before the router: buddyRoutes is mounted at
 // '/' and its param routes (e.g. DELETE /photos/:photoId) could otherwise
 // shadow /health — same ordering bug class gym-service hit in production.
+// (CI pipeline validation touch — first automated prod deploy test.)
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
