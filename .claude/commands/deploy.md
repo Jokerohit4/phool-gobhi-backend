@@ -16,6 +16,8 @@ Deploy a single backend service to Google Cloud Run. Arguments: `$ARGUMENTS`
 
 ## Steps
 
+0. **Analytics event drift check (hard gate).** Run `node scripts/check-analytics-events.cjs` from the repo root. If it exits non-zero (drift found — an event name used in code isn't in `docs/analytics-events.json`), STOP and report the drift; do not deploy until the registry is updated or the code fixed. This exists because a shipped event was silently renamed on 2026-07-22 with nothing to catch it before it broke a live funnel — don't bypass this gate.
+
 1. **Parse & validate args.** If service or env is missing/invalid, stop and show usage. Env must be `dev` or `prod`.
 
 2. **Branch sanity check.** Run `git branch --show-current`. Convention: `dev` env should deploy from branch `dev`, `prod` from `main`. If they don't match, warn the user and ask before continuing (do not auto-proceed).

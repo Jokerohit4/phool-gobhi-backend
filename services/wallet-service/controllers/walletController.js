@@ -15,6 +15,7 @@ import {
   getActiveSubscriptionService,
   getMySubscriptionsService,
   getTransactionByIdempotencyKeyService,
+  getGymCity,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -276,7 +277,9 @@ export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
     }
 
     const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
-    track('subscription_purchased_wallet', userId, { amount: subscription.price, gym_id: gymId, plan_type: planType });
+    track('subscription_purchased_wallet', userId, {
+      amount: subscription.price, gym_id: gymId, plan_type: planType, city: await getGymCity(Number(gymId)),
+    });
     res.status(201).json({ data: { subscription } });
   } catch (err) {
     res.status(err.status || 500).json({

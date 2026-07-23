@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
@@ -8,6 +11,21 @@ import { ingest } from './utils/analytics.js';
 import { withGoogleIdToken } from './utils/googleIdToken.js';
 
 const app = express();
+
+// Single source of truth for valid event names (docs/analytics-events.json,
+// checked for drift by scripts/check-analytics-events.cjs). Only the
+// 'client'-sourced subset is relevant here — server events never touch this
+// route, they're tracked in-process. Read via fs rather than an ESM JSON
+// import assertion to avoid Node-version-specific import syntax.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const analyticsEventsRegistry = JSON.parse(
+  readFileSync(join(__dirname, 'docs', 'analytics-events.json'), 'utf8')
+);
+const CLIENT_EVENT_ALLOWLIST = new Set(
+  Object.entries(analyticsEventsRegistry)
+    .filter(([key, v]) => !key.startsWith('$') && v.source === 'client')
+    .map(([key]) => key)
+);
 
 // Cloud Run sits in front of this gateway behind its own load balancer, so
 // without this req.ip is the LB's internal address for every request —
@@ -35,6 +53,7 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/subscription-plans/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
+  { method: 'GET', pattern: /^\/api\/bookings\/public\/attendance-stats(\?.*)?$/ },
   { method: 'GET', pattern: /^\/health/ },
 ];
 
@@ -94,10 +113,21 @@ const walletAttemptLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests. Please try again in a few minutes.' },
 });
+// Deliberately generous — pre-login screens fire several events in quick
+// succession (screen views, OTP request+submit) from one IP/device, and this
+// is a backstop against abuse, not a per-user throttle.
+const eventsIngestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many events' },
+});
 const RATE_LIMITED_ROUTES = [
   { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact)$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },
 ];
 app.use((req, res, next) => {
   const match = RATE_LIMITED_ROUTES.find(r => r.method === req.method && r.pattern.test(req.path));
@@ -117,9 +147,14 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
     const body = req.body || {};
     const list = Array.isArray(body.events) ? body.events : [body];
     for (const e of list) {
-      if (e && e.event) {
-        ingest({ event: e.event, distinctId: e.distinct_id, properties: e.properties || {}, source: 'client' });
-      }
+      if (!e || typeof e.event !== 'string') continue;
+      // Silently drop anything not in the registry — never tell the caller
+      // which names are valid, that just makes probing easier. Still 202.
+      if (!CLIENT_EVENT_ALLOWLIST.has(e.event)) continue;
+      if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
+      const properties = e.properties;
+      if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
+      ingest({ event: e.event, distinctId: e.distinct_id, properties: properties || {}, source: 'client' });
     }
   } catch (_) {
     // swallow — analytics never fails the client

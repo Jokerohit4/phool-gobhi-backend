@@ -11,6 +11,29 @@ async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
 }
 
+// Denormalizes gym city onto the subscription_purchased_wallet analytics
+// event (kept separate from the customer-facing subscription response —
+// this is purely for the controller's track() call, not part of the API
+// shape). Memoized for the same reason as booking-service's copy of this
+// helper: a ~1hr-stale city name is an acceptable tradeoff for not adding a
+// gym-service round trip to every tracked event, and a lookup failure must
+// never block the purchase it's attached to.
+const GYM_CITY_CACHE_TTL_MS = 60 * 60 * 1000;
+const gymCityCache = new Map(); // gymId -> { city, expiresAt }
+
+export async function getGymCity(gymId) {
+  const cached = gymCityCache.get(gymId);
+  if (cached && cached.expiresAt > Date.now()) return cached.city;
+  try {
+    const res = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    const city = (res.data?.data || res.data)?.city ?? null;
+    gymCityCache.set(gymId, { city, expiresAt: Date.now() + GYM_CITY_CACHE_TTL_MS });
+    return city;
+  } catch (_) {
+    return null;
+  }
+}
+
 // No per-gym override today — a single platform-wide rate taken at purchase
 // time and snapshotted onto the GymSubscription row for auditability.
 export const SUBSCRIPTION_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_COMMISSION_PERCENT) || 20;

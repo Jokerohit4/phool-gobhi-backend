@@ -31,6 +31,30 @@ async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
 }
 
+// Denormalizes gym city onto analytics events (booking/wallet events
+// otherwise carry no geo dimension at all, making city-level conversion
+// analysis require a join nothing currently does). Memoized rather than
+// fetched fresh every time — this is for analytics properties, not anything
+// transactional, so a ~1hr-stale city name is an acceptable tradeoff for
+// not adding a gym-service round trip to every tracked event. Fails open to
+// null: a lookup failure must never block the booking/wallet flow it's
+// attached to.
+const GYM_CITY_CACHE_TTL_MS = 60 * 60 * 1000;
+const gymCityCache = new Map(); // gymId -> { city, expiresAt }
+
+async function getGymCity(gymId) {
+  const cached = gymCityCache.get(gymId);
+  if (cached && cached.expiresAt > Date.now()) return cached.city;
+  try {
+    const res = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    const city = (res.data?.data || res.data)?.city ?? null;
+    gymCityCache.set(gymId, { city, expiresAt: Date.now() + GYM_CITY_CACHE_TTL_MS });
+    return city;
+  } catch (_) {
+    return null;
+  }
+}
+
 const RESERVE_MAX_ATTEMPTS = 4;
 const RESERVE_RETRY_BASE_MS = 40;
 
@@ -167,7 +191,7 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
 // notifications. Shared by createBooking's normal path and its
 // debit-call-error recovery path (where the debit turned out to have
 // actually landed despite the call throwing) so both stay in sync.
-async function confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId }) {
+async function confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId, city }) {
   const booking = await prisma.booking.update({
     where: { id: reservation.id },
     data: { status: 'confirmed' },
@@ -175,7 +199,7 @@ async function confirmReservation(reservation, { customerId, gymId, date, startT
 
   track('booking_confirmed', customerId, {
     booking_id: booking.id, gym_id: gymId, amount: booking.amount, date, start_time: startTime,
-    via: subscriptionId ? 'subscription' : 'wallet',
+    via: subscriptionId ? 'subscription' : 'wallet', city,
   });
 
   notifyPartner(gymId, booking).catch(() => {});
@@ -291,7 +315,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId });
     } catch (err) {
       if (err?.status === 409 && err.error === 'Slot is full') {
-        track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime });
+        track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime, city: gym.city });
       }
       throw err;
     }
@@ -332,13 +356,13 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         }
 
         if (actuallyCharged) {
-          return confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId: null });
+          return confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId: null, city: gym.city });
         }
 
         // Genuinely not charged — release the reservation so the slot goes
         // back to looking untouched.
         await prisma.booking.delete({ where: { id: reservation.id } }).catch(() => {});
-        track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount });
+        track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount, city: gym.city });
         throw {
           status: 400,
           error: err.response?.data?.error || 'Insufficient wallet balance'
@@ -348,7 +372,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
     // 5-6. Payment succeeded (or wasn't needed) — confirm the reservation,
     // track the funnel event, and fire notifications.
-    return confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId });
+    return confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId, city: gym.city });
   } catch (err) {
     if (err.error) throw err;
     console.error('createBooking error:', err);
@@ -502,6 +526,7 @@ export async function cancelBooking(bookingId, customerId) {
     track('booking_cancelled', customerId, {
       booking_id: booking.id, gym_id: booking.gymId, amount: booking.amount, date: booking.date,
       refund_rate: refundRate, refund_amount: refundAmount, hours_until_slot: hoursUntil,
+      city: await getGymCity(booking.gymId),
     });
 
     notifyCustomer(customerId, {
@@ -624,7 +649,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // Fulfillment funnel: the session actually happened (partner verified at the gym).
     track('booking_completed', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
-      attendance_method: updatedBooking.attendanceMethod,
+      attendance_method: updatedBooking.attendanceMethod, city: gym.city,
     });
 
     notifyCustomer(booking.customerId, {
@@ -692,7 +717,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId) {
     });
 
     track('attendance_verified', booking.customerId, {
-      booking_id: booking.id, gym_id: gymId, method: 'qr_scan',
+      booking_id: booking.id, gym_id: gymId, method: 'qr_scan', city: gym.city,
     });
 
     return {
@@ -773,7 +798,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
     });
 
     track('attendance_verified', customerId, {
-      booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self',
+      booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
     return {
@@ -799,9 +824,11 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
     if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
 
     let locationVerified = false;
+    let gymCity = null;
     try {
       const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
       const gym = gymRes.data.data || gymRes.data;
+      gymCity = gym.city ?? null;
       if (lat && lng && gym.lat && gym.lng) {
         locationVerified = distanceMeters(lat, lng, gym.lat, gym.lng) <= 300;
       }
@@ -815,7 +842,7 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
     });
 
     track('checkin_requested', customerId, {
-      booking_id: bookingId, gym_id: booking.gymId, location_verified: locationVerified,
+      booking_id: bookingId, gym_id: booking.gymId, location_verified: locationVerified, city: gymCity,
     });
 
     return { bookingId, locationVerified };

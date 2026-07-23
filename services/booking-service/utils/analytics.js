@@ -58,6 +58,21 @@ async function ensureTable(pool) {
         `CREATE INDEX IF NOT EXISTS idx_analytics_events_distinct ON analytics_events(distinct_id);`
       )
     )
+    .then(() =>
+      // Expression indexes on the two JSONB properties actually filtered/
+      // joined on today (gym_id for city/gym-level breakdowns, step for the
+      // partner-onboarding funnel) — cheaper to maintain than a full GIN
+      // index while covering the queries that exist. Add more as new
+      // property-level filters get built.
+      pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_analytics_events_gym_id ON analytics_events (((properties->>'gym_id')));`
+      )
+    )
+    .then(() =>
+      pool.query(
+        `CREATE INDEX IF NOT EXISTS idx_analytics_events_step ON analytics_events (((properties->>'step')));`
+      )
+    )
     .catch((err) => {
       console.error('[analytics] ensureTable failed:', err.message);
       _tableReady = null; // allow a later retry
