@@ -147,6 +147,23 @@ jobs:
             --set-env-vars="${{ steps.flags.outputs.env-vars }}" \
             --set-secrets="${{ steps.flags.outputs.secrets }}"
 
+      # `gcloud run deploy` only auto-shifts 100% traffic to the new revision
+      # when the service is still in "always use latest" mode. A prior
+      # rollback (`update-traffic --to-revisions=<name>=100`) pins traffic to
+      # a named revision and takes the service OUT of that mode permanently —
+      # every deploy after that point silently lands at 0% traffic otherwise
+      # (confirmed: https://cloud.google.com/sdk/gcloud/reference/run/deploy
+      # --no-traffic docs describe the same pinning side effect). Force it
+      # back explicitly on every deploy so a prior rollback never leaves
+      # future deploys stuck serving stale code — and so the health check
+      # below actually tests the revision we just built, not whatever
+      # revision happened to be pinned.
+      - id: shift-traffic
+        run: |
+          gcloud run services update-traffic "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --to-latest
+
       - id: healthcheck
         run: node deploy/scripts/verify-health.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
 
