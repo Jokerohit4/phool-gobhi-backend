@@ -1,0 +1,281 @@
+{
+  "project": "phool-gobhi",
+  "region": "asia-south1",
+  "services": {
+    "gateway": {
+      "cloudRunServiceBaseName": "gateway",
+      "sourceDir": ".",
+      "hasPrisma": false,
+      "healthCheckGuard": false,
+      "pathTriggers": [
+        "index.js",
+        "package.json",
+        "package-lock.json",
+        "Dockerfile",
+        ".gcloudignore"
+      ],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "gateway",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
+            "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "JWT_SECRET": "jwt-secret",
+            "ANALYTICS_DATABASE_URL": "db-url"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "gateway",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
+            "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
+            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "JWT_SECRET": "jwt-secret",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url"
+          }
+        }
+      }
+    },
+
+    "auth-service": {
+      "cloudRunServiceBaseName": "auth-service",
+      "sourceDir": "services/auth-service",
+      "hasPrisma": true,
+      "healthCheckGuard": false,
+      "pathTriggers": ["services/auth-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ALLOW_DEV_OTP": "true",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "auth-service",
+            "OTP_PROVIDER": "fast2sms",
+            "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
+            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
+            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "db-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "JWT_SECRET": "jwt-secret",
+            "JWT_REFRESH_SECRET": "jwt-refresh-secret",
+            "FAST2SMS_API_KEY": "fast2sms-api-key",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-auth",
+            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
+            "CLOUDINARY_API_KEY": "cloudinary-api-key",
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ALLOW_DEV_OTP": "false",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "auth-service",
+            "OTP_PROVIDER": "firebase",
+            "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
+            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "JWT_SECRET": "jwt-secret",
+            "JWT_REFRESH_SECRET": "jwt-refresh-secret",
+            "FAST2SMS_API_KEY": "fast2sms-api-key",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-auth",
+            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
+            "CLOUDINARY_API_KEY": "cloudinary-api-key",
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+          }
+        }
+      }
+    },
+
+    "gym-service": {
+      "cloudRunServiceBaseName": "gym-service",
+      "sourceDir": "services/gym-service",
+      "hasPrisma": true,
+      "healthCheckGuard": true,
+      "pathTriggers": ["services/gym-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "gym-service",
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "db-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
+            "CLOUDINARY_API_KEY": "cloudinary-api-key",
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "gym-service",
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
+            "CLOUDINARY_API_KEY": "cloudinary-api-key",
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+          }
+        }
+      }
+    },
+
+    "wallet-service": {
+      "cloudRunServiceBaseName": "wallet-service",
+      "sourceDir": "services/wallet-service",
+      "hasPrisma": true,
+      "healthCheckGuard": false,
+      "pathTriggers": ["services/wallet-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "wallet-service",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "db-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "RAZORPAY_KEY_ID": "razorpay-key-id",
+            "RAZORPAY_SECRET": "razorpay-secret",
+            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "wallet-service",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "RAZORPAY_KEY_ID": "razorpay-key-id",
+            "RAZORPAY_SECRET": "razorpay-secret",
+            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret"
+          }
+        }
+      }
+    },
+
+    "booking-service": {
+      "cloudRunServiceBaseName": "booking-service",
+      "sourceDir": "services/booking-service",
+      "hasPrisma": true,
+      "healthCheckGuard": false,
+      "pathTriggers": ["services/booking-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "booking-service",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
+            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "db-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "booking-service",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
+            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+          }
+        }
+      }
+    },
+
+    "buddy-service": {
+      "cloudRunServiceBaseName": "buddy-service",
+      "sourceDir": "services/buddy-service",
+      "hasPrisma": true,
+      "healthCheckGuard": false,
+      "pathTriggers": ["services/buddy-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "buddy-service",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "db-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
+            "CLOUDINARY_API_KEY": "cloudinary-api-key",
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "buddy-service",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url",
+            "INTERNAL_API_KEY": "internal-api-key",
+            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
+            "CLOUDINARY_API_KEY": "cloudinary-api-key",
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+          }
+        }
+      }
+    }
+  }
+}
