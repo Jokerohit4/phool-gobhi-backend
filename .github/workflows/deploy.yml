@@ -1,0 +1,159 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+  id-token: write   # required for google-github-actions/auth (WIF)
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      any: ${{ steps.detect.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: refs
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: detect
+        run: node deploy/scripts/detect-changed-services.cjs "${{ steps.refs.outputs.base }}" "${{ steps.refs.outputs.head }}"
+
+  preflight:
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/check-analytics-events.cjs
+
+  # PR events never deploy (the WIF provider's attribute-condition wouldn't
+  # accept a PR merge ref anyway) — instead just prove each changed service's
+  # Dockerfile still builds, catching a broken install/`prisma generate`
+  # before merge with zero GCP access needed.
+  build-validate:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: svcmeta
+        run: |
+          node -e "
+            const s = require('./deploy/services.json').services['${{ matrix.service }}'];
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'source-dir=' + s.sourceDir + '\n');
+          "
+      - run: docker build -f "${{ steps.svcmeta.outputs.source-dir }}/Dockerfile" "${{ steps.svcmeta.outputs.source-dir }}"
+
+  deploy:
+    needs: [changes, preflight]
+    if: github.event_name == 'push' && needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    concurrency:
+      group: deploy-${{ matrix.service }}-${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: env
+        run: echo "ENV=${{ github.ref_name == 'main' && 'prod' || 'dev' }}" >> "$GITHUB_OUTPUT"
+
+      - id: svcmeta
+        run: |
+          node -e "
+            const s = require('./deploy/services.json').services['${{ matrix.service }}'];
+            const fs = require('fs');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'source-dir=' + s.sourceDir + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has-prisma=' + !!s.hasPrisma + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'health-guard=' + !!s.healthCheckGuard + '\n');
+          "
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # gym-service footgun guard — CI port of .claude/commands/deploy.md's
+      # manual "/health before router" check (regressed once already, 3b3def4).
+      - if: steps.svcmeta.outputs.health-guard == 'true'
+        run: node deploy/scripts/check-gym-health-route-order.cjs
+
+      # Prisma migrations run from the runner (DB is externally reachable,
+      # not Cloud SQL) BEFORE the new revision is deployed. Guard on the
+      # migrations dir existing — gym-service/buddy-service don't have one
+      # yet, and `prisma migrate deploy` errors on a missing dir rather than
+      # no-op'ing.
+      - if: steps.svcmeta.outputs.has-prisma == 'true'
+        id: dbsecret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            DATABASE_URL:${{ vars.GCP_PROJECT_ID }}/db-url-${{ steps.env.outputs.ENV }}
+
+      - if: steps.svcmeta.outputs.has-prisma == 'true'
+        working-directory: ${{ steps.svcmeta.outputs.source-dir }}
+        env:
+          DATABASE_URL: ${{ steps.dbsecret.outputs.DATABASE_URL }}
+        run: |
+          if [ -d "prisma/migrations" ]; then
+            npm ci
+            npx prisma migrate deploy
+          else
+            echo "No prisma/migrations directory for ${{ matrix.service }} yet — skipping migrate deploy."
+          fi
+
+      - id: flags
+        run: node deploy/scripts/build-deploy-flags.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
+
+      - id: prev-revision
+        run: |
+          PREV=$(gcloud run services describe "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.traffic[0].revisionName)" 2>/dev/null || echo "")
+          echo "revision=$PREV" >> "$GITHUB_OUTPUT"
+
+      - id: deploy
+        run: |
+          gcloud run deploy "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
+            --source="${{ steps.svcmeta.outputs.source-dir }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --allow-unauthenticated --quiet \
+            --set-env-vars="${{ steps.flags.outputs.env-vars }}" \
+            --set-secrets="${{ steps.flags.outputs.secrets }}"
+
+      - id: healthcheck
+        run: node deploy/scripts/verify-health.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
+
+      - if: failure() && steps.healthcheck.outcome == 'failure' && steps.prev-revision.outputs.revision != ''
+        run: |
+          gcloud run services update-traffic "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --to-revisions="${{ steps.prev-revision.outputs.revision }}=100"
+          echo "::error::Health check failed — rolled back ${{ matrix.service }}-${{ steps.env.outputs.ENV }} to ${{ steps.prev-revision.outputs.revision }}"
+          exit 1
