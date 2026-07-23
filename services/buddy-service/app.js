@@ -16,9 +16,12 @@ app.use(express.json());
 // '/' and its param routes (e.g. DELETE /photos/:photoId) could otherwise
 // shadow /health — same ordering bug class gym-service hit in production.
 app.get('/health', async (req, res) => {
-  // TEMPORARY: intentionally broken to test the CI pipeline's automatic
-  // rollback-on-failed-healthcheck path. Revert immediately after.
-  res.status(503).json({ status: 'unhealthy', error: 'TEST: intentional rollback-path validation' });
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'Buddy Service is healthy' });
+  } catch (err) {
+    res.status(503).json({ status: 'unhealthy', error: err.message });
+  }
 });
 
 // Routes
