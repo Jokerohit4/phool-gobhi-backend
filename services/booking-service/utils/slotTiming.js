@@ -12,7 +12,35 @@ function slotInstantUTC(date, startTime) {
   return Date.UTC(y, mo - 1, d, h, mi) - IST_OFFSET_MS;
 }
 
+// "Today" as an IST calendar date (YYYY-MM-DD), not the server's own (UTC)
+// calendar date — `booking.date` is always an IST-local date string, so
+// comparing it against a raw `new Date().toISOString()` date is wrong
+// between IST 00:00-05:29, when the UTC date is still yesterday's.
+export function todayDateStringIST() {
+  return new Date(Date.now() + IST_OFFSET_MS).toISOString().split('T')[0];
+}
+
 // A slot is bookable only if it starts at least MIN_LEAD_MS from now.
 export function isSlotInPastOrTooSoon(date, startTime) {
   return slotInstantUTC(date, startTime) < Date.now() + MIN_LEAD_MS;
+}
+
+// How many hours from now until this slot starts — used by cancelBooking's
+// tiered refund policy. Negative once the slot has already started.
+export function hoursUntilSlot(date, startTime) {
+  return (slotInstantUTC(date, startTime) - Date.now()) / 3600000;
+}
+
+const SELF_CHECKIN_EARLY_GRACE_MS = 15 * 60000;
+
+// Is `now` within this session's window — used by the poster-QR/geofence
+// self-check-in flow to find "the booking the customer means right now"
+// from a gym-level (not booking-level) scan. Allows checking in up to 15
+// minutes before the session starts (queueing/changing at the gym) through
+// to the scheduled end time.
+export function isSessionActiveNow(date, startTime, endTime) {
+  const start = slotInstantUTC(date, startTime);
+  const end = slotInstantUTC(date, endTime);
+  const now = Date.now();
+  return now >= start - SELF_CHECKIN_EARLY_GRACE_MS && now <= end;
 }

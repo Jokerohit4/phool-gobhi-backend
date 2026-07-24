@@ -16,4 +16,6 @@ export const ERROR_MESSAGES = {
   PHONE_REQUIRED: { code: 'E114', message: 'Phone number is required' },
   INVALID_PHONE: { code: 'E115', message: 'Enter a valid 10-digit Indian mobile number' },
   ACCOUNT_DEACTIVATED: { code: 'E116', message: 'This account has been deactivated' },
+  ROLE_MISMATCH: { code: 'E117', message: 'This account is registered with a different role' },
+  GOBHI_SIGNUP_FORBIDDEN: { code: 'E118', message: 'Staff accounts cannot be created through this endpoint' },
 };

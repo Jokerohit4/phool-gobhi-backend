@@ -43,14 +43,10 @@ export async function notifyPartner(gymId, booking) {
     if (!partnerId) return;
 
     // Get partner FCM token from auth-service
-    const userRes = await axios.get(`${AUTH_SERVICE_URL}/users/${partnerId}`, {
-      headers: {
-        'x-user-id': String(partnerId),
-        'x-user-role': 'partner',
-        ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
-      },
+    const userRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${partnerId}`, {
+      headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) },
     });
-    const fcmToken = userRes.data?.data?.fcmToken;
+    const fcmToken = userRes.data?.fcmToken;
     if (!fcmToken) return;
 
     // Send notification

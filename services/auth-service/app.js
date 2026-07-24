@@ -26,27 +26,6 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Debug endpoint to test database connection
-app.get('/debug/db-test', async (req, res) => {
-  try {
-    const userCount = await prisma.user.count();
-    res.json({
-      status: 'Database connected',
-      userCount,
-      message: 'Prisma client is working correctly'
-    });
-  } catch (err) {
-    res.status(500).json({
-      error: 'Database connection failed',
-      details: {
-        code: err.code,
-        message: err.message,
-        name: err.name,
-      }
-    });
-  }
-});
-
 // Global error handler — catches anything a route/middleware passes to
 // next(err) instead of handling itself (e.g. Multer's file-too-large error
 // from the profile-picture upload, or a Cloudinary storage failure), so
@@ -54,7 +33,7 @@ app.get('/debug/db-test', async (req, res) => {
 // instead of falling through to Express's default HTML response.
 app.use((err, req, res, next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'Image is too large (max 5 MB)' });
+    return res.status(413).json({ error: 'File is too large' });
   }
   console.error('Unhandled error:', err);
   res.status(err?.status || 500).json({ error: err?.message || 'Server error' });

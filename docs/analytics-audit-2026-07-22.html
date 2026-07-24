@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eventing Audit — Phool Gobhi</title>
+<style>
+  :root{
+    --paper:#F1F3EE; --ink:#14201A; --ink-soft:#4B564E; --line:#D8DED2;
+    --accent:#2F6A4A; --accent-soft:#E4EDE6;
+    --amber:#B8862E; --amber-soft:#F6ECD9;
+    --red:#A23B2E; --red-soft:#F6E2DE;
+    --green-pill:#3D8B5D; --green-soft:#E1F0E6;
+    --chip-bg:#E7EBE2; --chip-ink:#2A3A2E;
+    --serif: "Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono: ui-monospace,"SF Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#10140F; --ink:#E8ECE4; --ink-soft:#A7B2A2; --line:#2A332A;
+      --accent:#6FCB9B; --accent-soft:#16261C;
+      --amber:#E0A94D; --amber-soft:#2B2415;
+      --red:#E2685A; --red-soft:#2C1A17;
+      --green-pill:#6FCB9B; --green-soft:#16261C;
+      --chip-bg:#1B231A; --chip-ink:#BFCFC0;
+    }
+  }
+  html[data-theme="dark"]{
+    --paper:#10140F; --ink:#E8ECE4; --ink-soft:#A7B2A2; --line:#2A332A;
+    --accent:#6FCB9B; --accent-soft:#16261C;
+    --amber:#E0A94D; --amber-soft:#2B2415;
+    --red:#E2685A; --red-soft:#2C1A17;
+    --green-pill:#6FCB9B; --green-soft:#16261C;
+    --chip-bg:#1B231A; --chip-ink:#BFCFC0;
+  }
+  html[data-theme="light"]{
+    --paper:#F1F3EE; --ink:#14201A; --ink-soft:#4B564E; --line:#D8DED2;
+    --accent:#2F6A4A; --accent-soft:#E4EDE6;
+    --amber:#B8862E; --amber-soft:#F6ECD9;
+    --red:#A23B2E; --red-soft:#F6E2DE;
+    --green-pill:#3D8B5D; --green-soft:#E1F0E6;
+    --chip-bg:#E7EBE2; --chip-ink:#2A3A2E;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    font-size:16px; line-height:1.6; margin:0;
+  }
+  .page{max-width:920px; margin:0 auto; padding:64px 28px 120px;}
+  .masthead{display:flex; flex-direction:column; gap:10px; border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:40px;}
+  .eyebrow{font-family:var(--mono); font-size:12.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--accent);}
+  h1{font-family:var(--serif); font-weight:600; font-size:2.5rem; line-height:1.15; margin:0; text-wrap:balance; letter-spacing:.001em;}
+  .dek{color:var(--ink-soft); font-size:1.05rem; max-width:62ch; margin:0;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:18px; font-family:var(--mono); font-size:12.5px; color:var(--ink-soft); margin-top:6px;}
+  .meta-row b{color:var(--ink); font-weight:600;}
+
+  .scorecard{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:36px 0 48px;}
+  .stat{background:var(--paper); padding:18px 20px;}
+  .stat .n{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:1.65rem; font-weight:600; color:var(--ink);}
+  .stat .l{font-size:12.5px; color:var(--ink-soft); margin-top:2px;}
+  .stat.warn .n{color:var(--amber);}
+  .stat.bad .n{color:var(--red);}
+
+  section{margin:56px 0;}
+  .sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:6px;}
+  .sec-num{font-family:var(--mono); color:var(--ink-soft); font-size:13px;}
+  h2{font-family:var(--serif); font-size:1.5rem; font-weight:600; margin:0; text-wrap:balance;}
+  .sec-dek{color:var(--ink-soft); max-width:66ch; margin:10px 0 24px; font-size:.98rem;}
+  p{max-width:68ch;}
+  h3{font-family:var(--sans); font-size:1rem; font-weight:700; margin:28px 0 10px;}
+
+  code, .code{font-family:var(--mono); font-size:.86em; background:var(--chip-bg); color:var(--chip-ink); padding:.12em .45em; border-radius:4px; white-space:nowrap;}
+
+  .pill{display:inline-flex; align-items:center; gap:.4em; font-family:var(--mono); font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; padding:.28em .7em; border-radius:100px; font-weight:600; white-space:nowrap;}
+  .pill.live{background:var(--green-soft); color:var(--green-pill);}
+  .pill.dark{background:var(--red-soft); color:var(--red);}
+  .pill.drift{background:var(--amber-soft); color:var(--amber);}
+  .pill.risk{background:var(--red-soft); color:var(--red);}
+  .pill::before{content:"●"; font-size:8px;}
+
+  .table-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; margin:18px 0;}
+  table{border-collapse:collapse; width:100%; font-size:.92rem;}
+  th, td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top;}
+  thead th{font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); background:var(--accent-soft); font-weight:600;}
+  tbody tr:last-child td{border-bottom:none;}
+  td.num, th.num{font-family:var(--mono); font-variant-numeric:tabular-nums; text-align:right;}
+  tbody tr:hover{background:var(--accent-soft);}
+
+  .finding{border-left:3px solid var(--line); padding:4px 0 4px 18px; margin:20px 0;}
+  .finding.risk{border-color:var(--red);}
+  .finding.drift{border-color:var(--amber);}
+  .finding.ok{border-color:var(--accent);}
+  .finding h4{margin:0 0 6px; font-size:.98rem; font-family:var(--sans); font-weight:700; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .finding p{margin:6px 0; color:var(--ink-soft); font-size:.93rem;}
+  .finding .evidence{margin-top:8px; font-family:var(--mono); font-size:.8rem; color:var(--ink-soft); background:var(--chip-bg); padding:8px 12px; border-radius:6px; white-space:pre-wrap;}
+
+  .funnel{border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin:16px 0; background:var(--accent-soft);}
+  .funnel h4{margin:0 0 4px; font-family:var(--serif); font-size:1.05rem;}
+  .funnel .steps{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:12px 0; font-family:var(--mono); font-size:.82rem;}
+  .funnel .steps .arrow{color:var(--ink-soft);}
+  .funnel .note{font-size:.87rem; color:var(--ink-soft); margin-top:8px;}
+  .funnel .note b{color:var(--ink);}
+
+  .split{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:720px){.split{grid-template-columns:1fr;}}
+  .col-card{border:1px solid var(--line); border-radius:10px; padding:18px 20px;}
+  .col-card h3{margin-top:0;}
+  .col-card ul{margin:0; padding-left:20px;}
+  .col-card li{margin-bottom:8px; font-size:.93rem;}
+
+  ol.reco{padding-left:0; list-style:none; counter-reset:reco; display:flex; flex-direction:column; gap:16px;}
+  ol.reco li{counter-increment:reco; padding-left:44px; position:relative;}
+  ol.reco li::before{content:counter(reco); position:absolute; left:0; top:-2px; font-family:var(--serif); font-size:1.3rem; color:var(--accent); font-weight:600;}
+  ol.reco b{display:block; margin-bottom:3px;}
+  ol.reco span{color:var(--ink-soft); font-size:.92rem;}
+
+  footer{margin-top:80px; padding-top:24px; border-top:1px solid var(--line); font-size:12.5px; color:var(--ink-soft); font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="masthead">
+    <div class="eyebrow">Internal engineering audit · Phool Gobhi platform</div>
+    <h1>What the eventing pipeline actually knows</h1>
+    <p class="dek">A code-and-data audit of the analytics architecture across the gateway, five backend services, both Flutter apps, the website, and the admin portal — verified against the live dev database, not just the design doc.</p>
+    <div class="meta-row">
+      <span><b>Snapshot taken</b> 2026-07-22, 11:52 UTC</span>
+      <span><b>Method</b> read against <code>analytics_events</code> on dev + source diff vs <code>docs/ANALYTICS.md</code></span>
+    </div>
+  </div>
+
+  <div class="scorecard">
+    <div class="stat"><div class="n">366</div><div class="l">events captured, all-time</div></div>
+    <div class="stat"><div class="n">81</div><div class="l">distinct identities</div></div>
+    <div class="stat"><div class="n">39</div><div class="l">days of history (Jun 14 → Jul 22)</div></div>
+    <div class="stat bad"><div class="n">0</div><div class="l">of it from production</div></div>
+    <div class="stat warn"><div class="n">29</div><div class="l">distinct event types live, only 17 documented</div></div>
+    <div class="stat bad"><div class="n">0</div><div class="l">rows from the website or admin portal — no instrumentation exists</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>The honest picture</h2></div>
+    <p class="sec-dek">The architecture (facade → Postgres, vendor-neutral, cheap) is genuinely good design and it's real, not aspirational — I queried it directly. But three things are true at once: it only runs in dev, the docs describe an event dictionary that's already drifted from what's shipped, and the one funnel that matters most for the Aug 1 launch — partner onboarding — isn't actually landing data.</p>
+
+    <div class="finding risk">
+      <h4><span class="pill dark">Dark</span> Production emits nothing</h4>
+      <p>Checked all six <code>*-prod</code> Cloud Run services directly: none have <code>ANALYTICS_PROVIDER</code> set at all — not even <code>none</code> explicitly, it's just absent. Every one of the 366 rows below is dev-environment testing traffic. There is currently no way to answer any real question about real users, because none has ever been asked to report anything.</p>
+    </div>
+
+    <div class="finding risk">
+      <h4><span class="pill dark">Silent</span> Partner-app client events aren't reaching the table</h4>
+      <p>The partner app's own analytics code (<code>onboarding_started</code>, <code>onboarding_step_completed</code>, screen views) is written, wired through DI, and looks correct on read. But querying <code>properties->>'app'</code> on every client-sourced row in dev: <b>98 are tagged <code>phool_gobhi</code></b> (the customer app) and <b>0 are tagged <code>phool_gobhi_partner</code></b>. The default sink is <code>console</code> in debug builds and only switches to the first-party HTTP sink in release — so unless someone has specifically run a release-mode partner build against the dev gateway, every onboarding tap has only ever been printed to a debug log and discarded. The <i>only</i> partner-onboarding signal that exists today is the server-side truth events (<code>gym_created</code>/<code>gym_approved</code>), which start mid-funnel — step 1–2 drop-off is invisible.</p>
+    </div>
+
+    <div class="finding drift">
+      <h4><span class="pill drift">Drifted</span> The event dictionary in <code>docs/ANALYTICS.md</code> is missing 12 shipped events</h4>
+      <p>Diffing the doc against actual <code>track()</code> call sites turns up a full second product surface the doc never mentions — all six <code>buddy_*</code> events, plus <code>gym_rejected</code>, <code>attendance_verified</code> (fired from two different check-in paths), <code>staff_account_created</code>/<code>revoked</code>, and <code>partner_payout_recorded</code>. None of this is wrong, exactly — it's just that nobody would know to query for it from reading the doc alone.</p>
+    </div>
+
+    <div class="finding risk">
+      <h4><span class="pill risk">Broke today</span> A funnel was renamed out from under itself this afternoon</h4>
+      <p>Commit <code>b8c7251</code> ("...subscriptions wallet-only...", 2026-07-22 18:38 IST) removed the two-step Razorpay subscription flow (<code>subscription_order_created</code> → <code>subscription_purchased</code>) in favor of a single wallet-debit step, now emitted as <code>subscription_purchased_wallet</code>. The dev table still holds the old names — 13 <code>subscription_order_created</code> and 4 <code>subscription_purchased</code> rows through Jul 20–22 — with no successor rows yet under the new name. This is the exact failure mode the doc's own naming rule warns about ("renaming a shipped event breaks historical funnels"), caught in the act rather than after the fact.</p>
+      <div class="evidence">git log -p -S "subscription_order_created" services/wallet-service
+→ b8c7251 replaces createSubscriptionOrder (Razorpay order + track('subscription_order_created', …))
+  with purchaseSubscriptionWithWalletHandler (direct debit + track('subscription_purchased_wallet', …))</div>
+    </div>
+
+    <div class="finding risk">
+      <h4><span class="pill risk">Open door</span> <code>POST /api/events</code> has no allowlist, auth, or rate limit</h4>
+      <p>It's a deliberately public route (client events pre-login must reach it), scoped to a 128kb body cap — but it accepts <i>any</i> event name and <i>any</i> distinct_id, unauthenticated. Proof it's already being hand-poked: one row in dev carries <code>distinct_id = 'verify-probe-1'</code>, clearly a manual curl test, sitting in the same table as real user rows with nothing to distinguish it programmatically. At real traffic this is also an unrate-limited write path into your primary shared Postgres.</p>
+    </div>
+
+    <div class="finding drift">
+      <h4><span class="pill drift">Blind spot</span> Website and admin portal have zero instrumentation</h4>
+      <p>Grepped both repos for <code>analytics</code>, <code>gtag</code>, <code>posthog</code>, <code>plausible</code>, <code>mixpanel</code>, <code>segment</code> — nothing. The website now has real customer login/session/account pages (shipped 2026-07-20) and the admin portal drives gym approvals and payouts — both are currently completely dark to this pipeline. The gateway's <code>/api/events</code> route would take a web POST identically to a mobile one; nothing backend-side is customer-app-specific.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>What's actually in the table right now</h2></div>
+    <p class="sec-dek">All dev-environment testing traffic, 2026-06-14 through 2026-07-22. Real user volume will look nothing like this — but the shape is informative about what each pipe is proving out.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Event</th><th>Service</th><th>Source</th><th class="num">Rows</th><th class="num">Distinct IDs</th><th>Documented?</th></tr></thead>
+        <tbody>
+          <tr><td><code>login_completed</code></td><td>auth-service</td><td>server</td><td class="num">84</td><td class="num">18</td><td>yes</td></tr>
+          <tr><td><code>signup_completed</code></td><td>auth-service</td><td>server</td><td class="num">59</td><td class="num">59</td><td>yes</td></tr>
+          <tr><td><code>screen_viewed</code></td><td>gateway</td><td>client</td><td class="num">54</td><td class="num">14</td><td>yes</td></tr>
+          <tr><td><code>gym_viewed</code></td><td>gateway</td><td>client</td><td class="num">20</td><td class="num">7</td><td>yes</td></tr>
+          <tr><td><code>buddy_swiped</code></td><td>buddy-service</td><td>server</td><td class="num">17</td><td class="num">12</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>wallet_topup_order_created</code></td><td>wallet-service</td><td>server</td><td class="num">16</td><td class="num">9</td><td>yes</td></tr>
+          <tr><td><code>subscription_order_created</code></td><td>wallet-service</td><td>server</td><td class="num">13</td><td class="num">4</td><td><span class="pill risk">retired today</span></td></tr>
+          <tr><td><code>buddy_profile_created</code></td><td>buddy-service</td><td>server</td><td class="num">12</td><td class="num">12</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>booking_failed</code></td><td>booking-service</td><td>server</td><td class="num">12</td><td class="num">11</td><td>yes</td></tr>
+          <tr><td><code>booking_confirmed</code></td><td>booking-service</td><td>server</td><td class="num">8</td><td class="num">3</td><td>yes</td></tr>
+          <tr><td><code>booking_cancelled</code></td><td>booking-service</td><td>server</td><td class="num">7</td><td class="num">3</td><td>yes</td></tr>
+          <tr><td><code>topup_tapped</code></td><td>gateway</td><td>client</td><td class="num">7</td><td class="num">3</td><td>yes</td></tr>
+          <tr><td><code>buddy_message_sent</code></td><td>buddy-service</td><td>server</td><td class="num">6</td><td class="num">6</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>buddy_matched</code></td><td>buddy-service</td><td>server</td><td class="num">6</td><td class="num">5</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>otp_submitted</code></td><td>gateway</td><td>client</td><td class="num">5</td><td class="num">4</td><td>yes</td></tr>
+          <tr><td><code>otp_requested</code></td><td>gateway</td><td>client</td><td class="num">5</td><td class="num">4</td><td>yes</td></tr>
+          <tr><td><code>gym_created</code></td><td>gym-service</td><td>server</td><td class="num">5</td><td class="num">5</td><td>yes</td></tr>
+          <tr><td><code>book_tapped</code></td><td>gateway</td><td>client</td><td class="num">4</td><td class="num">3</td><td>yes</td></tr>
+          <tr><td><code>identify</code></td><td>gateway</td><td>client</td><td class="num">4</td><td class="num">3</td><td>yes</td></tr>
+          <tr><td><code>subscription_purchased</code></td><td>wallet-service</td><td>server</td><td class="num">4</td><td class="num">1</td><td><span class="pill risk">retired today</span></td></tr>
+          <tr><td><code>wallet_topup_succeeded</code></td><td>wallet-service</td><td>server</td><td class="num">4</td><td class="num">4</td><td>yes</td></tr>
+          <tr><td><code>buddy_blocked</code></td><td>buddy-service</td><td>server</td><td class="num">3</td><td class="num">3</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>gym_approved</code></td><td>gym-service</td><td>server</td><td class="num">3</td><td class="num">2</td><td>yes</td></tr>
+          <tr><td><code>booking_completed</code></td><td>booking-service</td><td>server</td><td class="num">2</td><td class="num">2</td><td>yes</td></tr>
+          <tr><td><code>gym_rejected</code></td><td>gym-service</td><td>server</td><td class="num">2</td><td class="num">2</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>checkin_requested</code></td><td>booking-service</td><td>server</td><td class="num">1</td><td class="num">1</td><td>yes</td></tr>
+          <tr><td><code>staff_account_revoked</code></td><td>auth-service</td><td>server</td><td class="num">1</td><td class="num">1</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>staff_account_created</code></td><td>auth-service</td><td>server</td><td class="num">1</td><td class="num">1</td><td><span class="pill drift">no</span></td></tr>
+          <tr><td><code>buddy_unmatched</code></td><td>buddy-service</td><td>server</td><td class="num">1</td><td class="num">1</td><td><span class="pill drift">no</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:.85rem;color:var(--ink-soft)">Not shown: <code>attendance_verified</code> (fires under two <code>method</code> values, <code>qr_scan</code> and <code>qr_geofence_self</code>, folded into the booking rows above) and <code>partner_payout_recorded</code> (0 rows so far in dev).</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Funnels buildable today, as-is</h2></div>
+    <p class="sec-dek">No schema change needed for any of these — the JSONB shape already carries what's required. Each is annotated with what the live dev data actually shows, not just what's theoretically possible.</p>
+
+    <div class="funnel">
+      <h4>Activation</h4>
+      <div class="steps"><span class="code">otp_requested</span><span class="arrow">→</span><span class="code">otp_submitted</span><span class="arrow">→</span><span class="code">signup_completed</span> <span class="arrow">/</span> <span class="code">login_completed</span></div>
+      <div class="note">Fully wired, client + server, and <b>verified stitching across the login boundary</b> — I traced real anon_id → userId joins in the data (e.g. anon session → user <code>9</code>, three screen views, one OTP request, one submit, all before identify). This funnel works exactly as designed today.</div>
+    </div>
+
+    <div class="funnel">
+      <h4>Conversion / GMV</h4>
+      <div class="steps"><span class="code">gym_viewed</span><span class="arrow">→</span><span class="code">slot_selected</span><span class="arrow">→</span><span class="code">book_tapped</span><span class="arrow">→</span><span class="code">booking_confirmed</span> <span class="arrow">⤷</span> <span class="code">booking_failed</span></div>
+      <div class="note">Live in dev: 20 views → 4 taps → 8 confirms (confirms exceed taps because client-side taps aren't landing as reliably as server-side confirms — same debug-vs-release sink issue as the partner app, just less severe). <code>booking_failed</code> already carries a <code>reason</code> field (<code>slot_full</code> / <code>insufficient_balance</code>) so the failure branch is breakdown-ready.</div>
+    </div>
+
+    <div class="funnel">
+      <h4>Fulfillment</h4>
+      <div class="steps"><span class="code">booking_confirmed</span><span class="arrow">→</span><span class="code">checkin_requested</span><span class="arrow">→</span><span class="code">attendance_verified</span><span class="arrow">→</span><span class="code">booking_completed</span></div>
+      <div class="note">Structurally sound and now richer than the doc describes: <code>attendance_verified</code> carries a <code>method</code> (<code>qr_scan</code> by partner, or <code>qr_geofence_self</code> for customer self-check-in) — a real no-show vs. attended vs. how-attended breakdown is possible, it's just not in the funnel definition anyone's looking at.</div>
+    </div>
+
+    <div class="funnel">
+      <h4>Supply (partner onboarding → approval)</h4>
+      <div class="steps"><span class="code">onboarding_started</span><span class="arrow">→</span><span class="code">onboarding_step_completed</span> <span class="arrow">×4</span><span class="arrow">→</span><span class="code">gym_created</span><span class="arrow">→</span><span class="code">gym_approved</span>/<span class="code">gym_rejected</span></div>
+      <div class="note"><b>Broken in practice, not in design</b> — the first four steps are the partner-app client events that aren't reaching Postgres (§01). What <i>is</i> answerable today: gym approval SLA from the last two steps alone — 5 gyms created, 3 approved, 2 rejected, all within dev testing. The step-by-step onboarding drop-off — arguably the most decision-relevant funnel right now given gym supply is the actual launch bottleneck — has zero real signal.</div>
+    </div>
+
+    <div class="funnel">
+      <h4>Wallet</h4>
+      <div class="steps"><span class="code">topup_tapped</span><span class="arrow">→</span><span class="code">wallet_topup_order_created</span><span class="arrow">→</span><span class="code">wallet_topup_succeeded</span> <span class="arrow">⤷</span> <span class="code">wallet_topup_failed</span></div>
+      <div class="note">Complete, including the async Razorpay-webhook path (<code>wallet_topup_succeeded</code> carries <code>via: 'webhook'</code> when it lands out-of-band from the direct verify call) — a genuinely well-instrumented funnel.</div>
+    </div>
+
+    <div class="funnel">
+      <h4>Buddy engagement <span style="font-family:var(--sans);font-weight:400;font-size:.75rem;color:var(--ink-soft)">— not in the documented funnel list at all</span></h4>
+      <div class="steps"><span class="code">buddy_profile_created</span><span class="arrow">→</span><span class="code">buddy_swiped</span><span class="arrow">→</span><span class="code">buddy_matched</span><span class="arrow">→</span><span class="code">buddy_message_sent</span></div>
+      <div class="note">Fully instrumented server-side and already showing a real shape in dev: 12 profiles → 17 swipes → 6 matches → 6 messages (plus <code>buddy_blocked</code> and <code>buddy_unmatched</code> as negative-signal branches). Missing only the <i>view</i> step at the top — there's no client event for "buddy card shown," so swipe-through-rate against impressions can't be computed, only swipe-to-match rate.</div>
+    </div>
+
+    <div class="funnel">
+      <h4>Subscriptions <span style="font-family:var(--sans);font-weight:400;font-size:.75rem;color:var(--red)">— mid-migration as of today</span></h4>
+      <div class="steps"><span class="code" style="text-decoration:line-through;opacity:.55">subscription_order_created → subscription_purchased</span><span class="arrow">⟶</span><span class="code">subscription_purchased_wallet</span></div>
+      <div class="note">Also absent from the documented funnel list. As of this afternoon's commit it's a single-step event (wallet-only purchase, no order/verify split) — treat the old two-step rows as historical only; any new query should key off <code>subscription_purchased_wallet</code>.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>What you can and can't figure out today</h2></div>
+    <div class="split">
+      <div class="col-card">
+        <h3>Answerable right now</h3>
+        <ul>
+          <li>Signup vs. login mix, and role/user_type breakdown, for anyone who's touched dev</li>
+          <li>Booking drop-off shape and failure-reason mix (slot_full vs. insufficient_balance)</li>
+          <li>Gym approval turnaround time (<code>gym_created</code> → <code>gym_approved</code> timestamp delta)</li>
+          <li>Buddy swipe-to-match and match-to-message activation rates</li>
+          <li>Wallet top-up success rate, including async webhook completions</li>
+          <li>Cross-service journeys for one person — booking, wallet, and buddy activity are joinable today by <code>distinct_id</code> in one table, no warehouse needed</li>
+        </ul>
+      </div>
+      <div class="col-card">
+        <h3>Not answerable yet</h3>
+        <ul>
+          <li>Anything about real users — there is no production data, full stop</li>
+          <li>Partner onboarding step drop-off — the client events don't land (§01)</li>
+          <li>Session length, DAU, bounce, or any time-boxed engagement metric — there's no session concept in the schema at all</li>
+          <li>Conversion by city end-to-end — <code>city</code> only appears on gym-side events; booking/wallet rows would need a join back to the gym table to slice by city</li>
+          <li>Pre-login attribution across app restarts — the anon id lives in memory only and resets on every cold start, so it can only stitch a single continuous session</li>
+          <li>App-version or OS-version cohorting — <code>platform</code> is captured (android/ios) but not app build number</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Where to spend effort next</h2></div>
+    <ol class="reco">
+      <li><b>Turn dev results into prod results.</b><span>Six env vars (<code>ANALYTICS_PROVIDER=postgres</code> + a DB URL) across the five prod services and gateway, then <code>/deploy &lt;service&gt; prod</code>. This is the single highest-leverage change here — everything else in this doc is analysis of test data until this happens.</span></li>
+      <li><b>Find out why partner-app events aren't landing.</b><span>Confirm whether QA has ever run the partner app with <code>--dart-define=ANALYTICS_PROVIDER=firstparty</code>, or whether it's simply always tested in debug. If onboarding drop-off matters for the Aug 1 supply push, this is the fastest fix on the list — no new code, just a build flag.</span></li>
+      <li><b>Put a floor under <code>/api/events</code>.</b><span>An allowlist of known event names plus basic per-IP rate limiting closes the open door without touching the pre-login use case it exists for.</span></li>
+      <li><b>Reconcile the doc.</b><span>Fold in the 12 undocumented events (buddy suite, attendance methods, staff actions, payouts) and correct the subscription funnel to the new single-step shape — five minutes now, versus someone rediscovering this the hard way later.</span></li>
+      <li><b>Give client rows a real service dimension.</b><span>Every client event is tagged <code>service = 'gateway'</code> at the top level; the only way to tell customer-app from partner-app traffic apart is reaching into <code>properties->>'app'</code>. Promoting that to a first-class column (or at least a GIN index on <code>properties</code>) would make ad-hoc queries much less error-prone as volume grows.</span></li>
+      <li><b>Put a read-only view on top of the SQL.</b><span>Every number in this document came from hand-written queries run just now — there is no dashboard. The admin portal already exists and already has an internal audience; a page that runs the funnel queries in <code>docs/ANALYTICS.md</code> §8 would turn this from an occasional audit into something checked weekly.</span></li>
+    </ol>
+  </section>
+
+  <footer>Compiled by reading <code>utils/analytics.js</code> across all five services + gateway, <code>analytics_service.dart</code> in both apps, <code>docs/ANALYTICS.md</code>, git history on <code>services/wallet-service</code>, and live queries against the dev <code>analytics_events</code> table. No production data was queried or exists to query.</footer>
+
+</div>
+</body>
+</html>

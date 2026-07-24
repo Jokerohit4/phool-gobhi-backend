@@ -1,12 +1,25 @@
 
 import { PrismaClient } from '@prisma/client';
 import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService } from '../services/authService.js';
+import { ROLES } from '../constants/userEnums.js';
+import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 
 const prisma = new PrismaClient();
 
 const signup = async (req, res) => {
   try {
     console.log('Signup request body:', req.body);
+    // This route is public (no auth) — gobhi/staff accounts must only ever be
+    // created via the authenticated POST /admin/staff path (createStaffService),
+    // which calls signupService directly and bypasses this check. Without this,
+    // any anonymous caller could POST role:'gobhi' here and self-provision a
+    // staff account with full admin-portal access.
+    if (req.body?.role === ROLES.GOBHI) {
+      return res.status(403).json({
+        error: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.message,
+        errorCode: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.code,
+      });
+    }
     const result = await signupService(req.body ?? {});
     res.status(201).json(result);
   } catch (err) {
@@ -172,17 +185,18 @@ const getUserInternal = async (req, res) => {
 };
 
 // Internal: batched display-field lookup so a caller resolving N user ids
-// (e.g. buddy-service rendering a discovery page or matches list) can do it
-// in one round trip instead of N. Deliberately returns only name/
-// profileImageUrl — display-only fields that are safe to fan out widely,
-// unlike getUserInternal's fuller payload above.
+// (e.g. buddy-service rendering a discovery page/matches list, or
+// wallet-service enriching partner-balance/payout admin views) can do it in
+// one round trip instead of N. Deliberately narrow — display-only fields
+// that are safe to fan out widely, unlike getUserInternal's fuller payload
+// above (no fcmToken/dateOfBirth/fitnessGoals here).
 const getUsersBatchInternal = async (req, res) => {
   try {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isFinite) : [];
     if (!ids.length) return res.json({ data: [] });
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, profileImageUrl: true },
+      select: { id: true, name: true, phone: true, profileImageUrl: true },
     });
     res.json({ data: users });
   } catch (err) {

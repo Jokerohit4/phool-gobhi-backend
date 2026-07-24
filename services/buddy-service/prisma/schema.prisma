@@ -51,6 +51,9 @@ model BuddyProfile {
   id             Int           @id @default(autoincrement())
   userId         Int           @unique
   bio            String?       @db.VarChar(500)
+  // Optional, user-supplied — deliberately excluded from the completion
+  // score (unlike bio/photos) since it's a nice-to-have, not required.
+  socialMediaUrl String?       @db.VarChar(255)
   // Denormalized cache of auth-service fields, needed for SQL-level discovery
   // filtering (WHERE gender IN / dateOfBirth BETWEEN / fitnessGoals && ...).
   // auth-service remains the source of truth; refreshed on profile create and

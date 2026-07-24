@@ -35,10 +35,15 @@ function toPublicCandidate(profile, display) {
   return {
     userId: profile.userId,
     name: display?.name ?? 'Buddy',
-    profileImageUrl: display?.profileImageUrl ?? '',
+    // Prefer the buddy profile's own curated photo over the account avatar
+    // — every buddy profile has at least one (photos are required to save
+    // one), while the account avatar is optional and often unset, which
+    // otherwise leaves this summary field blank for no reason.
+    profileImageUrl: profile.photos[0]?.url || display?.profileImageUrl || '',
     ageYears: ageFromDOB(profile.dateOfBirth),
     gender: profile.gender,
     bio: profile.bio || '',
+    socialMediaUrl: profile.socialMediaUrl || null,
     fitnessGoals: profile.fitnessGoals,
     photos: profile.photos.map((p) => ({ id: p.id, url: p.url, order: p.order })),
     distanceRange: bucketDistanceKm(profile.distanceKm),
@@ -56,7 +61,7 @@ export async function getMyProfile(userId) {
   return profile;
 }
 
-export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscoverable }) {
+export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscoverable, socialMediaUrl }) {
   const existing = await prisma.buddyProfile.findUnique({ where: { userId } });
 
   if (existing) {
@@ -65,6 +70,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
     if (lat !== undefined) data.lat = lat;
     if (lng !== undefined) data.lng = lng;
     if (isDiscoverable !== undefined) data.isDiscoverable = isDiscoverable;
+    if (socialMediaUrl !== undefined) data.socialMediaUrl = socialMediaUrl || null;
     return prisma.buddyProfile.update({ where: { userId }, data });
   }
 
@@ -88,6 +94,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
     data: {
       userId,
       bio: bio || null,
+      socialMediaUrl: socialMediaUrl || null,
       lat,
       lng,
       gender: authUser.gender || null,
@@ -153,6 +160,32 @@ export async function addPhotos(userId, files) {
     )
   );
   return created;
+}
+
+// One-way "use my main profile photo" shortcut — buddy and account photos
+// stay on independent pipelines/models by design, this just clones the
+// current account avatar in as one more buddy photo via Cloudinary's
+// fetch-by-URL upload rather than requiring the client to download+re-upload
+// the bytes itself.
+export async function addPhotoFromUrl(userId, sourceUrl) {
+  const profile = await prisma.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
+  if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
+  if (profile.photos.length + 1 > MAX_BUDDY_PHOTOS) {
+    throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
+  }
+
+  const uploaded = await cloudinary.uploader.upload(sourceUrl, {
+    folder: 'phool-gobhi/buddy-profiles',
+    transformation: [{ width: 1080, height: 1350, crop: 'limit', quality: 'auto' }],
+  });
+  return prisma.buddyPhoto.create({
+    data: {
+      buddyProfileId: profile.id,
+      url: uploaded.secure_url,
+      publicId: uploaded.public_id,
+      order: profile.photos.length,
+    },
+  });
 }
 
 export async function reorderPhotos(userId, order) {
@@ -367,8 +400,15 @@ export async function getMatches(userId) {
   });
 
   const otherIds = matches.map((m) => (m.userLowId === userId ? m.userHighId : m.userLowId));
-  const infos = await getUsersBatchInternal(otherIds).catch(() => []);
+  const [infos, buddyProfiles] = await Promise.all([
+    getUsersBatchInternal(otherIds).catch(() => []),
+    prisma.buddyProfile.findMany({
+      where: { userId: { in: otherIds } },
+      include: { photos: { orderBy: { order: 'asc' }, take: 1 } },
+    }),
+  ]);
   const infoMap = new Map(infos.map((u) => [u.id, u]));
+  const primaryPhotoMap = new Map(buddyProfiles.map((p) => [p.userId, p.photos[0]?.url]));
 
   return matches.map((m) => {
     const otherUserId = m.userLowId === userId ? m.userHighId : m.userLowId;
@@ -376,7 +416,12 @@ export async function getMatches(userId) {
     const lastMessage = m.messages[0];
     return {
       matchId: m.id,
-      otherUser: { userId: otherUserId, name: other?.name ?? 'Buddy', profileImageUrl: other?.profileImageUrl ?? '' },
+      otherUser: {
+        userId: otherUserId,
+        name: other?.name ?? 'Buddy',
+        // Same buddy-photo-over-account-avatar preference as toPublicCandidate.
+        profileImageUrl: primaryPhotoMap.get(otherUserId) || other?.profileImageUrl || '',
+      },
       lastMessage: lastMessage?.body ?? null,
       lastMessageAt: lastMessage?.createdAt ?? null,
       matchedAt: m.matchedAt,
@@ -384,8 +429,35 @@ export async function getMatches(userId) {
   });
 }
 
+// Full profile (photos + bio) of the other person in an active match — the
+// only place besides discovery a profile is ever exposed, and only to a
+// confirmed match, not a stranger. Same toPublicCandidate DTO as discovery
+// so the bucketed-distance privacy guarantee applies here too.
+export async function getMatchedProfile(userId, matchId) {
+  const match = await assertParticipant(matchId, userId);
+  if (match.status !== 'active') throw { status: 410, error: 'This match is no longer active' };
+  const otherUserId = match.userLowId === userId ? match.userHighId : match.userLowId;
+
+  const [me, other] = await Promise.all([
+    prisma.buddyProfile.findUnique({ where: { userId } }),
+    prisma.buddyProfile.findUnique({
+      where: { userId: otherUserId },
+      include: { photos: { orderBy: { order: 'asc' } } },
+    }),
+  ]);
+  if (!other) throw { status: 404, error: 'Buddy profile not found' };
+
+  const distanceKm = me ? haversineKm(me.lat, me.lng, other.lat, other.lng) : null;
+  const infos = await getUsersBatchInternal([otherUserId]).catch(() => []);
+  return toPublicCandidate({ ...other, distanceKm }, infos[0]);
+}
+
 export async function unmatch(userId, matchId) {
-  await assertParticipant(matchId, userId);
+  const match = await assertParticipant(matchId, userId);
+  // Idempotent no-op if already inactive (block auto-unmatches too) —
+  // otherwise a repeat call (e.g. a double-tap) overwrites unmatchedBy/At
+  // with whoever called it last and double-fires the analytics event.
+  if (match.status !== 'active') return match;
   const updated = await prisma.match.update({
     where: { id: matchId },
     data: { status: 'unmatched', unmatchedBy: userId, unmatchedAt: new Date() },

@@ -14,6 +14,7 @@ router.put('/profile', requireAuth, ctrl.upsertProfile);
 router.post('/profile/refresh', requireAuth, ctrl.refreshProfile);
 
 router.post('/photos', requireAuth, uploadBuddyPhotos.array('photos', MAX_BUDDY_PHOTOS), ctrl.addPhotos);
+router.post('/photos/from-url', requireAuth, ctrl.addPhotoFromUrl);
 router.put('/photos/order', requireAuth, ctrl.reorderPhotos);
 router.delete('/photos/:photoId', requireAuth, ctrl.deletePhoto);
 
@@ -24,6 +25,7 @@ router.get('/discover', requireAuth, ctrl.getDiscoveryFeed);
 router.post('/swipes', requireAuth, ctrl.swipe);
 
 router.get('/matches', requireAuth, ctrl.getMatches);
+router.get('/matches/:matchId/profile', requireAuth, ctrl.getMatchedProfile);
 router.post('/matches/:matchId/unmatch', requireAuth, ctrl.unmatch);
 router.get('/matches/:matchId/messages', requireAuth, ctrl.getMessages);
 router.post('/matches/:matchId/messages', requireAuth, ctrl.sendMessage);

@@ -21,8 +21,17 @@ model Gym {
   lng          Float
   amenities    String[]
   phone        String
-  sessionPrice Float
-  quotedPrice  Float?
+  // Money fields are Decimal in Postgres (exact, no binary-float rounding
+  // drift on repeated writes/aggregates) but every read site in
+  // gymService.js converts them back to a plain JS Number immediately after
+  // the Prisma call, before any arithmetic or JSON response — mirrors
+  // wallet-service's established pattern (see its Wallet/WalletTransaction
+  // models + the Number(...) wrapping throughout walletService.js). Comparing
+  // two Prisma Decimal objects with JS's `<`/`>` does a STRING compare, and
+  // `decimalObj + number` can silently string-concatenate — normalizing at
+  // the boundary avoids ever hitting either footgun downstream.
+  sessionPrice Decimal     @db.Decimal(19, 2)
+  quotedPrice  Decimal?    @db.Decimal(19, 2)
   established  Int?
   brandDocs    String[]
   openTime     String
@@ -34,11 +43,16 @@ model Gym {
   isApproved   Boolean     @default(false)
   rejectionReason String?
   isActive     Boolean     @default(true)
+  weeklyPlanPrice    Decimal? @db.Decimal(19, 2)
+  monthlyPlanPrice   Decimal? @db.Decimal(19, 2)
+  quarterlyPlanPrice Decimal? @db.Decimal(19, 2)
+  yearlyPlanPrice    Decimal? @db.Decimal(19, 2)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   images       GymImage[]
   reviews      GymReview[]
   slotBlocks   SlotBlock[]
+  slotPrices   GymSlotPrice[]
 
   @@index([partnerId])
   @@schema("gym")
@@ -78,5 +92,23 @@ model SlotBlock {
   createdAt DateTime @default(now())
 
   @@index([gymId, date])
+  @@schema("gym")
+}
+
+// Price for a time-of-day slot (e.g. "18:00"-"19:00"), the same every day of
+// the week. One row per distinct startTime that generateTimeSlots() produces
+// for this gym; a slot with no row here falls back to Gym.sessionPrice.
+model GymSlotPrice {
+  id        Int      @id @default(autoincrement())
+  gymId     Int
+  startTime String
+  endTime   String
+  price     Decimal  @db.Decimal(19, 2)
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gymId, startTime])
+  @@index([gymId])
   @@schema("gym")
 }

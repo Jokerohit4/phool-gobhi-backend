@@ -13,8 +13,8 @@ export const getMyProfile = async (req, res) => {
 
 export const upsertProfile = async (req, res) => {
   try {
-    const { bio, lat, lng, isDiscoverable } = req.body || {};
-    const profile = await buddyService.createOrUpdateProfile(req.userId, { bio, lat, lng, isDiscoverable });
+    const { bio, lat, lng, isDiscoverable, socialMediaUrl } = req.body || {};
+    const profile = await buddyService.createOrUpdateProfile(req.userId, { bio, lat, lng, isDiscoverable, socialMediaUrl });
     res.json({ data: profile });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -37,6 +37,17 @@ export const addPhotos = async (req, res) => {
     if (!req.files || !req.files.length) return res.status(400).json({ error: 'No photos provided' });
     const photos = await buddyService.addPhotos(req.userId, req.files);
     res.status(201).json({ data: photos });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const addPhotoFromUrl = async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const photo = await buddyService.addPhotoFromUrl(req.userId, url);
+    res.status(201).json({ data: photo });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -112,6 +123,15 @@ export const getMatches = async (req, res) => {
   try {
     const matches = await buddyService.getMatches(req.userId);
     res.json({ data: matches });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMatchedProfile = async (req, res) => {
+  try {
+    const profile = await buddyService.getMatchedProfile(req.userId, parseInt(req.params.matchId));
+    res.json({ data: profile });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

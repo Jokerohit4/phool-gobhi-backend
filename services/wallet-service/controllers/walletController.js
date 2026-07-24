@@ -10,11 +10,27 @@ import {
   createRazorpayOrderService,
   getRazorpayOrderService,
   updateRazorpayOrderStatusService,
-  claimRazorpayOrderService
+  claimRazorpayOrderService,
+  purchaseSubscriptionWithWallet,
+  getActiveSubscriptionService,
+  getMySubscriptionsService,
+  getTransactionByIdempotencyKeyService,
+  getGymCity,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
+import { WALLET_TOPUP_AMOUNTS } from '../utils/walletConstants.js';
+
+// Buffer-length mismatch makes crypto.timingSafeEqual throw rather than
+// return false, so a shorter/longer signature must be treated as "not
+// equal" before ever reaching the constant-time comparison.
+function safeEqualHex(a, b) {
+  const bufA = Buffer.from(a || '', 'utf8');
+  const bufB = Buffer.from(b || '', 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 export const createWallet = async (req, res) => {
   try {
@@ -57,6 +73,15 @@ export const getWallet = async (req, res) => {
   }
 };
 
+export const getMyWalletTransactions = async (req, res) => {
+  try {
+    const transactions = await getWalletTransactionsService(req.userId);
+    res.json({ data: transactions });
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+};
+
 export const getWalletTransactions = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -71,8 +96,11 @@ export const getWalletTransactions = async (req, res) => {
 export const creditWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description } = req.body;
-    const result = await creditWalletService(Number(userId), amount, description);
+    const { amount, description, idempotencyKey } = req.body;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive finite number' });
+    }
+    const result = await creditWalletService(Number(userId), amount, description, idempotencyKey);
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -82,11 +110,27 @@ export const creditWallet = async (req, res) => {
 export const debitWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description } = req.body;
-    const result = await debitWalletService(Number(userId), amount, description);
+    const { amount, description, idempotencyKey } = req.body;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive finite number' });
+    }
+    const result = await debitWalletService(Number(userId), amount, description, idempotencyKey);
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+// Internal (requireInternal): lets a caller check whether a previous
+// credit/debit call it made under a given idempotency key actually landed —
+// used by booking-service to reconcile a booking stuck in `pending` after a
+// crash between reserving the slot and confirming payment.
+export const getTransactionByKeyInternal = async (req, res) => {
+  try {
+    const transaction = await getTransactionByIdempotencyKeyService(req.params.key);
+    res.json({ data: transaction });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
   }
 };
 
@@ -125,8 +169,13 @@ export const createTopUpOrder = async (req, res) => {
     const { amount } = req.body;
     const userId = req.userId; // from JWT middleware
 
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
+    }
+    if (!WALLET_TOPUP_AMOUNTS.includes(amount)) {
+      return res.status(400).json({
+        error: `Amount must be one of: ${WALLET_TOPUP_AMOUNTS.join(', ')}`
+      });
     }
 
     const razorpay = new Razorpay({
@@ -169,7 +218,7 @@ export const verifyAndCreditWallet = async (req, res) => {
     hmac.update(orderId + '|' + razorpayPaymentId);
     const hash = hmac.digest('hex');
 
-    if (hash !== razorpaySignature) {
+    if (!safeEqualHex(hash, razorpaySignature)) {
       return res.status(400).json({ error: 'Invalid signature' });
     }
 
@@ -216,6 +265,54 @@ export const verifyAndCreditWallet = async (req, res) => {
   }
 };
 
+const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'yearly'];
+
+export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
+  try {
+    const { gymId, planType } = req.body;
+    const userId = req.userId;
+
+    if (!gymId || !VALID_PLAN_TYPES.includes(planType)) {
+      return res.status(400).json({ error: 'gymId and a valid planType are required' });
+    }
+
+    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
+    track('subscription_purchased_wallet', userId, {
+      amount: subscription.price, gym_id: gymId, plan_type: planType, city: await getGymCity(Number(gymId)),
+    });
+    res.status(201).json({ data: { subscription } });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+      price: err.price,
+    });
+  }
+};
+
+// Internal (requireInternal): booking-service checks this at booking-creation
+// time to decide whether to skip the per-session wallet debit.
+export const getActiveSubscriptionInternal = async (req, res) => {
+  try {
+    const customerId = parseInt(req.query.customerId);
+    const gymId = parseInt(req.query.gymId);
+    const subscription = await getActiveSubscriptionService(customerId, gymId);
+    res.json({ data: { active: !!subscription, subscription } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMySubscriptions = async (req, res) => {
+  try {
+    const gymId = req.query.gymId ? parseInt(req.query.gymId) : undefined;
+    const subscriptions = await getMySubscriptionsService(req.userId, gymId);
+    res.json({ data: subscriptions });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const handleRazorpayWebhook = async (req, res) => {
   try {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -228,7 +325,7 @@ export const handleRazorpayWebhook = async (req, res) => {
     hmac.update(req.rawBody);
     const hash = hmac.digest('hex');
 
-    if (hash !== signature) {
+    if (!safeEqualHex(hash, signature)) {
       return res.status(400).json({ error: 'Invalid webhook signature' });
     }
 
@@ -238,6 +335,11 @@ export const handleRazorpayWebhook = async (req, res) => {
       const { id: paymentId, order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
 
+      // Razorpay orders are only ever created for wallet top-ups now —
+      // subscriptions are paid out of wallet balance (see
+      // purchaseSubscriptionWithWallet), never a direct Razorpay charge, so
+      // there's no `purpose === 'subscription'` case to branch on here
+      // anymore.
       if (order) {
         const claimed = await claimRazorpayOrderService(orderId);
         if (claimed) {

@@ -184,8 +184,10 @@ export async function refreshTokenService(token) {
   }
 }
 
-// In-memory OTP store: phone → { code, expiresAt, sentAt }
-const otpStore = new Map();
+// OTP store lives in Postgres (OtpCode model, one row per phone) rather than
+// an in-memory Map — a Cloud Run cold start or scale-out to multiple
+// instances would otherwise silently invalidate in-flight OTPs, since each
+// instance would have its own empty Map.
 
 // Canonical phone key for everything in this service — OTP-store lookups,
 // User.phone storage/matching, and both the OTP-store and Firebase verify
@@ -267,12 +269,17 @@ export async function sendOtpService(rawPhone) {
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
-  const existing = otpStore.get(phone);
-  if (existing?.sentAt && Date.now() - existing.sentAt < 60 * 1000) {
+  const existing = await prisma.otpCode.findUnique({ where: { phone } });
+  if (existing && Date.now() - existing.sentAt.getTime() < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000, sentAt: Date.now() });
+  const now = new Date();
+  await prisma.otpCode.upsert({
+    where: { phone },
+    create: { phone, code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
+    update: { code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
+  });
   // Skip paid SMS while ALLOW_DEV_OTP is on — the 123456 bypass makes a real
   // send pointless, and this ties "stop spending on SMS" to the same flag
   // that has to be flipped back for real verification to resume, so the two
@@ -287,12 +294,23 @@ export async function sendOtpService(rawPhone) {
   return response;
 }
 
+// Human-facing labels for the cross-app role-mismatch error below — keyed on
+// the account's EXISTING role (not the role the requesting app sent), since
+// that's the account the phone number actually belongs to.
 // Shared by both the OTP-store path (verifyOtpService) and the Firebase
 // ID-token path (verifyFirebaseTokenService) — everything that happens once a
 // phone number is confirmed verified, regardless of how it got verified.
 async function issueSessionForUser({ phone, name, email, role = 'customer', type = 'general', gobhiType }) {
   if (!VALID_ROLES.includes(role)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_ROLE.message, errorCode: ERROR_MESSAGES.INVALID_ROLE.code };
+  }
+  // Phone/OTP and Firebase sign-in are both public, unauthenticated entry
+  // points (customer + partner apps only) — gobhi/staff accounts must only
+  // ever be created via the authenticated POST /admin/staff path. Without
+  // this, anyone could verify an OTP for a brand-new phone number with
+  // role:'gobhi' and self-provision a staff account.
+  if (role === ROLES.GOBHI) {
+    throw { status: 403, error: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.message, errorCode: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.code };
   }
   if (!VALID_TYPES.includes(type)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_TYPE.message, errorCode: ERROR_MESSAGES.INVALID_TYPE.code };
@@ -317,6 +335,11 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
   }
 
+  // Token is always keyed off the account's real DB role/type, never the
+  // caller-supplied `role` above — that param only decides what a *new*
+  // account gets created as. An existing account authenticates as whatever
+  // it already is, regardless of which app/site the login came through
+  // (e.g. an existing partner logging in via the customer website).
   const accessToken = generateAccessToken(user.id, user.role, user.type);
   const refreshToken = generateRefreshToken(user.id);
 
@@ -358,15 +381,15 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
   const isDev = process.env.ALLOW_DEV_OTP === 'true';
   const DEV_OTP = '123456';
   if (!(isDev && otp === DEV_OTP)) {
-    const entry = otpStore.get(phone);
-    if (!entry || Date.now() > entry.expiresAt) {
-      otpStore.delete(phone);
+    const entry = await prisma.otpCode.findUnique({ where: { phone } });
+    if (!entry || Date.now() > entry.expiresAt.getTime()) {
+      if (entry) await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
     if (entry.code !== otp) {
       throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
     }
-    otpStore.delete(phone);
+    await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
   }
 
   return issueSessionForUser({ phone, name, email, role, type, gobhiType });

@@ -16,13 +16,75 @@ model Booking {
   date             String
   startTime        String
   endTime          String
-  amount           Float
+  // Decimal in Postgres (exact, matches wallet-service's Wallet/
+  // WalletTransaction/GymSubscription convention) — every read site in
+  // bookingService.js runs these through normalizeBookingMoney() immediately
+  // after the Prisma call, before any arithmetic or JSON response, since a
+  // raw Prisma Decimal object compared with JS `<`/`>` does a STRING compare
+  // and `decimalObj + number` can silently string-concatenate.
+  amount           Decimal       @db.Decimal(19, 2)
+  // Platform commission snapshotted at booking creation (mirrors
+  // GymSubscription.commissionPct/partnerShare in wallet-service) — captured
+  // once up front so completeBooking always pays out the rate that applied
+  // when the customer booked, even if the platform-wide rate changes later.
+  // Both null for subscription-covered bookings (subscriptionId set): the
+  // partner was already paid their share upfront at subscription purchase,
+  // so there's no separate per-session payout to compute here. Null also
+  // means "predates this feature" for old rows — completeBooking falls back
+  // to paying out the full `amount` in that case.
+  commissionPct    Decimal?      @db.Decimal(5, 2)
+  partnerShare     Decimal?      @db.Decimal(19, 2)
   status           BookingStatus @default(confirmed)
   walletTxId       Int?
+  // Set when this booking was covered by an active GymSubscription instead of
+  // a per-session wallet debit — null means the normal paid flow (unchanged).
+  // completeBooking/cancelBooking must guard on this: the partner was already
+  // paid upfront at subscription purchase, and the customer never spent
+  // wallet balance on this booking, so neither the completion payout nor the
+  // cancellation refund should fire for it.
+  subscriptionId   Int?
   checkinRequested Boolean       @default(false)
   locationVerified Boolean?
+
+  // Attendance verification — the enforced signal that gates completeBooking's
+  // payout. attendedAt is the single source of truth for "did this session
+  // count as attended" (drives customer history, partner/admin reporting, and
+  // the public aggregate stat). attendanceMethod records how it was proven;
+  // null means this predates the feature or was never verified.
+  attendedAt               DateTime?
+  attendanceMethod         AttendanceMethod?
+  attendanceVerifiedBy     Int?
+  attendanceOverrideReason String?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+
+  // NOTE: there is also a partial unique index in the DB —
+  // booking_unique_active_slot on (customerId, gymId, date, startTime) WHERE
+  // status <> 'cancelled' — added by hand in the migration SQL, since Prisma's
+  // schema DSL has no syntax for a filtered/partial unique index. It backstops
+  // createBooking's app-level duplicate check against a same-slot double-tap
+  // race, while still allowing a customer to re-book a slot after cancelling
+  // an earlier booking for it. `prisma db push`/introspection will not see
+  // this index and may report drift — that's expected, don't let a `db push`
+  // silently drop it.
+  @@index([gymId, date])
+  @@index([customerId])
+  @@index([gymId, date, attendedAt])
+  @@index([attendedAt])
+  @@schema("booking")
+}
+
+// Singleton row (id always 1) — admin-portal-editable cancellation tiers,
+// read by cancelBooking's refund calc and served to clients so the app's
+// policy screen shows the exact same numbers instead of a hand-synced copy.
+// tiers shape: [{ maxHoursNotice: number|null, blocked: bool, refundRate: number }, ...]
+// ordered ascending by maxHoursNotice (null = "8+ hours, no upper bound").
+model CancellationPolicySetting {
+  id        Int      @id @default(1)
+  tiers     Json
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
 
   @@schema("booking")
 }
@@ -32,6 +94,20 @@ enum BookingStatus {
   confirmed
   cancelled
   completed
+
+  @@schema("booking")
+}
+
+enum AttendanceMethod {
+  qr_scan
+  manual_override
+  // Customer scans a static per-gym poster QR (a deeplink, not a per-booking
+  // one) and self-verifies via geofence — see bookingService.selfCheckIn.
+  // Distinct from qr_scan (partner-witnessed) purely for reporting/adoption
+  // visibility, not because it's treated as lower-trust: it's gated on an
+  // authenticated session + a real active booking + location, same as any
+  // other verification path.
+  qr_geofence_self
 
   @@schema("booking")
 }

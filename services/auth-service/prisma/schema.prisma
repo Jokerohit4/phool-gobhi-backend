@@ -42,9 +42,70 @@ model PitchAccessContact {
   @@schema("auth")
 }
 
+// Website /contact form submissions (first-party — replaces the previous
+// Formspree integration, whose form id had gone stale/404 with no visible
+// failure to the submitter). Read-only for staff via the admin portal.
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@schema("auth")
+}
+
 enum PitchContactType {
   email
   phone
+
+  @@schema("auth")
+}
+
+// Website /careers listings — staff-managed via the admin portal's Jobs page,
+// publicly readable (active only) at GET /api/auth/jobs.
+model JobOpening {
+  id             Int            @id @default(autoincrement())
+  title          String
+  department     String
+  location       String
+  employmentType EmploymentType
+  description    String
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@schema("auth")
+}
+
+enum EmploymentType {
+  full_time
+  part_time
+  internship
+  contract
+
+  @@schema("auth")
+}
+
+// Applications submitted against a JobOpening (first-party — same rationale
+// as ContactMessage: a mailto "Apply" link fails silently when the visitor
+// has no default mail client). jobOpeningId/jobTitle are a plain snapshot,
+// not a relation — an application stays reviewable even if the listing it
+// was made against is later closed or deleted.
+model JobApplication {
+  id           Int      @id @default(autoincrement())
+  jobOpeningId Int
+  jobTitle     String
+  name         String
+  email        String
+  phone        String
+  portfolioUrl String?
+  linkedinUrl  String?
+  message      String
+  resumePath   String?
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   @@schema("auth")
 }
@@ -58,6 +119,17 @@ model SavedAddress {
   lng              Float
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@schema("auth")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  code      String
+  expiresAt DateTime
+  sentAt    DateTime
 
   @@schema("auth")
 }

@@ -1,12 +1,37 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { ingest } from './utils/analytics.js';
 import { withGoogleIdToken } from './utils/googleIdToken.js';
 
 const app = express();
+
+// Single source of truth for valid event names (docs/analytics-events.json,
+// checked for drift by scripts/check-analytics-events.cjs). Only the
+// 'client'-sourced subset is relevant here — server events never touch this
+// route, they're tracked in-process. Read via fs rather than an ESM JSON
+// import assertion to avoid Node-version-specific import syntax.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const analyticsEventsRegistry = JSON.parse(
+  readFileSync(join(__dirname, 'docs', 'analytics-events.json'), 'utf8')
+);
+const CLIENT_EVENT_ALLOWLIST = new Set(
+  Object.entries(analyticsEventsRegistry)
+    .filter(([key, v]) => !key.startsWith('$') && v.source === 'client')
+    .map(([key]) => key)
+);
+
+// Cloud Run sits in front of this gateway behind its own load balancer, so
+// without this req.ip is the LB's internal address for every request —
+// making IP-based rate limiting below either bucket everyone together or
+// throw on express-rate-limit's own misconfigured-trust-proxy check.
+app.set('trust proxy', 1);
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
@@ -16,15 +41,19 @@ const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check)$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
+  { method: 'GET', pattern: /^\/api\/auth\/jobs(\?.*)?$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/availability/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/subscription-plans/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
+  { method: 'GET', pattern: /^\/api\/bookings\/public\/attendance-stats(\?.*)?$/ },
   { method: 'GET', pattern: /^\/health/ },
 ];
 
@@ -62,6 +91,50 @@ function authMiddleware(req, res, next) {
 
 app.use(authMiddleware);
 
+// IP-keyed only, by necessity: express-http-proxy consumes the raw request
+// body itself (via raw-body) before forwarding — see the comment on the
+// /api/users mount below — so nothing upstream of the proxy can parse the
+// body (e.g. to key a limiter on phone number) without breaking proxied
+// request bodies downstream. This is a coarse outer backstop against one IP
+// hammering many phones/accounts; auth-service's own per-phone 60s OTP
+// cooldown (OtpCode table, survives cold starts/scale-out) remains the
+// primary throttle for send-otp specifically.
+const authAttemptLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again in a few minutes.' },
+});
+const walletAttemptLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again in a few minutes.' },
+});
+// Deliberately generous — pre-login screens fire several events in quick
+// succession (screen views, OTP request+submit) from one IP/device, and this
+// is a backstop against abuse, not a per-user throttle.
+const eventsIngestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many events' },
+});
+const RATE_LIMITED_ROUTES = [
+  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact)$/, limiter: authAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },
+];
+app.use((req, res, next) => {
+  const match = RATE_LIMITED_ROUTES.find(r => r.method === req.method && r.pattern.test(req.path));
+  if (!match) return next();
+  match.limiter(req, res, next);
+});
+
 app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timestamp: new Date().toISOString() }));
 
 // Client analytics ingestion. Public (anonymous pre-login events are valid) and
@@ -74,9 +147,14 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
     const body = req.body || {};
     const list = Array.isArray(body.events) ? body.events : [body];
     for (const e of list) {
-      if (e && e.event) {
-        ingest({ event: e.event, distinctId: e.distinct_id, properties: e.properties || {}, source: 'client' });
-      }
+      if (!e || typeof e.event !== 'string') continue;
+      // Silently drop anything not in the registry — never tell the caller
+      // which names are valid, that just makes probing easier. Still 202.
+      if (!CLIENT_EVENT_ALLOWLIST.has(e.event)) continue;
+      if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
+      const properties = e.properties;
+      if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
+      ingest({ event: e.event, distinctId: e.distinct_id, properties: properties || {}, source: 'client' });
     }
   } catch (_) {
     // swallow — analytics never fails the client
@@ -90,6 +168,9 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
 // gateway, rather than trusting the x-user-id headers alone. No-ops locally.
 app.use('/api/auth', proxy(AUTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(AUTH_SERVICE_URL),
+  // Raised for the same reason as /api/users and /api/gyms below — this
+  // mount now also carries the careers page's resume-upload multipart body.
+  limit: '15mb',
 }));
 // express-http-proxy buffers the whole request body itself (via raw-body)
 // before forwarding, with its own default limit far smaller than the
