@@ -12,6 +12,14 @@ function slotInstantUTC(date, startTime) {
   return Date.UTC(y, mo - 1, d, h, mi) - IST_OFFSET_MS;
 }
 
+// "Today" as an IST calendar date (YYYY-MM-DD), not the server's own (UTC)
+// calendar date — `booking.date` is always an IST-local date string, so
+// comparing it against a raw `new Date().toISOString()` date is wrong
+// between IST 00:00-05:29, when the UTC date is still yesterday's.
+export function todayDateStringIST() {
+  return new Date(Date.now() + IST_OFFSET_MS).toISOString().split('T')[0];
+}
+
 // A slot is bookable only if it starts at least MIN_LEAD_MS from now.
 export function isSlotInPastOrTooSoon(date, startTime) {
   return slotInstantUTC(date, startTime) < Date.now() + MIN_LEAD_MS;

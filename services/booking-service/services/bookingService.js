@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, todayDateStringIST } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -581,7 +581,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
 
     // 4. A session can only be completed on its own date — stops a scanned/forged
     //    booking ID from being marked complete on the wrong day.
-    const todayString = new Date().toISOString().split('T')[0];
+    const todayString = todayDateStringIST();
     if (booking.date !== todayString) {
       throw {
         status: 400,
@@ -622,11 +622,18 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
           attendanceOverrideReason: overrideReason || null,
         };
 
-    // 6. Update status to 'completed'
-    const updatedBooking = await prisma.booking.update({
-      where: { id: bookingId },
+    // 6. Update status to 'completed' — conditioned on the status still being
+    // 'confirmed' so two concurrent completion requests (double-tap, two
+    // devices) can't both pass the check above and both trigger a payout;
+    // only one update actually matches and the loser sees count === 0.
+    const { count } = await prisma.booking.updateMany({
+      where: { id: bookingId, status: 'confirmed' },
       data: { status: 'completed', ...attendanceData }
     });
+    if (count === 0) {
+      throw { status: 400, error: 'Booking cannot be completed' };
+    }
+    const updatedBooking = await prisma.booking.findUnique({ where: { id: bookingId } });
 
     // 7. Credit partner wallet — best-effort, never blocks completion.
     // Skipped when this booking was covered by an active subscription: the
@@ -697,7 +704,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId) {
       throw { status: 400, error: 'Booking is already completed' };
     }
 
-    const todayString = new Date().toISOString().split('T')[0];
+    const todayString = todayDateStringIST();
     if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
 
     if (booking.attendedAt) {
@@ -745,7 +752,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId) {
 // one deliberately carries a `code` alongside it.
 export async function selfCheckIn(gymId, customerId, lat, lng) {
   try {
-    const todayString = new Date().toISOString().split('T')[0];
+    const todayString = todayDateStringIST();
     const candidates = await prisma.booking.findMany({
       where: { customerId, gymId, date: todayString, status: 'confirmed' },
     });
@@ -820,7 +827,7 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
     if (!booking) throw { status: 404, error: 'Booking not found' };
     if (booking.customerId !== customerId) throw { status: 403, error: 'Forbidden' };
     if (booking.status !== 'confirmed') throw { status: 400, error: 'Booking is not confirmed' };
-    const todayString = new Date().toISOString().split('T')[0];
+    const todayString = todayDateStringIST();
     if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
 
     let locationVerified = false;
