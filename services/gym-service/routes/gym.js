@@ -19,6 +19,12 @@ router.get('/:id/availability', ctrl.getGymAvailability);
 router.get('/:id/reviews', ctrl.getGymReviews);
 router.get('/:id/subscription-plans', ctrl.getSubscriptionPlans);
 
+// Places autocomplete proxy — any authenticated user (web or mobile,
+// partner or customer), not partner-only, since address search is a
+// generic need. Key lives only server-side; see services/placesService.js.
+router.get('/places/autocomplete', requireAuth, ctrl.placesAutocomplete);
+router.get('/places/details', requireAuth, ctrl.placesDetails);
+
 // Partner routes
 router.get('/partner/mine', requireRole('partner'), ctrl.getPartnerGyms);
 router.post('/', requireRole('partner'), ctrl.createGym);

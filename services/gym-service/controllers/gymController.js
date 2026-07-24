@@ -1,4 +1,5 @@
 import * as gymService from '../services/gymService.js';
+import * as placesService from '../services/placesService.js';
 import { generateTimeSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
@@ -384,5 +385,33 @@ export const deleteSlotBlock = async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message });
+  }
+};
+
+// Server-side Places proxy — the Google Maps API key never reaches any
+// client (web or mobile); callers only ever see this endpoint.
+export const placesAutocomplete = async (req, res) => {
+  try {
+    const { input, sessiontoken } = req.query;
+    if (!input || !String(input).trim()) {
+      return res.status(400).json({ error: 'input is required' });
+    }
+    const predictions = await placesService.autocomplete(String(input), sessiontoken);
+    res.json({ data: predictions });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const placesDetails = async (req, res) => {
+  try {
+    const { placeId, sessiontoken } = req.query;
+    if (!placeId) {
+      return res.status(400).json({ error: 'placeId is required' });
+    }
+    const details = await placesService.placeDetails(String(placeId), sessiontoken);
+    res.json({ data: details });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
