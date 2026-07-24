@@ -297,17 +297,6 @@ export async function sendOtpService(rawPhone) {
 // Human-facing labels for the cross-app role-mismatch error below — keyed on
 // the account's EXISTING role (not the role the requesting app sent), since
 // that's the account the phone number actually belongs to.
-function roleLabel(role) {
-  if (role === ROLES.PARTNER) return 'gym partner';
-  if (role === ROLES.GOBHI) return 'staff';
-  return 'customer';
-}
-function appLabel(role) {
-  if (role === ROLES.PARTNER) return 'Partner app';
-  if (role === ROLES.GOBHI) return 'admin portal';
-  return 'Customer app';
-}
-
 // Shared by both the OTP-store path (verifyOtpService) and the Firebase
 // ID-token path (verifyFirebaseTokenService) — everything that happens once a
 // phone number is confirmed verified, regardless of how it got verified.
@@ -344,18 +333,13 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     });
   } else if (!user.isActive) {
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
-  } else if (user.role !== role) {
-    // This phone number already has an account, just not of the type the
-    // calling app expects (e.g. a partner's number entered into the customer
-    // app). Reject with a clear, actionable message instead of silently
-    // issuing a token whose role the app's own endpoints will later 403 on.
-    throw {
-      status: 409,
-      error: `This phone number is already registered as a ${roleLabel(user.role)}. Please use the ${appLabel(user.role)} to sign in.`,
-      errorCode: ERROR_MESSAGES.ROLE_MISMATCH.code,
-    };
   }
 
+  // Token is always keyed off the account's real DB role/type, never the
+  // caller-supplied `role` above — that param only decides what a *new*
+  // account gets created as. An existing account authenticates as whatever
+  // it already is, regardless of which app/site the login came through
+  // (e.g. an existing partner logging in via the customer website).
   const accessToken = generateAccessToken(user.id, user.role, user.type);
   const refreshToken = generateRefreshToken(user.id);
 
