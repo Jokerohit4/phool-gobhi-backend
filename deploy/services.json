@@ -127,7 +127,8 @@
             "INTERNAL_API_KEY": "internal-api-key",
             "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
             "CLOUDINARY_API_KEY": "cloudinary-api-key",
-            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
+            "GOOGLE_MAPS_API_KEY": "google-maps-api-key"
           }
         },
         "prod": {
@@ -143,7 +144,8 @@
             "INTERNAL_API_KEY": "internal-api-key",
             "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
             "CLOUDINARY_API_KEY": "cloudinary-api-key",
-            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+            "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
+            "GOOGLE_MAPS_API_KEY": "google-maps-api-key"
           }
         }
       }
