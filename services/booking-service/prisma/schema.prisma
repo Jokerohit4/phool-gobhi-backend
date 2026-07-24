@@ -16,7 +16,24 @@ model Booking {
   date             String
   startTime        String
   endTime          String
-  amount           Float
+  // Decimal in Postgres (exact, matches wallet-service's Wallet/
+  // WalletTransaction/GymSubscription convention) — every read site in
+  // bookingService.js runs these through normalizeBookingMoney() immediately
+  // after the Prisma call, before any arithmetic or JSON response, since a
+  // raw Prisma Decimal object compared with JS `<`/`>` does a STRING compare
+  // and `decimalObj + number` can silently string-concatenate.
+  amount           Decimal       @db.Decimal(19, 2)
+  // Platform commission snapshotted at booking creation (mirrors
+  // GymSubscription.commissionPct/partnerShare in wallet-service) — captured
+  // once up front so completeBooking always pays out the rate that applied
+  // when the customer booked, even if the platform-wide rate changes later.
+  // Both null for subscription-covered bookings (subscriptionId set): the
+  // partner was already paid their share upfront at subscription purchase,
+  // so there's no separate per-session payout to compute here. Null also
+  // means "predates this feature" for old rows — completeBooking falls back
+  // to paying out the full `amount` in that case.
+  commissionPct    Decimal?      @db.Decimal(5, 2)
+  partnerShare     Decimal?      @db.Decimal(19, 2)
   status           BookingStatus @default(confirmed)
   walletTxId       Int?
   // Set when this booking was covered by an active GymSubscription instead of

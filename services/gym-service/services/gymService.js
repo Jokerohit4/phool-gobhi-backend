@@ -6,6 +6,26 @@ const prisma = new PrismaClient();
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// Gym's price fields are Decimal in Postgres (see schema.prisma) — Prisma
+// returns them as Decimal objects, which JS silently mishandles in plain
+// arithmetic (comparing two Decimals with </> does a STRING compare;
+// `decimalObj + number` can string-concatenate instead of adding). Every
+// function below runs its fetched/created/updated gym through this
+// immediately after the Prisma call, before any further JS touches it, so
+// the rest of this file only ever sees plain numbers — same convention as
+// wallet-service's Number(...) wrapping.
+const GYM_MONEY_FIELDS = [
+  'sessionPrice', 'quotedPrice', 'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'yearlyPlanPrice',
+];
+function normalizeGymMoney(gym) {
+  if (!gym) return gym;
+  const out = { ...gym };
+  for (const f of GYM_MONEY_FIELDS) {
+    if (out[f] != null) out[f] = Number(out[f]);
+  }
+  return out;
+}
+
 const SUBSCRIPTION_PLANS = [
   { planType: 'weekly', field: 'weeklyPlanPrice', days: 7 },
   { planType: 'monthly', field: 'monthlyPlanPrice', days: 30 },
@@ -119,10 +139,10 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, us
     ];
   }
 
-  let gyms = await prisma.gym.findMany({
+  let gyms = (await prisma.gym.findMany({
     where,
     include: { images: true },
-  });
+  })).map(normalizeGymMoney);
 
   if (amenities) {
     const amenitiesArray = amenities.split(',').map(a => a.trim());
@@ -164,18 +184,19 @@ export async function listGymsAdmin({ status } = {}) {
     where.isApproved = true;
   }
 
-  return prisma.gym.findMany({
+  const gyms = await prisma.gym.findMany({
     where,
     include: { images: true },
     orderBy: { createdAt: 'desc' },
   });
+  return gyms.map(normalizeGymMoney);
 }
 
 export async function getGymById(id, userLat, userLng) {
-  const gym = await prisma.gym.findUnique({
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id },
     include: { images: true, reviews: true },
-  });
+  }));
 
   if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
@@ -198,7 +219,7 @@ export async function getGymByIdRaw(id) {
     include: { images: true },
   });
   if (!gym) throw { status: 404, error: 'Gym not found' };
-  return gym;
+  return normalizeGymMoney(gym);
 }
 
 export async function getGymCapacity(id) {
@@ -283,13 +304,18 @@ export async function createGym(partnerId, data) {
     },
   });
 
-  return gym;
+  return normalizeGymMoney(gym);
 }
 
 export async function updateGym(gymId, partnerId, data) {
-  const gym = await prisma.gym.findUnique({
+  // Normalized immediately — the MATERIAL_FIELDS comparison below does
+  // `updateData[field] !== gym[field]`, and a raw Prisma Decimal is never
+  // `===` to the plain number the request body sends, so every price-field
+  // update would wrongly look "changed" (and reset isApproved) if this were
+  // skipped, even when the value didn't actually move.
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id: gymId },
-  });
+  }));
 
   if (!gym) {
     throw { status: 404, error: 'Gym not found' };
@@ -350,10 +376,10 @@ export async function updateGym(gymId, partnerId, data) {
   );
   maybeResetApproval(gym, updateData, changedMaterialField);
 
-  const updated = await prisma.gym.update({
+  const updated = normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
     data: updateData,
-  });
+  }));
 
   // Changing hours/duration shifts slot boundaries, which can orphan
   // GymSlotPrice rows whose startTime no longer appears in the regenerated
@@ -387,7 +413,7 @@ export async function softDeleteGym(gymId, partnerId) {
     data: { isActive: false },
   });
 
-  return deleted;
+  return normalizeGymMoney(deleted);
 }
 
 export async function getPartnerGyms(partnerId) {
@@ -396,7 +422,7 @@ export async function getPartnerGyms(partnerId) {
     include: { images: true },
   });
 
-  return gyms;
+  return gyms.map(normalizeGymMoney);
 }
 
 // Compact onboarding summary for a partner — does an active gym exist yet, and
@@ -589,13 +615,13 @@ export async function approveGym(gymId, { approved = true, reason = null } = {})
     throw { status: 400, error: 'A reason is required when rejecting a gym' };
   }
 
-  return prisma.gym.update({
+  return normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
     data: {
       isApproved: approved,
       rejectionReason: approved ? null : reason,
     },
-  });
+  }));
 }
 
 export async function getAvailableSlots(gymId, date) {
@@ -670,11 +696,11 @@ export async function getSlotPriceMap(gymId) {
     where: { gymId },
     select: { startTime: true, price: true },
   });
-  return new Map(rows.map(r => [r.startTime, r.price]));
+  return new Map(rows.map(r => [r.startTime, Number(r.price)]));
 }
 
 export async function getSlotPrices(gymId) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({ where: { id: gymId } }));
   if (!gym) throw { status: 404, error: 'Gym not found' };
 
   const slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
@@ -689,7 +715,7 @@ export async function getSlotPrices(gymId) {
 }
 
 export async function upsertSlotPrices(gymId, partnerId, prices) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({ where: { id: gymId } }));
   if (!gym) throw { status: 404, error: 'Gym not found' };
   if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
 
@@ -741,14 +767,14 @@ export async function getGymInternalWithSlotPrice(gymId, startTime) {
     const row = await prisma.gymSlotPrice.findUnique({
       where: { gymId_startTime: { gymId, startTime } },
     });
-    resolvedSlotPrice = row ? row.price : gym.sessionPrice;
+    resolvedSlotPrice = row ? Number(row.price) : gym.sessionPrice;
   }
 
   return { ...gym, resolvedSlotPrice };
 }
 
 export async function getSubscriptionPlans(gymId) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({ where: { id: gymId } }));
   if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
   }

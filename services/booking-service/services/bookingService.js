@@ -22,6 +22,29 @@ const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004'
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
+// Booking's money fields are Decimal in Postgres (see schema.prisma) — every
+// read site below runs the fetched/created/updated row through this
+// immediately after the Prisma call, before any arithmetic or JSON response,
+// so a raw Decimal object is never compared with </> (which does a STRING
+// compare) or added to a number (which can silently string-concatenate).
+// Same convention as wallet-service's Number(...) wrapping and gym-service's
+// normalizeGymMoney.
+function normalizeBookingMoney(booking) {
+  if (!booking) return booking;
+  const out = { ...booking };
+  if (out.amount != null) out.amount = Number(out.amount);
+  if (out.commissionPct != null) out.commissionPct = Number(out.commissionPct);
+  if (out.partnerShare != null) out.partnerShare = Number(out.partnerShare);
+  return out;
+}
+
+// Platform commission on regular (non-subscription) session bookings —
+// mirrors wallet-service's SUBSCRIPTION_COMMISSION_PERCENT. Same rate by
+// default, but a separate env var since the two are billed completely
+// differently (per-session debit/credit here vs. upfront split there) and
+// may need to move independently later.
+const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
+
 // Per-target headers for service-to-service calls (x-internal-key shared
 // secret, plus a Google ID token on Cloud Run — see utils/googleIdToken.js —
 // now required since each target's Cloud Run invoker no longer allows
@@ -94,7 +117,8 @@ async function reconcileStalePendingBooking(booking) {
   if (!isStalePending(booking)) return booking;
 
   if (booking.subscriptionId) {
-    return prisma.booking.update({ where: { id: booking.id }, data: { status: 'confirmed' } }).catch(() => null);
+    return prisma.booking.update({ where: { id: booking.id }, data: { status: 'confirmed' } })
+      .then(normalizeBookingMoney).catch(() => null);
   }
 
   try {
@@ -104,7 +128,8 @@ async function reconcileStalePendingBooking(booking) {
     );
     const wasCharged = !!res.data?.data;
     if (wasCharged) {
-      return prisma.booking.update({ where: { id: booking.id }, data: { status: 'confirmed' } }).catch(() => null);
+      return prisma.booking.update({ where: { id: booking.id }, data: { status: 'confirmed' } })
+        .then(normalizeBookingMoney).catch(() => null);
     }
     const { count } = await prisma.booking.deleteMany({ where: { id: booking.id, status: 'pending' } });
     return count ? null : booking;
@@ -122,6 +147,16 @@ async function reconcileStalePendingBooking(booking) {
 // The row is created `pending`, not `confirmed`, specifically so this
 // transaction never has to stay open across the wallet-debit network call
 // that follows in createBooking — it commits (or releases) purely locally.
+// Subscription-covered bookings never pay out a per-session partner share
+// here (the partner was already paid upfront at subscription purchase — see
+// fulfillSubscriptionPurchase), so they get no commission snapshot at all.
+function bookingCommissionFields(amount, subscriptionId) {
+  if (subscriptionId) return { commissionPct: null, partnerShare: null };
+  const commissionPct = BOOKING_COMMISSION_PERCENT;
+  const partnerShare = Math.round(amount * (1 - commissionPct / 100) * 100) / 100;
+  return { commissionPct, partnerShare };
+}
+
 async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId = null }) {
   for (let attempt = 1; attempt <= RESERVE_MAX_ATTEMPTS; attempt++) {
     // Reconcile a stale pending duplicate BEFORE opening the transaction —
@@ -141,7 +176,7 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
     }
 
     try {
-      return await prisma.$transaction(async (tx) => {
+      const created = await prisma.$transaction(async (tx) => {
         const duplicate = await tx.booking.findFirst({
           where: { customerId, gymId, date, startTime, status: { not: 'cancelled' } },
           select: { id: true },
@@ -158,9 +193,13 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
         }
 
         return tx.booking.create({
-          data: { customerId, gymId, date, startTime, endTime, amount, status: 'pending', subscriptionId },
+          data: {
+            customerId, gymId, date, startTime, endTime, amount, status: 'pending', subscriptionId,
+            ...bookingCommissionFields(amount, subscriptionId),
+          },
         });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return normalizeBookingMoney(created);
     } catch (err) {
       // Business-rule rejection (duplicate slot / full slot) — surface immediately, don't retry.
       if (err && err.status) throw err;
@@ -192,10 +231,10 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
 // debit-call-error recovery path (where the debit turned out to have
 // actually landed despite the call throwing) so both stay in sync.
 async function confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId, city }) {
-  const booking = await prisma.booking.update({
+  const booking = normalizeBookingMoney(await prisma.booking.update({
     where: { id: reservation.id },
     data: { status: 'confirmed' },
-  });
+  }));
 
   track('booking_confirmed', customerId, {
     booking_id: booking.id, gym_id: gymId, amount: booking.amount, date, start_time: startTime,
@@ -431,9 +470,9 @@ async function cancellationRefundRate(hoursUntil) {
 export async function cancelBooking(bookingId, customerId) {
   try {
     // 1. Find booking
-    let booking = await prisma.booking.findUnique({
+    let booking = normalizeBookingMoney(await prisma.booking.findUnique({
       where: { id: bookingId }
-    });
+    }));
 
     if (!booking) {
       throw {
@@ -552,9 +591,9 @@ export async function cancelBooking(bookingId, customerId) {
 export async function completeBooking(bookingId, gymId, partnerId, { override = false, overrideReason } = {}) {
   try {
     // 1. Find booking
-    const booking = await prisma.booking.findUnique({
+    const booking = normalizeBookingMoney(await prisma.booking.findUnique({
       where: { id: bookingId }
-    });
+    }));
 
     if (!booking) {
       throw {
@@ -633,18 +672,21 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     if (count === 0) {
       throw { status: 400, error: 'Booking cannot be completed' };
     }
-    const updatedBooking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    const updatedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
 
     // 7. Credit partner wallet — best-effort, never blocks completion.
     // Skipped when this booking was covered by an active subscription: the
     // partner's share was already credited upfront at subscription purchase
     // (see wallet-service's fulfillSubscriptionPurchase) — crediting again
     // here would pay them twice for the same session.
+    // partnerShare is null for bookings created before this field existed —
+    // fall back to the full amount for those rather than paying out `null`.
+    const payoutAmount = booking.partnerShare ?? booking.amount;
     if (!booking.subscriptionId) {
       try {
         if (gym.partnerId) {
           await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
-            amount: booking.amount,
+            amount: payoutAmount,
             description: 'Gym session payout'
           }, await internalHeadersFor(WALLET_SERVICE_URL));
         }
@@ -656,6 +698,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // Fulfillment funnel: the session actually happened (partner verified at the gym).
     track('booking_completed', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+      commission_pct: booking.commissionPct, partner_share: booking.partnerShare,
       attendance_method: updatedBooking.attendanceMethod, city: gym.city,
     });
 
@@ -861,10 +904,10 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
 
 export async function getCustomerBookings(customerId) {
   try {
-    let bookings = await prisma.booking.findMany({
+    let bookings = (await prisma.booking.findMany({
       where: { customerId },
       orderBy: { createdAt: 'desc' }
-    });
+    })).map(normalizeBookingMoney);
 
     // Self-heal: a booking stuck at `pending` (process died between
     // reserving the slot and confirming payment) gets resolved the next
@@ -948,7 +991,7 @@ export async function getGymBookings(gymId, partnerId) {
       where: { gymId },
       orderBy: { createdAt: 'desc' }
     });
-    return bookings;
+    return bookings.map(normalizeBookingMoney);
   } catch (err) {
     if (err.error) throw err;
     console.error('getGymBookings error:', err);
@@ -1027,19 +1070,19 @@ export async function getGymSalesSummary(gymId, partnerId) {
     return {
       today: {
         count: todayStats._count,
-        total: todayStats._sum.amount || 0
+        total: Number(todayStats._sum.amount) || 0
       },
       weekly: {
         count: weeklyStats._count,
-        total: weeklyStats._sum.amount || 0
+        total: Number(weeklyStats._sum.amount) || 0
       },
       monthly: {
         count: monthlyStats._count,
-        total: monthlyStats._sum.amount || 0
+        total: Number(monthlyStats._sum.amount) || 0
       },
       yearly: {
         count: yearlyStats._count,
-        total: yearlyStats._sum.amount || 0
+        total: Number(yearlyStats._sum.amount) || 0
       }
     };
   } catch (err) {
