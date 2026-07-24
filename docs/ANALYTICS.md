@@ -278,6 +278,36 @@ Prisma DB), exposed at `GET /api/bookings/admin/analytics/*`
 `requireRole('gobhi')`. The sample queries below are for anything not yet
 covered there, or quick one-off checks.
 
+Every funnel tab (except Activation, whose steps are alternative outcomes —
+new signup vs. returning login — not a strict sequence) also shows a
+drop-off table alongside its chart: count, % of the previous step, and % of
+the top of the funnel, computed client-side from the same counts the chart
+uses (`lib/analyticsLabels.ts`'s `withDropoff`) rather than a second query.
+
+Three more tabs:
+
+- **By City** (`?view=city`, `GET /admin/analytics/city-breakdown`) — gyms
+  submitted/approved and bookings/GMV, per city. Needs no join back to the
+  gym table since `city` is already denormalized onto booking events (§4).
+- **Revenue** (`?view=revenue`, `GET /admin/analytics/revenue-trend`) — daily
+  GMV and booking-count trend lines (two separate charts, deliberately not
+  one dual-axis chart — see the `dataviz` skill's "one axis" rule).
+- **User Journey** (`?view=user`, `GET /admin/analytics/user-journey?distinctId=&days=`)
+  — looks up every event for one `distinct_id`, client and server interleaved
+  chronologically rather than split into separate feeds. Detects session
+  boundaries by watching `properties->>'session_id'` change between
+  consecutive rows (server events carry none, so they render inline without
+  resetting it), and best-effort resolves a numeric `distinct_id` to a real
+  name/phone via auth-service's existing internal lookup — fails open to
+  "unknown identity" for anon ids or a lookup failure.
+
+A fourth addition, **Supply health** (`GET /admin/analytics/supply-health`),
+is folded into the existing Supply tab rather than a tab of its own: gyms
+approved more than 7 days ago with their real booking count since, surfacing
+"dead weight" supply (approved but never actually converting) — the thing
+that matters more than raw approval throughput when the launch bottleneck is
+active supply, not paperwork.
+
 ### Sample funnel queries
 
 Booking conversion (last 30 days), per step:

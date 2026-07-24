@@ -1,6 +1,11 @@
 import pg from 'pg';
+import axios from 'axios';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const { Pool } = pg;
+
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 // Deliberately a SECOND, separate pool from this service's own Prisma-backed
 // operational DB (see db.js / prisma/schema.prisma) — reads here hit
@@ -183,6 +188,146 @@ export async function getBuddyFunnel(days) {
     [n]
   );
   return { steps: rows };
+}
+
+// ---- City breakdown -----------------------------------------------------------
+
+// Bookings/GMV and gym counts by city — the `city` property was denormalized
+// onto booking events (and was already native on gym events) specifically so
+// this kind of slice needs no join back to the gym table.
+export async function getCityBreakdown(days) {
+  const n = daysParam(days);
+  const { rows: bookingRows } = await query(
+    `SELECT COALESCE(properties->>'city', 'Unknown') AS city,
+            count(*)::int AS bookings,
+            COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv
+       FROM analytics_events
+      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1`,
+    [n]
+  );
+  const { rows: gymRows } = await query(
+    `SELECT COALESCE(properties->>'city', 'Unknown') AS city,
+            count(*) FILTER (WHERE event = 'gym_created')::int AS gyms_created,
+            count(*) FILTER (WHERE event = 'gym_approved')::int AS gyms_approved
+       FROM analytics_events
+      WHERE event IN ('gym_created', 'gym_approved') AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1`,
+    [n]
+  );
+  const byCity = new Map();
+  for (const r of gymRows) {
+    byCity.set(r.city, { city: r.city, gymsCreated: r.gyms_created, gymsApproved: r.gyms_approved, bookings: 0, gmv: 0 });
+  }
+  for (const r of bookingRows) {
+    const existing = byCity.get(r.city) || { city: r.city, gymsCreated: 0, gymsApproved: 0, bookings: 0, gmv: 0 };
+    existing.bookings = r.bookings;
+    existing.gmv = r.gmv;
+    byCity.set(r.city, existing);
+  }
+  return { cities: [...byCity.values()].sort((a, b) => b.gmv - a.gmv) };
+}
+
+// ---- Revenue / GMV trend -------------------------------------------------------
+
+export async function getRevenueTrend(days) {
+  const n = daysParam(days);
+  const { rows } = await query(
+    `SELECT date_trunc('day', ts) AS day,
+            count(*)::int AS bookings,
+            COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv
+       FROM analytics_events
+      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1 ORDER BY 1`,
+    [n]
+  );
+  return { days: rows };
+}
+
+// ---- Supply health: approved gyms with little/no booking activity -------------
+
+// Surfaces "dead weight" supply — a gym that got approved but never converted
+// into real bookings — which matters more than raw approval counts when the
+// launch bottleneck is real, active supply, not just approval throughput.
+// 7-day grace period: a gym approved yesterday having zero bookings yet isn't
+// a signal of anything, it just hasn't had time.
+export async function getSupplyHealth() {
+  const { rows } = await query(
+    `WITH approved AS (
+       SELECT DISTINCT ON (properties->>'gym_id')
+              properties->>'gym_id' AS gym_id, ts AS approved_ts, properties->>'city' AS city
+         FROM analytics_events
+        WHERE event = 'gym_approved'
+        ORDER BY properties->>'gym_id', ts DESC
+     ),
+     bookings AS (
+       SELECT properties->>'gym_id' AS gym_id, count(*)::int AS booking_count, max(ts) AS last_booking_ts
+         FROM analytics_events
+        WHERE event = 'booking_confirmed'
+        GROUP BY 1
+     )
+     SELECT a.gym_id, a.approved_ts, a.city,
+            COALESCE(b.booking_count, 0) AS booking_count, b.last_booking_ts
+       FROM approved a
+       LEFT JOIN bookings b ON b.gym_id = a.gym_id
+      WHERE a.approved_ts < now() - interval '7 days'
+      ORDER BY booking_count ASC, a.approved_ts ASC`
+  );
+  return { gyms: rows };
+}
+
+// ---- Per-user journey --------------------------------------------------------
+
+// Every event for one distinct_id, oldest first, interleaving client intent and
+// server truth in one timeline (deliberately not split into separate feeds —
+// seeing "viewed gym" next to the server's "booking_confirmed" a moment later
+// is the point). Session boundaries aren't computed here; the caller detects a
+// session_id change between consecutive rows to render a divider, since that's
+// cheap array logic and keeps this endpoint's shape reusable.
+export async function getUserJourney(distinctId, days) {
+  const n = daysParam(days || 90); // wider default window than the funnel views — a journey lookup is usually "show me everything"
+  const { rows } = await query(
+    `SELECT event, properties, source, service, ts
+       FROM analytics_events
+      WHERE distinct_id = $1 AND ts > now() - ($2 || ' days')::interval
+      ORDER BY ts ASC`,
+    [distinctId, n]
+  );
+  const sessionIds = new Set(rows.map((r) => r.properties?.session_id).filter(Boolean));
+  return {
+    events: rows,
+    summary: {
+      totalEvents: rows.length,
+      firstSeen: rows[0]?.ts ?? null,
+      lastSeen: rows[rows.length - 1]?.ts ?? null,
+      apps: [...new Set(rows.map((r) => r.properties?.app).filter(Boolean))],
+      services: [...new Set(rows.map((r) => r.service).filter(Boolean))],
+      sessionCount: sessionIds.size,
+    },
+  };
+}
+
+// Resolves a numeric distinct_id to a real name/phone via auth-service's
+// existing internal lookup (same endpoint bookingService.js already calls for
+// profile checks) — fails open to null, since an anon_xxx id, a manual test
+// id, or a lookup failure should never break the journey view, just leave the
+// identity section showing "unknown."
+export async function getUserProfile(distinctId) {
+  if (!/^\d+$/.test(String(distinctId))) return null;
+  try {
+    const headers = { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) };
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${distinctId}`, { headers });
+    const profile = res.data?.data || res.data;
+    if (!profile) return null;
+    return {
+      name: profile.name ?? null,
+      phone: profile.phone ?? null,
+      role: profile.role ?? null,
+      type: profile.type ?? null,
+    };
+  } catch (_) {
+    return null;
+  }
 }
 
 // ---- Generic daily trend for any event(s) -----------------------------------

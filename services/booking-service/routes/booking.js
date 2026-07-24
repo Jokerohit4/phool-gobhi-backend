@@ -34,6 +34,10 @@ router.get('/admin/analytics/activation', requireRole('gobhi'), analyticsCtrl.ge
 router.get('/admin/analytics/wallet-funnel', requireRole('gobhi'), analyticsCtrl.getWalletFunnel);
 router.get('/admin/analytics/buddy-funnel', requireRole('gobhi'), analyticsCtrl.getBuddyFunnel);
 router.get('/admin/analytics/trend', requireRole('gobhi'), analyticsCtrl.getTrend);
+router.get('/admin/analytics/user-journey', requireRole('gobhi'), analyticsCtrl.getUserJourney);
+router.get('/admin/analytics/city-breakdown', requireRole('gobhi'), analyticsCtrl.getCityBreakdown);
+router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl.getRevenueTrend);
+router.get('/admin/analytics/supply-health', requireRole('gobhi'), analyticsCtrl.getSupplyHealth);
 router.put('/:id/cancel', requireRole('customer'), ctrl.cancelBooking);
 router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
