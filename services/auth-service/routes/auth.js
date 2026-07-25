@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, updateMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -37,6 +37,7 @@ router.post('/verify-firebase-token', verifyFirebaseToken);
 router.post('/google', googleSignIn);
 router.get('/otp-config', getOtpConfig);
 router.get('/me', verifyToken, getMe);
+router.patch('/me', verifyToken, updateMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
 router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 router.post('/fcm-token', verifyToken, updateFcmToken);

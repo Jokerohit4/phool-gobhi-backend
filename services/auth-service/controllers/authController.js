@@ -204,6 +204,20 @@ const getUsersBatchInternal = async (req, res) => {
   }
 };
 
+// Lets a customer/partner set their name after signup, since phone+OTP
+// signup never collects one (see authService.js issueSessionForUser). Each
+// app nudges for this once name is null rather than blocking signup on it.
+const updateMe = async (req, res) => {
+  try {
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const user = await prisma.user.update({ where: { id: req.user.id }, data: { name } });
+    res.json({ id: user.id, name: user.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
@@ -215,6 +229,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, updateMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

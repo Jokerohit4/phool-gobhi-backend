@@ -322,7 +322,10 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   if (!user) {
     user = await prisma.user.create({
       data: {
-        name: name || 'User',
+        // Phone+OTP signup never collects a name, so this is left null rather
+        // than a placeholder like 'User' — each app prompts for it once,
+        // after first login, when it sees name is missing.
+        name: name || null,
         phone,
         email: email || null,
         role,
