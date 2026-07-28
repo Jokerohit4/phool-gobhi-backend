@@ -753,6 +753,10 @@ export async function verifyAttendance(bookingId, gymId, partnerId) {
     const todayString = todayDateStringIST();
     if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
 
+    if (!isSessionActiveNow(booking.date, booking.startTime, booking.endTime)) {
+      throw { status: 400, error: 'This session is not currently in progress — you can only verify attendance during the session window' };
+    }
+
     if (booking.attendedAt) {
       return {
         bookingId: booking.id,
@@ -990,11 +994,36 @@ export async function getGymBookings(gymId, partnerId) {
     }
     if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
 
-    const bookings = await prisma.booking.findMany({
+    let bookings = await prisma.booking.findMany({
       where: { gymId },
       orderBy: { createdAt: 'desc' }
     });
-    return bookings.map(normalizeBookingMoney);
+    bookings = bookings.map(normalizeBookingMoney);
+
+    // Enrich with customer name + photo so partner sees a real person, not
+    // just "Member #123". Phone is deliberately excluded — partners must
+    // never see a customer's phone number.
+    const uniqueCustomerIds = [...new Set(bookings.map(b => b.customerId))];
+    const customerMap = {};
+    if (uniqueCustomerIds.length) {
+      try {
+        const batchRes = await axios.post(
+          `${AUTH_SERVICE_URL}/internal/users/batch`,
+          { ids: uniqueCustomerIds },
+          await internalHeadersFor(AUTH_SERVICE_URL),
+        );
+        const users = batchRes.data?.data || [];
+        for (const u of users) {
+          customerMap[u.id] = { name: u.name || null, photoUrl: u.profileImageUrl || null };
+        }
+      } catch (_) { /* leave customerMap empty — graceful degradation */ }
+    }
+
+    return bookings.map(b => ({
+      ...b,
+      customerName: customerMap[b.customerId]?.name ?? null,
+      customerPhotoUrl: customerMap[b.customerId]?.photoUrl ?? null,
+    }));
   } catch (err) {
     if (err.error) throw err;
     console.error('getGymBookings error:', err);
@@ -1190,16 +1219,18 @@ function attendanceDateBuckets() {
 // sessions, so each bucket's upper bound must be capped at today — otherwise
 // future confirmed bookings would wrongly inflate the no-show count.
 async function attendanceBucket(where) {
-  const [booked, scanned, manualOverride] = await Promise.all([
+  const [booked, scanned, selfCheckin, manualOverride] = await Promise.all([
     prisma.booking.count({ where }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_scan' } }),
+    prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_geofence_self' } }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'manual_override' } }),
   ]);
-  const noShow = booked - scanned - manualOverride;
+  const verified = scanned + selfCheckin + manualOverride;
+  const noShow = booked - verified;
   return {
-    booked, scanned, manualOverride, noShow,
+    booked, scanned, selfCheckin, manualOverride, noShow,
     verifiedAttendanceRate: booked ? scanned / booked : null,
-    completionRate: booked ? (scanned + manualOverride) / booked : null,
+    completionRate: booked ? verified / booked : null,
   };
 }
 
@@ -1276,14 +1307,17 @@ export async function getAdminAttendanceByGym(period = 'monthly') {
     const rows = bookedGroups.map((g) => {
       const methods = methodByGym[g.gymId] || {};
       const scanned = methods.qr_scan || 0;
+      const selfCheckin = methods.qr_geofence_self || 0;
       const manualOverride = methods.manual_override || 0;
       const booked = g._count;
+      const verified = scanned + selfCheckin + manualOverride;
       return {
         gymId: g.gymId,
         booked,
         scanned,
+        selfCheckin,
         manualOverride,
-        noShow: booked - scanned - manualOverride,
+        noShow: booked - verified,
         verifiedAttendanceRate: booked ? scanned / booked : null,
       };
     });
