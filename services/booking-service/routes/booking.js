@@ -40,6 +40,7 @@ router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl
 router.get('/admin/analytics/supply-health', requireRole('gobhi'), analyticsCtrl.getSupplyHealth);
 router.put('/:id/cancel', requireRole('customer'), ctrl.cancelBooking);
 router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn);
+router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
 router.post('/gym/:gymId/self-checkin', requireRole('customer'), ctrl.selfCheckIn);
 router.put('/:id/complete', requireRole('partner'), ctrl.completeBooking);
