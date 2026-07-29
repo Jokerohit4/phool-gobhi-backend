@@ -41,7 +41,7 @@ const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|logout|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
   { method: 'GET', pattern: /^\/api\/auth\/app-config(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/auth\/jobs(\?.*)?$/ },

@@ -25,9 +25,33 @@ model User {
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
+  refreshTokens   RefreshToken[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
+  @@schema("auth")
+}
+
+// Refresh-token rotation: one row per issued refresh token, chained via
+// familyId. A row's usedAt/replacedByJti gets set the moment it's rotated;
+// presenting an already-used token again after the grace window (see
+// refreshTokenService.js) revokes the whole family — that's the theft-replay
+// signal rotation exists to catch. expiresAt is fixed per family (not
+// extended on rotation) so total session length stays the 7 days it is today.
+model RefreshToken {
+  id            String    @id @default(uuid())
+  jti           String    @unique
+  familyId      String
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  usedAt        DateTime?
+  replacedByJti String?
+  revokedAt     DateTime?
+
+  @@index([familyId])
+  @@index([userId])
   @@schema("auth")
 }
 

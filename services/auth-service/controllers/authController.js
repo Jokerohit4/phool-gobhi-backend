@@ -1,7 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 
@@ -71,6 +71,13 @@ const refreshToken = async (req, res) => {
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
   }
+};
+
+// Public (like refresh-token) so logout still revokes the session even if
+// the access token has already expired. Always 200 — see logoutService.
+const logout = async (req, res) => {
+  const result = await logoutService(req.body?.token);
+  res.json(result);
 };
 
 const sendOtp = async (req, res) => {
@@ -324,6 +331,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

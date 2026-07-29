@@ -18,4 +18,5 @@ export const ERROR_MESSAGES = {
   ACCOUNT_DEACTIVATED: { code: 'E116', message: 'This account has been deactivated' },
   ROLE_MISMATCH: { code: 'E117', message: 'This account is registered with a different role' },
   GOBHI_SIGNUP_FORBIDDEN: { code: 'E118', message: 'Staff accounts cannot be created through this endpoint' },
+  SESSION_REVOKED: { code: 'E120', message: 'Session revoked, please log in again' },
 };

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -23,6 +23,7 @@ import { uploadResume } from '../utils/gcsResume.js';
 router.post('/signup', signup);
 router.post('/login', login);
 router.post('/refresh-token', refreshToken);
+router.post('/logout', logout);
 router.delete('/delete', verifyToken, deleteUser);
 router.post('/forgot-password', async (req, res) => {
   // Only email/password accounts (gobhi/staff, via /admin/staff — customer

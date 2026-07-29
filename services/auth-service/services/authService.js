@@ -1,7 +1,7 @@
 import { hash, compare } from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import { generateAccessToken, generateRefreshToken } from '../utils/generateTokens.js';
+import { generateAccessToken } from '../utils/generateTokens.js';
+import { issueRefreshFamily, rotate as rotateRefreshToken, revokeByToken } from './refreshTokenService.js';
 import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
@@ -60,7 +60,7 @@ export async function signupService({ name, email, password, role, type, gobhiTy
       },
     });
     const accessToken = generateAccessToken(user.id, user.role, user.type);
-    const refreshToken = generateRefreshToken(user.id);
+    const refreshToken = await issueRefreshFamily(user.id);
     return {
       accessToken,
       refreshToken,
@@ -132,7 +132,7 @@ export async function loginService({ email, password }) {
     if (!isMatch) throw { status: 401, error: ERROR_MESSAGES.INVALID_CREDENTIALS.message, errorCode: ERROR_MESSAGES.INVALID_CREDENTIALS.code };
     if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
     const accessToken = generateAccessToken(user.id, user.role, user.type);
-    const refreshToken = generateRefreshToken(user.id);
+    const refreshToken = await issueRefreshFamily(user.id);
     return {
       accessToken,
       refreshToken,
@@ -172,16 +172,34 @@ export async function deleteUserService(userId) {
 export async function refreshTokenService(token) {
   if (!token) throw { status: 401, error: ERROR_MESSAGES.NO_REFRESH_TOKEN.message, errorCode: ERROR_MESSAGES.NO_REFRESH_TOKEN.code };
   try {
-    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-    const user = await prisma.user.findUnique({ where: { id: payload.id } });
+    // rotateRefreshToken verifies the JWT, looks up its RefreshToken row, and
+    // either rotates it (issuing a new one) or rejects it (revoked/reused/
+    // expired) — see refreshTokenService.js for the full state machine.
+    const { userId, refreshToken } = await rotateRefreshToken(token);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
     if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
     const accessToken = generateAccessToken(user.id, user.role, user.type);
-    return { accessToken };
+    return { accessToken, refreshToken };
   } catch (err) {
     if (err.status) throw err;
     throw { status: 403, error: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.message, errorCode: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.code };
   }
+}
+
+// Explicit logout — revokes the token's whole rotation family so it (and any
+// clone of it) stops working immediately, rather than waiting out its
+// natural 7-day expiry. Never throws on a bad/missing token: logout should
+// always succeed from the caller's point of view.
+export async function logoutService(token) {
+  if (token) {
+    try {
+      await revokeByToken(token);
+    } catch (err) {
+      console.error('logoutService: revoke failed (ignored)', err);
+    }
+  }
+  return { ok: true };
 }
 
 // OTP store lives in Postgres (OtpCode model, one row per phone) rather than
@@ -344,7 +362,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   // it already is, regardless of which app/site the login came through
   // (e.g. an existing partner logging in via the customer website).
   const accessToken = generateAccessToken(user.id, user.role, user.type);
-  const refreshToken = generateRefreshToken(user.id);
+  const refreshToken = await issueRefreshFamily(user.id);
 
   // Activation funnel: signup_completed (new) vs login_completed (returning).
   // distinct_id is the userId so this stitches with the client's pre-login
@@ -454,7 +472,7 @@ export async function googleSignInService({ idToken }) {
   }
 
   const accessToken = generateAccessToken(user.id, user.role, user.type);
-  const refreshToken = generateRefreshToken(user.id);
+  const refreshToken = await issueRefreshFamily(user.id);
   track('login_completed', user.id, { role: user.role, user_type: user.type, method: 'google' });
 
   return {
