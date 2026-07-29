@@ -311,6 +311,15 @@ export const getGymReviews = async (req, res) => {
   }
 };
 
+export const deleteReview = async (req, res) => {
+  try {
+    await gymService.deleteReview(parseInt(req.params.id), parseInt(req.params.reviewId));
+    res.json({ data: { success: true } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const approveGym = async (req, res) => {
   try {
     const { approved, reason } = req.body || {};

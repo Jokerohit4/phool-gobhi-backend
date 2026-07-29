@@ -593,6 +593,33 @@ export async function addReview(gymId, customerId, rating, comment) {
   return review;
 }
 
+// Admin-only moderation — removes a fake/abusive review and recomputes the
+// gym's rating so it doesn't keep reflecting a review nobody can see anymore.
+export async function deleteReview(gymId, reviewId) {
+  const review = await prisma.gymReview.findUnique({ where: { id: reviewId } });
+  if (!review || review.gymId !== gymId) {
+    throw { status: 404, error: 'Review not found' };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.gymReview.delete({ where: { id: reviewId } });
+
+    const aggregate = await tx.gymReview.aggregate({
+      where: { gymId },
+      _avg: { rating: true },
+      _count: true,
+    });
+
+    await tx.gym.update({
+      where: { id: gymId },
+      data: {
+        rating: aggregate._count > 0 ? aggregate._avg.rating : null,
+        ratingCount: aggregate._count,
+      },
+    });
+  });
+}
+
 export async function getGymReviews(gymId) {
   const gym = await prisma.gym.findUnique({ where: { id: gymId } });
   if (!gym || !gym.isActive || !gym.isApproved) {

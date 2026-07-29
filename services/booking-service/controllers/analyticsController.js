@@ -68,6 +68,14 @@ export const getTrend = async (req, res) => {
   }
 };
 
+export const getRetentionCohorts = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getRetentionCohorts(req.query.weeks) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getCityBreakdown = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getCityBreakdown(req.query.days) });
@@ -94,8 +102,15 @@ export const getSupplyHealth = async (req, res) => {
 
 export const getUserJourney = async (req, res) => {
   try {
-    const { distinctId, days } = req.query;
-    if (!distinctId) return res.status(400).json({ error: 'distinctId is required' });
+    const { distinctId: rawDistinctId, days } = req.query;
+    if (!rawDistinctId) return res.status(400).json({ error: 'distinctId is required' });
+
+    // rawDistinctId may be a phone number typed into the search box — resolve
+    // it to the real distinct_id first; a phone-shaped input that matches no
+    // account is a clean 404, not an empty journey for the raw phone string.
+    const distinctId = await analyticsQuery.resolveDistinctIdFromSearch(rawDistinctId);
+    if (!distinctId) return res.status(404).json({ error: `No user found for "${rawDistinctId}"` });
+
     const [journey, profile] = await Promise.all([
       analyticsQuery.getUserJourney(distinctId, days),
       analyticsQuery.getUserProfile(distinctId),

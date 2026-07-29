@@ -275,6 +275,15 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       };
     }
 
+    // Blocks the cheap version of self-booking fraud — a partner using their
+    // own login to book (and complete, and review) their own gym to inflate
+    // attendance/rating numbers. Doesn't catch a partner using a second
+    // account with a different phone number; that needs real multi-account
+    // detection, not an id comparison.
+    if (gym.partnerId === customerId) {
+      throw { status: 403, error: 'You cannot book a session at your own gym' };
+    }
+
     const capacity = gym.capacity;
     const amount = gym.resolvedSlotPrice ?? gym.sessionPrice;
 
@@ -628,8 +637,11 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
       };
     }
 
-    // 3. Verify status is 'confirmed'
-    if (booking.status !== 'confirmed') {
+    // 3. Verify status allows completion — 'started' is the normal case
+    // (attendance already verified by verifyAttendance/selfCheckIn); a
+    // still-'confirmed' booking is only completable via an explicit
+    // override (see step 5a) since no scan/self-check-in ever happened.
+    if (booking.status !== 'confirmed' && booking.status !== 'started') {
       throw {
         status: 400,
         error: 'Booking cannot be completed'
@@ -684,7 +696,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // devices) can't both pass the check above and both trigger a payout;
     // only one update actually matches and the loser sees count === 0.
     const { count } = await prisma.booking.updateMany({
-      where: { id: bookingId, status: 'confirmed' },
+      where: { id: bookingId, status: { in: ['confirmed', 'started'] } },
       data: { status: 'completed', ...attendanceData }
     });
     if (count === 0) {
@@ -828,6 +840,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
     const bookingUpdate = prisma.booking.update({
       where: { id: bookingId },
       data: {
+        status: 'started',
         attendedAt: new Date(),
         attendanceMethod,
         attendanceVerifiedBy: partnerId,
@@ -934,7 +947,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
     // attendanceMethod='qr_geofence_self' already says who/how.
     const updated = await prisma.booking.update({
       where: { id: booking.id },
-      data: { attendedAt: new Date(), attendanceMethod: 'qr_geofence_self' },
+      data: { status: 'started', attendedAt: new Date(), attendanceMethod: 'qr_geofence_self' },
     });
 
     track('attendance_verified', customerId, {
@@ -1349,7 +1362,7 @@ export async function getGymAttendanceSummary(gymId, partnerId) {
     if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
 
     const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
-    const bookedStatuses = { in: ['confirmed', 'completed'] };
+    const bookedStatuses = { in: ['confirmed', 'started', 'completed'] };
     const [today, weekly, monthly, yearly] = await Promise.all([
       attendanceBucket({ gymId, date: { gte: todayString, lte: todayString }, status: bookedStatuses }),
       attendanceBucket({ gymId, date: { gte: weekAgoString, lte: todayString }, status: bookedStatuses }),
@@ -1369,7 +1382,7 @@ export async function getGymAttendanceSummary(gymId, partnerId) {
 export async function getAdminAttendanceSummary(gymId) {
   try {
     const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
-    const bookedStatuses = { in: ['confirmed', 'completed'] };
+    const bookedStatuses = { in: ['confirmed', 'started', 'completed'] };
     const base = gymId ? { gymId } : {};
     const [today, weekly, monthly, yearly] = await Promise.all([
       attendanceBucket({ ...base, date: { gte: todayString, lte: todayString }, status: bookedStatuses }),
@@ -1395,7 +1408,7 @@ export async function getAdminAttendanceByGym(period = 'monthly') {
     const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
     const fromDateString = { today: todayString, weekly: weekAgoString, monthly: monthAgoString, yearly: yearAgoString }[period] || monthAgoString;
 
-    const where = { date: { gte: fromDateString, lte: todayString }, status: { in: ['confirmed', 'completed'] } };
+    const where = { date: { gte: fromDateString, lte: todayString }, status: { in: ['confirmed', 'started', 'completed'] } };
     const [bookedGroups, methodGroups] = await Promise.all([
       prisma.booking.groupBy({ by: ['gymId'], where, _count: true }),
       prisma.booking.groupBy({ by: ['gymId', 'attendanceMethod'], where, _count: true }),

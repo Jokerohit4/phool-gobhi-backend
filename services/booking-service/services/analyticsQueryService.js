@@ -312,6 +312,35 @@ export async function getUserJourney(distinctId, days) {
 // profile checks) — fails open to null, since an anon_xxx id, a manual test
 // id, or a lookup failure should never break the journey view, just leave the
 // identity section showing "unknown."
+// Same 10-digit normalization authService.js's normalizePhone uses, so
+// "+919354859197", "919354859197", and "9354859197" are all recognized as
+// phone input rather than a raw distinct_id.
+function normalizePhone(input) {
+  const digits = String(input || '').replace(/\D/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2)
+    : digits.length === 11 && digits.startsWith('0') ? digits.slice(1)
+    : digits;
+  return /^[6-9]\d{9}$/.test(local) ? local : null;
+}
+
+// Lets the admin portal's journey search box take a phone number in place of
+// a distinct_id — resolves it to the numeric user id via auth-service, since
+// analytics_events keys journeys on distinct_id (== auth user id for logged-in
+// users), not phone. Returns null (not the phone string) when nothing matches,
+// so the caller can tell "no such user" apart from "search by this id".
+export async function resolveDistinctIdFromSearch(rawInput) {
+  const phone = normalizePhone(rawInput);
+  if (!phone) return String(rawInput);
+  try {
+    const headers = { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) };
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/by-phone/${phone}`, { headers });
+    const user = res.data?.data || res.data;
+    return user?.id != null ? String(user.id) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 export async function getUserProfile(distinctId) {
   if (!/^\d+$/.test(String(distinctId))) return null;
   try {
@@ -347,4 +376,61 @@ export async function getTrend(metric, days) {
     [events, n]
   );
   return { days: rows };
+}
+
+// ---- Weekly cohort retention -------------------------------------------------
+//
+// Answers "of customers whose first booking landed in week W, what fraction
+// still booked again N weeks later" — the thing the funnel-only dashboards
+// can't answer (a healthy top-of-funnel can hide a leaky cohort). Deliberately
+// scoped to booking_confirmed only (not every event) since a repeat booking is
+// the one signal that actually means "came back and paid again," not just
+// "opened the app." Capped at 8 weeks of offset and the last `cohortWeeks`
+// cohorts so this stays a small table, not an unbounded triangle.
+const RETENTION_MAX_WEEK_OFFSET = 8;
+
+export async function getRetentionCohorts(cohortWeeks) {
+  const weeks = Number(cohortWeeks);
+  const n = Number.isFinite(weeks) && weeks > 0 && weeks <= 26 ? weeks : 12;
+  const { rows } = await query(
+    `WITH first_booking AS (
+       SELECT distinct_id, date_trunc('week', min(ts)) AS cohort_week
+         FROM analytics_events
+        WHERE event = 'booking_confirmed'
+        GROUP BY distinct_id
+     ),
+     activity AS (
+       SELECT distinct_id, date_trunc('week', ts) AS activity_week
+         FROM analytics_events
+        WHERE event = 'booking_confirmed'
+        GROUP BY distinct_id, date_trunc('week', ts)
+     )
+     SELECT
+       fb.cohort_week,
+       count(DISTINCT fb.distinct_id)::int AS cohort_size,
+       floor(extract(epoch FROM (a.activity_week - fb.cohort_week)) / 604800)::int AS week_offset,
+       count(DISTINCT a.distinct_id)::int AS active_users
+     FROM first_booking fb
+     JOIN activity a ON a.distinct_id = fb.distinct_id AND a.activity_week >= fb.cohort_week
+    WHERE fb.cohort_week > now() - ($1 || ' weeks')::interval
+    GROUP BY fb.cohort_week, week_offset
+   ORDER BY fb.cohort_week, week_offset`,
+    [n]
+  );
+
+  const cohortsByWeek = new Map();
+  for (const row of rows) {
+    if (row.week_offset > RETENTION_MAX_WEEK_OFFSET) continue;
+    const key = row.cohort_week.toISOString();
+    if (!cohortsByWeek.has(key)) {
+      cohortsByWeek.set(key, { cohortWeek: row.cohort_week, cohortSize: row.cohort_size, weeks: [] });
+    }
+    const cohort = cohortsByWeek.get(key);
+    cohort.weeks.push({
+      offset: row.week_offset,
+      activeUsers: row.active_users,
+      retentionRate: cohort.cohortSize ? row.active_users / cohort.cohortSize : null,
+    });
+  }
+  return { cohorts: [...cohortsByWeek.values()] };
 }

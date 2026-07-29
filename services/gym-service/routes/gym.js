@@ -50,6 +50,8 @@ router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
 router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 // Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)
 router.get('/admin/:id', requireRole('gobhi'), ctrl.getGymAdmin);
+// Review moderation — remove a fake/abusive review; recomputes the gym's rating.
+router.delete('/:id/reviews/:reviewId', requireRole('gobhi'), ctrl.deleteReview);
 
 // Customer routes
 router.post('/:id/reviews', requireRole('customer'), ctrl.addReview);

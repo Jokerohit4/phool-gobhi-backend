@@ -365,6 +365,13 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
 
   const { partnerId, price } = await fetchGymForSubscription(gymId, planType);
 
+  // Same self-booking-fraud guard as booking-service's createBooking — a
+  // partner shouldn't be able to buy a subscription to their own gym under
+  // their own login to inflate revenue/attendance numbers.
+  if (partnerId === customerId) {
+    throw { status: 403, error: 'You cannot subscribe to your own gym' };
+  }
+
   const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
   if (!wallet || Number(wallet.balance) < price) {
     throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price };
