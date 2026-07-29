@@ -98,6 +98,10 @@ model CancellationPolicySetting {
 enum BookingStatus {
   pending
   confirmed
+  // Attendance has been verified (partner scan or customer self-check-in) —
+  // the session is in progress but completeBooking hasn't been called yet.
+  // A booking in this state can no longer be cancelled/refunded.
+  started
   cancelled
   completed
 
