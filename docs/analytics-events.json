@@ -18,6 +18,7 @@
   "booking_created":             { "source": "server", "service": "booking-service" },
   "checkin_requested":           { "source": "server", "service": "booking-service" },
   "attendance_verified":         { "source": "server", "service": "booking-service", "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'" },
+  "attendance_slot_mismatch_confirmed": { "source": "server", "service": "booking-service", "since": "2026-07-29", "notes": "fires instead of attendance_verified when a partner scans a booking's QR before its session window opens and confirms shifting the slot time" },
 
   "wallet_topup_order_created":  { "source": "server", "service": "wallet-service" },
   "wallet_topup_succeeded":      { "source": "server", "service": "wallet-service" },
