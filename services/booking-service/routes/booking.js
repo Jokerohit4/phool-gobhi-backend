@@ -15,6 +15,7 @@ router.get('/public/attendance-stats', ctrl.getPublicAttendanceStats);
 router.post('/', requireRole('customer'), ctrl.createBooking);
 router.get('/mine', requireRole('customer'), ctrl.getMyBookings);
 router.get('/mine/attendance-summary', requireRole('customer'), ctrl.getMyAttendanceSummary);
+router.get('/mine/attendance-warnings', requireRole('customer'), ctrl.getMyAttendanceWarnings);
 router.get('/cancellation-policy', requireRole('customer'), ctrl.getCancellationPolicy);
 router.put('/cancellation-policy', requireRole('gobhi'), ctrl.updateCancellationPolicy);
 router.get('/gym/:gymId', requireRole('partner'), ctrl.getGymBookings);

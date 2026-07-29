@@ -44,3 +44,28 @@ export function isSessionActiveNow(date, startTime, endTime) {
   const now = Date.now();
   return now >= start - SELF_CHECKIN_EARLY_GRACE_MS && now <= end;
 }
+
+// True only for the "too early" side of the window (more than 15 min before
+// start) — used by verifyAttendance to offer a confirm-and-shift flow for
+// early scans while still hard-rejecting scans after the session has ended.
+export function isBeforeSessionWindow(date, startTime) {
+  return Date.now() < slotInstantUTC(date, startTime) - SELF_CHECKIN_EARLY_GRACE_MS;
+}
+
+export function isSessionEnded(date, endTime) {
+  return Date.now() > slotInstantUTC(date, endTime);
+}
+
+// Computes a replacement startTime/endTime (same duration as the original
+// slot) anchored to the current IST wall-clock time. Only ever called after
+// isBeforeSessionWindow has confirmed `now` is still on the same IST
+// calendar day as `date`, so no midnight-rollover handling is needed.
+export function shiftedSlotForNow(date, startTime, endTime) {
+  const durationMs = slotInstantUTC(date, endTime) - slotInstantUTC(date, startTime);
+  const pad = (n) => String(n).padStart(2, '0');
+  const nowIst = new Date(Date.now() + IST_OFFSET_MS);
+  const newStartTime = `${pad(nowIst.getUTCHours())}:${pad(nowIst.getUTCMinutes())}`;
+  const newEndIst = new Date(Date.now() + durationMs + IST_OFFSET_MS);
+  const newEndTime = `${pad(newEndIst.getUTCHours())}:${pad(newEndIst.getUTCMinutes())}`;
+  return { newStartTime, newEndTime };
+}

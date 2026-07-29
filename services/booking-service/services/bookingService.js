@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, todayDateStringIST } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 
@@ -53,6 +53,19 @@ const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT
 // async (internally cached/refreshed, so this is cheap).
 async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
+}
+
+// Best-effort customer name lookup for the early-scan confirmation dialog —
+// same single-user internal call pattern as notifyCustomer.js. Never blocks
+// the flow: a lookup failure just falls back to a generic label.
+async function fetchCustomerName(customerId) {
+  try {
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    const user = res.data?.data || res.data;
+    return user?.name || null;
+  } catch (_) {
+    return null;
+  }
 }
 
 // Denormalizes gym city onto analytics events (booking/wallet events
@@ -730,7 +743,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
 // happened" signal completeBooking now requires. Idempotent: re-scanning an
 // already-verified booking just returns its existing verification instead of
 // erroring, since a camera can fire multiple detections for one physical scan.
-export async function verifyAttendance(bookingId, gymId, partnerId, { method = 'qr_scan', qrToken } = {}) {
+export async function verifyAttendance(bookingId, gymId, partnerId, { method = 'qr_scan', qrToken, confirmSlotShift = false } = {}) {
   try {
     const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) throw { status: 404, error: 'Booking not found' };
@@ -756,10 +769,10 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
     const todayString = todayDateStringIST();
     if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
 
-    if (!isSessionActiveNow(booking.date, booking.startTime, booking.endTime)) {
-      throw { status: 400, error: 'This session is not currently in progress — you can only verify attendance during the session window' };
-    }
-
+    // Idempotency check runs before any window check — a camera can fire
+    // multiple detections for one physical scan, and re-scanning an
+    // already-verified booking must never fail just because the window has
+    // since closed.
     if (booking.attendedAt) {
       return {
         bookingId: booking.id,
@@ -770,6 +783,33 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
     }
 
     if (booking.status !== 'confirmed') throw { status: 400, error: 'Booking cannot be checked in' };
+
+    // A scan after the session's end time is simply too late — no
+    // confirm-and-continue option, unlike the early case below.
+    if (isSessionEnded(booking.date, booking.endTime)) {
+      throw { status: 400, error: 'This session has already ended', code: 'SESSION_ENDED' };
+    }
+
+    let slotShift = null;
+    if (isBeforeSessionWindow(booking.date, booking.startTime)) {
+      const proposed = shiftedSlotForNow(booking.date, booking.startTime, booking.endTime);
+      if (!confirmSlotShift) {
+        const customerName = await fetchCustomerName(booking.customerId);
+        throw {
+          status: 409,
+          error: 'This is a different slot time than expected.',
+          code: 'SLOT_TIME_MISMATCH',
+          confirmation: {
+            customerName: customerName || 'This customer',
+            currentStartTime: booking.startTime,
+            currentEndTime: booking.endTime,
+            newStartTime: proposed.newStartTime,
+            newEndTime: proposed.newEndTime,
+          },
+        };
+      }
+      slotShift = proposed;
+    }
 
     // A real camera scan must present a valid signed token — a bare gymId is
     // no longer enough to prove a scan actually happened. partner-web has no
@@ -785,12 +825,37 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
       attendanceMethod = 'qr_scan';
     }
 
-    const updated = await prisma.booking.update({
+    const bookingUpdate = prisma.booking.update({
       where: { id: bookingId },
-      data: { attendedAt: new Date(), attendanceMethod, attendanceVerifiedBy: partnerId },
+      data: {
+        attendedAt: new Date(),
+        attendanceMethod,
+        attendanceVerifiedBy: partnerId,
+        ...(slotShift
+          ? { startTime: slotShift.newStartTime, endTime: slotShift.newEndTime, slotShiftWarning: true }
+          : {}),
+      },
     });
 
-    track('attendance_verified', booking.customerId, {
+    const [updated] = slotShift
+      ? await prisma.$transaction([
+          bookingUpdate,
+          prisma.attendanceWarning.create({
+            data: {
+              bookingId: booking.id,
+              customerId: booking.customerId,
+              gymId,
+              date: booking.date,
+              originalStartTime: booking.startTime,
+              originalEndTime: booking.endTime,
+              newStartTime: slotShift.newStartTime,
+              newEndTime: slotShift.newEndTime,
+            },
+          }),
+        ])
+      : [await bookingUpdate];
+
+    track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
     });
 
@@ -799,6 +864,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
       attendedAt: updated.attendedAt,
       attendanceMethod: updated.attendanceMethod,
       alreadyVerified: false,
+      ...(slotShift ? { slotShifted: true, newStartTime: slotShift.newStartTime, newEndTime: slotShift.newEndTime } : {}),
     };
   } catch (err) {
     if (err.error) throw err;
@@ -1038,11 +1104,17 @@ export async function getGymBookings(gymId, partnerId) {
       } catch (_) { /* leave customerMap empty — graceful degradation */ }
     }
 
-    return bookings.map(b => ({
-      ...b,
-      customerName: customerMap[b.customerId]?.name ?? null,
-      customerPhotoUrl: customerMap[b.customerId]?.photoUrl ?? null,
-    }));
+    // slotShiftWarning is customer-facing only — a partner already saw and
+    // confirmed the shift at scan time, and must never see a "warning" tally
+    // against a customer here.
+    return bookings.map(b => {
+      const { slotShiftWarning, ...safe } = b;
+      return {
+        ...safe,
+        customerName: customerMap[b.customerId]?.name ?? null,
+        customerPhotoUrl: customerMap[b.customerId]?.photoUrl ?? null,
+      };
+    });
   } catch (err) {
     if (err.error) throw err;
     console.error('getGymBookings error:', err);
@@ -1388,6 +1460,46 @@ export async function getCustomerAttendanceSummary(customerId) {
     };
   } catch (err) {
     console.error('getCustomerAttendanceSummary error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Customer-facing warning log — one row per early-scan confirmation (see
+// verifyAttendance's SLOT_TIME_MISMATCH branch). Never surfaced to
+// partners/admin.
+export async function getMyAttendanceWarnings(customerId) {
+  try {
+    const warnings = await prisma.attendanceWarning.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const uniqueGymIds = [...new Set(warnings.map((w) => w.gymId))];
+    const gymNameById = {};
+    await Promise.all(uniqueGymIds.map(async (gymId) => {
+      try {
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        const gym = gymRes.data?.data || gymRes.data;
+        gymNameById[gymId] = gym?.name || null;
+      } catch (_) { /* leave gym name null for this id */ }
+    }));
+
+    return {
+      count: warnings.length,
+      warnings: warnings.map((w) => ({
+        bookingId: w.bookingId,
+        gymId: w.gymId,
+        gymName: gymNameById[w.gymId] ?? null,
+        date: w.date,
+        originalStartTime: w.originalStartTime,
+        originalEndTime: w.originalEndTime,
+        newStartTime: w.newStartTime,
+        newEndTime: w.newEndTime,
+        createdAt: w.createdAt,
+      })),
+    };
+  } catch (err) {
+    console.error('getMyAttendanceWarnings error:', err);
     throw { status: 500, error: err.message || 'Server error' };
   }
 }

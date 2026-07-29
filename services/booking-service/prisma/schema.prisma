@@ -56,6 +56,12 @@ model Booking {
   attendanceVerifiedBy     Int?
   attendanceOverrideReason String?
 
+  // True once a partner scanned this booking's QR before its session window
+  // opened and chose to proceed anyway — startTime/endTime were shifted to
+  // match the actual scan time (see AttendanceWarning for the original
+  // values). Customer-facing only; never exposed on partner-facing reads.
+  slotShiftWarning Boolean @default(false)
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -108,6 +114,33 @@ enum AttendanceMethod {
   // authenticated session + a real active booking + location, same as any
   // other verification path.
   qr_geofence_self
+  // Partner-web manual "Verify attendance" (no camera there) — was being
+  // written without a matching enum value until this was added; see
+  // migration 20260729xxxxxx_add_attendance_warning.
+  manual_verify
 
+  @@schema("booking")
+}
+
+// One row per early-scan confirmation: a partner scanned this booking's QR
+// before its session window opened and chose to proceed, shifting the
+// booking's startTime/endTime to match the actual scan time. Lives in
+// booking-service (not denormalized onto auth-service's User) following this
+// codebase's existing pattern of a service owning its own per-user counters
+// (e.g. wallet balance stays in wallet-service). Customer-facing only.
+model AttendanceWarning {
+  id                Int      @id @default(autoincrement())
+  bookingId         Int
+  customerId        Int
+  gymId             Int
+  date              String
+  originalStartTime String
+  originalEndTime   String
+  newStartTime      String
+  newEndTime        String
+  createdAt         DateTime @default(now())
+
+  @@index([customerId])
+  @@index([bookingId])
   @@schema("booking")
 }

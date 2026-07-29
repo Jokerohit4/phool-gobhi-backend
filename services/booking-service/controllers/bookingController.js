@@ -158,11 +158,20 @@ export const verifyAttendance = async (req, res) => {
     const bookingId = parseInt(req.params.id);
     const gymId = parseInt(req.body.gymId);
     if (isNaN(gymId)) return res.status(400).json({ error: 'gymId is required' });
-    const { qrToken, method } = req.body;
-    const result = await bookingService.verifyAttendance(bookingId, gymId, req.userId, { method, qrToken });
+    const { qrToken, method, confirmSlotShift } = req.body;
+    const result = await bookingService.verifyAttendance(bookingId, gymId, req.userId, { method, qrToken, confirmSlotShift: !!confirmSlotShift });
     res.json({ data: result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, confirmation: err.confirmation });
+  }
+};
+
+export const getMyAttendanceWarnings = async (req, res) => {
+  try {
+    const result = await bookingService.getMyAttendanceWarnings(req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 
