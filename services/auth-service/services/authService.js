@@ -196,7 +196,7 @@ export async function refreshTokenService(token) {
 // two client apps (which formatted phone differently) could each reach a
 // different account for the same real phone number. Returns null if the
 // input isn't a valid 10-digit Indian mobile number.
-function normalizePhone(input) {
+export function normalizePhone(input) {
   const digits = String(input || '').replace(/\D/g, '');
   const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2)
     : digits.length === 11 && digits.startsWith('0') ? digits.slice(1)
