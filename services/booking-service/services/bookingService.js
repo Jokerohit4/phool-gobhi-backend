@@ -226,16 +226,9 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
   }
 }
 
-// Flips a reservation to `confirmed`, tracks the funnel event, and fires
-// notifications. Shared by createBooking's normal path and its
-// debit-call-error recovery path (where the debit turned out to have
-// actually landed despite the call throwing) so both stay in sync.
-async function confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId, city }) {
-  const booking = normalizeBookingMoney(await prisma.booking.update({
-    where: { id: reservation.id },
-    data: { status: 'confirmed' },
-  }));
-
+// Fires notifications when a booking is confirmed by the partner.
+// Separate from the payment-success path so partners have a chance to review.
+async function notifyOnConfirmation(booking, { customerId, gymId, date, startTime, subscriptionId, city }) {
   track('booking_confirmed', customerId, {
     booking_id: booking.id, gym_id: gymId, amount: booking.amount, date, start_time: startTime,
     via: subscriptionId ? 'subscription' : 'wallet', city,
@@ -244,11 +237,9 @@ async function confirmReservation(reservation, { customerId, gymId, date, startT
   notifyPartner(gymId, booking).catch(() => {});
   notifyCustomer(customerId, {
     title: 'Booking confirmed',
-    body: `Your session on ${booking.date} at ${booking.startTime} is booked. ₹${booking.amount} debited.`,
+    body: `Your session on ${booking.date} at ${booking.startTime} is confirmed. ₹${booking.amount} debited.`,
     data: { type: 'booking_confirmed', bookingId: booking.id, date: booking.date },
   }).catch(() => {});
-
-  return booking;
 }
 
 export async function createBooking(customerId, { gymId, date, startTime, endTime }) {
@@ -390,28 +381,37 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         } catch (_) {
           // Can't tell right now — fall through and release below. If it
           // did land, the slot stays reserved (`pending`) and
-          // reconcileStalePendingBooking will confirm it (never delete a
-          // charged booking) once it's next looked at.
+          // reconcileStalePendingBooking will handle it if needed.
         }
 
-        if (actuallyCharged) {
-          return confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId: null, city: gym.city });
+        if (!actuallyCharged) {
+          // Genuinely not charged — release the reservation so the slot goes
+          // back to looking untouched.
+          await prisma.booking.delete({ where: { id: reservation.id } }).catch(() => {});
+          track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount, city: gym.city });
+          throw {
+            status: 400,
+            error: err.response?.data?.error || 'Insufficient wallet balance'
+          };
         }
-
-        // Genuinely not charged — release the reservation so the slot goes
-        // back to looking untouched.
-        await prisma.booking.delete({ where: { id: reservation.id } }).catch(() => {});
-        track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount, city: gym.city });
-        throw {
-          status: 400,
-          error: err.response?.data?.error || 'Insufficient wallet balance'
-        };
+        // else: actuallyCharged, so booking stays pending (charged but not yet confirmed by partner)
       }
     }
 
-    // 5-6. Payment succeeded (or wasn't needed) — confirm the reservation,
-    // track the funnel event, and fire notifications.
-    return confirmReservation(reservation, { customerId, gymId, date, startTime, subscriptionId, city: gym.city });
+    // 5. Payment succeeded (or wasn't needed) — booking stays pending,
+    // awaiting partner confirmation. Notify customer that payment was taken.
+    track('booking_created', customerId, {
+      booking_id: reservation.id, gym_id: gymId, amount: reservation.amount, date, start_time: startTime,
+      via: subscriptionId ? 'subscription' : 'wallet', city: gym.city,
+    });
+
+    notifyCustomer(customerId, {
+      title: 'Booking request sent',
+      body: `Your session on ${reservation.date} at ${reservation.startTime} is pending gym confirmation. ₹${reservation.amount} debited.`,
+      data: { type: 'booking_created', bookingId: reservation.id, date: reservation.date },
+    }).catch(() => {});
+
+    return normalizeBookingMoney(reservation);
   } catch (err) {
     if (err.error) throw err;
     console.error('createBooking error:', err);
@@ -489,11 +489,11 @@ export async function cancelBooking(bookingId, customerId) {
       };
     }
 
-    // 2a. A booking stuck at `pending` (see reconcileStalePendingBooking) has
-    // to be resolved before we can decide whether "cancel" even means
-    // anything for it — we can't safely refund a booking we don't yet know
-    // was actually charged.
-    if (booking.status === 'pending') {
+    // 2a. A booking stuck at `pending` (see reconcileStalePendingBooking) can
+    // be safely cancelled as long as we know whether the customer was charged.
+    // For stale pending bookings, check; for fresh ones, we assume they'll
+    // resolve normally (partner will confirm or customer's wallet will reject).
+    if (booking.status === 'pending' && isStalePending(booking)) {
       const reconciled = await reconcileStalePendingBooking(booking);
       if (!reconciled) {
         // Released: never charged (or already resolved) — nothing to cancel.
@@ -506,18 +506,21 @@ export async function cancelBooking(bookingId, customerId) {
       }
     }
 
-    // 2b. Tiered cancellation window: blocked inside 1 hour of the slot;
-    // otherwise the refund rate depends on how much notice was given.
-    // Checked before the status flip below — a blocked cancellation must
-    // never touch the booking's status at all.
-    const hoursUntil = hoursUntilSlot(booking.date, booking.startTime);
-    const refundRate = await cancellationRefundRate(hoursUntil);
-    if (refundRate === null) {
-      throw { status: 400, error: 'Bookings cannot be cancelled within 1 hour of the session' };
+    // 2b. Tiered cancellation window for confirmed bookings: blocked inside
+    // 1 hour of the slot; otherwise the refund rate depends on how much notice
+    // was given. For pending bookings (not yet confirmed by gym), allow
+    // cancellation anytime with full refund since gym hasn't committed resources.
+    let refundRate = 1.0;
+    if (booking.status === 'confirmed') {
+      const hoursUntil = hoursUntilSlot(booking.date, booking.startTime);
+      refundRate = await cancellationRefundRate(hoursUntil);
+      if (refundRate === null) {
+        throw { status: 400, error: 'Bookings cannot be cancelled within 1 hour of the session' };
+      }
     }
 
-    // 3-4. Atomically flip confirmed -> cancelled first, gating the refund on
-    // this single conditional update succeeding. Previously the wallet
+    // 3-4. Atomically flip (pending|confirmed) -> cancelled first, gating the
+    // refund on this single conditional update succeeding. Previously the wallet
     // credit ran BEFORE this status flip: if the process crashed in between,
     // the booking was left `confirmed` but already refunded, and since
     // `status === 'confirmed'` was the only guard elsewhere, it could later
@@ -525,7 +528,7 @@ export async function cancelBooking(bookingId, customerId) {
     // customer credit). `updateMany` + `count === 1` makes a concurrent
     // second cancel attempt no-op instead of double-crediting.
     const { count } = await prisma.booking.updateMany({
-      where: { id: bookingId, customerId, status: 'confirmed' },
+      where: { id: bookingId, customerId, status: { in: ['pending', 'confirmed'] } },
       data: { status: 'cancelled' },
     });
     if (count !== 1) {
@@ -749,6 +752,10 @@ export async function verifyAttendance(bookingId, gymId, partnerId) {
 
     const todayString = todayDateStringIST();
     if (booking.date !== todayString) throw { status: 400, error: 'This session is not scheduled for today' };
+
+    if (!isSessionActiveNow(booking.date, booking.startTime, booking.endTime)) {
+      throw { status: 400, error: 'This session is not currently in progress — you can only verify attendance during the session window' };
+    }
 
     if (booking.attendedAt) {
       return {
@@ -987,14 +994,115 @@ export async function getGymBookings(gymId, partnerId) {
     }
     if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
 
-    const bookings = await prisma.booking.findMany({
+    let bookings = await prisma.booking.findMany({
       where: { gymId },
       orderBy: { createdAt: 'desc' }
     });
-    return bookings.map(normalizeBookingMoney);
+    bookings = bookings.map(normalizeBookingMoney);
+
+    // Enrich with customer name + photo so partner sees a real person, not
+    // just "Member #123". Phone is deliberately excluded — partners must
+    // never see a customer's phone number.
+    const uniqueCustomerIds = [...new Set(bookings.map(b => b.customerId))];
+    const customerMap = {};
+    if (uniqueCustomerIds.length) {
+      try {
+        const batchRes = await axios.post(
+          `${AUTH_SERVICE_URL}/internal/users/batch`,
+          { ids: uniqueCustomerIds },
+          await internalHeadersFor(AUTH_SERVICE_URL),
+        );
+        const users = batchRes.data?.data || [];
+        for (const u of users) {
+          customerMap[u.id] = { name: u.name || null, photoUrl: u.profileImageUrl || null };
+        }
+      } catch (_) { /* leave customerMap empty — graceful degradation */ }
+    }
+
+    return bookings.map(b => ({
+      ...b,
+      customerName: customerMap[b.customerId]?.name ?? null,
+      customerPhotoUrl: customerMap[b.customerId]?.photoUrl ?? null,
+    }));
   } catch (err) {
     if (err.error) throw err;
     console.error('getGymBookings error:', err);
+    throw {
+      status: 500,
+      error: err.message || 'Server error'
+    };
+  }
+}
+
+export async function confirmBooking(bookingId, gymId, partnerId) {
+  try {
+    // 1. Find booking
+    const booking = normalizeBookingMoney(await prisma.booking.findUnique({
+      where: { id: bookingId }
+    }));
+
+    if (!booking) {
+      throw {
+        status: 404,
+        error: 'Booking not found'
+      };
+    }
+
+    // 2. Verify booking belongs to gym
+    if (booking.gymId !== gymId) {
+      throw {
+        status: 403,
+        error: 'Forbidden'
+      };
+    }
+
+    // 3. Verify partner owns this gym
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+    // 4. Verify status is 'pending'
+    if (booking.status !== 'pending') {
+      throw {
+        status: 400,
+        error: booking.status === 'confirmed'
+          ? 'This booking is already confirmed'
+          : `Booking cannot be confirmed (status: ${booking.status})`
+      };
+    }
+
+    // 5. Atomically flip pending -> confirmed
+    const { count } = await prisma.booking.updateMany({
+      where: { id: bookingId, status: 'pending' },
+      data: { status: 'confirmed' },
+    });
+    if (count !== 1) {
+      throw {
+        status: 400,
+        error: 'Booking cannot be confirmed'
+      };
+    }
+    const confirmedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
+
+    // 6. Fire notifications
+    await notifyOnConfirmation(confirmedBooking, {
+      customerId: booking.customerId,
+      gymId,
+      date: booking.date,
+      startTime: booking.startTime,
+      subscriptionId: booking.subscriptionId,
+      city: gym.city,
+    });
+
+    return confirmedBooking;
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('confirmBooking error:', err);
     throw {
       status: 500,
       error: err.message || 'Server error'
@@ -1122,16 +1230,18 @@ function attendanceDateBuckets() {
 // sessions, so each bucket's upper bound must be capped at today — otherwise
 // future confirmed bookings would wrongly inflate the no-show count.
 async function attendanceBucket(where) {
-  const [booked, scanned, manualOverride] = await Promise.all([
+  const [booked, scanned, selfCheckin, manualOverride] = await Promise.all([
     prisma.booking.count({ where }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_scan' } }),
+    prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_geofence_self' } }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'manual_override' } }),
   ]);
-  const noShow = booked - scanned - manualOverride;
+  const verified = scanned + selfCheckin + manualOverride;
+  const noShow = booked - verified;
   return {
-    booked, scanned, manualOverride, noShow,
+    booked, scanned, selfCheckin, manualOverride, noShow,
     verifiedAttendanceRate: booked ? scanned / booked : null,
-    completionRate: booked ? (scanned + manualOverride) / booked : null,
+    completionRate: booked ? verified / booked : null,
   };
 }
 
@@ -1208,14 +1318,17 @@ export async function getAdminAttendanceByGym(period = 'monthly') {
     const rows = bookedGroups.map((g) => {
       const methods = methodByGym[g.gymId] || {};
       const scanned = methods.qr_scan || 0;
+      const selfCheckin = methods.qr_geofence_self || 0;
       const manualOverride = methods.manual_override || 0;
       const booked = g._count;
+      const verified = scanned + selfCheckin + manualOverride;
       return {
         gymId: g.gymId,
         booked,
         scanned,
+        selfCheckin,
         manualOverride,
-        noShow: booked - scanned - manualOverride,
+        noShow: booked - verified,
         verifiedAttendanceRate: booked ? scanned / booked : null,
       };
     });

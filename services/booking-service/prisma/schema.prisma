@@ -34,7 +34,7 @@ model Booking {
   // to paying out the full `amount` in that case.
   commissionPct    Decimal?      @db.Decimal(5, 2)
   partnerShare     Decimal?      @db.Decimal(19, 2)
-  status           BookingStatus @default(confirmed)
+  status           BookingStatus @default(pending)
   walletTxId       Int?
   // Set when this booking was covered by an active GymSubscription instead of
   // a per-session wallet debit — null means the normal paid flow (unchanged).

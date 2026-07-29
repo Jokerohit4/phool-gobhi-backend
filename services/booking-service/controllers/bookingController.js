@@ -175,3 +175,15 @@ export const selfCheckIn = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
   }
 };
+
+export const confirmBooking = async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id);
+    const gymId = parseInt(req.query.gymId || req.body.gymId);
+    if (isNaN(gymId)) return res.status(400).json({ error: 'gymId is required' });
+    const booking = await bookingService.confirmBooking(bookingId, gymId, req.userId);
+    res.json({ data: booking });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

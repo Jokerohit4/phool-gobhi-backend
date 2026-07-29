@@ -15,6 +15,7 @@
   "booking_failed":              { "source": "server", "service": "booking-service" },
   "booking_cancelled":           { "source": "server", "service": "booking-service" },
   "booking_completed":           { "source": "server", "service": "booking-service" },
+  "booking_created":             { "source": "server", "service": "booking-service" },
   "checkin_requested":           { "source": "server", "service": "booking-service" },
   "attendance_verified":         { "source": "server", "service": "booking-service", "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'" },
 
