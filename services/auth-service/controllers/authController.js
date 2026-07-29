@@ -1,6 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
-import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService } from '../services/authService.js';
+import semver from 'semver';
+import { signupService, loginService, deleteUserService, refreshTokenService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 
@@ -112,6 +113,83 @@ const getOtpConfig = (req, res) => {
   res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
 };
 
+// Default config used whenever no AppVersionSetting row exists yet — both
+// apps ship with this inert (minVersion/latestVersion match the current
+// build) so the feature does nothing until an admin deliberately raises a
+// version in the admin portal.
+const DEFAULT_APP_VERSION_CONFIG = {
+  customer: {
+    android: { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: 'https://play.google.com/store/apps/details?id=in.phoolgobi.customer', message: '' },
+    ios: { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' },
+  },
+  partner: {
+    android: { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: 'https://play.google.com/store/apps/details?id=in.phoolgobi.partner', message: '' },
+    ios: { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' },
+  },
+};
+
+async function loadAppVersionConfig() {
+  const row = await prisma.appVersionSetting.findUnique({ where: { id: 1 } });
+  return row?.config || DEFAULT_APP_VERSION_CONFIG;
+}
+
+// Public — called by both apps on startup, before login, to decide whether
+// to hard-block (forceUpdate) or show a dismissible nudge (updateAvailable).
+// Never throws on a bad/missing version — always fails open (both flags
+// false) so a malformed query string never locks anyone out.
+const getAppConfig = async (req, res) => {
+  const { app, platform, version } = req.query;
+  let forceUpdate = false;
+  let updateAvailable = false;
+  let entry = { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' };
+  try {
+    const config = await loadAppVersionConfig();
+    entry = config?.[app]?.[platform] || entry;
+    const coerced = semver.valid(semver.coerce(version));
+    if (coerced) {
+      forceUpdate = semver.lt(coerced, entry.minVersion);
+      updateAvailable = semver.lt(coerced, entry.latestVersion);
+    }
+  } catch (err) {
+    console.error('getAppConfig error:', err);
+  }
+  res.json({
+    forceUpdate,
+    updateAvailable,
+    minVersion: entry.minVersion,
+    latestVersion: entry.latestVersion,
+    updateUrl: entry.updateUrl,
+    message: entry.message,
+  });
+};
+
+// gobhi-only — admin portal's raw view/edit of the full config blob.
+const getAppConfigAdmin = async (req, res) => {
+  try {
+    const config = await loadAppVersionConfig();
+    res.json({ data: config });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateAppConfigAdmin = async (req, res) => {
+  try {
+    const config = req.body?.config;
+    if (!config || typeof config !== 'object') {
+      return res.status(400).json({ error: 'config is required' });
+    }
+    const updated = await prisma.appVersionSetting.upsert({
+      where: { id: 1 },
+      create: { id: 1, config, updatedBy: req.user.id },
+      update: { config, updatedBy: req.user.id },
+    });
+    res.json({ data: updated.config });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const listStaff = async (req, res) => {
   try {
     const staff = await listStaffService();
@@ -184,6 +262,23 @@ const getUserInternal = async (req, res) => {
   }
 };
 
+// Backs the admin portal's user-journey phone search (analytics-service has
+// no User table of its own, only a distinct_id) — normalizes the same way
+// login/OTP does so "+919354859197", "919354859197", and "9354859197" all
+// resolve to the one account, then hands back just the id (the caller
+// re-fetches the fuller profile via getUserInternal with that id).
+const getUserByPhoneInternal = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.params.phone);
+    if (!phone) return res.status(400).json({ error: 'Invalid phone number' });
+    const user = await prisma.user.findUnique({ where: { phone } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ id: user.id, name: user.name, phone: user.phone });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 // Internal: batched display-field lookup so a caller resolving N user ids
 // (e.g. buddy-service rendering a discovery page/matches list, or
 // wallet-service enriching partner-balance/payout admin views) can do it in
@@ -229,6 +324,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, updateMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

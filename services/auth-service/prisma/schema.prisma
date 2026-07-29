@@ -134,6 +134,20 @@ model OtpCode {
   @@schema("auth")
 }
 
+// Singleton row (id always 1) — admin-portal-editable min/latest app
+// versions per app (customer/partner) + platform (android/ios), read by
+// GET /api/auth/app-config so both Flutter apps can force- or soft-update
+// on startup without a redeploy. Same pattern as booking-service's
+// CancellationPolicySetting.
+model AppVersionSetting {
+  id        Int      @id @default(1)
+  config    Json
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
+
+  @@schema("auth")
+}
+
 enum GobhiType {
   trainer
   cleaner

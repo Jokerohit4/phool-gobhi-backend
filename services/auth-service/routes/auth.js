@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getMe, updateMe, getUserInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -36,9 +36,15 @@ router.post('/verify-otp', verifyOtp);
 router.post('/verify-firebase-token', verifyFirebaseToken);
 router.post('/google', googleSignIn);
 router.get('/otp-config', getOtpConfig);
+// Force/soft-update check — public, called by both apps before login.
+router.get('/app-config', getAppConfig);
+// Admin portal's raw config view/edit (Settings page)
+router.get('/app-config/admin', requireGobhi, getAppConfigAdmin);
+router.put('/app-config/admin', requireGobhi, updateAppConfigAdmin);
 router.get('/me', verifyToken, getMe);
 router.patch('/me', verifyToken, updateMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
+router.get('/internal/by-phone/:phone', requireInternal, getUserByPhoneInternal);
 router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 router.post('/fcm-token', verifyToken, updateFcmToken);
 
