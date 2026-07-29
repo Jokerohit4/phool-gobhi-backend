@@ -166,6 +166,13 @@ export const payoutPartner = async (req, res) => {
 
 export const createTopUpOrder = async (req, res) => {
   try {
+    // Partner wallets are credited only from the platform's share of
+    // completed bookings/subscriptions — dispersal to partners happens
+    // manually via payoutPartner. Partners must never be able to add their
+    // own money in, so top-up is customer-only.
+    if (req.userRole === 'partner') {
+      return res.status(403).json({ error: 'Partner wallets cannot be topped up. Balance is credited automatically from completed bookings.' });
+    }
     const { amount } = req.body;
     const userId = req.userId; // from JWT middleware
 
@@ -210,6 +217,12 @@ export const createTopUpOrder = async (req, res) => {
 
 export const verifyAndCreditWallet = async (req, res) => {
   try {
+    // Defense-in-depth alongside the same guard in createTopUpOrder — a
+    // partner should never be able to credit their own wallet even with a
+    // forged/leaked orderId.
+    if (req.userRole === 'partner') {
+      return res.status(403).json({ error: 'Partner wallets cannot be topped up. Balance is credited automatically from completed bookings.' });
+    }
     const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
     const userId = req.userId;
 

@@ -1067,23 +1067,34 @@ export async function getGymSalesSummary(gymId, partnerId) {
       _sum: { amount: true }
     });
 
+    // `total` stays the gross session price (unchanged, existing consumers
+    // rely on it). `net` is what the partner actually gets paid — the same
+    // commission-adjusted figure completeBooking credits to the partner's
+    // wallet (see BOOKING_COMMISSION_PERCENT above) — so a partner's
+    // "revenue" figure always matches their wallet balance.
+    const netOf = (gross) => Math.round(gross * (1 - BOOKING_COMMISSION_PERCENT / 100) * 100) / 100;
     return {
       today: {
         count: todayStats._count,
-        total: Number(todayStats._sum.amount) || 0
+        total: Number(todayStats._sum.amount) || 0,
+        net: netOf(Number(todayStats._sum.amount) || 0)
       },
       weekly: {
         count: weeklyStats._count,
-        total: Number(weeklyStats._sum.amount) || 0
+        total: Number(weeklyStats._sum.amount) || 0,
+        net: netOf(Number(weeklyStats._sum.amount) || 0)
       },
       monthly: {
         count: monthlyStats._count,
-        total: Number(monthlyStats._sum.amount) || 0
+        total: Number(monthlyStats._sum.amount) || 0,
+        net: netOf(Number(monthlyStats._sum.amount) || 0)
       },
       yearly: {
         count: yearlyStats._count,
-        total: Number(yearlyStats._sum.amount) || 0
-      }
+        total: Number(yearlyStats._sum.amount) || 0,
+        net: netOf(Number(yearlyStats._sum.amount) || 0)
+      },
+      commissionPct: BOOKING_COMMISSION_PERCENT
     };
   } catch (err) {
     if (err.error) throw err;
