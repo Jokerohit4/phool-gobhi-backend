@@ -1236,77 +1236,46 @@ export async function getGymSalesSummary(gymId, partnerId) {
     const monthAgoString = toDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000));
     const yearAgoString = toDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000));
 
-    // Get today's stats
-    const todayStats = await prisma.booking.aggregate({
-      where: {
-        gymId,
-        date: todayString,
-        status: 'completed'
-      },
-      _count: true,
-      _sum: { amount: true }
+    // One fetch, bucketed in JS — cheaper than 5 near-identical aggregate
+    // queries, and (more importantly) lets `net` be summed from each
+    // booking's own stored `partnerShare` — the exact figure completeBooking
+    // actually credited — instead of re-deriving an approximate net by
+    // applying today's flat BOOKING_COMMISSION_PERCENT to the gross sum.
+    // That approximation drifted from the real wallet balance two ways: a
+    // booking's snapshotted commissionPct can differ from the CURRENT
+    // percent if it's ever changed, and subscription-covered bookings
+    // (subscriptionId set) get ZERO wallet credit at completion — the
+    // partner was already paid upfront at subscription purchase — so
+    // lumping their gross amount into a flat 80%-of-everything formula
+    // overstated `net` relative to what actually landed in the wallet.
+    const bookings = await prisma.booking.findMany({
+      where: { gymId, status: 'completed' },
+      select: { date: true, amount: true, partnerShare: true, subscriptionId: true },
     });
 
-    // Get weekly stats
-    const weeklyStats = await prisma.booking.aggregate({
-      where: {
-        gymId,
-        date: { gte: weekAgoString },
-        status: 'completed'
-      },
-      _count: true,
-      _sum: { amount: true }
-    });
+    function bucketFor(predicate) {
+      const rows = bookings.filter(predicate);
+      const gross = rows.reduce((sum, b) => sum + Number(b.amount), 0);
+      const net = rows.reduce((sum, b) => {
+        if (b.subscriptionId) return sum; // paid out at subscription purchase, not here
+        const share = b.partnerShare != null
+          ? Number(b.partnerShare)
+          : Number(b.amount) * (1 - BOOKING_COMMISSION_PERCENT / 100); // legacy rows predating partnerShare
+        return sum + share;
+      }, 0);
+      return {
+        count: rows.length,
+        total: Math.round(gross * 100) / 100,
+        net: Math.round(net * 100) / 100,
+      };
+    }
 
-    // Get monthly stats
-    const monthlyStats = await prisma.booking.aggregate({
-      where: {
-        gymId,
-        date: { gte: monthAgoString },
-        status: 'completed'
-      },
-      _count: true,
-      _sum: { amount: true }
-    });
-
-    // Get yearly stats
-    const yearlyStats = await prisma.booking.aggregate({
-      where: {
-        gymId,
-        date: { gte: yearAgoString },
-        status: 'completed'
-      },
-      _count: true,
-      _sum: { amount: true }
-    });
-
-    // `total` stays the gross session price (unchanged, existing consumers
-    // rely on it). `net` is what the partner actually gets paid — the same
-    // commission-adjusted figure completeBooking credits to the partner's
-    // wallet (see BOOKING_COMMISSION_PERCENT above) — so a partner's
-    // "revenue" figure always matches their wallet balance.
-    const netOf = (gross) => Math.round(gross * (1 - BOOKING_COMMISSION_PERCENT / 100) * 100) / 100;
     return {
-      today: {
-        count: todayStats._count,
-        total: Number(todayStats._sum.amount) || 0,
-        net: netOf(Number(todayStats._sum.amount) || 0)
-      },
-      weekly: {
-        count: weeklyStats._count,
-        total: Number(weeklyStats._sum.amount) || 0,
-        net: netOf(Number(weeklyStats._sum.amount) || 0)
-      },
-      monthly: {
-        count: monthlyStats._count,
-        total: Number(monthlyStats._sum.amount) || 0,
-        net: netOf(Number(monthlyStats._sum.amount) || 0)
-      },
-      yearly: {
-        count: yearlyStats._count,
-        total: Number(yearlyStats._sum.amount) || 0,
-        net: netOf(Number(yearlyStats._sum.amount) || 0)
-      },
+      today: bucketFor((b) => b.date === todayString),
+      weekly: bucketFor((b) => b.date >= weekAgoString),
+      monthly: bucketFor((b) => b.date >= monthAgoString),
+      yearly: bucketFor((b) => b.date >= yearAgoString),
+      lifetime: bucketFor(() => true),
       commissionPct: BOOKING_COMMISSION_PERCENT
     };
   } catch (err) {
