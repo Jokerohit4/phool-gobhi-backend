@@ -129,13 +129,23 @@ async function alreadyAppliedWallet(userId, idempotencyKey) {
   return serializeWallet(wallet);
 }
 
-export async function creditWalletService(userId, amount, description, idempotencyKey = null) {
+// Unlike debitWalletService, a missing wallet here is NOT a legitimate
+// failure — crediting someone who has no wallet row yet just means they
+// haven't been auto-provisioned on a read path (getMyWallet/getWallet) or
+// ever explicitly created one. That used to throw 'Wallet not found' here,
+// silently swallowed by booking-service's best-effort completeBooking payout
+// (see its try/catch around the /credit call) — a partner whose wallet row
+// didn't exist yet simply never got paid for a completed session, with no
+// error surfaced anywhere. Upserting closes that class of bug for every
+// caller of this function at once (booking payouts, subscription payouts,
+// cancellation refunds), not just the one call site that first hit it.
+export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer') {
   const already = await alreadyAppliedWallet(userId, idempotencyKey);
   if (already) return already;
   try {
     const updated = await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { userId } });
-      if (!wallet) throw new Error('Wallet not found');
+      await tx.wallet.upsert({ where: { userId }, update: {}, create: { userId, userType } });
+      const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
       const updated = await tx.wallet.update({
         where: { userId },
         data: { balance: { increment: amount } }

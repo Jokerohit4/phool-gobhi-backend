@@ -96,11 +96,11 @@ export const getWalletTransactions = async (req, res) => {
 export const creditWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description, idempotencyKey } = req.body;
+    const { amount, description, idempotencyKey, userType } = req.body;
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'amount must be a positive finite number' });
     }
-    const result = await creditWalletService(Number(userId), amount, description, idempotencyKey);
+    const result = await creditWalletService(Number(userId), amount, description, idempotencyKey, userType || 'customer');
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });

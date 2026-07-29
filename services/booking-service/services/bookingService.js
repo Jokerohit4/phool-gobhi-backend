@@ -717,7 +717,8 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
         if (gym.partnerId) {
           await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
             amount: payoutAmount,
-            description: 'Gym session payout'
+            description: 'Gym session payout',
+            userType: 'partner',
           }, await internalHeadersFor(WALLET_SERVICE_URL));
         }
       } catch (payoutErr) {
