@@ -5,6 +5,7 @@ import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, todayDateStringIST } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -411,7 +412,8 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       data: { type: 'booking_created', bookingId: reservation.id, date: reservation.date },
     }).catch(() => {});
 
-    return normalizeBookingMoney(reservation);
+    const confirmed = normalizeBookingMoney(reservation);
+    return { ...confirmed, qrToken: signQrToken(confirmed.id, confirmed.gymId) };
   } catch (err) {
     if (err.error) throw err;
     console.error('createBooking error:', err);
@@ -722,12 +724,13 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
   }
 }
 
-// Partner scans the customer's QR (raw booking id) at the gym — this is the
-// enforced "the session actually happened" signal completeBooking now
-// requires. Idempotent: re-scanning an already-verified booking just
-// returns its existing verification instead of erroring, since a camera can
-// fire multiple detections for one physical scan.
-export async function verifyAttendance(bookingId, gymId, partnerId) {
+// Partner scans the customer's QR (a signed token, not a bare booking id —
+// see qrToken.js) at the gym, or manually confirms attendance from
+// partner-web (no camera there). This is the enforced "the session actually
+// happened" signal completeBooking now requires. Idempotent: re-scanning an
+// already-verified booking just returns its existing verification instead of
+// erroring, since a camera can fire multiple detections for one physical scan.
+export async function verifyAttendance(bookingId, gymId, partnerId, { method = 'qr_scan', qrToken } = {}) {
   try {
     const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) throw { status: 404, error: 'Booking not found' };
@@ -768,13 +771,27 @@ export async function verifyAttendance(bookingId, gymId, partnerId) {
 
     if (booking.status !== 'confirmed') throw { status: 400, error: 'Booking cannot be checked in' };
 
+    // A real camera scan must present a valid signed token — a bare gymId is
+    // no longer enough to prove a scan actually happened. partner-web has no
+    // camera, so it explicitly asks for 'manual' instead of faking a scan.
+    let attendanceMethod;
+    if (method === 'manual') {
+      attendanceMethod = 'manual_verify';
+    } else {
+      const check = verifyQrToken(qrToken, bookingId, gymId);
+      if (!check.valid) {
+        throw { status: 400, error: 'This QR code could not be verified — please rescan or use manual verification.', code: 'INVALID_QR' };
+      }
+      attendanceMethod = 'qr_scan';
+    }
+
     const updated = await prisma.booking.update({
       where: { id: bookingId },
-      data: { attendedAt: new Date(), attendanceMethod: 'qr_scan', attendanceVerifiedBy: partnerId },
+      data: { attendedAt: new Date(), attendanceMethod, attendanceVerifiedBy: partnerId },
     });
 
     track('attendance_verified', booking.customerId, {
-      booking_id: booking.id, gym_id: gymId, method: 'qr_scan', city: gym.city,
+      booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
     });
 
     return {
@@ -954,10 +971,12 @@ export async function getCustomerBookings(customerId) {
     }));
 
     // Strip the partner's internal override note — it's about the customer,
-    // not for them (e.g. "phone dead, verified manually").
+    // not for them (e.g. "phone dead, verified manually"). Every booking gets
+    // a signed check-in token regardless of status — verifyAttendance's own
+    // status/date checks are what actually gate a successful scan.
     return bookings.map(b => {
       const { attendanceOverrideReason, ...safe } = b;
-      return { ...safe, gym: gymMap[b.gymId] || null };
+      return { ...safe, gym: gymMap[b.gymId] || null, qrToken: signQrToken(b.id, b.gymId) };
     });
   } catch (err) {
     console.error('getCustomerBookings error:', err);
@@ -1230,16 +1249,17 @@ function attendanceDateBuckets() {
 // sessions, so each bucket's upper bound must be capped at today — otherwise
 // future confirmed bookings would wrongly inflate the no-show count.
 async function attendanceBucket(where) {
-  const [booked, scanned, selfCheckin, manualOverride] = await Promise.all([
+  const [booked, scanned, selfCheckin, manualVerify, manualOverride] = await Promise.all([
     prisma.booking.count({ where }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_scan' } }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'qr_geofence_self' } }),
+    prisma.booking.count({ where: { ...where, attendanceMethod: 'manual_verify' } }),
     prisma.booking.count({ where: { ...where, attendanceMethod: 'manual_override' } }),
   ]);
-  const verified = scanned + selfCheckin + manualOverride;
+  const verified = scanned + selfCheckin + manualVerify + manualOverride;
   const noShow = booked - verified;
   return {
-    booked, scanned, selfCheckin, manualOverride, noShow,
+    booked, scanned, selfCheckin, manualVerify, manualOverride, noShow,
     verifiedAttendanceRate: booked ? scanned / booked : null,
     completionRate: booked ? verified / booked : null,
   };
@@ -1319,14 +1339,16 @@ export async function getAdminAttendanceByGym(period = 'monthly') {
       const methods = methodByGym[g.gymId] || {};
       const scanned = methods.qr_scan || 0;
       const selfCheckin = methods.qr_geofence_self || 0;
+      const manualVerify = methods.manual_verify || 0;
       const manualOverride = methods.manual_override || 0;
       const booked = g._count;
-      const verified = scanned + selfCheckin + manualOverride;
+      const verified = scanned + selfCheckin + manualVerify + manualOverride;
       return {
         gymId: g.gymId,
         booked,
         scanned,
         selfCheckin,
+        manualVerify,
         manualOverride,
         noShow: booked - verified,
         verifiedAttendanceRate: booked ? scanned / booked : null,
