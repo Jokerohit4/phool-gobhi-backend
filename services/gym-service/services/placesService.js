@@ -13,7 +13,7 @@ function requireApiKey() {
   return key;
 }
 
-export async function autocomplete(input, sessionToken) {
+export async function autocomplete(input, sessionToken, location) {
   const key = requireApiKey();
   const params = new URLSearchParams({
     input,
@@ -21,6 +21,12 @@ export async function autocomplete(input, sessionToken) {
     components: 'country:in',
   });
   if (sessionToken) params.set('sessiontoken', sessionToken);
+  // Biases ranking toward the caller's location without excluding matches
+  // elsewhere (unlike `location`+`radius`, `locationbias` is a soft ranking
+  // signal) — without it Places has no sense of where the partner actually
+  // is and ranks by string match alone, e.g. "Sector 14" resolving to
+  // whichever Sector 14 Google likes best nationwide.
+  if (location) params.set('locationbias', `circle:50000@${location.lat},${location.lng}`);
 
   const res = await fetch(`${PLACES_BASE}/autocomplete/json?${params}`);
   const body = await res.json();

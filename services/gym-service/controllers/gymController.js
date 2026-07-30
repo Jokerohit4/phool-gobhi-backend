@@ -401,11 +401,12 @@ export const deleteSlotBlock = async (req, res) => {
 // client (web or mobile); callers only ever see this endpoint.
 export const placesAutocomplete = async (req, res) => {
   try {
-    const { input, sessiontoken } = req.query;
+    const { input, sessiontoken, lat, lng } = req.query;
     if (!input || !String(input).trim()) {
       return res.status(400).json({ error: 'input is required' });
     }
-    const predictions = await placesService.autocomplete(String(input), sessiontoken);
+    const location = lat && lng ? { lat: Number(lat), lng: Number(lng) } : null;
+    const predictions = await placesService.autocomplete(String(input), sessiontoken, location);
     res.json({ data: predictions });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
