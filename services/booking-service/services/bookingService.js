@@ -719,6 +719,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
             amount: payoutAmount,
             description: 'Gym session payout',
             userType: 'partner',
+            gymId,
           }, await internalHeadersFor(WALLET_SERVICE_URL));
         }
       } catch (payoutErr) {

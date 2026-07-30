@@ -139,7 +139,7 @@ async function alreadyAppliedWallet(userId, idempotencyKey) {
 // error surfaced anywhere. Upserting closes that class of bug for every
 // caller of this function at once (booking payouts, subscription payouts,
 // cancellation refunds), not just the one call site that first hit it.
-export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer') {
+export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer', gymId = null) {
   const already = await alreadyAppliedWallet(userId, idempotencyKey);
   if (already) return already;
   try {
@@ -157,6 +157,7 @@ export async function creditWalletService(userId, amount, description, idempoten
           amount,
           description,
           idempotencyKey,
+          gymId,
         }
       });
       return updated;
@@ -172,7 +173,7 @@ export async function creditWalletService(userId, amount, description, idempoten
   }
 }
 
-export async function debitWalletService(userId, amount, description, idempotencyKey = null) {
+export async function debitWalletService(userId, amount, description, idempotencyKey = null, gymId = null) {
   if (!Number.isFinite(amount) || amount <= 0) {
     // Defense in depth — the controller already rejects this, but a Decimal
     // wallet.balance compared against NaN/undefined via `<` would silently
@@ -198,6 +199,7 @@ export async function debitWalletService(userId, amount, description, idempotenc
           amount,
           description,
           idempotencyKey,
+          gymId,
         }
       });
       return updated;
@@ -394,7 +396,8 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   await debitWalletService(
     customerId, price,
     `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
-    `subscription-wallet-order-${syntheticOrderId}`
+    `subscription-wallet-order-${syntheticOrderId}`,
+    gymId
   );
 
   // A concurrent purchase (e.g. a double-tap racing this same function on
@@ -403,7 +406,8 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   const existingAfter = await getActiveSubscriptionService(customerId, gymId);
   if (existingAfter) {
     await creditWalletService(customerId, price,
-      `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`);
+      `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`,
+      null, 'customer', gymId);
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
@@ -418,7 +422,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     update: {},
     create: { userId: partnerId, userType: 'partner' },
   });
-  await creditWalletService(partnerId, partnerShare, `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`);
+  await creditWalletService(partnerId, partnerShare, `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`, null, 'partner', gymId);
 
   const subscription = await prisma.gymSubscription.create({
     data: {

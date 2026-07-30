@@ -39,7 +39,8 @@ export async function notifyPartner(gymId, booking) {
     const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, {
       headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(GYM_SERVICE_URL)) },
     });
-    const partnerId = gymRes.data?.data?.partnerId;
+    const gym = gymRes.data?.data;
+    const partnerId = gym?.partnerId;
     if (!partnerId) return;
 
     // Get partner FCM token from auth-service
@@ -53,13 +54,15 @@ export async function notifyPartner(gymId, booking) {
     await admin.messaging().send({
       token: fcmToken,
       notification: {
-        title: 'New Booking!',
+        title: gym?.name ? `New Booking — ${gym.name}` : 'New Booking!',
         body: `Session on ${booking.date} at ${booking.startTime}–${booking.endTime} · ₹${booking.amount}`,
       },
       data: {
         type: 'new_booking',
         bookingId: String(booking.id),
         date: booking.date,
+        gymId: String(gymId),
+        gymName: gym?.name || '',
       },
       android: {
         priority: 'high',

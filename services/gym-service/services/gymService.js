@@ -171,7 +171,7 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, us
 
 // Admin (gobhi) listing — unlike listGyms above, this has no isActive/
 // isApproved filter by default so staff can see gyms pending review.
-export async function listGymsAdmin({ status } = {}) {
+export async function listGymsAdmin({ status, partnerId } = {}) {
   const where = {};
 
   if (status === 'pending') {
@@ -182,6 +182,12 @@ export async function listGymsAdmin({ status } = {}) {
     where.rejectionReason = { not: null };
   } else if (status === 'approved') {
     where.isApproved = true;
+  }
+
+  // Staff viewing "this partner's other gyms" wants every one of that
+  // partner's gyms regardless of status, not just the currently-selected tab.
+  if (partnerId) {
+    where.partnerId = Number(partnerId);
   }
 
   const gyms = await prisma.gym.findMany({
@@ -241,13 +247,6 @@ export async function getGymCapacity(id) {
 }
 
 export async function createGym(partnerId, data) {
-  const existing = await prisma.gym.findFirst({
-    where: { partnerId, isActive: true },
-  });
-  if (existing) {
-    throw { status: 409, error: 'You already have a gym listed. Edit your existing gym instead of creating a new one.' };
-  }
-
   const {
     name,
     description,
@@ -429,16 +428,26 @@ export async function getPartnerGyms(partnerId) {
 // is it approved. Used by auth-service to tell the partner app, at login, where
 // to route (dashboard vs. resume onboarding) without trusting local state.
 export async function getPartnerGymSummary(partnerId) {
-  const gym = await prisma.gym.findFirst({
+  const gyms = await prisma.gym.findMany({
     where: { partnerId, isActive: true },
     orderBy: { id: 'asc' },
     select: { id: true, isApproved: true, rejectionReason: true },
   });
+  // "approved" answers "does this partner have AT LEAST ONE approved gym" —
+  // a partner with 2+ gyms should route to their dashboard even if their
+  // very first gym was rejected, as long as a later one is live. gymId/
+  // rejectionReason still resolve to one sensible "primary" gym (prefer an
+  // approved one) so a client that only reads those two fields keeps
+  // working unmodified.
+  const approvedGym = gyms.find(g => g.isApproved);
+  const primary = approvedGym || gyms[0];
   return {
-    hasGym: !!gym,
-    approved: gym?.isApproved ?? false,
-    gymId: gym?.id ?? null,
-    rejectionReason: gym?.rejectionReason ?? null,
+    hasGym: gyms.length > 0,
+    approved: !!approvedGym,
+    gymId: primary?.id ?? null,
+    rejectionReason: approvedGym ? null : (primary?.rejectionReason ?? null),
+    gymCount: gyms.length,
+    hasOtherGyms: gyms.length > 1,
   };
 }
 

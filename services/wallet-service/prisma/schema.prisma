@@ -50,7 +50,13 @@ model WalletTransaction {
   // same key as a no-op, returning the wallet state unchanged.
   idempotencyKey    String?           @unique
   createdAt         DateTime          @default(now())
+  // Which gym a credit/debit is attributable to — a partner with multiple
+  // gyms otherwise has no way to tell which gym earned a given credit from
+  // transaction history alone. Nullable: existing rows predate this column,
+  // and not every transaction type (top-ups, manual payouts) has a gym.
+  gymId             Int?
 
+  @@index([gymId])
   @@schema("wallet")
 }
 

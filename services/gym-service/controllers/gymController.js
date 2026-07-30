@@ -29,8 +29,8 @@ export const listGyms = async (req, res) => {
 
 export const listGymsAdmin = async (req, res) => {
   try {
-    const { status } = req.query;
-    const gyms = await gymService.listGymsAdmin({ status });
+    const { status, partnerId } = req.query;
+    const gyms = await gymService.listGymsAdmin({ status, partnerId });
     res.json({ data: gyms });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

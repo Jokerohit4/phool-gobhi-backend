@@ -287,6 +287,18 @@ export async function sendOtpService(rawPhone) {
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
+  // OTP_PROVIDER is meant to be the single switch between WhatsApp/Fast2SMS
+  // and Firebase (see GET /otp-config) — but that switch previously only
+  // advised clients which path to take; this function itself would still
+  // attempt a real WhatsApp/Fast2SMS send regardless. That let Fast2SMS fire
+  // (and silently "succeed" per the 200 below even when delivery failed) for
+  // any caller of this endpoint even while the platform is on Firebase.
+  // Guard it here so "OTP_PROVIDER=firebase" is an actual guarantee, not
+  // just a hint — Fast2SMS/WhatsApp are disabled while it's set, and this is
+  // the only line that needs to change back when DLT registration lands.
+  if (process.env.OTP_PROVIDER === 'firebase') {
+    throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
+  }
   const existing = await prisma.otpCode.findUnique({ where: { phone } });
   if (existing && Date.now() - existing.sentAt.getTime() < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
@@ -378,7 +390,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   let onboarding;
   if (user.role === ROLES.PARTNER) {
     onboarding = isNewUser
-      ? { hasGym: false, approved: false, gymId: null }
+      ? { hasGym: false, approved: false, gymId: null, rejectionReason: null, gymCount: 0, hasOtherGyms: false }
       : await fetchPartnerGymSummary(user.id);
   }
 
