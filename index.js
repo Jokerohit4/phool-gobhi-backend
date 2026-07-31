@@ -7,6 +7,7 @@ import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
 import { withGoogleIdToken } from './utils/googleIdToken.js';
 
@@ -145,6 +146,22 @@ app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timest
 // request bodies below. Accepts a single event or { events: [...] }.
 app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
   try {
+    // Parsed once per request (same header applies to every event in a
+    // batch). This is a backstop, not the primary source: the apps already
+    // send their own richer platform/os_version/device_model directly, so
+    // these only fill gaps (website traffic, or any future client that
+    // forgets a field) — never overwrite what the client already sent.
+    const userAgent = req.headers['user-agent'];
+    const ip = req.ip;
+    const uaResult = userAgent ? new UAParser(userAgent).getResult() : null;
+    const uaProps = uaResult && {
+      os_name: uaResult.os.name,
+      os_version: uaResult.os.version,
+      browser_name: uaResult.browser.name,
+      browser_version: uaResult.browser.version,
+      device_type: uaResult.device.type || 'desktop',
+    };
+
     const body = req.body || {};
     const list = Array.isArray(body.events) ? body.events : [body];
     for (const e of list) {
@@ -155,7 +172,17 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
       if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
       const properties = e.properties;
       if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
-      ingest({ event: e.event, distinctId: e.distinct_id, properties: properties || {}, source: 'client' });
+
+      const enriched = { ...(properties || {}) };
+      if (userAgent && enriched.user_agent == null) enriched.user_agent = userAgent;
+      if (uaProps) {
+        for (const [key, value] of Object.entries(uaProps)) {
+          if (value != null && enriched[key] == null) enriched[key] = value;
+        }
+      }
+      if (ip && enriched.ip == null) enriched.ip = ip;
+
+      ingest({ event: e.event, distinctId: e.distinct_id, properties: enriched, source: 'client' });
     }
   } catch (_) {
     // swallow — analytics never fails the client

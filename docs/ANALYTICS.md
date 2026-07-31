@@ -146,8 +146,23 @@ any call site** as of 2026-07-23 — reserved names, not currently emitted:
 `gym_image_uploaded`, `gym_doc_uploaded`, `gym_profile_updated`,
 `dashboard_viewed`, `booking_checked_in`.
 
-Every event also carries `source` (`server`/client implicit), `service`/`app`,
-and `platform`. Client events additionally carry `session_id` (see above).
+Every event also carries `source` (`server`/client implicit) and `service`/`app`.
+Client events additionally carry `session_id` (see above) and the
+device/platform properties below (added 2026-07-31 — see §9 for the privacy
+note on `ip`):
+
+| Property | Set by | Notes |
+|---|---|---|
+| `platform` | apps (`android`/`ios` via `Platform.operatingSystem`), website (static `web`) | |
+| `os_version` | apps (Android `AndroidDeviceInfo.version.release`, iOS `IosDeviceInfo.systemVersion`) | absent on website — see `os_name` below |
+| `device_model` | apps (Android `.model`, iOS `utsname.machine`, e.g. `"iPhone14,5"`) | iOS uses the specific hardware id, not the generic `.model`, to distinguish device generations — needs a lookup table to become human-readable |
+| `device_manufacturer` | apps (Android `.manufacturer`, iOS hardcoded `'Apple'`) | |
+| `app_version` / `app_build_number` | apps, via `package_info_plus` | |
+| `device_language` | apps, via `Platform.localeName` | |
+| `app_theme` | apps (`'dark'`/`'light'`), static flag kept in sync by each app's `ThemeProvider` | |
+| `user_agent` | website (forwarded from the request's `User-Agent` header) | raw string |
+| `os_name` / `browser_name` / `browser_version` / `device_type` | gateway, parsed from `user_agent` via `ua-parser-js` | **backstop only** — the gateway fills these only when the event doesn't already carry them, so it never overwrites the richer app-supplied fields above; this is the primary source of OS/browser info for website traffic |
+| `ip` | gateway, from `req.ip` | every client event, via the gateway's `/api/events` handler |
 
 ---
 
@@ -198,6 +213,10 @@ event name against `docs/analytics-events.json` (silently drops anything not
 listed, still returns `202`) and rate-limits at 60 req/min/IP — see §1's link
 to `scripts/check-analytics-events.cjs` for keeping that registry current.
 
+The same route also enriches every accepted event with the `ip`/`user_agent`/
+parsed-UA properties described in §4, via the `ua-parser-js` dependency — no
+new env var needed for this.
+
 ### Apps (build-time `--dart-define`)
 
 ```
@@ -212,6 +231,12 @@ app's telemetry went unnoticed for weeks; see §7). Debug builds still print a
 local `[analytics] ...` line alongside the real POST, so nothing is lost for
 local development. `posthog`/`firstparty` downgrade to no-op if their required
 config is missing.
+
+Both apps depend on `device_info_plus` and `package_info_plus` to populate
+the `os_version`/`device_model`/`device_manufacturer`/`app_version`/
+`app_build_number` properties in §4 — fetched once at startup (`setupLocator`,
+alongside the existing `SharedPreferences` await) and cached, so `_baseProps()`
+stays a synchronous function.
 
 ---
 
@@ -351,6 +376,18 @@ point of the facade.
 ## 9. Privacy
 
 - Only `userId` identifies a person; no phone/email/name in properties.
+- Device model, OS/app version, and language (§4) are not treated as PII —
+  they identify a device/build, not a person.
+- **`ip` (added 2026-07-31) is a deliberate exception to "no PII"** — raw
+  client IP is personal data under DPDP. It's captured because it was an
+  explicit product decision (not a silent default), to enable future
+  city/country-level breakdowns. Anyone building on top of `analytics_events`
+  should treat `properties->>'ip'` with the same care as the `userId` column —
+  in particular, be deliberate about who can see it in internal tooling that
+  surfaces raw event detail (e.g. the admin dashboard's per-user "User
+  Journey" view). No retention policy exists yet for this column specifically;
+  it inherits whatever retention the rest of `analytics_events` has (none,
+  currently — flagged here as a gap to revisit, not solved by this change).
 - PostHog offers an EU region; self-hosting (open source) is the fallback if
   Indian data residency becomes mandatory.
 - A consent gate can wrap `AnalyticsService` (return the no-op sink until the user

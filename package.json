@@ -14,7 +14,8 @@
     "express-rate-limit": "^8.6.0",
     "google-auth-library": "^10.9.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.16.0"
+    "pg": "^8.16.0",
+    "ua-parser-js": "^2.0.10"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
