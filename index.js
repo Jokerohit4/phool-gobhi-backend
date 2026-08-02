@@ -47,6 +47,7 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/auth\/app-config(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/auth\/launch-status(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/auth\/jobs(\?.*)?$/ },
+  { method: 'GET', pattern: /^\/api\/auth\/platform-reviews(\?.*)?$/ },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },

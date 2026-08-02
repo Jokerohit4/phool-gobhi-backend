@@ -172,6 +172,25 @@ model AppVersionSetting {
   @@schema("auth")
 }
 
+// Platform-wide reviews ("What users say about us" on the website's
+// /testimonials page) — distinct from gym-service's per-gym GymReview. One
+// row per customer (upsert on customerId): resubmitting edits their existing
+// review instead of piling up duplicates, and resets isApproved since an
+// edited review hasn't been vetted yet. Starts unapproved — an admin must
+// approve it (GET/PATCH/DELETE /api/auth/admin/platform-reviews) before it
+// shows publicly.
+model PlatformReview {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @unique
+  rating     Int
+  comment    String?
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@schema("auth")
+}
+
 // Singleton row (id always 1) — admin-portal-editable launch gate for the
 // website: `enabled=false` means always live (gate off); `enabled=true` with
 // `launchAt` null means gated indefinitely (manual hold, no schedule set);

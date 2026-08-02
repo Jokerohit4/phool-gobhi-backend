@@ -15,9 +15,17 @@ import {
   listApplications,
   updateApplicationRead,
 } from '../controllers/jobApplicationController.js';
+import {
+  listPublicPlatformReviews,
+  listAdminPlatformReviews,
+  submitPlatformReview,
+  updatePlatformReviewApproval,
+  removePlatformReview,
+} from '../controllers/platformReviewController.js';
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import requireGobhi from '../middleware/requireGobhi.js';
+import requireCustomer from '../middleware/requireCustomer.js';
 import { uploadResume } from '../utils/gcsResume.js';
 
 router.post('/signup', signup);
@@ -81,5 +89,13 @@ router.delete('/admin/jobs/:id', requireGobhi, removeJobOpening);
 router.post('/jobs/:jobOpeningId/apply', uploadResume.single('resume'), submitApplication);
 router.get('/admin/job-applications', requireGobhi, listApplications);
 router.patch('/admin/job-applications/:id', requireGobhi, updateApplicationRead);
+
+// Platform-wide reviews ("What users say about us" on /testimonials) — public
+// read (approved only), customer-submitted (one per customer, upsert), gobhi-moderated.
+router.get('/platform-reviews', listPublicPlatformReviews);
+router.post('/platform-reviews', requireCustomer, submitPlatformReview);
+router.get('/admin/platform-reviews', requireGobhi, listAdminPlatformReviews);
+router.patch('/admin/platform-reviews/:id', requireGobhi, updatePlatformReviewApproval);
+router.delete('/admin/platform-reviews/:id', requireGobhi, removePlatformReview);
 
 export default router;
