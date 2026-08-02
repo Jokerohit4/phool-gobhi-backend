@@ -39,11 +39,11 @@ function normalizeBookingMoney(booking) {
   return out;
 }
 
-// Platform commission on regular (non-subscription) session bookings —
-// mirrors wallet-service's SUBSCRIPTION_COMMISSION_PERCENT. Same rate by
-// default, but a separate env var since the two are billed completely
-// differently (per-session debit/credit here vs. upfront split there) and
-// may need to move independently later.
+// Fallback commission on regular (non-subscription) session bookings, used
+// only if a gym-service response is somehow missing commissionPct (e.g. an
+// older gym-service revision) — the real rate is per-gym, gym-service's
+// Gym.commissionPct (admin-editable, defaults to 20 there too). Mirrors
+// wallet-service's SUBSCRIPTION_COMMISSION_PERCENT fallback.
 const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
 
 // Per-target headers for service-to-service calls (x-internal-key shared
@@ -164,14 +164,18 @@ async function reconcileStalePendingBooking(booking) {
 // Subscription-covered bookings never pay out a per-session partner share
 // here (the partner was already paid upfront at subscription purchase — see
 // fulfillSubscriptionPurchase), so they get no commission snapshot at all.
-function bookingCommissionFields(amount, subscriptionId) {
+function bookingCommissionFields(amount, subscriptionId, gymCommissionPct) {
   if (subscriptionId) return { commissionPct: null, partnerShare: null };
-  const commissionPct = BOOKING_COMMISSION_PERCENT;
+  // Per-gym override (gym-service's Gym.commissionPct, admin-editable) takes
+  // priority; the env constant only ever fires for a gym-service response
+  // that's missing the field (shouldn't happen post-migration, but this is
+  // cheaper than trusting that).
+  const commissionPct = gymCommissionPct ?? BOOKING_COMMISSION_PERCENT;
   const partnerShare = Math.round(amount * (1 - commissionPct / 100) * 100) / 100;
   return { commissionPct, partnerShare };
 }
 
-async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId = null }) {
+async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId = null, gymCommissionPct = null }) {
   for (let attempt = 1; attempt <= RESERVE_MAX_ATTEMPTS; attempt++) {
     // Reconcile a stale pending duplicate BEFORE opening the transaction —
     // reconciliation can make an HTTP call to wallet-service, which must
@@ -209,7 +213,7 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
         return tx.booking.create({
           data: {
             customerId, gymId, date, startTime, endTime, amount, status: 'pending', subscriptionId,
-            ...bookingCommissionFields(amount, subscriptionId),
+            ...bookingCommissionFields(amount, subscriptionId, gymCommissionPct),
           },
         });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -365,7 +369,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // The row lands as `pending` — a real reservation, not yet paid for.
     let reservation;
     try {
-      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId });
+      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId, gymCommissionPct: gym.commissionPct });
     } catch (err) {
       if (err?.status === 409 && err.error === 'Slot is full') {
         track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime, city: gym.city });
@@ -1227,6 +1231,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
       throw { status: 404, error: 'Gym not found' };
     }
     if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+    const effectiveCommissionPct = gym.commissionPct ?? BOOKING_COMMISSION_PERCENT;
 
     const today = new Date();
     // All buckets key off the session `date` (YYYY-MM-DD string) for consistency.
@@ -1261,7 +1266,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
         if (b.subscriptionId) return sum; // paid out at subscription purchase, not here
         const share = b.partnerShare != null
           ? Number(b.partnerShare)
-          : Number(b.amount) * (1 - BOOKING_COMMISSION_PERCENT / 100); // legacy rows predating partnerShare
+          : Number(b.amount) * (1 - effectiveCommissionPct / 100); // legacy rows predating partnerShare
         return sum + share;
       }, 0);
       return {
@@ -1277,7 +1282,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
       monthly: bucketFor((b) => b.date >= monthAgoString),
       yearly: bucketFor((b) => b.date >= yearAgoString),
       lifetime: bucketFor(() => true),
-      commissionPct: BOOKING_COMMISSION_PERCENT
+      commissionPct: effectiveCommissionPct
     };
   } catch (err) {
     if (err.error) throw err;

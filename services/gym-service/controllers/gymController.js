@@ -335,6 +335,15 @@ export const approveGym = async (req, res) => {
   }
 };
 
+export const updateGymCommission = async (req, res) => {
+  try {
+    const gym = await gymService.updateGymCommission(parseInt(req.params.id), Number(req.body?.commissionPct));
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getSlotPrices = async (req, res) => {
   try {
     const slots = await gymService.getSlotPrices(parseInt(req.params.id));

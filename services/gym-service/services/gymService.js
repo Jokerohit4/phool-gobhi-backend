@@ -6,16 +6,18 @@ const prisma = new PrismaClient();
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Gym's price fields are Decimal in Postgres (see schema.prisma) — Prisma
-// returns them as Decimal objects, which JS silently mishandles in plain
-// arithmetic (comparing two Decimals with </> does a STRING compare;
-// `decimalObj + number` can string-concatenate instead of adding). Every
-// function below runs its fetched/created/updated gym through this
-// immediately after the Prisma call, before any further JS touches it, so
-// the rest of this file only ever sees plain numbers — same convention as
-// wallet-service's Number(...) wrapping.
+// Gym's price fields (plus commissionPct, same Decimal column type) are
+// Decimal in Postgres (see schema.prisma) — Prisma returns them as Decimal
+// objects, which JS silently mishandles in plain arithmetic (comparing two
+// Decimals with </> does a STRING compare; `decimalObj + number` can
+// string-concatenate instead of adding). Every function below runs its
+// fetched/created/updated gym through this immediately after the Prisma
+// call, before any further JS touches it, so the rest of this file (and
+// every service that reads a gym from gym-service's API) only ever sees
+// plain numbers — same convention as wallet-service's Number(...) wrapping.
 const GYM_MONEY_FIELDS = [
   'sessionPrice', 'quotedPrice', 'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'yearlyPlanPrice',
+  'commissionPct',
 ];
 function normalizeGymMoney(gym) {
   if (!gym) return gym;
@@ -657,6 +659,22 @@ export async function approveGym(gymId, { approved = true, reason = null } = {})
       isApproved: approved,
       rejectionReason: approved ? null : reason,
     },
+  }));
+}
+
+// gobhi-only — unlike updateGym (partner-owned, allowlisted material
+// fields), this never checks partnerId: commission is a platform lever an
+// admin sets on any gym, not something the owning partner can touch.
+export async function updateGymCommission(gymId, commissionPct) {
+  if (typeof commissionPct !== 'number' || Number.isNaN(commissionPct) || commissionPct < 0 || commissionPct > 100) {
+    throw { status: 400, error: 'commissionPct must be a number between 0 and 100' };
+  }
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  return normalizeGymMoney(await prisma.gym.update({
+    where: { id: gymId },
+    data: { commissionPct },
   }));
 }
 

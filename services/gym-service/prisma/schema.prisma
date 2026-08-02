@@ -43,6 +43,10 @@ model Gym {
   isApproved   Boolean     @default(false)
   rejectionReason String?
   isActive     Boolean     @default(true)
+  // Platform commission on this gym's bookings/subscriptions, admin-editable
+  // (gobhi-only, see PUT /:id/commission) — 20 is the platform default for
+  // every gym until an admin overrides it.
+  commissionPct Decimal    @default(20) @db.Decimal(5, 2)
   weeklyPlanPrice    Decimal? @db.Decimal(19, 2)
   monthlyPlanPrice   Decimal? @db.Decimal(19, 2)
   quarterlyPlanPrice Decimal? @db.Decimal(19, 2)

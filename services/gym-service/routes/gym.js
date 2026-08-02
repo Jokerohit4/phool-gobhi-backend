@@ -46,6 +46,8 @@ router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) =>
 // To approve: create an account with role:'gobhi' via POST /api/auth/signup, login, use the JWT
 // Body: {} or {approved:true} to approve; {approved:false, reason:"..."} to reject (reason required)
 router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
+// Body: {commissionPct: number} (0-100) — overrides this gym's platform commission rate (default 20).
+router.put('/:id/commission', requireRole('gobhi'), ctrl.updateGymCommission);
 // List all gyms regardless of owner/approval status; ?status=pending|approved|rejected
 router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 // Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)

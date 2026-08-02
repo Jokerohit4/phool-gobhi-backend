@@ -34,8 +34,10 @@ export async function getGymCity(gymId) {
   }
 }
 
-// No per-gym override today — a single platform-wide rate taken at purchase
-// time and snapshotted onto the GymSubscription row for auditability.
+// Fallback only — the real rate is per-gym (gym-service's admin-editable
+// Gym.commissionPct, see fetchGymForSubscription), taken at purchase time
+// and snapshotted onto the GymSubscription row for auditability. This fires
+// only if a gym-service response is somehow missing the field.
 export const SUBSCRIPTION_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_COMMISSION_PERCENT) || 20;
 
 const PLAN_DAYS = { weekly: 7, monthly: 30, quarterly: 90, yearly: 365 };
@@ -354,7 +356,7 @@ export async function fetchGymForSubscription(gymId, planType) {
   const price = gym[field];
   if (price == null) throw { status: 400, error: `This gym does not offer a ${planType} plan` };
 
-  return { partnerId: gym.partnerId, price: Number(price) };
+  return { partnerId: gym.partnerId, price: Number(price), commissionPct: gym.commissionPct };
 }
 
 // Subscriptions are paid for out of wallet balance only — never a direct
@@ -375,7 +377,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const { partnerId, price } = await fetchGymForSubscription(gymId, planType);
+  const { partnerId, price, commissionPct: gymCommissionPct } = await fetchGymForSubscription(gymId, planType);
 
   // Same self-booking-fraud guard as booking-service's createBooking — a
   // partner shouldn't be able to buy a subscription to their own gym under
@@ -411,7 +413,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const commissionPct = SUBSCRIPTION_COMMISSION_PERCENT;
+  const commissionPct = gymCommissionPct ?? SUBSCRIPTION_COMMISSION_PERCENT;
   const partnerShare = Math.round(price * (1 - commissionPct / 100) * 100) / 100;
   const days = PLAN_DAYS[planType];
   const startDate = new Date();
