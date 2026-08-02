@@ -16,7 +16,8 @@ router.post('/', requireRole('customer'), ctrl.createBooking);
 router.get('/mine', requireRole('customer'), ctrl.getMyBookings);
 router.get('/mine/attendance-summary', requireRole('customer'), ctrl.getMyAttendanceSummary);
 router.get('/mine/attendance-warnings', requireRole('customer'), ctrl.getMyAttendanceWarnings);
-router.get('/cancellation-policy', requireRole('customer'), ctrl.getCancellationPolicy);
+// gobhi too — the admin portal's /settings page reads this to prefill its editor.
+router.get('/cancellation-policy', requireRole('customer', 'gobhi'), ctrl.getCancellationPolicy);
 router.put('/cancellation-policy', requireRole('gobhi'), ctrl.updateCancellationPolicy);
 router.get('/gym/:gymId', requireRole('partner'), ctrl.getGymBookings);
 router.get('/gym/:gymId/summary', requireRole('partner'), ctrl.getGymSalesSummary);
