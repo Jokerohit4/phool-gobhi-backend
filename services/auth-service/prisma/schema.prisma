@@ -172,6 +172,23 @@ model AppVersionSetting {
   @@schema("auth")
 }
 
+// Singleton row (id always 1) — admin-portal-editable launch gate for the
+// website: `enabled=false` means always live (gate off); `enabled=true` with
+// `launchAt` null means gated indefinitely (manual hold, no schedule set);
+// `enabled=true` with `launchAt` set means gated until that instant. Read by
+// public GET /api/auth/launch-status, which the website's proxy.ts uses to
+// block gym visibility/booking creation pre-launch while partner onboarding
+// (a separate route tree) stays open throughout.
+model LaunchGateSetting {
+  id        Int       @id @default(1)
+  enabled   Boolean   @default(false)
+  launchAt  DateTime?
+  updatedAt DateTime  @updatedAt
+  updatedBy Int?
+
+  @@schema("auth")
+}
+
 enum GobhiType {
   trainer
   cleaner

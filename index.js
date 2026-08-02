@@ -45,6 +45,7 @@ const PUBLIC_ROUTES = [
   { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|logout|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
   { method: 'GET', pattern: /^\/api\/auth\/app-config(\?.*)?$/ },
+  { method: 'GET', pattern: /^\/api\/auth\/launch-status(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/auth\/jobs(\?.*)?$/ },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },

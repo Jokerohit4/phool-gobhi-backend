@@ -197,6 +197,70 @@ const updateAppConfigAdmin = async (req, res) => {
   }
 };
 
+// Default when no LaunchGateSetting row exists yet — inert, same convention
+// as DEFAULT_APP_VERSION_CONFIG, so the feature does nothing until an admin
+// deliberately turns it on from the admin portal's /settings page.
+const DEFAULT_LAUNCH_GATE = { enabled: false, launchAt: null };
+
+async function loadLaunchGate() {
+  const row = await prisma.launchGateSetting.findUnique({ where: { id: 1 } });
+  if (!row) return DEFAULT_LAUNCH_GATE;
+  return { enabled: row.enabled, launchAt: row.launchAt };
+}
+
+// Public — called by the website before rendering gym browse/detail/booking
+// pages. `enabled=false` (or no row) is always live. `enabled=true` with no
+// launchAt is gated indefinitely (manual hold). `enabled=true` with a
+// launchAt is gated until that instant passes. Fails CLOSED on a DB error —
+// unlike getAppConfig's fail-open, leaking gym visibility/bookings a few
+// seconds early is worse here than a transient false "not live yet".
+const getLaunchStatus = async (req, res) => {
+  try {
+    const gate = await loadLaunchGate();
+    if (!gate.enabled) return res.json({ launchAt: null, isLive: true });
+    if (!gate.launchAt) return res.json({ launchAt: null, isLive: false });
+    const launchAt = gate.launchAt.toISOString();
+    res.json({ launchAt, isLive: Date.now() >= gate.launchAt.getTime() });
+  } catch (err) {
+    console.error('getLaunchStatus error:', err);
+    res.json({ launchAt: null, isLive: false });
+  }
+};
+
+// gobhi-only — admin portal's raw view/edit of the launch gate (Settings page).
+const getLaunchGateAdmin = async (req, res) => {
+  try {
+    const gate = await loadLaunchGate();
+    res.json({ data: gate });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateLaunchGateAdmin = async (req, res) => {
+  try {
+    const { enabled, launchAt } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled (boolean) is required' });
+    }
+    let parsedLaunchAt = null;
+    if (launchAt) {
+      parsedLaunchAt = new Date(launchAt);
+      if (Number.isNaN(parsedLaunchAt.getTime())) {
+        return res.status(400).json({ error: 'launchAt must be a valid date' });
+      }
+    }
+    const updated = await prisma.launchGateSetting.upsert({
+      where: { id: 1 },
+      create: { id: 1, enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
+      update: { enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
+    });
+    res.json({ data: { enabled: updated.enabled, launchAt: updated.launchAt } });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const listStaff = async (req, res) => {
   try {
     const staff = await listStaffService();
@@ -331,6 +395,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

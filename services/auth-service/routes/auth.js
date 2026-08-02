@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -42,6 +42,11 @@ router.get('/app-config', getAppConfig);
 // Admin portal's raw config view/edit (Settings page)
 router.get('/app-config/admin', requireGobhi, getAppConfigAdmin);
 router.put('/app-config/admin', requireGobhi, updateAppConfigAdmin);
+// Public — website launch gate, see getLaunchStatus.
+router.get('/launch-status', getLaunchStatus);
+// Admin portal's raw view/edit of the launch gate (Settings page).
+router.get('/launch-gate/admin', requireGobhi, getLaunchGateAdmin);
+router.put('/launch-gate/admin', requireGobhi, updateLaunchGateAdmin);
 router.get('/me', verifyToken, getMe);
 router.patch('/me', verifyToken, updateMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
