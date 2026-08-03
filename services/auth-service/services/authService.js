@@ -330,7 +330,13 @@ export async function sendOtpService(rawPhone) {
 // Shared by both the OTP-store path (verifyOtpService) and the Firebase
 // ID-token path (verifyFirebaseTokenService) — everything that happens once a
 // phone number is confirmed verified, regardless of how it got verified.
-async function issueSessionForUser({ phone, name, email, role = 'customer', type = 'general', gobhiType }) {
+// Deterministic own-code derivation — see the referralCode field's schema
+// comment. Called only after the row exists (needs a real id).
+function referralCodeFor(userId) {
+  return `PG${userId.toString(36).toUpperCase()}`;
+}
+
+async function issueSessionForUser({ phone, name, email, role = 'customer', type = 'general', gobhiType, referralCode }) {
   if (!VALID_ROLES.includes(role)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_ROLE.message, errorCode: ERROR_MESSAGES.INVALID_ROLE.code };
   }
@@ -350,6 +356,15 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   const isNewUser = !user;
 
   if (!user) {
+    // Resolve an incoming referral code to the referrer's id — silently
+    // ignored if the code doesn't match anyone (typo'd code shouldn't block
+    // signup). Self-referral is structurally impossible: this user's own row
+    // (and the code derived from it) doesn't exist yet at this point.
+    let referredByUserId = null;
+    if (referralCode && typeof referralCode === 'string' && referralCode.trim()) {
+      const referrer = await prisma.user.findUnique({ where: { referralCode: referralCode.trim().toUpperCase() } });
+      if (referrer) referredByUserId = referrer.id;
+    }
     user = await prisma.user.create({
       data: {
         // Phone+OTP signup never collects a name, so this is left null rather
@@ -361,8 +376,15 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
         role,
         type,
         gobhiType: role === ROLES.GOBHI ? gobhiType : null,
+        referredByUserId,
         updatedAt: new Date(),
       },
+    });
+    // Follow-up update rather than a single create: the code is derived
+    // from the id Postgres just assigned, so it can't be known beforehand.
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { referralCode: referralCodeFor(user.id) },
     });
   } else if (!user.isActive) {
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
@@ -403,7 +425,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   };
 }
 
-export async function verifyOtpService({ phone: rawPhone, otp, name, email, role = 'customer', type = 'general', gobhiType }) {
+export async function verifyOtpService({ phone: rawPhone, otp, name, email, role = 'customer', type = 'general', gobhiType, referralCode }) {
   if (!rawPhone) {
     throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
   }
@@ -425,10 +447,10 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
     await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
   }
 
-  return issueSessionForUser({ phone, name, email, role, type, gobhiType });
+  return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode });
 }
 
-export async function verifyFirebaseTokenService({ idToken, name, email, role = 'customer', type = 'general', gobhiType }) {
+export async function verifyFirebaseTokenService({ idToken, name, email, role = 'customer', type = 'general', gobhiType, referralCode }) {
   if (!idToken) {
     throw { status: 400, error: 'idToken is required', errorCode: 'ID_TOKEN_REQUIRED' };
   }
@@ -452,7 +474,7 @@ export async function verifyFirebaseTokenService({ idToken, name, email, role = 
     throw { status: 400, error: 'Firebase token has an invalid phone number', errorCode: 'INVALID_PHONE_IN_TOKEN' };
   }
 
-  return issueSessionForUser({ phone, name, email, role, type, gobhiType });
+  return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode });
 }
 
 // Staff-only Google sign-in (admin portal). Unlike verifyFirebaseTokenService

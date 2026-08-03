@@ -26,6 +26,17 @@ model User {
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
   refreshTokens   RefreshToken[]
+  // Referral program: referralCode is this user's own shareable code,
+  // deterministically derived from `id` right after creation (see
+  // issueSessionForUser) — never random, so no collision-retry loop needed.
+  // referredByUserId is set once at creation from an incoming code and never
+  // mutated after; self-referral is structurally impossible since a user
+  // can't know their own code before the row (and therefore the id it's
+  // derived from) exists.
+  referralCode     String?  @unique
+  referredByUserId Int?
+  referredBy       User?    @relation("Referrals", fields: [referredByUserId], references: [id])
+  referrals        User[]   @relation("Referrals")
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 

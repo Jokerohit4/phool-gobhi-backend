@@ -302,6 +302,7 @@ const getMe = async (req, res) => {
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
+      referralCode: user.referralCode,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -314,6 +315,9 @@ const getMe = async (req, res) => {
 // Extended for buddy-service: gender/fitnessGoals seed its denormalized
 // discovery-filter cache, profileImageUrl/fcmToken back match/chat display
 // and push notifications (services/buddy-service/services/authClient.js).
+// Also extended for booking-service: referredByUserId lets completeBooking
+// check, on a customer's first completed session, whether to fire the
+// referral wallet credit.
 const getUserInternal = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });
@@ -327,6 +331,7 @@ const getUserInternal = async (req, res) => {
       fitnessGoals: user.fitnessGoals,
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
+      referredByUserId: user.referredByUserId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

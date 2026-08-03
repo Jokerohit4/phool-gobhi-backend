@@ -97,6 +97,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `booking_failed` | booking | customerId | `gym_id`, `reason` (`slot_full`/`insufficient_balance`), `amount` |
 | `booking_cancelled` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
 | `booking_completed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
+| `referral_credited` | booking | customerId | `booking_id`, `referrer_id` |
 | `checkin_requested` | booking | customerId | `booking_id`, `gym_id`, `location_verified` |
 | `wallet_topup_order_created` | wallet | userId | `amount`, `order_id` |
 | `wallet_topup_succeeded` | wallet | userId | `amount`, `order_id`, `via` (`webhook` if async) |
@@ -131,6 +132,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `slot_selected` | customer | Slot chosen (`start_time`) |
 | `book_tapped` | customer | Book button (`gym_id`, `amount`, `start_time`) |
 | `topup_tapped` | customer | Top-up initiated (`amount`) |
+| `referral_shared` | customer | Share your code tapped on Refer & Earn |
 | `onboarding_started` | partner | Wizard opened (`resumed_at_step`) |
 | `onboarding_step_completed` | partner | Each step (`step` 1–4, `gym_id` at 3) |
 | `onboarding_gym_photo_added` | partner | Photos picked (`count`) |

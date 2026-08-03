@@ -22,6 +22,7 @@ const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-serv
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
+const REFERRAL_BONUS = 50;
 
 // Booking's money fields are Decimal in Postgres (see schema.prisma) — every
 // read site below runs the fetched/created/updated row through this
@@ -729,6 +730,38 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
       } catch (payoutErr) {
         console.error('Partner payout failed for booking', bookingId, payoutErr.message);
       }
+    }
+
+    // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
+    // very first completed booking (never re-fires on later sessions) and
+    // only if they were referred. Same fire-and-forget, error-logged-not-
+    // thrown pattern as the partner payout above; idempotency keys make a
+    // retried completeBooking call (or a duplicate updateMany race) safe.
+    try {
+      const priorCompletedCount = await prisma.booking.count({
+        where: { customerId: booking.customerId, status: 'completed' },
+      });
+      if (priorCompletedCount === 1) {
+        const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+        const referredByUserId = profileRes.data?.referredByUserId;
+        if (referredByUserId) {
+          await axios.post(`${WALLET_SERVICE_URL}/${referredByUserId}/credit`, {
+            amount: REFERRAL_BONUS,
+            description: 'Referral bonus',
+            idempotencyKey: `referral-credit-referrer-${referredByUserId}-for-${booking.customerId}`,
+          }, await internalHeadersFor(WALLET_SERVICE_URL));
+          await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
+            amount: REFERRAL_BONUS,
+            description: 'Referral bonus',
+            idempotencyKey: `referral-credit-referred-${booking.customerId}`,
+          }, await internalHeadersFor(WALLET_SERVICE_URL));
+          track('referral_credited', booking.customerId, {
+            booking_id: booking.id, referrer_id: referredByUserId,
+          });
+        }
+      }
+    } catch (referralErr) {
+      console.error('Referral credit failed for booking', bookingId, referralErr.message);
     }
 
     // Fulfillment funnel: the session actually happened (partner verified at the gym).
