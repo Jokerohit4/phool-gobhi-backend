@@ -219,6 +219,35 @@ model LaunchGateSetting {
   @@schema("auth")
 }
 
+// Singleton row (id always 1) — admin-portal-editable OTP verification mode:
+// fast2sms/firebase are the two real providers (unchanged behavior); skip
+// layers a 123456 bypass onto the fast2sms code path but only for phones on
+// OtpSkipAllowlistEntry — every other phone still gets/needs a real OTP even
+// while skip is selected. Falls back to the legacy OTP_PROVIDER env var if no
+// row exists yet. Read by public GET /api/auth/otp-config (both Flutter apps
+// and the website) and edited via GET/PUT /api/auth/otp-config/admin.
+model OtpProviderSetting {
+  id        Int      @id @default(1)
+  provider  String   @default("fast2sms")
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
+
+  @@schema("auth")
+}
+
+// Phone numbers allowed to bypass real OTP verification with 123456 while
+// OtpProviderSetting.provider === "skip". Empty allowlist = skip mode
+// bypasses nothing for anyone (fail-safe default) — deliberately mirrors
+// PitchAccessContact's shape/normalization convention.
+model OtpSkipAllowlistEntry {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@schema("auth")
+}
+
 enum GobhiType {
   trainer
   cleaner

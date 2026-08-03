@@ -6,6 +6,9 @@ import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
+
+const SKIP_OTP_CODE = '123456';
 
 const prisma = new PrismaClient();
 
@@ -287,21 +290,30 @@ export async function sendOtpService(rawPhone) {
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
-  // OTP_PROVIDER is meant to be the single switch between WhatsApp/Fast2SMS
-  // and Firebase (see GET /otp-config) — but that switch previously only
-  // advised clients which path to take; this function itself would still
-  // attempt a real WhatsApp/Fast2SMS send regardless. That let Fast2SMS fire
-  // (and silently "succeed" per the 200 below even when delivery failed) for
-  // any caller of this endpoint even while the platform is on Firebase.
-  // Guard it here so "OTP_PROVIDER=firebase" is an actual guarantee, not
-  // just a hint — Fast2SMS/WhatsApp are disabled while it's set, and this is
-  // the only line that needs to change back when DLT registration lands.
-  if (process.env.OTP_PROVIDER === 'firebase') {
+  // provider is the admin-configurable switch between WhatsApp/Fast2SMS,
+  // Firebase, and skip (see GET /otp-config, admin-editable via
+  // /otp-config/admin) — but the switch previously only advised clients
+  // which path to take; this function itself would still attempt a real
+  // WhatsApp/Fast2SMS send regardless. That let Fast2SMS fire (and silently
+  // "succeed" per the 200 below even when delivery failed) for any caller of
+  // this endpoint even while the platform is on Firebase.
+  // Guard it here so "provider=firebase" is an actual guarantee, not just a
+  // hint — Fast2SMS/WhatsApp are disabled while it's set.
+  const provider = await loadOtpProvider();
+  if (provider === 'firebase') {
     throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
   const existing = await prisma.otpCode.findUnique({ where: { phone } });
   if (existing && Date.now() - existing.sentAt.getTime() < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
+  }
+  // Skip mode only bypasses the real send for phones on the allowlist —
+  // everyone else (including all traffic while provider is plain
+  // "fast2sms") gets the real WhatsApp/Fast2SMS send below. No OtpCode row
+  // is written for a bypassed number since verifyOtpService short-circuits
+  // before ever reading one.
+  if (provider === 'skip' && await isSkipAllowlisted(phone)) {
+    return { message: 'OTP sent successfully' };
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const now = new Date();
@@ -310,18 +322,9 @@ export async function sendOtpService(rawPhone) {
     create: { phone, code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
     update: { code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
   });
-  // Skip paid SMS while ALLOW_DEV_OTP is on — the 123456 bypass makes a real
-  // send pointless, and this ties "stop spending on SMS" to the same flag
-  // that has to be flipped back for real verification to resume, so the two
-  // can't drift out of sync.
-  const skipPaidSms = process.env.ALLOW_DEV_OTP === 'true';
-  const sent = await sendWhatsAppOtp(phone, code) || (!skipPaidSms && await sendFast2SmsOtp(phone, code));
+  const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
   if (!sent) console.log(`OTP for ${phone}: ${code}`);
-  const response = { message: 'OTP sent successfully' };
-  // Echoing the OTP is opt-in (set ALLOW_DEV_OTP=true in dev only) so an
-  // incomplete prod env can never leak codes.
-  if (process.env.ALLOW_DEV_OTP === 'true') response.otp = code;
-  return response;
+  return { message: 'OTP sent successfully' };
 }
 
 // Human-facing labels for the cross-app role-mismatch error below — keyed on
@@ -433,9 +436,9 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
   if (!phone) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
   }
-  const isDev = process.env.ALLOW_DEV_OTP === 'true';
-  const DEV_OTP = '123456';
-  if (!(isDev && otp === DEV_OTP)) {
+  const provider = await loadOtpProvider();
+  const skipBypass = provider === 'skip' && otp === SKIP_OTP_CODE && await isSkipAllowlisted(phone);
+  if (!skipBypass) {
     const entry = await prisma.otpCode.findUnique({ where: { phone } });
     if (!entry || Date.now() > entry.expiresAt.getTime()) {
       if (entry) await prisma.otpCode.delete({ where: { phone } }).catch(() => {});

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -45,6 +45,12 @@ router.post('/verify-otp', verifyOtp);
 router.post('/verify-firebase-token', verifyFirebaseToken);
 router.post('/google', googleSignIn);
 router.get('/otp-config', getOtpConfig);
+// Admin portal's raw view/edit of the OTP provider + skip-mode allowlist (Settings page).
+router.get('/otp-config/admin', requireGobhi, getOtpConfigAdmin);
+router.put('/otp-config/admin', requireGobhi, updateOtpConfigAdmin);
+router.get('/otp-config/admin/skip-allowlist', requireGobhi, listOtpSkipAllowlist);
+router.post('/otp-config/admin/skip-allowlist', requireGobhi, addOtpSkipAllowlist);
+router.delete('/otp-config/admin/skip-allowlist/:id', requireGobhi, removeOtpSkipAllowlist);
 // Force/soft-update check — public, called by both apps before login.
 router.get('/app-config', getAppConfig);
 // Admin portal's raw config view/edit (Settings page)

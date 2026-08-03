@@ -4,6 +4,14 @@ import semver from 'semver';
 import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
+import {
+  loadOtpProvider,
+  loadOtpProviderAdmin,
+  updateOtpProvider,
+  listSkipAllowlist,
+  addSkipAllowlistEntry,
+  removeSkipAllowlistEntry,
+} from '../services/otpProviderService.js';
 
 const prisma = new PrismaClient();
 
@@ -116,8 +124,60 @@ const googleSignIn = async (req, res) => {
   }
 };
 
-const getOtpConfig = (req, res) => {
-  res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
+const getOtpConfig = async (req, res) => {
+  try {
+    const provider = await loadOtpProvider();
+    res.json({ provider });
+  } catch (err) {
+    console.error('getOtpConfig error:', err);
+    res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
+  }
+};
+
+// gobhi-only — admin portal's raw view/edit of the OTP provider (Settings page).
+const getOtpConfigAdmin = async (req, res) => {
+  try {
+    const { provider, updatedAt } = await loadOtpProviderAdmin();
+    res.json({ data: { provider }, updatedAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateOtpConfigAdmin = async (req, res) => {
+  try {
+    const updated = await updateOtpProvider(req.body?.provider, req.user.id);
+    res.json({ data: { provider: updated.provider }, updatedAt: updated.updatedAt });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+const listOtpSkipAllowlist = async (req, res) => {
+  try {
+    const data = await listSkipAllowlist();
+    res.json({ data });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const addOtpSkipAllowlist = async (req, res) => {
+  try {
+    const entry = await addSkipAllowlistEntry(req.body ?? {});
+    res.status(201).json({ data: entry });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+const removeOtpSkipAllowlist = async (req, res) => {
+  try {
+    await removeSkipAllowlistEntry(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
 };
 
 // Default config used whenever no AppVersionSetting row exists yet — both
@@ -400,6 +460,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 
