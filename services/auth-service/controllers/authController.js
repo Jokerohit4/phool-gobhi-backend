@@ -130,7 +130,7 @@ const getOtpConfig = async (req, res) => {
     res.json({ provider });
   } catch (err) {
     console.error('getOtpConfig error:', err);
-    res.json({ provider: process.env.OTP_PROVIDER || 'fast2sms' });
+    res.json({ provider: 'firebase' });
   }
 };
 

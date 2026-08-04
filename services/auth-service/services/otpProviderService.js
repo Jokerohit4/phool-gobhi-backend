@@ -10,18 +10,20 @@ function normalizePhone(raw) {
   return String(raw ?? '').replace(/\D/g, '').slice(-10);
 }
 
-// Falls back to the legacy OTP_PROVIDER env var (then "fast2sms") until an
-// admin has ever saved a row — same "no row yet" convention as
-// loadAppVersionConfig/loadLaunchGate in authController.js.
+// Defaults to "firebase" until an admin has ever saved a row — same "no row
+// yet" convention as loadAppVersionConfig/loadLaunchGate in authController.js.
+// The legacy OTP_PROVIDER env fallback is gone: fast2sms is only ever active
+// when an admin explicitly selects it via the admin portal (PUT
+// /api/auth/otp-config/admin), never by environment alone.
 export async function loadOtpProvider() {
   const row = await prisma.otpProviderSetting.findUnique({ where: { id: 1 } });
-  return row?.provider || process.env.OTP_PROVIDER || 'fast2sms';
+  return row?.provider || 'firebase';
 }
 
 export async function loadOtpProviderAdmin() {
   const row = await prisma.otpProviderSetting.findUnique({ where: { id: 1 } });
   return {
-    provider: row?.provider || process.env.OTP_PROVIDER || 'fast2sms',
+    provider: row?.provider || 'firebase',
     updatedAt: row?.updatedAt || null,
   };
 }

@@ -223,12 +223,13 @@ model LaunchGateSetting {
 // fast2sms/firebase are the two real providers (unchanged behavior); skip
 // layers a 123456 bypass onto the fast2sms code path but only for phones on
 // OtpSkipAllowlistEntry — every other phone still gets/needs a real OTP even
-// while skip is selected. Falls back to the legacy OTP_PROVIDER env var if no
-// row exists yet. Read by public GET /api/auth/otp-config (both Flutter apps
-// and the website) and edited via GET/PUT /api/auth/otp-config/admin.
+// while skip is selected. Defaults to "firebase" until a row exists (the old
+// OTP_PROVIDER env fallback was removed — fast2sms is only active when an
+// admin explicitly picks it). Read by public GET /api/auth/otp-config (both
+// Flutter apps and the website) and edited via GET/PUT /api/auth/otp-config/admin.
 model OtpProviderSetting {
   id        Int      @id @default(1)
-  provider  String   @default("fast2sms")
+  provider  String   @default("firebase")
   updatedAt DateTime @updatedAt
   updatedBy Int?
 
