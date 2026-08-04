@@ -8,6 +8,21 @@ const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 const PROFILE_COMPLETION_BONUS = 20;
+// Someone at least this old must hold an account — mirrors the client-side
+// check (phool-gobhi-website lib/age.ts) so the API rejects under-age DOBs
+// even when a crafted request bypasses the UI.
+const MIN_AGE_YEARS = 11;
+
+// Latest allowed DOB as a UTC-midnight Date (both sides of the comparison in
+// updateProfile parse date-only strings, so no timezone drift).
+function minAgeCutoffDate() {
+  const now = new Date();
+  return new Date(
+    `${now.getFullYear() - MIN_AGE_YEARS}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')}`
+  );
+}
 
 // Fire-and-forget: keeps buddy-service's denormalized gender/dateOfBirth/
 // fitnessGoals cache from drifting after a profile edit (see
@@ -152,6 +167,12 @@ export const updateProfile = async (req, res) => {
 
     if (gender !== undefined && gender !== null && !VALID_GENDERS.includes(gender)) {
       return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
+    }
+    if (dateOfBirth !== undefined && dateOfBirth !== null && dateOfBirth !== '') {
+      const dob = new Date(dateOfBirth);
+      if (Number.isNaN(dob.getTime()) || dob.getTime() > minAgeCutoffDate().getTime()) {
+        return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old` });
+      }
     }
     if (fitnessGoals !== undefined && fitnessGoals !== null) {
       if (!Array.isArray(fitnessGoals) || fitnessGoals.some((goal) => !VALID_FITNESS_GOALS.includes(goal))) {
