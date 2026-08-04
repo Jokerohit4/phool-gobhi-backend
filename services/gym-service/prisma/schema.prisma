@@ -81,6 +81,7 @@ model Gym {
   reviews      GymReview[]
   slotBlocks   SlotBlock[]
   slotPrices   GymSlotPrice[]
+  editRequests GymEditRequest[]
 
   @@index([partnerId])
   @@schema("gym")
@@ -146,5 +147,51 @@ model GymSlotPrice {
 
   @@unique([gymId, startTime])
   @@index([gymId])
+  @@schema("gym")
+}
+
+enum EditRequestType {
+  profile
+  image_add
+  image_delete
+  doc_add
+  doc_delete
+  slot_prices
+  slot_block_add
+  slot_block_delete
+
+  @@schema("gym")
+}
+
+enum EditRequestStatus {
+  pending
+  approved
+  rejected
+
+  @@schema("gym")
+}
+
+// A partner mutation on an already-approved (live) gym. Instead of writing
+// straight to Gym/GymImage/SlotBlock/GymSlotPrice, the proposed change sits
+// here until a gobhi approves it — customers keep seeing the old approved
+// data the whole time. Gyms that have never been approved yet skip this
+// entirely (see gymService.js's isApproved gate) since nothing is live to
+// protect.
+model GymEditRequest {
+  id              Int                @id @default(autoincrement())
+  gymId           Int
+  gym             Gym                @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  partnerId       Int
+  changeType      EditRequestType
+  payload         Json
+  status          EditRequestStatus  @default(pending)
+  rejectionReason String?
+  reviewedBy      Int?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([gymId, status])
+  @@index([status])
   @@schema("gym")
 }

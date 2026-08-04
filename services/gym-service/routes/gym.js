@@ -13,6 +13,17 @@ router.get('/', ctrl.listGyms);
 router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
+
+// Pending-edit-request admin queue — MUST stay above `GET /:id` below: both
+// are one path segment, so Express would otherwise treat "edit-requests" as
+// an `:id` value (same footgun class as this service's gym-health route
+// ordering). ?status=pending|approved|rejected
+router.get('/edit-requests', requireRole('gobhi'), ctrl.listEditRequestsAdmin);
+router.get('/edit-requests/:id', requireRole('gobhi'), ctrl.getEditRequestAdmin);
+router.put('/edit-requests/:id/approve', requireRole('gobhi'), ctrl.approveEditRequest);
+// Body: {reason} (required)
+router.put('/edit-requests/:id/reject', requireRole('gobhi'), ctrl.rejectEditRequest);
+
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/availability', ctrl.getGymAvailability);
@@ -38,6 +49,8 @@ router.post('/:id/docs', requireRole('partner'), uploadGymDoc.single('file'), ct
 router.delete('/:id/docs', requireRole('partner'), ctrl.deleteGymDoc);
 router.get('/:id/slot-prices', requireRole('partner'), ctrl.getSlotPrices);
 router.put('/:id/slot-prices', requireRole('partner'), ctrl.updateSlotPrices);
+// A partner's own pending/reviewed edit requests for this gym (status banners).
+router.get('/:id/edit-requests', requireRole('partner'), ctrl.getPartnerEditRequests);
 router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   res.json({ url: req.file.path });

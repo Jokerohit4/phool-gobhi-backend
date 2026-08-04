@@ -250,7 +250,10 @@ export const deleteGymImage = async (req, res) => {
       parseInt(req.params.imageId),
       req.userId
     );
-    res.json(result);
+    // Always wrapped in {data: ...} — every other mutation response is, and
+    // callers branch on `body.data.pending` to tell a gated request apart
+    // from an applied one.
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -261,12 +264,18 @@ export const addGymDoc = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No document provided' });
     }
-    const brandDocs = await gymService.addGymDoc(
+    const result = await gymService.addGymDoc(
       parseInt(req.params.id),
       req.userId,
       req.file.path
     );
-    res.status(201).json({ data: { url: req.file.path, brandDocs } });
+    // gymService.addGymDoc returns either the updated brandDocs array
+    // (applied) or {pending, editRequest} (gated) — only nest it under
+    // `brandDocs` in the former case, otherwise callers can't see `pending`.
+    if (result?.pending) {
+      return res.status(201).json({ data: result });
+    }
+    res.status(201).json({ data: { url: req.file.path, brandDocs: result } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -278,12 +287,15 @@ export const deleteGymDoc = async (req, res) => {
     if (!url) {
       return res.status(400).json({ error: 'Document url is required' });
     }
-    const brandDocs = await gymService.deleteGymDoc(
+    const result = await gymService.deleteGymDoc(
       parseInt(req.params.id),
       req.userId,
       url
     );
-    res.json({ data: { brandDocs } });
+    if (result?.pending) {
+      return res.json({ data: result });
+    }
+    res.json({ data: { brandDocs: result } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -377,6 +389,51 @@ export const updateGymCommission = async (req, res) => {
   }
 };
 
+export const getPartnerEditRequests = async (req, res) => {
+  try {
+    const requests = await gymService.getPartnerEditRequests(parseInt(req.params.id), req.userId);
+    res.json({ data: requests });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listEditRequestsAdmin = async (req, res) => {
+  try {
+    const requests = await gymService.listEditRequestsAdmin({ status: req.query.status });
+    res.json({ data: requests });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getEditRequestAdmin = async (req, res) => {
+  try {
+    const request = await gymService.getEditRequestAdmin(parseInt(req.params.id));
+    res.json({ data: request });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const approveEditRequest = async (req, res) => {
+  try {
+    const request = await gymService.approveEditRequest(parseInt(req.params.id), req.userId);
+    res.json({ data: request });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const rejectEditRequest = async (req, res) => {
+  try {
+    const request = await gymService.rejectEditRequest(parseInt(req.params.id), req.userId, req.body?.reason);
+    res.json({ data: request });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getSlotPrices = async (req, res) => {
   try {
     const slots = await gymService.getSlotPrices(parseInt(req.params.id));
@@ -433,7 +490,7 @@ export const deleteSlotBlock = async (req, res) => {
       parseInt(req.params.blockId),
       req.userId
     );
-    res.json(result);
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message });
   }

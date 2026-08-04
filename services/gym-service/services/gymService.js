@@ -37,17 +37,6 @@ const SUBSCRIPTION_PLANS = [
   { planType: 'yearly', field: 'yearlyPlanPrice', days: 365 },
 ];
 
-// Approval only vouches for the gym as it looked at review time — shared by
-// updateGym (material fields) and upsertSlotPrices (per-slot pricing) so
-// both call sites reset isApproved/rejectionReason the same way.
-function maybeResetApproval(gym, updateData, changedMaterial) {
-  if (gym.isApproved && changedMaterial) {
-    updateData.isApproved = false;
-  } else if (!gym.isApproved && gym.rejectionReason && Object.keys(updateData).length > 0) {
-    updateData.rejectionReason = null;
-  }
-}
-
 // Validates the fields that flow into slot generation (utils/slots.js). A
 // non-positive slotDuration in particular isn't just bad data — it makes
 // generateTimeSlots loop forever, since its termination check assumes a
@@ -343,12 +332,40 @@ export async function createGym(partnerId, data) {
   return normalizeGymMoney(gym);
 }
 
+// The actual write for a profile-field change — shared by updateGym (gym not
+// yet approved: applies immediately) and approveEditRequest (gym approved:
+// applies once a gobhi signs off on the pending request built from the same
+// payload shape).
+async function applyGymProfileUpdate(gymId, updateData) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+
+  // Re-linking to a different (or first-time) Google place should show the
+  // new place's rating immediately, without waiting for a separate refresh
+  // click. Untouched saves (googlePlaceId unchanged) skip the extra API call.
+  if ('googlePlaceId' in updateData && updateData.googlePlaceId !== gym.googlePlaceId) {
+    Object.assign(updateData, await fetchGoogleRatingFields(updateData.googlePlaceId));
+  }
+
+  const updated = normalizeGymMoney(await prisma.gym.update({
+    where: { id: gymId },
+    data: updateData,
+  }));
+
+  // Changing hours/duration shifts slot boundaries, which can orphan
+  // GymSlotPrice rows whose startTime no longer appears in the regenerated
+  // slot list — clear those out so stale prices don't silently linger.
+  if ('openTime' in updateData || 'closeTime' in updateData || 'slotDuration' in updateData) {
+    const validStartTimes = generateTimeSlots(updated.openTime, updated.closeTime, updated.slotDuration)
+      .map(s => s.startTime);
+    await prisma.gymSlotPrice.deleteMany({
+      where: { gymId, startTime: { notIn: validStartTimes } },
+    });
+  }
+
+  return updated;
+}
+
 export async function updateGym(gymId, partnerId, data) {
-  // Normalized immediately — the MATERIAL_FIELDS comparison below does
-  // `updateData[field] !== gym[field]`, and a raw Prisma Decimal is never
-  // `===` to the plain number the request body sends, so every price-field
-  // update would wrongly look "changed" (and reset isApproved) if this were
-  // skipped, even when the value didn't actually move.
   const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id: gymId },
   }));
@@ -387,11 +404,11 @@ export async function updateGym(gymId, partnerId, data) {
     'yearlyPlanPrice',
     // Lets a partner reactivate a gym that was deactivated via DELETE
     // /:id (softDeleteGym) — that route only ever sets isActive=false,
-    // with no corresponding endpoint to flip it back until now.
+    // with no corresponding endpoint to flip it back until now. Partner's
+    // own on/off switch — applied immediately below, never gated behind an
+    // edit request, since there's nothing to "review" about pulling your
+    // own listing offline.
     'isActive',
-    // Linking/relinking a Google place — NOT in MATERIAL_FIELDS below, since
-    // it doesn't change what's actually being reviewed and shouldn't reset
-    // approval the way changing the address itself does.
     'googlePlaceId',
   ];
 
@@ -403,44 +420,42 @@ export async function updateGym(gymId, partnerId, data) {
 
   validateGymFields(updateData);
 
-  // Approval only vouches for the gym as it looked at review time — if a
-  // partner changes what's actually being reviewed (identity, location,
-  // price) after approval, that approval no longer means anything and has
-  // to be re-earned. Cosmetic fields (description, phone, hours, amenities,
-  // capacity) don't trigger this.
-  const MATERIAL_FIELDS = [
-    'name', 'address', 'city', 'state', 'lat', 'lng', 'sessionPrice',
-    'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'sixMonthlyPlanPrice', 'yearlyPlanPrice',
-  ];
-  const changedMaterialField = MATERIAL_FIELDS.some(
-    field => field in updateData && updateData[field] !== gym[field]
-  );
-  maybeResetApproval(gym, updateData, changedMaterialField);
+  const { isActive, ...gatedData } = updateData;
 
-  // Re-linking to a different (or first-time) Google place should show the
-  // new place's rating immediately, without waiting for a separate refresh
-  // click. Untouched saves (googlePlaceId unchanged) skip the extra API call.
-  if ('googlePlaceId' in updateData && updateData.googlePlaceId !== gym.googlePlaceId) {
-    Object.assign(updateData, await fetchGoogleRatingFields(updateData.googlePlaceId));
+  let updatedGym = gym;
+  if (isActive !== undefined) {
+    updatedGym = normalizeGymMoney(await prisma.gym.update({
+      where: { id: gymId },
+      data: { isActive },
+    }));
   }
 
-  const updated = normalizeGymMoney(await prisma.gym.update({
-    where: { id: gymId },
-    data: updateData,
-  }));
-
-  // Changing hours/duration shifts slot boundaries, which can orphan
-  // GymSlotPrice rows whose startTime no longer appears in the regenerated
-  // slot list — clear those out so stale prices don't silently linger.
-  if ('openTime' in updateData || 'closeTime' in updateData || 'slotDuration' in updateData) {
-    const validStartTimes = generateTimeSlots(updated.openTime, updated.closeTime, updated.slotDuration)
-      .map(s => s.startTime);
-    await prisma.gymSlotPrice.deleteMany({
-      where: { gymId, startTime: { notIn: validStartTimes } },
-    });
+  if (Object.keys(gatedData).length === 0) {
+    return updatedGym;
   }
 
-  return updated;
+  // Once a gym is live, a partner's edit no longer writes straight to
+  // customer-facing data — it becomes a pending request a gobhi must
+  // approve, and the old approved version keeps showing until then. A gym
+  // that has never been approved yet (still in initial review, or being
+  // fixed up after rejection) has nothing live to protect, so it keeps
+  // applying directly, same as always.
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'profile', gatedData);
+    return { pending: true, editRequest };
+  }
+
+  const applied = await applyGymProfileUpdate(gymId, gatedData);
+
+  // Editing a rejected gym is an implicit "I fixed it" — worth another look,
+  // so clear the stale rejection reason rather than leaving it displayed
+  // next to what might now be a compliant listing.
+  if (gym.rejectionReason) {
+    await prisma.gym.update({ where: { id: gymId }, data: { rejectionReason: null } });
+    applied.rejectionReason = null;
+  }
+
+  return applied;
 }
 
 // Unlike fetchGoogleRatingFields (used inline during create/update, where a
@@ -532,6 +547,31 @@ export async function getPartnerGymSummary(partnerId) {
   };
 }
 
+// Cloudinary upload already happened by the time either of these run (the
+// caller needs the URL either way) — what's gated is only the DB row that
+// makes the photo/doc show up on the live gym.
+async function applyGymImageAdd(gymId, { url, publicId }) {
+  return prisma.gymImage.create({ data: { gymId, url, publicId } });
+}
+
+async function applyGymImageDelete({ imageId }) {
+  const image = await prisma.gymImage.findUnique({ where: { id: imageId } });
+  if (!image) {
+    throw { status: 404, error: 'Image not found' };
+  }
+
+  if (image.publicId) {
+    try {
+      await cloudinary.uploader.destroy(image.publicId);
+    } catch (err) {
+      console.error('Error deleting image from Cloudinary:', err.message);
+    }
+  }
+
+  await prisma.gymImage.delete({ where: { id: imageId } });
+  return { message: 'Image deleted' };
+}
+
 export async function addGymImage(gymId, partnerId, url, publicId) {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },
@@ -545,15 +585,12 @@ export async function addGymImage(gymId, partnerId, url, publicId) {
     throw { status: 403, error: 'Forbidden' };
   }
 
-  const image = await prisma.gymImage.create({
-    data: {
-      gymId,
-      url,
-      publicId,
-    },
-  });
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'image_add', { url, publicId });
+    return { pending: true, editRequest };
+  }
 
-  return image;
+  return applyGymImageAdd(gymId, { url, publicId });
 }
 
 export async function deleteGymImage(gymId, imageId, partnerId) {
@@ -569,27 +606,17 @@ export async function deleteGymImage(gymId, imageId, partnerId) {
     throw { status: 403, error: 'Forbidden' };
   }
 
-  const image = await prisma.gymImage.findUnique({
-    where: { id: imageId },
-  });
-
+  const image = await prisma.gymImage.findUnique({ where: { id: imageId } });
   if (!image) {
     throw { status: 404, error: 'Image not found' };
   }
 
-  if (image.publicId) {
-    try {
-      await cloudinary.uploader.destroy(image.publicId);
-    } catch (err) {
-      console.error('Error deleting image from Cloudinary:', err.message);
-    }
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'image_delete', { imageId });
+    return { pending: true, editRequest };
   }
 
-  await prisma.gymImage.delete({
-    where: { id: imageId },
-  });
-
-  return { message: 'Image deleted' };
+  return applyGymImageDelete({ imageId });
 }
 
 // Derive a Cloudinary public id from a delivery URL, e.g.
@@ -605,11 +632,7 @@ function cloudinaryPublicIdFromUrl(url) {
   }
 }
 
-export async function addGymDoc(gymId, partnerId, url) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-  if (!gym) throw { status: 404, error: 'Gym not found' };
-  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
-
+async function applyGymDocAdd(gymId, { url }) {
   const updated = await prisma.gym.update({
     where: { id: gymId },
     data: { brandDocs: { push: url } },
@@ -618,12 +641,9 @@ export async function addGymDoc(gymId, partnerId, url) {
   return updated.brandDocs;
 }
 
-export async function deleteGymDoc(gymId, partnerId, url) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-  if (!gym) throw { status: 404, error: 'Gym not found' };
-  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
-
-  const remaining = (gym.brandDocs || []).filter((d) => d !== url);
+async function applyGymDocDelete(gymId, { url }) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { brandDocs: true } });
+  const remaining = (gym?.brandDocs || []).filter((d) => d !== url);
 
   // Best-effort Cloudinary cleanup. brandDocs stores only URLs, so derive the
   // public id; resource_type 'auto'/raw uploads need to be destroyed as such.
@@ -642,6 +662,32 @@ export async function deleteGymDoc(gymId, partnerId, url) {
     select: { brandDocs: true },
   });
   return updated.brandDocs;
+}
+
+export async function addGymDoc(gymId, partnerId, url) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'doc_add', { url });
+    return { pending: true, editRequest };
+  }
+
+  return applyGymDocAdd(gymId, { url });
+}
+
+export async function deleteGymDoc(gymId, partnerId, url) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'doc_delete', { url });
+    return { pending: true, editRequest };
+  }
+
+  return applyGymDocDelete(gymId, { url });
 }
 
 // Optional per-review category scores — a customer can rate any subset, so
@@ -772,6 +818,119 @@ export async function updateGymCommission(gymId, commissionPct) {
   }));
 }
 
+// Pending edit requests ------------------------------------------------------
+// Once a gym is approved, the gated mutations above (updateGym's non-isActive
+// fields, image/doc add-delete, slot prices, slot blocks) route here instead
+// of writing live. A gobhi reviews the payload and either approves it (which
+// dispatches to the same apply* function the mutation would have called
+// directly on an unapproved gym) or rejects it (no live write at all).
+
+async function createEditRequest(gymId, partnerId, changeType, payload) {
+  // A partner is never blocked from resubmitting — the newest request for a
+  // given (gym, changeType) simply supersedes whatever was still pending,
+  // so duplicate pending rows never pile up and there's always exactly one
+  // pending request per changeType to review.
+  await prisma.gymEditRequest.updateMany({
+    where: { gymId, changeType, status: 'pending' },
+    data: { status: 'rejected', rejectionReason: 'Superseded by a newer request' },
+  });
+
+  return prisma.gymEditRequest.create({
+    data: { gymId, partnerId, changeType, payload },
+  });
+}
+
+// Partner-facing: their own gym's request history (to show pending/rejected
+// status banners) — ownership-checked the same way every other partner route is.
+export async function getPartnerEditRequests(gymId, partnerId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { partnerId: true } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  return prisma.gymEditRequest.findMany({
+    where: { gymId },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+  });
+}
+
+export async function listEditRequestsAdmin({ status = 'pending' } = {}) {
+  return prisma.gymEditRequest.findMany({
+    where: { status },
+    include: { gym: { select: { name: true, city: true, partnerId: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function getEditRequestAdmin(id) {
+  const request = await prisma.gymEditRequest.findUnique({
+    where: { id },
+    include: { gym: true },
+  });
+  if (!request) throw { status: 404, error: 'Edit request not found' };
+  request.gym = normalizeGymMoney(request.gym);
+  return request;
+}
+
+export async function approveEditRequest(id, gobhiId) {
+  const request = await prisma.gymEditRequest.findUnique({ where: { id } });
+  if (!request) throw { status: 404, error: 'Edit request not found' };
+  if (request.status !== 'pending') {
+    throw { status: 400, error: `Edit request is already ${request.status}` };
+  }
+
+  switch (request.changeType) {
+    case 'profile':
+      await applyGymProfileUpdate(request.gymId, request.payload);
+      break;
+    case 'image_add':
+      await applyGymImageAdd(request.gymId, request.payload);
+      break;
+    case 'image_delete':
+      await applyGymImageDelete(request.payload);
+      break;
+    case 'doc_add':
+      await applyGymDocAdd(request.gymId, request.payload);
+      break;
+    case 'doc_delete':
+      await applyGymDocDelete(request.gymId, request.payload);
+      break;
+    case 'slot_prices':
+      await applySlotPrices(request.gymId, request.payload.prices);
+      break;
+    case 'slot_block_add':
+      await applySlotBlockAdd(request.gymId, request.payload);
+      break;
+    case 'slot_block_delete':
+      await applySlotBlockDelete(request.payload);
+      break;
+    default:
+      throw { status: 500, error: `Unknown edit request type: ${request.changeType}` };
+  }
+
+  return prisma.gymEditRequest.update({
+    where: { id },
+    data: { status: 'approved', reviewedBy: gobhiId, reviewedAt: new Date() },
+  });
+}
+
+export async function rejectEditRequest(id, gobhiId, reason) {
+  if (!reason) {
+    throw { status: 400, error: 'A reason is required when rejecting an edit request' };
+  }
+
+  const request = await prisma.gymEditRequest.findUnique({ where: { id } });
+  if (!request) throw { status: 404, error: 'Edit request not found' };
+  if (request.status !== 'pending') {
+    throw { status: 400, error: `Edit request is already ${request.status}` };
+  }
+
+  return prisma.gymEditRequest.update({
+    where: { id },
+    data: { status: 'rejected', rejectionReason: reason, reviewedBy: gobhiId, reviewedAt: new Date() },
+  });
+}
+
 export async function getAvailableSlots(gymId, date) {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },
@@ -799,11 +958,7 @@ export async function getSlotBlocks(gymId, date) {
   });
 }
 
-export async function createSlotBlock(gymId, partnerId, { date, startTime, endTime }) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
-  if (!gym) throw { status: 404, error: 'Gym not found' };
-  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
-
+async function applySlotBlockAdd(gymId, { date, startTime, endTime }) {
   // Prevent duplicate blocks
   const existing = await prisma.slotBlock.findFirst({
     where: { gymId, date, startTime },
@@ -815,16 +970,41 @@ export async function createSlotBlock(gymId, partnerId, { date, startTime, endTi
   });
 }
 
+async function applySlotBlockDelete({ blockId }) {
+  // deleteMany rather than delete — approval can run after the partner (or
+  // another approval) already removed the same block, and that shouldn't
+  // fail the approval.
+  await prisma.slotBlock.deleteMany({ where: { id: blockId } });
+  return { message: 'Block removed' };
+}
+
+export async function createSlotBlock(gymId, partnerId, { date, startTime, endTime }) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'slot_block_add', { date, startTime, endTime });
+    return { pending: true, editRequest };
+  }
+
+  return applySlotBlockAdd(gymId, { date, startTime, endTime });
+}
+
 export async function deleteSlotBlock(blockId, partnerId) {
   const block = await prisma.slotBlock.findUnique({
     where: { id: blockId },
-    include: { gym: { select: { partnerId: true } } },
+    include: { gym: { select: { id: true, partnerId: true, isApproved: true } } },
   });
   if (!block) throw { status: 404, error: 'Block not found' };
   if (block.gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
 
-  await prisma.slotBlock.delete({ where: { id: blockId } });
-  return { message: 'Block removed' };
+  if (block.gym.isApproved) {
+    const editRequest = await createEditRequest(block.gym.id, partnerId, 'slot_block_delete', { blockId });
+    return { pending: true, editRequest };
+  }
+
+  return applySlotBlockDelete({ blockId });
 }
 
 export async function isSlotBlocked(gymId, date, startTime) {
@@ -862,6 +1042,30 @@ export async function getSlotPrices(gymId) {
   }));
 }
 
+// Re-derives valid slots from the gym as it looks RIGHT NOW rather than
+// trusting whatever was valid when the request was submitted — hours/duration
+// may have changed (via a separately-approved profile edit) in the meantime.
+async function applySlotPrices(gymId, prices) {
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({ where: { id: gymId } }));
+  const validSlots = new Map(
+    generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration).map(s => [s.startTime, s.endTime])
+  );
+
+  await prisma.$transaction(
+    prices
+      .filter(p => validSlots.has(p.startTime))
+      .map(p =>
+        prisma.gymSlotPrice.upsert({
+          where: { gymId_startTime: { gymId, startTime: p.startTime } },
+          update: { price: p.price },
+          create: { gymId, startTime: p.startTime, endTime: validSlots.get(p.startTime), price: p.price },
+        })
+      )
+  );
+
+  return getSlotPrices(gymId);
+}
+
 export async function upsertSlotPrices(gymId, partnerId, prices) {
   const gym = normalizeGymMoney(await prisma.gym.findUnique({ where: { id: gymId } }));
   if (!gym) throw { status: 404, error: 'Gym not found' };
@@ -884,25 +1088,12 @@ export async function upsertSlotPrices(gymId, partnerId, prices) {
     }
   }
 
-  await prisma.$transaction(
-    prices.map(p =>
-      prisma.gymSlotPrice.upsert({
-        where: { gymId_startTime: { gymId, startTime: p.startTime } },
-        update: { price: p.price },
-        create: { gymId, startTime: p.startTime, endTime: validSlots.get(p.startTime), price: p.price },
-      })
-    )
-  );
-
-  // Slot pricing is reviewed at approval time just like sessionPrice —
-  // saving new prices on an already-approved gym re-earns that approval.
-  const updateData = {};
-  maybeResetApproval(gym, updateData, true);
-  if (Object.keys(updateData).length > 0) {
-    await prisma.gym.update({ where: { id: gymId }, data: updateData });
+  if (gym.isApproved) {
+    const editRequest = await createEditRequest(gymId, partnerId, 'slot_prices', { prices });
+    return { pending: true, editRequest };
   }
 
-  return getSlotPrices(gymId);
+  return applySlotPrices(gymId, prices);
 }
 
 // Resolves the price for one specific slot (falls back to sessionPrice),
