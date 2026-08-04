@@ -22,7 +22,10 @@ const { execFileSync } = require('child_process');
 
 const [, , baseRef, headRef] = process.argv;
 
-if (!baseRef || !headRef) {
+// headRef is always present (the commit being deployed). baseRef may be
+// empty/zeros for workflow_dispatch (GitHub sends no `before`) — that's not
+// an error: getChangedFiles() treats an unknown base as "everything changed".
+if (!headRef) {
   console.error('Usage: detect-changed-services.cjs <baseRef> <headRef>');
   process.exit(1);
 }
