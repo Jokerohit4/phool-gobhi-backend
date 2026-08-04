@@ -215,7 +215,7 @@ jobs:
           workload_identity_provider: ${{ steps.env.outputs.ENV == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
           token_format: 'id_token'
-          audience: ${{ steps.svcurl.outputs.url }}
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
 
       - id: healthcheck
         env:
