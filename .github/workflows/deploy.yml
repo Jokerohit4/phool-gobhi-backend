@@ -197,7 +197,7 @@ jobs:
       # URL, then mint an audience-scoped identity token via the auth action.
       # WIF external-account creds can't do `gcloud auth print-identity-token
       # --audiences <url>` (gcloud: "Invalid account type"), so the action is
-      # re-invoked with token_format=identity_token and the service URL as
+      # re-invoked with token_format=id_token and the service URL as
       # audience — the only reliable way to satisfy the IAM invoker check on
       # locked-down (no-allow-unauthenticated) services. The per-env
       # health-check providers exist because a provider is capped at 10
@@ -214,7 +214,7 @@ jobs:
         with:
           workload_identity_provider: ${{ steps.env.outputs.ENV == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
-          token_format: 'identity_token'
+          token_format: 'id_token'
           audience: ${{ steps.svcurl.outputs.url }}
 
       - id: healthcheck
