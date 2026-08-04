@@ -17,6 +17,7 @@ import {
   getActiveSubscriptionInternal,
   redeemGiftDayInternal,
   processLapsedSubscriptionsInternal,
+  reconcilePendingRazorpayOrdersInternal,
   getGiftBonusPayoutsAnalytics,
   getMySubscriptions,
   getTransactionByKeyInternal,
@@ -51,5 +52,6 @@ router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer'
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check
 router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
+router.post('/internal/orders/reconcile-pending', requireInternal, reconcilePendingRazorpayOrdersInternal); // Razorpay top-up reconciliation trigger
 
 export default router;

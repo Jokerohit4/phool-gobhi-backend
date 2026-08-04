@@ -97,6 +97,8 @@ model RazorpayOrder {
   gymId             Int?
   planType          String?
 
+  @@index([status, createdAt])
+  @@index([userId, status])
   @@schema("wallet")
 }
 

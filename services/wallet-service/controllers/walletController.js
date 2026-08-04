@@ -20,6 +20,7 @@ import {
   getMySubscriptionsService,
   getTransactionByIdempotencyKeyService,
   getGymCity,
+  reconcilePendingRazorpayOrdersService,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -48,6 +49,15 @@ export const createWallet = async (req, res) => {
 
 export const getMyWallet = async (req, res) => {
   try {
+    // Lazy Razorpay top-up reconciliation — a customer opening their wallet
+    // is the exact moment a paid-but-unsettled top-up should land, so settle
+    // any stale PENDING orders first. Best-effort and never allowed to break
+    // the wallet read: a DB or Razorpay hiccup here must not 500 the balance.
+    try {
+      await reconcilePendingRazorpayOrdersService({ userId: req.userId });
+    } catch (err) {
+      console.error('Lazy wallet reconcile error:', err.message);
+    }
     let wallet;
     try {
       wallet = await getWalletService(req.userId);
@@ -79,6 +89,11 @@ export const getWallet = async (req, res) => {
 
 export const getMyWalletTransactions = async (req, res) => {
   try {
+    try {
+      await reconcilePendingRazorpayOrdersService({ userId: req.userId });
+    } catch (err) {
+      console.error('Lazy wallet reconcile error:', err.message);
+    }
     const transactions = await getWalletTransactionsService(req.userId);
     res.json({ data: transactions });
   } catch (err) {
@@ -354,6 +369,20 @@ export const processLapsedSubscriptionsInternal = async (req, res) => {
   }
 };
 
+// Internal (requireInternal): manual/periodic trigger for Razorpay top-up
+// reconciliation — the same logic the in-process timer and the lazy
+// on-wallet-read path already run, exposed so a Cloud Scheduler job (or a
+// one-off curl) can force a sweep of all stale PENDING orders at once.
+export const reconcilePendingRazorpayOrdersInternal = async (req, res) => {
+  try {
+    const userId = req.body?.userId ? Number(req.body.userId) : undefined;
+    const result = await reconcilePendingRazorpayOrdersService(userId ? { userId } : {});
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 // Admin (requireRole('gobhi')): powers the admin portal's "Gift & Bonus
 // Payouts" analytics tab.
 export const getGiftBonusPayoutsAnalytics = async (req, res) => {
@@ -394,7 +423,13 @@ export const handleRazorpayWebhook = async (req, res) => {
 
     const event = req.body.event;
 
-    if (event === 'payment.authorized') {
+    // Both events mean the charge succeeded and the money is in — cards and
+    // netbanking fire payment.authorized first (and again on capture), while
+    // UPI and some wallets only ever fire payment.captured. Same payload
+    // shape, same credit. Without the captured branch, a UPI top-up where the
+    // customer closes the app before the client-side /verify path runs would
+    // never be credited.
+    if (event === 'payment.authorized' || event === 'payment.captured') {
       const { id: paymentId, order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
 

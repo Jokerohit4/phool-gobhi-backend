@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import Razorpay from 'razorpay';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
+import { track } from '../utils/analytics.js';
 const prisma = new PrismaClient();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
@@ -693,4 +695,89 @@ export async function processLapsedSubscriptionsService() {
     processed++;
   }
   return { processed, total: candidates.length };
+}
+
+// Razorpay top-up reconciliation --------------------------------------------
+//
+// An order created but not settled within this window is fair game for the
+// reconciler. 10 minutes gives the active Razorpay checkout plus the
+// client-side /verify call plenty of time to settle normally before a
+// reconcile could race it.
+const RECONCILE_ORDER_AFTER_MS = 10 * 60 * 1000;
+
+function razorpayClient() {
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_SECRET,
+  });
+}
+
+// Settles one stale PENDING order against Razorpay's own payment records:
+//  - a captured/authorized payment => credit the wallet (same claim-then-
+//    credit path the client /verify and the webhook use, so the atomic
+//    PENDING->PROCESSING claim guarantees no double credit no matter which
+//    of the three settles it first);
+//  - only failed payments => mark the order FAILED;
+//  - no payment at all (checkout abandoned mid-flight) => leave PENDING for
+//    the next sweep, since the user may still complete it.
+async function settleRazorpayOrder(razorpay, order) {
+  // fetchPayments throws if the order is unknown to Razorpay (e.g. created
+  // against a different key set) — the caller treats that as unresolved.
+  const payments = await razorpay.orders.fetchPayments(order.orderId);
+  const list = payments?.items ?? [];
+
+  const succeeded = list.find((p) => p.status === 'captured' || p.status === 'authorized');
+  const anyFailed = list.length > 0 && list.every((p) => p.status === 'failed');
+  if (!succeeded && !anyFailed) return 'unresolved';
+
+  const claimed = await claimRazorpayOrderService(order.orderId);
+  if (!claimed) return 'unresolved'; // client /verify or webhook settled it first
+
+  if (succeeded) {
+    await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`);
+    await updateRazorpayOrderStatusService(order.orderId, 'SUCCESS', succeeded.id);
+    track('wallet_topup_succeeded', order.userId, { amount: Number(order.amount), order_id: order.orderId, via: 'reconcile' });
+    return 'credited';
+  }
+
+  await updateRazorpayOrderStatusService(order.orderId, 'FAILED');
+  track('wallet_topup_failed', order.userId, { amount: Number(order.amount), order_id: order.orderId });
+  return 'failed';
+}
+
+// Finds PENDING top-up orders older than the settle window and settles them
+// against Razorpay. `userId` scopes it to one customer (the lazy on-read
+// path); omitting it reconciles everything (the periodic sweep / internal
+// trigger). Failures are swallowed per-order — a single bad order must never
+// stall the rest of the sweep.
+export async function reconcilePendingRazorpayOrdersService({ userId } = {}) {
+  const cutoff = new Date(Date.now() - RECONCILE_ORDER_AFTER_MS);
+  const candidates = await prisma.razorpayOrder.findMany({
+    where: {
+      purpose: 'topup',
+      status: 'PENDING',
+      createdAt: { lt: cutoff },
+      ...(userId ? { userId } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const razorpay = razorpayClient();
+  let credited = 0;
+  let failed = 0;
+  let unresolved = 0;
+
+  for (const order of candidates) {
+    try {
+      const outcome = await settleRazorpayOrder(razorpay, order);
+      if (outcome === 'credited') credited++;
+      else if (outcome === 'failed') failed++;
+      else unresolved++;
+    } catch (err) {
+      console.error(`Reconcile order ${order.orderId} error:`, err.message);
+      unresolved++;
+    }
+  }
+
+  return { credited, failed, unresolved, total: candidates.length };
 }
