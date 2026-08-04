@@ -99,6 +99,7 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_OUTPUT, 'source-dir=' + s.sourceDir + '\n');
             fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has-prisma=' + !!s.hasPrisma + '\n');
             fs.appendFileSync(process.env.GITHUB_OUTPUT, 'health-guard=' + !!s.healthCheckGuard + '\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'allow-unauthenticated=' + !!s.allowUnauthenticated + '\n');
           "
 
       - uses: google-github-actions/auth@v2
@@ -147,12 +148,23 @@ jobs:
             --format="value(status.traffic[0].revisionName)" 2>/dev/null || echo "")
           echo "revision=$PREV" >> "$GITHUB_OUTPUT"
 
+      # Only the gateway is meant to be publicly invokable — every backend
+      # service should reject unauthenticated Cloud Run ingress entirely,
+      # with the app-layer x-internal-key check as a second, independent
+      # layer on top, not instead of this one. This used to be unconditional
+      # `--allow-unauthenticated` for every service in the matrix (gateway
+      # included), which silently re-opened public access to every backend
+      # service on every single deploy — the culprit behind IAM lockdown
+      # "regressing" despite never being reverted on purpose. Driven by
+      # deploy/services.json's allowUnauthenticated flag (true only for
+      # gateway) so this can never drift service-by-service again.
       - id: deploy
         run: |
           gcloud run deploy "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
             --source="${{ steps.svcmeta.outputs.source-dir }}" \
             --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
-            --allow-unauthenticated --quiet \
+            $([ "${{ steps.svcmeta.outputs.allow-unauthenticated }}" = "true" ] && echo --allow-unauthenticated || echo --no-allow-unauthenticated) \
+            --quiet \
             --set-env-vars="${{ steps.flags.outputs.env-vars }}" \
             --set-secrets="${{ steps.flags.outputs.secrets }}"
 

@@ -7,6 +7,7 @@
       "sourceDir": ".",
       "hasPrisma": false,
       "healthCheckGuard": false,
+      "allowUnauthenticated": true,
       "pathTriggers": [
         "index.js",
         "package.json",
@@ -55,6 +56,7 @@
       "sourceDir": "services/auth-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
+      "allowUnauthenticated": false,
       "pathTriggers": ["services/auth-service/**"],
       "env": {
         "dev": {
@@ -112,6 +114,7 @@
       "sourceDir": "services/gym-service",
       "hasPrisma": true,
       "healthCheckGuard": true,
+      "allowUnauthenticated": false,
       "pathTriggers": ["services/gym-service/**"],
       "env": {
         "dev": {
@@ -156,6 +159,7 @@
       "sourceDir": "services/wallet-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
+      "allowUnauthenticated": false,
       "pathTriggers": ["services/wallet-service/**"],
       "env": {
         "dev": {
@@ -203,6 +207,7 @@
       "sourceDir": "services/booking-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
+      "allowUnauthenticated": false,
       "pathTriggers": ["services/booking-service/**"],
       "env": {
         "dev": {
@@ -245,6 +250,7 @@
       "sourceDir": "services/buddy-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
+      "allowUnauthenticated": false,
       "pathTriggers": ["services/buddy-service/**"],
       "env": {
         "dev": {

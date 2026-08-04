@@ -44,11 +44,18 @@ Deploy a single backend service to Google Cloud Run. Arguments: `$ARGUMENTS`
      --source <source-dir> \
      --project phool-gobhi \
      --region asia-south1 \
-     --allow-unauthenticated \
+     --no-allow-unauthenticated \
      --quiet \
      --set-env-vars="<env-vars value from above>" \
      --set-secrets="<secrets value from above>"
    ```
+   **`--no-allow-unauthenticated` above is for every service EXCEPT `gateway`.** Check
+   `deploy/services.json`'s `allowUnauthenticated` field for this service first — only `gateway`
+   has it `true` and should use `--allow-unauthenticated` instead. Passing `--allow-unauthenticated`
+   for a backend service re-opens public Cloud Run ingress to it, bypassing the IAM lockdown
+   entirely regardless of the app-layer `x-internal-key` check — this exact mistake is what
+   silently undid the lockdown before (every CI deploy passed it unconditionally until this was
+   fixed in `deploy.yml`).
 
 6. **Verify.** Get the URL with
    `gcloud run services describe <service>-<env> --project phool-gobhi --region asia-south1 --format="value(status.url)"`
