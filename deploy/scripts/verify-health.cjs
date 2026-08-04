@@ -26,20 +26,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// gcloud ships as gcloud.cmd on Windows, which Node can only invoke via a
+// shell — only opt into that on win32 so CI (Linux, real gcloud binary)
+// doesn't take the shell-arg-escaping risk/deprecation warning for no reason.
+function gcloud(args) {
+  return execFileSync('gcloud', args, {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  }).trim();
+}
+
 function getServiceUrl() {
-  const url = execFileSync(
-    'gcloud',
-    [
-      'run', 'services', 'describe', cloudRunName,
-      '--project', 'phool-gobhi',
-      '--region', 'asia-south1',
-      '--format', 'value(status.url)',
-    ],
-    // gcloud ships as gcloud.cmd on Windows, which Node can only invoke via a
-    // shell — only opt into that on win32 so CI (Linux, real gcloud binary)
-    // doesn't take the shell-arg-escaping risk/deprecation warning for no reason.
-    { encoding: 'utf8', shell: process.platform === 'win32' }
-  ).trim();
+  const url = gcloud([
+    'run', 'services', 'describe', cloudRunName,
+    '--project', 'phool-gobhi',
+    '--region', 'asia-south1',
+    '--format', 'value(status.url)',
+  ]);
 
   if (!url) {
     throw new Error(`gcloud returned no URL for service "${cloudRunName}"`);
@@ -47,9 +50,20 @@ function getServiceUrl() {
   return url;
 }
 
-function checkOnce(healthUrl) {
+// Only the gateway accepts unauthenticated Cloud Run ingress (see
+// deploy/services.json's allowUnauthenticated) — every other service 403s
+// at the Cloud Run IAM layer before the request ever reaches the app, no
+// matter what the app-layer /health route does. The CI deployer service
+// account has roles/run.invoker on every backend service specifically so
+// this check can authenticate; this mints a token scoped to that one
+// audience (the Cloud Run service URL) rather than reusing a broader token.
+function getIdentityToken(audience) {
+  return gcloud(['auth', 'print-identity-token', '--audiences', audience]);
+}
+
+function checkOnce(healthUrl, headers) {
   return new Promise((resolve) => {
-    const req = https.get(healthUrl, { timeout: 10000 }, (res) => {
+    const req = https.get(healthUrl, { timeout: 10000, headers }, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
@@ -67,10 +81,13 @@ function checkOnce(healthUrl) {
 async function main() {
   const serviceUrl = getServiceUrl();
   const healthUrl = `${serviceUrl}/health`;
+  const headers = service === 'gateway'
+    ? undefined
+    : { Authorization: `Bearer ${getIdentityToken(serviceUrl)}` };
 
   let last = null;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
-    last = await checkOnce(healthUrl);
+    last = await checkOnce(healthUrl, headers);
 
     if (last.statusCode && last.statusCode >= 200 && last.statusCode < 300) {
       console.log(`OK — ${healthUrl} returned ${last.statusCode} on attempt ${attempt}/${ATTEMPTS}`);
