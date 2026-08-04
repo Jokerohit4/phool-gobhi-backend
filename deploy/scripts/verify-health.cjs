@@ -55,8 +55,16 @@ function getServiceUrl() {
 // at the Cloud Run IAM layer before the request ever reaches the app, no
 // matter what the app-layer /health route does. The CI deployer service
 // account has roles/run.invoker on every backend service specifically so
-// this check can authenticate; this mints a token scoped to that one
-// audience (the Cloud Run service URL) rather than reusing a broader token.
+// this check can authenticate.
+//
+// Under Workload Identity Federation the active gcloud credential is an
+// external account, which CANNOT mint an audience-scoped token via
+// `gcloud auth print-identity-token --audiences <url>` (gcloud errors:
+// "Invalid account type ... Requires valid service account"). CI therefore
+// passes the token minted by google-github-actions/auth@v2
+// (token_format: identity_token, audience: <cloud-run-url>) in HEALTH_TOKEN.
+// This fallback only works from a machine holding a real service-account
+// key, i.e. local/manual runs.
 function getIdentityToken(audience) {
   return gcloud(['auth', 'print-identity-token', '--audiences', audience]);
 }
@@ -80,10 +88,13 @@ function checkOnce(healthUrl, headers) {
 
 async function main() {
   const serviceUrl = getServiceUrl();
-  const healthUrl = `${serviceUrl}/health`;
-  const headers = service === 'gateway'
-    ? undefined
-    : { Authorization: `Bearer ${getIdentityToken(serviceUrl)}` };
+  const healthUrl = process.env.HEALTH_URL || `${serviceUrl}/health`;
+  let headers;
+  if (process.env.HEALTH_TOKEN) {
+    headers = { Authorization: `Bearer ${process.env.HEALTH_TOKEN}` };
+  } else if (service !== 'gateway') {
+    headers = { Authorization: `Bearer ${getIdentityToken(serviceUrl)}` };
+  }
 
   let last = null;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {

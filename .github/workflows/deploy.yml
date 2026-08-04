@@ -185,7 +185,32 @@ jobs:
             --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
             --to-latest
 
+      # Cloud Run URLs embed a per-project/region hash — resolve the live
+      # URL, then mint an audience-scoped identity token via the auth action.
+      # WIF external-account creds can't do `gcloud auth print-identity-token
+      # --audiences <url>` (gcloud: "Invalid account type"), so the action is
+      # re-invoked with token_format=identity_token and the service URL as
+      # audience — the only reliable way to satisfy the IAM invoker check on
+      # locked-down (no-allow-unauthenticated) services.
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - id: healthauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'identity_token'
+          audience: ${{ steps.svcurl.outputs.url }}
+
       - id: healthcheck
+        env:
+          HEALTH_URL: ${{ steps.svcurl.outputs.url }}/health
+          HEALTH_TOKEN: ${{ steps.healthauth.outputs.id_token }}
         run: node deploy/scripts/verify-health.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
 
       - if: failure() && steps.healthcheck.outcome == 'failure' && steps.prev-revision.outputs.revision != ''
