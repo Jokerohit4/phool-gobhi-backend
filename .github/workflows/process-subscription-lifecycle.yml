@@ -1,0 +1,50 @@
+name: Process lapsed subscriptions
+
+# Triggers wallet-service's gift-day/attendance-bonus close-out for any
+# subscription that lapsed but hasn't been processed yet (see
+# closeOutSubscriptionIfLapsed / processLapsedSubscriptionsService). This is
+# a pure convenience trigger, not a correctness requirement — the same
+# close-out already runs lazily the next time a customer's subscription is
+# read (getMySubscriptionsService, getGiftEligibleLapsedSubscription); this
+# scheduled sweep exists only so the "gift ready" push notification fires
+# close to when the plan actually lapses, instead of waiting for the
+# customer to next open the app.
+#
+# Fetches INTERNAL_API_KEY-dev fresh from Secret Manager on every run via the
+# same Workload Identity Federation trust the deploy workflow already uses —
+# deliberately not a separately-stored GitHub secret, so this never creates a
+# second place that value lives.
+#
+# Dev only for now — add a prod job (mirroring deploy.yml's ENV branching)
+# once this mechanic has run in dev long enough to trust it.
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # daily, 02:30 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  process-lapsed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            INTERNAL_API_KEY:${{ vars.GCP_PROJECT_ID }}/internal-api-key-dev
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "x-internal-key: ${{ steps.secret.outputs.INTERNAL_API_KEY }}" \
+            https://wallet-service-dev-1077801427223.asia-south1.run.app/internal/subscriptions/process-lapsed
