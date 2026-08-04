@@ -199,7 +199,9 @@ jobs:
       # --audiences <url>` (gcloud: "Invalid account type"), so the action is
       # re-invoked with token_format=identity_token and the service URL as
       # audience — the only reliable way to satisfy the IAM invoker check on
-      # locked-down (no-allow-unauthenticated) services.
+      # locked-down (no-allow-unauthenticated) services. The per-env
+      # health-check providers exist because a provider is capped at 10
+      # allowed audiences and we have 6 services x 2 envs (12 run.app URLs).
       - id: svcurl
         run: |
           URL=$(gcloud run services describe "${{ matrix.service }}-${{ steps.env.outputs.ENV }}" \
@@ -210,7 +212,7 @@ jobs:
       - id: healthauth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          workload_identity_provider: ${{ steps.env.outputs.ENV == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
           token_format: 'identity_token'
           audience: ${{ steps.svcurl.outputs.url }}
