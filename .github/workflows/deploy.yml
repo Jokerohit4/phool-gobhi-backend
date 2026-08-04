@@ -83,7 +83,7 @@ jobs:
 
   deploy:
     needs: [changes, preflight]
-    if: github.event_name == 'push' && needs.changes.outputs.any == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'production' || 'dev' }}
     strategy:
