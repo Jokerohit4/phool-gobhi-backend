@@ -5,6 +5,14 @@ on:
     branches: [dev, main]
   pull_request:
     branches: [dev, main]
+  workflow_dispatch:
+    # Manual deploy of every changed service on the chosen ref. The
+    # detect-changed-services step gets an empty `before` for this event, so
+    # it treats all services as changed — an explicit full redeploy.
+    inputs:
+      ref:
+        description: 'Branch or commit SHA to deploy (default: current branch)'
+        required: false
 
 permissions:
   contents: read
