@@ -164,7 +164,8 @@
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "wallet-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
-            "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app"
+            "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",
@@ -172,7 +173,8 @@
             "INTERNAL_API_KEY": "internal-api-key",
             "RAZORPAY_KEY_ID": "razorpay-key-id",
             "RAZORPAY_SECRET": "razorpay-secret",
-            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret"
+            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
           }
         },
         "prod": {
@@ -180,7 +182,8 @@
             "NODE_ENV": "production",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "wallet-service",
-            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app"
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",
@@ -188,7 +191,8 @@
             "INTERNAL_API_KEY": "internal-api-key",
             "RAZORPAY_KEY_ID": "razorpay-key-id",
             "RAZORPAY_SECRET": "razorpay-secret",
-            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret"
+            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret",
+            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
           }
         }
       }

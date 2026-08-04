@@ -7,6 +7,10 @@ const router = Router();
 
 // Internal service-to-service endpoint (gym-service calls this to compute slot availability)
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
+// Internal (wallet-service's closeOutSubscriptionIfLapsed — gift-day/attendance-bonus close-out)
+router.get('/internal/bookings/subscription/:id/completed-count', requireInternal, ctrl.getCompletedVisitCountForSubscription);
+// Internal (wallet-service's getMySubscriptionsService — mid-period gift-box teaser)
+router.get('/internal/bookings/subscription/:id/last-visit-date', requireInternal, ctrl.getLastVisitDateForSubscription);
 
 // Public, unauthenticated — marketing-site aggregate stat only. Must be
 // paired with a gateway PUBLIC_ROUTES entry (see index.js).

@@ -208,6 +208,15 @@ export const updateGym = async (req, res) => {
   }
 };
 
+export const refreshGoogleRating = async (req, res) => {
+  try {
+    const gym = await gymService.refreshGoogleRating(parseInt(req.params.id), req.userId);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const deleteGym = async (req, res) => {
   try {
     const gym = await gymService.softDeleteGym(parseInt(req.params.id), req.userId);
@@ -280,6 +289,18 @@ export const deleteGymDoc = async (req, res) => {
   }
 };
 
+// Optional per-category scores a review may include, alongside the required
+// overall `rating` — a customer can rate any subset of these (see
+// gymService.CATEGORY_FIELDS / recomputeGymRating).
+const CATEGORY_FIELDS = [
+  'equipmentRating',
+  'cleanlinessRating',
+  'trainerRating',
+  'valueForMoneyRating',
+  'staffBehaviourRating',
+  'crowdRating',
+];
+
 export const addReview = async (req, res) => {
   try {
     const { rating, comment } = req.body;
@@ -287,11 +308,23 @@ export const addReview = async (req, res) => {
     if (!rating || r < 1 || r > 5) {
       return res.status(400).json({ error: 'Rating must be between 1 and 5' });
     }
+
+    const categories = {};
+    for (const field of CATEGORY_FIELDS) {
+      if (req.body[field] == null) continue;
+      const value = Number(req.body[field]);
+      if (isNaN(value) || value < 1 || value > 5) {
+        return res.status(400).json({ error: `${field} must be between 1 and 5` });
+      }
+      categories[field] = value;
+    }
+
     const review = await gymService.addReview(
       parseInt(req.params.id),
       req.userId,
       rating,
-      comment
+      comment,
+      categories
     );
     res.status(201).json({ data: review });
   } catch (err) {

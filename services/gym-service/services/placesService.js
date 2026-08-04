@@ -44,7 +44,11 @@ export async function placeDetails(placeId, sessionToken) {
   const params = new URLSearchParams({
     place_id: placeId,
     key,
-    fields: 'name,formatted_address,geometry,address_component',
+    // rating/user_ratings_total pull this call into Google's Atmosphere-Data
+    // SKU (billed differently than the address-only Basic-Data fields below)
+    // — needed so gym create/edit and the partner refresh button can read a
+    // gym's Google rating without a second API call.
+    fields: 'name,formatted_address,geometry,address_component,rating,user_ratings_total',
   });
   if (sessionToken) params.set('sessiontoken', sessionToken);
 
@@ -62,10 +66,13 @@ export async function placeDetails(placeId, sessionToken) {
     '';
 
   return {
+    placeId,
     name: result.name || '',
     address: result.formatted_address || '',
     city,
     lat: result.geometry?.location?.lat ?? null,
     lng: result.geometry?.location?.lng ?? null,
+    googleRating: result.rating ?? null,
+    googleRatingCount: result.user_ratings_total ?? null,
   };
 }

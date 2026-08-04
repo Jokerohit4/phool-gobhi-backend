@@ -47,6 +47,17 @@ export async function notifyCustomer(customerId, { title, body, data = {} }) {
         priority: 'high',
         notification: { channelId: 'bookings_channel' },
       },
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+        payload: {
+          aps: {
+            'mutable-content': 1,
+            sound: 'default',
+          },
+        },
+      },
     });
   } catch (err) {
     console.error('[FCM] Notify customer failed:', err.message);

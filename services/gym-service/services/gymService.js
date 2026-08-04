@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import cloudinary from '../config/cloudinary.js';
 import { generateTimeSlots } from '../utils/slots.js';
+import * as placesService from './placesService.js';
 
 const prisma = new PrismaClient();
 
@@ -16,7 +17,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // every service that reads a gym from gym-service's API) only ever sees
 // plain numbers — same convention as wallet-service's Number(...) wrapping.
 const GYM_MONEY_FIELDS = [
-  'sessionPrice', 'quotedPrice', 'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'yearlyPlanPrice',
+  'sessionPrice', 'quotedPrice', 'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'sixMonthlyPlanPrice', 'yearlyPlanPrice',
   'commissionPct',
 ];
 function normalizeGymMoney(gym) {
@@ -32,6 +33,7 @@ const SUBSCRIPTION_PLANS = [
   { planType: 'weekly', field: 'weeklyPlanPrice', days: 7 },
   { planType: 'monthly', field: 'monthlyPlanPrice', days: 30 },
   { planType: 'quarterly', field: 'quarterlyPlanPrice', days: 90 },
+  { planType: 'sixMonthly', field: 'sixMonthlyPlanPrice', days: 182 },
   { planType: 'yearly', field: 'yearlyPlanPrice', days: 365 },
 ];
 
@@ -248,6 +250,24 @@ export async function getGymCapacity(id) {
   return gym;
 }
 
+// Best-effort — a partner creating/editing their gym must never be blocked
+// by Google Places being down or slow, so failures here are swallowed and
+// just leave the google* fields unset (the partner can still hit the
+// dedicated refresh endpoint later, which does surface errors).
+async function fetchGoogleRatingFields(placeId) {
+  if (!placeId) return {};
+  try {
+    const d = await placesService.placeDetails(placeId);
+    return {
+      googleRating: d.googleRating,
+      googleRatingCount: d.googleRatingCount,
+      googleRatingUpdatedAt: new Date(),
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
 export async function createGym(partnerId, data) {
   const {
     name,
@@ -261,12 +281,18 @@ export async function createGym(partnerId, data) {
     phone,
     sessionPrice,
     quotedPrice,
+    weeklyPlanPrice,
+    monthlyPlanPrice,
+    quarterlyPlanPrice,
+    sixMonthlyPlanPrice,
+    yearlyPlanPrice,
     established,
     brandDocs,
     openTime,
     closeTime,
     slotDuration,
     capacity,
+    googlePlaceId,
   } = data;
 
   const finalSlotDuration = slotDuration || 60;
@@ -279,6 +305,8 @@ export async function createGym(partnerId, data) {
     openTime,
     closeTime,
   });
+
+  const googleFields = await fetchGoogleRatingFields(googlePlaceId);
 
   const gym = await prisma.gym.create({
     data: {
@@ -294,6 +322,11 @@ export async function createGym(partnerId, data) {
       phone,
       sessionPrice,
       quotedPrice: quotedPrice ?? null,
+      weeklyPlanPrice: weeklyPlanPrice ?? null,
+      monthlyPlanPrice: monthlyPlanPrice ?? null,
+      quarterlyPlanPrice: quarterlyPlanPrice ?? null,
+      sixMonthlyPlanPrice: sixMonthlyPlanPrice ?? null,
+      yearlyPlanPrice: yearlyPlanPrice ?? null,
       established: established ?? null,
       brandDocs: brandDocs || [],
       openTime,
@@ -302,6 +335,8 @@ export async function createGym(partnerId, data) {
       capacity: finalCapacity,
       isApproved: false,
       isActive: true,
+      googlePlaceId: googlePlaceId || null,
+      ...googleFields,
     },
   });
 
@@ -348,11 +383,16 @@ export async function updateGym(gymId, partnerId, data) {
     'weeklyPlanPrice',
     'monthlyPlanPrice',
     'quarterlyPlanPrice',
+    'sixMonthlyPlanPrice',
     'yearlyPlanPrice',
     // Lets a partner reactivate a gym that was deactivated via DELETE
     // /:id (softDeleteGym) — that route only ever sets isActive=false,
     // with no corresponding endpoint to flip it back until now.
     'isActive',
+    // Linking/relinking a Google place — NOT in MATERIAL_FIELDS below, since
+    // it doesn't change what's actually being reviewed and shouldn't reset
+    // approval the way changing the address itself does.
+    'googlePlaceId',
   ];
 
   allowedFields.forEach(field => {
@@ -370,12 +410,19 @@ export async function updateGym(gymId, partnerId, data) {
   // capacity) don't trigger this.
   const MATERIAL_FIELDS = [
     'name', 'address', 'city', 'state', 'lat', 'lng', 'sessionPrice',
-    'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'yearlyPlanPrice',
+    'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'sixMonthlyPlanPrice', 'yearlyPlanPrice',
   ];
   const changedMaterialField = MATERIAL_FIELDS.some(
     field => field in updateData && updateData[field] !== gym[field]
   );
   maybeResetApproval(gym, updateData, changedMaterialField);
+
+  // Re-linking to a different (or first-time) Google place should show the
+  // new place's rating immediately, without waiting for a separate refresh
+  // click. Untouched saves (googlePlaceId unchanged) skip the extra API call.
+  if ('googlePlaceId' in updateData && updateData.googlePlaceId !== gym.googlePlaceId) {
+    Object.assign(updateData, await fetchGoogleRatingFields(updateData.googlePlaceId));
+  }
 
   const updated = normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
@@ -394,6 +441,38 @@ export async function updateGym(gymId, partnerId, data) {
   }
 
   return updated;
+}
+
+// Unlike fetchGoogleRatingFields (used inline during create/update, where a
+// Places failure must never block saving the gym), this is the explicit
+// "Refresh Google Rating" button — its whole point is telling the partner
+// whether it worked, so failures propagate instead of being swallowed.
+export async function refreshGoogleRating(gymId, partnerId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+
+  if (!gym) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+
+  if (gym.partnerId !== partnerId) {
+    throw { status: 403, error: 'Forbidden' };
+  }
+
+  if (!gym.googlePlaceId) {
+    throw { status: 400, error: 'This gym is not linked to a Google listing yet — re-select your address on the gym page.' };
+  }
+
+  const details = await placesService.placeDetails(gym.googlePlaceId);
+  const updated = await prisma.gym.update({
+    where: { id: gymId },
+    data: {
+      googleRating: details.googleRating,
+      googleRatingCount: details.googleRatingCount,
+      googleRatingUpdatedAt: new Date(),
+    },
+  });
+
+  return normalizeGymMoney(updated);
 }
 
 export async function softDeleteGym(gymId, partnerId) {
@@ -565,13 +644,52 @@ export async function deleteGymDoc(gymId, partnerId, url) {
   return updated.brandDocs;
 }
 
-export async function addReview(gymId, customerId, rating, comment) {
+// Optional per-review category scores — a customer can rate any subset, so
+// each category's average AND count are tracked independently (unlike the
+// overall rating/ratingCount, which always has one count for the whole gym).
+const CATEGORY_FIELDS = [
+  'equipmentRating',
+  'cleanlinessRating',
+  'trainerRating',
+  'valueForMoneyRating',
+  'staffBehaviourRating',
+  'crowdRating',
+];
+
+// One aggregate() round trip computes avg+non-null-count for the overall
+// rating and every category at once — `_count: { field: true }` counts only
+// non-null values for that field, distinct from `_count._all` (all rows).
+async function recomputeGymRating(tx, gymId) {
+  const aggregate = await tx.gymReview.aggregate({
+    where: { gymId },
+    _avg: { rating: true, ...Object.fromEntries(CATEGORY_FIELDS.map((f) => [f, true])) },
+    _count: { _all: true, ...Object.fromEntries(CATEGORY_FIELDS.map((f) => [f, true])) },
+  });
+
+  const data = {
+    rating: aggregate._count._all > 0 ? aggregate._avg.rating : null,
+    ratingCount: aggregate._count._all,
+  };
+  for (const field of CATEGORY_FIELDS) {
+    data[field] = aggregate._count[field] > 0 ? aggregate._avg[field] : null;
+    data[`${field}Count`] = aggregate._count[field];
+  }
+
+  await tx.gym.update({ where: { id: gymId }, data });
+}
+
+export async function addReview(gymId, customerId, rating, comment, categories = {}) {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },
   });
 
   if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
+  }
+
+  const categoryData = {};
+  for (const field of CATEGORY_FIELDS) {
+    if (categories[field] != null) categoryData[field] = categories[field];
   }
 
   const review = await prisma.$transaction(async (tx) => {
@@ -581,22 +699,11 @@ export async function addReview(gymId, customerId, rating, comment) {
         customerId,
         rating,
         comment,
+        ...categoryData,
       },
     });
 
-    const aggregate = await tx.gymReview.aggregate({
-      where: { gymId },
-      _avg: { rating: true },
-      _count: true,
-    });
-
-    await tx.gym.update({
-      where: { id: gymId },
-      data: {
-        rating: aggregate._avg.rating,
-        ratingCount: aggregate._count,
-      },
-    });
+    await recomputeGymRating(tx, gymId);
 
     return created;
   });
@@ -614,20 +721,7 @@ export async function deleteReview(gymId, reviewId) {
 
   await prisma.$transaction(async (tx) => {
     await tx.gymReview.delete({ where: { id: reviewId } });
-
-    const aggregate = await tx.gymReview.aggregate({
-      where: { gymId },
-      _avg: { rating: true },
-      _count: true,
-    });
-
-    await tx.gym.update({
-      where: { id: gymId },
-      data: {
-        rating: aggregate._count > 0 ? aggregate._avg.rating : null,
-        ratingCount: aggregate._count,
-      },
-    });
+    await recomputeGymRating(tx, gymId);
   });
 }
 

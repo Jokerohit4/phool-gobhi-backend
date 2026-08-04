@@ -27,10 +27,14 @@ model Booking {
   // GymSubscription.commissionPct/partnerShare in wallet-service) — captured
   // once up front so completeBooking always pays out the rate that applied
   // when the customer booked, even if the platform-wide rate changes later.
-  // Both null for subscription-covered bookings (subscriptionId set): the
-  // partner was already paid their share upfront at subscription purchase,
-  // so there's no separate per-session payout to compute here. Null also
-  // means "predates this feature" for old rows — completeBooking falls back
+  // Both null ONLY for a subscription-covered booking under the legacy
+  // "upfront" payout model (GymSubscription.payoutModel) — that partner was
+  // already paid their full share in one shot at subscription purchase, so
+  // there's no separate per-session payout to compute here. A "perVisit"
+  // subscription booking DOES get a real partnerShare here (that plan's
+  // partnerShare/days, snapshotted at booking-creation time), paid out at
+  // completion exactly like a normal paid booking. Null also means "predates
+  // this feature" for old non-subscription rows — completeBooking falls back
   // to paying out the full `amount` in that case.
   commissionPct    Decimal?      @db.Decimal(5, 2)
   partnerShare     Decimal?      @db.Decimal(19, 2)
@@ -38,10 +42,10 @@ model Booking {
   walletTxId       Int?
   // Set when this booking was covered by an active GymSubscription instead of
   // a per-session wallet debit — null means the normal paid flow (unchanged).
-  // completeBooking/cancelBooking must guard on this: the partner was already
-  // paid upfront at subscription purchase, and the customer never spent
-  // wallet balance on this booking, so neither the completion payout nor the
-  // cancellation refund should fire for it.
+  // The customer never spent wallet balance on this booking either way (they
+  // paid for the subscription itself, separately), so cancelBooking's refund
+  // never fires for it — but completeBooking's partner payout DOES fire for
+  // it now, unless partnerShare is null (see above).
   subscriptionId   Int?
   checkinRequested Boolean       @default(false)
   locationVerified Boolean?

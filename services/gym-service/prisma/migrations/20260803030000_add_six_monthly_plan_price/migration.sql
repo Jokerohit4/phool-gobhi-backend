@@ -1,0 +1,1 @@
+ALTER TABLE "gym"."Gym" ADD COLUMN IF NOT EXISTS "sixMonthlyPlanPrice" NUMERIC(19,2);

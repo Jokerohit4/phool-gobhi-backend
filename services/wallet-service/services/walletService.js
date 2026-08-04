@@ -1,10 +1,12 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { notifyCustomer } from '../utils/notifyCustomer.js';
 const prisma = new PrismaClient();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 async function internalHeadersFor(targetUrl) {
@@ -40,12 +42,29 @@ export async function getGymCity(gymId) {
 // only if a gym-service response is somehow missing the field.
 export const SUBSCRIPTION_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_COMMISSION_PERCENT) || 20;
 
-const PLAN_DAYS = { weekly: 7, monthly: 30, quarterly: 90, yearly: 365 };
+const PLAN_DAYS = { weekly: 7, monthly: 30, quarterly: 90, sixMonthly: 182, yearly: 365 };
 const PLAN_PRICE_FIELD = {
   weekly: 'weeklyPlanPrice',
   monthly: 'monthlyPlanPrice',
   quarterly: 'quarterlyPlanPrice',
+  sixMonthly: 'sixMonthlyPlanPrice',
   yearly: 'yearlyPlanPrice',
+};
+
+// Attendance retention mechanic (see closeOutSubscriptionIfLapsed below).
+// Gift-day cap is a ceiling only — the actual grant is
+// min(tierCap, daysMissed), so it's always funded from this customer's own
+// already-collected subscription revenue, never a net cost. Cash-bonus
+// amount IS a real cost with no funding offset (most visibly on a
+// 100%-attendance weekly plan, where there's no missed-day breakage at
+// all) — a deliberate marketing/retention spend, not self-funded.
+const GIFT_DAY_CAP = { weekly: 1, monthly: 3, quarterly: 6, sixMonthly: 10, yearly: 20 };
+const CASH_BONUS = {
+  weekly: { threshold: 1.0, amount: 10 },
+  monthly: { threshold: 0.6, amount: 20 },
+  quarterly: { threshold: 0.6, amount: 50 },
+  sixMonthly: { threshold: 0.6, amount: 100 },
+  yearly: { threshold: 0.6, amount: 300 },
 };
 
 // Wallet/WalletTransaction/RazorpayOrder store money as Prisma Decimal for
@@ -334,6 +353,11 @@ function serializeSubscription(sub) {
     price: Number(sub.price),
     commissionPct: Number(sub.commissionPct),
     partnerShare: Number(sub.partnerShare),
+    // Derived, not stored — booking-service needs the plan's total day count
+    // to split partnerShare into a per-visit amount (partnerShare/days) and
+    // has no PLAN_DAYS map of its own, so it rides along on every serialized
+    // subscription instead of duplicating that map cross-service.
+    days: PLAN_DAYS[sub.planType],
   };
 }
 
@@ -414,6 +438,14 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   }
 
   const commissionPct = gymCommissionPct ?? SUBSCRIPTION_COMMISSION_PERCENT;
+  // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
+  // partner is credited partnerShare/days per completed visit instead (see
+  // bookingCommissionFields/completeBooking in booking-service), so this
+  // customer's own already-collected revenue is what funds every visit
+  // (including any later gift-day make-up visits) and unused days are simply
+  // never paid out. Still upsert the partner's wallet row now so the first
+  // per-visit credit never fails on a missing wallet (the bug that used to
+  // strand a purchase in PROCESSING when a partner had no wallet yet).
   const partnerShare = Math.round(price * (1 - commissionPct / 100) * 100) / 100;
   const days = PLAN_DAYS[planType];
   const startDate = new Date();
@@ -424,7 +456,6 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     update: {},
     create: { userId: partnerId, userType: 'partner' },
   });
-  await creditWalletService(partnerId, partnerShare, `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`, null, 'partner', gymId);
 
   const subscription = await prisma.gymSubscription.create({
     data: {
@@ -438,6 +469,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
       startDate,
       endDate,
       razorpayOrderId: syntheticOrderId,
+      payoutModel: 'perVisit',
     },
   });
 
@@ -454,12 +486,211 @@ export async function getActiveSubscriptionService(customerId, gymId) {
   return serializeSubscription(sub);
 }
 
+async function fetchLastVisitDate(subscriptionId) {
+  try {
+    const res = await axios.get(
+      `${BOOKING_SERVICE_URL}/internal/bookings/subscription/${subscriptionId}/last-visit-date`,
+      await internalHeadersFor(BOOKING_SERVICE_URL)
+    );
+    return res.data?.data?.lastVisitDate ?? null; // null = no visits yet (valid), not "unknown"
+  } catch (_) {
+    return undefined; // booking-service unreachable — "unknown", never claim a teaser is due
+  }
+}
+
+function daysSince(dateStr) {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
+}
+
 // Customer-facing list — lets the app show "already subscribed here" before
-// re-selling a plan for the same gym.
+// re-selling a plan for the same gym. Also lazily closes out any lapsed,
+// not-yet-processed subscription in the list (see closeOutSubscriptionIfLapsed)
+// so a customer opening this screen always sees their final gift/bonus state,
+// even if the daily sweep hasn't reached that row yet — and, for a still
+// in-window subscription, attaches showGiftTeaser (2+ days since the last
+// visit, or since the plan started if there's been no visit yet) so the app
+// can surface the glowing gift-box FAB mid-period.
 export async function getMySubscriptionsService(customerId, gymId) {
   const subs = await prisma.gymSubscription.findMany({
     where: { customerId, ...(gymId ? { gymId } : {}) },
     orderBy: { createdAt: 'desc' },
   });
-  return subs.map(serializeSubscription);
+  const now = new Date();
+  const resolved = await Promise.all(subs.map(async (sub) => {
+    if (!sub.closedOutAt && sub.endDate < now) return closeOutSubscriptionIfLapsed(sub.id);
+
+    if (sub.status === 'active' && sub.endDate >= now) {
+      const lastVisitDate = await fetchLastVisitDate(sub.id);
+      const referenceDate = lastVisitDate ?? sub.startDate.toISOString().split('T')[0];
+      const showGiftTeaser = lastVisitDate !== undefined && daysSince(referenceDate) >= 2;
+      return { ...serializeSubscription(sub), showGiftTeaser };
+    }
+
+    return serializeSubscription(sub);
+  }));
+  return resolved;
+}
+
+// Booking-service's entitlement check only ever queries an in-window
+// subscription (see getActiveSubscriptionService) — gift-day redemption
+// deliberately lives in its own function rather than folding into that one,
+// so a customer with leftover gift days on an old plan can still buy a
+// fresh subscription for the same gym without tripping purchaseSubscriptionWithWallet's
+// "already have an active subscription" guard.
+export async function getGiftEligibleLapsedSubscription(customerId, gymId) {
+  const now = new Date();
+  const lapsed = await prisma.gymSubscription.findFirst({
+    where: { customerId, gymId, status: 'active', endDate: { lt: now } },
+    orderBy: { endDate: 'desc' },
+  });
+  if (!lapsed) return null;
+
+  const closedOut = lapsed.closedOutAt ? serializeSubscription(lapsed) : await closeOutSubscriptionIfLapsed(lapsed.id);
+  if (!closedOut || closedOut.giftDaysGranted - closedOut.giftDaysRedeemed <= 0) return null;
+  return closedOut;
+}
+
+// booking-service calls this right after creating a booking against a
+// gift-eligible lapsed subscription (see getGiftEligibleLapsedSubscription) —
+// best-effort, fire-and-forget, same pattern as the referral-credit call in
+// booking-service's completeBooking. A failed increment just means this
+// customer's next gift-day booking is evaluated against a stale
+// giftDaysRedeemed count, which self-corrects on the next successful call
+// and can never grant more than giftDaysGranted since bookingService's
+// own "one free session per day" check still applies per calendar day.
+export async function redeemGiftDayService(subscriptionId) {
+  await prisma.gymSubscription.update({
+    where: { id: subscriptionId },
+    data: { giftDaysRedeemed: { increment: 1 } },
+  });
+}
+
+async function fetchCompletedVisitCount(subscriptionId) {
+  try {
+    const res = await axios.get(
+      `${BOOKING_SERVICE_URL}/internal/bookings/subscription/${subscriptionId}/completed-count`,
+      await internalHeadersFor(BOOKING_SERVICE_URL)
+    );
+    return res.data?.data?.count ?? 0;
+  } catch (_) {
+    // booking-service unreachable — signal "unknown" so the caller can leave
+    // this subscription un-closed-out and simply try again on the next read,
+    // rather than guessing 0 visits and wrongly maxing out the gift-day grant.
+    return null;
+  }
+}
+
+// Runs once per lapsed subscription (guarded by closedOutAt), triggered
+// either lazily on read (getMySubscriptionsService, getGiftEligibleLapsedSubscription)
+// or by the periodic sweep (processLapsedSubscriptionsService) — whichever
+// happens first. Computes the gift-day grant and attendance cash bonus and
+// persists them so every later read is a no-op.
+export async function closeOutSubscriptionIfLapsed(subscriptionId) {
+  const sub = await prisma.gymSubscription.findUnique({ where: { id: subscriptionId } });
+  if (!sub) return null;
+  if (sub.closedOutAt || sub.endDate > new Date()) return serializeSubscription(sub);
+
+  const daysUsed = await fetchCompletedVisitCount(subscriptionId);
+  if (daysUsed == null) return serializeSubscription(sub); // try again on the next read
+
+  const totalDays = PLAN_DAYS[sub.planType] ?? 0;
+  const missedDays = Math.max(0, totalDays - daysUsed);
+  const giftDaysGranted = Math.min(missedDays, GIFT_DAY_CAP[sub.planType] ?? 0);
+  const attendancePct = totalDays > 0 ? daysUsed / totalDays : 0;
+  const bonusConfig = CASH_BONUS[sub.planType];
+  const qualifiesForBonus = !!bonusConfig && attendancePct >= bonusConfig.threshold;
+
+  if (qualifiesForBonus) {
+    try {
+      await creditWalletService(
+        sub.customerId, bonusConfig.amount,
+        `Attendance bonus - ${sub.planType} plan`,
+        `subscription-bonus-${subscriptionId}`, 'customer', sub.gymId
+      );
+    } catch (err) {
+      // Best-effort — a failed credit shouldn't block recording the rest of
+      // close-out; bonusPaid stays false below so this isn't mistaken for success.
+      console.error('Subscription attendance bonus credit failed', subscriptionId, err.message);
+    }
+  }
+
+  const updated = await prisma.gymSubscription.update({
+    where: { id: subscriptionId },
+    data: {
+      giftDaysGranted,
+      bonusPaid: qualifiesForBonus,
+      closedOutAt: new Date(),
+    },
+  });
+
+  const messageParts = [];
+  if (giftDaysGranted > 0) messageParts.push(`${giftDaysGranted} bonus visit${giftDaysGranted === 1 ? '' : 's'}`);
+  if (qualifiesForBonus) messageParts.push(`₹${bonusConfig.amount} in your wallet`);
+  if (messageParts.length > 0) {
+    notifyCustomer(sub.customerId, {
+      title: 'A gift is waiting for you',
+      body: `It's okay you missed a few days — here's ${messageParts.join(' and ')} to help you reach your goal.`,
+      data: { type: 'gift_ready', subscriptionId: String(subscriptionId) },
+    }).catch(() => {});
+  }
+
+  return serializeSubscription(updated);
+}
+
+// Admin rollup (requireRole('gobhi')) — gives visibility into what the
+// gift-day/attendance-bonus mechanic is actually costing: giftDaysGranted is
+// self-funded from each subscription's own breakage (see
+// closeOutSubscriptionIfLapsed), but the cash bonus is a real, unfunded
+// cost, most visibly on a 100%-attendance weekly plan.
+export async function getGiftBonusPayoutsAnalyticsService(days) {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const closedOut = await prisma.gymSubscription.findMany({
+    where: { closedOutAt: { gte: since } },
+    select: { closedOutAt: true, planType: true, giftDaysGranted: true, bonusPaid: true },
+  });
+
+  const byDay = new Map();
+  let totalGiftDays = 0;
+  let totalBonusAmount = 0;
+  let bonusCount = 0;
+  for (const row of closedOut) {
+    const day = row.closedOutAt.toISOString().split('T')[0];
+    if (!byDay.has(day)) byDay.set(day, { day, giftDays: 0, bonusAmount: 0 });
+    const bucket = byDay.get(day);
+    bucket.giftDays += row.giftDaysGranted;
+    totalGiftDays += row.giftDaysGranted;
+    if (row.bonusPaid) {
+      const amount = CASH_BONUS[row.planType]?.amount ?? 0;
+      bucket.bonusAmount += amount;
+      totalBonusAmount += amount;
+      bonusCount++;
+    }
+  }
+
+  return {
+    days: [...byDay.values()].sort((a, b) => (a.day < b.day ? -1 : 1)),
+    totalGiftDays,
+    totalBonusAmount,
+    bonusCount,
+    closedOutCount: closedOut.length,
+  };
+}
+
+// Bulk sweep for the periodic scheduled trigger (see deploy notes) — the
+// lazy on-read close-out above already guarantees correctness even if this
+// never runs; this exists purely so the "gift ready" push notification
+// fires close to when the plan actually lapses, instead of waiting for the
+// customer to next open the app.
+export async function processLapsedSubscriptionsService() {
+  const now = new Date();
+  const candidates = await prisma.gymSubscription.findMany({
+    where: { status: 'active', endDate: { lt: now }, closedOutAt: null },
+    select: { id: true },
+  });
+  let processed = 0;
+  for (const { id } of candidates) {
+    await closeOutSubscriptionIfLapsed(id);
+    processed++;
+  }
+  return { processed, total: candidates.length };
 }

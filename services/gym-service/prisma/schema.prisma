@@ -40,6 +40,29 @@ model Gym {
   capacity     Int         @default(20)
   rating       Float       @default(0)
   ratingCount  Int         @default(0)
+  // Linked once, at gym create/edit time, by picking an address from Places
+  // autocomplete (see placesService.js) — null until then, and refreshable
+  // on demand from the partner dashboard (refreshGoogleRating).
+  googlePlaceId         String?
+  googleRating          Float?
+  googleRatingCount     Int?
+  googleRatingUpdatedAt DateTime?
+  // Per-category aggregates, recomputed the same way rating/ratingCount are
+  // (see addReview/deleteReview) — nullable because a review can rate some
+  // categories and skip others, and *Count tracks only that category's
+  // non-null review count so the website can hide categories nobody rated.
+  equipmentRating           Float?
+  equipmentRatingCount      Int?     @default(0)
+  cleanlinessRating         Float?
+  cleanlinessRatingCount    Int?     @default(0)
+  trainerRating             Float?
+  trainerRatingCount        Int?     @default(0)
+  valueForMoneyRating       Float?
+  valueForMoneyRatingCount  Int?     @default(0)
+  staffBehaviourRating      Float?
+  staffBehaviourRatingCount Int?     @default(0)
+  crowdRating               Float?
+  crowdRatingCount          Int?     @default(0)
   isApproved   Boolean     @default(false)
   rejectionReason String?
   isActive     Boolean     @default(true)
@@ -47,10 +70,11 @@ model Gym {
   // (gobhi-only, see PUT /:id/commission) — 20 is the platform default for
   // every gym until an admin overrides it.
   commissionPct Decimal    @default(20) @db.Decimal(5, 2)
-  weeklyPlanPrice    Decimal? @db.Decimal(19, 2)
-  monthlyPlanPrice   Decimal? @db.Decimal(19, 2)
-  quarterlyPlanPrice Decimal? @db.Decimal(19, 2)
-  yearlyPlanPrice    Decimal? @db.Decimal(19, 2)
+  weeklyPlanPrice     Decimal? @db.Decimal(19, 2)
+  monthlyPlanPrice    Decimal? @db.Decimal(19, 2)
+  quarterlyPlanPrice  Decimal? @db.Decimal(19, 2)
+  sixMonthlyPlanPrice Decimal? @db.Decimal(19, 2)
+  yearlyPlanPrice     Decimal? @db.Decimal(19, 2)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   images       GymImage[]
@@ -79,6 +103,14 @@ model GymReview {
   customerId Int
   rating     Float
   comment    String?
+  // Optional per-category scores (1-5) — a customer can rate any subset,
+  // averaged separately per category on Gym (see gymService aggregate calls).
+  equipmentRating      Float?
+  cleanlinessRating    Float?
+  trainerRating        Float?
+  valueForMoneyRating  Float?
+  staffBehaviourRating Float?
+  crowdRating          Float?
   gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
 

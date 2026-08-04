@@ -15,6 +15,9 @@ import {
   handleRazorpayWebhook,
   purchaseSubscriptionWithWalletHandler,
   getActiveSubscriptionInternal,
+  redeemGiftDayInternal,
+  processLapsedSubscriptionsInternal,
+  getGiftBonusPayoutsAnalytics,
   getMySubscriptions,
   getTransactionByKeyInternal,
 } from '../controllers/walletController.js';
@@ -26,6 +29,7 @@ router.post('/', requireInternal, createWallet); // Create wallet (internal)
 router.get('/balance', requireAuth, getMyWallet); // Get wallet for logged-in user
 router.get('/transactions', requireAuth, getMyWalletTransactions); // Get transactions for logged-in user
 router.get('/partners/summary', requireRole('gobhi'), listPartnerBalances); // Admin: list partner balances owed
+router.get('/admin/analytics/gift-bonus-payouts', requireRole('gobhi'), getGiftBonusPayoutsAnalytics); // Admin: gift-day/attendance-bonus rollup
 router.get('/payouts', requireRole('gobhi'), listPayoutHistory); // Admin: payout history (registered before /:userId — literal path)
 router.post('/:userId/payout', requireRole('gobhi'), payoutPartner); // Admin: record a manual payout to a partner
 router.get('/:userId', requireAuth, getWallet); // Get wallet by userId
@@ -45,5 +49,7 @@ router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (n
 router.post('/subscriptions/purchase-with-wallet', requireAuth, purchaseSubscriptionWithWalletHandler);
 router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer's own subscriptions (optional ?gymId=)
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check
+router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
+router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
 
 export default router;

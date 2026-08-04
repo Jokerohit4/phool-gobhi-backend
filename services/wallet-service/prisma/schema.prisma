@@ -114,6 +114,27 @@ model GymSubscription {
   status          SubscriptionStatus @default(active)
   razorpayOrderId String             @unique
   createdAt       DateTime           @default(now())
+  // "upfront" (legacy — partner already paid partnerShare in full at
+  // purchase, see purchaseSubscriptionWithWallet's git history) | "perVisit"
+  // (current — partner is credited partnerShare/days per completed booking,
+  // see bookingCommissionFields in booking-service). Existing rows are
+  // backfilled to "upfront" by this field's migration so bookingCommissionFields
+  // never double-pays a partner who was already paid in full under the old
+  // model — new rows default to "perVisit".
+  payoutModel     String             @default("perVisit")
+  // Attendance-based retention mechanic, computed once by
+  // closeOutSubscriptionIfLapsed the first time this row is read after
+  // endDate passes (closedOutAt marks that this has already run — every
+  // field below is meaningless/zero until then). giftDaysGranted is capped
+  // by both the plan's tier cap and the customer's actual missed-day count,
+  // so it's always funded from this subscription's own already-collected
+  // partnerShare, never a net cost. giftDaysRedeemed tracks how many of
+  // those grace visits have actually been used (see redeemGiftDayService),
+  // redeemable even though endDate has passed.
+  giftDaysGranted  Int      @default(0)
+  giftDaysRedeemed Int      @default(0)
+  bonusPaid        Boolean  @default(false)
+  closedOutAt      DateTime?
 
   @@index([customerId, gymId, status])
   @@schema("wallet")

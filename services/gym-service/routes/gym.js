@@ -29,6 +29,7 @@ router.get('/places/details', requireAuth, ctrl.placesDetails);
 router.get('/partner/mine', requireRole('partner'), ctrl.getPartnerGyms);
 router.post('/', requireRole('partner'), ctrl.createGym);
 router.put('/:id', requireRole('partner'), ctrl.updateGym);
+router.put('/:id/refresh-google-rating', requireRole('partner'), ctrl.refreshGoogleRating);
 router.delete('/:id', requireRole('partner'), ctrl.deleteGym);
 router.post('/:id/images', requireRole('partner'), uploadGymImage.single('image'), ctrl.addGymImage);
 router.delete('/:id/images/:imageId', requireRole('partner'), ctrl.deleteGymImage);

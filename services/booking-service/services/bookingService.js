@@ -162,11 +162,18 @@ async function reconcileStalePendingBooking(booking) {
 // The row is created `pending`, not `confirmed`, specifically so this
 // transaction never has to stay open across the wallet-debit network call
 // that follows in createBooking — it commits (or releases) purely locally.
-// Subscription-covered bookings never pay out a per-session partner share
-// here (the partner was already paid upfront at subscription purchase — see
-// fulfillSubscriptionPurchase), so they get no commission snapshot at all.
-function bookingCommissionFields(amount, subscriptionId, gymCommissionPct) {
-  if (subscriptionId) return { commissionPct: null, partnerShare: null };
+// Subscription-covered bookings under the legacy "upfront" payout model
+// never pay out a per-session partner share here (the partner was already
+// paid in full at subscription purchase) — but current ("perVisit")
+// subscriptions split the plan's already-collected partnerShare evenly
+// across its days and pay one slice per completed visit, so the partner's
+// earnings actually track attendance instead of being fixed at purchase.
+function bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subscription) {
+  if (subscriptionId) {
+    if (subscription?.payoutModel === 'upfront') return { commissionPct: null, partnerShare: null };
+    const perVisitShare = Math.round((subscription.partnerShare / subscription.days) * 100) / 100;
+    return { commissionPct: subscription.commissionPct, partnerShare: perVisitShare };
+  }
   // Per-gym override (gym-service's Gym.commissionPct, admin-editable) takes
   // priority; the env constant only ever fires for a gym-service response
   // that's missing the field (shouldn't happen post-migration, but this is
@@ -176,7 +183,7 @@ function bookingCommissionFields(amount, subscriptionId, gymCommissionPct) {
   return { commissionPct, partnerShare };
 }
 
-async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId = null, gymCommissionPct = null }) {
+async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId = null, gymCommissionPct = null, subscription = null }) {
   for (let attempt = 1; attempt <= RESERVE_MAX_ATTEMPTS; attempt++) {
     // Reconcile a stale pending duplicate BEFORE opening the transaction —
     // reconciliation can make an HTTP call to wallet-service, which must
@@ -214,7 +221,7 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
         return tx.booking.create({
           data: {
             customerId, gymId, date, startTime, endTime, amount, status: 'pending', subscriptionId,
-            ...bookingCommissionFields(amount, subscriptionId, gymCommissionPct),
+            ...bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subscription),
           },
         });
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -344,6 +351,8 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // unreachable, etc.) falls through to the normal paid flow below — an
     // outage must never silently grant free access.
     let subscriptionId = null;
+    let subscription = null;
+    let viaGiftDay = false;
     try {
       const subRes = await axios.get(
         `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}`,
@@ -357,7 +366,9 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         // Already used today's free session — this booking falls back to the
         // normal paid flow rather than being blocked outright.
         if (!usedToday) {
-          subscriptionId = subRes.data.data.subscription.id;
+          subscription = subRes.data.data.subscription;
+          subscriptionId = subscription.id;
+          viaGiftDay = !!subRes.data.data.viaGiftDay;
         }
       }
     } catch (_) {
@@ -370,12 +381,25 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // The row lands as `pending` — a real reservation, not yet paid for.
     let reservation;
     try {
-      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId, gymCommissionPct: gym.commissionPct });
+      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId, gymCommissionPct: gym.commissionPct, subscription });
     } catch (err) {
       if (err?.status === 409 && err.error === 'Slot is full') {
         track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime, city: gym.city });
       }
       throw err;
+    }
+
+    // This booking used one of the customer's redeemable gift-day visits
+    // (see wallet-service's getGiftEligibleLapsedSubscription) — best-effort,
+    // fire-and-forget, same pattern as the referral-credit call in
+    // completeBooking. A failure here just means the next redemption re-uses
+    // a stale count, which self-corrects on its own next success.
+    if (subscriptionId && viaGiftDay) {
+      axios.post(
+        `${WALLET_SERVICE_URL}/internal/subscriptions/${subscriptionId}/redeem-gift-day`,
+        {},
+        await internalHeadersFor(WALLET_SERVICE_URL)
+      ).catch(() => {});
     }
 
     // 4. Debit customer wallet — skipped entirely when this booking is
@@ -710,14 +734,19 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     const updatedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
 
     // 7. Credit partner wallet — best-effort, never blocks completion.
-    // Skipped when this booking was covered by an active subscription: the
-    // partner's share was already credited upfront at subscription purchase
-    // (see wallet-service's fulfillSubscriptionPurchase) — crediting again
-    // here would pay them twice for the same session.
     // partnerShare is null for bookings created before this field existed —
     // fall back to the full amount for those rather than paying out `null`.
+    // Skipped ONLY for a subscription booking whose commission fields came
+    // back null from bookingCommissionFields — that happens exclusively for
+    // legacy "upfront" subscriptions, where the partner was already paid the
+    // full plan share in one shot at purchase (see purchaseSubscriptionWithWallet's
+    // payoutModel branch); crediting again here would pay them twice for the
+    // same subscription. Current "perVisit" subscriptions DO have a real
+    // (non-null) partnerShare snapshotted at booking-creation time — those
+    // pay out here exactly like a normal paid booking.
     const payoutAmount = booking.partnerShare ?? booking.amount;
-    if (!booking.subscriptionId) {
+    const skipPayout = booking.subscriptionId && booking.partnerShare == null;
+    if (!skipPayout) {
       try {
         if (gym.partnerId) {
           await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
@@ -1119,6 +1148,29 @@ export async function getSlotCounts(gymId, date) {
   return counts;
 }
 
+// Internal, called by wallet-service's closeOutSubscriptionIfLapsed to work
+// out how many of the plan's days were actually visited. Counts `completed`
+// only (not `confirmed`/`started`) since those haven't been attendance-
+// verified yet and a lapsed plan's window has already closed.
+export async function getCompletedVisitCountForSubscription(subscriptionId) {
+  return prisma.booking.count({
+    where: { subscriptionId, status: 'completed' },
+  });
+}
+
+// Internal, called by wallet-service's getMySubscriptionsService to decide
+// whether to surface the mid-period "gift box" teaser on a still-active
+// subscription — not-cancelled (rather than completed-only) so a booked-but-
+// not-yet-visited slot for today still counts as "not missed".
+export async function getLastVisitDateForSubscription(subscriptionId) {
+  const latest = await prisma.booking.findFirst({
+    where: { subscriptionId, status: { not: 'cancelled' } },
+    orderBy: { date: 'desc' },
+    select: { date: true },
+  });
+  return latest?.date ?? null;
+}
+
 export async function getGymBookings(gymId, partnerId) {
   try {
     // Verify partner owns this gym before exposing bookings
@@ -1282,11 +1334,13 @@ export async function getGymSalesSummary(gymId, partnerId) {
     // applying today's flat BOOKING_COMMISSION_PERCENT to the gross sum.
     // That approximation drifted from the real wallet balance two ways: a
     // booking's snapshotted commissionPct can differ from the CURRENT
-    // percent if it's ever changed, and subscription-covered bookings
-    // (subscriptionId set) get ZERO wallet credit at completion — the
-    // partner was already paid upfront at subscription purchase — so
-    // lumping their gross amount into a flat 80%-of-everything formula
-    // overstated `net` relative to what actually landed in the wallet.
+    // percent if it's ever changed, and legacy "upfront"-model subscription
+    // bookings (subscriptionId set, partnerShare null) get ZERO wallet
+    // credit at completion — that partner was already paid in full at
+    // subscription purchase — so lumping their gross amount into a flat
+    // 80%-of-everything formula overstated `net` relative to what actually
+    // landed in the wallet. Current "perVisit"-model subscription bookings
+    // do have a real partnerShare (their per-visit slice) and net out correctly.
     const bookings = await prisma.booking.findMany({
       where: { gymId, status: 'completed' },
       select: { date: true, amount: true, partnerShare: true, subscriptionId: true },
@@ -1296,7 +1350,13 @@ export async function getGymSalesSummary(gymId, partnerId) {
       const rows = bookings.filter(predicate);
       const gross = rows.reduce((sum, b) => sum + Number(b.amount), 0);
       const net = rows.reduce((sum, b) => {
-        if (b.subscriptionId) return sum; // paid out at subscription purchase, not here
+        // Only legacy "upfront"-model subscription bookings have a null
+        // partnerShare here — that partner was already paid the full plan
+        // share in one shot at subscription purchase, so it's excluded from
+        // this per-booking payout sum. Current "perVisit" subscription
+        // bookings have a real partnerShare (their per-visit slice) and flow
+        // through the normal branch below like any other booking.
+        if (b.subscriptionId && b.partnerShare == null) return sum;
         const share = b.partnerShare != null
           ? Number(b.partnerShare)
           : Number(b.amount) * (1 - effectiveCommissionPct / 100); // legacy rows predating partnerShare

@@ -13,6 +13,10 @@ import {
   claimRazorpayOrderService,
   purchaseSubscriptionWithWallet,
   getActiveSubscriptionService,
+  getGiftEligibleLapsedSubscription,
+  redeemGiftDayService,
+  processLapsedSubscriptionsService,
+  getGiftBonusPayoutsAnalyticsService,
   getMySubscriptionsService,
   getTransactionByIdempotencyKeyService,
   getGymCity,
@@ -278,7 +282,7 @@ export const verifyAndCreditWallet = async (req, res) => {
   }
 };
 
-const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'yearly'];
+const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'sixMonthly', 'yearly'];
 
 export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
   try {
@@ -304,13 +308,59 @@ export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
 };
 
 // Internal (requireInternal): booking-service checks this at booking-creation
-// time to decide whether to skip the per-session wallet debit.
+// time to decide whether to skip the per-session wallet debit. Falls back to
+// a gift-eligible lapsed subscription (see getGiftEligibleLapsedSubscription)
+// when there's no in-window one, so a customer's unused make-up visits stay
+// bookable after their plan's endDate — `viaGiftDay` tells booking-service
+// whether to call redeem-gift-day after creating the booking.
 export const getActiveSubscriptionInternal = async (req, res) => {
   try {
     const customerId = parseInt(req.query.customerId);
     const gymId = parseInt(req.query.gymId);
-    const subscription = await getActiveSubscriptionService(customerId, gymId);
-    res.json({ data: { active: !!subscription, subscription } });
+    let subscription = await getActiveSubscriptionService(customerId, gymId);
+    let viaGiftDay = false;
+    if (!subscription) {
+      subscription = await getGiftEligibleLapsedSubscription(customerId, gymId);
+      viaGiftDay = !!subscription;
+    }
+    res.json({ data: { active: !!subscription, subscription, viaGiftDay } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal (requireInternal): booking-service calls this right after
+// creating a booking against a gift-eligible lapsed subscription.
+export const redeemGiftDayInternal = async (req, res) => {
+  try {
+    await redeemGiftDayService(parseInt(req.params.id));
+    res.json({ data: { ok: true } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal (requireInternal): periodic sweep trigger (see deploy notes for
+// how this gets invoked on a schedule) — finds every lapsed-but-not-yet-
+// processed subscription and runs the gift-day/attendance-bonus close-out
+// on each, so the "gift ready" push fires close to when the plan lapses
+// rather than waiting for the customer to next open the app.
+export const processLapsedSubscriptionsInternal = async (req, res) => {
+  try {
+    const result = await processLapsedSubscriptionsService();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Admin (requireRole('gobhi')): powers the admin portal's "Gift & Bonus
+// Payouts" analytics tab.
+export const getGiftBonusPayoutsAnalytics = async (req, res) => {
+  try {
+    const days = req.query.days ? Number(req.query.days) : 30;
+    const result = await getGiftBonusPayoutsAnalyticsService(days);
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
