@@ -4,6 +4,7 @@ import { generateTimeSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { hasCloudinary, uploadBufferToCloudinary } from '../utils/upload.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -231,13 +232,41 @@ export const addGymImage = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No image provided' });
     }
+    let imageUrl, publicId;
+    if (hasCloudinary) {
+      const result = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: 'phool-gobhi/gyms',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
+      });
+      imageUrl = result.secure_url;
+      publicId = result.public_id;
+    }
     const image = await gymService.addGymImage(
       parseInt(req.params.id),
       req.userId,
-      req.file.path,
-      req.file.filename
+      imageUrl,
+      publicId
     );
     res.status(201).json({ data: image });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Legacy generic upload used by the Flutter partner app's multi-photo
+// onboarding flow (POST /api/gyms/upload) — same folder/format/transform as
+// addGymImage above, just not tied to a specific gym yet at upload time.
+export const uploadGenericImage = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: 'phool-gobhi/gyms',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: [{ width: 1200, height: 800, crop: 'limit', quality: 'auto' }],
+    });
+    res.json({ url: result.secure_url });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -264,10 +293,19 @@ export const addGymDoc = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No document provided' });
     }
+    let docUrl;
+    if (hasCloudinary) {
+      const result = await uploadBufferToCloudinary(req.file.buffer, {
+        folder: 'phool-gobhi/docs',
+        resource_type: 'auto',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      });
+      docUrl = result.secure_url;
+    }
     const result = await gymService.addGymDoc(
       parseInt(req.params.id),
       req.userId,
-      req.file.path
+      docUrl
     );
     // gymService.addGymDoc returns either the updated brandDocs array
     // (applied) or {pending, editRequest} (gated) — only nest it under
@@ -275,7 +313,7 @@ export const addGymDoc = async (req, res) => {
     if (result?.pending) {
       return res.status(201).json({ data: result });
     }
-    res.status(201).json({ data: { url: req.file.path, brandDocs: result } });
+    res.status(201).json({ data: { url: docUrl, brandDocs: result } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

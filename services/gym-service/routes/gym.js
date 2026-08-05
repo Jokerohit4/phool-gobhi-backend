@@ -51,10 +51,7 @@ router.get('/:id/slot-prices', requireRole('partner'), ctrl.getSlotPrices);
 router.put('/:id/slot-prices', requireRole('partner'), ctrl.updateSlotPrices);
 // A partner's own pending/reviewed edit requests for this gym (status banners).
 router.get('/:id/edit-requests', requireRole('partner'), ctrl.getPartnerEditRequests);
-router.post('/upload', requireAuth, uploadGymImage.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.json({ url: req.file.path });
-});
+router.post('/upload', requireAuth, uploadGymImage.single('file'), ctrl.uploadGenericImage);
 
 // Admin-only routes — require role 'gobhi'
 // To approve: create an account with role:'gobhi' via POST /api/auth/signup, login, use the JWT

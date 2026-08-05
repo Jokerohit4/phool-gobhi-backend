@@ -27,10 +27,11 @@ app.get('/health', async (req, res) => {
 app.use('/', gymRoutes);
 
 // Global error handler — catches anything a route/middleware passes to
-// next(err) instead of handling itself (e.g. Multer's file-too-large error,
-// or a Cloudinary storage failure inside multer-storage-cloudinary), so
-// upload failures return the same JSON shape as every other error path
-// instead of falling through to Express's default HTML response.
+// next(err) instead of handling itself (e.g. Multer's file-too-large error),
+// so upload failures return the same JSON shape as every other error path
+// instead of falling through to Express's default HTML response. Cloudinary
+// upload failures are caught inline in the controllers instead (see
+// utils/upload.js's retry wrapper) and never reach here.
 app.use((err, req, res, next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'File is too large (max 10 MB)' });
