@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import { extractUser } from './middleware/requireAuth.js';
 import walletRoutes from './routes/wallet.js';
 import { pool } from './db.js';
-import { reconcilePendingRazorpayOrdersService } from './services/walletService.js';
 
 dotenv.config();
 
@@ -33,18 +32,15 @@ app.listen(PORT, () => {
   console.log(`🚀 Wallet Service running on port ${PORT}`);
 });
 
-// Periodic Razorpay top-up reconciliation (every 5 min while the container is
-// warm). Cloud Run throttles CPU between requests by default, so this timer is
-// a best-effort convenience, NOT a correctness guarantee — the same settle
-// logic also runs lazily whenever a customer reads their wallet (see
-// getMyWallet/getMyWalletTransactions), which is the true backstop. It makes
-// the dashboard webhook optional: a top-up where the app was killed before the
-// client-side /verify ran still lands on the next sweep or the customer's next
-// wallet visit. No-op fast when there are no stale PENDING orders.
-if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_SECRET) {
-  setInterval(() => {
-    reconcilePendingRazorpayOrdersService().catch((err) =>
-      console.error('Razorpay reconcile sweep error:', err.message)
-    );
-  }, 5 * 60 * 1000);
-}
+// Periodic Razorpay top-up reconciliation is triggered externally now (see
+// .github/workflows/reconcile-razorpay-orders.yml), not by an in-process
+// setInterval as this used to do. Cloud Run throttles a container's CPU to
+// near-zero between requests unless cpu-throttling is explicitly disabled
+// (it isn't, for this service) — a timer firing while idle got starved of
+// the CPU needed to even open a Postgres connection, missing Prisma's 10s
+// pool-acquisition timeout on every single tick in both dev and prod. A
+// real incoming HTTP request (POST /internal/orders/reconcile-pending)
+// gets full CPU allocation the old timer never could. Still pure
+// convenience, not a correctness requirement: the same settle logic also
+// runs lazily whenever a customer reads their wallet (see
+// getMyWallet/getMyWalletTransactions), which is the true backstop.

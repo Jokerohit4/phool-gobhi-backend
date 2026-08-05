@@ -1,0 +1,79 @@
+name: Reconcile pending Razorpay top-ups
+
+# Triggers wallet-service's Razorpay top-up reconciliation
+# (reconcilePendingRazorpayOrdersService, via POST /internal/orders/
+# reconcile-pending) as a real incoming HTTP request instead of the
+# in-process setInterval that used to live in wallet-service/app.js.
+#
+# That timer fired every 5 min "while the container was warm", but Cloud
+# Run throttles CPU to near-zero between requests unless cpu-throttling is
+# explicitly disabled (it isn't, for this service) — the timer callback
+# never got enough CPU to even open a Postgres connection, missing
+# Prisma's 10s pool-acquisition timeout on every single tick in both dev
+# and prod (100% failure rate, confirmed via Cloud Logging on
+# 2026-08-05). A genuine incoming request gets full CPU allocation, which
+# fixes this at the root instead of just silencing the log spam.
+#
+# Pure convenience, not a correctness requirement: the same settlement
+# logic also runs lazily whenever a customer reads their wallet (see
+# getMyWallet/getMyWalletTransactions) — the true backstop, unchanged.
+#
+# Auth is two-layered, same as every other internal endpoint in this repo:
+# an x-internal-key header (the app-level requireInternal check) AND a
+# Google-signed ID token scoped to the target service's own URL as
+# audience (required by Cloud Run's IAM invoker check on this
+# no-allow-unauthenticated service — see deploy.yml's healthauth step,
+# whose exact pattern this mirrors, reusing the same per-env WIF
+# providers since wallet-service's URLs are already registered audiences
+# there for post-deploy health checks).
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 min
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  reconcile:
+    strategy:
+      matrix:
+        env: [dev, prod]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            INTERNAL_API_KEY:${{ vars.GCP_PROJECT_ID }}/internal-api-key-${{ matrix.env }}
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "wallet-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - id: reconcileauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.reconcileauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.secret.outputs.INTERNAL_API_KEY }}" \
+            "${{ steps.svcurl.outputs.url }}/internal/orders/reconcile-pending"
