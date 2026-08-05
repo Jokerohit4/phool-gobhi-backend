@@ -137,6 +137,11 @@ model GymSubscription {
   giftDaysRedeemed Int      @default(0)
   bonusPaid        Boolean  @default(false)
   closedOutAt      DateTime?
+  // Set once the customer has actually seen the /gift-reveal screen for this
+  // closed-out subscription — without it, hasUnseenGiftReveal (client-side)
+  // stays true forever with nothing to ever flip it back, so the gift-box FAB
+  // and reveal screen resurface on every app launch indefinitely.
+  giftRevealSeenAt DateTime?
 
   @@index([customerId, gymId, status])
   @@schema("wallet")

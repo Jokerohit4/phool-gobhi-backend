@@ -20,6 +20,7 @@ import {
   reconcilePendingRazorpayOrdersInternal,
   getGiftBonusPayoutsAnalytics,
   getMySubscriptions,
+  ackGiftReveal,
   getTransactionByKeyInternal,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
@@ -49,6 +50,7 @@ router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (n
 // source rule).
 router.post('/subscriptions/purchase-with-wallet', requireAuth, purchaseSubscriptionWithWalletHandler);
 router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer's own subscriptions (optional ?gymId=)
+router.post('/subscriptions/:id/ack-gift-reveal', requireAuth, ackGiftReveal); // Customer confirms they've seen the /gift-reveal screen
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check
 router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger

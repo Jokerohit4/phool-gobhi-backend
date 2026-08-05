@@ -66,42 +66,70 @@ export async function rotate(token) {
   }
 
   if (row.usedAt) {
-    const withinGrace = Date.now() - row.usedAt.getTime() <= REUSE_GRACE_MS;
-    if (!withinGrace) {
-      // Reuse of an already-rotated token well after the fact — theft
-      // signal. Revoke the whole family so the stolen token (and the
-      // legitimate one it was cloned from) both stop working.
-      await revokeFamily(familyId);
-      throw { status: 403, error: 'Session revoked, please log in again', errorCode: 'E120' };
-    }
-    // Benign race: re-hand-out the token this row was already rotated into,
-    // rather than rotating again (which would just create a second race).
-    const nextRow = row.replacedByJti
-      ? await prisma.refreshToken.findUnique({ where: { jti: row.replacedByJti } })
-      : null;
-    if (!nextRow || nextRow.revokedAt) {
-      throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
-    }
-    return {
-      userId,
-      refreshToken: signRefreshToken(userId, nextRow.jti, familyId, nextRow.expiresAt),
-    };
+    return handleAlreadyUsedToken(row, userId, familyId);
   }
 
+  // Atomically claim this token for rotation — the conditional
+  // updateMany(usedAt: null) and the successor's create happen in one
+  // transaction, so two concurrent rotate() calls presenting the same
+  // not-yet-used token (two tabs, a client retry racing the original
+  // request, or a stolen token replayed at the same instant) can never both
+  // "win" and fork two independent successor chains from one predecessor —
+  // a plain findUnique-then-separately-write let exactly that happen,
+  // because both calls could pass the old `!row.usedAt` check before either
+  // wrote. Here, exactly one call's updateMany matches (count 1); the loser
+  // gets count 0 and falls through to the same reuse-grace/theft-detection
+  // path a delayed re-presentation of an already-used token goes through —
+  // so a benign race now genuinely hands both callers the same successor
+  // token, instead of silently forking the session.
   const newJti = crypto.randomUUID();
-  await prisma.$transaction([
-    prisma.refreshToken.create({
-      data: { jti: newJti, familyId, userId, expiresAt: row.expiresAt },
-    }),
-    prisma.refreshToken.update({
-      where: { jti },
+  const claimed = await prisma.$transaction(async (tx) => {
+    const result = await tx.refreshToken.updateMany({
+      where: { jti, usedAt: null },
       data: { usedAt: new Date(), replacedByJti: newJti },
-    }),
-  ]);
+    });
+    if (result.count === 0) return false;
+    await tx.refreshToken.create({
+      data: { jti: newJti, familyId, userId, expiresAt: row.expiresAt },
+    });
+    return true;
+  });
+
+  if (!claimed) {
+    const freshRow = await prisma.refreshToken.findUnique({ where: { jti } });
+    return handleAlreadyUsedToken(freshRow, userId, familyId);
+  }
 
   return {
     userId,
     refreshToken: signRefreshToken(userId, newJti, familyId, row.expiresAt),
+  };
+}
+
+// Shared by the top-of-function "already used" check and the fallback after
+// losing the atomic claim above — a delayed re-presentation and a
+// same-instant lost race land in the exact same state (row.usedAt set,
+// replacedByJti pointing at whoever won) and are handled identically.
+async function handleAlreadyUsedToken(row, userId, familyId) {
+  const withinGrace = Date.now() - row.usedAt.getTime() <= REUSE_GRACE_MS;
+  if (!withinGrace) {
+    // Reuse of an already-rotated token well after the fact — theft
+    // signal. Revoke the whole family so the stolen token (and the
+    // legitimate one it was cloned from) both stop working.
+    await revokeFamily(familyId);
+    throw { status: 403, error: 'Session revoked, please log in again', errorCode: 'E120' };
+  }
+  // Benign race: re-hand-out the token this row was already rotated into,
+  // rather than rotating again (which would just create a second race).
+  const nextRow = row.replacedByJti
+    ? await prisma.refreshToken.findUnique({ where: { jti: row.replacedByJti } })
+    : null;
+  if (!nextRow || nextRow.revokedAt) {
+    throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
+  }
+  return {
+    userId,
+    refreshToken: signRefreshToken(userId, nextRow.jti, familyId, nextRow.expiresAt),
   };
 }
 

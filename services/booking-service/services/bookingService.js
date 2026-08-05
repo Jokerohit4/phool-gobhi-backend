@@ -183,7 +183,7 @@ function bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subsc
   return { commissionPct, partnerShare };
 }
 
-async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId = null, gymCommissionPct = null, subscription = null }) {
+async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, candidateSubscription = null, gymCommissionPct = null }) {
   for (let attempt = 1; attempt <= RESERVE_MAX_ATTEMPTS; attempt++) {
     // Reconcile a stale pending duplicate BEFORE opening the transaction —
     // reconciliation can make an HTTP call to wallet-service, which must
@@ -216,6 +216,27 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
         });
         if (activeCount >= capacity) {
           throw { status: 409, error: 'Slot is full' };
+        }
+
+        // Decide subscription coverage in the SAME serializable transaction
+        // as the insert — otherwise two concurrent requests for two
+        // different slots at the same gym/day can each read "not used
+        // today" before either commits, granting two free sessions in one
+        // day. Postgres's serializable snapshot isolation detects the
+        // resulting read-write conflict on this predicate (same as the
+        // duplicate/capacity checks above) and aborts one side as P2034,
+        // which the retry loop below already handles.
+        let subscriptionId = null;
+        let subscription = null;
+        if (candidateSubscription) {
+          const usedToday = await tx.booking.findFirst({
+            where: { customerId, gymId, date, subscriptionId: { not: null }, status: { not: 'cancelled' } },
+            select: { id: true },
+          });
+          if (!usedToday) {
+            subscription = candidateSubscription;
+            subscriptionId = subscription.id;
+          }
         }
 
         return tx.booking.create({
@@ -287,6 +308,14 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       };
     }
 
+    // /internal/:id (unlike gym-service's own public getGymById) returns the
+    // raw row with no approval/active filtering — enforce it here, otherwise
+    // an unapproved or deactivated gym (invisible everywhere else: discovery,
+    // detail, reviews) could still take paid bookings.
+    if (!gym.isActive || !gym.isApproved) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+
     // Blocks the cheap version of self-booking fraud — a partner using their
     // own login to book (and complete, and review) their own gym to inflate
     // attendance/rating numbers. Doesn't catch a partner using a second
@@ -350,38 +379,34 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // session at this gym today? Any failure here (wallet-service
     // unreachable, etc.) falls through to the normal paid flow below — an
     // outage must never silently grant free access.
-    let subscriptionId = null;
-    let subscription = null;
-    let viaGiftDay = false;
+    // These are only a CANDIDATE — whether this booking actually ends up
+    // subscription-covered is decided atomically inside reserveBookingSlot's
+    // transaction (see there for why), so don't trust this subscriptionId
+    // for anything money-related below; use reservation.subscriptionId.
+    let candidateSubscription = null;
+    let candidateSubscriptionId = null;
+    let candidateViaGiftDay = false;
     try {
       const subRes = await axios.get(
         `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}`,
         await internalHeadersFor(WALLET_SERVICE_URL)
       );
       if (subRes.data?.data?.active) {
-        const usedToday = await prisma.booking.findFirst({
-          where: { customerId, gymId, date, subscriptionId: { not: null }, status: { not: 'cancelled' } },
-          select: { id: true },
-        });
-        // Already used today's free session — this booking falls back to the
-        // normal paid flow rather than being blocked outright.
-        if (!usedToday) {
-          subscription = subRes.data.data.subscription;
-          subscriptionId = subscription.id;
-          viaGiftDay = !!subRes.data.data.viaGiftDay;
-        }
+        candidateSubscription = subRes.data.data.subscription;
+        candidateSubscriptionId = candidateSubscription.id;
+        candidateViaGiftDay = !!subRes.data.data.viaGiftDay;
       }
     } catch (_) {
       // wallet-service unreachable — fall through to the paid flow
     }
 
-    // 2-3. Reserve the slot: duplicate-booking and capacity checks plus the
-    // insert happen atomically (see reserveBookingSlot) so two concurrent
-    // requests for the last open slot can't both pass the capacity check.
-    // The row lands as `pending` — a real reservation, not yet paid for.
+    // 2-3. Reserve the slot: duplicate-booking, capacity, and subscription-
+    // quota checks plus the insert happen atomically (see reserveBookingSlot)
+    // so two concurrent requests can't both pass any of those checks. The
+    // row lands as `pending` — a real reservation, not yet paid for.
     let reservation;
     try {
-      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, subscriptionId, gymCommissionPct: gym.commissionPct, subscription });
+      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, candidateSubscription, gymCommissionPct: gym.commissionPct });
     } catch (err) {
       if (err?.status === 409 && err.error === 'Slot is full') {
         track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime, city: gym.city });
@@ -389,12 +414,18 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       throw err;
     }
 
+    // The DB row is the source of truth for whether this booking actually
+    // landed as subscription-covered — the candidate above may have lost the
+    // atomic "used today" check to a concurrent booking.
+    const subscriptionId = reservation.subscriptionId;
+
     // This booking used one of the customer's redeemable gift-day visits
     // (see wallet-service's getGiftEligibleLapsedSubscription) — best-effort,
     // fire-and-forget, same pattern as the referral-credit call in
     // completeBooking. A failure here just means the next redemption re-uses
-    // a stale count, which self-corrects on its own next success.
-    if (subscriptionId && viaGiftDay) {
+    // a stale count, which self-corrects on its own next success. Only fires
+    // if the candidate subscription actually won the atomic check above.
+    if (subscriptionId && subscriptionId === candidateSubscriptionId && candidateViaGiftDay) {
       axios.post(
         `${WALLET_SERVICE_URL}/internal/subscriptions/${subscriptionId}/redeem-gift-day`,
         {},
@@ -767,10 +798,20 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // thrown pattern as the partner payout above; idempotency keys make a
     // retried completeBooking call (or a duplicate updateMany race) safe.
     try {
-      const priorCompletedCount = await prisma.booking.count({
+      // Identified by "earliest-booked (lowest id) session that is now
+      // completed", not a count — a plain count of completed bookings taken
+      // after this row's own status flip can read as 2 on BOTH sides of a
+      // customer's first two sessions completing at nearly the same instant
+      // (each sees the other's already-committed row too), so neither would
+      // fire. Only one booking can ever be the minimum id among currently-
+      // completed rows, so at most one concurrent completion can match this
+      // check — race-safe without needing a transaction.
+      const firstCompleted = await prisma.booking.findFirst({
         where: { customerId: booking.customerId, status: 'completed' },
+        orderBy: { id: 'asc' },
+        select: { id: true },
       });
-      if (priorCompletedCount === 1) {
+      if (firstCompleted?.id === booking.id) {
         const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
         const referredByUserId = profileRes.data?.referredByUserId;
         if (referredByUserId) {
@@ -905,36 +946,57 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
       attendanceMethod = 'qr_scan';
     }
 
-    const bookingUpdate = prisma.booking.update({
-      where: { id: bookingId },
-      data: {
-        status: 'started',
-        attendedAt: new Date(),
-        attendanceMethod,
-        attendanceVerifiedBy: partnerId,
-        ...(slotShift
-          ? { startTime: slotShift.newStartTime, endTime: slotShift.newEndTime, slotShiftWarning: true }
-          : {}),
-      },
+    // updateMany + a status guard, not update() — the idempotency check
+    // above read `booking` before this point, so two truly concurrent
+    // verify calls for the same booking (retry storm, second device) could
+    // otherwise both pass it and both write. Conditioning on status still
+    // being 'confirmed' means only one wins; the attendanceWarning is
+    // created inside the same interactive transaction so it's never
+    // inserted for the losing side.
+    const { count } = await prisma.$transaction(async (tx) => {
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, status: 'confirmed' },
+        data: {
+          status: 'started',
+          attendedAt: new Date(),
+          attendanceMethod,
+          attendanceVerifiedBy: partnerId,
+          ...(slotShift
+            ? { startTime: slotShift.newStartTime, endTime: slotShift.newEndTime, slotShiftWarning: true }
+            : {}),
+        },
+      });
+      if (result.count > 0 && slotShift) {
+        await tx.attendanceWarning.create({
+          data: {
+            bookingId: booking.id,
+            customerId: booking.customerId,
+            gymId,
+            date: booking.date,
+            originalStartTime: booking.startTime,
+            originalEndTime: booking.endTime,
+            newStartTime: slotShift.newStartTime,
+            newEndTime: slotShift.newEndTime,
+          },
+        });
+      }
+      return result;
     });
 
-    const [updated] = slotShift
-      ? await prisma.$transaction([
-          bookingUpdate,
-          prisma.attendanceWarning.create({
-            data: {
-              bookingId: booking.id,
-              customerId: booking.customerId,
-              gymId,
-              date: booking.date,
-              originalStartTime: booking.startTime,
-              originalEndTime: booking.endTime,
-              newStartTime: slotShift.newStartTime,
-              newEndTime: slotShift.newEndTime,
-            },
-          }),
-        ])
-      : [await bookingUpdate];
+    if (count === 0) {
+      // Lost the race to a concurrent verify call — return the winner's
+      // now-committed state as already-verified rather than erroring, since
+      // attendance IS recorded, just not by this particular request.
+      const current = await prisma.booking.findUnique({ where: { id: bookingId } });
+      return {
+        bookingId: current.id,
+        attendedAt: current.attendedAt,
+        attendanceMethod: current.attendanceMethod,
+        alreadyVerified: true,
+      };
+    }
+
+    const updated = await prisma.booking.findUnique({ where: { id: bookingId } });
 
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,

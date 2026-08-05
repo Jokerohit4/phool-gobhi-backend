@@ -165,6 +165,10 @@ model OtpCode {
   code      String
   expiresAt DateTime
   sentAt    DateTime
+  // Failed-verify counter for this live code — lets verifyOtpService lock
+  // out further guesses once exceeded, closing a per-phone brute-force gap
+  // that was previously only bounded by the gateway's per-IP rate limit.
+  attempts  Int      @default(0)
 
   @@schema("auth")
 }

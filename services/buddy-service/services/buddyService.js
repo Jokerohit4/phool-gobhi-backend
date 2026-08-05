@@ -301,7 +301,11 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
     userId: { notIn: excludeIds },
     lat: { gte: box.minLat, lte: box.maxLat },
     lng: { gte: box.minLng, lte: box.maxLng },
-    dateOfBirth: { gte: minDob, lte: maxDob },
+    // minDob is exactly maxAge+1 years back — `gt`, not `gte`, since a
+    // candidate born exactly on that date has already turned maxAge+1
+    // (matches ageFromDOB's own reckoning, used to render their displayed
+    // age elsewhere in this same response) and should be excluded.
+    dateOfBirth: { gt: minDob, lte: maxDob },
   };
   if (filter.genders.length) where.gender = { in: filter.genders };
   if (filter.fitnessGoals.length) where.fitnessGoals = { hasSome: filter.fitnessGoals };

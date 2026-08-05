@@ -18,6 +18,7 @@ import {
   processLapsedSubscriptionsService,
   getGiftBonusPayoutsAnalyticsService,
   getMySubscriptionsService,
+  ackGiftRevealService,
   getTransactionByIdempotencyKeyService,
   getGymCity,
   reconcilePendingRazorpayOrdersService,
@@ -400,6 +401,15 @@ export const getMySubscriptions = async (req, res) => {
     const gymId = req.query.gymId ? parseInt(req.query.gymId) : undefined;
     const subscriptions = await getMySubscriptionsService(req.userId, gymId);
     res.json({ data: subscriptions });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const ackGiftReveal = async (req, res) => {
+  try {
+    await ackGiftRevealService(parseInt(req.params.id), req.userId);
+    res.json({ data: { ok: true } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

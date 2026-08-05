@@ -1,5 +1,6 @@
 import { hash, compare } from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { generateAccessToken } from '../utils/generateTokens.js';
 import { issueRefreshFamily, rotate as rotateRefreshToken, revokeByToken } from './refreshTokenService.js';
 import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
@@ -9,8 +10,21 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
 
 const SKIP_OTP_CODE = '123456';
+const OTP_MAX_ATTEMPTS = 5;
 
 const prisma = new PrismaClient();
+
+// Constant-time string compare — a plain !== on a guessable secret (an OTP
+// code here) leaks a timing signal proportional to how many leading
+// characters matched. Low-risk in practice (bounded by the OTP's 5-minute
+// lifetime, the gateway's per-IP rate limit, and now OTP_MAX_ATTEMPTS below),
+// but cheap to close outright rather than rely solely on those.
+function safeCompareStrings(a, b) {
+  const bufA = Buffer.from(String(a ?? ''));
+  const bufB = Buffer.from(String(b ?? ''));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 
@@ -368,21 +382,37 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
       const referrer = await prisma.user.findUnique({ where: { referralCode: referralCode.trim().toUpperCase() } });
       if (referrer) referredByUserId = referrer.id;
     }
-    user = await prisma.user.create({
-      data: {
-        // Phone+OTP signup never collects a name, so this is left null rather
-        // than a placeholder like 'User' — each app prompts for it once,
-        // after first login, when it sees name is missing.
-        name: name || null,
-        phone,
-        email: email || null,
-        role,
-        type,
-        gobhiType: role === ROLES.GOBHI ? gobhiType : null,
-        referredByUserId,
-        updatedAt: new Date(),
-      },
-    });
+    try {
+      user = await prisma.user.create({
+        data: {
+          // Phone+OTP signup never collects a name, so this is left null rather
+          // than a placeholder like 'User' — each app prompts for it once,
+          // after first login, when it sees name is missing.
+          name: name || null,
+          phone,
+          email: email || null,
+          role,
+          type,
+          gobhiType: role === ROLES.GOBHI ? gobhiType : null,
+          referredByUserId,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      // P2002 on the phone-unique constraint means a concurrent verify call
+      // for this same brand-new phone (double-tap, or a client retry on a
+      // flaky connection) already created the account between our
+      // findUnique above and this create. Fall through with the now-
+      // existing row and let the referralCode step below no-op to the same
+      // value, instead of surfacing a raw 500 for what should be a
+      // successful login.
+      if (err.code === 'P2002') {
+        user = await prisma.user.findUnique({ where: { phone } });
+        if (!user) throw err;
+      } else {
+        throw err;
+      }
+    }
     // Follow-up update rather than a single create: the code is derived
     // from the id Postgres just assigned, so it can't be known beforehand.
     user = await prisma.user.update({
@@ -444,7 +474,16 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
       if (entry) await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
-    if (entry.code !== otp) {
+    if (entry.attempts >= OTP_MAX_ATTEMPTS) {
+      // Too many wrong guesses against this exact code — force a fresh
+      // resend rather than continuing to allow guesses for the rest of its
+      // 5-minute window. Previously the only ceiling here was the gateway's
+      // per-IP rate limit, which a distributed-IP attacker isn't bound by.
+      await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+      throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
+    }
+    if (!safeCompareStrings(entry.code, otp)) {
+      await prisma.otpCode.update({ where: { phone }, data: { attempts: { increment: 1 } } }).catch(() => {});
       throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
     }
     await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
@@ -539,6 +578,9 @@ export async function createStaffService({ name, email, password, gobhiType }, a
   return result;
 }
 
+const STAFF_STATUS_MAX_ATTEMPTS = 4;
+const STAFF_STATUS_RETRY_BASE_MS = 40;
+
 export async function updateStaffStatusService(targetId, isActive, actorId) {
   const id = Number(targetId);
   if (id === actorId) {
@@ -548,17 +590,39 @@ export async function updateStaffStatusService(targetId, isActive, actorId) {
   if (!target || target.role !== ROLES.GOBHI) {
     throw { status: 404, error: 'Staff account not found' };
   }
-  if (!isActive) {
-    const activeCount = await prisma.user.count({ where: { role: ROLES.GOBHI, isActive: true } });
-    if (activeCount <= 1) {
-      throw { status: 400, error: 'Cannot deactivate the last remaining active staff account' };
+
+  for (let attempt = 1; attempt <= STAFF_STATUS_MAX_ATTEMPTS; attempt++) {
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        if (!isActive) {
+          // Serializable isolation makes the count-check-then-update atomic
+          // against a concurrent deactivation of a DIFFERENT staff account:
+          // Postgres detects the overlapping read (active-gobhi count) vs.
+          // write (a gobhi row's isActive) between two such transactions and
+          // aborts one as a serialization failure (P2034) instead of letting
+          // both commit and zero out active staff. Same retry-on-P2034
+          // pattern as booking-service's reserveBookingSlot.
+          const activeCount = await tx.user.count({ where: { role: ROLES.GOBHI, isActive: true } });
+          if (activeCount <= 1) {
+            throw { status: 400, error: 'Cannot deactivate the last remaining active staff account' };
+          }
+        }
+        return tx.user.update({
+          where: { id },
+          data: { isActive },
+          select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
+        });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+      track(isActive ? 'staff_account_reactivated' : 'staff_account_revoked', actorId, { targetUserId: id });
+      return updated;
+    } catch (err) {
+      if (err && err.status) throw err;
+      if (err?.code === 'P2034' && attempt < STAFF_STATUS_MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, STAFF_STATUS_RETRY_BASE_MS * attempt));
+        continue;
+      }
+      throw err;
     }
   }
-  const updated = await prisma.user.update({
-    where: { id },
-    data: { isActive },
-    select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
-  });
-  track(isActive ? 'staff_account_reactivated' : 'staff_account_revoked', actorId, { targetUserId: id });
-  return updated;
 }

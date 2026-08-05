@@ -879,39 +879,62 @@ export async function approveEditRequest(id, gobhiId) {
     throw { status: 400, error: `Edit request is already ${request.status}` };
   }
 
-  switch (request.changeType) {
-    case 'profile':
-      await applyGymProfileUpdate(request.gymId, request.payload);
-      break;
-    case 'image_add':
-      await applyGymImageAdd(request.gymId, request.payload);
-      break;
-    case 'image_delete':
-      await applyGymImageDelete(request.payload);
-      break;
-    case 'doc_add':
-      await applyGymDocAdd(request.gymId, request.payload);
-      break;
-    case 'doc_delete':
-      await applyGymDocDelete(request.gymId, request.payload);
-      break;
-    case 'slot_prices':
-      await applySlotPrices(request.gymId, request.payload.prices);
-      break;
-    case 'slot_block_add':
-      await applySlotBlockAdd(request.gymId, request.payload);
-      break;
-    case 'slot_block_delete':
-      await applySlotBlockDelete(request.payload);
-      break;
-    default:
-      throw { status: 500, error: `Unknown edit request type: ${request.changeType}` };
-  }
-
-  return prisma.gymEditRequest.update({
-    where: { id },
+  // Atomically claim the request BEFORE applying any side effect. This is
+  // what actually prevents two staff simultaneously approving and rejecting
+  // the same request from both passing the pending check above: only one of
+  // approveEditRequest/rejectEditRequest's claims can match status='pending'
+  // on this row — the loser's count is 0 and it fails cleanly instead of one
+  // side's mutation landing on the gym while the request ends up marked
+  // decided the other way.
+  const claim = await prisma.gymEditRequest.updateMany({
+    where: { id, status: 'pending' },
     data: { status: 'approved', reviewedBy: gobhiId, reviewedAt: new Date() },
   });
+  if (claim.count === 0) {
+    throw { status: 400, error: 'Edit request was already reviewed' };
+  }
+
+  try {
+    switch (request.changeType) {
+      case 'profile':
+        await applyGymProfileUpdate(request.gymId, request.payload);
+        break;
+      case 'image_add':
+        await applyGymImageAdd(request.gymId, request.payload);
+        break;
+      case 'image_delete':
+        await applyGymImageDelete(request.payload);
+        break;
+      case 'doc_add':
+        await applyGymDocAdd(request.gymId, request.payload);
+        break;
+      case 'doc_delete':
+        await applyGymDocDelete(request.gymId, request.payload);
+        break;
+      case 'slot_prices':
+        await applySlotPrices(request.gymId, request.payload.prices);
+        break;
+      case 'slot_block_add':
+        await applySlotBlockAdd(request.gymId, request.payload);
+        break;
+      case 'slot_block_delete':
+        await applySlotBlockDelete(request.payload);
+        break;
+      default:
+        throw { status: 500, error: `Unknown edit request type: ${request.changeType}` };
+    }
+  } catch (err) {
+    // The side effect failed after we already claimed 'approved' — revert
+    // to pending so the request isn't stuck marked approved with nothing
+    // actually applied, and a retry (or manual reject) is still possible.
+    await prisma.gymEditRequest.updateMany({
+      where: { id, status: 'approved' },
+      data: { status: 'pending', reviewedBy: null, reviewedAt: null },
+    }).catch(() => {});
+    throw err;
+  }
+
+  return prisma.gymEditRequest.findUnique({ where: { id } });
 }
 
 export async function rejectEditRequest(id, gobhiId, reason) {
@@ -925,10 +948,16 @@ export async function rejectEditRequest(id, gobhiId, reason) {
     throw { status: 400, error: `Edit request is already ${request.status}` };
   }
 
-  return prisma.gymEditRequest.update({
-    where: { id },
+  // Same atomic claim as approveEditRequest — see there for why.
+  const claim = await prisma.gymEditRequest.updateMany({
+    where: { id, status: 'pending' },
     data: { status: 'rejected', rejectionReason: reason, reviewedBy: gobhiId, reviewedAt: new Date() },
   });
+  if (claim.count === 0) {
+    throw { status: 400, error: 'Edit request was already reviewed' };
+  }
+
+  return prisma.gymEditRequest.findUnique({ where: { id } });
 }
 
 export async function getAvailableSlots(gymId, date) {

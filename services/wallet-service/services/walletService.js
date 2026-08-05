@@ -210,11 +210,20 @@ export async function debitWalletService(userId, amount, description, idempotenc
     const updated = await prisma.$transaction(async (tx) => {
       const wallet = await tx.wallet.findUnique({ where: { userId } });
       if (!wallet) throw new Error('Wallet not found');
-      if (Number(wallet.balance) < amount) throw new Error('Insufficient balance');
-      const updated = await tx.wallet.update({
-        where: { userId },
-        data: { balance: { decrement: amount } }
+      // Atomic check-and-decrement: the WHERE clause re-validates
+      // balance>=amount against the row's value AT UPDATE TIME under
+      // Postgres's row lock, not against the `wallet` snapshot read above.
+      // That snapshot is stale the instant a concurrent debit/payout on the
+      // same wallet is in flight — a plain findUnique-then-update let two
+      // concurrent debits both pass the same balance check and both commit,
+      // driving the balance negative. `wallet` above is only used for its
+      // id now, not for the balance check.
+      const { count } = await tx.wallet.updateMany({
+        where: { userId, balance: { gte: amount } },
+        data: { balance: { decrement: amount } },
       });
+      if (count === 0) throw new Error('Insufficient balance');
+      const updated = await tx.wallet.findUnique({ where: { userId } });
       await tx.walletTransaction.create({
         data: {
           walletId: wallet.id,
@@ -269,27 +278,58 @@ export async function getPayoutHistoryService() {
 }
 
 export async function payoutWalletService(userId, amount, description) {
-  const result = await prisma.$transaction(async (tx) => {
-    const wallet = await tx.wallet.findUnique({ where: { userId } });
+  const explicitAmount = amount != null;
+  if (explicitAmount && (!Number.isFinite(amount) || amount <= 0)) {
+    throw new Error('Nothing to pay out');
+  }
+
+  // Bounded retry, not a single read-check-write: needed only for the "pay
+  // out full balance" case (amount omitted), where the target itself is
+  // read from the wallet. An explicit amount either succeeds on the first
+  // atomic attempt or is genuinely insufficient (see below) — no retry
+  // changes that outcome.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const wallet = await prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new Error('Wallet not found');
-    const payoutAmount = amount ?? Number(wallet.balance);
+    const payoutAmount = explicitAmount ? amount : Number(wallet.balance);
     if (payoutAmount <= 0) throw new Error('Nothing to pay out');
-    if (Number(wallet.balance) < payoutAmount) throw new Error('Insufficient balance');
-    const updated = await tx.wallet.update({
-      where: { userId },
-      data: { balance: { decrement: payoutAmount } }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Atomic check-and-decrement: the WHERE clause re-validates
+      // balance>=payoutAmount against the row's value AT UPDATE TIME under
+      // Postgres's row lock, not against the `wallet` snapshot read above —
+      // this is what prevents a double-clicked "Record payout" (or a race
+      // with a concurrent debit) from both passing a stale check and
+      // overdrawing the wallet.
+      const { count } = await tx.wallet.updateMany({
+        where: { userId, balance: { gte: payoutAmount } },
+        data: { balance: { decrement: payoutAmount } },
+      });
+      if (count === 0) return null;
+      const updated = await tx.wallet.findUnique({ where: { userId } });
+      const transaction = await tx.walletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          type: 'payout',
+          amount: payoutAmount,
+          description: description || 'Manual payout to partner'
+        }
+      });
+      return { wallet: updated, transaction };
     });
-    const transaction = await tx.walletTransaction.create({
-      data: {
-        walletId: wallet.id,
-        type: 'payout',
-        amount: payoutAmount,
-        description: description || 'Manual payout to partner'
-      }
-    });
-    return { wallet: updated, transaction };
-  });
-  return { wallet: serializeWallet(result.wallet), transaction: serializeTransaction(result.transaction) };
+
+    if (result) {
+      return { wallet: serializeWallet(result.wallet), transaction: serializeTransaction(result.transaction) };
+    }
+
+    // count was 0 — balance moved between our read and the guarded update.
+    // An explicit amount didn't change, so this is a genuine insufficient-
+    // balance case, not a race worth retrying. "Full balance" retries with
+    // a fresh read since the still-lower-but-nonzero balance may well be
+    // payable.
+    if (explicitAmount) throw new Error('Insufficient balance');
+  }
+  throw new Error('Insufficient balance');
 }
 
 export async function createRazorpayOrderService(userId, orderId, amount, extra = {}) {
@@ -565,6 +605,27 @@ export async function redeemGiftDayService(subscriptionId) {
     where: { id: subscriptionId },
     data: { giftDaysRedeemed: { increment: 1 } },
   });
+}
+
+// Customer-facing (not internal) — called when the app's /gift-reveal screen
+// is actually shown, so hasUnseenGiftReveal stops matching this subscription
+// on every future load. Ownership-checked since this is reachable by any
+// authenticated customer, unlike the internal-only endpoints above.
+export async function ackGiftRevealService(subscriptionId, customerId) {
+  const { count } = await prisma.gymSubscription.updateMany({
+    where: { id: subscriptionId, customerId, giftRevealSeenAt: null },
+    data: { giftRevealSeenAt: new Date() },
+  });
+  if (count === 0) {
+    // Either it doesn't exist, isn't this customer's, or was already
+    // acked — any of those is fine to no-op on rather than error, since the
+    // caller only wants "make sure this stops showing up."
+    const exists = await prisma.gymSubscription.findFirst({
+      where: { id: subscriptionId, customerId },
+      select: { id: true },
+    });
+    if (!exists) throw { status: 404, error: 'Subscription not found' };
+  }
 }
 
 async function fetchCompletedVisitCount(subscriptionId) {
