@@ -511,6 +511,33 @@ export async function softDeleteGym(gymId, partnerId) {
   return normalizeGymMoney(deleted);
 }
 
+// Admin (gobhi) soft-delete/restore — no ownership check, unlike
+// softDeleteGym above which only a gym's own partner can hit. Reversible
+// (isActive: true undoes it), so this is the safe default for admin
+// removals; hard-deleting (below) is only for gyms with zero booking history.
+export async function setGymActiveAdmin(gymId, isActive) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  const updated = await prisma.gym.update({
+    where: { id: gymId },
+    data: { isActive },
+  });
+  return normalizeGymMoney(updated);
+}
+
+// Admin (gobhi) hard delete — permanently removes the gym row. Images,
+// reviews, slot prices and edit requests cascade via this schema's
+// onDelete: Cascade, but bookings live in booking-service's own DB with no
+// FK enforcement across services, so the caller (deleteGymAdmin controller)
+// must confirm zero booking history first — see its booking-count check.
+export async function deleteGymAdmin(gymId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  await prisma.gym.delete({ where: { id: gymId } });
+}
+
 export async function getPartnerGyms(partnerId) {
   const gyms = await prisma.gym.findMany({
     where: { partnerId },

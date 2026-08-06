@@ -1233,6 +1233,13 @@ export async function getLastVisitDateForSubscription(subscriptionId) {
   return latest?.date ?? null;
 }
 
+// Internal, called by gym-service before a gobhi hard-deletes a gym — a gym
+// with any booking history (even cancelled) must be deactivated instead, since
+// deleting it would orphan these rows' gymId with no way to render them.
+export async function getBookingCountForGym(gymId) {
+  return prisma.booking.count({ where: { gymId } });
+}
+
 export async function getGymBookings(gymId, partnerId) {
   try {
     // Verify partner owns this gym before exposing bookings

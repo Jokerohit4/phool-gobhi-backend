@@ -7,6 +7,8 @@ const router = Router();
 
 // Internal service-to-service endpoint (gym-service calls this to compute slot availability)
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
+// Internal (gym-service's deleteGymAdmin — refuses to hard-delete a gym with booking history)
+router.get('/internal/gym/:gymId/booking-count', requireInternal, ctrl.getBookingCountForGym);
 // Internal (wallet-service's closeOutSubscriptionIfLapsed — gift-day/attendance-bonus close-out)
 router.get('/internal/bookings/subscription/:id/completed-count', requireInternal, ctrl.getCompletedVisitCountForSubscription);
 // Internal (wallet-service's getMySubscriptionsService — mid-period gift-box teaser)

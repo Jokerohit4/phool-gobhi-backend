@@ -58,6 +58,16 @@ export const getSlotCounts = async (req, res) => {
   }
 };
 
+export const getBookingCountForGym = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const count = await bookingService.getBookingCountForGym(gymId);
+    res.json({ data: { count } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getCompletedVisitCountForSubscription = async (req, res) => {
   try {
     const subscriptionId = parseInt(req.params.id);

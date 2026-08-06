@@ -227,6 +227,57 @@ export const deleteGym = async (req, res) => {
   }
 };
 
+// Admin (gobhi) soft-delete/restore. Body: {isActive: boolean}.
+export const setGymActiveAdmin = async (req, res) => {
+  try {
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive (boolean) is required' });
+    }
+    const gym = await gymService.setGymActiveAdmin(parseInt(req.params.id), isActive);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Admin (gobhi) hard delete. Refuses (409) if the gym has any booking
+// history — even cancelled — since deleting it would leave those bookings'
+// gymId dangling with nothing for the admin/partner UI to render; the
+// booking-service check fails closed (blocks delete) if unreachable, since
+// this action is irreversible. Use setGymActiveAdmin instead in that case.
+export const deleteGymAdmin = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.id);
+
+    let bookingCount;
+    try {
+      const resp = await fetch(`${BOOKING_SERVICE_URL}/internal/gym/${gymId}/booking-count`, {
+        headers: {
+          'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+          ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
+        },
+      });
+      if (!resp.ok) throw new Error('booking-service returned an error');
+      const body = await resp.json();
+      bookingCount = body.data?.count ?? 0;
+    } catch (_) {
+      return res.status(503).json({ error: 'Could not verify booking history for this gym — try again' });
+    }
+
+    if (bookingCount > 0) {
+      return res.status(409).json({
+        error: `This gym has ${bookingCount} booking${bookingCount === 1 ? '' : 's'} on record — deactivate it instead of deleting.`,
+      });
+    }
+
+    await gymService.deleteGymAdmin(gymId);
+    res.json({ data: { message: 'Gym deleted' } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 // Signature for a browser-direct Cloudinary upload — see utils/upload.js's
 // signCloudinaryUpload comment for why this exists instead of always
 // uploading through this service.

@@ -68,6 +68,10 @@ router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 router.get('/admin/:id', requireRole('gobhi'), ctrl.getGymAdmin);
 // Review moderation — remove a fake/abusive review; recomputes the gym's rating.
 router.delete('/:id/reviews/:reviewId', requireRole('gobhi'), ctrl.deleteReview);
+// Soft delete/restore (reversible) — hides the gym from discovery without losing data. Body: {isActive}
+router.put('/admin/:id/status', requireRole('gobhi'), ctrl.setGymActiveAdmin);
+// Hard delete (irreversible) — refuses if the gym has booking history; see ctrl.deleteGymAdmin.
+router.delete('/admin/:id', requireRole('gobhi'), ctrl.deleteGymAdmin);
 
 // Customer routes
 router.post('/:id/reviews', requireRole('customer'), ctrl.addReview);
