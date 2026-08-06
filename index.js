@@ -55,6 +55,12 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/availability/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/subscription-plans/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/operating-hours/ },
+  // Also covers GET /api/gyms/:id/classes/:classId/occurrences — mutating
+  // methods (POST/PUT/DELETE) aren't matched here (isPublicRoute checks
+  // method too) and still require partner auth via requireRole('partner')
+  // in gym-service.
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/classes/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
   { method: 'GET', pattern: /^\/api\/bookings\/public\/attendance-stats(\?.*)?$/ },
