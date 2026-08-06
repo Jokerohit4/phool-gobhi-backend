@@ -1029,25 +1029,66 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
 export async function selfCheckIn(gymId, customerId, lat, lng) {
   try {
     const todayString = todayDateStringIST();
-    const candidates = await prisma.booking.findMany({
-      where: { customerId, gymId, date: todayString, status: 'confirmed' },
+    // Pull every one of today's bookings for this customer+gym regardless of
+    // status, then classify — not just 'confirmed'. The old version only
+    // ever looked at 'confirmed', which meant a booking that had *already
+    // been checked in* (status flips to 'started' the moment that happens)
+    // became invisible to a second lookup, and fell through to the same
+    // generic "no booking at all" message as someone who never booked.
+    const todaysBookings = await prisma.booking.findMany({
+      where: { customerId, gymId, date: todayString, status: { in: ['pending', 'confirmed', 'started', 'completed'] } },
     });
-    const booking = candidates.find((b) => isSessionActiveNow(b.date, b.startTime, b.endTime));
+
+    const activeConfirmed = todaysBookings.find(
+      (b) => b.status === 'confirmed' && isSessionActiveNow(b.date, b.startTime, b.endTime)
+    );
+    // No time-window gate here — once checked in, "already verified" is the
+    // right answer at any point in (or after) the session, not just while
+    // isSessionActiveNow still holds.
+    const alreadyStarted = todaysBookings.find((b) => b.status === 'started');
+    const booking = activeConfirmed || alreadyStarted;
 
     if (!booking) {
-      // Distinguish "you never booked" from "you booked, but the gym hasn't
-      // confirmed it yet" — the latter is a real, paid booking sitting in
-      // `pending`, and telling the customer there's simply no booking at all
-      // (the old behavior) is actively misleading standing at the front door.
-      const pendingCandidates = await prisma.booking.findMany({
-        where: { customerId, gymId, date: todayString, status: 'pending' },
-      });
-      const pendingBooking = pendingCandidates.find((b) => isSessionActiveNow(b.date, b.startTime, b.endTime));
-      if (pendingBooking) {
+      // Nothing is checkable right now — but do we have something to
+      // explain, rather than just "you have no booking"?
+      const pending = todaysBookings.find((b) => b.status === 'pending');
+      if (pending) {
         throw {
           status: 404,
           error: "Your booking is still awaiting the gym's confirmation — check back shortly, or ask the front desk.",
           code: 'BOOKING_PENDING_CONFIRMATION',
+        };
+      }
+
+      const notYetOpen = todaysBookings.find(
+        (b) => b.status === 'confirmed' && isBeforeSessionWindow(b.date, b.startTime)
+      );
+      if (notYetOpen) {
+        throw {
+          status: 404,
+          error: `Check-in opens 15 minutes before your ${notYetOpen.startTime} session — come back shortly.`,
+          code: 'SESSION_NOT_STARTED',
+          startTime: notYetOpen.startTime,
+        };
+      }
+
+      const completed = todaysBookings.find((b) => b.status === 'completed');
+      if (completed) {
+        throw {
+          status: 404,
+          error: "You've already completed this session.",
+          code: 'SESSION_ALREADY_COMPLETED',
+        };
+      }
+
+      const ended = todaysBookings.find(
+        (b) => b.status === 'confirmed' && isSessionEnded(b.date, b.endTime)
+      );
+      if (ended) {
+        throw {
+          status: 404,
+          error: 'This session has already ended.',
+          code: 'SESSION_ENDED',
         };
       }
 

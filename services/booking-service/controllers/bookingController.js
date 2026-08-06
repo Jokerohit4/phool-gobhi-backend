@@ -212,7 +212,7 @@ export const selfCheckIn = async (req, res) => {
     const result = await bookingService.selfCheckIn(gymId, req.userId, lat, lng);
     res.json({ data: result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, startTime: err.startTime });
   }
 };
 
