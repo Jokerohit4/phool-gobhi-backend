@@ -153,3 +153,22 @@ enum SubscriptionStatus {
 
   @@schema("wallet")
 }
+
+// Singleton row (id always 1) — admin-portal-editable wallet top-up
+// options, read by createTopUpOrder's amount check and served to clients
+// (website + apps) so the top-up UI shows the exact same options instead of
+// a hand-synced copy. presets: whole-rupee amounts, e.g. [200,500,1000,2000];
+// may be empty iff allowCustomAmount is true (enforced in
+// updateWalletTopupConfig, not the DB) — customers always need at least one
+// way to top up.
+model WalletTopupConfig {
+  id                Int      @id @default(1)
+  presets           Json
+  allowCustomAmount Boolean  @default(false)
+  minCustomAmount   Decimal? @db.Decimal(19, 2)
+  maxCustomAmount   Decimal? @db.Decimal(19, 2)
+  updatedAt         DateTime @updatedAt
+  updatedBy         Int?
+
+  @@schema("wallet")
+}

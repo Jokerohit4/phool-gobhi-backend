@@ -25,6 +25,7 @@
   "wallet_topup_succeeded":      { "source": "server", "service": "wallet-service" },
   "wallet_topup_failed":         { "source": "server", "service": "wallet-service" },
   "partner_payout_recorded":     { "source": "server", "service": "wallet-service" },
+  "wallet_topup_config_updated": { "source": "server", "service": "wallet-service", "since": "2026-08-06", "notes": "admin edits WalletTopupConfig (presets/allowCustomAmount/min/max) via phool-gobhi-admin's Settings page" },
   "subscription_purchased_wallet": { "source": "server", "service": "wallet-service", "since": "2026-07-22", "notes": "replaces the retired two-step subscription_order_created/subscription_purchased flow as of commit b8c7251" },
   "subscription_order_created":  { "source": "server", "service": "wallet-service", "retired": true, "retiredSince": "2026-07-22", "notes": "superseded by subscription_purchased_wallet; historical rows only" },
   "subscription_purchased":      { "source": "server", "service": "wallet-service", "retired": true, "retiredSince": "2026-07-22", "notes": "superseded by subscription_purchased_wallet; historical rows only" },

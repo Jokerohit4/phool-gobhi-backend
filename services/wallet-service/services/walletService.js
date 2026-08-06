@@ -4,6 +4,7 @@ import Razorpay from 'razorpay';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
+import { DEFAULT_WALLET_TOPUP_CONFIG, HARD_MAX_TOPUP_AMOUNT } from '../utils/walletConstants.js';
 const prisma = new PrismaClient();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
@@ -43,6 +44,86 @@ export async function getGymCity(gymId) {
 // and snapshotted onto the GymSubscription row for auditability. This fires
 // only if a gym-service response is somehow missing the field.
 export const SUBSCRIPTION_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_COMMISSION_PERCENT) || 20;
+
+// Admin-portal-editable wallet top-up options (presets + optional
+// custom-amount range). Cached briefly since createTopUpOrder reads this on
+// every top-up attempt — a short TTL bounds DB load without weakening
+// enforcement: /verify never re-checks this config, it only credits
+// whatever amount was already approved and stored on the RazorpayOrder row
+// at order-creation time, so a few seconds of cross-instance staleness here
+// can only affect whether a *new* order gets created under old-vs-new
+// rules, never what an already-created order gets credited for.
+const TOPUP_CONFIG_CACHE_TTL_MS = 30 * 1000;
+let walletTopupConfigCache = null; // { value, expiresAt }
+
+function serializeTopupConfig(row) {
+  if (!row) return { ...DEFAULT_WALLET_TOPUP_CONFIG, updatedAt: null };
+  return {
+    presets: row.presets,
+    allowCustomAmount: row.allowCustomAmount,
+    minCustomAmount: row.minCustomAmount != null ? Number(row.minCustomAmount) : null,
+    maxCustomAmount: row.maxCustomAmount != null ? Number(row.maxCustomAmount) : null,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export async function getWalletTopupConfig() {
+  const row = await prisma.walletTopupConfig.findUnique({ where: { id: 1 } });
+  return serializeTopupConfig(row);
+}
+
+export async function getWalletTopupConfigCached() {
+  if (walletTopupConfigCache && walletTopupConfigCache.expiresAt > Date.now()) {
+    return walletTopupConfigCache.value;
+  }
+  const value = await getWalletTopupConfig();
+  walletTopupConfigCache = { value, expiresAt: Date.now() + TOPUP_CONFIG_CACHE_TTL_MS };
+  return value;
+}
+
+export async function updateWalletTopupConfig({ presets, allowCustomAmount, minCustomAmount, maxCustomAmount }, updatedBy) {
+  if (!Array.isArray(presets)) {
+    throw { status: 400, error: 'presets must be an array' };
+  }
+  const cleanPresets = [...new Set(presets.map(Number))].sort((a, b) => a - b);
+  for (const p of cleanPresets) {
+    if (!Number.isInteger(p) || p <= 0) {
+      throw { status: 400, error: 'Each preset amount must be a positive whole number of rupees' };
+    }
+    if (p > HARD_MAX_TOPUP_AMOUNT) {
+      throw { status: 400, error: `Preset amounts cannot exceed ₹${HARD_MAX_TOPUP_AMOUNT}` };
+    }
+  }
+
+  const allowCustom = !!allowCustomAmount;
+  if (cleanPresets.length === 0 && !allowCustom) {
+    throw { status: 400, error: 'If there are no preset amounts, custom amounts must be allowed — customers need at least one way to top up' };
+  }
+
+  let min = null;
+  let max = null;
+  if (allowCustom) {
+    min = Number(minCustomAmount);
+    max = Number(maxCustomAmount);
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      throw { status: 400, error: 'minCustomAmount and maxCustomAmount are required when custom amounts are allowed' };
+    }
+    if (!Number.isInteger(min) || !Number.isInteger(max)) {
+      throw { status: 400, error: 'minCustomAmount and maxCustomAmount must be whole numbers of rupees' };
+    }
+    if (min < 1) throw { status: 400, error: 'minCustomAmount must be at least ₹1' };
+    if (max > HARD_MAX_TOPUP_AMOUNT) throw { status: 400, error: `maxCustomAmount cannot exceed ₹${HARD_MAX_TOPUP_AMOUNT}` };
+    if (min > max) throw { status: 400, error: 'minCustomAmount cannot be greater than maxCustomAmount' };
+  }
+
+  const saved = await prisma.walletTopupConfig.upsert({
+    where: { id: 1 },
+    create: { id: 1, presets: cleanPresets, allowCustomAmount: allowCustom, minCustomAmount: min, maxCustomAmount: max, updatedBy },
+    update: { presets: cleanPresets, allowCustomAmount: allowCustom, minCustomAmount: min, maxCustomAmount: max, updatedBy },
+  });
+  walletTopupConfigCache = null; // best-effort local bust — see cache comment above re: cross-instance staleness
+  return serializeTopupConfig(saved);
+}
 
 const PLAN_DAYS = { weekly: 7, monthly: 30, quarterly: 90, sixMonthly: 182, yearly: 365 };
 const PLAN_PRICE_FIELD = {

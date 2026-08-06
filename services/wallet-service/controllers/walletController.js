@@ -22,11 +22,12 @@ import {
   getTransactionByIdempotencyKeyService,
   getGymCity,
   reconcilePendingRazorpayOrdersService,
+  getWalletTopupConfigCached,
+  updateWalletTopupConfig,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
-import { WALLET_TOPUP_AMOUNTS } from '../utils/walletConstants.js';
 
 // Buffer-length mismatch makes crypto.timingSafeEqual throw rather than
 // return false, so a shorter/longer signature must be treated as "not
@@ -199,10 +200,22 @@ export const createTopUpOrder = async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
-    if (!WALLET_TOPUP_AMOUNTS.includes(amount)) {
-      return res.status(400).json({
-        error: `Amount must be one of: ${WALLET_TOPUP_AMOUNTS.join(', ')}`
-      });
+
+    const topupConfig = await getWalletTopupConfigCached();
+    const isPreset = topupConfig.presets.includes(amount);
+    const isValidCustom =
+      topupConfig.allowCustomAmount &&
+      Number.isInteger(amount) &&
+      topupConfig.minCustomAmount != null &&
+      topupConfig.maxCustomAmount != null &&
+      amount >= topupConfig.minCustomAmount &&
+      amount <= topupConfig.maxCustomAmount;
+
+    if (!isPreset && !isValidCustom) {
+      const parts = [];
+      if (topupConfig.presets.length) parts.push(`one of: ₹${topupConfig.presets.join(', ₹')}`);
+      if (topupConfig.allowCustomAmount) parts.push(`a whole-rupee amount between ₹${topupConfig.minCustomAmount} and ₹${topupConfig.maxCustomAmount}`);
+      return res.status(400).json({ error: `Amount must be ${parts.join(', or ')}` });
     }
 
     const razorpay = new Razorpay({
@@ -393,6 +406,33 @@ export const getGiftBonusPayoutsAnalytics = async (req, res) => {
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Customer + gobhi: powers the website/app top-up UI and the admin portal's
+// Settings page prefill.
+export const getWalletTopupConfigHandler = async (req, res) => {
+  try {
+    const config = await getWalletTopupConfigCached();
+    res.json({ data: config });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Admin (requireRole('gobhi')): edits presets/allowCustomAmount/min/max —
+// see phool-gobhi-admin's Settings page, "Wallet top-up amounts" section.
+export const updateWalletTopupConfigHandler = async (req, res) => {
+  try {
+    const { presets, allowCustomAmount, minCustomAmount, maxCustomAmount } = req.body;
+    const config = await updateWalletTopupConfig({ presets, allowCustomAmount, minCustomAmount, maxCustomAmount }, req.userId);
+    track('wallet_topup_config_updated', req.userId, {
+      preset_count: config.presets.length,
+      allow_custom_amount: config.allowCustomAmount,
+    });
+    res.json({ data: config });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

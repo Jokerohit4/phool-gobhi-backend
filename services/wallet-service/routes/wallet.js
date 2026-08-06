@@ -22,6 +22,8 @@ import {
   getMySubscriptions,
   ackGiftReveal,
   getTransactionByKeyInternal,
+  getWalletTopupConfigHandler,
+  updateWalletTopupConfigHandler,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -33,6 +35,8 @@ router.get('/transactions', requireAuth, getMyWalletTransactions); // Get transa
 router.get('/partners/summary', requireRole('gobhi'), listPartnerBalances); // Admin: list partner balances owed
 router.get('/admin/analytics/gift-bonus-payouts', requireRole('gobhi'), getGiftBonusPayoutsAnalytics); // Admin: gift-day/attendance-bonus rollup
 router.get('/payouts', requireRole('gobhi'), listPayoutHistory); // Admin: payout history (registered before /:userId — literal path)
+router.get('/topup-config', requireRole('customer', 'gobhi'), getWalletTopupConfigHandler); // Top-up UI reads this; gobhi = admin Settings prefill (registered before /:userId — literal path)
+router.put('/topup-config', requireRole('gobhi'), updateWalletTopupConfigHandler); // Admin: edit presets/allowCustomAmount/min/max
 router.post('/:userId/payout', requireRole('gobhi'), payoutPartner); // Admin: record a manual payout to a partner
 router.get('/:userId', requireAuth, getWallet); // Get wallet by userId
 router.get('/:userId/transactions', requireAuth, getWalletTransactions); // Get transactions
