@@ -2,8 +2,12 @@ import * as bookingService from '../services/bookingService.js';
 
 export const createBooking = async (req, res) => {
   try {
-    const { gymId, date, startTime, endTime } = req.body;
-    const booking = await bookingService.createBooking(req.userId, { gymId, date, startTime, endTime });
+    // classId (optional): a recurring-class booking — date/startTime/endTime
+    // are still required for a plain-slot booking, but for a class booking
+    // only gymId/date/classId matter (the class's own schedule governs
+    // startTime/endTime; see bookingService.createBooking).
+    const { gymId, date, startTime, endTime, classId } = req.body;
+    const booking = await bookingService.createBooking(req.userId, { gymId, date, startTime, endTime, classId });
     res.status(201).json({ data: booking });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -52,6 +56,19 @@ export const getSlotCounts = async (req, res) => {
     const gymId = parseInt(req.params.gymId);
     const { date } = req.query;
     const counts = await bookingService.getSlotCounts(gymId, date);
+    res.json({ data: counts });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal service-to-service: gym-service computes class-occurrence
+// availability across upcoming dates (?dates=2026-08-10,2026-08-17,...).
+export const getClassCounts = async (req, res) => {
+  try {
+    const classId = parseInt(req.params.classId);
+    const dates = String(req.query.dates || '').split(',').map(d => d.trim()).filter(Boolean);
+    const counts = await bookingService.getClassCounts(classId, dates);
     res.json({ data: counts });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

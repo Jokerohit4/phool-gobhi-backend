@@ -13,6 +13,8 @@ router.get('/', ctrl.listGyms);
 router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
+// Internal service-to-service: booking-service resolves a class before booking it
+router.get('/internal/classes/:classId', requireInternal, ctrl.getClassInternal);
 
 // Pending-edit-request admin queue — MUST stay above `GET /:id` below: both
 // are one path segment, so Express would otherwise treat "edit-requests" as
@@ -80,5 +82,18 @@ router.post('/:id/reviews', requireRole('customer'), ctrl.addReview);
 router.get('/:id/blocks', requireRole('partner'), ctrl.getSlotBlocks);
 router.post('/:id/blocks', requireRole('partner'), ctrl.createSlotBlock);
 router.delete('/:id/blocks/:blockId', requireRole('partner'), ctrl.deleteSlotBlock);
+
+// Per-day-of-week operating hours — public read (website/app display),
+// partner-editable (goes through the same edit-request approval gate as
+// every other live-gym mutation once isApproved).
+router.get('/:id/operating-hours', ctrl.getOperatingHours);
+router.put('/:id/operating-hours', requireRole('partner'), ctrl.updateOperatingHours);
+
+// Recurring bookable classes — public read (customer browse/book), partner CRUD.
+router.get('/:id/classes', ctrl.getClasses);
+router.get('/:id/classes/:classId/occurrences', ctrl.getClassOccurrences);
+router.post('/:id/classes', requireRole('partner'), ctrl.createClass);
+router.put('/:id/classes/:classId', requireRole('partner'), ctrl.updateClass);
+router.delete('/:id/classes/:classId', requireRole('partner'), ctrl.deleteClass);
 
 export default router;

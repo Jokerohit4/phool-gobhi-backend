@@ -25,6 +25,15 @@ export function isSlotInPastOrTooSoon(date, startTime) {
   return slotInstantUTC(date, startTime) < Date.now() + MIN_LEAD_MS;
 }
 
+// Weekday (0=Sunday..6=Saturday) of a plain IST calendar-date string —
+// timezone-invariant, since it only depends on the calendar date itself
+// (India has no DST). Used to check a class booking's requested date
+// against GymClass.dayOfWeek.
+export function getDayOfWeek(date) {
+  const [y, mo, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+}
+
 // How many hours from now until this slot starts — used by cancelBooking's
 // tiered refund policy. Negative once the slot has already started.
 export function hoursUntilSlot(date, startTime) {

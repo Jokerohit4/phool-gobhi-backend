@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 
@@ -183,37 +183,50 @@ function bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subsc
   return { commissionPct, partnerShare };
 }
 
-async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, candidateSubscription = null, gymCommissionPct = null }) {
+async function reserveBookingSlot({ customerId, gymId, classId = null, date, startTime, endTime, amount, capacity, candidateSubscription = null, gymCommissionPct = null }) {
+  // A class booking's "duplicate" and "capacity" identity is scoped by
+  // classId instead of startTime — two different classes (or a class and a
+  // walk-in slot) can legitimately share the same startTime at the same
+  // gym, so classId:null on the plain-slot side keeps the two capacity
+  // pools from leaking into each other (see the amended
+  // booking_unique_active_slot index and the new
+  // booking_unique_active_class_occurrence index, both from the migration
+  // that introduced classId).
+  const dupeWhere = classId
+    ? { customerId, classId, date, status: { not: 'cancelled' } }
+    : { customerId, gymId, date, startTime, classId: null, status: { not: 'cancelled' } };
+  const duplicateError = classId ? 'You already have a booking for this class' : 'You already have a booking for this slot';
+
   for (let attempt = 1; attempt <= RESERVE_MAX_ATTEMPTS; attempt++) {
     // Reconcile a stale pending duplicate BEFORE opening the transaction —
     // reconciliation can make an HTTP call to wallet-service, which must
     // never run inside an open DB transaction (see below). A duplicate
     // that's still fresh (or a real confirmed booking) comes back unchanged
     // and correctly rejects this attempt, same as before.
-    const existingDuplicate = await prisma.booking.findFirst({
-      where: { customerId, gymId, date, startTime, status: { not: 'cancelled' } },
-    });
+    const existingDuplicate = await prisma.booking.findFirst({ where: dupeWhere });
     if (existingDuplicate) {
       const reconciled = await reconcileStalePendingBooking(existingDuplicate);
       if (reconciled) {
-        throw { status: 409, error: 'You already have a booking for this slot' };
+        throw { status: 409, error: duplicateError };
       }
       // else: reconciliation released the stale row — fall through and reserve fresh
     }
 
     try {
       const created = await prisma.$transaction(async (tx) => {
-        const duplicate = await tx.booking.findFirst({
-          where: { customerId, gymId, date, startTime, status: { not: 'cancelled' } },
-          select: { id: true },
-        });
+        const duplicate = await tx.booking.findFirst({ where: dupeWhere, select: { id: true } });
         if (duplicate) {
-          throw { status: 409, error: 'You already have a booking for this slot' };
+          throw { status: 409, error: duplicateError };
         }
 
-        const activeCount = await tx.booking.count({
-          where: { gymId, date, startTime, status: { not: 'cancelled' } },
-        });
+        // Two separate, non-overlapping capacity pools: a class's own
+        // capacity (scoped by classId), or the gym's plain-slot capacity
+        // (scoped by gymId+startTime, explicitly excluding class bookings
+        // so they never eat into each other's advertised availability).
+        const capacityWhere = classId
+          ? { classId, date, status: { not: 'cancelled' } }
+          : { gymId, date, startTime, classId: null, status: { not: 'cancelled' } };
+        const activeCount = await tx.booking.count({ where: capacityWhere });
         if (activeCount >= capacity) {
           throw { status: 409, error: 'Slot is full' };
         }
@@ -225,7 +238,12 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
         // day. Postgres's serializable snapshot isolation detects the
         // resulting read-write conflict on this predicate (same as the
         // duplicate/capacity checks above) and aborts one side as P2034,
-        // which the retry loop below already handles.
+        // which the retry loop below already handles. Deliberately NOT
+        // scoped by classId — a subscription covers one visit per gym per
+        // day regardless of activity type (session vs. class), and the
+        // perVisit payout math assumes one payout slice per day of use; see
+        // createBooking for why a paid class never reaches this branch at
+        // all (candidateSubscription is never passed for one).
         let subscriptionId = null;
         let subscription = null;
         if (candidateSubscription) {
@@ -241,7 +259,7 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
 
         return tx.booking.create({
           data: {
-            customerId, gymId, date, startTime, endTime, amount, status: 'pending', subscriptionId,
+            customerId, gymId, classId, date, startTime, endTime, amount, status: 'pending', subscriptionId,
             ...bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subscription),
           },
         });
@@ -260,12 +278,13 @@ async function reserveBookingSlot({ customerId, gymId, date, startTime, endTime,
         continue;
       }
 
-      // Unique-violation on the partial index (see migration
-      // 20260717130000_booking_indexes_and_unique_slot) — belt-and-suspenders
+      // Unique-violation on one of the partial indexes (see migrations
+      // 20260717130000_booking_indexes_and_unique_slot and
+      // 20260807020000_add_booking_class_support) — belt-and-suspenders
       // backstop in case two transactions both slipped past the findFirst
       // duplicate check; shouldn't happen under Serializable, cheap to guard.
       if (err?.code === 'P2002') {
-        throw { status: 409, error: 'You already have a booking for this slot' };
+        throw { status: 409, error: duplicateError };
       }
 
       throw err;
@@ -289,23 +308,73 @@ async function notifyOnConfirmation(booking, { customerId, gymId, date, startTim
   }).catch(() => {});
 }
 
-export async function createBooking(customerId, { gymId, date, startTime, endTime }) {
+export async function createBooking(customerId, { gymId, date, startTime, endTime, classId }) {
   try {
-    // 1. Fetch gym details from gym-service — pass startTime so the response
-    // resolves the correct per-slot price (falls back to sessionPrice
-    // server-side if this slot has no explicit price set).
     let gym;
-    try {
-      const response = await axios.get(
-        `${GYM_SERVICE_URL}/internal/${gymId}?startTime=${encodeURIComponent(startTime)}`,
-        await internalHeadersFor(GYM_SERVICE_URL)
-      );
-      gym = response.data.data || response.data;
-    } catch (err) {
-      throw {
-        status: 404,
-        error: 'Gym not found'
-      };
+    let cls = null;
+    // For a class booking, the class's own recurring schedule governs the
+    // actual startTime/endTime — whatever the client sent for those fields
+    // (if anything) is ignored.
+    let effectiveStartTime = startTime;
+    let effectiveEndTime = endTime;
+
+    if (classId) {
+      try {
+        const response = await axios.get(
+          `${GYM_SERVICE_URL}/internal/classes/${classId}`,
+          await internalHeadersFor(GYM_SERVICE_URL)
+        );
+        cls = response.data.data || response.data;
+      } catch (err) {
+        throw { status: 404, error: 'Class not found' };
+      }
+
+      if (cls.gymId !== gymId) {
+        throw { status: 404, error: 'Class not found' };
+      }
+      if (!cls.isActive) {
+        throw { status: 404, error: 'This class is no longer offered' };
+      }
+      if (!cls.gymIsActive || !cls.gymIsApproved) {
+        throw { status: 404, error: 'Gym not found' };
+      }
+      if (getDayOfWeek(date) !== cls.dayOfWeek) {
+        throw { status: 400, error: 'This class is not held on the selected date' };
+      }
+      if ((cls.cancelledDates || []).includes(date)) {
+        throw { status: 409, error: 'This class occurrence has been cancelled' };
+      }
+
+      effectiveStartTime = cls.startTime;
+      effectiveEndTime = cls.endTime;
+
+      // Still need the gym row itself for partnerId/commissionPct/city below.
+      try {
+        const response = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        gym = response.data.data || response.data;
+      } catch (err) {
+        throw { status: 404, error: 'Gym not found' };
+      }
+    } else {
+      // 1. Fetch gym details from gym-service — pass startTime+date so the
+      // response resolves the correct per-slot price (falls back to
+      // sessionPrice server-side if this slot has no explicit price set)
+      // and tells us whether this startTime actually falls within the
+      // gym's operating hours for that day (isValidSlot) — this is now the
+      // only guard against a booking landing in a closed midday gap, so a
+      // failed/missing check here must fail closed, not open.
+      try {
+        const response = await axios.get(
+          `${GYM_SERVICE_URL}/internal/${gymId}?startTime=${encodeURIComponent(startTime)}&date=${encodeURIComponent(date)}`,
+          await internalHeadersFor(GYM_SERVICE_URL)
+        );
+        gym = response.data.data || response.data;
+      } catch (err) {
+        throw { status: 404, error: 'Gym not found' };
+      }
+      if (gym.isValidSlot === false) {
+        throw { status: 400, error: 'This time is outside the gym\'s operating hours' };
+      }
     }
 
     // /internal/:id (unlike gym-service's own public getGymById) returns the
@@ -325,10 +394,15 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       throw { status: 403, error: 'You cannot book a session at your own gym' };
     }
 
-    const capacity = gym.capacity;
-    const amount = gym.resolvedSlotPrice ?? gym.sessionPrice;
+    const capacity = classId ? cls.capacity : gym.capacity;
+    // An "included" class booking (price null) has no monetary value of its
+    // own — its partner payout comes entirely from the covering
+    // subscription's own per-visit share (see bookingCommissionFields),
+    // exactly like a subscription-covered plain session, so 0 here is
+    // correct and doesn't overstate revenue analytics.
+    const amount = classId ? (cls.price ?? 0) : (gym.resolvedSlotPrice ?? gym.sessionPrice);
 
-    if (isSlotInPastOrTooSoon(date, startTime)) {
+    if (isSlotInPastOrTooSoon(date, effectiveStartTime)) {
       throw {
         status: 400,
         error: 'This slot has already passed or starts too soon to book'
@@ -358,14 +432,18 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       };
     }
 
-    // 1b. Check if slot is blocked
+    // 1b. Check if the slot is blocked — shared with class bookings too: a
+    // gym-wide SlotBlock at this date/startTime (e.g. "closed for
+    // maintenance") closes a class occurrence at that same time as well,
+    // same physical location. One-off class-only cancellations use
+    // GymClassCancellation instead (checked above via cancelledDates).
     try {
       const blockRes = await axios.get(
         `${GYM_SERVICE_URL}/${gymId}/blocks?date=${date}`,
         await internalHeadersFor(GYM_SERVICE_URL)
       );
       const blocks = blockRes.data?.data || [];
-      const isBlocked = blocks.some(b => b.startTime === startTime);
+      const isBlocked = blocks.some(b => b.startTime === effectiveStartTime);
       if (isBlocked) {
         throw { status: 409, error: 'This slot has been blocked by the gym' };
       }
@@ -376,28 +454,42 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
 
     // 1c. Subscription entitlement check — does this customer have an active
     // subscription for this gym, and have they already used their one free
-    // session at this gym today? Any failure here (wallet-service
+    // visit at this gym today? Any failure here (wallet-service
     // unreachable, etc.) falls through to the normal paid flow below — an
     // outage must never silently grant free access.
     // These are only a CANDIDATE — whether this booking actually ends up
     // subscription-covered is decided atomically inside reserveBookingSlot's
     // transaction (see there for why), so don't trust this subscriptionId
     // for anything money-related below; use reservation.subscriptionId.
+    // A class with a set price is always charged that amount regardless of
+    // subscription status (see amount above) — it must never even look up a
+    // candidate subscription, so it can never accidentally consume the
+    // daily subscription quota.
+    const classIsAlwaysPaid = !!(classId && cls.price != null);
     let candidateSubscription = null;
     let candidateSubscriptionId = null;
     let candidateViaGiftDay = false;
-    try {
-      const subRes = await axios.get(
-        `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}`,
-        await internalHeadersFor(WALLET_SERVICE_URL)
-      );
-      if (subRes.data?.data?.active) {
-        candidateSubscription = subRes.data.data.subscription;
-        candidateSubscriptionId = candidateSubscription.id;
-        candidateViaGiftDay = !!subRes.data.data.viaGiftDay;
+    if (!classIsAlwaysPaid) {
+      try {
+        const subRes = await axios.get(
+          `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}`,
+          await internalHeadersFor(WALLET_SERVICE_URL)
+        );
+        if (subRes.data?.data?.active) {
+          candidateSubscription = subRes.data.data.subscription;
+          candidateSubscriptionId = candidateSubscription.id;
+          candidateViaGiftDay = !!subRes.data.data.viaGiftDay;
+        }
+      } catch (_) {
+        // wallet-service unreachable — fall through to the paid flow
       }
-    } catch (_) {
-      // wallet-service unreachable — fall through to the paid flow
+    }
+
+    // A class with no price (price null) is a subscription-only perk, not
+    // pay-per-session — no active subscription means no access, full stop,
+    // unlike a plain session which always falls through to the paid flow.
+    if (classId && cls.price == null && !candidateSubscription) {
+      throw { status: 403, error: 'An active subscription at this gym is required to book this class' };
     }
 
     // 2-3. Reserve the slot: duplicate-booking, capacity, and subscription-
@@ -406,10 +498,14 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // row lands as `pending` — a real reservation, not yet paid for.
     let reservation;
     try {
-      reservation = await reserveBookingSlot({ customerId, gymId, date, startTime, endTime, amount, capacity, candidateSubscription, gymCommissionPct: gym.commissionPct });
+      reservation = await reserveBookingSlot({
+        customerId, gymId, classId: classId || null, date,
+        startTime: effectiveStartTime, endTime: effectiveEndTime,
+        amount, capacity, candidateSubscription, gymCommissionPct: gym.commissionPct,
+      });
     } catch (err) {
       if (err?.status === 409 && err.error === 'Slot is full') {
-        track('booking_failed', customerId, { gym_id: gymId, reason: 'slot_full', date, start_time: startTime, city: gym.city });
+        track('booking_failed', customerId, { gym_id: gymId, class_id: classId || undefined, reason: 'slot_full', date, start_time: effectiveStartTime, city: gym.city });
       }
       throw err;
     }
@@ -434,17 +530,22 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     }
 
     // 4. Debit customer wallet — skipped entirely when this booking is
-    // covered by an active subscription (subscriptionId set above). The
-    // reservation above already committed locally, so this network call
-    // never runs inside an open DB transaction.
+    // covered by an active subscription (subscriptionId set above), which
+    // for a class only ever happens on the "included" (price null) path —
+    // a priced class always reaches this branch since it never sets
+    // subscriptionId. The reservation above already committed locally, so
+    // this network call never runs inside an open DB transaction.
     if (!subscriptionId) {
       try {
         await axios.post(`${WALLET_SERVICE_URL}/${customerId}/debit`, {
           amount,
-          description: 'Gym session booking',
+          description: classId ? `Class booking: ${cls.name}` : 'Gym session booking',
           // Tags this debit to this specific reservation so a retry/
           // reconciliation of the same booking can never double-charge it
-          // (see reconcileStalePendingBooking).
+          // (see reconcileStalePendingBooking) — same key convention
+          // (bookingId-based, no classId-specific prefix) for both booking
+          // kinds, since reconcileStalePendingBooking looks it up purely by
+          // booking id regardless of type.
           idempotencyKey: debitIdempotencyKey(reservation.id),
         }, await internalHeadersFor(WALLET_SERVICE_URL));
       } catch (err) {
@@ -471,7 +572,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
           // Genuinely not charged — release the reservation so the slot goes
           // back to looking untouched.
           await prisma.booking.delete({ where: { id: reservation.id } }).catch(() => {});
-          track('booking_failed', customerId, { gym_id: gymId, reason: 'insufficient_balance', amount, city: gym.city });
+          track('booking_failed', customerId, { gym_id: gymId, class_id: classId || undefined, reason: 'insufficient_balance', amount, city: gym.city });
           throw {
             status: 400,
             error: err.response?.data?.error || 'Insufficient wallet balance'
@@ -484,13 +585,13 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // 5. Payment succeeded (or wasn't needed) — booking stays pending,
     // awaiting partner confirmation. Notify customer that payment was taken.
     track('booking_created', customerId, {
-      booking_id: reservation.id, gym_id: gymId, amount: reservation.amount, date, start_time: startTime,
+      booking_id: reservation.id, gym_id: gymId, class_id: classId || undefined, amount: reservation.amount, date, start_time: effectiveStartTime,
       via: subscriptionId ? 'subscription' : 'wallet', city: gym.city,
     });
 
     notifyCustomer(customerId, {
-      title: 'Booking request sent',
-      body: `Your session on ${reservation.date} at ${reservation.startTime} is pending gym confirmation. ₹${reservation.amount} debited.`,
+      title: classId ? 'Class booking request sent' : 'Booking request sent',
+      body: `Your ${classId ? cls.name : 'session'} on ${reservation.date} at ${reservation.startTime} is pending gym confirmation.${subscriptionId ? '' : ` ₹${reservation.amount} debited.`}`,
       data: { type: 'booking_created', bookingId: reservation.id, date: reservation.date },
     }).catch(() => {});
 
@@ -1301,13 +1402,34 @@ export async function getCustomerBookings(customerId) {
 // Internal: booking counts per slot start time for a gym on a given date.
 // Used by gym-service to hide slots that have reached capacity.
 export async function getSlotCounts(gymId, date) {
+  // classId: null — class bookings have their own separate capacity pool
+  // (see reserveBookingSlot/getClassCounts) and must not count against a
+  // gym's plain-slot availability even if a class happens to share a
+  // startTime with a walk-in slot.
   const bookings = await prisma.booking.findMany({
-    where: { gymId, date, status: { not: 'cancelled' } },
+    where: { gymId, date, classId: null, status: { not: 'cancelled' } },
     select: { startTime: true },
   });
   const counts = {};
   for (const b of bookings) {
     counts[b.startTime] = (counts[b.startTime] || 0) + 1;
+  }
+  return counts;
+}
+
+// Internal: booking counts for a single recurring class across a set of
+// upcoming occurrence dates — mirrors getSlotCounts above but keyed by date
+// (a class has one fixed startTime; what varies is which future date) since
+// classId is now the capacity-pool key instead of gymId+startTime. Used by
+// gym-service to annotate class occurrences with remaining capacity.
+export async function getClassCounts(classId, dates) {
+  const bookings = await prisma.booking.findMany({
+    where: { classId, date: { in: dates }, status: { not: 'cancelled' } },
+    select: { date: true },
+  });
+  const counts = {};
+  for (const b of bookings) {
+    counts[b.date] = (counts[b.date] || 0) + 1;
   }
   return counts;
 }

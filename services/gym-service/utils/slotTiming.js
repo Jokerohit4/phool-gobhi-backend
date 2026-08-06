@@ -16,3 +16,20 @@ function slotInstantUTC(date, startTime) {
 export function isSlotInPastOrTooSoon(date, startTime) {
   return slotInstantUTC(date, startTime) < Date.now() + MIN_LEAD_MS;
 }
+
+// Weekday (0=Sunday..6=Saturday) of a plain IST calendar-date string —
+// timezone-invariant, since it only depends on the calendar date itself, not
+// the instant it represents (India has no DST).
+export function getDayOfWeek(date) {
+  const [y, mo, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+}
+
+// Today's date as an IST calendar-date string — same IST anchor used
+// elsewhere (see gymController.js's getGymAvailability), factored out so any
+// date-less caller resolves "today" consistently.
+export function todayDateStringIST() {
+  const istNow = new Date(Date.now() + IST_OFFSET_MS);
+  return new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()))
+    .toISOString().split('T')[0];
+}

@@ -1,8 +1,8 @@
 import * as gymService from '../services/gymService.js';
 import * as placesService from '../services/placesService.js';
-import { generateTimeSlots } from '../utils/slots.js';
+import { generateWindowedSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
 
@@ -66,7 +66,8 @@ export const getGym = async (req, res) => {
 
 export const getGymInternal = async (req, res) => {
   try {
-    const gym = await gymService.getGymInternalWithSlotPrice(parseInt(req.params.id), req.query.startTime);
+    const { startTime, date } = req.query;
+    const gym = await gymService.getGymInternalWithSlotPrice(parseInt(req.params.id), startTime, date);
     res.json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -74,7 +75,12 @@ export const getGymInternal = async (req, res) => {
 };
 
 async function getAnnotatedSlotsForDate(gym, gymId, date) {
-  let slots = generateTimeSlots(gym.openTime, gym.closeTime, gym.slotDuration);
+  // A date-less call (no known caller today, but preserved for safety) has
+  // no day-of-week to resolve hours against — default to today's IST
+  // calendar day rather than guessing.
+  const dayOfWeek = getDayOfWeek(date || todayDateStringIST());
+  const hours = await gymService.getOperatingHours(gymId, dayOfWeek);
+  let slots = generateWindowedSlots(hours, gym.slotDuration);
 
   // Attach each slot's per-time-of-day price (same value every date),
   // falling back to the gym's flat sessionPrice where no explicit row exists.
@@ -616,6 +622,140 @@ export const deleteSlotBlock = async (req, res) => {
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message });
+  }
+};
+
+// Per-day-of-week operating hours (public read, partner-editable) ----------
+
+export const getOperatingHours = async (req, res) => {
+  try {
+    const hours = await gymService.getAllOperatingHours(parseInt(req.params.id));
+    res.json({ data: hours });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Body: { days: [{dayOfWeek, morningStart, morningEnd, eveningStart, eveningEnd}, ...] } — all 7 days.
+export const updateOperatingHours = async (req, res) => {
+  try {
+    const result = await gymService.upsertOperatingHours(parseInt(req.params.id), req.userId, req.body?.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Recurring bookable classes (public read, partner CRUD) --------------------
+
+export const getClasses = async (req, res) => {
+  try {
+    const classes = await gymService.getGymClasses(parseInt(req.params.id));
+    res.json({ data: classes });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Upcoming bookable dates for a recurring class, with remaining capacity —
+// mirrors getGymAvailability's rolling-window pattern but scoped to one
+// class's dayOfWeek instead of every day.
+export const getClassOccurrences = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.id);
+    const classId = parseInt(req.params.classId);
+    const days = Math.min(Math.max(parseInt(req.query.days) || 14, 1), 60);
+
+    const cls = await gymService.getClassForOccurrences(gymId, classId);
+    const cancelledDates = new Set(cls.cancelledDates);
+
+    // Same IST-anchoring convention as getGymAvailability below.
+    const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+    const istNow = new Date(Date.now() + IST_OFFSET_MS);
+    const anchor = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate());
+
+    const dates = [];
+    for (let i = 0; dates.length < days && i < days * 7 + 7; i++) {
+      const d = new Date(anchor + i * 86400000);
+      if (d.getUTCDay() !== cls.dayOfWeek) continue;
+      const dateStr = d.toISOString().split('T')[0];
+      if (cancelledDates.has(dateStr)) continue;
+      if (isSlotInPastOrTooSoon(dateStr, cls.startTime)) continue;
+      dates.push(dateStr);
+    }
+
+    let counts = {};
+    if (dates.length) {
+      try {
+        const resp = await fetch(
+          `${BOOKING_SERVICE_URL}/internal/class-counts/${classId}?dates=${encodeURIComponent(dates.join(','))}`,
+          {
+            headers: {
+              'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+              ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
+            },
+          }
+        );
+        if (resp.ok) {
+          const body = await resp.json();
+          counts = body.data || {};
+        }
+      } catch (_) {
+        // booking-service down — leave counts empty so occurrences still render
+      }
+    }
+
+    const occurrences = dates.map(date => ({
+      date,
+      startTime: cls.startTime,
+      endTime: cls.endTime,
+      booked: counts[date] || 0,
+      available: Math.max(cls.capacity - (counts[date] || 0), 0),
+    }));
+
+    res.json({ data: occurrences });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createClass = async (req, res) => {
+  try {
+    const result = await gymService.createClass(parseInt(req.params.id), req.userId, req.body);
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Body is either an ordinary field edit (name/description/instructor/
+// dayOfWeek/startTime/endTime/capacity/price/isActive) or a one-off
+// occurrence action: { action: 'cancel_occurrence' | 'uncancel_occurrence', date }.
+export const updateClass = async (req, res) => {
+  try {
+    const result = await gymService.updateClass(parseInt(req.params.id), parseInt(req.params.classId), req.userId, req.body);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const deleteClass = async (req, res) => {
+  try {
+    const result = await gymService.deleteClass(parseInt(req.params.id), parseInt(req.params.classId), req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal: booking-service resolves a class by id before booking it.
+export const getClassInternal = async (req, res) => {
+  try {
+    const cls = await gymService.getClassInternal(parseInt(req.params.classId));
+    res.json({ data: cls });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

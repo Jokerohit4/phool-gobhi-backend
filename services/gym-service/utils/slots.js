@@ -15,3 +15,17 @@ export function generateTimeSlots(openTime, closeTime, slotDuration) {
   }
   return slots;
 }
+
+// Slots for a single day, given that day's GymOperatingHours row (up to two
+// windows — morning + evening; either may be null meaning no window that
+// side of the day, e.g. a midday gap or a day closed entirely).
+export function generateWindowedSlots(hoursRow, slotDuration) {
+  const slots = [];
+  if (hoursRow?.morningStart && hoursRow?.morningEnd) {
+    slots.push(...generateTimeSlots(hoursRow.morningStart, hoursRow.morningEnd, slotDuration));
+  }
+  if (hoursRow?.eveningStart && hoursRow?.eveningEnd) {
+    slots.push(...generateTimeSlots(hoursRow.eveningStart, hoursRow.eveningEnd, slotDuration));
+  }
+  return slots;
+}

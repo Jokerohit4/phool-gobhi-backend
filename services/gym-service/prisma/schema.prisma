@@ -82,6 +82,8 @@ model Gym {
   slotBlocks   SlotBlock[]
   slotPrices   GymSlotPrice[]
   editRequests GymEditRequest[]
+  operatingHours GymOperatingHours[]
+  classes        GymClass[]
 
   @@index([partnerId])
   @@schema("gym")
@@ -157,6 +159,69 @@ model GymSlotPrice {
   @@schema("gym")
 }
 
+// Per-day-of-week operating hours, up to two windows/day (morning + evening,
+// null = no window that day — i.e. either a closed midday gap between them,
+// or the whole day closed if both are null). Every existing gym is backfilled
+// with 7 rows reproducing its old single openTime/closeTime window exactly
+// (see the migration for this model) so nothing changes until a partner
+// edits their hours. Gym.openTime/closeTime/slotDuration are left in place
+// but only slotDuration is still read by slot generation post-migration.
+model GymOperatingHours {
+  id           Int      @id @default(autoincrement())
+  gymId        Int
+  dayOfWeek    Int // 0=Sunday..6=Saturday
+  morningStart String?
+  morningEnd   String?
+  eveningStart String?
+  eveningEnd   String?
+  gym          Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([gymId, dayOfWeek])
+  @@schema("gym")
+}
+
+// A recurring bookable class (e.g. "Yoga", Mon/Wed/Fri 7-8am) — a class held
+// multiple times a week is multiple rows, one per dayOfWeek. Has its own
+// capacity pool, separate from the gym's plain-slot capacity (see
+// booking-service's Booking.classId). price null = included with an active
+// subscription at this gym (same daily quota as a regular session); price
+// set = always charged that amount regardless of subscription status.
+model GymClass {
+  id            Int                    @id @default(autoincrement())
+  gymId         Int
+  name          String
+  description   String?
+  instructor    String?
+  dayOfWeek     Int
+  startTime     String
+  endTime       String
+  capacity      Int
+  price         Decimal?               @db.Decimal(19, 2)
+  isActive      Boolean                @default(true)
+  gym           Gym                    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  cancellations GymClassCancellation[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([gymId, dayOfWeek])
+  @@schema("gym")
+}
+
+// One-off cancellation of a single occurrence of a recurring GymClass (e.g.
+// instructor sick on a specific date) — mirrors SlotBlock's per-date
+// mechanism for plain slots, but scoped to a class instead of a startTime.
+model GymClassCancellation {
+  id        Int      @id @default(autoincrement())
+  classId   Int
+  date      String
+  class     GymClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([classId, date])
+  @@schema("gym")
+}
+
 enum EditRequestType {
   profile
   image_add
@@ -166,6 +231,10 @@ enum EditRequestType {
   slot_prices
   slot_block_add
   slot_block_delete
+  operating_hours_update
+  class_add
+  class_update
+  class_delete
 
   @@schema("gym")
 }

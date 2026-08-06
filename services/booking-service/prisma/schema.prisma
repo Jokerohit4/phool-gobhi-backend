@@ -47,6 +47,14 @@ model Booking {
   // never fires for it — but completeBooking's partner payout DOES fire for
   // it now, unless partnerShare is null (see above).
   subscriptionId   Int?
+  // Set for a recurring-class booking instead of a plain-slot booking — the
+  // class's own schedule (gym-service's GymClass) governs startTime/endTime
+  // for this row, and its capacity pool is tracked separately from the
+  // gym's plain-slot capacity (see the (classId, date) index and the
+  // amended booking_unique_active_slot index below, both added by the
+  // migration that introduced this column). Plain int, no cross-service FK,
+  // same convention as gymId.
+  classId          Int?
   checkinRequested Boolean       @default(false)
   locationVerified Boolean?
 
@@ -69,19 +77,31 @@ model Booking {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  // NOTE: there is also a partial unique index in the DB —
-  // booking_unique_active_slot on (customerId, gymId, date, startTime) WHERE
-  // status <> 'cancelled' — added by hand in the migration SQL, since Prisma's
-  // schema DSL has no syntax for a filtered/partial unique index. It backstops
-  // createBooking's app-level duplicate check against a same-slot double-tap
-  // race, while still allowing a customer to re-book a slot after cancelling
-  // an earlier booking for it. `prisma db push`/introspection will not see
-  // this index and may report drift — that's expected, don't let a `db push`
-  // silently drop it.
+  // NOTE: there are also partial unique indexes in the DB, added by hand in
+  // migration SQL since Prisma's schema DSL has no syntax for a filtered/
+  // partial unique index (`prisma db push`/introspection will not see them
+  // and may report drift — that's expected, don't let a `db push` silently
+  // drop them):
+  //   - booking_unique_active_slot on (customerId, gymId, date, startTime)
+  //     WHERE status <> 'cancelled' AND "classId" IS NULL — backstops
+  //     createBooking's app-level duplicate check for a plain-slot booking.
+  //     The "classId" IS NULL clause was added in the same migration that
+  //     introduced this column — without it, a class booking whose
+  //     startTime happens to coincide with a walk-in slot's startTime would
+  //     wrongly collide with this index.
+  //   - booking_unique_active_class_occurrence on (customerId, classId, date)
+  //     WHERE classId IS NOT NULL AND status <> 'cancelled' — same
+  //     protection for a class booking.
   @@index([gymId, date])
   @@index([customerId])
   @@index([gymId, date, attendedAt])
   @@index([attendedAt])
+  // Lets the capacity count inside reserveBookingSlot's Serializable
+  // transaction (see bookingService.js) satisfy its predicate via an index
+  // scan instead of a seq scan — without this, SIREAD locking degrades to
+  // page/relation granularity under load, causing spurious serialization
+  // conflicts for unrelated concurrent bookings.
+  @@index([classId, date])
   @@schema("booking")
 }
 
