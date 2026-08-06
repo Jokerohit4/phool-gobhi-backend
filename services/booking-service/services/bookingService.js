@@ -1035,6 +1035,22 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
     const booking = candidates.find((b) => isSessionActiveNow(b.date, b.startTime, b.endTime));
 
     if (!booking) {
+      // Distinguish "you never booked" from "you booked, but the gym hasn't
+      // confirmed it yet" — the latter is a real, paid booking sitting in
+      // `pending`, and telling the customer there's simply no booking at all
+      // (the old behavior) is actively misleading standing at the front door.
+      const pendingCandidates = await prisma.booking.findMany({
+        where: { customerId, gymId, date: todayString, status: 'pending' },
+      });
+      const pendingBooking = pendingCandidates.find((b) => isSessionActiveNow(b.date, b.startTime, b.endTime));
+      if (pendingBooking) {
+        throw {
+          status: 404,
+          error: "Your booking is still awaiting the gym's confirmation — check back shortly, or ask the front desk.",
+          code: 'BOOKING_PENDING_CONFIRMATION',
+        };
+      }
+
       throw {
         status: 404,
         error: "You don't have a session at this gym right now",
