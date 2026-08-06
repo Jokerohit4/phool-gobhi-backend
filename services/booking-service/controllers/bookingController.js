@@ -208,11 +208,15 @@ export const getMyAttendanceWarnings = async (req, res) => {
 export const selfCheckIn = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
-    const { lat, lng } = req.body;
-    const result = await bookingService.selfCheckIn(gymId, req.userId, lat, lng);
+    const { lat, lng, confirmEarly } = req.body;
+    const result = await bookingService.selfCheckIn(gymId, req.userId, lat, lng, !!confirmEarly);
     res.json({ data: result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, startTime: err.startTime });
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+      confirmation: err.confirmation,
+    });
   }
 };
 

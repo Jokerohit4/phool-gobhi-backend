@@ -1026,7 +1026,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
 // retry") — every other controller in this file uses a bare {error}
 // string, but string-matching that in the client would be fragile, so this
 // one deliberately carries a `code` alongside it.
-export async function selfCheckIn(gymId, customerId, lat, lng) {
+export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = false) {
   try {
     const todayString = todayDateStringIST();
     // Pull every one of today's bookings for this customer+gym regardless of
@@ -1046,7 +1046,16 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
     // right answer at any point in (or after) the session, not just while
     // isSessionActiveNow still holds.
     const alreadyStarted = todaysBookings.find((b) => b.status === 'started');
-    const booking = activeConfirmed || alreadyStarted;
+    // Too early for the normal window but still a real booking for today —
+    // same confirm-and-shift-with-warning treatment verifyAttendance already
+    // gives a partner's early QR scan, rather than the old hard "come back
+    // later" with no way through. Only considered when there's nothing
+    // already checkable, so an early booking never shadows a genuinely
+    // active/started one.
+    const early = !activeConfirmed && !alreadyStarted
+      ? todaysBookings.find((b) => b.status === 'confirmed' && isBeforeSessionWindow(b.date, b.startTime))
+      : null;
+    const booking = activeConfirmed || alreadyStarted || early;
 
     if (!booking) {
       // Nothing is checkable right now — but do we have something to
@@ -1057,18 +1066,6 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
           status: 404,
           error: "Your booking is still awaiting the gym's confirmation — check back shortly, or ask the front desk.",
           code: 'BOOKING_PENDING_CONFIRMATION',
-        };
-      }
-
-      const notYetOpen = todaysBookings.find(
-        (b) => b.status === 'confirmed' && isBeforeSessionWindow(b.date, b.startTime)
-      );
-      if (notYetOpen) {
-        throw {
-          status: 404,
-          error: `Check-in opens 15 minutes before your ${notYetOpen.startTime} session — come back shortly.`,
-          code: 'SESSION_NOT_STARTED',
-          startTime: notYetOpen.startTime,
         };
       }
 
@@ -1129,15 +1126,62 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
       };
     }
 
+    // Geofence passed above regardless of early/on-time — that's the "real
+    // signal" this flow relies on (mirroring verifyAttendance's QR scan), so
+    // it's required before even offering the early-checkin confirmation, not
+    // just before committing it.
+    let slotShift = null;
+    if (booking === early) {
+      const proposed = shiftedSlotForNow(booking.date, booking.startTime, booking.endTime);
+      if (!confirmEarly) {
+        throw {
+          status: 409,
+          error: `Check-in doesn't open until 15 minutes before your ${booking.startTime} session.`,
+          code: 'EARLY_CHECKIN',
+          confirmation: {
+            currentStartTime: booking.startTime,
+            currentEndTime: booking.endTime,
+            newStartTime: proposed.newStartTime,
+            newEndTime: proposed.newEndTime,
+          },
+        };
+      }
+      slotShift = proposed;
+    }
+
     // attendanceVerifiedBy deliberately left null — that field means "which
     // partner recorded this"; self-check-in has no verifying partner, and
     // attendanceMethod='qr_geofence_self' already says who/how.
-    const updated = await prisma.booking.update({
-      where: { id: booking.id },
-      data: { status: 'started', attendedAt: new Date(), attendanceMethod: 'qr_geofence_self' },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'started',
+          attendedAt: new Date(),
+          attendanceMethod: 'qr_geofence_self',
+          ...(slotShift
+            ? { startTime: slotShift.newStartTime, endTime: slotShift.newEndTime, slotShiftWarning: true }
+            : {}),
+        },
+      });
+      if (slotShift) {
+        await tx.attendanceWarning.create({
+          data: {
+            bookingId: booking.id,
+            customerId,
+            gymId,
+            date: booking.date,
+            originalStartTime: booking.startTime,
+            originalEndTime: booking.endTime,
+            newStartTime: slotShift.newStartTime,
+            newEndTime: slotShift.newEndTime,
+          },
+        });
+      }
+      return result;
     });
 
-    track('attendance_verified', customerId, {
+    track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', customerId, {
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
@@ -1146,6 +1190,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng) {
       attendedAt: updated.attendedAt,
       attendanceMethod: updated.attendanceMethod,
       alreadyVerified: false,
+      ...(slotShift ? { slotShifted: true, newStartTime: slotShift.newStartTime, newEndTime: slotShift.newEndTime } : {}),
     };
   } catch (err) {
     if (err.error) throw err;
