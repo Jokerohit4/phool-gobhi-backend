@@ -134,7 +134,7 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, us
 
   let gyms = (await prisma.gym.findMany({
     where,
-    include: { images: true },
+    include: { images: { orderBy: { id: 'asc' } } },
   })).map(normalizeGymMoney);
 
   if (amenities) {
@@ -185,7 +185,7 @@ export async function listGymsAdmin({ status, partnerId } = {}) {
 
   const gyms = await prisma.gym.findMany({
     where,
-    include: { images: true },
+    include: { images: { orderBy: { id: 'asc' } } },
     orderBy: { createdAt: 'desc' },
   });
   return gyms.map(normalizeGymMoney);
@@ -194,7 +194,7 @@ export async function listGymsAdmin({ status, partnerId } = {}) {
 export async function getGymById(id, userLat, userLng) {
   const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id },
-    include: { images: true, reviews: true },
+    include: { images: { orderBy: { id: 'asc' } }, reviews: true },
   }));
 
   if (!gym || !gym.isActive || !gym.isApproved) {
@@ -215,7 +215,7 @@ export async function getGymById(id, userLat, userLng) {
 export async function getGymByIdRaw(id) {
   const gym = await prisma.gym.findUnique({
     where: { id },
-    include: { images: true },
+    include: { images: { orderBy: { id: 'asc' } } },
   });
   if (!gym) throw { status: 404, error: 'Gym not found' };
   return normalizeGymMoney(gym);
@@ -514,7 +514,7 @@ export async function softDeleteGym(gymId, partnerId) {
 export async function getPartnerGyms(partnerId) {
   const gyms = await prisma.gym.findMany({
     where: { partnerId },
-    include: { images: true },
+    include: { images: { orderBy: { id: 'asc' } } },
   });
 
   return gyms.map(normalizeGymMoney);
@@ -825,15 +825,27 @@ export async function updateGymCommission(gymId, commissionPct) {
 // dispatches to the same apply* function the mutation would have called
 // directly on an unapproved gym) or rejects it (no live write at all).
 
+// changeTypes that represent a single mutable draft (profile fields, the
+// whole slot-price list) — a newer pending request here really does replace
+// the old one, since there's only ever one "current" value being proposed.
+// Anything else (image/doc add-delete, slot blocks) is a discrete event, not
+// a state: uploading a second photo isn't a revision of the first upload,
+// it's an independent addition, and superseding would silently drop it
+// before a gobhi ever sees it — exactly what made "upload 3 photos, only the
+// last one shows up for review" happen.
+const SINGLETON_CHANGE_TYPES = new Set(['profile', 'slot_prices']);
+
 async function createEditRequest(gymId, partnerId, changeType, payload) {
-  // A partner is never blocked from resubmitting — the newest request for a
-  // given (gym, changeType) simply supersedes whatever was still pending,
-  // so duplicate pending rows never pile up and there's always exactly one
-  // pending request per changeType to review.
-  await prisma.gymEditRequest.updateMany({
-    where: { gymId, changeType, status: 'pending' },
-    data: { status: 'rejected', rejectionReason: 'Superseded by a newer request' },
-  });
+  if (SINGLETON_CHANGE_TYPES.has(changeType)) {
+    // A partner is never blocked from resubmitting — the newest request for
+    // a given (gym, changeType) simply supersedes whatever was still
+    // pending, so duplicate pending rows never pile up and there's always
+    // exactly one pending request per changeType to review.
+    await prisma.gymEditRequest.updateMany({
+      where: { gymId, changeType, status: 'pending' },
+      data: { status: 'rejected', rejectionReason: 'Superseded by a newer request' },
+    });
+  }
 
   return prisma.gymEditRequest.create({
     data: { gymId, partnerId, changeType, payload },
@@ -865,7 +877,12 @@ export async function listEditRequestsAdmin({ status = 'pending' } = {}) {
 export async function getEditRequestAdmin(id) {
   const request = await prisma.gymEditRequest.findUnique({
     where: { id },
-    include: { gym: true },
+    // Nested include, not just `gym: true` — an image_delete request's admin
+    // detail page looks up gym.images.find(img => img.id === payload.imageId)
+    // to show which photo is being removed, and a bare `gym: true` only
+    // pulls the gym's own scalar fields, leaving gym.images undefined and
+    // that .find() throwing.
+    include: { gym: { include: { images: { orderBy: { id: 'asc' } } } } },
   });
   if (!request) throw { status: 404, error: 'Edit request not found' };
   request.gym = normalizeGymMoney(request.gym);
