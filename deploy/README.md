@@ -30,8 +30,12 @@ mistaken for transcription errors):
   in prod, same as dev — but pointed at a **separate, dedicated** Neon DB (secret base name
   `analytics-database-url`, not `db-url`), not the shared dev/booking DB dev still uses. Deliberate:
   prod analytics traffic never touches the real transactional booking DB.
-- **wallet-service**: dev has `GYM_SERVICE_URL`, prod does not. Preserved as-is; if a prod
-  code path ever needs it, add it here rather than patching the live service directly.
+- **wallet-service**: prod was missing `GYM_SERVICE_URL` until 2026-08-06 — harmless while
+  wallet-service had no code path calling gym-service, but `purchaseSubscriptionWithWallet`
+  (shipped 2026-08-03) needs it to look up gym plan pricing, and its `fetchGymForSubscription`
+  catch-block masks the resulting connection failure as a false "Gym not found" 404. Added
+  here and applied live to match. If wallet-service ever grows another gym-service call, this
+  is where the URL already is.
 
 ## URL format standardization
 

@@ -646,7 +646,12 @@ export async function getMySubscriptionsService(customerId, gymId) {
       const lastVisitDate = await fetchLastVisitDate(sub.id);
       const referenceDate = lastVisitDate ?? sub.startDate.toISOString().split('T')[0];
       const showGiftTeaser = lastVisitDate !== undefined && daysSince(referenceDate) >= 2;
-      return { ...serializeSubscription(sub), showGiftTeaser };
+      // Lets the website/app show "today's session is covered" without
+      // guessing — a customer who already has a booking today at this gym
+      // has used the one free/covered session this subscription grants per
+      // day (see reserveBookingSlot's usedToday check). null/undefined (no
+      // visit yet, or booking-service unreachable) both mean "not used today".
+      return { ...serializeSubscription(sub), showGiftTeaser, lastVisitDate: lastVisitDate ?? null };
     }
 
     return serializeSubscription(sub);

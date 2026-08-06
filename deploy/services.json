@@ -187,6 +187,7 @@
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "wallet-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
