@@ -92,6 +92,13 @@ model GymImage {
   gymId     Int
   url       String
   publicId  String?
+  // "image" | "video" — plain string rather than a Postgres enum to match
+  // this schema's existing style (no enums elsewhere) and keep the
+  // hand-authored migration a trivial ADD COLUMN. Videos only ever arrive
+  // via the browser-direct signed-upload path (see upload.js) — the old
+  // server-side multipart path stays image-only, since Cloud Run's request
+  // body limit rules out uploading real video through it anyway.
+  mediaType String   @default("image")
   gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 

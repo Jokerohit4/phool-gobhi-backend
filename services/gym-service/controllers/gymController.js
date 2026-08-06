@@ -236,15 +236,21 @@ export const getUploadSignature = (req, res) => {
   res.json({
     data: signCloudinaryUpload({
       folder: type === 'doc' ? 'phool-gobhi/docs' : 'phool-gobhi/gyms',
-      resourceType: type === 'doc' ? 'auto' : 'image',
+      // 'auto' either way — gym media can now be a photo or a video, and
+      // 'auto' correctly classifies whichever one the partner picked
+      // instead of forcing every upload down the image-only pipeline.
+      resourceType: 'auto',
     }),
   });
 };
 
 export const addGymImage = async (req, res) => {
   try {
-    let imageUrl, publicId;
+    let imageUrl, publicId, mediaType;
     if (req.file) {
+      // Legacy multipart path (Flutter apps) — images only, see the
+      // GymImage.mediaType schema comment for why video never comes
+      // through here.
       if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
       const result = await uploadBufferToCloudinary(req.file.buffer, {
         folder: 'phool-gobhi/gyms',
@@ -253,10 +259,14 @@ export const addGymImage = async (req, res) => {
       });
       imageUrl = result.secure_url;
       publicId = result.public_id;
+      mediaType = 'image';
     } else if (req.body?.url) {
       // Already uploaded straight to Cloudinary from the browser using a
       // signature from getUploadSignature above — just persist the result.
-      imageUrl = withGymImageTransform(req.body.url);
+      // The resize/crop transform only makes sense for a photo; a video's
+      // secure_url is stored as-is and sized by the player instead.
+      mediaType = req.body.mediaType === 'video' ? 'video' : 'image';
+      imageUrl = mediaType === 'video' ? req.body.url : withGymImageTransform(req.body.url);
       publicId = req.body.publicId;
     } else {
       return res.status(400).json({ error: 'No image provided' });
@@ -265,7 +275,8 @@ export const addGymImage = async (req, res) => {
       parseInt(req.params.id),
       req.userId,
       imageUrl,
-      publicId
+      publicId,
+      mediaType
     );
     res.status(201).json({ data: image });
   } catch (err) {

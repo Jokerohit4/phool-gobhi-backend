@@ -550,8 +550,8 @@ export async function getPartnerGymSummary(partnerId) {
 // Cloudinary upload already happened by the time either of these run (the
 // caller needs the URL either way) — what's gated is only the DB row that
 // makes the photo/doc show up on the live gym.
-async function applyGymImageAdd(gymId, { url, publicId }) {
-  return prisma.gymImage.create({ data: { gymId, url, publicId } });
+async function applyGymImageAdd(gymId, { url, publicId, mediaType }) {
+  return prisma.gymImage.create({ data: { gymId, url, publicId, mediaType: mediaType || 'image' } });
 }
 
 async function applyGymImageDelete({ imageId }) {
@@ -562,7 +562,11 @@ async function applyGymImageDelete({ imageId }) {
 
   if (image.publicId) {
     try {
-      await cloudinary.uploader.destroy(image.publicId);
+      // Cloudinary scopes destroy by resource_type (defaults to 'image') —
+      // omitting this for a video silently no-ops instead of deleting it.
+      await cloudinary.uploader.destroy(image.publicId, {
+        resource_type: image.mediaType === 'video' ? 'video' : 'image',
+      });
     } catch (err) {
       console.error('Error deleting image from Cloudinary:', err.message);
     }
@@ -572,7 +576,7 @@ async function applyGymImageDelete({ imageId }) {
   return { message: 'Image deleted' };
 }
 
-export async function addGymImage(gymId, partnerId, url, publicId) {
+export async function addGymImage(gymId, partnerId, url, publicId, mediaType = 'image') {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },
   });
@@ -586,11 +590,11 @@ export async function addGymImage(gymId, partnerId, url, publicId) {
   }
 
   if (gym.isApproved) {
-    const editRequest = await createEditRequest(gymId, partnerId, 'image_add', { url, publicId });
+    const editRequest = await createEditRequest(gymId, partnerId, 'image_add', { url, publicId, mediaType });
     return { pending: true, editRequest };
   }
 
-  return applyGymImageAdd(gymId, { url, publicId });
+  return applyGymImageAdd(gymId, { url, publicId, mediaType });
 }
 
 export async function deleteGymImage(gymId, imageId, partnerId) {
