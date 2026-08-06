@@ -864,7 +864,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
 // happened" signal completeBooking now requires. Idempotent: re-scanning an
 // already-verified booking just returns its existing verification instead of
 // erroring, since a camera can fire multiple detections for one physical scan.
-export async function verifyAttendance(bookingId, gymId, partnerId, { method = 'qr_scan', qrToken, confirmSlotShift = false } = {}) {
+export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, confirmSlotShift = false } = {}) {
   try {
     const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
     if (!booking) throw { status: 404, error: 'Booking not found' };
@@ -933,18 +933,18 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { method = '
     }
 
     // A real camera scan must present a valid signed token — a bare gymId is
-    // no longer enough to prove a scan actually happened. partner-web has no
-    // camera, so it explicitly asks for 'manual' instead of faking a scan.
-    let attendanceMethod;
-    if (method === 'manual') {
-      attendanceMethod = 'manual_verify';
-    } else {
-      const check = verifyQrToken(qrToken, bookingId, gymId);
-      if (!check.valid) {
-        throw { status: 400, error: 'This QR code could not be verified — please rescan or use manual verification.', code: 'INVALID_QR' };
-      }
-      attendanceMethod = 'qr_scan';
+    // no longer enough to prove a scan actually happened. There used to be a
+    // 'manual' fallback with no corroborating signal at all (partner-web has
+    // no camera) — removed, since it let a partner mark any confirmed
+    // booking as attended with the customer never having been there, which
+    // directly gated that partner's own payout. Attendance can only be
+    // verified by a real signed QR scan now, or by the customer themselves
+    // via self-check-in's GPS geofence.
+    const check = verifyQrToken(qrToken, bookingId, gymId);
+    if (!check.valid) {
+      throw { status: 400, error: 'This QR code could not be verified — please rescan.', code: 'INVALID_QR' };
     }
+    const attendanceMethod = 'qr_scan';
 
     // updateMany + a status guard, not update() — the idempotency check
     // above read `booking` before this point, so two truly concurrent
