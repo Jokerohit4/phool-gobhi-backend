@@ -4,7 +4,7 @@ import { generateTimeSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
-import { hasCloudinary, uploadBufferToCloudinary } from '../utils/upload.js';
+import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -227,13 +227,25 @@ export const deleteGym = async (req, res) => {
   }
 };
 
+// Signature for a browser-direct Cloudinary upload — see utils/upload.js's
+// signCloudinaryUpload comment for why this exists instead of always
+// uploading through this service.
+export const getUploadSignature = (req, res) => {
+  const type = req.query.type === 'doc' ? 'doc' : 'image';
+  if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
+  res.json({
+    data: signCloudinaryUpload({
+      folder: type === 'doc' ? 'phool-gobhi/docs' : 'phool-gobhi/gyms',
+      resourceType: type === 'doc' ? 'auto' : 'image',
+    }),
+  });
+};
+
 export const addGymImage = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image provided' });
-    }
     let imageUrl, publicId;
-    if (hasCloudinary) {
+    if (req.file) {
+      if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
       const result = await uploadBufferToCloudinary(req.file.buffer, {
         folder: 'phool-gobhi/gyms',
         allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
@@ -241,6 +253,13 @@ export const addGymImage = async (req, res) => {
       });
       imageUrl = result.secure_url;
       publicId = result.public_id;
+    } else if (req.body?.url) {
+      // Already uploaded straight to Cloudinary from the browser using a
+      // signature from getUploadSignature above — just persist the result.
+      imageUrl = withGymImageTransform(req.body.url);
+      publicId = req.body.publicId;
+    } else {
+      return res.status(400).json({ error: 'No image provided' });
     }
     const image = await gymService.addGymImage(
       parseInt(req.params.id),
@@ -290,17 +309,21 @@ export const deleteGymImage = async (req, res) => {
 
 export const addGymDoc = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No document provided' });
-    }
     let docUrl;
-    if (hasCloudinary) {
+    if (req.file) {
+      if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
       const result = await uploadBufferToCloudinary(req.file.buffer, {
         folder: 'phool-gobhi/docs',
         resource_type: 'auto',
         allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
       });
       docUrl = result.secure_url;
+    } else if (req.body?.url) {
+      // Already uploaded straight to Cloudinary from the browser using a
+      // signature from getUploadSignature above — just persist the result.
+      docUrl = req.body.url;
+    } else {
+      return res.status(400).json({ error: 'No document provided' });
     }
     const result = await gymService.addGymDoc(
       parseInt(req.params.id),

@@ -47,3 +47,35 @@ export async function uploadBufferToCloudinary(buffer, options, attempts = 3) {
   }
   throw lastErr;
 }
+
+// The retry above only helps when the failure is transient — it isn't when
+// gym-service's own outbound path to Cloudinary is the thing rejecting the
+// request (confirmed live: a direct call with the same key from outside
+// Cloud Run succeeds at the exact moment gym-service's calls fail 100% of
+// the time, retries included). A static egress IP would be the durable
+// backend-side fix but costs money we don't have right now, so instead the
+// browser uploads straight to Cloudinary itself — gym-service never touches
+// the file, it only hands out a short-lived signature for the upload the
+// browser is about to make, using its own IP instead of Cloud Run's.
+export function signCloudinaryUpload({ folder, resourceType }) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const paramsToSign = { folder, timestamp };
+  const signature = cloudinary.utils.api_sign_request(paramsToSign, process.env.CLOUDINARY_API_SECRET);
+  return {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    timestamp,
+    signature,
+    folder,
+    resourceType,
+  };
+}
+
+// Cloudinary's stored secure_url is the untransformed original — this
+// inserts the same resize/quality transform addGymImage used to apply
+// upload-time (via multer-storage-cloudinary's `params.transformation`) as
+// a delivery-time transform instead, so a browser-uploaded photo looks
+// identical to a server-uploaded one wherever it's later displayed.
+export function withGymImageTransform(secureUrl) {
+  return secureUrl.replace('/upload/', '/upload/w_1200,h_800,c_limit,q_auto/');
+}

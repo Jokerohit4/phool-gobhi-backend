@@ -24,6 +24,9 @@ router.put('/edit-requests/:id/approve', requireRole('gobhi'), ctrl.approveEditR
 // Body: {reason} (required)
 router.put('/edit-requests/:id/reject', requireRole('gobhi'), ctrl.rejectEditRequest);
 
+// Same footgun, same fix — must stay above GET /:id. ?type=image|doc
+router.get('/upload-signature', requireRole('partner'), ctrl.getUploadSignature);
+
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/availability', ctrl.getGymAvailability);
