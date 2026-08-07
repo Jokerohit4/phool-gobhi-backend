@@ -515,6 +515,17 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // atomic "used today" check to a concurrent booking.
     const subscriptionId = reservation.subscriptionId;
 
+    // An "included" class (price null) has no standalone price to fall back
+    // to — unlike a plain session, which always has a real resolvedSlotPrice
+    // and so correctly becomes a normal paid booking if it loses the atomic
+    // same-day quota race, an included class that loses that race has
+    // amount=0 and nothing sensible to charge. Reject clearly instead of
+    // silently attempting a phantom ₹0 wallet debit below.
+    if (classId && cls.price == null && !subscriptionId) {
+      await prisma.booking.delete({ where: { id: reservation.id } }).catch(() => {});
+      throw { status: 409, error: "You've already used your subscription visit at this gym today" };
+    }
+
     // This booking used one of the customer's redeemable gift-day visits
     // (see wallet-service's getGiftEligibleLapsedSubscription) — best-effort,
     // fire-and-forget, same pattern as the referral-credit call in
