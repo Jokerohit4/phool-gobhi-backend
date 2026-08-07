@@ -100,6 +100,14 @@ export const getSupplyHealth = async (req, res) => {
   }
 };
 
+export const getRecentAnonSessions = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getRecentAnonSessions(req.query.days, req.query.limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getUserJourney = async (req, res) => {
   try {
     const { distinctId: rawDistinctId, days } = req.query;

@@ -276,6 +276,35 @@ export async function getSupplyHealth() {
   return { gyms: rows };
 }
 
+// ---- Recent anonymous (pre-signup) sessions --------------------------------
+
+// Anon distinct_ids (website's lib/analytics.ts / both apps' AnalyticsService
+// mint `anon_...` before login) have no phone to search by, so the Lookup
+// tab's phone-resolve path can never find them — this is the only way to
+// discover one to look up at all. last_screen/app are just a cheap preview
+// (most-recent non-null value per group) so the admin can tell which row is
+// worth opening before committing to a full journey fetch.
+export async function getRecentAnonSessions(days, limit) {
+  const n = daysParam(days || 7); // narrower default than the journey lookup — this is "who's active lately," not a full history
+  const cappedLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+  const { rows } = await query(
+    `SELECT distinct_id,
+            min(ts) AS first_seen,
+            max(ts) AS last_seen,
+            count(*)::int AS event_count,
+            count(DISTINCT properties->>'session_id')::int AS session_count,
+            (array_agg(properties->>'screen_name' ORDER BY ts DESC) FILTER (WHERE properties->>'screen_name' IS NOT NULL))[1] AS last_screen,
+            (array_agg(properties->>'app' ORDER BY ts DESC) FILTER (WHERE properties->>'app' IS NOT NULL))[1] AS app
+       FROM analytics_events
+      WHERE distinct_id LIKE 'anon\_%' AND ts > now() - ($1 || ' days')::interval
+      GROUP BY distinct_id
+      ORDER BY last_seen DESC
+      LIMIT $2`,
+    [n, cappedLimit]
+  );
+  return { sessions: rows };
+}
+
 // ---- Per-user journey --------------------------------------------------------
 
 // Every event for one distinct_id, oldest first, interleaving client intent and

@@ -327,6 +327,13 @@ Three more tabs:
   resetting it), and best-effort resolves a numeric `distinct_id` to a real
   name/phone via auth-service's existing internal lookup — fails open to
   "unknown identity" for anon ids or a lookup failure.
+- **Recent anonymous sessions** (same `?view=user` tab, `GET /admin/analytics/anon-sessions?days=&limit=`)
+  — the only way to *find* a pre-signup journey to look up in the first
+  place, since the search box above only resolves a phone number or an
+  already-known `distinct_id` and anon visitors have neither on record. Lists
+  the most recently active `anon_...` distinct_ids (grouped, most recent
+  first) with first/last seen, event and session counts, and a cheap preview
+  of their most recent app + screen — click a row to open its full journey.
 
 A fourth addition, **Supply health** (`GET /admin/analytics/supply-health`),
 is folded into the existing Supply tab rather than a tab of its own: gyms
