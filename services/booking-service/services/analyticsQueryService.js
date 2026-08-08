@@ -305,6 +305,85 @@ export async function getRecentAnonSessions(days, limit) {
   return { sessions: rows };
 }
 
+// ---- Event search (find users, not a specific one) -------------------------
+
+// The counterpart to getRecentAnonSessions for signed-up users: "which users
+// did X" rather than "what did user X do." Same shape (grouped by
+// distinct_id, most recent first) but for any event + optional exact-match
+// property filters, not just the anon-id special case.
+export async function searchEventUsers(event, filters, days, limit) {
+  const n = daysParam(days || 30);
+  const cappedLimit = Math.min(Math.max(Number(limit) || 25, 1), 200);
+  const params = [event];
+  let filterClauses = '';
+  for (const [key, value] of Object.entries(filters || {})) {
+    params.push(key);
+    params.push(value);
+    filterClauses += ` AND properties ->> $${params.length - 1} = $${params.length}`;
+  }
+  const daysIdx = params.push(n);
+  const limitIdx = params.push(cappedLimit);
+  const { rows } = await query(
+    `SELECT distinct_id,
+            min(ts) AS first_seen,
+            max(ts) AS last_seen,
+            count(*)::int AS event_count
+       FROM analytics_events
+      WHERE event = $1 AND ts > now() - ($${daysIdx} || ' days')::interval${filterClauses}
+      GROUP BY distinct_id
+      ORDER BY last_seen DESC
+      LIMIT $${limitIdx}`,
+    params
+  );
+  return { users: rows };
+}
+
+// ---- Custom funnels (admin-defined, true sequential order) -----------------
+
+// Unlike the hardcoded funnels above (independent per-event counts in the
+// same window), this enforces real order: step N only counts a distinct_id
+// if it matched step N-1 at an earlier ts. Built as a chain of CTEs, one per
+// step, each joining the previous step's surviving distinct_ids against a
+// later occurrence of its own event. Event names and filter keys/values are
+// all bound params — ->> takes its key as a plain text operand, so even the
+// filter *keys* are safely parameterizable, not just the values. Only the
+// window bound (step 0 only — later steps have no time ceiling, matching
+// "of everyone who started in the window, how many eventually did each next
+// step") and the generated CTE aliases (step0, step1, ... — ordinal, never
+// derived from user input) are interpolated directly.
+export async function getCustomFunnel(steps, days) {
+  const n = daysParam(days || 30);
+  const params = [];
+  const ctes = steps.map((step, i) => {
+    const eventIdx = params.push(step.event);
+    let filterClauses = '';
+    for (const [key, value] of Object.entries(step.filters || {})) {
+      const keyIdx = params.push(key);
+      const valueIdx = params.push(value);
+      filterClauses += ` AND e.properties ->> $${keyIdx} = $${valueIdx}`;
+    }
+    if (i === 0) {
+      const daysIdx = params.push(n);
+      return `step0 AS (
+        SELECT distinct_id, min(ts) AS ts0
+          FROM analytics_events e
+         WHERE e.event = $${eventIdx} AND e.ts > now() - ($${daysIdx} || ' days')::interval${filterClauses}
+         GROUP BY distinct_id
+      )`;
+    }
+    return `step${i} AS (
+      SELECT p.distinct_id, min(e.ts) AS ts${i}
+        FROM step${i - 1} p
+        JOIN analytics_events e ON e.distinct_id = p.distinct_id AND e.event = $${eventIdx} AND e.ts > p.ts${i - 1}${filterClauses}
+       GROUP BY p.distinct_id
+    )`;
+  });
+  const counts = steps.map((_, i) => `SELECT ${i} AS step_index, count(*)::int AS users FROM step${i}`).join(' UNION ALL ');
+  const { rows } = await query(`WITH ${ctes.join(',\n')} ${counts} ORDER BY step_index`, params);
+  const byIndex = new Map(rows.map((r) => [r.step_index, r.users]));
+  return { steps: steps.map((s, i) => ({ event: s.event, filters: s.filters || {}, users: byIndex.get(i) ?? 0 })) };
+}
+
 // ---- Per-user journey --------------------------------------------------------
 
 // Every event for one distinct_id, oldest first, interleaving client intent and

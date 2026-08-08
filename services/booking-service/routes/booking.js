@@ -45,6 +45,11 @@ router.get('/admin/analytics/wallet-funnel', requireRole('gobhi'), analyticsCtrl
 router.get('/admin/analytics/buddy-funnel', requireRole('gobhi'), analyticsCtrl.getBuddyFunnel);
 router.get('/admin/analytics/trend', requireRole('gobhi'), analyticsCtrl.getTrend);
 router.get('/admin/analytics/anon-sessions', requireRole('gobhi'), analyticsCtrl.getRecentAnonSessions);
+router.get('/admin/analytics/event-search', requireRole('gobhi'), analyticsCtrl.searchEventUsers);
+router.get('/admin/analytics/custom-funnel', requireRole('gobhi'), analyticsCtrl.getCustomFunnelResult);
+router.get('/admin/analytics/funnels', requireRole('gobhi'), analyticsCtrl.listSavedFunnels);
+router.post('/admin/analytics/funnels', requireRole('gobhi'), analyticsCtrl.createSavedFunnel);
+router.delete('/admin/analytics/funnels/:id', requireRole('gobhi'), analyticsCtrl.deleteSavedFunnel);
 router.get('/admin/analytics/user-journey', requireRole('gobhi'), analyticsCtrl.getUserJourney);
 router.get('/admin/analytics/city-breakdown', requireRole('gobhi'), analyticsCtrl.getCityBreakdown);
 router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl.getRevenueTrend);

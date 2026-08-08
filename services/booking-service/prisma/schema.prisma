@@ -119,6 +119,23 @@ model CancellationPolicySetting {
   @@schema("booking")
 }
 
+// Admin-defined custom funnels (the /analytics User Journey tab's "Custom
+// funnels" section) — steps run against analytics_events (a separate DB/pool,
+// see analyticsQueryService.js), not this table; this just persists the
+// definition so it can be revisited by name instead of re-entered every time.
+// steps shape: [{ event: string, filters?: Record<string,string> }, ...],
+// in the order they must occur — enforced per-distinct_id at query time.
+model SavedFunnel {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  steps     Json
+  createdBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("booking")
+}
+
 enum BookingStatus {
   pending
   confirmed

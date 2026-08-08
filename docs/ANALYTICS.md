@@ -334,6 +334,23 @@ Three more tabs:
   the most recently active `anon_...` distinct_ids (grouped, most recent
   first) with first/last seen, event and session counts, and a cheap preview
   of their most recent app + screen — click a row to open its full journey.
+- **Event search** (`?view=user`, `GET /admin/analytics/event-search?event=&filters=&days=&limit=`)
+  — "which users did X" rather than "what did user X do." `filters` is a JSON
+  object of exact-match property filters (e.g. `{"screen_name":"/gyms"}`).
+  Groups by `distinct_id`, most recently active first; each row opens straight
+  into the journey view, same as the anon-sessions list.
+- **Custom funnels** (`?view=user`, saved via `GET/POST /admin/analytics/funnels`,
+  `DELETE /admin/analytics/funnels/:id`, run via `GET /admin/analytics/custom-funnel?funnelId=|steps=&days=`)
+  — admin-defined funnels, persisted in `SavedFunnel` (booking-service's own
+  Prisma DB, *not* `analytics_events`). Unlike every hardcoded funnel above
+  (independent per-event counts in the same window), this one enforces real
+  step order: `getCustomFunnel` chains one CTE per step, each joining the
+  previous step's surviving `distinct_id`s against a *later* occurrence of
+  its own event — step N only counts someone if step N-1 happened first, for
+  them specifically. Each step can carry its own exact-match property
+  filters. `custom-funnel` accepts either a saved `funnelId` or an ad-hoc
+  `steps` JSON array (both validated by the same `savedFunnelService.validateSteps`
+  gate, 2-8 steps) so you can preview before saving.
 
 A fourth addition, **Supply health** (`GET /admin/analytics/supply-health`),
 is folded into the existing Supply tab rather than a tab of its own: gyms

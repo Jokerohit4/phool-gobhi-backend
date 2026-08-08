@@ -1,4 +1,5 @@
 import * as analyticsQuery from '../services/analyticsQueryService.js';
+import * as savedFunnels from '../services/savedFunnelService.js';
 
 // Thin wrappers, same shape as the existing admin attendance endpoints in
 // bookingController.js — every route here is requireRole('gobhi') (see
@@ -103,6 +104,79 @@ export const getSupplyHealth = async (req, res) => {
 export const getRecentAnonSessions = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getRecentAnonSessions(req.query.days, req.query.limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const searchEventUsers = async (req, res) => {
+  try {
+    const { event, filters, days, limit } = req.query;
+    if (!event) return res.status(400).json({ error: 'event is required' });
+    let parsedFilters = {};
+    if (filters) {
+      try {
+        parsedFilters = JSON.parse(filters);
+      } catch {
+        return res.status(400).json({ error: 'filters must be JSON, e.g. {"city":"Gurugram"}' });
+      }
+    }
+    res.json({ data: await analyticsQuery.searchEventUsers(event, parsedFilters, days, limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Runs either a saved funnel (funnelId) or an ad-hoc one (steps, as a JSON
+// query param) — same validateSteps gate as saving one, so an unsaved
+// preview can't reach the query builder with anything saving wouldn't allow.
+export const getCustomFunnelResult = async (req, res) => {
+  try {
+    const { funnelId, steps, days } = req.query;
+    let rawSteps;
+    if (funnelId) {
+      const saved = await savedFunnels.getSavedFunnel(funnelId);
+      if (!saved) return res.status(404).json({ error: `No saved funnel with id ${funnelId}` });
+      rawSteps = saved.steps;
+    } else if (steps) {
+      try {
+        rawSteps = JSON.parse(steps);
+      } catch {
+        return res.status(400).json({ error: 'steps must be JSON, e.g. [{"event":"gym_viewed"},{"event":"book_tapped"}]' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Provide either funnelId or steps' });
+    }
+    const validSteps = savedFunnels.validateSteps(rawSteps);
+    res.json({ data: await analyticsQuery.getCustomFunnel(validSteps, days) });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const listSavedFunnels = async (req, res) => {
+  try {
+    res.json({ data: await savedFunnels.listSavedFunnels() });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const createSavedFunnel = async (req, res) => {
+  try {
+    const { name, steps } = req.body;
+    const created = await savedFunnels.createSavedFunnel(name, steps, req.userId ?? null);
+    res.status(201).json({ data: created });
+  } catch (err) {
+    const status = /required|between 2 and 8|missing an event/.test(err.message) ? 400 : 500;
+    res.status(status).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const deleteSavedFunnel = async (req, res) => {
+  try {
+    await savedFunnels.deleteSavedFunnel(req.params.id);
+    res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
