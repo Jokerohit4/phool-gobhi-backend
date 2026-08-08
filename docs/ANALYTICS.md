@@ -80,6 +80,32 @@ how they roll up into the funnels that matter for the business.
 Because both halves use `userId`, a funnel can freely mix client and server steps,
 e.g. `book_tapped` (client) → `booking_confirmed` (server).
 
+**Shared-device caveat:** the anon id lives in browser `localStorage` /
+`SharedPreferences`, scoped to the *device*, not the person. If two different
+people use the same device before either logs in, they're indistinguishable
+in the data — same anon id, merged history. `reset()` on logout mints a fresh
+anon id specifically so the *next* person on a shared device doesn't inherit
+the previous one's identity, but two people who never log in/out in between
+can't be split apart after the fact. No fix short of forcing login or device
+fingerprinting (deliberately not pursued — DPDP compliance risk) closes this.
+
+**Internal-traffic opt-out:** staff testing devices can be excluded from
+writing to `analytics_events` at all (not just filtered out downstream) via a
+persisted `analytics_excluded` flag, checked at the top of every client's
+send path before it ever reaches `/api/events`:
+- Website: visit `?notrack=1` once (sets `pg_analytics_excluded` in
+  `localStorage`); `?notrack=0` clears it. See `lib/analytics.ts`.
+- Customer app: the `phoolgobhi://notrack` deep link (`?off=1` clears),
+  handled by `DeepLinkService` alongside the poster-QR check-in link — the
+  mobile equivalent of the website's query param, since there's no URL bar.
+- Partner app: no deep-link scheme exists in this app, so the equivalent
+  entry point is 7 taps on the "App Version" row in Settings (the standard
+  hidden dev-mode gesture), which opens a toggle dialog.
+- Partner-web: not applicable — this app sends no analytics events at all.
+
+The flag is hydrated once at startup (`loadAnalyticsExcludedFlag`) and takes
+effect immediately when toggled, no restart needed either way.
+
 ---
 
 ## 4. Event dictionary
