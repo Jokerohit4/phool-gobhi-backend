@@ -96,6 +96,7 @@ function formatUser(user) {
     gender: user.gender || null,
     dateOfBirth: user.dateOfBirth || null,
     fitnessGoals: user.fitnessGoals || [],
+    referralCode: user.referralCode || null,
   };
 }
 
