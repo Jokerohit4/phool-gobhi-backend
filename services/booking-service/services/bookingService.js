@@ -707,8 +707,9 @@ export async function cancelBooking(bookingId, customerId) {
     // was given. For pending bookings (not yet confirmed by gym), allow
     // cancellation anytime with full refund since gym hasn't committed resources.
     let refundRate = 1.0;
+    let hoursUntil;
     if (booking.status === 'confirmed') {
-      const hoursUntil = hoursUntilSlot(booking.date, booking.startTime);
+      hoursUntil = hoursUntilSlot(booking.date, booking.startTime);
       refundRate = await cancellationRefundRate(hoursUntil);
       if (refundRate === null) {
         throw { status: 400, error: 'Bookings cannot be cancelled within 1 hour of the session' };
