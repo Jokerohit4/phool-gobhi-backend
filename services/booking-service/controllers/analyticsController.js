@@ -109,6 +109,33 @@ export const getRecentAnonSessions = async (req, res) => {
   }
 };
 
+export const getKnownEvents = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getKnownEvents(req.query.limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const getKnownPropertyKeys = async (req, res) => {
+  try {
+    if (!req.query.event) return res.status(400).json({ error: 'event is required' });
+    res.json({ data: await analyticsQuery.getKnownPropertyKeys(req.query.event, req.query.limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const getKnownPropertyValues = async (req, res) => {
+  try {
+    const { event, key, limit } = req.query;
+    if (!event || !key) return res.status(400).json({ error: 'event and key are required' });
+    res.json({ data: await analyticsQuery.getKnownPropertyValues(event, key, limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const searchEventUsers = async (req, res) => {
   try {
     const { event, filters, days, limit } = req.query;

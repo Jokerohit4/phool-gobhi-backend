@@ -377,6 +377,17 @@ Three more tabs:
   filters. `custom-funnel` accepts either a saved `funnelId` or an ad-hoc
   `steps` JSON array (both validated by the same `savedFunnelService.validateSteps`
   gate, 2-8 steps) so you can preview before saving.
+- **Suggestion sources** for the event-search and custom-funnel builders —
+  mirrors CleverTap's segment builder's event→property→value cascade rather
+  than free-text filter inputs: `GET /admin/analytics/known-events?limit=`
+  (real event names that have actually occurred, most frequent first — not a
+  hardcoded schema), `GET /admin/analytics/known-properties?event=&limit=`
+  (that event's actual property keys via `jsonb_object_keys`, minus
+  `ip`/`user_agent`/`session_id` as noise — not useful filter dimensions),
+  and `GET /admin/analytics/known-values?event=&key=&limit=` (that
+  event+key's actual distinct values with counts, most common first). None
+  of these three write anything; they're read-only autocomplete sources the
+  admin UI calls live as you build a filter.
 
 A fourth addition, **Supply health** (`GET /admin/analytics/supply-health`),
 is folded into the existing Supply tab rather than a tab of its own: gyms

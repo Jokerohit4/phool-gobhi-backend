@@ -44,6 +44,9 @@ router.get('/admin/analytics/activation', requireRole('gobhi'), analyticsCtrl.ge
 router.get('/admin/analytics/wallet-funnel', requireRole('gobhi'), analyticsCtrl.getWalletFunnel);
 router.get('/admin/analytics/buddy-funnel', requireRole('gobhi'), analyticsCtrl.getBuddyFunnel);
 router.get('/admin/analytics/trend', requireRole('gobhi'), analyticsCtrl.getTrend);
+router.get('/admin/analytics/known-events', requireRole('gobhi'), analyticsCtrl.getKnownEvents);
+router.get('/admin/analytics/known-properties', requireRole('gobhi'), analyticsCtrl.getKnownPropertyKeys);
+router.get('/admin/analytics/known-values', requireRole('gobhi'), analyticsCtrl.getKnownPropertyValues);
 router.get('/admin/analytics/anon-sessions', requireRole('gobhi'), analyticsCtrl.getRecentAnonSessions);
 router.get('/admin/analytics/event-search', requireRole('gobhi'), analyticsCtrl.searchEventUsers);
 router.get('/admin/analytics/custom-funnel', requireRole('gobhi'), analyticsCtrl.getCustomFunnelResult);

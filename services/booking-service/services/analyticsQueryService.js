@@ -276,6 +276,60 @@ export async function getSupplyHealth() {
   return { gyms: rows };
 }
 
+// ---- Suggestion sources (event/property/value autocomplete) ----------------
+
+// Backs the Event Search and Custom Funnel builders' event-name field —
+// real events that have actually occurred, most frequent first, rather than
+// a hardcoded schema list. Mirrors how CleverTap's segment builder only
+// offers events present in the account's own data.
+export async function getKnownEvents(limit) {
+  const cappedLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  const { rows } = await query(
+    `SELECT event, count(*)::int AS n FROM analytics_events GROUP BY event ORDER BY n DESC LIMIT $1`,
+    [cappedLimit]
+  );
+  return { events: rows };
+}
+
+// jsonb_object_keys is a set-returning function — used directly in the SELECT
+// list here (a supported, if legacy, Postgres pattern) rather than a LATERAL
+// join, since there's nothing else in the row to correlate against. Excludes
+// keys that are noise as a filter dimension (unique-ish per row, or raw
+// strings nobody buckets on) — same reasoning as HIDDEN_INLINE_PROPS in the
+// admin's journey timeline, kept independently since this list is about
+// what's worth filtering on, not what's worth displaying inline.
+const NOISY_PROPERTY_KEYS = ['ip', 'user_agent', 'session_id'];
+
+export async function getKnownPropertyKeys(event, limit) {
+  const cappedLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const { rows } = await query(
+    `SELECT DISTINCT jsonb_object_keys(properties) AS key
+       FROM analytics_events
+      WHERE event = $1
+      LIMIT $2`,
+    [event, cappedLimit]
+  );
+  return { keys: rows.map((r) => r.key).filter((k) => !NOISY_PROPERTY_KEYS.includes(k)).sort() };
+}
+
+// The actual "suggest a value" step — scoped to one event+key pair, since
+// values for e.g. screen_name and cta don't mean anything mixed together.
+// Counts included so the UI can show "most common first," same as
+// CleverTap's value picker.
+export async function getKnownPropertyValues(event, key, limit) {
+  const cappedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const { rows } = await query(
+    `SELECT properties ->> $2 AS value, count(*)::int AS n
+       FROM analytics_events
+      WHERE event = $1 AND properties ->> $2 IS NOT NULL
+      GROUP BY 1
+      ORDER BY n DESC
+      LIMIT $3`,
+    [event, key, cappedLimit]
+  );
+  return { values: rows };
+}
+
 // ---- Recent anonymous (pre-signup) sessions --------------------------------
 
 // Anon distinct_ids (website's lib/analytics.ts / both apps' AnalyticsService
