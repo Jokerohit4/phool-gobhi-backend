@@ -243,6 +243,11 @@ enum EditRequestStatus {
   pending
   approved
   rejected
+  // The submitting partner cancelled it themselves before a gobhi reviewed
+  // it — distinct from `rejected` (a gobhi disapproving it) so
+  // PendingEditBanner-style "your change was not approved" messaging never
+  // fires for something the partner withdrew on their own.
+  withdrawn
 
   @@schema("gym")
 }

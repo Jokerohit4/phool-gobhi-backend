@@ -563,6 +563,16 @@ export const rejectEditRequest = async (req, res) => {
   }
 };
 
+// Partner-facing: cancel their own still-pending edit request.
+export const withdrawEditRequest = async (req, res) => {
+  try {
+    const request = await gymService.withdrawEditRequest(parseInt(req.params.id), req.userId);
+    res.json({ data: request });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getSlotPrices = async (req, res) => {
   try {
     const slots = await gymService.getSlotPrices(parseInt(req.params.id));

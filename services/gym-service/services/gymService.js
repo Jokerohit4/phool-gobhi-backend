@@ -1033,6 +1033,30 @@ export async function rejectEditRequest(id, gobhiId, reason) {
   return prisma.gymEditRequest.findUnique({ where: { id } });
 }
 
+// Partner-facing: cancel their own still-pending request before a gobhi
+// reviews it — e.g. they made a typo, or submitted a class on the wrong
+// day. Ownership-checked the same way every other partner-facing mutation
+// is; the atomic claim mirrors approveEditRequest/rejectEditRequest so a
+// gobhi approving/rejecting at the same instant can't race this.
+export async function withdrawEditRequest(id, partnerId) {
+  const request = await prisma.gymEditRequest.findUnique({ where: { id } });
+  if (!request) throw { status: 404, error: 'Edit request not found' };
+  if (request.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  if (request.status !== 'pending') {
+    throw { status: 400, error: `Edit request is already ${request.status}` };
+  }
+
+  const claim = await prisma.gymEditRequest.updateMany({
+    where: { id, status: 'pending' },
+    data: { status: 'withdrawn', reviewedAt: new Date() },
+  });
+  if (claim.count === 0) {
+    throw { status: 400, error: 'Edit request was already reviewed' };
+  }
+
+  return prisma.gymEditRequest.findUnique({ where: { id } });
+}
+
 export async function getAvailableSlots(gymId, date) {
   const gym = await prisma.gym.findUnique({
     where: { id: gymId },

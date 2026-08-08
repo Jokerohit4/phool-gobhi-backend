@@ -25,6 +25,8 @@ router.get('/edit-requests/:id', requireRole('gobhi'), ctrl.getEditRequestAdmin)
 router.put('/edit-requests/:id/approve', requireRole('gobhi'), ctrl.approveEditRequest);
 // Body: {reason} (required)
 router.put('/edit-requests/:id/reject', requireRole('gobhi'), ctrl.rejectEditRequest);
+// Partner-facing: cancel their own still-pending request before a gobhi reviews it.
+router.delete('/edit-requests/:id', requireRole('partner'), ctrl.withdrawEditRequest);
 
 // Same footgun, same fix — must stay above GET /:id. ?type=image|doc
 router.get('/upload-signature', requireRole('partner'), ctrl.getUploadSignature);
