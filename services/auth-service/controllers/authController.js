@@ -200,6 +200,12 @@ async function loadAppVersionConfig() {
   return row?.config || DEFAULT_APP_VERSION_CONFIG;
 }
 
+// Kill-switch defaults for customer-app features. Buddy is currently live, so
+// the default is enabled (true) — the flag only does something once an admin
+// deliberately turns it off from the admin portal's /settings page. Same
+// inert-by-default convention as DEFAULT_APP_VERSION_CONFIG.
+const DEFAULT_FEATURES = { buddy: { enabled: true } };
+
 // Public — called by both apps on startup, before login, to decide whether
 // to hard-block (forceUpdate) or show a dismissible nudge (updateAvailable).
 // Never throws on a bad/missing version — always fails open (both flags
@@ -209,9 +215,13 @@ const getAppConfig = async (req, res) => {
   let forceUpdate = false;
   let updateAvailable = false;
   let entry = { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' };
+  let features = DEFAULT_FEATURES;
   try {
     const config = await loadAppVersionConfig();
     entry = config?.[app]?.[platform] || entry;
+    // Shallow-merge so a config blob that predates the features key (or only
+    // carries one flag) still resolves every feature to a sane default.
+    features = { ...DEFAULT_FEATURES, ...(config?.features || {}) };
     const coerced = semver.valid(semver.coerce(version));
     if (coerced) {
       forceUpdate = semver.lt(coerced, entry.minVersion);
@@ -227,6 +237,7 @@ const getAppConfig = async (req, res) => {
     latestVersion: entry.latestVersion,
     updateUrl: entry.updateUrl,
     message: entry.message,
+    features,
   });
 };
 
