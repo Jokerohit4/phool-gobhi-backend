@@ -560,12 +560,16 @@ export async function getPartnerGyms(partnerId) {
   return gyms.map(normalizeGymMoney);
 }
 
-// Compact onboarding summary for a partner — does an active gym exist yet, and
-// is it approved. Used by auth-service to tell the partner app, at login, where
-// to route (dashboard vs. resume onboarding) without trusting local state.
+// Compact onboarding summary for a partner — does a gym exist yet, and is it
+// approved. Used by auth-service to tell the partner app, at login, where to
+// route (dashboard vs. resume onboarding) without trusting local state.
+// Counts every gym the partner has ever created, active or not: a soft-deleted
+// or admin-deactivated gym is still a real gym, and a partner who has one
+// should land on their dashboard (to manage/reactivate it) rather than being
+// funneled into creating a brand-new gym at login.
 export async function getPartnerGymSummary(partnerId) {
   const gyms = await prisma.gym.findMany({
-    where: { partnerId, isActive: true },
+    where: { partnerId },
     orderBy: { id: 'asc' },
     select: { id: true, isApproved: true, rejectionReason: true },
   });
