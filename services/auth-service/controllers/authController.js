@@ -12,6 +12,11 @@ import {
   addSkipAllowlistEntry,
   removeSkipAllowlistEntry,
 } from '../services/otpProviderService.js';
+import {
+  loadProfileCompletionBonusAmount,
+  loadProfileCompletionBonusAdmin,
+  updateProfileCompletionBonusAmount,
+} from '../services/profileCompletionBonusService.js';
 
 const prisma = new PrismaClient();
 
@@ -153,6 +158,28 @@ const updateOtpConfigAdmin = async (req, res) => {
   }
 };
 
+// gobhi-only — admin portal's view/edit of the one-time profile-completion
+// bonus amount (Settings page). Also served to the customer app inside
+// GET /api/auth/app-config (features.profileCompletionBonus.amount) so the
+// app never hardcodes a stale ₹ value.
+const getProfileCompletionBonusAdmin = async (req, res) => {
+  try {
+    const { amount, updatedAt } = await loadProfileCompletionBonusAdmin();
+    res.json({ data: { amount }, updatedAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateProfileCompletionBonusAdmin = async (req, res) => {
+  try {
+    const updated = await updateProfileCompletionBonusAmount(req.body?.amount, req.user.id);
+    res.json({ data: { amount: updated.amount }, updatedAt: updated.updatedAt });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 const listOtpSkipAllowlist = async (req, res) => {
   try {
     const data = await listSkipAllowlist();
@@ -203,8 +230,61 @@ async function loadAppVersionConfig() {
 // Kill-switch defaults for customer-app features. Buddy is currently live, so
 // the default is enabled (true) — the flag only does something once an admin
 // deliberately turns it off from the admin portal's /settings page. Same
-// inert-by-default convention as DEFAULT_APP_VERSION_CONFIG.
-const DEFAULT_FEATURES = { buddy: { enabled: true } };
+// inert-by-default convention as DEFAULT_APP_VERSION_CONFIG. otp.provider and
+// profileCompletionBonus.amount are overridden with the live setting-row
+// values in getAppConfig below (their defaults here just keep the shape safe
+// before/without those rows).
+const DEFAULT_FEATURES = {
+  buddy: { enabled: true },
+  otp: { provider: 'firebase' },
+  profileCompletionBonus: { amount: 20 },
+};
+
+// Maintenance-window config for the customer website's wallet and gym
+// sections. Admin-editable from the admin portal's /settings page; served
+// publicly through /app-config so the website can gate the affected surfaces
+// (and, in future, the apps can too). Each feature is independent — wallet
+// and gyms can be put down separately or together. `enabled` is an immediate
+// manual hold; if startsAt/endsAt are also set the window additionally
+// auto-engages while `now` falls between them and releases once it passes.
+// Same inert-by-default convention as the other settings.
+const DEFAULT_MAINTENANCE_CONFIG = {
+  wallet: { enabled: false, startsAt: null, endsAt: null, message: '' },
+  gyms: { enabled: false, startsAt: null, endsAt: null, message: '' },
+};
+
+function isMaintenanceActive(entry) {
+  if (entry?.enabled) return true;
+  const startsAt = entry?.startsAt ? new Date(entry.startsAt) : null;
+  const endsAt = entry?.endsAt ? new Date(entry.endsAt) : null;
+  if (
+    startsAt && endsAt &&
+    !Number.isNaN(startsAt.getTime()) && !Number.isNaN(endsAt.getTime())
+  ) {
+    const now = Date.now();
+    return now >= startsAt.getTime() && now <= endsAt.getTime();
+  }
+  return false;
+}
+
+// Merge whatever the stored blob carries over the defaults, one entry per
+// feature, and compute the live `active` flag (manual hold OR now inside the
+// scheduled window).
+function resolveMaintenance(config) {
+  const raw = config?.maintenance || {};
+  const resolved = {};
+  for (const [feature, defaults] of Object.entries(DEFAULT_MAINTENANCE_CONFIG)) {
+    const entry = { ...defaults, ...(raw[feature] || {}) };
+    resolved[feature] = {
+      active: isMaintenanceActive(entry),
+      enabled: !!entry.enabled,
+      startsAt: entry.startsAt || null,
+      endsAt: entry.endsAt || null,
+      message: entry.message || '',
+    };
+  }
+  return resolved;
+}
 
 // Public — called by both apps on startup, before login, to decide whether
 // to hard-block (forceUpdate) or show a dismissible nudge (updateAvailable).
@@ -216,12 +296,26 @@ const getAppConfig = async (req, res) => {
   let updateAvailable = false;
   let entry = { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' };
   let features = DEFAULT_FEATURES;
+  let maintenance = resolveMaintenance(null);
   try {
     const config = await loadAppVersionConfig();
     entry = config?.[app]?.[platform] || entry;
+    maintenance = resolveMaintenance(config);
     // Shallow-merge so a config blob that predates the features key (or only
-    // carries one flag) still resolves every feature to a sane default.
-    features = { ...DEFAULT_FEATURES, ...(config?.features || {}) };
+    // carries one flag) still resolves every feature to a sane default. The
+    // OTP provider and profile-completion bonus amount are served from their
+    // own singleton setting rows (single source of truth for the admin
+    // panel's /settings edits), overriding whatever an old blob carried.
+    const [otpProvider, bonusAmount] = await Promise.all([
+      loadOtpProvider(),
+      loadProfileCompletionBonusAmount(),
+    ]);
+    features = {
+      ...DEFAULT_FEATURES,
+      ...(config?.features || {}),
+      otp: { provider: otpProvider },
+      profileCompletionBonus: { amount: bonusAmount },
+    };
     const coerced = semver.valid(semver.coerce(version));
     if (coerced) {
       forceUpdate = semver.lt(coerced, entry.minVersion);
@@ -238,6 +332,7 @@ const getAppConfig = async (req, res) => {
     updateUrl: entry.updateUrl,
     message: entry.message,
     features,
+    maintenance,
   });
 };
 
@@ -471,6 +566,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

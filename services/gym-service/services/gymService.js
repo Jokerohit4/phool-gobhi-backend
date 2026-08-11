@@ -87,7 +87,25 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 // a business rule, not just a sort/display concern.
 const MAX_DISTANCE_KM = 40;
 
-export async function listGyms({ city, minPrice, maxPrice, search, amenities, userLat, userLng }) {
+// Orderings for GET /api/gyms ?sort=. The sort param lets the customer app's
+// home feed render genuinely different lists per tab instead of re-sorting one
+// client-side copy: "rating" (Top Rated), "popular" (Popular, ratingCount =
+// number of reviews as the closest popularity proxy available), "recommended"
+// (a reputation blend so it isn't just a rehash of the other three), and
+// "distance" (Near You). The default (no sort) preserves the historical
+// behavior — distance-sorted when a location is attached, else DB order.
+//
+// Sort fallback: a gym's own aggregate rating wins once it has in-app reviews;
+// until then the Google rating (if any) stands in, so a well-rated new gym
+// isn't buried at the bottom of the rating-based tabs. This only affects
+// ordering — the response still carries the raw rating/ratingCount and the
+// separate googleRating/googleRatingCount fields, which the app already shows
+// side by side.
+const byDistanceKm = (a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity);
+const sortRating = (g) => (g.ratingCount > 0 && g.rating != null ? g.rating : (g.googleRating ?? 0));
+const sortRatingCount = (g) => (g.ratingCount > 0 ? g.ratingCount : (g.googleRatingCount ?? 0));
+
+export async function listGyms({ city, minPrice, maxPrice, search, amenities, sort, userLat, userLng }) {
   const where = {
     isActive: true,
     isApproved: true,
@@ -157,7 +175,28 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, us
       // Gyms without coordinates can't be confirmed within range, so they're
       // dropped along with anything beyond MAX_DISTANCE_KM.
       .filter(gym => gym.distanceKm != null && gym.distanceKm <= MAX_DISTANCE_KM);
-    gyms.sort((a, b) => a.distanceKm - b.distanceKm);
+  }
+
+  if (sort === 'rating') {
+    gyms.sort((a, b) =>
+      (sortRating(b) - sortRating(a)) ||
+      (sortRatingCount(b) - sortRatingCount(a)) ||
+      byDistanceKm(a, b)
+    );
+  } else if (sort === 'popular') {
+    gyms.sort((a, b) =>
+      (sortRatingCount(b) - sortRatingCount(a)) ||
+      (sortRating(b) - sortRating(a)) ||
+      byDistanceKm(a, b)
+    );
+  } else if (sort === 'recommended') {
+    gyms.sort((a, b) =>
+      ((sortRating(b) * sortRatingCount(b)) - (sortRating(a) * sortRatingCount(a))) ||
+      byDistanceKm(a, b)
+    );
+  } else if (userLat != null && userLng != null) {
+    // Default and 'distance' both end here: nearest first.
+    gyms.sort(byDistanceKm);
   }
 
   return gyms;

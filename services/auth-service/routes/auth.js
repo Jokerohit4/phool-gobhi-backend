@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -61,6 +61,11 @@ router.get('/launch-status', getLaunchStatus);
 // Admin portal's raw view/edit of the launch gate (Settings page).
 router.get('/launch-gate/admin', requireGobhi, getLaunchGateAdmin);
 router.put('/launch-gate/admin', requireGobhi, updateLaunchGateAdmin);
+// Admin portal's view/edit of the one-time profile-completion wallet bonus
+// amount (Settings page). Also surfaced to the customer app via the public
+// /app-config features block.
+router.get('/profile-completion-bonus/admin', requireGobhi, getProfileCompletionBonusAdmin);
+router.put('/profile-completion-bonus/admin', requireGobhi, updateProfileCompletionBonusAdmin);
 router.get('/me', verifyToken, getMe);
 router.patch('/me', verifyToken, updateMe);
 router.get('/internal/:id', requireInternal, getUserInternal);

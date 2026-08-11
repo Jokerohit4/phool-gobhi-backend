@@ -253,6 +253,20 @@ model OtpSkipAllowlistEntry {
   @@schema("auth")
 }
 
+// Singleton row (id always 1) — admin-portal-editable wallet bonus amount (₹)
+// credited once when a customer's profile crosses from incomplete to complete.
+// Defaults to 20 until a row exists (see profileCompletionBonusService.js);
+// 0 disables the bonus entirely. Read by auth-service when crediting and by
+// GET /api/auth/app-config so the customer app can display the real amount.
+model ProfileCompletionBonusSetting {
+  id        Int      @id @default(1)
+  amount    Int
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
+
+  @@schema("auth")
+}
+
 enum GobhiType {
   trainer
   cleaner
