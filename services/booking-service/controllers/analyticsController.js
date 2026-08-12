@@ -93,6 +93,14 @@ export const getRevenueTrend = async (req, res) => {
   }
 };
 
+export const getWebsiteTraffic = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getWebsiteTraffic(req.query.days) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getSupplyHealth = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getSupplyHealth() });

@@ -244,6 +244,56 @@ export async function getRevenueTrend(days) {
   return { days: rows };
 }
 
+// ---- Website traffic (footfall) ---------------------------------------------
+
+// The website (lib/analytics.ts) posts session_started once per tab session
+// and screen_viewed on every route change, both tagged properties.app =
+// 'website' — there's no separate page-view pixel or GA wired up, so this
+// analytics_events table is the only footfall signal that exists. Unique
+// visitors is distinct_id (anon_xxx pre-login, resolved to the real user id
+// post-identify — see getUserJourney's anon-id resolution above for why that
+// matters for journey lookups but is left alone here: a rough visitor count
+// doesn't need that resolution, it would only double-count as "one more
+// person" for the same person before/after login on the same device).
+export async function getWebsiteTraffic(days) {
+  const n = daysParam(days);
+  const { rows: totals } = await query(
+    `SELECT event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users
+       FROM analytics_events
+      WHERE event IN ('session_started', 'screen_viewed')
+        AND properties->>'app' = 'website'
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY event`,
+    [n]
+  );
+  const { rows: daily } = await query(
+    `SELECT date_trunc('day', ts) AS day, event, count(*)::int AS n
+       FROM analytics_events
+      WHERE event IN ('session_started', 'screen_viewed')
+        AND properties->>'app' = 'website'
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1, 2 ORDER BY 1`,
+    [n]
+  );
+  const { rows: topPages } = await query(
+    `SELECT properties->>'screen_name' AS page, count(*)::int AS views
+       FROM analytics_events
+      WHERE event = 'screen_viewed' AND properties->>'app' = 'website'
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1 ORDER BY views DESC LIMIT 15`,
+    [n]
+  );
+  const sessions = totals.find((r) => r.event === 'session_started');
+  const pageviews = totals.find((r) => r.event === 'screen_viewed');
+  return {
+    totalSessions: sessions?.n ?? 0,
+    uniqueVisitors: sessions?.distinct_users ?? 0,
+    totalPageViews: pageviews?.n ?? 0,
+    daily,
+    topPages,
+  };
+}
+
 // ---- Supply health: approved gyms with little/no booking activity -------------
 
 // Surfaces "dead weight" supply — a gym that got approved but never converted

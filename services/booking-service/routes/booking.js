@@ -58,6 +58,7 @@ router.get('/admin/analytics/city-breakdown', requireRole('gobhi'), analyticsCtr
 router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl.getRevenueTrend);
 router.get('/admin/analytics/supply-health', requireRole('gobhi'), analyticsCtrl.getSupplyHealth);
 router.get('/admin/analytics/retention', requireRole('gobhi'), analyticsCtrl.getRetentionCohorts);
+router.get('/admin/analytics/website-traffic', requireRole('gobhi'), analyticsCtrl.getWebsiteTraffic);
 router.put('/:id/cancel', requireRole('customer'), ctrl.cancelBooking);
 router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn);
 router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
