@@ -446,13 +446,28 @@ export async function getCustomFunnel(steps, days) {
 // is the point). Session boundaries aren't computed here; the caller detects a
 // session_id change between consecutive rows to render a divider, since that's
 // cheap array logic and keeps this endpoint's shape reusable.
+//
+// Pre-login events (session_started, the landing screen_viewed) are always
+// posted under the browser's anon_xxx id, since identify() only swaps the
+// client's in-memory distinct_id to the real user id once the session cookie
+// check resolves (see website lib/analytics.ts). Every identify event this
+// user ever fired recorded which anon id it came from in
+// properties.anon_distinct_id, so we resolve that set first and pull those
+// anon-tagged rows into the same timeline — otherwise a logged-in user's
+// journey looks like nothing but a string of bare "identify" events.
 export async function getUserJourney(distinctId, days) {
   const n = daysParam(days || 90); // wider default window than the funnel views — a journey lookup is usually "show me everything"
   const { rows } = await query(
-    `SELECT event, properties, source, service, ts
-       FROM analytics_events
-      WHERE distinct_id = $1 AND ts > now() - ($2 || ' days')::interval
-      ORDER BY ts ASC`,
+    `WITH anon_ids AS (
+       SELECT DISTINCT properties->>'anon_distinct_id' AS anon_id
+         FROM analytics_events
+        WHERE event = 'identify' AND distinct_id = $1 AND properties->>'anon_distinct_id' IS NOT NULL
+     )
+       SELECT event, properties, source, service, ts
+         FROM analytics_events
+        WHERE (distinct_id = $1 OR distinct_id IN (SELECT anon_id FROM anon_ids))
+          AND ts > now() - ($2 || ' days')::interval
+        ORDER BY ts ASC`,
     [distinctId, n]
   );
   const sessionIds = new Set(rows.map((r) => r.properties?.session_id).filter(Boolean));
