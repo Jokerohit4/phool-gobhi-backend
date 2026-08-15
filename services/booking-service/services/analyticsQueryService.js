@@ -337,10 +337,15 @@ export async function getSupplyHealth() {
 // interpolating them directly into the SQL is safe — same convention as
 // getCustomFunnel's generated CTE aliases.
 const REACH_BUCKETS = [
-  { label: '0-5km', min: 0, max: 5 },
-  { label: '5-15km', min: 5, max: 15 },
-  { label: '15-40km', min: 15, max: 40 },
-  { label: '40km+', min: 40, max: null },
+  { label: '0-1km', min: 0, max: 1 },
+  { label: '1-2km', min: 1, max: 2 },
+  { label: '2-3km', min: 2, max: 3 },
+  { label: '3-4km', min: 3, max: 4 },
+  { label: '4-5km', min: 4, max: 5 },
+  { label: '5-6km', min: 5, max: 6 },
+  { label: '6-10km', min: 6, max: 10 },
+  { label: '10-30km', min: 10, max: 30 },
+  { label: '30km+', min: 30, max: null },
 ];
 
 export async function getLocationReach(days, limit) {
