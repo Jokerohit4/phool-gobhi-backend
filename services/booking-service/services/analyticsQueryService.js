@@ -283,6 +283,51 @@ export async function getWebsiteTraffic(days) {
       GROUP BY 1 ORDER BY views DESC LIMIT 15`,
     [n]
   );
+
+  // How visitors landed — session_started carries this (see lib/analytics.ts's
+  // getLandingContext, added 2026-08-15), captured once at the very first
+  // paint of a session so it reflects the actual entry point, not wherever a
+  // visitor happened to be when session_started's SQL got queried.
+  const { rows: channels } = await query(
+    `SELECT COALESCE(properties->>'channel', 'unknown') AS channel,
+            count(*)::int AS sessions,
+            count(DISTINCT distinct_id)::int AS distinct_visitors
+       FROM analytics_events
+      WHERE event = 'session_started' AND properties->>'app' = 'website'
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1 ORDER BY sessions DESC`,
+    [n]
+  );
+  const { rows: referrers } = await query(
+    `SELECT properties->>'referrer_host' AS referrer_host, count(*)::int AS sessions
+       FROM analytics_events
+      WHERE event = 'session_started' AND properties->>'app' = 'website'
+        AND properties->>'referrer_host' IS NOT NULL
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1 ORDER BY sessions DESC LIMIT 15`,
+    [n]
+  );
+  const { rows: campaigns } = await query(
+    `SELECT properties->>'utm_source' AS utm_source,
+            properties->>'utm_campaign' AS utm_campaign,
+            count(*)::int AS sessions
+       FROM analytics_events
+      WHERE event = 'session_started' AND properties->>'app' = 'website'
+        AND properties->>'utm_source' IS NOT NULL
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1, 2 ORDER BY sessions DESC LIMIT 15`,
+    [n]
+  );
+  const { rows: landingPages } = await query(
+    `SELECT properties->>'landing_path' AS landing_path, count(*)::int AS sessions
+       FROM analytics_events
+      WHERE event = 'session_started' AND properties->>'app' = 'website'
+        AND properties->>'landing_path' IS NOT NULL
+        AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1 ORDER BY sessions DESC LIMIT 15`,
+    [n]
+  );
+
   const sessions = totals.find((r) => r.event === 'session_started');
   const pageviews = totals.find((r) => r.event === 'screen_viewed');
   return {
@@ -291,6 +336,10 @@ export async function getWebsiteTraffic(days) {
     totalPageViews: pageviews?.n ?? 0,
     daily,
     topPages,
+    channels,
+    referrers,
+    campaigns,
+    landingPages,
   };
 }
 

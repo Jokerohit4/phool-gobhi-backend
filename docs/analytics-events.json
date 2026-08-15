@@ -48,7 +48,7 @@
   "checkin_tapped":                 { "source": "client", "apps": ["phool_gobhi"] },
   "topup_tapped":                   { "source": "client", "apps": ["phool_gobhi"] },
   "referral_shared":                { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-03", "notes": "Share your code tapped on the Refer & Earn screen" },
-  "session_started":                { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23" },
+  "session_started":                { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23", "notes": "as of 2026-08-15, the website's copy also carries properties.channel ('direct'|'organic_search'|'social'|'referral'|'campaign:<utm_source>'), referrer_host, utm_source/medium/campaign/term/content, and landing_path — captured once at the very first paint of the session, before any client-side navigation — backing the admin's traffic-source breakdown" },
   "session_ended":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23" },
   "update_required_shown":          { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"], "notes": "force-update splash screen shown (min version gate)" },
   "update_now_tapped":               { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
