@@ -109,6 +109,14 @@ export const getSupplyHealth = async (req, res) => {
   }
 };
 
+export const getLocationReach = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getLocationReach(req.query.days, req.query.limit) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getRecentAnonSessions = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getRecentAnonSessions(req.query.days, req.query.limit) });

@@ -50,6 +50,7 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/auth\/platform-reviews(\?.*)?$/ },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/ },
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/nearest-distance(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/availability/ },

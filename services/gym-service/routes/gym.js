@@ -31,6 +31,10 @@ router.delete('/edit-requests/:id', requireRole('partner'), ctrl.withdrawEditReq
 // Same footgun, same fix — must stay above GET /:id. ?type=image|doc
 router.get('/upload-signature', requireRole('partner'), ctrl.getUploadSignature);
 
+// Same footgun, same fix — must stay above GET /:id. Public: analytics-only,
+// see ctrl.getNearestGymDistance.
+router.get('/nearest-distance', ctrl.getNearestGymDistance);
+
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/availability', ctrl.getGymAvailability);

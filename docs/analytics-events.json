@@ -65,5 +65,6 @@
   "gym_profile_updated":             { "source": "client", "apps": ["phool_gobhi_partner"], "notes": "defined in AnalyticsEvents but no call site found yet as of 2026-07-23 — not wired up" },
   "dashboard_viewed":                { "source": "client", "apps": ["phool_gobhi_partner"], "notes": "defined in AnalyticsEvents but no call site found yet as of 2026-07-23 — not wired up" },
   "booking_checked_in":              { "source": "client", "apps": ["phool_gobhi_partner"], "notes": "defined in AnalyticsEvents but no call site found yet as of 2026-07-23 — not wired up" },
-  "cta_clicked":                     { "source": "client", "apps": ["website"], "since": "2026-07-23", "notes": "generic CTA click event, properties.cta identifies which one (e.g. 'whatsapp', 'signup')" }
+  "cta_clicked":                     { "source": "client", "apps": ["website"], "since": "2026-07-23", "notes": "generic CTA click event, properties.cta identifies which one (e.g. 'whatsapp', 'signup')" },
+  "location_resolved":               { "source": "client", "apps": ["website"], "since": "2026-08-15", "notes": "fires once per session after the site's silent geolocation grab settles. properties.permission is 'granted'|'denied'|'unsupported'|'timeout'|'error'; when granted, properties.nearest_gym_distance_km is the TRUE nearest-gym distance computed server-side (no 40km discovery cutoff) — backs the admin Location Reach view" }
 }

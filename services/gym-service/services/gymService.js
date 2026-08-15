@@ -231,6 +231,29 @@ export async function listGymsAdmin({ status, partnerId } = {}) {
   return gyms.map(normalizeGymMoney);
 }
 
+// True nearest-gym distance for a lat/lng, with NO MAX_DISTANCE_KM cutoff —
+// unlike listGyms (a business rule: don't show gyms beyond 40km), this is
+// purely descriptive, used only by the website's location_resolved analytics
+// event so the admin's Location Reach view can tell "visitor's nearest gym is
+// 62km away" apart from "visitor never shared location," which listGyms's
+// silent filtering can't distinguish.
+export async function getNearestGymDistance(userLat, userLng) {
+  const gyms = await prisma.gym.findMany({
+    where: { isActive: true, isApproved: true, lat: { not: null }, lng: { not: null } },
+    select: { id: true, lat: true, lng: true },
+  });
+
+  let nearest = null;
+  for (const gym of gyms) {
+    const distanceKm = Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10;
+    if (nearest === null || distanceKm < nearest.distanceKm) {
+      nearest = { gymId: gym.id, distanceKm };
+    }
+  }
+
+  return { nearestGymId: nearest?.gymId ?? null, nearestDistanceKm: nearest?.distanceKm ?? null };
+}
+
 export async function getGymById(id, userLat, userLng) {
   const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id },

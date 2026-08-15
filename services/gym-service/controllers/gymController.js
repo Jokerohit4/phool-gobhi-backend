@@ -65,6 +65,24 @@ export const getGym = async (req, res) => {
   }
 };
 
+// Public: true nearest-gym distance for a lat/lng, ignoring the 40km
+// discovery cutoff listGyms applies — backs the website's location_resolved
+// analytics event (fired for every visitor, whether or not they'd see any
+// gym in the regular list) rather than any customer-facing feature.
+export const getNearestGymDistance = async (req, res) => {
+  try {
+    const userLat = parseFloat(req.headers['x-user-lat']);
+    const userLng = parseFloat(req.headers['x-user-lng']);
+    if (isNaN(userLat) || isNaN(userLng)) {
+      return res.status(400).json({ error: 'x-user-lat/x-user-lng headers are required' });
+    }
+    const result = await gymService.getNearestGymDistance(userLat, userLng);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getGymInternal = async (req, res) => {
   try {
     const { startTime, date } = req.query;

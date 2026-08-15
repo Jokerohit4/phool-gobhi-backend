@@ -326,6 +326,97 @@ export async function getSupplyHealth() {
   return { gyms: rows };
 }
 
+// ---- Location reach: can a visitor even reach a gym? ------------------------
+
+// Distinct from listGyms' MAX_DISTANCE_KM cutoff (a business rule for what
+// shows in discovery) — this reads location_resolved, which carries the TRUE
+// nearest-gym distance the website computed via /api/gyms/nearest-distance,
+// so "browsed but never booked" can be explained by "there's nothing within
+// reach" rather than looking identical to "location permission was never
+// granted." Bucket bounds below are fixed constants, not user input, so
+// interpolating them directly into the SQL is safe — same convention as
+// getCustomFunnel's generated CTE aliases.
+const REACH_BUCKETS = [
+  { label: '0-5km', min: 0, max: 5 },
+  { label: '5-15km', min: 5, max: 15 },
+  { label: '15-40km', min: 15, max: 40 },
+  { label: '40km+', min: 40, max: null },
+];
+
+export async function getLocationReach(days, limit) {
+  const n = daysParam(days);
+  const cappedLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+
+  const { rows: permission } = await query(
+    `SELECT properties->>'permission' AS permission,
+            count(*)::int AS n,
+            count(DISTINCT distinct_id)::int AS distinct_visitors
+       FROM analytics_events
+      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval
+      GROUP BY 1`,
+    [n]
+  );
+
+  const { rows: distanceStats } = await query(
+    `SELECT count(*)::int AS n,
+            avg((properties->>'nearest_gym_distance_km')::numeric)::float AS avg_km,
+            percentile_cont(0.5) WITHIN GROUP (ORDER BY (properties->>'nearest_gym_distance_km')::numeric)::float AS median_km
+       FROM analytics_events
+      WHERE event = 'location_resolved'
+        AND properties->>'nearest_gym_distance_km' IS NOT NULL
+        AND ts > now() - ($1 || ' days')::interval`,
+    [n]
+  );
+
+  const bucketSelect = REACH_BUCKETS
+    .map((b, i) => {
+      const lower = `(properties->>'nearest_gym_distance_km')::numeric >= ${b.min}`;
+      const upper = b.max != null ? ` AND (properties->>'nearest_gym_distance_km')::numeric < ${b.max}` : '';
+      return `count(*) FILTER (WHERE ${lower}${upper})::int AS bucket_${i}`;
+    })
+    .join(',\n            ');
+  const { rows: bucketRows } = await query(
+    `SELECT ${bucketSelect}
+       FROM analytics_events
+      WHERE event = 'location_resolved'
+        AND properties->>'nearest_gym_distance_km' IS NOT NULL
+        AND ts > now() - ($1 || ' days')::interval`,
+    [n]
+  );
+  const bucketCounts = bucketRows[0] || {};
+  const buckets = REACH_BUCKETS.map((b, i) => ({ label: b.label, count: bucketCounts[`bucket_${i}`] ?? 0 }));
+
+  // Every distinct visitor's most recent resolution — "for every user, how
+  // close was the nearest gym" answered one row at a time, not just as an
+  // aggregate. FILTER on the array_agg drops null distances (denied/
+  // unsupported/timeout/error rows) so a visitor's last GRANTED distance
+  // still surfaces even if their most recent event was a later denial.
+  const { rows: visitors } = await query(
+    `SELECT distinct_id,
+            max(ts) AS last_seen,
+            (array_agg(properties->>'permission' ORDER BY ts DESC))[1] AS permission,
+            (array_agg((properties->>'nearest_gym_distance_km')::float ORDER BY ts DESC)
+              FILTER (WHERE properties->>'nearest_gym_distance_km' IS NOT NULL))[1] AS nearest_gym_distance_km
+       FROM analytics_events
+      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval
+      GROUP BY distinct_id
+      ORDER BY last_seen DESC
+      LIMIT $2`,
+    [n, cappedLimit]
+  );
+
+  return {
+    permission,
+    distance: {
+      resolvedCount: distanceStats[0]?.n ?? 0,
+      avgKm: distanceStats[0]?.avg_km ?? null,
+      medianKm: distanceStats[0]?.median_km ?? null,
+      buckets,
+    },
+    visitors,
+  };
+}
+
 // ---- Suggestion sources (event/property/value autocomplete) ----------------
 
 // Backs the Event Search and Custom Funnel builders' event-name field —
