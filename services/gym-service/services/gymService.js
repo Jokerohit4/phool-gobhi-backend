@@ -238,8 +238,11 @@ export async function listGymsAdmin({ status, partnerId } = {}) {
 // 62km away" apart from "visitor never shared location," which listGyms's
 // silent filtering can't distinguish.
 export async function getNearestGymDistance(userLat, userLng) {
+  // lat/lng are non-nullable Float columns (schema.prisma) — Prisma rejects
+  // an explicit `{ not: null }` filter on a required field, so (as in
+  // listGyms above) there's nothing to filter here beyond isActive/isApproved.
   const gyms = await prisma.gym.findMany({
-    where: { isActive: true, isApproved: true, lat: { not: null }, lng: { not: null } },
+    where: { isActive: true, isApproved: true },
     select: { id: true, lat: true, lng: true },
   });
 
