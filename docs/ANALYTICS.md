@@ -168,11 +168,29 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `session_started` | both + web | App/site cold start (`session_id` in every subsequent event's properties, not a top-level column) |
 | `session_ended` | both + web | Best-effort, fired on app backgrounding / page unload — may not always land; compute session length from `max(ts)-min(ts)` per `session_id` regardless |
 | `cta_clicked` | website | Marketing-site CTA tap, `cta` identifies which one |
+| `dashboard_viewed` | partner | Home dashboard opened (`HomeScreenTwo.initState`) |
+| `gym_image_uploaded` | partner | Gym photo added on the Edit tab (`gym_id`, `pending`) |
+| `gym_doc_uploaded` | partner | Verification doc added on the Edit tab (`gym_id`, `pending`) |
+| `gym_profile_updated` | partner | Gym edit form saved (`gym_id`, `pending`) |
+| `booking_checked_in` | partner | QR scan verifies attendance (`gym_id`, `booking_id`, `method` = `qr_scan`/`qr_scan_slot_shift`, `already_verified`) — client-side echo of the same moment `attendance_verified` fires server-side |
+| `gym_switched` | partner | Partner selects a different gym from the multi-gym switcher (`gym_id`, `gym_count`) — only on an actual change, not re-selecting the active gym |
+| `gym_class_created` | partner | Recurring class created on the Classes tab (`gym_id`, `pending`) |
+| `schedule_slot_blocked` | partner | A slot block toggled on/off (`gym_id`, `action` = `blocked`/`unblocked`, `pending`) |
+| `schedule_hours_updated` | partner | Operating-hours editor saved (`gym_id`, `pending`) |
+| `logout_tapped` | partner | Sign-out confirmed in Settings, fired just before the session actually resets |
 
-Defined in `phool-gobhi-partner-app`'s `AnalyticsEvents` but **not yet wired to
-any call site** as of 2026-07-23 — reserved names, not currently emitted:
-`gym_image_uploaded`, `gym_doc_uploaded`, `gym_profile_updated`,
-`dashboard_viewed`, `booking_checked_in`.
+**Added 2026-08-17:** `dashboard_viewed`, `gym_image_uploaded`, `gym_doc_uploaded`,
+`gym_profile_updated`, and `booking_checked_in` were defined in the partner
+app's `AnalyticsEvents` back on 2026-07-23 but had **no call site** — reserved
+names that never actually fired, so nothing about gym-management or QR
+check-in activity ever reached `analytics_events` despite being reservable in
+the admin dashboard's event search. All five are now wired. `gym_switched`,
+`gym_class_created`, `schedule_slot_blocked`, and `schedule_hours_updated` are
+new: multi-gym switching in particular had zero analytics coverage even though
+it's the partner app's newest major feature (see the platform's multi-gym
+support work) — the switcher sheet is one of the most-used surfaces for any
+partner running more than one gym, and it was previously invisible in the
+data entirely.
 
 Every event also carries `source` (`server`/client implicit) and `service`/`app`.
 Client events additionally carry `session_id` (see above) and the
