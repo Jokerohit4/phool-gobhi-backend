@@ -91,7 +91,8 @@
             "ANALYTICS_SERVICE_NAME": "auth-service",
             "OTP_PROVIDER": "firebase",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
-            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
+            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
+            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",
