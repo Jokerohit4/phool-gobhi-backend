@@ -3,6 +3,7 @@ import cloudinary from '../config/cloudinary.js';
 import { generateTimeSlots, generateWindowedSlots } from '../utils/slots.js';
 import { getDayOfWeek } from '../utils/slotTiming.js';
 import * as placesService from './placesService.js';
+import { getRoadDistancesKm } from './roadDistanceService.js';
 
 const prisma = new PrismaClient();
 
@@ -199,6 +200,20 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, so
     gyms.sort(byDistanceKm);
   }
 
+  // Filtering/sorting above is deliberately straight-line (cheap, always
+  // available, fine for a "roughly in range" business rule). Swap in real
+  // driving distance only for what's actually displayed, without touching
+  // the order already established above — a river or highway loop can make
+  // road distance rank differently than straight-line, but re-sorting on it
+  // isn't worth an external call becoming load-bearing for page order.
+  if (userLat != null && userLng != null) {
+    const roadDistances = await getRoadDistancesKm(userLat, userLng, gyms);
+    gyms = gyms.map(gym => ({
+      ...gym,
+      distanceKm: roadDistances.get(gym.id) ?? gym.distanceKm,
+    }));
+  }
+
   return gyms;
 }
 
@@ -236,7 +251,9 @@ export async function listGymsAdmin({ status, partnerId } = {}) {
 // purely descriptive, used only by the website's location_resolved analytics
 // event so the admin's Location Reach view can tell "visitor's nearest gym is
 // 62km away" apart from "visitor never shared location," which listGyms's
-// silent filtering can't distinguish.
+// silent filtering can't distinguish. Real driving distance (getRoadDistancesKm)
+// where available — straight-line haversine understates how far a visitor
+// genuinely has to travel, which is the whole point of this endpoint.
 export async function getNearestGymDistance(userLat, userLng) {
   // lat/lng are non-nullable Float columns (schema.prisma) — Prisma rejects
   // an explicit `{ not: null }` filter on a required field, so (as in
@@ -246,9 +263,12 @@ export async function getNearestGymDistance(userLat, userLng) {
     select: { id: true, lat: true, lng: true },
   });
 
+  const roadDistances = await getRoadDistancesKm(userLat, userLng, gyms);
+
   let nearest = null;
   for (const gym of gyms) {
-    const distanceKm = Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10;
+    const distanceKm =
+      roadDistances.get(gym.id) ?? Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10;
     if (nearest === null || distanceKm < nearest.distanceKm) {
       nearest = { gymId: gym.id, distanceKm };
     }
@@ -268,9 +288,11 @@ export async function getGymById(id, userLat, userLng) {
   }
 
   if (userLat != null && userLng != null && gym.lat != null && gym.lng != null) {
+    const haversineDistanceKm = Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10;
+    const roadDistances = await getRoadDistancesKm(userLat, userLng, [{ id: gym.id, lat: gym.lat, lng: gym.lng }]);
     return {
       ...gym,
-      distanceKm: Math.round(haversineKm(userLat, userLng, gym.lat, gym.lng) * 10) / 10,
+      distanceKm: roadDistances.get(gym.id) ?? haversineDistanceKm,
     };
   }
 
