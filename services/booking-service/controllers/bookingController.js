@@ -32,6 +32,15 @@ export const getMyAttendanceSummary = async (req, res) => {
   }
 };
 
+export const getVisitedGyms = async (req, res) => {
+  try {
+    const visitedGyms = await bookingService.getVisitedGyms(req.userId);
+    res.json({ data: visitedGyms });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getCancellationPolicy = async (req, res) => {
   try {
     const policy = await bookingService.getCancellationPolicy();

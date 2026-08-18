@@ -228,6 +228,44 @@ export async function getCityBreakdown(days) {
   return { cities: [...byCity.values()].sort((a, b) => b.gmv - a.gmv) };
 }
 
+// ---- Gamification wave 1: badge summary --------------------------------------
+
+// Per-gym badge_earned counts, ascending (lowest first) — a low count here
+// means few customers are having their "first visit" at that gym, i.e. a
+// supply-density signal for gyms that aren't getting explored. This can't
+// surface gyms with a literal zero count (analytics_events only has rows for
+// events that fired; the full gym list lives in gym-service's own DB, not
+// this analytics pool) — that join would need a cross-service call, deferred
+// until this view proves useful enough to justify it.
+export async function getBadgeSummary(days) {
+  const n = daysParam(days);
+  const [{ rows: totals }, { rows: byGym }] = await Promise.all([
+    query(
+      `SELECT count(*)::int AS total_badges,
+              count(DISTINCT distinct_id)::int AS unique_customers
+         FROM analytics_events
+        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval`,
+      [n]
+    ),
+    query(
+      `SELECT (properties->>'gym_id')::int AS gym_id,
+              COALESCE(properties->>'city', 'Unknown') AS city,
+              count(*)::int AS badges
+         FROM analytics_events
+        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval
+        GROUP BY 1, 2
+        ORDER BY badges ASC`,
+      [n]
+    ),
+  ]);
+  const t = totals[0] || { total_badges: 0, unique_customers: 0 };
+  return {
+    totalBadges: t.total_badges,
+    uniqueCustomers: t.unique_customers,
+    byGym: byGym.map((r) => ({ gymId: r.gym_id, city: r.city, badges: r.badges })),
+  };
+}
+
 // ---- Revenue / GMV trend -------------------------------------------------------
 
 export async function getRevenueTrend(days) {

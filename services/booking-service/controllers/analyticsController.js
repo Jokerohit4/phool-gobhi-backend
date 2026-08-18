@@ -85,6 +85,14 @@ export const getCityBreakdown = async (req, res) => {
   }
 };
 
+export const getBadgeSummary = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getBadgeSummary(req.query.days) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getRevenueTrend = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getRevenueTrend(req.query.days) });

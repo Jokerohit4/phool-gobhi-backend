@@ -1298,6 +1298,21 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
+    // Gamification wave 1: a badge is just "first-ever attended booking at
+    // this gym" — no persisted badge row, purely a fire-once analytics
+    // signal derived from the same attendance data /mine/visited-gyms reads.
+    try {
+      const priorVisit = await prisma.booking.findFirst({
+        where: { customerId, gymId, attendedAt: { not: null }, id: { not: booking.id } },
+        select: { id: true },
+      });
+      if (!priorVisit) {
+        track('badge_earned', customerId, { gym_id: gymId, city: gym?.city ?? null });
+      }
+    } catch (badgeErr) {
+      console.error('badge_earned check failed for booking', booking.id, badgeErr);
+    }
+
     return {
       bookingId: updated.id,
       attendedAt: updated.attendedAt,
@@ -1847,6 +1862,41 @@ export async function getCustomerAttendanceSummary(customerId) {
     };
   } catch (err) {
     console.error('getCustomerAttendanceSummary error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Gamification wave 1: lifetime per-gym visit rollup for the badge shelf /
+// fog-of-war map. Deliberately a separate endpoint from
+// getCustomerAttendanceSummary rather than extending it — that endpoint caps
+// at the 90 most recent attended dates and drops gymId, both wrong for a
+// lifetime "every gym you've ever badged" list.
+export async function getVisitedGyms(customerId) {
+  try {
+    const rows = await prisma.booking.groupBy({
+      by: ['gymId'],
+      where: { customerId, attendedAt: { not: null } },
+      _min: { attendedAt: true },
+      _count: { _all: true },
+    });
+
+    const gymById = {};
+    await Promise.all(rows.map(async ({ gymId }) => {
+      try {
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        const gym = gymRes.data?.data || gymRes.data;
+        gymById[gymId] = gym ? { name: gym.name, lat: gym.lat, lng: gym.lng, city: gym.city } : null;
+      } catch (_) { /* leave gym metadata null for this id */ }
+    }));
+
+    return rows.map((r) => ({
+      gymId: r.gymId,
+      firstVisitedAt: r._min.attendedAt,
+      visitCount: r._count._all,
+      gym: gymById[r.gymId] ?? null,
+    }));
+  } catch (err) {
+    console.error('getVisitedGyms error:', err);
     throw { status: 500, error: err.message || 'Server error' };
   }
 }

@@ -24,6 +24,8 @@ router.post('/', requireRole('customer'), ctrl.createBooking);
 router.get('/mine', requireRole('customer'), ctrl.getMyBookings);
 router.get('/mine/attendance-summary', requireRole('customer'), ctrl.getMyAttendanceSummary);
 router.get('/mine/attendance-warnings', requireRole('customer'), ctrl.getMyAttendanceWarnings);
+// Gamification wave 1: lifetime per-gym visit rollup for the badge shelf / fog-of-war map.
+router.get('/mine/visited-gyms', requireRole('customer'), ctrl.getVisitedGyms);
 // gobhi too — the admin portal's /settings page reads this to prefill its editor.
 router.get('/cancellation-policy', requireRole('customer', 'gobhi'), ctrl.getCancellationPolicy);
 router.put('/cancellation-policy', requireRole('gobhi'), ctrl.updateCancellationPolicy);
@@ -55,6 +57,8 @@ router.post('/admin/analytics/funnels', requireRole('gobhi'), analyticsCtrl.crea
 router.delete('/admin/analytics/funnels/:id', requireRole('gobhi'), analyticsCtrl.deleteSavedFunnel);
 router.get('/admin/analytics/user-journey', requireRole('gobhi'), analyticsCtrl.getUserJourney);
 router.get('/admin/analytics/city-breakdown', requireRole('gobhi'), analyticsCtrl.getCityBreakdown);
+// Gamification wave 1: per-gym badge_earned counts, a supply-density signal.
+router.get('/admin/analytics/badges-summary', requireRole('gobhi'), analyticsCtrl.getBadgeSummary);
 router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl.getRevenueTrend);
 router.get('/admin/analytics/supply-health', requireRole('gobhi'), analyticsCtrl.getSupplyHealth);
 router.get('/admin/analytics/retention', requireRole('gobhi'), analyticsCtrl.getRetentionCohorts);
