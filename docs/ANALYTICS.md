@@ -204,8 +204,11 @@ note on `ip`):
 | `device_model` | apps (Android `.model`, iOS `utsname.machine`, e.g. `"iPhone14,5"`) | iOS uses the specific hardware id, not the generic `.model`, to distinguish device generations — needs a lookup table to become human-readable |
 | `device_manufacturer` | apps (Android `.manufacturer`, iOS hardcoded `'Apple'`) | |
 | `app_version` / `app_build_number` | apps, via `package_info_plus` | |
-| `device_language` | apps, via `Platform.localeName` | |
-| `app_theme` | apps (`'dark'`/`'light'`), static flag kept in sync by each app's `ThemeProvider` | |
+| `device_language` | apps, via `Platform.localeName` | kept for historical continuity with existing rows/dashboards — see `system_language` below for the same value under its explicit name |
+| `system_language` | apps, via `Platform.localeName` (added 2026-08-17, partner app only so far) | the OS locale, read fresh at send time — identical value to `device_language`, added under an explicit name alongside `app_language` |
+| `app_language` | apps (added 2026-08-17, partner app only so far) | the language the app is actually rendering in. Partner app has no in-app language picker yet (English-only, hardcoded strings) so this is currently always `'en'` — kept as its own property so the schema doesn't need to change the day a real language switcher ships |
+| `app_theme` | apps (`'dark'`/`'light'`), static flag kept in sync by each app's `ThemeProvider` | the app's active theme choice — may diverge from `system_theme` once a user manually overrides it |
+| `system_theme` | apps (`'dark'`/`'light'`, added 2026-08-17, partner app only so far), via `PlatformDispatcher.instance.platformBrightness` read fresh at send time | the OS's live brightness setting, independent of any in-app override — distinct from `app_theme` specifically to catch drift between the two |
 | `user_agent` | website (forwarded from the request's `User-Agent` header) | raw string |
 | `os_name` / `browser_name` / `browser_version` / `device_type` | gateway, parsed from `user_agent` via `ua-parser-js` | **backstop only** — the gateway fills these only when the event doesn't already carry them, so it never overwrites the richer app-supplied fields above; this is the primary source of OS/browser info for website traffic |
 | `ip` | gateway, from `req.ip` | every client event, via the gateway's `/api/events` handler |
