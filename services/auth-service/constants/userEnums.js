@@ -32,8 +32,22 @@ export const FITNESS_GOALS = {
   REHABILITATION: 'rehabilitation',
 };
 
+export const EXPERIENCE_LEVELS = {
+  NEW_TO_GYM: 'new_to_gym',
+  RESTARTING_AFTER_BREAK: 'restarting_after_break',
+  EXPERIENCED: 'experienced',
+};
+
+export const FREQUENCY_INTENTS = {
+  ONE_TWO: 'one_two',
+  THREE_FOUR: 'three_four',
+  FIVE_PLUS: 'five_plus',
+};
+
 export const VALID_ROLES = Object.values(ROLES);
 export const VALID_TYPES = Object.values(USER_TYPES);
 export const VALID_GOBHI_TYPES = Object.values(GOBHI_TYPES);
 export const VALID_GENDERS = Object.values(GENDERS);
 export const VALID_FITNESS_GOALS = Object.values(FITNESS_GOALS);
+export const VALID_EXPERIENCE_LEVELS = Object.values(EXPERIENCE_LEVELS);
+export const VALID_FREQUENCY_INTENTS = Object.values(FREQUENCY_INTENTS);

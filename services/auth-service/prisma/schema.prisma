@@ -22,6 +22,12 @@ model User {
   gender        Gender?
   dateOfBirth   DateTime?     @db.Date
   fitnessGoals  FitnessGoal[]
+  // Collected at onboarding alongside gender/dateOfBirth/fitnessGoals — feeds
+  // the customer app's client-side gym recommendation scorer (experienceLevel
+  // is the highest-weighted, required field there) and gates the trainer
+  // WhatsApp-handoff CTA to new/restarting users only.
+  experienceLevel       ExperienceLevel?
+  weeklyFrequencyIntent FrequencyIntent?
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
@@ -307,6 +313,22 @@ enum FitnessGoal {
   flexibility_yoga
   sports_training
   rehabilitation
+
+  @@schema("auth")
+}
+
+enum ExperienceLevel {
+  new_to_gym
+  restarting_after_break
+  experienced
+
+  @@schema("auth")
+}
+
+enum FrequencyIntent {
+  one_two
+  three_four
+  five_plus
 
   @@schema("auth")
 }
