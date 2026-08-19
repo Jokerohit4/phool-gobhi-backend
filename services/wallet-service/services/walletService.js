@@ -39,11 +39,32 @@ export async function getGymCity(gymId) {
   }
 }
 
-// Fallback only — the real rate is per-gym (gym-service's admin-editable
-// Gym.commissionPct, see fetchGymForSubscription), taken at purchase time
-// and snapshotted onto the GymSubscription row for auditability. This fires
-// only if a gym-service response is somehow missing the field.
-export const SUBSCRIPTION_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_COMMISSION_PERCENT) || 20;
+// Attendance-SaaS wedge (finalized 2026-08-19): GymSubscription purchases no
+// longer share Gym.commissionPct with one-off marketplace bookings. Instead,
+// every gym gets a flat honeymoon window from its own
+// Gym.partnershipStartDate (set once, at first approval) during which
+// subscription purchases carry ZERO platform commission; after that window
+// the platform takes a flat cut — the platform default below, or a
+// per-gym override via gym-service's admin-editable
+// Gym.subscriptionCommissionPct (PUT /:id/subscription-commission). This is
+// deliberately decoupled from commissionPct: a customer who also books
+// through the regular marketplace still pays that 20%-by-default rate on
+// those bookings separately (see bookingCommissionFields in booking-service,
+// unchanged by this).
+const SUBSCRIPTION_SAAS_HONEYMOON_DAYS = Number(process.env.SUBSCRIPTION_SAAS_HONEYMOON_DAYS) || 30;
+export const DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_SAAS_COMMISSION_PERCENT) || 1;
+
+// partnershipStartDate null (gym approved before this feature existed and
+// somehow missed the migration backfill) is treated as "no honeymoon" rather
+// than "always in honeymoon" — the safe direction if that ever happens is to
+// undercharge zero gyms for free, not to give every unbackfilled gym an
+// indefinite free ride.
+function computeSubscriptionSaasCommissionPct(partnershipStartDate, overridePct) {
+  const resolvedRate = overridePct ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
+  if (!partnershipStartDate) return resolvedRate;
+  const honeymoonEndsAt = new Date(partnershipStartDate).getTime() + SUBSCRIPTION_SAAS_HONEYMOON_DAYS * 24 * 60 * 60 * 1000;
+  return Date.now() < honeymoonEndsAt ? 0 : resolvedRate;
+}
 
 // Admin-portal-editable wallet top-up options (presets + optional
 // custom-amount range). Cached briefly since createTopUpOrder reads this on
@@ -358,6 +379,52 @@ export async function getPayoutHistoryService() {
   return enrichWithUserInfo(rows);
 }
 
+// Attendance-SaaS admin rollup: per-gym subscription counts + revenue,
+// keyed by gymId only — gym name/city/honeymoon status are resolved by the
+// admin-portal caller against gym-service (same split as the /attendance
+// admin page's by-gym view), so this stays a single-service, single-query
+// endpoint. status:'active' alone doesn't mean "currently in-window" (the
+// SubscriptionStatus enum only ever gets set to 'active' — nothing writes
+// 'cancelled' today, and a lapsed-but-unprocessed row stays 'active'
+// indefinitely), so activeCount additionally requires endDate in the future.
+// Matches this file's existing style for admin rollups (getPayoutHistoryService,
+// getGiftBonusPayoutsAnalyticsService): findMany + manual Map reduction, not
+// Prisma groupBy.
+export async function getSubscriptionSummaryByGymService() {
+  const now = new Date();
+  const subs = await prisma.gymSubscription.findMany({
+    select: { gymId: true, status: true, endDate: true, price: true, partnerShare: true, commissionPct: true },
+  });
+
+  const byGym = new Map();
+  for (const s of subs) {
+    if (!byGym.has(s.gymId)) {
+      byGym.set(s.gymId, {
+        gymId: s.gymId,
+        subscriptionCount: 0,
+        activeCount: 0,
+        honeymoonSubscriptionCount: 0,
+        totalRevenue: 0,
+        // Commission the platform is owed across this gym's subscriptions
+        // (price - partnerShare per subscription) — a ceiling realized
+        // progressively via per-visit payouts at booking completion, not
+        // cash already banked.
+        totalPlatformShare: 0,
+      });
+    }
+    const bucket = byGym.get(s.gymId);
+    const price = Number(s.price);
+    const partnerShare = Number(s.partnerShare);
+    bucket.subscriptionCount += 1;
+    if (s.status === 'active' && s.endDate >= now) bucket.activeCount += 1;
+    if (Number(s.commissionPct) === 0) bucket.honeymoonSubscriptionCount += 1;
+    bucket.totalRevenue = Math.round((bucket.totalRevenue + price) * 100) / 100;
+    bucket.totalPlatformShare = Math.round((bucket.totalPlatformShare + (price - partnerShare)) * 100) / 100;
+  }
+
+  return [...byGym.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
+}
+
 export async function payoutWalletService(userId, amount, description) {
   const explicitAmount = amount != null;
   if (explicitAmount && (!Number.isFinite(amount) || amount <= 0)) {
@@ -503,7 +570,12 @@ export async function fetchGymForSubscription(gymId, planType) {
   const price = gym[field];
   if (price == null) throw { status: 400, error: `This gym does not offer a ${planType} plan` };
 
-  return { partnerId: gym.partnerId, price: Number(price), commissionPct: gym.commissionPct };
+  return {
+    partnerId: gym.partnerId,
+    price: Number(price),
+    partnershipStartDate: gym.partnershipStartDate ?? null,
+    subscriptionCommissionPct: gym.subscriptionCommissionPct != null ? Number(gym.subscriptionCommissionPct) : null,
+  };
 }
 
 // Subscriptions are paid for out of wallet balance only — never a direct
@@ -524,7 +596,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const { partnerId, price, commissionPct: gymCommissionPct } = await fetchGymForSubscription(gymId, planType);
+  const { partnerId, price, partnershipStartDate, subscriptionCommissionPct: subscriptionCommissionPctOverride } = await fetchGymForSubscription(gymId, planType);
 
   // Same self-booking-fraud guard as booking-service's createBooking — a
   // partner shouldn't be able to buy a subscription to their own gym under
@@ -560,7 +632,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const commissionPct = gymCommissionPct ?? SUBSCRIPTION_COMMISSION_PERCENT;
+  const commissionPct = computeSubscriptionSaasCommissionPct(partnershipStartDate, subscriptionCommissionPctOverride);
   // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
   // partner is credited partnerShare/days per completed visit instead (see
   // bookingCommissionFields/completeBooking in booking-service), so this

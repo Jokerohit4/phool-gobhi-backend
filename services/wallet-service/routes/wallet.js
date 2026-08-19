@@ -24,6 +24,7 @@ import {
   getTransactionByKeyInternal,
   getWalletTopupConfigHandler,
   updateWalletTopupConfigHandler,
+  getSubscriptionSummaryByGym,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -53,6 +54,7 @@ router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (n
 // (see purchaseSubscriptionWithWallet for why: RBI's refund-to-original-
 // source rule).
 router.post('/subscriptions/purchase-with-wallet', requireAuth, purchaseSubscriptionWithWalletHandler);
+router.get('/subscriptions/admin/by-gym', requireRole('gobhi'), getSubscriptionSummaryByGym); // Admin: attendance-SaaS per-gym rollup (registered before /subscriptions/mine — literal path)
 router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer's own subscriptions (optional ?gymId=)
 router.post('/subscriptions/:id/ack-gift-reveal', requireAuth, ackGiftReveal); // Customer confirms they've seen the /gift-reveal screen
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check

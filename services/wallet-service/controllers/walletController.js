@@ -24,6 +24,7 @@ import {
   reconcilePendingRazorpayOrdersService,
   getWalletTopupConfigCached,
   updateWalletTopupConfig,
+  getSubscriptionSummaryByGymService,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -168,6 +169,15 @@ export const listPayoutHistory = async (req, res) => {
   try {
     const payouts = await getPayoutHistoryService();
     res.json({ data: payouts });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const getSubscriptionSummaryByGym = async (req, res) => {
+  try {
+    const summary = await getSubscriptionSummaryByGymService();
+    res.json({ data: summary });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

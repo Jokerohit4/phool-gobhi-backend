@@ -43,8 +43,11 @@ function normalizeBookingMoney(booking) {
 // Fallback commission on regular (non-subscription) session bookings, used
 // only if a gym-service response is somehow missing commissionPct (e.g. an
 // older gym-service revision) — the real rate is per-gym, gym-service's
-// Gym.commissionPct (admin-editable, defaults to 20 there too). Mirrors
-// wallet-service's SUBSCRIPTION_COMMISSION_PERCENT fallback.
+// Gym.commissionPct (admin-editable, defaults to 20 there too). This rate is
+// untouched by the attendance-SaaS wedge — GymSubscription purchases now
+// carry their own separate honeymoon/1% commission computed in
+// wallet-service (computeSubscriptionSaasCommissionPct), independent of this
+// constant and of commissionPct.
 const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
 
 // Per-target headers for service-to-service calls (x-internal-key shared

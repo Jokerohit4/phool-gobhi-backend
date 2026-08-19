@@ -537,6 +537,17 @@ export const updateGymCommission = async (req, res) => {
   }
 };
 
+export const updateGymSubscriptionCommission = async (req, res) => {
+  try {
+    const raw = req.body?.subscriptionCommissionPct;
+    const value = raw === null || raw === undefined ? null : Number(raw);
+    const gym = await gymService.updateGymSubscriptionCommission(parseInt(req.params.id), value);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getPartnerEditRequests = async (req, res) => {
   try {
     const requests = await gymService.getPartnerEditRequests(parseInt(req.params.id), req.userId);

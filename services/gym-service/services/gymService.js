@@ -20,7 +20,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // plain numbers — same convention as wallet-service's Number(...) wrapping.
 const GYM_MONEY_FIELDS = [
   'sessionPrice', 'quotedPrice', 'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'sixMonthlyPlanPrice', 'yearlyPlanPrice',
-  'commissionPct',
+  'commissionPct', 'subscriptionCommissionPct',
 ];
 function normalizeGymMoney(gym) {
   if (!gym) return gym;
@@ -933,6 +933,9 @@ export async function approveGym(gymId, { approved = true, reason = null } = {})
     data: {
       isApproved: approved,
       rejectionReason: approved ? null : reason,
+      // First approval only — a later reject/re-approve cycle must not reset
+      // the honeymoon clock the gym already started.
+      ...(approved && !gym.partnershipStartDate ? { partnershipStartDate: new Date() } : {}),
     },
   }));
 }
@@ -950,6 +953,26 @@ export async function updateGymCommission(gymId, commissionPct) {
   return normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
     data: { commissionPct },
+  }));
+}
+
+// gobhi-only, same shape as updateGymCommission — overrides the
+// attendance-SaaS post-honeymoon rate wallet-service applies to this gym's
+// GymSubscription purchases (see computeSubscriptionSaasCommissionPct).
+// null resets to the platform default instead of a fixed number.
+export async function updateGymSubscriptionCommission(gymId, subscriptionCommissionPct) {
+  if (
+    subscriptionCommissionPct !== null &&
+    (typeof subscriptionCommissionPct !== 'number' || Number.isNaN(subscriptionCommissionPct) || subscriptionCommissionPct < 0 || subscriptionCommissionPct > 100)
+  ) {
+    throw { status: 400, error: 'subscriptionCommissionPct must be a number between 0 and 100, or null to reset to the platform default' };
+  }
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  return normalizeGymMoney(await prisma.gym.update({
+    where: { id: gymId },
+    data: { subscriptionCommissionPct },
   }));
 }
 

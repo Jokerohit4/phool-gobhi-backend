@@ -70,6 +70,18 @@ model Gym {
   // (gobhi-only, see PUT /:id/commission) — 20 is the platform default for
   // every gym until an admin overrides it.
   commissionPct Decimal    @default(20) @db.Decimal(5, 2)
+  // Attendance-SaaS wedge: when this gym first went live (isApproved flipped
+  // true), set once in approveGym and never moved after — drives wallet-
+  // service's 1-month honeymoon window on GymSubscription purchases. Null
+  // until first approval. Backfilled to createdAt for gyms already approved
+  // before this feature existed (see migration) so no already-live gym gets
+  // a free honeymoon it never had.
+  partnershipStartDate DateTime?
+  // Post-honeymoon commission on GymSubscription purchases specifically —
+  // separate lever from commissionPct, which keeps governing one-off
+  // marketplace bookings unchanged. Null = platform default (see
+  // DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT in wallet-service).
+  subscriptionCommissionPct Decimal? @db.Decimal(5, 2)
   weeklyPlanPrice     Decimal? @db.Decimal(19, 2)
   monthlyPlanPrice    Decimal? @db.Decimal(19, 2)
   quarterlyPlanPrice  Decimal? @db.Decimal(19, 2)

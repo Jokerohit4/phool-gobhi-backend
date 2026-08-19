@@ -70,6 +70,9 @@ router.post('/upload', requireAuth, uploadGymImage.single('file'), ctrl.uploadGe
 router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
 // Body: {commissionPct: number} (0-100) — overrides this gym's platform commission rate (default 20).
 router.put('/:id/commission', requireRole('gobhi'), ctrl.updateGymCommission);
+// Body: {subscriptionCommissionPct: number|null} (0-100, null resets to platform default) — overrides
+// this gym's post-honeymoon attendance-SaaS commission on subscription purchases (see wallet-service).
+router.put('/:id/subscription-commission', requireRole('gobhi'), ctrl.updateGymSubscriptionCommission);
 // List all gyms regardless of owner/approval status; ?status=pending|approved|rejected
 router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 // Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)
