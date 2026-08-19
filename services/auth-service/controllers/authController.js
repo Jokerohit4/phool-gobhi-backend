@@ -469,6 +469,7 @@ const getMe = async (req, res) => {
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
       referralCode: user.referralCode,
+      linkedGymId: user.linkedGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

@@ -43,6 +43,15 @@ model User {
   referredByUserId Int?
   referredBy       User?    @relation("Referrals", fields: [referredByUserId], references: [id])
   referrals        User[]   @relation("Referrals")
+  // Attendance-SaaS wedge: set once at account creation when signup
+  // originated from a gym-specific "join us" QR/link (website /join/:gymId,
+  // app phoolgobhi://join?gymId=), never mutated after — same contract as
+  // referredByUserId. A bare Int, not a Prisma relation: Gym lives in
+  // gym-service's own database, so this is an unenforced cross-service
+  // reference, not a real foreign key. Drives the customer app's decision to
+  // show a gym-scoped "linked member" home instead of the marketplace browse
+  // home (see /api/auth/me).
+  linkedGymId Int?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
