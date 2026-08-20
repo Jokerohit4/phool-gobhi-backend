@@ -104,6 +104,19 @@ export const getCompletedVisitCountForSubscription = async (req, res) => {
   }
 };
 
+export const getCustomerIdsWithCompletedBooking = async (req, res) => {
+  try {
+    const customerIds = Array.isArray(req.body?.customerIds)
+      ? req.body.customerIds.map(Number).filter(Number.isFinite)
+      : [];
+    if (!customerIds.length) return res.json({ data: [] });
+    const active = await bookingService.getCustomerIdsWithCompletedBooking(customerIds);
+    res.json({ data: active });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getLastVisitDateForSubscription = async (req, res) => {
   try {
     const subscriptionId = parseInt(req.params.id);

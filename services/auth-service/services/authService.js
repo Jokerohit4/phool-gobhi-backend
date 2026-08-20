@@ -7,6 +7,7 @@ import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { notifyUser } from '../utils/notifyUser.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
 
 const SKIP_OTP_CODE = '123456';
@@ -27,6 +28,8 @@ function safeCompareStrings(a, b) {
 }
 
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 
 // Best-effort onboarding summary for a partner, fetched from gym-service. Lets
 // the partner app route on login (dashboard vs. resume onboarding) from the
@@ -47,6 +50,88 @@ async function fetchPartnerGymSummary(partnerId) {
     console.error('fetchPartnerGymSummary error:', err.message);
     return null;
   }
+}
+
+// Bulk "which of these customerIds have activity" lookup against another
+// service's batch endpoint — a failed/unreachable service degrades to "no
+// one there has activity" (empty array) rather than blocking the whole
+// sweep, same fail-open posture as fetchPartnerGymSummary above.
+async function fetchCustomerIdsWithActivity(serviceUrl, path, customerIds) {
+  try {
+    const res = await fetch(`${serviceUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+        'Content-Type': 'application/json',
+        ...(await googleIdTokenHeader(serviceUrl)),
+      },
+      body: JSON.stringify({ customerIds }),
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return Array.isArray(body.data) ? body.data : [];
+  } catch (err) {
+    console.error(`fetchCustomerIdsWithActivity(${path}) error:`, err.message);
+    return [];
+  }
+}
+
+const REENGAGEMENT_AFTER_DAYS = Number(process.env.REENGAGEMENT_AFTER_DAYS) || 3;
+// Caps how many candidates one sweep run processes — if there's ever a
+// backlog bigger than this, the oldest-signed-up candidates (ordered by
+// createdAt) get resolved first, and the rest wait for tomorrow's run
+// rather than the sweep growing unbounded in a single invocation.
+const REENGAGEMENT_BATCH_SIZE = 500;
+
+// Attendance-SaaS wedge: nudges a gym-linked signup who has shown no
+// activity (no completed booking, no subscription purchase) N days after
+// registering — at most once ever per user (see reengagementNudgedAt).
+// Runs on a schedule (see .github/workflows), not on-demand.
+export async function runAttendanceSaasReengagementSweepService() {
+  const cutoff = new Date(Date.now() - REENGAGEMENT_AFTER_DAYS * 24 * 60 * 60 * 1000);
+  const candidates = await prisma.user.findMany({
+    where: { linkedGymId: { not: null }, createdAt: { lt: cutoff }, reengagementNudgedAt: null },
+    orderBy: { createdAt: 'asc' },
+    take: REENGAGEMENT_BATCH_SIZE,
+    select: { id: true, fcmToken: true, linkedGymId: true },
+  });
+
+  if (!candidates.length) return { candidates: 0, nudged: 0, alreadyActive: 0 };
+
+  const customerIds = candidates.map((c) => c.id);
+  const [withBooking, withSubscription] = await Promise.all([
+    fetchCustomerIdsWithActivity(BOOKING_SERVICE_URL, '/internal/bookings/has-completed-batch', customerIds),
+    fetchCustomerIdsWithActivity(WALLET_SERVICE_URL, '/internal/subscriptions/has-purchased-batch', customerIds),
+  ]);
+  const activeIds = new Set([...withBooking, ...withSubscription]);
+
+  let nudged = 0;
+  let alreadyActive = 0;
+  for (const user of candidates) {
+    // Per-candidate try/catch — one bad row (e.g. a DB hiccup on the
+    // resolving update) must never abort the rest of the batch.
+    try {
+      if (activeIds.has(user.id)) {
+        alreadyActive++;
+      } else {
+        await notifyUser(user.fcmToken, {
+          title: "Don't lose your streak!",
+          body: 'Check in at your gym on Phool Gobhi to keep your attendance on record.',
+          data: { type: 'attendance_saas_reengagement' },
+        });
+        track('attendance_saas_reengagement_sent', user.id, {
+          linked_gym_id: user.linkedGymId,
+          had_fcm_token: Boolean(user.fcmToken),
+        });
+        nudged++;
+      }
+      await prisma.user.update({ where: { id: user.id }, data: { reengagementNudgedAt: new Date() } });
+    } catch (err) {
+      console.error(`Reengagement sweep failed for user ${user.id}:`, err.message);
+    }
+  }
+
+  return { candidates: candidates.length, nudged, alreadyActive };
 }
 
 export async function signupService({ name, email, password, role, type, gobhiType }) {

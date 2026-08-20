@@ -15,6 +15,9 @@ router.get('/internal/gym/:gymId/booking-count', requireInternal, ctrl.getBookin
 router.get('/internal/bookings/subscription/:id/completed-count', requireInternal, ctrl.getCompletedVisitCountForSubscription);
 // Internal (wallet-service's getMySubscriptionsService — mid-period gift-box teaser)
 router.get('/internal/bookings/subscription/:id/last-visit-date', requireInternal, ctrl.getLastVisitDateForSubscription);
+// Internal (auth-service's attendance-SaaS re-engagement sweep — bulk "has this
+// customer ever completed a booking" check, batched to avoid N sequential calls)
+router.post('/internal/bookings/has-completed-batch', requireInternal, ctrl.getCustomerIdsWithCompletedBooking);
 
 // Public, unauthenticated — marketing-site aggregate stat only. Must be
 // paired with a gateway PUBLIC_ROUTES entry (see index.js).

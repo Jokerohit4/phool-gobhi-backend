@@ -1474,6 +1474,21 @@ export async function getCompletedVisitCountForSubscription(subscriptionId) {
   });
 }
 
+// Internal, called by auth-service's attendance-SaaS re-engagement sweep —
+// bulk "has ever completed a booking" check across a batch of candidate
+// customerIds, so the sweep isn't making one HTTP round trip per candidate.
+// Returns only the subset that has at least one completed booking; a
+// gym-linked signup absent from this list (and from wallet-service's
+// equivalent has-purchased-batch) is the actual "never engaged" signal.
+export async function getCustomerIdsWithCompletedBooking(customerIds) {
+  const rows = await prisma.booking.findMany({
+    where: { customerId: { in: customerIds }, status: 'completed' },
+    select: { customerId: true },
+    distinct: ['customerId'],
+  });
+  return rows.map((r) => r.customerId);
+}
+
 // Internal, called by wallet-service's getMySubscriptionsService to decide
 // whether to surface the mid-period "gift box" teaser on a still-active
 // subscription — not-cancelled (rather than completed-only) so a booked-but-

@@ -25,6 +25,7 @@ import {
   getWalletTopupConfigHandler,
   updateWalletTopupConfigHandler,
   getSubscriptionSummaryByGym,
+  getCustomerIdsWithPurchasedSubscription,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -61,5 +62,6 @@ router.get('/internal/subscriptions/active', requireInternal, getActiveSubscript
 router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
 router.post('/internal/orders/reconcile-pending', requireInternal, reconcilePendingRazorpayOrdersInternal); // Razorpay top-up reconciliation trigger
+router.post('/internal/subscriptions/has-purchased-batch', requireInternal, getCustomerIdsWithPurchasedSubscription); // auth-service's attendance-SaaS re-engagement sweep
 
 export default router;

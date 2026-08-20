@@ -1,7 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
@@ -543,6 +543,17 @@ const getUsersBatchInternal = async (req, res) => {
   }
 };
 
+// Scheduled trigger (see .github/workflows) for the attendance-SaaS
+// re-engagement sweep — nudges gym-linked signups with no activity.
+const runAttendanceSaasReengagementSweep = async (req, res) => {
+  try {
+    const result = await runAttendanceSaasReengagementSweepService();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 // Lets a customer/partner set their name after signup, since phone+OTP
 // signup never collects one (see authService.js issueSessionForUser). Each
 // app nudges for this once name is null rather than blocking signup on it.
@@ -568,6 +579,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

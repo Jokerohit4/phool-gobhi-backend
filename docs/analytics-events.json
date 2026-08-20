@@ -3,6 +3,7 @@
 
   "signup_completed":            { "source": "server", "service": "auth-service" },
   "login_completed":             { "source": "server", "service": "auth-service" },
+  "attendance_saas_reengagement_sent": { "source": "server", "service": "auth-service", "since": "2026-08-20", "notes": "attendance-SaaS wedge — nudge sent to a gym-linked signup with no booking/subscription activity" },
   "staff_account_created":       { "source": "server", "service": "auth-service" },
   "staff_account_revoked":       { "source": "server", "service": "auth-service" },
   "staff_account_reactivated":   { "source": "server", "service": "auth-service" },

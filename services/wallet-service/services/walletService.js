@@ -441,6 +441,19 @@ export async function getSubscriptionSummaryByGymService() {
   return [...byGym.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
+// Internal, called by auth-service's attendance-SaaS re-engagement sweep —
+// bulk "has ever purchased a subscription" check across a batch of candidate
+// customerIds. Purchase itself is the signal (any status counts) — someone
+// who bought and let it lapse already converted, they're not "never engaged".
+export async function getCustomerIdsWithPurchasedSubscriptionService(customerIds) {
+  const rows = await prisma.gymSubscription.findMany({
+    where: { customerId: { in: customerIds } },
+    select: { customerId: true },
+    distinct: ['customerId'],
+  });
+  return rows.map((r) => r.customerId);
+}
+
 export async function payoutWalletService(userId, amount, description) {
   const explicitAmount = amount != null;
   if (explicitAmount && (!Number.isFinite(amount) || amount <= 0)) {

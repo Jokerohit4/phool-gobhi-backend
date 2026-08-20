@@ -119,6 +119,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 |---|---|---|---|
 | `signup_completed` | auth | userId | `role`, `user_type`, `linked_gym_id` (attendance-SaaS wedge — non-null only on a genuine new signup via a gym's /join link) |
 | `login_completed` | auth | userId | `role`, `user_type`, `linked_gym_id` (always the account's existing value, if any — set once at signup, never changes on login) |
+| `attendance_saas_reengagement_sent` | auth | userId | `linked_gym_id`, `had_fcm_token` — fired by the scheduled re-engagement sweep, once ever per user |
 | `booking_confirmed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `start_time` |
 | `booking_failed` | booking | customerId | `gym_id`, `reason` (`slot_full`/`insufficient_balance`), `amount` |
 | `booking_cancelled` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
@@ -242,7 +243,10 @@ note on `ip`):
    where `linked_gym_id` is non-null, joined on `distinct_id`. No separate
    "joined the /join page" step is captured server-side (that's a client page
    view, not a truth event) — this measures signup-to-paid-registration only,
-   not top-of-funnel page traffic.
+   not top-of-funnel page traffic. `attendance_saas_reengagement_sent` marks
+   the scheduled nudge sent to signups still inactive after
+   `REENGAGEMENT_AFTER_DAYS` (env, default 3) — a re-entry point into the
+   same funnel, not a step within it.
 
 In PostHog: Product → Funnels → add these events as ordered steps, breakdown by
 `role` / `city` / `platform` as needed.

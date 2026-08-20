@@ -26,6 +26,7 @@ import {
   getWalletTopupConfigCached,
   updateWalletTopupConfig,
   getSubscriptionSummaryByGymService,
+  getCustomerIdsWithPurchasedSubscriptionService,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -179,6 +180,19 @@ export const getSubscriptionSummaryByGym = async (req, res) => {
   try {
     const summary = await getSubscriptionSummaryByGymService();
     res.json({ data: summary });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+export const getCustomerIdsWithPurchasedSubscription = async (req, res) => {
+  try {
+    const customerIds = Array.isArray(req.body?.customerIds)
+      ? req.body.customerIds.map(Number).filter(Number.isFinite)
+      : [];
+    if (!customerIds.length) return res.json({ data: [] });
+    const active = await getCustomerIdsWithPurchasedSubscriptionService(customerIds);
+    res.json({ data: active });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

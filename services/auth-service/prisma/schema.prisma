@@ -52,6 +52,12 @@ model User {
   // show a gym-scoped "linked member" home instead of the marketplace browse
   // home (see /api/auth/me).
   linkedGymId Int?
+  // Set once the attendance-SaaS re-engagement sweep has resolved this
+  // gym-linked user — either it sent them a nudge, or found them already
+  // active (a completed booking or subscription purchase) and no nudge was
+  // needed. Never reset either way, so a resolved user is never re-checked
+  // on a later sweep run — this is "processed," not strictly "was nudged."
+  reengagementNudgedAt DateTime?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
