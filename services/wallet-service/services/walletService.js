@@ -441,6 +441,27 @@ export async function getSubscriptionSummaryByGymService() {
   return [...byGym.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
+// Gobhi-only: individual GymSubscription rows for one gym, for the
+// attendance-SaaS member roster (see getSubscriptionSummaryByGymService for
+// the aggregate rollup this complements). One row per purchase, not
+// deduped per customer — a repeat customer legitimately shows multiple rows.
+export async function getSubscriptionsForGymService(gymId) {
+  const rows = await prisma.gymSubscription.findMany({
+    where: { gymId },
+    orderBy: { startDate: 'desc' },
+    select: {
+      customerId: true, planType: true, price: true, commissionPct: true,
+      partnerShare: true, startDate: true, endDate: true, status: true,
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    price: Number(r.price),
+    commissionPct: Number(r.commissionPct),
+    partnerShare: Number(r.partnerShare),
+  }));
+}
+
 // Internal, called by auth-service's attendance-SaaS re-engagement sweep —
 // bulk "has ever purchased a subscription" check across a batch of candidate
 // customerIds. Purchase itself is the signal (any status counts) — someone

@@ -554,6 +554,24 @@ const runAttendanceSaasReengagementSweep = async (req, res) => {
   }
 };
 
+// Gobhi-only roster of a single gym's linked members (attendance-SaaS
+// wedge) — admin's /attendance-saas dashboard previously only had
+// gym-level aggregates (see wallet-service's getSubscriptionSummaryByGymService);
+// this is the individual-member list behind those numbers.
+const listAttendanceSaasMembers = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const members = await prisma.user.findMany({
+      where: { linkedGymId: gymId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, phone: true, createdAt: true },
+    });
+    res.json({ data: members });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 // Lets a customer/partner set their name after signup, since phone+OTP
 // signup never collects one (see authService.js issueSessionForUser). Each
 // app nudges for this once name is null rather than blocking signup on it.
@@ -579,6 +597,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

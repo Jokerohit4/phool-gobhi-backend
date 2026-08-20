@@ -27,6 +27,7 @@ import {
   updateWalletTopupConfig,
   getSubscriptionSummaryByGymService,
   getCustomerIdsWithPurchasedSubscriptionService,
+  getSubscriptionsForGymService,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -180,6 +181,21 @@ export const getSubscriptionSummaryByGym = async (req, res) => {
   try {
     const summary = await getSubscriptionSummaryByGymService();
     res.json({ data: summary });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Gobhi-only: individual subscription rows for one gym (attendance-SaaS
+// member roster — auth-service's listAttendanceSaasMembers is the sibling
+// "who's linked" half, this is the "what have they paid" half; the admin
+// portal joins them client-side by customerId, same join-in-the-frontend
+// convention as its existing /attendance page).
+export const getSubscriptionsForGym = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const subscriptions = await getSubscriptionsForGymService(gymId);
+    res.json({ data: subscriptions });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
