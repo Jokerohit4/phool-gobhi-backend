@@ -28,6 +28,7 @@ import {
   getSubscriptionSummaryByGymService,
   getCustomerIdsWithPurchasedSubscriptionService,
   getSubscriptionsForGymService,
+  assertPartnerOwnsGym,
   recordPendingBankSettlementService,
   getPendingBankSettlementsService,
   settleBankSettlementsService,
@@ -202,6 +203,22 @@ export const getSubscriptionsForGym = async (req, res) => {
     res.json({ data: subscriptions });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+// Partner-facing equivalent of getSubscriptionsForGym above — the "what
+// have they paid" half of the member roster, ownership-checked instead of
+// gobhi-only (attendance-SaaS gap-analysis finding: this existed in code but
+// never reached the partner). Admin joins this with auth-service's roster
+// client-side by customerId; the partner-web/app screen does the same join.
+export const getSubscriptionsForGymForPartner = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    await assertPartnerOwnsGym(gymId, req.userId);
+    const subscriptions = await getSubscriptionsForGymService(gymId);
+    res.json({ data: subscriptions });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

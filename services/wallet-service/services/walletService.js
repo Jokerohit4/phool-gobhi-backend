@@ -26,6 +26,22 @@ async function internalHeadersFor(targetUrl) {
 const GYM_CITY_CACHE_TTL_MS = 60 * 60 * 1000;
 const gymCityCache = new Map(); // gymId -> { city, expiresAt }
 
+// Verifies the requesting partner actually owns gymId before this service
+// hands back gym-scoped data (the subscriptions half of the member roster)
+// — same posture as booking-service's/auth-service's own copies of this
+// check, duplicated per-service since these are independent microservices.
+export async function assertPartnerOwnsGym(gymId, partnerId) {
+  let gym;
+  try {
+    const res = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = res.data?.data || res.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
 export async function getGymCity(gymId) {
   const cached = gymCityCache.get(gymId);
   if (cached && cached.expiresAt > Date.now()) return cached.city;

@@ -52,6 +52,30 @@ async function fetchPartnerGymSummary(partnerId) {
   }
 }
 
+// Verifies the requesting partner actually owns gymId before this service
+// hands back gym-scoped data (the member roster) — same posture as
+// booking-service's assertPartnerOwnsGym / wallet-service's ownership checks,
+// duplicated per-service rather than shared since these are independent
+// microservices with no shared code layer.
+export async function assertPartnerOwnsGym(gymId, partnerId) {
+  let gym;
+  try {
+    const res = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
+      headers: {
+        'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+        ...(await googleIdTokenHeader(GYM_SERVICE_URL)),
+      },
+    });
+    if (!res.ok) throw new Error('not ok');
+    const body = await res.json();
+    gym = body.data || body;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
 // Bulk "which of these customerIds have activity" lookup against another
 // service's batch endpoint — a failed/unreachable service degrades to "no
 // one there has activity" (empty array) rather than blocking the whole

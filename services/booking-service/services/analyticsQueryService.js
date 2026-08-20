@@ -122,6 +122,30 @@ export async function getConversionFunnel(days) {
   return { steps, failuresByReason };
 }
 
+// ---- Gym-scoped discovery funnel (partner-facing) ---------------------------
+
+// The per-gym equivalent of getConversionFunnel, for the partner-facing
+// "Gym insights" view (attendance-SaaS gap-analysis item: "analytics never
+// reach the partner"). slot_selected is deliberately excluded — the client
+// never attaches gym_id to that event (see book_gym_cubit.dart), so it can't
+// be scoped per gym without a client change; the three that DO carry gym_id
+// (gym_viewed, book_tapped, booking_confirmed) still tell the partner where
+// their own funnel leaks.
+const GYM_FUNNEL_STEPS = ['gym_viewed', 'book_tapped', 'booking_confirmed'];
+
+export async function getGymFunnel(gymId, days) {
+  const n = daysParam(days);
+  const { rows: steps } = await query(
+    `SELECT event, count(DISTINCT distinct_id)::int AS users
+       FROM analytics_events
+      WHERE event = ANY($1) AND properties->>'gym_id' = $2
+        AND ts > now() - ($3 || ' days')::interval
+      GROUP BY event`,
+    [GYM_FUNNEL_STEPS, String(gymId), n]
+  );
+  return { steps };
+}
+
 // ---- Fulfillment / attendance funnel ---------------------------------------
 
 export async function getFulfillmentFunnel(days) {
@@ -278,6 +302,26 @@ export async function getRevenueTrend(days) {
       WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval
       GROUP BY 1 ORDER BY 1`,
     [n]
+  );
+  return { days: rows };
+}
+
+// ---- Gym-scoped revenue trend (partner-facing) -------------------------------
+
+// Per-gym equivalent of getRevenueTrend — daily bookings/GMV for one gym,
+// so a partner can see a trend line instead of just today/week/month/year
+// tiles (see partner-web/partner-app dashboard).
+export async function getGymRevenueTrend(gymId, days) {
+  const n = daysParam(days);
+  const { rows } = await query(
+    `SELECT date_trunc('day', ts) AS day,
+            count(*)::int AS bookings,
+            COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv
+       FROM analytics_events
+      WHERE event = 'booking_confirmed' AND properties->>'gym_id' = $1
+        AND ts > now() - ($2 || ' days')::interval
+      GROUP BY 1 ORDER BY 1`,
+    [String(gymId), n]
   );
   return { days: rows };
 }
@@ -826,6 +870,59 @@ export async function getRetentionCohorts(cohortWeeks) {
     GROUP BY fb.cohort_week, week_offset
    ORDER BY fb.cohort_week, week_offset`,
     [n]
+  );
+
+  const cohortsByWeek = new Map();
+  for (const row of rows) {
+    if (row.week_offset > RETENTION_MAX_WEEK_OFFSET) continue;
+    const key = row.cohort_week.toISOString();
+    if (!cohortsByWeek.has(key)) {
+      cohortsByWeek.set(key, { cohortWeek: row.cohort_week, cohortSize: row.cohort_size, weeks: [] });
+    }
+    const cohort = cohortsByWeek.get(key);
+    cohort.weeks.push({
+      offset: row.week_offset,
+      activeUsers: row.active_users,
+      retentionRate: cohort.cohortSize ? row.active_users / cohort.cohortSize : null,
+    });
+  }
+  return { cohorts: [...cohortsByWeek.values()] };
+}
+
+// ---- Gym-scoped weekly cohort retention (partner-facing) --------------------
+
+// Same "did they come back" question as getRetentionCohorts, but cohorted on
+// a customer's first booking AT THIS GYM specifically, not their first
+// booking anywhere on the platform — the number a gym owner actually wants
+// ("do people who try my gym come back to MY gym") is different from the
+// platform-wide figure gobhi tracks.
+export async function getGymRetentionCohorts(gymId, cohortWeeks) {
+  const weeks = Number(cohortWeeks);
+  const n = Number.isFinite(weeks) && weeks > 0 && weeks <= 26 ? weeks : 12;
+  const { rows } = await query(
+    `WITH first_booking AS (
+       SELECT distinct_id, date_trunc('week', min(ts)) AS cohort_week
+         FROM analytics_events
+        WHERE event = 'booking_confirmed' AND properties->>'gym_id' = $2
+        GROUP BY distinct_id
+     ),
+     activity AS (
+       SELECT distinct_id, date_trunc('week', ts) AS activity_week
+         FROM analytics_events
+        WHERE event = 'booking_confirmed' AND properties->>'gym_id' = $2
+        GROUP BY distinct_id, date_trunc('week', ts)
+     )
+     SELECT
+       fb.cohort_week,
+       count(DISTINCT fb.distinct_id)::int AS cohort_size,
+       floor(extract(epoch FROM (a.activity_week - fb.cohort_week)) / 604800)::int AS week_offset,
+       count(DISTINCT a.distinct_id)::int AS active_users
+     FROM first_booking fb
+     JOIN activity a ON a.distinct_id = fb.distinct_id AND a.activity_week >= fb.cohort_week
+    WHERE fb.cohort_week > now() - ($1 || ' weeks')::interval
+    GROUP BY fb.cohort_week, week_offset
+   ORDER BY fb.cohort_week, week_offset`,
+    [n, String(gymId)]
   );
 
   const cohortsByWeek = new Map();

@@ -1,7 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
@@ -569,6 +569,28 @@ const listAttendanceSaasMembers = async (req, res) => {
     res.json({ data: members });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Partner-facing member roster (attendance-SaaS gap-analysis finding: every
+// competitor treats "see your own members" as day-one baseline, and this
+// existed in code but was gobhi-only). Same query as
+// listAttendanceSaasMembers above, minus phone — partners must never see a
+// customer's phone number (same rule bookingController's getGymBookings
+// already enforces for the booking-history roster).
+export const listGymMembersForPartner = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    await assertPartnerOwnsGym(gymId, req.user.id);
+    const members = await prisma.user.findMany({
+      where: { linkedGymId: gymId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, createdAt: true },
+    });
+    res.json({ data: members });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

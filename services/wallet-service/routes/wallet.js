@@ -27,6 +27,7 @@ import {
   getSubscriptionSummaryByGym,
   getCustomerIdsWithPurchasedSubscription,
   getSubscriptionsForGym,
+  getSubscriptionsForGymForPartner,
   recordPendingBankSettlement,
   getPendingBankSettlements,
   settleBankSettlements,
@@ -62,6 +63,7 @@ router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (n
 router.post('/subscriptions/purchase-with-wallet', requireAuth, purchaseSubscriptionWithWalletHandler);
 router.get('/subscriptions/admin/by-gym', requireRole('gobhi'), getSubscriptionSummaryByGym); // Admin: attendance-SaaS per-gym rollup (registered before /subscriptions/mine — literal path)
 router.get('/subscriptions/admin/by-gym/:gymId', requireRole('gobhi'), getSubscriptionsForGym); // Admin: individual subscription rows for one gym (member roster)
+router.get('/subscriptions/gym/:gymId', requireRole('partner'), getSubscriptionsForGymForPartner); // Partner: same rows, ownership-checked, for their own gym's member roster
 router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer's own subscriptions (optional ?gymId=)
 router.post('/subscriptions/:id/ack-gift-reveal', requireAuth, ackGiftReveal); // Customer confirms they've seen the /gift-reveal screen
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check

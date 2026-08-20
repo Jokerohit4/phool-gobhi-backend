@@ -35,6 +35,10 @@ router.put('/cancellation-policy', requireRole('gobhi'), ctrl.updateCancellation
 router.get('/gym/:gymId', requireRole('partner'), ctrl.getGymBookings);
 router.get('/gym/:gymId/summary', requireRole('partner'), ctrl.getGymSalesSummary);
 router.get('/gym/:gymId/attendance-summary', requireRole('partner'), ctrl.getGymAttendanceSummary);
+// Partner-facing "Gym insights" — the gym-scoped slice of analytics_events
+// (funnel/revenue-trend/retention) that closes the gap-analysis finding that
+// the wedge's own analytics never reached the partner. See analyticsController.js.
+router.get('/gym/:gymId/analytics', requireRole('partner'), analyticsCtrl.getGymAnalyticsForPartner);
 router.get('/admin/attendance-summary', requireRole('gobhi'), ctrl.getAdminAttendanceSummary);
 router.get('/admin/attendance-summary/by-gym', requireRole('gobhi'), ctrl.getAdminAttendanceByGym);
 

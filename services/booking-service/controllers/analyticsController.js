@@ -1,9 +1,32 @@
 import * as analyticsQuery from '../services/analyticsQueryService.js';
 import * as savedFunnels from '../services/savedFunnelService.js';
+import { assertPartnerOwnsGym } from '../services/bookingService.js';
 
 // Thin wrappers, same shape as the existing admin attendance endpoints in
 // bookingController.js — every route here is requireRole('gobhi') (see
 // routes/booking.js) and backs the admin portal's /analytics page.
+
+// Partner-facing exception to the above: a gym-scoped slice of the same
+// analytics_events data, gated by requireRole('partner') + ownership (see
+// routes/booking.js) instead of requireRole('gobhi'). Bundles funnel +
+// revenue trend + retention into one call — this is the "Gym insights" view
+// that closes the attendance-SaaS gap-analysis finding that the wedge's own
+// analytics never reached the partner.
+export const getGymAnalyticsForPartner = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    await assertPartnerOwnsGym(gymId, req.userId);
+    const days = req.query.days;
+    const [funnel, revenueTrend, retention] = await Promise.all([
+      analyticsQuery.getGymFunnel(gymId, days),
+      analyticsQuery.getGymRevenueTrend(gymId, days),
+      analyticsQuery.getGymRetentionCohorts(gymId, req.query.cohortWeeks),
+    ]);
+    res.json({ data: { funnel, revenueTrend, retention } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
 
 export const getOnboardingFunnel = async (req, res) => {
   try {

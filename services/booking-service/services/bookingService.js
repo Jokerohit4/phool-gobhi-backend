@@ -59,6 +59,23 @@ async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
 }
 
+// Shared by every partner-facing, gym-scoped read (bookings, sales summary,
+// attendance summary, and now gym analytics) — fetches the gym from
+// gym-service and throws unless the requesting partner actually owns it.
+// Returns the gym object so callers that also need gym fields (e.g.
+// commissionPct) don't have to fetch it twice.
+export async function assertPartnerOwnsGym(gymId, partnerId) {
+  let gym;
+  try {
+    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = gymRes.data?.data || gymRes.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
 // Best-effort customer name lookup for the early-scan confirmation dialog —
 // same single-user internal call pattern as notifyCustomer.js. Never blocks
 // the flow: a lookup failure just falls back to a generic label.
@@ -1535,15 +1552,7 @@ export async function getBookingCountForGym(gymId) {
 
 export async function getGymBookings(gymId, partnerId) {
   try {
-    // Verify partner owns this gym before exposing bookings
-    let gym;
-    try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-      gym = gymRes.data?.data || gymRes.data;
-    } catch (_) {
-      throw { status: 404, error: 'Gym not found' };
-    }
-    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+    await assertPartnerOwnsGym(gymId, partnerId);
 
     let bookings = await prisma.booking.findMany({
       where: { gymId },
@@ -1669,15 +1678,7 @@ export async function confirmBooking(bookingId, gymId, partnerId) {
 
 export async function getGymSalesSummary(gymId, partnerId) {
   try {
-    // Verify partner owns this gym before exposing revenue data
-    let gym;
-    try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-      gym = gymRes.data?.data || gymRes.data;
-    } catch (_) {
-      throw { status: 404, error: 'Gym not found' };
-    }
-    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+    const gym = await assertPartnerOwnsGym(gymId, partnerId);
     const effectiveCommissionPct = gym.commissionPct ?? BOOKING_COMMISSION_PERCENT;
 
     const today = new Date();
@@ -1802,14 +1803,7 @@ async function attendanceBucket(where) {
 
 export async function getGymAttendanceSummary(gymId, partnerId) {
   try {
-    let gym;
-    try {
-      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-      gym = gymRes.data?.data || gymRes.data;
-    } catch (_) {
-      throw { status: 404, error: 'Gym not found' };
-    }
-    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+    await assertPartnerOwnsGym(gymId, partnerId);
 
     const { todayString, weekAgoString, monthAgoString, yearAgoString } = attendanceDateBuckets();
     const bookedStatuses = { in: ['confirmed', 'started', 'completed'] };
