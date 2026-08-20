@@ -39,8 +39,23 @@ router.get('/gym/:gymId/attendance-summary', requireRole('partner'), ctrl.getGym
 // (funnel/revenue-trend/retention) that closes the gap-analysis finding that
 // the wedge's own analytics never reached the partner. See analyticsController.js.
 router.get('/gym/:gymId/analytics', requireRole('partner'), analyticsCtrl.getGymAnalyticsForPartner);
+// Live occupancy ("who's here right now") + attendance heatmap ("which day,
+// what time") — partner (own gym, ownership-checked) and admin (any/all
+// gyms) versions. See bookingService.js's fetchLiveOccupancy/
+// computeAttendanceHeatmap for why `started` status / attendedAt is the
+// signal used.
+router.get('/gym/:gymId/live', requireRole('partner'), ctrl.getGymLiveOccupancy);
+router.get('/gym/:gymId/attendance-heatmap', requireRole('partner'), ctrl.getGymAttendanceHeatmap);
 router.get('/admin/attendance-summary', requireRole('gobhi'), ctrl.getAdminAttendanceSummary);
 router.get('/admin/attendance-summary/by-gym', requireRole('gobhi'), ctrl.getAdminAttendanceByGym);
+// Admin-only: bookings/presence explorer for one gym (previously admin had
+// NO bookings list at all, unlike partner-web's own /bookings).
+router.get('/admin/gym/:gymId/bookings', requireRole('gobhi'), ctrl.getGymBookingsAdmin);
+router.get('/admin/live', requireRole('gobhi'), ctrl.getAdminLiveOccupancy);
+router.get('/admin/attendance-heatmap', requireRole('gobhi'), ctrl.getAdminAttendanceHeatmap);
+// Admin-only: top-performing-gyms leaderboard — the mirror image of the
+// existing supply-health view (which finds the worst gyms).
+router.get('/admin/top-gyms', requireRole('gobhi'), ctrl.getTopPerformingGyms);
 
 // Admin analytics dashboards (phool-gobhi-admin's /analytics page) — reads
 // from analytics_events via a separate pool (see analyticsQueryService.js),

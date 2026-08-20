@@ -176,6 +176,68 @@ export const getAdminAttendanceByGym = async (req, res) => {
   }
 };
 
+// Admin (gobhi) bookings/presence explorer for one gym — no bookings list
+// existed in admin at all before this; mirrors getGymBookings' partner
+// version (name+photo, no phone), just without the ownership check.
+export const getGymBookingsAdmin = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const bookings = await bookingService.getGymBookingsAdmin(gymId);
+    res.json({ data: bookings });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getGymLiveOccupancy = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getGymLiveOccupancy(gymId, req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getAdminLiveOccupancy = async (req, res) => {
+  try {
+    const gymId = req.query.gymId ? parseInt(req.query.gymId) : undefined;
+    const result = await bookingService.getAdminLiveOccupancy(gymId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getGymAttendanceHeatmap = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getGymAttendanceHeatmap(gymId, req.userId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getAdminAttendanceHeatmap = async (req, res) => {
+  try {
+    const gymId = req.query.gymId ? parseInt(req.query.gymId) : undefined;
+    const result = await bookingService.getAdminAttendanceHeatmap(gymId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getTopPerformingGyms = async (req, res) => {
+  try {
+    const result = await bookingService.getTopPerformingGyms(req.query.days, req.query.limit);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getPublicAttendanceStats = async (req, res) => {
   try {
     const stats = await bookingService.getPublicAttendanceStats();
