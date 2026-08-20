@@ -82,6 +82,15 @@ model Gym {
   // marketplace bookings unchanged. Null = platform default (see
   // DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT in wallet-service).
   subscriptionCommissionPct Decimal? @db.Decimal(5, 2)
+  // Partner's own opt-out of the attendance-SaaS program — applied
+  // immediately by updateGym (like isActive), never gated behind the
+  // GymEditRequest approval queue, since there's nothing customer-facing to
+  // review about a partner declining a commission program. When true,
+  // GymSubscription purchases at this gym revert to the standard
+  // commissionPct rate above (wallet-service) and their payouts go back to
+  // the normal in-app wallet instead of the attendance-SaaS bank-settlement
+  // ledger — i.e. this gym behaves exactly as if the program didn't exist.
+  attendanceSaasOptedOut Boolean @default(false)
   weeklyPlanPrice     Decimal? @db.Decimal(19, 2)
   monthlyPlanPrice    Decimal? @db.Decimal(19, 2)
   quarterlyPlanPrice  Decimal? @db.Decimal(19, 2)

@@ -27,6 +27,10 @@ import {
   getSubscriptionSummaryByGym,
   getCustomerIdsWithPurchasedSubscription,
   getSubscriptionsForGym,
+  recordPendingBankSettlement,
+  getPendingBankSettlements,
+  settleBankSettlements,
+  getMyBankSettlements,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -65,5 +69,14 @@ router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, rede
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
 router.post('/internal/orders/reconcile-pending', requireInternal, reconcilePendingRazorpayOrdersInternal); // Razorpay top-up reconciliation trigger
 router.post('/internal/subscriptions/has-purchased-batch', requireInternal, getCustomerIdsWithPurchasedSubscription); // auth-service's attendance-SaaS re-engagement sweep
+
+// Attendance-SaaS bank settlements — a separate ledger from Wallet above;
+// this money never credits the partner's in-app wallet. Literal paths
+// (mine, admin/pending) registered before the /admin/:partnerId/settle
+// param route, same convention as elsewhere in this file.
+router.post('/internal/bank-settlements/record', requireInternal, recordPendingBankSettlement); // booking-service, at completion of a SaaS subscription visit
+router.get('/bank-settlements/mine', requireRole('partner'), getMyBankSettlements); // Partner's own pending total + history (optional ?gymId=)
+router.get('/bank-settlements/admin/pending', requireRole('gobhi'), getPendingBankSettlements); // Admin: every partner's pending total
+router.post('/bank-settlements/admin/:partnerId/settle', requireRole('gobhi'), settleBankSettlements); // Admin: mark a partner's pending rows settled (optional body {gymId})
 
 export default router;

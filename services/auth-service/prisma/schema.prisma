@@ -32,6 +32,7 @@ model User {
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
   refreshTokens   RefreshToken[]
+  bankAccount     PartnerBankAccount?
   // Referral program: referralCode is this user's own shareable code,
   // deterministically derived from `id` right after creation (see
   // issueSessionForUser) — never random, so no collision-retry loop needed.
@@ -177,6 +178,28 @@ model SavedAddress {
   user             User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@schema("auth")
+}
+
+// A partner's bank details for the attendance-SaaS bank-settlement flow
+// (wallet-service's PartnerBankSettlement) — admin uses this to actually
+// make the manual bank transfer; there's no automated disbursement API
+// here, this is just where the destination details are recorded.
+// SECURITY NOTE: stored as plain columns, not encrypted at rest — same
+// posture as the rest of this schema (no field-level encryption anywhere
+// yet), flagged here explicitly since this is more sensitive than most of
+// what's on User. Worth a follow-up if this needs to satisfy a stricter
+// bar before real payout volume flows through it.
+model PartnerBankAccount {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  accountHolderName String
+  accountNumber     String
+  ifscCode          String
+  upiId             String?
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id])
+
   @@schema("auth")
 }
 

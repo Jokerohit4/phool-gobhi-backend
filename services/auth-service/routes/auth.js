@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -76,6 +76,12 @@ router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 router.post('/internal/attendance-saas/reengagement-sweep', requireInternal, runAttendanceSaasReengagementSweep);
 // Gobhi-only: admin's attendance-SaaS member roster for one gym.
 router.get('/admin/attendance-saas/members/:gymId', requireGobhi, listAttendanceSaasMembers);
+// Partner self-service bank details, for the attendance-SaaS bank-settlement
+// flow (wallet-service's PartnerBankSettlement) — admin needs the full
+// details to actually make the manual transfer, hence the admin route too.
+router.get('/bank-account', verifyToken, getBankAccount);
+router.put('/bank-account', verifyToken, updateBankAccount);
+router.get('/admin/bank-account/:userId', requireGobhi, getBankAccountAdmin);
 router.post('/fcm-token', verifyToken, updateFcmToken);
 
 // Pitch-deck access allowlist (moved off a hardcoded file in the website repo)

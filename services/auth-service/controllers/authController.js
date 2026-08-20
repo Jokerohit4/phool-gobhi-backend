@@ -586,6 +586,56 @@ const updateMe = async (req, res) => {
   }
 };
 
+// Partner-only self-service — for the attendance-SaaS bank-settlement flow.
+// No masking on the way back to the partner: it's their own data, and admin
+// separately needs the full details to actually make the transfer, so
+// there's nothing gained by hiding it from the one person it belongs to.
+const getBankAccount = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const account = await prisma.partnerBankAccount.findUnique({ where: { userId: req.user.id } });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateBankAccount = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const { accountHolderName, accountNumber, ifscCode, upiId } = req.body ?? {};
+    if (!accountHolderName?.trim() || !accountNumber?.trim() || !ifscCode?.trim()) {
+      return res.status(400).json({ error: 'accountHolderName, accountNumber, and ifscCode are required' });
+    }
+    const data = {
+      accountHolderName: accountHolderName.trim(),
+      accountNumber: accountNumber.trim(),
+      ifscCode: ifscCode.trim().toUpperCase(),
+      upiId: upiId?.trim() || null,
+    };
+    const account = await prisma.partnerBankAccount.upsert({
+      where: { userId: req.user.id },
+      update: data,
+      create: { userId: req.user.id, ...data },
+    });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only — admin needs the full bank details to actually make the
+// manual settlement transfer (see wallet-service's PartnerBankSettlement).
+const getBankAccountAdmin = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const account = await prisma.partnerBankAccount.findUnique({ where: { userId } });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
@@ -597,6 +647,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

@@ -173,9 +173,13 @@ async function reconcileStalePendingBooking(booking) {
 // earnings actually track attendance instead of being fixed at purchase.
 function bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subscription) {
   if (subscriptionId) {
-    if (subscription?.payoutModel === 'upfront') return { commissionPct: null, partnerShare: null };
+    // Rides along on the same serialized subscription object as
+    // commissionPct/partnerShare/days — see wallet-service's
+    // serializeSubscription, which spreads the raw GymSubscription row.
+    const isAttendanceSaas = !!subscription?.isAttendanceSaas;
+    if (subscription?.payoutModel === 'upfront') return { commissionPct: null, partnerShare: null, isAttendanceSaas };
     const perVisitShare = Math.round((subscription.partnerShare / subscription.days) * 100) / 100;
-    return { commissionPct: subscription.commissionPct, partnerShare: perVisitShare };
+    return { commissionPct: subscription.commissionPct, partnerShare: perVisitShare, isAttendanceSaas };
   }
   // Per-gym override (gym-service's Gym.commissionPct, admin-editable) takes
   // priority; the env constant only ever fires for a gym-service response
@@ -183,7 +187,7 @@ function bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subsc
   // cheaper than trusting that).
   const commissionPct = gymCommissionPct ?? BOOKING_COMMISSION_PERCENT;
   const partnerShare = Math.round(amount * (1 - commissionPct / 100) * 100) / 100;
-  return { commissionPct, partnerShare };
+  return { commissionPct, partnerShare, isAttendanceSaas: false };
 }
 
 async function reserveBookingSlot({ customerId, gymId, classId = null, date, startTime, endTime, amount, capacity, candidateSubscription = null, gymCommissionPct = null }) {
@@ -893,7 +897,27 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // pay out here exactly like a normal paid booking.
     const payoutAmount = booking.partnerShare ?? booking.amount;
     const skipPayout = booking.subscriptionId && booking.partnerShare == null;
-    if (!skipPayout) {
+    // Attendance-SaaS subscription visit: this partner share is settled
+    // directly to the partner's bank account by admin, never credited to
+    // their in-app wallet (see PartnerBankSettlement in wallet-service).
+    // Everything else — one-off marketplace bookings, and subscriptions at
+    // an opted-out gym — keeps crediting the wallet exactly as before.
+    const isSaasBankSettlement = booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null;
+    if (isSaasBankSettlement) {
+      try {
+        if (gym.partnerId) {
+          await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
+            partnerId: gym.partnerId,
+            gymId,
+            bookingId,
+            subscriptionId: booking.subscriptionId,
+            amount: payoutAmount,
+          }, await internalHeadersFor(WALLET_SERVICE_URL));
+        }
+      } catch (payoutErr) {
+        console.error('Partner bank settlement record failed for booking', bookingId, payoutErr.message);
+      }
+    } else if (!skipPayout) {
       try {
         if (gym.partnerId) {
           await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
@@ -1684,26 +1708,45 @@ export async function getGymSalesSummary(gymId, partnerId) {
       select: { date: true, amount: true, partnerShare: true, subscriptionId: true },
     });
 
-    function bucketFor(predicate) {
-      const rows = bookings.filter(predicate);
+    // Net for a single row — extracted so the combined bucket and the
+    // marketplace/registration split below stay byte-for-byte consistent
+    // (same fallback logic, no risk of the split drifting from the total).
+    function netShare(b) {
+      // Only legacy "upfront"-model subscription bookings have a null
+      // partnerShare here — that partner was already paid the full plan
+      // share in one shot at subscription purchase, so it's excluded from
+      // this per-booking payout sum. Current "perVisit" subscription
+      // bookings have a real partnerShare (their per-visit slice) and flow
+      // through the normal branch below like any other booking.
+      if (b.subscriptionId && b.partnerShare == null) return 0;
+      return b.partnerShare != null
+        ? Number(b.partnerShare)
+        : Number(b.amount) * (1 - effectiveCommissionPct / 100); // legacy rows predating partnerShare
+    }
+
+    function sumBucket(rows) {
       const gross = rows.reduce((sum, b) => sum + Number(b.amount), 0);
-      const net = rows.reduce((sum, b) => {
-        // Only legacy "upfront"-model subscription bookings have a null
-        // partnerShare here — that partner was already paid the full plan
-        // share in one shot at subscription purchase, so it's excluded from
-        // this per-booking payout sum. Current "perVisit" subscription
-        // bookings have a real partnerShare (their per-visit slice) and flow
-        // through the normal branch below like any other booking.
-        if (b.subscriptionId && b.partnerShare == null) return sum;
-        const share = b.partnerShare != null
-          ? Number(b.partnerShare)
-          : Number(b.amount) * (1 - effectiveCommissionPct / 100); // legacy rows predating partnerShare
-        return sum + share;
-      }, 0);
+      const net = rows.reduce((sum, b) => sum + netShare(b), 0);
       return {
         count: rows.length,
         total: Math.round(gross * 100) / 100,
         net: Math.round(net * 100) / 100,
+      };
+    }
+
+    // Marketplace (one-off, discovered-and-booked) vs registration
+    // (subscription-covered — the attendance-SaaS "someone registered with
+    // this gym and is visiting under a plan" revenue) — split purely on
+    // subscriptionId, regardless of whether that subscription is under the
+    // honeymoon/SaaS commission or an opted-out gym's standard rate, since
+    // from the partner's perspective both are still "a member visiting
+    // under a plan," not a one-off marketplace booking.
+    function bucketFor(predicate) {
+      const rows = bookings.filter(predicate);
+      return {
+        ...sumBucket(rows),
+        marketplace: sumBucket(rows.filter((b) => b.subscriptionId == null)),
+        registration: sumBucket(rows.filter((b) => b.subscriptionId != null)),
       };
     }
 

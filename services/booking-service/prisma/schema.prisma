@@ -47,6 +47,14 @@ model Booking {
   // never fires for it — but completeBooking's partner payout DOES fire for
   // it now, unless partnerShare is null (see above).
   subscriptionId   Int?
+  // Snapshotted at booking-creation time from the covering GymSubscription's
+  // own isAttendanceSaas flag (wallet-service) — meaningless when
+  // subscriptionId is null (always false there). true routes this booking's
+  // completeBooking payout to wallet-service's PartnerBankSettlement ledger
+  // instead of crediting the wallet, same as every other commission field
+  // here: captured once so a later change to the gym's opt-out status never
+  // retroactively changes how an already-booked visit gets paid.
+  isAttendanceSaas Boolean       @default(false)
   // Set for a recurring-class booking instead of a plain-slot booking — the
   // class's own schedule (gym-service's GymClass) governs startTime/endTime
   // for this row, and its capacity pool is tracked separately from the

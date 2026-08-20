@@ -510,6 +510,11 @@ export async function updateGym(gymId, partnerId, data) {
     // own listing offline.
     'isActive',
     'googlePlaceId',
+    // Partner's own opt-out of the attendance-SaaS program — same
+    // immediate-apply, never-gated treatment as isActive just above, and
+    // for the same reason: nothing customer-facing to review about a
+    // partner declining a commission program.
+    'attendanceSaasOptedOut',
   ];
 
   allowedFields.forEach(field => {
@@ -520,13 +525,16 @@ export async function updateGym(gymId, partnerId, data) {
 
   validateGymFields(updateData);
 
-  const { isActive, ...gatedData } = updateData;
+  const { isActive, attendanceSaasOptedOut, ...gatedData } = updateData;
 
   let updatedGym = gym;
-  if (isActive !== undefined) {
+  if (isActive !== undefined || attendanceSaasOptedOut !== undefined) {
     updatedGym = normalizeGymMoney(await prisma.gym.update({
       where: { id: gymId },
-      data: { isActive },
+      data: {
+        ...(isActive !== undefined && { isActive }),
+        ...(attendanceSaasOptedOut !== undefined && { attendanceSaasOptedOut }),
+      },
     }));
   }
 

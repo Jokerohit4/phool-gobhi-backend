@@ -82,6 +82,12 @@ function computeSubscriptionSaasCommissionPct(partnershipStartDate, overridePct)
   return Date.now() < honeymoonEndsAt ? 0 : resolvedRate;
 }
 
+// Same env var name as booking-service's own fallback for the identical
+// concept (the standard marketplace rate) — used here only when a gym has
+// opted out of attendance-SaaS, so its subscription purchases fall back to
+// being priced exactly like a one-off marketplace booking.
+const STANDARD_COMMISSION_PERCENT_FALLBACK = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
+
 // Admin-portal-editable wallet top-up options (presets + optional
 // custom-amount range). Cached briefly since createTopUpOrder reads this on
 // every top-up attempt — a short TTL bounds DB load without weakening
@@ -475,6 +481,74 @@ export async function getCustomerIdsWithPurchasedSubscriptionService(customerIds
   return rows.map((r) => r.customerId);
 }
 
+// --- Attendance-SaaS bank settlements -------------------------------------
+// A parallel ledger to Wallet/WalletTransaction, deliberately separate: this
+// money never touches the partner's in-app wallet balance. booking-service
+// calls recordPendingBankSettlementService at booking-completion time
+// instead of crediting the wallet, whenever a booking's payout is both
+// subscription-linked and isAttendanceSaas. Settlement itself (the actual
+// bank transfer) stays a manual, off-platform admin action — same posture
+// as the existing wallet payoutWalletService below, just a different ledger.
+
+export async function recordPendingBankSettlementService({ partnerId, gymId, bookingId, subscriptionId, amount }) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw { status: 400, error: 'amount must be a positive finite number' };
+  }
+  return prisma.partnerBankSettlement.create({
+    data: { partnerId, gymId, bookingId, subscriptionId, amount },
+  });
+}
+
+// Gobhi-only: every partner's pending (not yet settled) bank-settlement
+// total, grouped by partner — the admin equivalent of getPartnerBalancesService
+// but for this separate ledger.
+export async function getPendingBankSettlementsService() {
+  const rows = await prisma.partnerBankSettlement.findMany({
+    where: { settledAt: null },
+  });
+  const byPartner = new Map();
+  for (const row of rows) {
+    const bucket = byPartner.get(row.partnerId) ?? { partnerId: row.partnerId, amount: 0, count: 0 };
+    bucket.amount = Math.round((bucket.amount + Number(row.amount)) * 100) / 100;
+    bucket.count += 1;
+    byPartner.set(row.partnerId, bucket);
+  }
+  return enrichWithUserInfo([...byPartner.values()].sort((a, b) => b.amount - a.amount));
+}
+
+// Gobhi-only: marks every currently-pending settlement row for one partner
+// as settled (the admin has done the actual bank transfer outside the app).
+// Optionally scoped to one gym, matching getPartnerBalancesService/
+// payoutWalletService's per-user granularity but allowing a per-gym partial
+// settlement for a multi-gym partner.
+export async function settleBankSettlementsService(partnerId, gymId) {
+  const result = await prisma.partnerBankSettlement.updateMany({
+    where: { partnerId, settledAt: null, ...(gymId ? { gymId } : {}) },
+    data: { settledAt: new Date() },
+  });
+  return { settledCount: result.count };
+}
+
+// Partner-facing: their own pending total + settlement history, optionally
+// scoped to one gym (multi-gym partners).
+export async function getMyBankSettlementsService(partnerId, gymId) {
+  const rows = await prisma.partnerBankSettlement.findMany({
+    where: { partnerId, ...(gymId ? { gymId } : {}) },
+    orderBy: { createdAt: 'desc' },
+  });
+  const pending = rows.filter((r) => r.settledAt == null);
+  const settled = rows.filter((r) => r.settledAt != null);
+  return {
+    pendingAmount: Math.round(pending.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
+    pendingCount: pending.length,
+    history: rows.map((r) => ({
+      id: r.id, gymId: r.gymId, amount: Number(r.amount),
+      settledAt: r.settledAt, createdAt: r.createdAt,
+    })),
+    totalSettled: Math.round(settled.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
+  };
+}
+
 export async function payoutWalletService(userId, amount, description) {
   const explicitAmount = amount != null;
   if (explicitAmount && (!Number.isFinite(amount) || amount <= 0)) {
@@ -625,6 +699,13 @@ export async function fetchGymForSubscription(gymId, planType) {
     price: Number(price),
     partnershipStartDate: gym.partnershipStartDate ?? null,
     subscriptionCommissionPct: gym.subscriptionCommissionPct != null ? Number(gym.subscriptionCommissionPct) : null,
+    attendanceSaasOptedOut: gym.attendanceSaasOptedOut === true,
+    // The gym's STANDARD marketplace rate (same field bookings use) — only
+    // consulted when attendanceSaasOptedOut is true, as the fallback rate
+    // instead of the honeymoon/SaaS one. Named distinctly from
+    // subscriptionCommissionPct above to avoid confusion: that one is the
+    // SaaS-program override, this is the plain marketplace commissionPct.
+    standardCommissionPct: gym.commissionPct != null ? Number(gym.commissionPct) : null,
   };
 }
 
@@ -646,7 +727,11 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const { partnerId, price, partnershipStartDate, subscriptionCommissionPct: subscriptionCommissionPctOverride } = await fetchGymForSubscription(gymId, planType);
+  const {
+    partnerId, price, partnershipStartDate,
+    subscriptionCommissionPct: subscriptionCommissionPctOverride,
+    attendanceSaasOptedOut, standardCommissionPct,
+  } = await fetchGymForSubscription(gymId, planType);
 
   // Same self-booking-fraud guard as booking-service's createBooking — a
   // partner shouldn't be able to buy a subscription to their own gym under
@@ -682,7 +767,15 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const commissionPct = computeSubscriptionSaasCommissionPct(partnershipStartDate, subscriptionCommissionPctOverride);
+  // Opted-out gym: skip the honeymoon/SaaS model entirely and price this
+  // subscription exactly like a one-off marketplace booking — same rate,
+  // and (see bookingCommissionFields/completeBooking in booking-service)
+  // its per-visit payouts will credit the wallet normally instead of the
+  // attendance-SaaS bank-settlement ledger.
+  const isAttendanceSaas = !attendanceSaasOptedOut;
+  const commissionPct = isAttendanceSaas
+    ? computeSubscriptionSaasCommissionPct(partnershipStartDate, subscriptionCommissionPctOverride)
+    : (standardCommissionPct ?? STANDARD_COMMISSION_PERCENT_FALLBACK);
   // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
   // partner is credited partnerShare/days per completed visit instead (see
   // bookingCommissionFields/completeBooking in booking-service), so this
@@ -711,6 +804,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
       price,
       commissionPct,
       partnerShare,
+      isAttendanceSaas,
       startDate,
       endDate,
       razorpayOrderId: syntheticOrderId,

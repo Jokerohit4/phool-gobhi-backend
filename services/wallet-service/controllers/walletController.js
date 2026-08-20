@@ -28,6 +28,10 @@ import {
   getSubscriptionSummaryByGymService,
   getCustomerIdsWithPurchasedSubscriptionService,
   getSubscriptionsForGymService,
+  recordPendingBankSettlementService,
+  getPendingBankSettlementsService,
+  settleBankSettlementsService,
+  getMyBankSettlementsService,
 } from '../services/walletService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -220,6 +224,57 @@ export const payoutPartner = async (req, res) => {
     const { amount, description } = req.body;
     const result = await payoutWalletService(Number(userId), amount, description);
     track('partner_payout_recorded', Number(userId), { amount: result.transaction.amount });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Internal (requireInternal): booking-service calls this instead of
+// crediting the wallet, for a subscription-linked, isAttendanceSaas booking.
+export const recordPendingBankSettlement = async (req, res) => {
+  try {
+    const { partnerId, gymId, bookingId, subscriptionId, amount } = req.body;
+    const settlement = await recordPendingBankSettlementService({
+      partnerId: Number(partnerId), gymId: Number(gymId),
+      bookingId: Number(bookingId), subscriptionId: Number(subscriptionId),
+      amount: Number(amount),
+    });
+    res.json({ data: settlement });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only: every partner's pending attendance-SaaS bank-settlement total.
+export const getPendingBankSettlements = async (req, res) => {
+  try {
+    const rows = await getPendingBankSettlementsService();
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Gobhi-only: admin has done the actual bank transfer outside the app —
+// marks this partner's (optionally one gym's) pending rows settled.
+export const settleBankSettlements = async (req, res) => {
+  try {
+    const { partnerId } = req.params;
+    const { gymId } = req.body;
+    const result = await settleBankSettlementsService(Number(partnerId), gymId ? Number(gymId) : undefined);
+    track('partner_bank_settlement_recorded', Number(partnerId), { settled_count: result.settledCount, gym_id: gymId ?? null });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Partner-facing: their own pending total + settlement history.
+export const getMyBankSettlements = async (req, res) => {
+  try {
+    const gymId = req.query.gymId ? Number(req.query.gymId) : undefined;
+    const result = await getMyBankSettlementsService(req.userId, gymId);
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
