@@ -39,6 +39,22 @@ export async function getGymCity(gymId) {
   }
 }
 
+// Same purpose as getGymCity above (denormalize context onto the
+// subscription_purchased_wallet event, attendance-SaaS funnel), but
+// deliberately NOT cached the same way: a per-gym cache is bounded by the
+// small, slow-growing number of gyms, while a per-user cache would grow
+// unbounded over the service's lifetime for no real benefit — a subscription
+// purchase is rare enough per user that a live lookup here isn't a hot path.
+// A lookup failure must never block the purchase it's attached to.
+export async function getUserLinkedGymId(userId) {
+  try {
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${userId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    return (res.data?.data || res.data)?.linkedGymId ?? null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Attendance-SaaS wedge (finalized 2026-08-19): GymSubscription purchases no
 // longer share Gym.commissionPct with one-off marketplace bookings. Instead,
 // every gym gets a flat honeymoon window from its own

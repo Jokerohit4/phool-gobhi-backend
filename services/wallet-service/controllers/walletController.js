@@ -21,6 +21,7 @@ import {
   ackGiftRevealService,
   getTransactionByIdempotencyKeyService,
   getGymCity,
+  getUserLinkedGymId,
   reconcilePendingRazorpayOrdersService,
   getWalletTopupConfigCached,
   updateWalletTopupConfig,
@@ -333,8 +334,19 @@ export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
     }
 
     const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
+    // linked_gym_id (attendance-SaaS funnel): non-null only when the buyer's
+    // OWN linked gym matches the one they're subscribing to — that's the
+    // actual funnel step ("a gym-linked signup converted into a paid
+    // registration"), not just "a linked user bought any subscription
+    // anywhere." A buyer with no linkedGymId, or one buying at a different
+    // gym than they're linked to, still shows up as a plain marketplace sale.
+    const buyerLinkedGymId = await getUserLinkedGymId(userId);
     track('subscription_purchased_wallet', userId, {
-      amount: subscription.price, gym_id: gymId, plan_type: planType, city: await getGymCity(Number(gymId)),
+      amount: subscription.price,
+      gym_id: gymId,
+      plan_type: planType,
+      city: await getGymCity(Number(gymId)),
+      linked_gym_id: buyerLinkedGymId === Number(gymId) ? buyerLinkedGymId : null,
     });
     res.status(201).json({ data: { subscription } });
   } catch (err) {

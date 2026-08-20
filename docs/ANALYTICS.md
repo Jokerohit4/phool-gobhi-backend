@@ -117,8 +117,8 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 
 | Event | Service | distinct_id | Key properties |
 |---|---|---|---|
-| `signup_completed` | auth | userId | `role`, `user_type` |
-| `login_completed` | auth | userId | `role`, `user_type` |
+| `signup_completed` | auth | userId | `role`, `user_type`, `linked_gym_id` (attendance-SaaS wedge — non-null only on a genuine new signup via a gym's /join link) |
+| `login_completed` | auth | userId | `role`, `user_type`, `linked_gym_id` (always the account's existing value, if any — set once at signup, never changes on login) |
 | `booking_confirmed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `start_time` |
 | `booking_failed` | booking | customerId | `gym_id`, `reason` (`slot_full`/`insufficient_balance`), `amount` |
 | `booking_cancelled` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
@@ -128,7 +128,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `wallet_topup_order_created` | wallet | userId | `amount`, `order_id` |
 | `wallet_topup_succeeded` | wallet | userId | `amount`, `order_id`, `via` (`webhook` if async) |
 | `wallet_topup_failed` | wallet | userId | `amount`, `order_id` |
-| `subscription_purchased_wallet` | wallet | userId | `amount`, `gym_id`, `plan_type` |
+| `subscription_purchased_wallet` | wallet | userId | `amount`, `gym_id`, `plan_type`, `city`, `linked_gym_id` (attendance-SaaS wedge — non-null only when this purchase is at the buyer's own linked gym, i.e. the actual join→register conversion step, not just any subscription sale) |
 | `partner_payout_recorded` | wallet | partnerId | `amount` |
 | `gym_created` | gym | partnerId | `gym_id`, `city`, `session_price` |
 | `gym_approved` | gym | partnerId | `gym_id`, `city` |
@@ -237,6 +237,12 @@ note on `ip`):
    (wallet-debit purchase, no separate order/verify events). Rows before that
    date use the retired `subscription_order_created` → `subscription_purchased`
    two-step names — see the retired-events note in §4.
+9. **Attendance-SaaS wedge (gym-linked signup → paid registration)** —
+   `signup_completed` where `linked_gym_id` is non-null → `subscription_purchased_wallet`
+   where `linked_gym_id` is non-null, joined on `distinct_id`. No separate
+   "joined the /join page" step is captured server-side (that's a client page
+   view, not a truth event) — this measures signup-to-paid-registration only,
+   not top-of-funnel page traffic.
 
 In PostHog: Product → Funnels → add these events as ordered steps, breakdown by
 `role` / `city` / `platform` as needed.

@@ -447,10 +447,15 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
 
   // Activation funnel: signup_completed (new) vs login_completed (returning).
   // distinct_id is the userId so this stitches with the client's pre-login
-  // anonymous events once the app calls identify(userId).
+  // anonymous events once the app calls identify(userId). linked_gym_id
+  // (attendance-SaaS wedge) is only ever non-null on a genuine signup_completed
+  // — an existing user's linkedGymId can't change on a later login (see the
+  // resolvedLinkedGymId comment above), so this measures the /join funnel
+  // without a separate event name.
   track(isNewUser ? 'signup_completed' : 'login_completed', user.id, {
     role: user.role,
     user_type: user.type,
+    linked_gym_id: user.linkedGymId ?? null,
   });
 
   // Tell partners, at login, whether their gym already exists so the app can
