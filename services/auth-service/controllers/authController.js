@@ -1,7 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
@@ -470,6 +470,7 @@ const getMe = async (req, res) => {
       fitnessGoals: user.fitnessGoals,
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
+      trainerGymId: user.trainerGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -500,6 +501,7 @@ const getUserInternal = async (req, res) => {
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,
       linkedGymId: user.linkedGymId,
+      trainerGymId: user.trainerGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -589,6 +591,45 @@ export const listGymMembersForPartner = async (req, res) => {
       select: { id: true, name: true, createdAt: true },
     });
     res.json({ data: members });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Partner-only — creates a gym-employed trainer account (never public
+// self-signup, see the ROLES.TRAINER guard in issueSessionForUser). The
+// trainer subsequently logs in via the normal /send-otp + /verify-otp flow
+// using the phone number given here.
+export const createTrainer = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainer = await createTrainerService(req.body ?? {}, gymId, req.user.id);
+    res.status(201).json({ data: trainer });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listTrainers = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainers = await listTrainersForGymService(gymId, req.user.id);
+    res.json({ data: trainers });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateTrainerStatus = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainerId = parseInt(req.params.trainerId);
+    const isActive = req.body?.isActive === true;
+    const trainer = await updateTrainerStatusService(trainerId, isActive, gymId, req.user.id);
+    res.json({ data: trainer });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

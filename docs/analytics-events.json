@@ -8,6 +8,9 @@
   "staff_account_created":       { "source": "server", "service": "auth-service" },
   "staff_account_revoked":       { "source": "server", "service": "auth-service" },
   "staff_account_reactivated":   { "source": "server", "service": "auth-service" },
+  "trainer_account_created":      { "source": "server", "service": "auth-service", "since": "2026-08-21", "notes": "partner created a gym-employed trainer account" },
+  "trainer_account_deactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
+  "trainer_account_reactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
 
   "gym_created":                 { "source": "server", "service": "gym-service" },
   "gym_approved":                { "source": "server", "service": "gym-service" },

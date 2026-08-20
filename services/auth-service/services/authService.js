@@ -488,6 +488,16 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   const isNewUser = !user;
 
   if (!user) {
+    // Unlike GOBHI's block above (unconditional — gobhi never legitimately
+    // logs in via phone/OTP at all), this only guards NEW-account creation:
+    // an existing trainer (created by their employing partner via
+    // createTrainerService) must still be able to log in through this same
+    // phone/OTP flow — see the "token is always keyed off the account's
+    // real DB role" comment below for why the caller-supplied `role` is
+    // irrelevant once the row already exists.
+    if (role === ROLES.TRAINER) {
+      throw { status: 403, error: 'Trainer accounts can only be created by a gym partner.' };
+    }
     // Resolve an incoming referral code to the referrer's id — silently
     // ignored if the code doesn't match anyone (typo'd code shouldn't block
     // signup). Self-referral is structurally impossible: this user's own row
@@ -582,7 +592,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     refreshToken,
     isNewUser,
     ...(onboarding !== undefined && { onboarding }),
-    user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType, linkedGymId: user.linkedGymId },
+    user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType, linkedGymId: user.linkedGymId, trainerGymId: user.trainerGymId },
   };
 }
 
@@ -753,4 +763,75 @@ export async function updateStaffStatusService(targetId, isActive, actorId) {
       throw err;
     }
   }
+}
+
+// Partner-only — mirrors createStaffService's "never public self-signup"
+// posture (see the ROLES.TRAINER guard in issueSessionForUser above), but
+// phone+OTP instead of email+password since a gym trainer is exactly the
+// kind of individual who already expects that login pattern from the
+// customer/partner apps. assertPartnerOwnsGym is the same ownership check
+// booking-service/wallet-service already use for their own gym-scoped
+// partner endpoints — duplicated here for the same reason those are
+// duplicated per-service (independent microservices, no shared code layer).
+export async function createTrainerService({ name, phone: rawPhone }, gymId, partnerId) {
+  await assertPartnerOwnsGym(gymId, partnerId);
+
+  const phone = normalizePhone(rawPhone);
+  if (!phone) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
+  }
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) {
+    throw { status: 400, error: 'name is required' };
+  }
+
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) {
+    throw {
+      status: 409,
+      error: existing.role === ROLES.TRAINER
+        ? 'This phone number is already registered as a trainer.'
+        : `This phone number is already registered as a ${existing.role}. A phone number can only be one account.`,
+    };
+  }
+
+  const trainer = await prisma.user.create({
+    data: {
+      name: trimmedName,
+      phone,
+      role: ROLES.TRAINER,
+      type: 'general',
+      trainerGymId: gymId,
+      updatedAt: new Date(),
+    },
+  });
+  track('trainer_account_created', partnerId, { trainerId: trainer.id, gymId });
+  return { id: trainer.id, name: trainer.name, phone: trainer.phone, isActive: trainer.isActive, createdAt: trainer.createdAt };
+}
+
+export async function listTrainersForGymService(gymId, partnerId) {
+  await assertPartnerOwnsGym(gymId, partnerId);
+  return prisma.user.findMany({
+    where: { role: ROLES.TRAINER, trainerGymId: gymId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, name: true, phone: true, isActive: true, createdAt: true },
+  });
+}
+
+// No "last active trainer" floor (unlike updateStaffStatusService) — a gym
+// can legitimately have zero active trainers, that's just a gym without
+// trainers, not a locked-out platform.
+export async function updateTrainerStatusService(trainerId, isActive, gymId, partnerId) {
+  await assertPartnerOwnsGym(gymId, partnerId);
+  const trainer = await prisma.user.findUnique({ where: { id: trainerId } });
+  if (!trainer || trainer.role !== ROLES.TRAINER || trainer.trainerGymId !== gymId) {
+    throw { status: 404, error: 'Trainer not found at this gym' };
+  }
+  const updated = await prisma.user.update({
+    where: { id: trainerId },
+    data: { isActive },
+    select: { id: true, name: true, phone: true, isActive: true, createdAt: true },
+  });
+  track(isActive ? 'trainer_account_reactivated' : 'trainer_account_deactivated', partnerId, { trainerId, gymId });
+  return updated;
 }
