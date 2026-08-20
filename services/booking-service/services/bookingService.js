@@ -1757,6 +1757,100 @@ export async function getAdminAttendanceHeatmap(gymId, days) {
   }
 }
 
+// ---- Per-member activity (most/least active, time spent, routine-vs-varied) --
+//
+// One shared dataset per gym that both partner and admin sort/slice into
+// several distinct views client-side (most active, least active, most/least
+// time spent, shows-up-at-the-same-time vs varies) — computing all of it
+// once per member is far cheaper than six separate leaderboard queries, and
+// every one of those views is really just a different sort/reverse of the
+// same per-member rows.
+//
+// "Time spent" is the sum of each attended booking's BOOKED slot duration
+// (endTime - startTime), not a measured presence duration — there's no
+// check-out event anywhere in the system (see fetchLiveOccupancy's comment),
+// so this is the closest real proxy: how much session time this member
+// attended, not how long they were physically in the building.
+//
+// consistencyRatio: for each member, the fraction of their visits that fall
+// in their single most-common hour-of-day. Close to 1 means "always shows
+// up around the same time"; low means their visit times vary a lot. Only
+// meaningful with 2+ visits — a single visit trivially scores 1.0.
+const MEMBER_ACTIVITY_MAX_DAYS = 90;
+
+function minutesBetweenTimes(startTime, endTime) {
+  const [sh, sm] = String(startTime).split(':').map(Number);
+  const [eh, em] = String(endTime).split(':').map(Number);
+  if ([sh, sm, eh, em].some((n) => !Number.isFinite(n))) return 0;
+  return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+}
+
+async function computeMemberActivity(gymId, days) {
+  const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= MEMBER_ACTIVITY_MAX_DAYS
+    ? Number(days) : 7;
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - n);
+  const fromDateString = fromDate.toISOString().split('T')[0];
+  const todayString = new Date().toISOString().split('T')[0];
+
+  const bookings = await prisma.booking.findMany({
+    where: { gymId, attendedAt: { not: null }, date: { gte: fromDateString, lte: todayString } },
+    select: { customerId: true, startTime: true, endTime: true },
+  });
+
+  const byCustomer = new Map();
+  for (const b of bookings) {
+    const entry = byCustomer.get(b.customerId) ?? { customerId: b.customerId, visitCount: 0, totalMinutes: 0, hourCounts: {} };
+    entry.visitCount += 1;
+    entry.totalMinutes += minutesBetweenTimes(b.startTime, b.endTime);
+    const hour = parseInt(String(b.startTime).split(':')[0], 10) || 0;
+    entry.hourCounts[hour] = (entry.hourCounts[hour] || 0) + 1;
+    byCustomer.set(b.customerId, entry);
+  }
+
+  const rows = [...byCustomer.values()].map((e) => {
+    const hourEntries = Object.entries(e.hourCounts);
+    const [mostCommonHour, mostCommonCount] = hourEntries.reduce(
+      (best, cur) => (cur[1] > best[1] ? cur : best), ['0', 0],
+    );
+    return {
+      customerId: e.customerId,
+      visitCount: e.visitCount,
+      totalMinutes: e.totalMinutes,
+      mostCommonHour: Number(mostCommonHour),
+      consistencyRatio: e.visitCount ? mostCommonCount / e.visitCount : 0,
+    };
+  });
+
+  const enriched = await enrichBookingsWithCustomerInfo(rows.map((r) => ({ customerId: r.customerId })));
+  const nameByCustomer = new Map(enriched.map((e) => [e.customerId, e.customerName]));
+
+  return {
+    windowDays: n,
+    members: rows.map((r) => ({ ...r, customerName: nameByCustomer.get(r.customerId) ?? null })),
+  };
+}
+
+export async function getMemberActivityForGym(gymId, partnerId, days) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    return computeMemberActivity(gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Admin: any specific gym (gobhi isn't restricted to gyms they own).
+export async function getMemberActivityAdmin(gymId, days) {
+  try {
+    return computeMemberActivity(gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
 // ---- Top-performing gyms (admin leaderboard) --------------------------------
 //
 // The mirror image of the existing getAdminAttendanceByGym (which sorts

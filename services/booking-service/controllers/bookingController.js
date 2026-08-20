@@ -229,6 +229,26 @@ export const getAdminAttendanceHeatmap = async (req, res) => {
   }
 };
 
+export const getMemberActivityForGym = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getMemberActivityForGym(gymId, req.userId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMemberActivityAdmin = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getMemberActivityAdmin(gymId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getTopPerformingGyms = async (req, res) => {
   try {
     const result = await bookingService.getTopPerformingGyms(req.query.days, req.query.limit);

@@ -46,6 +46,11 @@ router.get('/gym/:gymId/analytics', requireRole('partner'), analyticsCtrl.getGym
 // signal used.
 router.get('/gym/:gymId/live', requireRole('partner'), ctrl.getGymLiveOccupancy);
 router.get('/gym/:gymId/attendance-heatmap', requireRole('partner'), ctrl.getGymAttendanceHeatmap);
+// Per-member activity — most/least active, time spent, same-time vs varies.
+// One dataset, sorted/sliced into several views client-side (see
+// bookingService.js's computeMemberActivity for why).
+router.get('/gym/:gymId/member-activity', requireRole('partner'), ctrl.getMemberActivityForGym);
+router.get('/admin/gym/:gymId/member-activity', requireRole('gobhi'), ctrl.getMemberActivityAdmin);
 router.get('/admin/attendance-summary', requireRole('gobhi'), ctrl.getAdminAttendanceSummary);
 router.get('/admin/attendance-summary/by-gym', requireRole('gobhi'), ctrl.getAdminAttendanceByGym);
 // Admin-only: bookings/presence explorer for one gym (previously admin had
