@@ -153,6 +153,7 @@ function formatUser(user) {
     experienceLevel: user.experienceLevel || null,
     weeklyFrequencyIntent: user.weeklyFrequencyIntent || null,
     referralCode: user.referralCode || null,
+    linkedGymId: user.linkedGymId || null,
   };
 }
 
