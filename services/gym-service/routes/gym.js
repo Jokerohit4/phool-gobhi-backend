@@ -73,6 +73,9 @@ router.put('/:id/commission', requireRole('gobhi'), ctrl.updateGymCommission);
 // Body: {subscriptionCommissionPct: number|null} (0-100, null resets to platform default) — overrides
 // this gym's post-honeymoon attendance-SaaS commission on subscription purchases (see wallet-service).
 router.put('/:id/subscription-commission', requireRole('gobhi'), ctrl.updateGymSubscriptionCommission);
+// Body: {subscriptionPricingMode: 'percentage'|'flatPerUser', subscriptionFlatFeePerUser: number|null} —
+// picks which formula wallet-service applies to this gym's post-honeymoon attendance-SaaS commission.
+router.put('/:id/subscription-pricing-mode', requireRole('gobhi'), ctrl.updateGymSubscriptionPricingMode);
 // List all gyms regardless of owner/approval status; ?status=pending|approved|rejected
 router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 // Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)

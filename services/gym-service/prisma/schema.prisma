@@ -91,6 +91,25 @@ model Gym {
   // the normal in-app wallet instead of the attendance-SaaS bank-settlement
   // ledger — i.e. this gym behaves exactly as if the program didn't exist.
   attendanceSaasOptedOut Boolean @default(false)
+  // Partner's own choice to disable the marketplace product entirely — no
+  // customer discovery, no new pay-per-session bookings. Mirrors
+  // attendanceSaasOptedOut's self-service posture (applied immediately by
+  // updateGym, never gated behind the edit-request queue). A gym must keep
+  // at least one of the two business models on: updateGym rejects a request
+  // that would leave both marketplaceEnabled=false and
+  // attendanceSaasOptedOut=true at the same time.
+  marketplaceEnabled Boolean @default(true)
+  // Admin-only (gobhi, see PUT /:id/subscription-pricing-mode) — which
+  // formula wallet-service applies to a GymSubscription purchase's
+  // post-honeymoon commission: a percentage of the plan price
+  // (subscriptionCommissionPct above), or a flat fee per registration
+  // regardless of plan price (subscriptionFlatFeePerUser below). Some gyms
+  // are a better fit for "we take a cut of what you charge," others for
+  // "we charge you a flat Rs-per-signup fee" — this lets gobhi pick per gym.
+  subscriptionPricingMode SubscriptionPricingMode @default(percentage)
+  // Only meaningful when subscriptionPricingMode = flatPerUser. Null uses
+  // wallet-service's platform-default flat fee.
+  subscriptionFlatFeePerUser Decimal? @db.Decimal(10, 2)
   weeklyPlanPrice     Decimal? @db.Decimal(19, 2)
   monthlyPlanPrice    Decimal? @db.Decimal(19, 2)
   quarterlyPlanPrice  Decimal? @db.Decimal(19, 2)
@@ -240,6 +259,13 @@ model GymClassCancellation {
   createdAt DateTime @default(now())
 
   @@unique([classId, date])
+  @@schema("gym")
+}
+
+enum SubscriptionPricingMode {
+  percentage
+  flatPerUser
+
   @@schema("gym")
 }
 

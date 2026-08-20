@@ -20,7 +20,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // plain numbers — same convention as wallet-service's Number(...) wrapping.
 const GYM_MONEY_FIELDS = [
   'sessionPrice', 'quotedPrice', 'weeklyPlanPrice', 'monthlyPlanPrice', 'quarterlyPlanPrice', 'sixMonthlyPlanPrice', 'yearlyPlanPrice',
-  'commissionPct', 'subscriptionCommissionPct',
+  'commissionPct', 'subscriptionCommissionPct', 'subscriptionFlatFeePerUser',
 ];
 function normalizeGymMoney(gym) {
   if (!gym) return gym;
@@ -110,6 +110,10 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, so
   const where = {
     isActive: true,
     isApproved: true,
+    // A gym that's opted out of the marketplace product entirely (SaaS-only)
+    // must never surface in customer discovery — this is the discovery-side
+    // half of that choice; createBooking is the booking-side half.
+    marketplaceEnabled: true,
   };
 
   if (city) {
@@ -283,7 +287,7 @@ export async function getGymById(id, userLat, userLng) {
     include: { images: { orderBy: { id: 'asc' } }, reviews: true },
   }));
 
-  if (!gym || !gym.isActive || !gym.isApproved) {
+  if (!gym || !gym.isActive || !gym.isApproved || !gym.marketplaceEnabled) {
     throw { status: 404, error: 'Gym not found' };
   }
 
@@ -515,6 +519,10 @@ export async function updateGym(gymId, partnerId, data) {
     // for the same reason: nothing customer-facing to review about a
     // partner declining a commission program.
     'attendanceSaasOptedOut',
+    // Partner's own on/off switch for the marketplace product — same
+    // posture as attendanceSaasOptedOut above (this is the other half of
+    // "which business model(s) is this gym in").
+    'marketplaceEnabled',
   ];
 
   allowedFields.forEach(field => {
@@ -525,15 +533,30 @@ export async function updateGym(gymId, partnerId, data) {
 
   validateGymFields(updateData);
 
-  const { isActive, attendanceSaasOptedOut, ...gatedData } = updateData;
+  const { isActive, attendanceSaasOptedOut, marketplaceEnabled, ...gatedData } = updateData;
+
+  // A gym must keep at least one business model on. Only enforced when
+  // this call is actually changing one of the two flags — reads the
+  // CURRENT value of whichever flag isn't part of this request, so e.g.
+  // disabling marketplace on a gym that's already SaaS-opted-out is
+  // correctly rejected even though this request only mentions
+  // marketplaceEnabled.
+  if (marketplaceEnabled !== undefined || attendanceSaasOptedOut !== undefined) {
+    const nextMarketplaceEnabled = marketplaceEnabled !== undefined ? marketplaceEnabled : gym.marketplaceEnabled;
+    const nextAttendanceSaasOptedOut = attendanceSaasOptedOut !== undefined ? attendanceSaasOptedOut : gym.attendanceSaasOptedOut;
+    if (!nextMarketplaceEnabled && nextAttendanceSaasOptedOut) {
+      throw { status: 400, error: 'At least one business model (marketplace or attendance-SaaS) must stay enabled.' };
+    }
+  }
 
   let updatedGym = gym;
-  if (isActive !== undefined || attendanceSaasOptedOut !== undefined) {
+  if (isActive !== undefined || attendanceSaasOptedOut !== undefined || marketplaceEnabled !== undefined) {
     updatedGym = normalizeGymMoney(await prisma.gym.update({
       where: { id: gymId },
       data: {
         ...(isActive !== undefined && { isActive }),
         ...(attendanceSaasOptedOut !== undefined && { attendanceSaasOptedOut }),
+        ...(marketplaceEnabled !== undefined && { marketplaceEnabled }),
       },
     }));
   }
@@ -966,8 +989,9 @@ export async function updateGymCommission(gymId, commissionPct) {
 
 // gobhi-only, same shape as updateGymCommission — overrides the
 // attendance-SaaS post-honeymoon rate wallet-service applies to this gym's
-// GymSubscription purchases (see computeSubscriptionSaasCommissionPct).
-// null resets to the platform default instead of a fixed number.
+// GymSubscription purchases when subscriptionPricingMode is 'percentage'
+// (see purchaseSubscriptionWithWallet). null resets to the platform default
+// instead of a fixed number.
 export async function updateGymSubscriptionCommission(gymId, subscriptionCommissionPct) {
   if (
     subscriptionCommissionPct !== null &&
@@ -981,6 +1005,37 @@ export async function updateGymSubscriptionCommission(gymId, subscriptionCommiss
   return normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
     data: { subscriptionCommissionPct },
+  }));
+}
+
+// gobhi-only, same shape as updateGymCommission — picks which formula
+// wallet-service applies to this gym's post-honeymoon GymSubscription
+// commission: a percentage of the plan price (subscriptionCommissionPct
+// above), or a flat fee per registration regardless of price
+// (flatFeePerUser). flatFeePerUser is only meaningful when mode is
+// 'flatPerUser'; null there falls back to wallet-service's platform
+// default, same convention as subscriptionCommissionPct=null.
+const VALID_SUBSCRIPTION_PRICING_MODES = ['percentage', 'flatPerUser'];
+
+export async function updateGymSubscriptionPricingMode(gymId, mode, flatFeePerUser) {
+  if (!VALID_SUBSCRIPTION_PRICING_MODES.includes(mode)) {
+    throw { status: 400, error: `subscriptionPricingMode must be one of: ${VALID_SUBSCRIPTION_PRICING_MODES.join(', ')}` };
+  }
+  if (
+    flatFeePerUser !== null && flatFeePerUser !== undefined &&
+    (typeof flatFeePerUser !== 'number' || Number.isNaN(flatFeePerUser) || flatFeePerUser < 0)
+  ) {
+    throw { status: 400, error: 'subscriptionFlatFeePerUser must be a non-negative number, or null to reset to the platform default' };
+  }
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+
+  return normalizeGymMoney(await prisma.gym.update({
+    where: { id: gymId },
+    data: {
+      subscriptionPricingMode: mode,
+      subscriptionFlatFeePerUser: flatFeePerUser ?? null,
+    },
   }));
 }
 

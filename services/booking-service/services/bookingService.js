@@ -45,8 +45,8 @@ function normalizeBookingMoney(booking) {
 // older gym-service revision) — the real rate is per-gym, gym-service's
 // Gym.commissionPct (admin-editable, defaults to 20 there too). This rate is
 // untouched by the attendance-SaaS wedge — GymSubscription purchases now
-// carry their own separate honeymoon/1% commission computed in
-// wallet-service (computeSubscriptionSaasCommissionPct), independent of this
+// carry their own separate honeymoon/1%-or-flat-fee commission computed in
+// wallet-service (purchaseSubscriptionWithWallet), independent of this
 // constant and of commissionPct.
 const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
 
@@ -406,6 +406,20 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // an unapproved or deactivated gym (invisible everywhere else: discovery,
     // detail, reviews) could still take paid bookings.
     if (!gym.isActive || !gym.isApproved) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+
+    // A gym that's opted out of the marketplace business model entirely
+    // (SaaS-only) never accepts new pay-per-session bookings — same
+    // "gym not found" posture as an unapproved/deactivated gym, since it's
+    // invisible everywhere else in the marketplace too (see gym-service's
+    // listGyms/getGymById). Explicit `=== false` (not `!gym.marketplaceEnabled`)
+    // is deliberate: this field is new, and gym-service/booking-service
+    // deploy independently, so a version-skew window where gym-service
+    // hasn't rolled out yet and this key is simply absent from the response
+    // must fail OPEN here, not closed — unlike isActive/isApproved, which
+    // have always been present.
+    if (gym.marketplaceEnabled === false) {
       throw { status: 404, error: 'Gym not found' };
     }
 

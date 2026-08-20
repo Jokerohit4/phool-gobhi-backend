@@ -154,6 +154,15 @@ model GymSubscription {
   // field did — see migration — since every subscription was uniformly
   // under the SaaS model before opt-out existed.
   isAttendanceSaas Boolean @default(true)
+  // Snapshotted at purchase time from the gym's subscriptionPricingMode
+  // (gym-service) — "percentage" (commissionPct is a real percentage of
+  // price) or "flatPerUser" (commissionPct is the EQUIVALENT percentage
+  // that the flat per-user fee worked out to be for this specific price;
+  // still populated so every existing percentage-reading consumer of
+  // commissionPct keeps working unmodified). Purely a display/audit-trail
+  // field — pricing is otherwise identical in shape between the two modes
+  // once commissionPct/partnerShare are computed.
+  pricingMode String @default("percentage")
 
   @@index([customerId, gymId, status])
   @@schema("wallet")
