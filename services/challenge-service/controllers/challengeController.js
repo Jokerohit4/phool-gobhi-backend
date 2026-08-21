@@ -6,6 +6,7 @@ import * as challengeCatalogService from '../services/challengeCatalogService.js
 import * as challengeEnrollmentService from '../services/challengeEnrollmentService.js';
 import * as adminChallengeService from '../services/adminChallengeService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
+import * as pairedStreakService from '../services/pairedStreakService.js';
 
 // ---- Customer-facing (requireAuth + requireFeatureFlag('streaksCoins')) ---
 
@@ -61,6 +62,26 @@ export const enrollInChallenge = async (req, res) => {
   try {
     const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id);
     res.status(201).json({ data: enrollment });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const optInPairedStreak = async (req, res) => {
+  try {
+    const { matchId } = req.body || {};
+    if (!matchId) return res.status(400).json({ error: 'matchId is required' });
+    const pairedStreak = await pairedStreakService.optInService(req.userId, matchId);
+    res.status(201).json({ data: pairedStreak });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMyPairedStreaks = async (req, res) => {
+  try {
+    const pairedStreaks = await pairedStreakService.getMyPairedStreaksService(req.userId);
+    res.json({ data: pairedStreaks });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -239,6 +260,9 @@ export const closeWeekInternal = async (req, res) => {
       ? new Date(req.body.weekStart)
       : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const results = await streakService.closeWeek(weekStart);
+    if (await isFeatureEnabled('buddyPairedStreaks')) {
+      await pairedStreakService.advancePairedStreaksService(weekStart);
+    }
     res.json({ data: results });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

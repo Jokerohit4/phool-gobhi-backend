@@ -9,6 +9,7 @@ export const DEFAULT_ECONOMY_CONFIG = {
   coinsPerCheckin: 10,
   weeklyTargetBonus: 20,
   milestones: { '2': 50, '4': 150, '12': 500 },
+  pairedStreakWeeklyBonus: 15,
 };
 
 const MAX_COIN_AMOUNT = 100_000; // sanity ceiling, mirrors wallet-service's HARD_MAX_TOPUP_AMOUNT convention
@@ -20,6 +21,7 @@ export async function loadEconomyConfig() {
     coinsPerCheckin: row.coinsPerCheckin,
     weeklyTargetBonus: row.weeklyTargetBonus,
     milestones: row.milestones,
+    pairedStreakWeeklyBonus: row.pairedStreakWeeklyBonus,
     updatedAt: row.updatedAt,
   };
 }
@@ -32,9 +34,10 @@ function validateAmount(value, label) {
   return n;
 }
 
-export async function updateEconomyConfig({ coinsPerCheckin, weeklyTargetBonus, milestones }, updatedBy) {
+export async function updateEconomyConfig({ coinsPerCheckin, weeklyTargetBonus, milestones, pairedStreakWeeklyBonus }, updatedBy) {
   const coinsPerCheckinValue = validateAmount(coinsPerCheckin, 'coinsPerCheckin');
   const weeklyTargetBonusValue = validateAmount(weeklyTargetBonus, 'weeklyTargetBonus');
+  const pairedStreakWeeklyBonusValue = validateAmount(pairedStreakWeeklyBonus, 'pairedStreakWeeklyBonus');
   if (typeof milestones !== 'object' || milestones === null || Array.isArray(milestones)) {
     throw { status: 400, error: 'milestones must be an object mapping week-number strings to coin amounts' };
   }
@@ -46,15 +49,23 @@ export async function updateEconomyConfig({ coinsPerCheckin, weeklyTargetBonus, 
     }
     cleanMilestones[String(weekNum)] = validateAmount(amount, `milestone amount for week ${week}`);
   }
+  const data = {
+    coinsPerCheckin: coinsPerCheckinValue,
+    weeklyTargetBonus: weeklyTargetBonusValue,
+    milestones: cleanMilestones,
+    pairedStreakWeeklyBonus: pairedStreakWeeklyBonusValue,
+    updatedBy,
+  };
   const updated = await prisma.coinEconomyConfig.upsert({
     where: { id: 1 },
-    create: { id: 1, coinsPerCheckin: coinsPerCheckinValue, weeklyTargetBonus: weeklyTargetBonusValue, milestones: cleanMilestones, updatedBy },
-    update: { coinsPerCheckin: coinsPerCheckinValue, weeklyTargetBonus: weeklyTargetBonusValue, milestones: cleanMilestones, updatedBy },
+    create: { id: 1, ...data },
+    update: data,
   });
   return {
     coinsPerCheckin: updated.coinsPerCheckin,
     weeklyTargetBonus: updated.weeklyTargetBonus,
     milestones: updated.milestones,
+    pairedStreakWeeklyBonus: updated.pairedStreakWeeklyBonus,
     updatedAt: updated.updatedAt,
   };
 }

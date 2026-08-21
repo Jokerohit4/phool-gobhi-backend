@@ -15,6 +15,8 @@ router.get('/', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallenge
 router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallengeDetail);
 router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);
 router.post('/:id/checkpoint', requireAuth, requireFeatureFlag('challenges'), ctrl.visitCheckpoint);
+router.post('/paired-streaks/opt-in', requireAuth, requireFeatureFlag('buddyPairedStreaks'), ctrl.optInPairedStreak);
+router.get('/paired-streaks/me', requireAuth, requireFeatureFlag('buddyPairedStreaks'), ctrl.getMyPairedStreaks);
 
 // Admin (gobhi) — same role-gate convention as gym-service's /:id/approve,
 // wallet-service's /payouts, etc. Not flag-gated: an admin must always be

@@ -113,12 +113,15 @@ model UserStreakWeek {
 // planning doc proposed) — stored as JSON so an admin can add/remove tiers
 // without a migration.
 model CoinEconomyConfig {
-  id                Int      @id @default(1)
-  coinsPerCheckin   Int      @default(10)
-  weeklyTargetBonus Int      @default(20)
-  milestones        Json     @default("{\"2\":50,\"4\":150,\"12\":500}")
-  updatedAt         DateTime @updatedAt
-  updatedBy         Int?
+  id                     Int      @id @default(1)
+  coinsPerCheckin        Int      @default(10)
+  weeklyTargetBonus      Int      @default(20)
+  milestones             Json     @default("{\"2\":50,\"4\":150,\"12\":500}")
+  // Phase 4 — paid to BOTH members of a paired streak for every week it
+  // survives (i.e. both independently qualified). Strawman default.
+  pairedStreakWeeklyBonus Int     @default(15)
+  updatedAt              DateTime @updatedAt
+  updatedBy              Int?
 
   @@schema("challenge")
 }
@@ -469,6 +472,32 @@ model RewardIssuance {
   coinAmount   Int?
   medalSerial  String?
   issuedAt     DateTime            @default(now())
+
+  @@schema("challenge")
+}
+
+// ---------------------------------------------------------------------
+// Phase 4 — buddy-loop paired streaks, per buddy-loop-retention-playbook.html.
+// Deliberately scoped to just mechanic #1 ("build first") of the doc's four
+// — peer win-back nudges, Book Together, and activity visibility are
+// explicitly deferred per the doc's own warning against building all four
+// before validating this one moves retention. Reuses the existing weekly
+// streak/coin infra; introduces no new currency or taxonomy bucket, per the
+// doc's own framing as "a variant of the existing Streak bucket."
+// matchId is buddy-service's Match.id — a plain cross-service reference
+// (same convention as gymId/userId elsewhere), verified via buddy-service's
+// GET /internal/matches/:matchId/verify/:userId at opt-in time, never
+// trusted as-is from the client.
+model PairedStreak {
+  id                     Int       @id @default(autoincrement())
+  matchId                Int       @unique
+  userAId                Int
+  userBId                Int
+  currentStreak          Int       @default(0)
+  longestStreak          Int       @default(0)
+  lastQualifiedWeekStart DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@schema("challenge")
 }
