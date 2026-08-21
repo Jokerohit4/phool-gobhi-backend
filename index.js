@@ -1,3 +1,4 @@
+import './bootstrap-secrets.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { readFileSync } from 'fs';
