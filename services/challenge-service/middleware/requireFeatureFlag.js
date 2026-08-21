@@ -32,9 +32,17 @@ async function getFeatureFlags() {
   return cachedFlags;
 }
 
-export const requireFeatureFlag = (flagName) => async (req, res, next) => {
+// Plain check, for a route/handler that mixes concerns gated by different
+// flags (e.g. /internal/attendance-events drives both streak/coin recording
+// AND off-peak-challenge progress) and so can't be gated wholesale by a
+// single middleware — each concern checks its own flag independently instead.
+export async function isFeatureEnabled(flagName) {
   const flags = await getFeatureFlags();
-  if (!flags?.[flagName]?.enabled) {
+  return !!flags?.[flagName]?.enabled;
+}
+
+export const requireFeatureFlag = (flagName) => async (req, res, next) => {
+  if (!(await isFeatureEnabled(flagName))) {
     return res.status(403).json({ error: 'FEATURE_DISABLED' });
   }
   next();

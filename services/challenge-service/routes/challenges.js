@@ -5,32 +5,46 @@ import * as ctrl from '../controllers/challengeController.js';
 
 const router = Router();
 
-// Customer-facing — gated server-side by the streaksCoins flag (not just
-// client-hidden), since these expose coin/streak state the admin panel can
-// kill independently of a client release.
+// Customer-facing — gated server-side by the relevant flag (not just
+// client-hidden), since these expose coin/streak/challenge state the admin
+// panel can kill independently of a client release.
 router.get('/streak/me', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyStreak);
 router.get('/coins/wallet', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyCoinWallet);
 router.get('/coins/catalog', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getCoinCatalog);
+router.get('/', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallenges);
+router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallengeDetail);
+router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);
+router.post('/:id/checkpoint', requireAuth, requireFeatureFlag('challenges'), ctrl.visitCheckpoint);
 
 // Admin (gobhi) — same role-gate convention as gym-service's /:id/approve,
 // wallet-service's /payouts, etc. Not flag-gated: an admin must always be
-// able to configure/inspect the economy even while it's turned off for
-// customers, e.g. to set it up before flipping the flag on for the first time.
+// able to configure/inspect these even while turned off for customers, e.g.
+// to set up the pilot challenges before flipping the flag on for the first time.
 router.get('/admin/coins/economy-config', requireRole('gobhi'), ctrl.getCoinEconomyConfigAdmin);
 router.put('/admin/coins/economy-config', requireRole('gobhi'), ctrl.updateCoinEconomyConfigAdmin);
 router.get('/admin/coins/catalog', requireRole('gobhi'), ctrl.listCoinCatalogAdmin);
 router.post('/admin/coins/catalog', requireRole('gobhi'), ctrl.createCoinCatalogItemAdmin);
 router.put('/admin/coins/catalog/:id', requireRole('gobhi'), ctrl.updateCoinCatalogItemAdmin);
 
+router.get('/admin/challenges/definitions', requireRole('gobhi'), ctrl.listChallengeDefinitionsAdmin);
+router.post('/admin/challenges/definitions', requireRole('gobhi'), ctrl.createChallengeDefinitionAdmin);
+router.get('/admin/challenges', requireRole('gobhi'), ctrl.listChallengesAdmin);
+router.post('/admin/challenges', requireRole('gobhi'), ctrl.createChallengeAdmin);
+router.put('/admin/challenges/:id', requireRole('gobhi'), ctrl.updateChallengeAdmin);
+router.get('/admin/challenges/:id/checkpoint-spots', requireRole('gobhi'), ctrl.listCheckpointSpotsAdmin);
+router.post('/admin/challenges/:id/checkpoint-spots', requireRole('gobhi'), ctrl.createCheckpointSpotAdmin);
+router.get('/admin/challenges/:id/enrollments', requireRole('gobhi'), ctrl.listEnrollmentsAdmin);
+router.get('/admin/sponsors', requireRole('gobhi'), ctrl.listSponsorsAdmin);
+router.post('/admin/sponsors', requireRole('gobhi'), ctrl.createSponsorAdmin);
+
 // Internal — booking-service fires attendance events on every verified
-// check-in; a cron fires the weekly close; other backend services will call
-// the coin credit/debit pair once redemption/reward flows exist (Phase 2+).
-// Also flag-gated: booking-service's fire-and-forget call is a harmless
-// no-op (403, swallowed) until streaksCoins is turned on — this is what
-// makes Phase 0's wiring inert until Phase 2 flips the switch, and what
-// keeps "no streak backfill from before cutover" true by construction rather
-// than by a separate backfill-avoidance rule.
-router.post('/internal/attendance-events', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.recordAttendanceEventInternal);
+// check-in, driving both streak/coin recording and off-peak-challenge
+// progress off the same signal. Each concern checks its own flag inside the
+// handler (see recordAttendanceEventInternal) rather than gating the whole
+// route, since one attendance event can be relevant to either flag
+// independently. A cron fires the weekly streak close; other backend
+// services call the coin credit/debit pair for redemption/reward flows.
+router.post('/internal/attendance-events', requireInternal, ctrl.recordAttendanceEventInternal);
 router.post('/internal/streak/close-week', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.closeWeekInternal);
 router.post('/internal/coins/:userId/credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditCoinsInternal);
 router.post('/internal/coins/:userId/debit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.debitCoinsInternal);

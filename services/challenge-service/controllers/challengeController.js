@@ -2,6 +2,10 @@ import * as coinLedgerService from '../services/coinLedgerService.js';
 import * as streakService from '../services/streakService.js';
 import * as coinCatalogService from '../services/coinCatalogService.js';
 import * as coinEconomyConfigService from '../services/coinEconomyConfigService.js';
+import * as challengeCatalogService from '../services/challengeCatalogService.js';
+import * as challengeEnrollmentService from '../services/challengeEnrollmentService.js';
+import * as adminChallengeService from '../services/adminChallengeService.js';
+import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 
 // ---- Customer-facing (requireAuth + requireFeatureFlag('streaksCoins')) ---
 
@@ -35,7 +39,127 @@ export const getCoinCatalog = async (req, res) => {
   }
 };
 
+export const getChallenges = async (req, res) => {
+  try {
+    const challenges = await challengeCatalogService.listActiveChallengesService(req.userId);
+    res.json({ data: challenges });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getChallengeDetail = async (req, res) => {
+  try {
+    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, req.userId);
+    res.json({ data: detail });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const enrollInChallenge = async (req, res) => {
+  try {
+    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id);
+    res.status(201).json({ data: enrollment });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const visitCheckpoint = async (req, res) => {
+  try {
+    const { code, lat, lng } = req.body || {};
+    if (!code || typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ error: 'code, lat and lng are required' });
+    }
+    const enrollment = await challengeEnrollmentService.visitCheckpointService(req.userId, req.params.id, { code, lat, lng });
+    res.json({ data: enrollment });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
+  }
+};
+
 // ---- Admin (requireRole('gobhi')) --------------------------------------
+
+export const listChallengeDefinitionsAdmin = async (req, res) => {
+  try {
+    res.json({ data: await adminChallengeService.listChallengeDefinitionsAdminService() });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createChallengeDefinitionAdmin = async (req, res) => {
+  try {
+    res.status(201).json({ data: await adminChallengeService.createChallengeDefinitionAdminService(req.body || {}) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listChallengesAdmin = async (req, res) => {
+  try {
+    res.json({ data: await adminChallengeService.listChallengesAdminService() });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createChallengeAdmin = async (req, res) => {
+  try {
+    res.status(201).json({ data: await adminChallengeService.createChallengeAdminService(req.body || {}) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateChallengeAdmin = async (req, res) => {
+  try {
+    res.json({ data: await adminChallengeService.updateChallengeAdminService(req.params.id, req.body || {}) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listCheckpointSpotsAdmin = async (req, res) => {
+  try {
+    res.json({ data: await adminChallengeService.listCheckpointSpotsAdminService(req.params.id) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createCheckpointSpotAdmin = async (req, res) => {
+  try {
+    res.status(201).json({ data: await adminChallengeService.createCheckpointSpotAdminService(req.params.id, req.body || {}) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listEnrollmentsAdmin = async (req, res) => {
+  try {
+    res.json({ data: await adminChallengeService.listEnrollmentsAdminService(req.params.id) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listSponsorsAdmin = async (req, res) => {
+  try {
+    res.json({ data: await adminChallengeService.listSponsorsAdminService() });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createSponsorAdmin = async (req, res) => {
+  try {
+    res.status(201).json({ data: await adminChallengeService.createSponsorAdminService(req.body || {}) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
 
 export const getCoinEconomyConfigAdmin = async (req, res) => {
   try {
@@ -84,13 +208,23 @@ export const updateCoinCatalogItemAdmin = async (req, res) => {
 
 // ---- Internal (requireInternal) --------------------------------------
 
+// Drives two independent concerns off one attendance signal — streak/coin
+// recording (streaksCoins flag) and off-peak-challenge progress (challenges
+// flag). Each is gated on its OWN flag rather than the route as a whole, so
+// turning one off doesn't silently also disable the other.
 export const recordAttendanceEventInternal = async (req, res) => {
   try {
     const { userId, bookingId, gymId, attendedAt, source } = req.body || {};
     if (!userId || !bookingId || !gymId || !attendedAt || !source) {
       return res.status(400).json({ error: 'userId, bookingId, gymId, attendedAt and source are required' });
     }
-    const result = await streakService.recordAttendanceEvent({ userId, bookingId, gymId, attendedAt, source });
+    let result = { alreadyRecorded: true };
+    if (await isFeatureEnabled('streaksCoins')) {
+      result = await streakService.recordAttendanceEvent({ userId, bookingId, gymId, attendedAt, source });
+    }
+    if (await isFeatureEnabled('challenges')) {
+      await challengeEnrollmentService.advanceOffPeakChallengesService(userId, attendedAt);
+    }
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
