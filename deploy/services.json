@@ -28,8 +28,7 @@
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "JWT_SECRET": "jwt-secret",
-            "ANALYTICS_DATABASE_URL": "db-url"
+            "SECRETS_JSON": "gateway-secrets"
           }
         },
         "prod": {
@@ -71,16 +70,7 @@
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "db-url",
-            "INTERNAL_API_KEY": "internal-api-key",
-            "JWT_SECRET": "jwt-secret",
-            "JWT_REFRESH_SECRET": "jwt-refresh-secret",
-            "FAST2SMS_API_KEY": "fast2sms-api-key",
-            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-auth",
-            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
-            "CLOUDINARY_API_KEY": "cloudinary-api-key",
-            "CLOUDINARY_API_SECRET": "cloudinary-api-secret"
+            "SECRETS_JSON": "auth-service-secrets"
           }
         },
         "prod": {
@@ -126,13 +116,7 @@
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "db-url",
-            "INTERNAL_API_KEY": "internal-api-key",
-            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
-            "CLOUDINARY_API_KEY": "cloudinary-api-key",
-            "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
-            "GOOGLE_MAPS_API_KEY": "google-maps-api-key"
+            "SECRETS_JSON": "gym-service-secrets"
           }
         },
         "prod": {
@@ -173,13 +157,7 @@
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "db-url",
-            "INTERNAL_API_KEY": "internal-api-key",
-            "RAZORPAY_KEY_ID": "razorpay-key-id",
-            "RAZORPAY_SECRET": "razorpay-secret",
-            "RAZORPAY_WEBHOOK_SECRET": "razorpay-webhook-secret",
-            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+            "SECRETS_JSON": "wallet-service-secrets"
           }
         },
         "prod": {
@@ -222,10 +200,7 @@
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "db-url",
-            "INTERNAL_API_KEY": "internal-api-key",
-            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+            "SECRETS_JSON": "booking-service-secrets"
           }
         },
         "prod": {
@@ -263,13 +238,7 @@
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "db-url",
-            "INTERNAL_API_KEY": "internal-api-key",
-            "CLOUDINARY_CLOUD_NAME": "cloudinary-cloud-name",
-            "CLOUDINARY_API_KEY": "cloudinary-api-key",
-            "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
-            "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+            "SECRETS_JSON": "buddy-service-secrets"
           }
         },
         "prod": {
