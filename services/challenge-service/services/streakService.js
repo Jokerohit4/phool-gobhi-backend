@@ -1,4 +1,6 @@
 import { PrismaClient } from '@prisma/client';
+import { creditCoinsService } from './coinLedgerService.js';
+import { loadEconomyConfig } from './coinEconomyConfigService.js';
 const prisma = new PrismaClient();
 
 // A week qualifies once a user logs this many verified attendance events
@@ -30,17 +32,29 @@ export async function recordAttendanceEvent({ userId, bookingId, gymId, attended
     update: { checkinCount: { increment: 1 } },
     create: { userId, weekStart, checkinCount: 1 },
   });
+
+  // Per-check-in coins, idempotent on the same bookingId as the
+  // AttendanceEventLog row above — a retried call can never double-pay one
+  // real check-in.
+  const { coinsPerCheckin } = await loadEconomyConfig();
+  if (coinsPerCheckin > 0) {
+    await creditCoinsService(userId, coinsPerCheckin, 'Check-in reward', `checkin-coins:${bookingId}`);
+  }
+
   return { alreadyRecorded: false };
 }
 
 // Cron entry point (POST /internal/streak/close-week). Finalizes every
 // still-open UserStreakWeek row for the given week, updates each user's
-// running streak, and returns the list of users who just qualified (Phase 2
-// wires milestone coin issuance onto this return value — deliberately not
-// wired yet in Phase 0, per the plan's phased scope).
+// running streak, and issues the weekly-target bonus + any streak-milestone
+// bonus that just fired. Both coin credits are idempotent on
+// (userId, weekStart), so re-running close-week for an already-closed week
+// (e.g. a manual retry) never double-pays.
 export async function closeWeek(weekStartDate) {
   const weekStart = startOfIsoWeek(weekStartDate);
+  const weekStartKey = weekStart.toISOString();
   const weeks = await prisma.userStreakWeek.findMany({ where: { weekStart, closedAt: null } });
+  const { weeklyTargetBonus, milestones } = await loadEconomyConfig();
   const results = [];
   for (const week of weeks) {
     const qualified = week.checkinCount >= QUALIFYING_CHECKINS_PER_WEEK;
@@ -62,6 +76,23 @@ export async function closeWeek(weekStartDate) {
         lastQualifiedWeekStart: qualified ? weekStart : streak.lastQualifiedWeekStart,
       },
     });
+
+    if (qualified) {
+      if (weeklyTargetBonus > 0) {
+        await creditCoinsService(
+          week.userId, weeklyTargetBonus, 'Weekly streak target bonus',
+          `weekly-bonus:${week.userId}:${weekStartKey}`,
+        );
+      }
+      const milestoneAmount = milestones?.[String(nextCurrent)];
+      if (milestoneAmount > 0) {
+        await creditCoinsService(
+          week.userId, milestoneAmount, `${nextCurrent}-week streak milestone`,
+          `streak-milestone:${week.userId}:${weekStartKey}`,
+        );
+      }
+    }
+
     results.push({ userId: week.userId, qualified, currentStreak: updated.currentStreak });
   }
   return results;

@@ -142,6 +142,14 @@ model GymSubscription {
   // stays true forever with nothing to ever flip it back, so the gift-box FAB
   // and reveal screen resurface on every app launch indefinitely.
   giftRevealSeenAt DateTime?
+  // Gamification Phase 2: set only when the customer redeemed a coin
+  // discount at purchase (see purchaseSubscriptionWithWallet). Coins are
+  // debited in challenge-service, never converted into wallet credit —
+  // these two fields exist purely so this subscription's revenue reporting
+  // stays honest about "real price charged" vs. "platform absorbed as a
+  // coin discount", not to represent any money that changed hands as coins.
+  coinDiscountAmount Decimal? @db.Decimal(19, 2)
+  coinDiscountCoins  Int?
 
   @@index([customerId, gymId, status])
   @@schema("wallet")

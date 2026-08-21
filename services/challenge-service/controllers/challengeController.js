@@ -1,5 +1,7 @@
 import * as coinLedgerService from '../services/coinLedgerService.js';
 import * as streakService from '../services/streakService.js';
+import * as coinCatalogService from '../services/coinCatalogService.js';
+import * as coinEconomyConfigService from '../services/coinEconomyConfigService.js';
 
 // ---- Customer-facing (requireAuth + requireFeatureFlag('streaksCoins')) ---
 
@@ -19,6 +21,62 @@ export const getMyCoinWallet = async (req, res) => {
       coinLedgerService.getCoinLedgerService(req.userId),
     ]);
     res.json({ data: { ...balance, ledger } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getCoinCatalog = async (req, res) => {
+  try {
+    const items = await coinCatalogService.listActiveCatalogService();
+    res.json({ data: items });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// ---- Admin (requireRole('gobhi')) --------------------------------------
+
+export const getCoinEconomyConfigAdmin = async (req, res) => {
+  try {
+    const config = await coinEconomyConfigService.loadEconomyConfig();
+    res.json({ data: config });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateCoinEconomyConfigAdmin = async (req, res) => {
+  try {
+    const updated = await coinEconomyConfigService.updateEconomyConfig(req.body || {}, req.userId);
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listCoinCatalogAdmin = async (req, res) => {
+  try {
+    const items = await coinCatalogService.listCatalogAdminService();
+    res.json({ data: items });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createCoinCatalogItemAdmin = async (req, res) => {
+  try {
+    const item = await coinCatalogService.createCatalogItemAdminService(req.body || {});
+    res.status(201).json({ data: item });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateCoinCatalogItemAdmin = async (req, res) => {
+  try {
+    const item = await coinCatalogService.updateCatalogItemAdminService(req.params.id, req.body || {});
+    res.json({ data: item });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -75,5 +133,37 @@ export const debitCoinsInternal = async (req, res) => {
   } catch (err) {
     const insufficient = err.message === 'Insufficient coins';
     res.status(insufficient ? 409 : (err.status || 500)).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Called by wallet-service at subscription-purchase time when a customer
+// chose a coin discount — debits coins and records the redemption in one
+// step (see coinCatalogService for why there's no separate reservation
+// phase). A 409 here (insufficient coins) is meant to abort the whole
+// purchase in the caller, not be swallowed.
+export const redeemCoinCatalogItemInternal = async (req, res) => {
+  try {
+    const { userId, catalogItemKey, idempotencyKey, metadata } = req.body || {};
+    if (!userId || !catalogItemKey) return res.status(400).json({ error: 'userId and catalogItemKey are required' });
+    const redemption = await coinCatalogService.redeemCatalogItemService({ userId, catalogItemKey, idempotencyKey, metadata });
+    res.json({ data: redemption });
+  } catch (err) {
+    const insufficient = err.message === 'Insufficient coins';
+    res.status(insufficient ? 409 : (err.status || 500)).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Called by wallet-service if the subscription purchase failed after coins
+// were already debited (e.g. lost the concurrent-duplicate-purchase race) —
+// reverses the debit. Not flag-gated: a refund must always be reachable
+// even if streaksCoins gets turned off mid-flight, so a debit is never
+// permanently stranded.
+export const refundCoinRedemptionInternal = async (req, res) => {
+  try {
+    const { idempotencyKey } = req.body || {};
+    const redemption = await coinCatalogService.refundRedemptionService(req.params.redemptionId, idempotencyKey);
+    res.json({ data: redemption });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };

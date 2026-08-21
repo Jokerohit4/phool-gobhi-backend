@@ -172,7 +172,8 @@
             "ANALYTICS_SERVICE_NAME": "wallet-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
-            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",
@@ -191,7 +192,8 @@
             "ANALYTICS_SERVICE_NAME": "wallet-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
-            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app"
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",

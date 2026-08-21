@@ -103,3 +103,88 @@ model UserStreakWeek {
   @@index([userId, weekStart])
   @@schema("challenge")
 }
+
+// Phase 2 — Coin economy tuning, singleton row (id always 1), admin-editable
+// from day one (per the 2026-08-21 decision to ship with the planning docs'
+// placeholder numbers rather than block on finalized ones). Same convention
+// as auth-service's ProfileCompletionBonusSetting / AppVersionSetting.
+// milestones is a JSON map of "consecutive qualified weeks reached" -> coin
+// bonus (default {"2":50,"4":150,"12":500}, the only concrete numbers any
+// planning doc proposed) — stored as JSON so an admin can add/remove tiers
+// without a migration.
+model CoinEconomyConfig {
+  id                Int      @id @default(1)
+  coinsPerCheckin   Int      @default(10)
+  weeklyTargetBonus Int      @default(20)
+  milestones        Json     @default("{\"2\":50,\"4\":150,\"12\":500}")
+  updatedAt         DateTime @updatedAt
+  updatedBy         Int?
+
+  @@schema("challenge")
+}
+
+// subscription_discount is the only category with real fulfillment wired up
+// (booking flows through wallet-service's purchaseSubscriptionWithWallet).
+// priority_booking/buddy_unlock are reserved per the planning docs but have
+// no product spec for what redeeming them would actually DO yet — no catalog
+// items are seeded in those categories until that's designed. brand_product
+// is reserved for Phase 3's docs' own gate (a signed brand relationship),
+// not offered until one exists.
+enum CoinCatalogCategory {
+  subscription_discount
+  priority_booking
+  buddy_unlock
+  brand_product
+
+  @@schema("challenge")
+}
+
+model CoinCatalogItem {
+  id             Int                 @id @default(autoincrement())
+  // Stable machine key referenced by callers (e.g. wallet-service's
+  // subscription purchase flow) — never reuse a key for a different item.
+  key            String              @unique
+  category       CoinCatalogCategory
+  title          String
+  description    String?
+  coinCost       Int
+  // Only meaningful for category == subscription_discount: the rupee amount
+  // knocked off a subscription's price when this item is redeemed. Null for
+  // every other category (nothing to fulfill yet — see enum comment above).
+  discountAmount Int?
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  redemptions    CoinRedemption[]
+
+  @@schema("challenge")
+}
+
+enum CoinRedemptionStatus {
+  fulfilled
+  refunded
+
+  @@schema("challenge")
+}
+
+model CoinRedemption {
+  id             Int                  @id @default(autoincrement())
+  userId         Int
+  catalogItemId  Int
+  catalogItem    CoinCatalogItem      @relation(fields: [catalogItemId], references: [id])
+  coinCost       Int
+  status         CoinRedemptionStatus @default(fulfilled)
+  // Free-form context for the specific redemption — e.g. for
+  // subscription_discount: { gymId, discountAmount }. The calling service
+  // (wallet-service) remains the source of truth for the actual purchase;
+  // this is just this service's record of "coins were spent for X".
+  metadata       Json?
+  // Coins were debited under this key (see coinCatalogService.redeem) — a
+  // caller retrying the same purchase attempt must never double-debit.
+  idempotencyKey String?              @unique
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([userId, createdAt])
+  @@schema("challenge")
+}

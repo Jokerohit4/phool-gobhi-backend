@@ -325,16 +325,18 @@ const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'sixMonthly', 'yearl
 
 export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
   try {
-    const { gymId, planType } = req.body;
+    const { gymId, planType, coinCatalogItemKey } = req.body;
     const userId = req.userId;
 
     if (!gymId || !VALID_PLAN_TYPES.includes(planType)) {
       return res.status(400).json({ error: 'gymId and a valid planType are required' });
     }
 
-    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
+    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType, { coinCatalogItemKey });
     track('subscription_purchased_wallet', userId, {
       amount: subscription.price, gym_id: gymId, plan_type: planType, city: await getGymCity(Number(gymId)),
+      coin_discount_amount: subscription.coinDiscountAmount ?? undefined,
+      coin_discount_coins: subscription.coinDiscountCoins ?? undefined,
     });
     res.status(201).json({ data: { subscription } });
   } catch (err) {
