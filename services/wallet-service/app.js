@@ -1,3 +1,4 @@
+import './bootstrap-secrets.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import { extractUser } from './middleware/requireAuth.js';
