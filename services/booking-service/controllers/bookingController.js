@@ -323,6 +323,28 @@ export const getTrainersOverviewAdmin = async (req, res) => {
   }
 };
 
+export const getTrainerSessionsForPartner = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const trainerId = parseInt(req.params.trainerId);
+    const result = await bookingService.getTrainerSessionsForPartner(trainerId, gymId, req.userId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getTrainerSessionsAdmin = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const trainerId = parseInt(req.params.trainerId);
+    const result = await bookingService.getTrainerSessionsAdmin(trainerId, gymId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getTopPerformingGyms = async (req, res) => {
   try {
     const result = await bookingService.getTopPerformingGyms(req.query.days, req.query.limit);

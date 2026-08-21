@@ -1987,33 +1987,64 @@ export async function logTrainingSession(trainerId, gymId, bookingId) {
   }
 }
 
+// Shared by the trainer's own view and the partner/admin "who has this
+// trainer actually been training" drill-down — the ownership check differs
+// per caller (see the three wrappers below), the query and customer-name
+// enrichment don't.
+async function computeTrainerSessions(trainerId, gymId, days) {
+  const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
+    ? Number(days) : 30;
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - n);
+
+  const sessions = await prisma.trainingSession.findMany({
+    where: { trainerId, gymId, createdAt: { gte: fromDate } },
+    orderBy: { createdAt: 'desc' },
+  });
+  const customerIds = [...new Set(sessions.map((s) => s.customerId))];
+  const nameByCustomer = new Map();
+  if (customerIds.length) {
+    try {
+      const batchRes = await axios.post(
+        `${AUTH_SERVICE_URL}/internal/users/batch`, { ids: customerIds }, await internalHeadersFor(AUTH_SERVICE_URL),
+      );
+      for (const u of batchRes.data?.data || []) nameByCustomer.set(u.id, u.name || null);
+    } catch (_) { /* graceful degradation */ }
+  }
+  return {
+    windowDays: n,
+    uniqueCustomerCount: customerIds.length,
+    sessions: sessions.map((s) => ({ ...s, customerName: nameByCustomer.get(s.customerId) ?? null })),
+  };
+}
+
 export async function getMyTrainingSessions(trainerId, gymId, days) {
   try {
     await assertTrainerBelongsToGym(trainerId, gymId);
-    const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
-      ? Number(days) : 30;
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - n);
+    return computeTrainerSessions(trainerId, gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
 
-    const sessions = await prisma.trainingSession.findMany({
-      where: { trainerId, gymId, createdAt: { gte: fromDate } },
-      orderBy: { createdAt: 'desc' },
-    });
-    const customerIds = [...new Set(sessions.map((s) => s.customerId))];
-    const nameByCustomer = new Map();
-    if (customerIds.length) {
-      try {
-        const batchRes = await axios.post(
-          `${AUTH_SERVICE_URL}/internal/users/batch`, { ids: customerIds }, await internalHeadersFor(AUTH_SERVICE_URL),
-        );
-        for (const u of batchRes.data?.data || []) nameByCustomer.set(u.id, u.name || null);
-      } catch (_) { /* graceful degradation */ }
-    }
-    return {
-      windowDays: n,
-      uniqueCustomerCount: customerIds.length,
-      sessions: sessions.map((s) => ({ ...s, customerName: nameByCustomer.get(s.customerId) ?? null })),
-    };
+// Partner drill-down: "which customers has THIS trainer at my gym been
+// training" — the identity half of the overview dashboard's counts.
+export async function getTrainerSessionsForPartner(trainerId, gymId, partnerId, days) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    await assertTrainerBelongsToGym(trainerId, gymId);
+    return computeTrainerSessions(trainerId, gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+export async function getTrainerSessionsAdmin(trainerId, gymId, days) {
+  try {
+    await assertTrainerBelongsToGym(trainerId, gymId);
+    return computeTrainerSessions(trainerId, gymId, days);
   } catch (err) {
     if (err.error) throw err;
     throw { status: 500, error: err.message || 'Server error' };

@@ -73,6 +73,9 @@ router.get('/gym/:gymId/trainer-sessions/mine', requireRole('trainer'), ctrl.get
 // Partner/admin dashboard: per-trainer attendance + who they've trained.
 router.get('/gym/:gymId/trainers-overview', requireRole('partner'), ctrl.getTrainersOverviewForGym);
 router.get('/admin/gym/:gymId/trainers-overview', requireRole('gobhi'), ctrl.getTrainersOverviewAdmin);
+// Drill-down: which customers has this specific trainer been training.
+router.get('/gym/:gymId/trainers/:trainerId/sessions', requireRole('partner'), ctrl.getTrainerSessionsForPartner);
+router.get('/admin/gym/:gymId/trainers/:trainerId/sessions', requireRole('gobhi'), ctrl.getTrainerSessionsAdmin);
 
 // Admin analytics dashboards (phool-gobhi-admin's /analytics page) — reads
 // from analytics_events via a separate pool (see analyticsQueryService.js),
