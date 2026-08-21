@@ -29,7 +29,7 @@ name: Reconcile pending Razorpay top-ups
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # every 15 min
+    - cron: '0 * * * *'   # hourly (was every 15 min — cut to reduce forced Neon compute wake-ups; correctness backstop is still the lazy settle-on-wallet-read path)
   workflow_dispatch: {}
 
 permissions:
