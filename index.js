@@ -39,6 +39,7 @@ const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-serv
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
+const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
@@ -236,6 +237,12 @@ app.use('/api/bookings', proxy(BOOKING_SERVICE_URL, {
 app.use('/api/buddy', proxy(BUDDY_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(BUDDY_SERVICE_URL),
   limit: '15mb',
+}));
+// Gamification suite (badges/streaks/coins/challenges): no public routes —
+// same posture as buddy-service, everything requires a verified JWT. Plain
+// JSON only (no uploads), so no raised limit needed.
+app.use('/api/challenges', proxy(CHALLENGE_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(CHALLENGE_SERVICE_URL),
 }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;

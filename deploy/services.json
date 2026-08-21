@@ -25,7 +25,8 @@
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
-            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app"
+            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "JWT_SECRET": "jwt-secret",
@@ -41,7 +42,8 @@
             "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
-            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
+            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "JWT_SECRET": "jwt-secret",
@@ -219,7 +221,8 @@
             "ANALYTICS_SERVICE_NAME": "booking-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
-            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app"
+            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",
@@ -235,7 +238,8 @@
             "ANALYTICS_SERVICE_NAME": "booking-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
-            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app"
+            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "DATABASE_URL": "db-url",
@@ -287,6 +291,47 @@
             "CLOUDINARY_API_KEY": "cloudinary-api-key",
             "CLOUDINARY_API_SECRET": "cloudinary-api-secret",
             "FIREBASE_SERVICE_ACCOUNT_JSON": "firebase-booking"
+          }
+        }
+      }
+    },
+
+    "challenge-service": {
+      "cloudRunServiceBaseName": "challenge-service",
+      "sourceDir": "services/challenge-service",
+      "hasPrisma": true,
+      "healthCheckGuard": false,
+      "allowUnauthenticated": false,
+      "pathTriggers": ["services/challenge-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "challenge-service",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "db-url",
+            "INTERNAL_API_KEY": "internal-api-key"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "challenge-service",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
+            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "DATABASE_URL": "db-url",
+            "ANALYTICS_DATABASE_URL": "analytics-database-url",
+            "INTERNAL_API_KEY": "internal-api-key"
           }
         }
       }

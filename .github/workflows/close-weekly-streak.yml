@@ -1,0 +1,71 @@
+name: Close weekly gamification streak
+
+# Triggers challenge-service's weekly streak finalization
+# (closeWeek, via POST /internal/streak/close-week) as a real incoming HTTP
+# request — same reasoning as reconcile-razorpay-orders.yml: an in-process
+# setInterval/node-cron timer never gets enough CPU on Cloud Run between
+# requests (cpu-throttling is not disabled for this service either), so a
+# scheduled GitHub Actions call is the reliable way to fire a periodic job
+# here. No body is sent — the endpoint defaults to closing "last week" when
+# weekStart is omitted, which is exactly what a Monday-morning run wants.
+#
+# Auth mirrors every other internal endpoint in this repo: an x-internal-key
+# header (requireInternal) AND a Google-signed ID token scoped to the
+# target service's own URL (Cloud Run IAM invoker check on this
+# no-allow-unauthenticated service).
+#
+# No-op while the streaksCoins feature flag is off (challenge-service's
+# requireFeatureFlag returns 403) — safe to leave this schedule running
+# through Phase 0 before Phase 2 turns the flag on.
+
+on:
+  schedule:
+    - cron: '15 0 * * 1'   # 00:15 UTC every Monday
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  close-week:
+    strategy:
+      matrix:
+        env: [dev, prod]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            INTERNAL_API_KEY:${{ vars.GCP_PROJECT_ID }}/internal-api-key-${{ matrix.env }}
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "challenge-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - id: closeauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.closeauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.secret.outputs.INTERNAL_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/streak/close-week"

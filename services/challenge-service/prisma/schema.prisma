@@ -1,0 +1,105 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["challenge"]
+}
+
+// Phase 0 subset only — this schema grows in later phases (ChallengeDefinition,
+// Challenge, ChallengeEnrollment, ChallengeCheckpoint, Sponsor, CoinCatalogItem,
+// PairedStreak, etc.). See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
+// Everything below exists to prove one thing end-to-end: verified attendance ->
+// weekly streak -> a coin ledger that mirrors wallet-service's real-money ledger
+// pattern but is a fully separate, non-convertible currency (no wallet_credit
+// anywhere in this schema, by deliberate design — see the plan's Context section).
+
+enum CoinLedgerEntryType {
+  credit
+  debit
+
+  @@schema("challenge")
+}
+
+model CoinBalance {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  balance   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("challenge")
+}
+
+model CoinLedgerEntry {
+  id             Int                 @id @default(autoincrement())
+  userId         Int
+  type           CoinLedgerEntryType
+  amount         Int
+  description    String
+  // Same idempotency convention as wallet-service's WalletTransaction —
+  // a caller retrying a fire-and-forget credit/debit must never double-apply it.
+  idempotencyKey String?             @unique
+  createdAt      DateTime            @default(now())
+
+  @@index([userId, createdAt])
+  @@schema("challenge")
+}
+
+// One row per real, verified attendance event (self-check-in OR
+// partner-verified OR completed booking — all three count, closing Wave 1's
+// known badge_earned undercounting gap for this new pipeline from day one).
+// Idempotent on bookingId so booking-service's fire-and-forget call can
+// safely retry.
+model AttendanceEventLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  bookingId  Int      @unique
+  gymId      Int
+  attendedAt DateTime
+  source     String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, attendedAt])
+  @@schema("challenge")
+}
+
+// Running weekly-cadence streak counter (per challenge-service-tech-spec.html
+// and the 2026-08-15 planning decision this supersedes: most users train
+// 3-4x/week, not daily, so a literal-consecutive-day streak — the customer
+// app's old client-side calc — rarely survives long enough for a milestone to
+// matter). Starts at 0 from cutover; no historical backfill.
+model UserStreak {
+  id                     Int       @id @default(autoincrement())
+  userId                 Int       @unique
+  currentStreak          Int       @default(0)
+  longestStreak          Int       @default(0)
+  lastQualifiedWeekStart DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@schema("challenge")
+}
+
+// One row per ISO week (Monday-start) a user has any activity in. `qualified`
+// and `closedAt` are only set once the weekly cron (POST
+// /internal/streak/close-week) finalizes the week — never computed live,
+// so the streak stays server-authoritative even if a client re-requests it
+// mid-week.
+model UserStreakWeek {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  weekStart    DateTime
+  checkinCount Int       @default(0)
+  qualified    Boolean   @default(false)
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart])
+  @@schema("challenge")
+}

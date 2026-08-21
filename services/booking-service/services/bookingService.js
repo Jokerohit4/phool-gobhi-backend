@@ -6,6 +6,7 @@ import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
+import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -17,6 +18,29 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
 }
 
 const prisma = new PrismaClient();
+
+// Gamification: badge = "first-ever attended booking at this gym" (Wave 1,
+// purely a derived analytics signal, no persisted row) + a fire-and-forget
+// attendance event to challenge-service (streak/coin subsystem). Called from
+// every path that records a *first* real attendedAt on a booking —
+// selfCheckIn, verifyAttendance, and completeBooking's manual-override
+// branch — so all three verification methods count equally. Originally only
+// selfCheckIn emitted badge_earned (Wave 1's known undercounting gap); this
+// closes it for all three at once.
+async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
+  try {
+    const priorVisit = await prisma.booking.findFirst({
+      where: { customerId, gymId, attendedAt: { not: null }, id: { not: bookingId } },
+      select: { id: true },
+    });
+    if (!priorVisit) {
+      track('badge_earned', customerId, { gym_id: gymId, city: city ?? null });
+    }
+  } catch (badgeErr) {
+    console.error('badge_earned check failed for booking', bookingId, badgeErr);
+  }
+  recordAttendanceEvent({ userId: customerId, bookingId, gymId, attendedAt: new Date().toISOString(), source });
+}
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
@@ -880,6 +904,14 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     }
     const updatedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
 
+    // Only fires on the manual-override branch above — if attendedAt was
+    // already set (a real verifyAttendance/selfCheckIn scan happened
+    // earlier), that scan already emitted this exact signal once; firing
+    // again here would double-count the attendance event and the badge check.
+    if (!booking.attendedAt) {
+      await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override' });
+    }
+
     // 7. Credit partner wallet — best-effort, never blocks completion.
     // partnerShare is null for bookings created before this field existed —
     // fall back to the full amount for those rather than paying out `null`.
@@ -1117,6 +1149,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
     });
+    await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym.city, source: 'partner_verified' });
 
     return {
       bookingId: updated.id,
@@ -1301,20 +1334,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
-    // Gamification wave 1: a badge is just "first-ever attended booking at
-    // this gym" — no persisted badge row, purely a fire-once analytics
-    // signal derived from the same attendance data /mine/visited-gyms reads.
-    try {
-      const priorVisit = await prisma.booking.findFirst({
-        where: { customerId, gymId, attendedAt: { not: null }, id: { not: booking.id } },
-        select: { id: true },
-      });
-      if (!priorVisit) {
-        track('badge_earned', customerId, { gym_id: gymId, city: gym?.city ?? null });
-      }
-    } catch (badgeErr) {
-      console.error('badge_earned check failed for booking', booking.id, badgeErr);
-    }
+    await emitAttendanceSignals({ customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin' });
 
     return {
       bookingId: updated.id,
