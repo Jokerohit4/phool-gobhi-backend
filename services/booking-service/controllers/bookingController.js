@@ -249,6 +249,80 @@ export const getMemberActivityAdmin = async (req, res) => {
   }
 };
 
+// ---- Trainer attendance + training-session linking (role='trainer') --------
+
+export const trainerCheckIn = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const { lat, lng } = req.body ?? {};
+    const result = await bookingService.trainerCheckIn(req.userId, gymId, Number(lat), Number(lng));
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMyTrainerAttendance = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getMyTrainerAttendance(req.userId, gymId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getTodaysTrainableBookings = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getTodaysTrainableBookings(gymId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const logTrainingSession = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const bookingId = parseInt(req.body?.bookingId);
+    const result = await bookingService.logTrainingSession(req.userId, gymId, bookingId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getMyTrainingSessions = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getMyTrainingSessions(req.userId, gymId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getTrainersOverviewForGym = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getTrainersOverviewForGym(gymId, req.userId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getTrainersOverviewAdmin = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getTrainersOverviewAdmin(gymId, req.query.days);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getTopPerformingGyms = async (req, res) => {
   try {
     const result = await bookingService.getTopPerformingGyms(req.query.days, req.query.limit);

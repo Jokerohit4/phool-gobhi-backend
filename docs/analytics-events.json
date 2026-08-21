@@ -11,6 +11,8 @@
   "trainer_account_created":      { "source": "server", "service": "auth-service", "since": "2026-08-21", "notes": "partner created a gym-employed trainer account" },
   "trainer_account_deactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
   "trainer_account_reactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
+  "trainer_checked_in":           { "source": "server", "service": "booking-service", "since": "2026-08-21" },
+  "training_session_logged":      { "source": "server", "service": "booking-service", "since": "2026-08-21", "notes": "trainer self-logged which attended customer booking they trained" },
 
   "gym_created":                 { "source": "server", "service": "gym-service" },
   "gym_approved":                { "source": "server", "service": "gym-service" },

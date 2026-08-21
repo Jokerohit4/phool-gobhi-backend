@@ -113,6 +113,46 @@ model Booking {
   @@schema("booking")
 }
 
+// A gym trainer's own daily presence — deliberately separate from Booking
+// (a trainer has no slot/time-window to book against, just "did they show
+// up today"). One row per trainer per day: checking in again the same day
+// just bumps checkedInAt rather than creating a duplicate (see
+// trainerCheckIn's upsert). trainerId is a bare Int, not a Prisma relation —
+// the User row lives in auth-service's own database, same cross-service
+// convention as Booking.customerId.
+model TrainerAttendance {
+  id          Int      @id @default(autoincrement())
+  trainerId   Int
+  gymId       Int
+  date        String
+  checkedInAt DateTime @default(now())
+  method      String
+
+  @@unique([trainerId, date])
+  @@index([gymId, date])
+  @@schema("booking")
+}
+
+// The trainer half of "which customers is this trainer training" — a
+// trainer self-logs themselves against a specific customer BOOKING (not a
+// freeform customer pick), so every row has real provenance: it's tied to
+// an actual attended session, not a static, driftable assignment. One
+// trainer per booking (@unique on bookingId) — logging again just
+// overwrites (a correction), it doesn't create a second claim on the same
+// session.
+model TrainingSession {
+  id         Int      @id @default(autoincrement())
+  bookingId  Int      @unique
+  trainerId  Int
+  gymId      Int
+  customerId Int
+  createdAt  DateTime @default(now())
+
+  @@index([trainerId, gymId])
+  @@index([customerId])
+  @@schema("booking")
+}
+
 // Singleton row (id always 1) — admin-portal-editable cancellation tiers,
 // read by cancelBooking's refund calc and served to clients so the app's
 // policy screen shows the exact same numbers instead of a hand-synced copy.

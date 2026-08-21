@@ -1851,6 +1851,241 @@ export async function getMemberActivityAdmin(gymId, days) {
   }
 }
 
+// ---- Trainer attendance + training-session linking --------------------------
+//
+// Two independent concerns, deliberately kept as separate tables: presence
+// (TrainerAttendance — did this trainer show up today) and relationships
+// (TrainingSession — which of today's attended customer bookings did this
+// trainer run). A trainer might check in once and train several customers
+// across the day, or check in and train no one that visit — collapsing
+// these into one table would force a false 1:1 between them.
+
+const TRAINER_GEOFENCE_METERS = 300; // same radius as customer self-check-in
+
+// Verifies the requesting trainer is actually employed by gymId before
+// handing back trainer-scoped writes/reads — same posture as
+// assertPartnerOwnsGym, just checking auth-service's User.trainerGymId
+// instead of gym-service's Gym.partnerId (a trainer's employer is recorded
+// in a different service's database than a partner's own gym).
+async function assertTrainerBelongsToGym(trainerId, gymId) {
+  let trainer;
+  try {
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${trainerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    trainer = res.data?.data || res.data;
+  } catch (_) {
+    throw { status: 404, error: 'Trainer not found' };
+  }
+  if (!trainer || trainer.trainerGymId !== gymId) {
+    throw { status: 403, error: 'Forbidden' };
+  }
+  return trainer;
+}
+
+export async function trainerCheckIn(trainerId, gymId, lat, lng) {
+  try {
+    await assertTrainerBelongsToGym(trainerId, gymId);
+
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || gym?.lat == null || gym?.lng == null) {
+      throw { status: 400, error: 'Location is required to check in' };
+    }
+    if (distanceMeters(lat, lng, gym.lat, gym.lng) > TRAINER_GEOFENCE_METERS) {
+      throw { status: 400, error: 'You need to be at the gym to check in', code: 'OUTSIDE_GEOFENCE' };
+    }
+
+    const date = todayDateStringIST();
+    const attendance = await prisma.trainerAttendance.upsert({
+      where: { trainerId_date: { trainerId, date } },
+      update: { checkedInAt: new Date() },
+      create: { trainerId, gymId, date, method: 'qr_geofence_self' },
+    });
+    track('trainer_checked_in', trainerId, { gym_id: gymId, date });
+    return attendance;
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+const TRAINER_ATTENDANCE_MAX_DAYS = 90;
+
+export async function getMyTrainerAttendance(trainerId, gymId, days) {
+  try {
+    await assertTrainerBelongsToGym(trainerId, gymId);
+    const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
+      ? Number(days) : 30;
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - n);
+    const fromDateString = fromDate.toISOString().split('T')[0];
+    const todayString = new Date().toISOString().split('T')[0];
+
+    const rows = await prisma.trainerAttendance.findMany({
+      where: { trainerId, gymId, date: { gte: fromDateString, lte: todayString } },
+      orderBy: { date: 'desc' },
+    });
+    return { windowDays: n, daysAppeared: rows.length, checkIns: rows };
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// What a trainer picks from to log "I trained this customer" — every
+// booking at this gym, today, that's actually been attended (status
+// started/completed, attendedAt set), plus whether it's already claimed by
+// some trainer (never necessarily this one — a partner might have multiple
+// trainers, and re-logging is a correction, not a race).
+export async function getTodaysTrainableBookings(gymId) {
+  try {
+    const todayString = todayDateStringIST();
+    let bookings = await prisma.booking.findMany({
+      where: { gymId, date: todayString, attendedAt: { not: null } },
+      orderBy: { attendedAt: 'desc' },
+    });
+    bookings = bookings.map(normalizeBookingMoney);
+    const enriched = await enrichBookingsWithCustomerInfo(bookings);
+
+    const sessions = await prisma.trainingSession.findMany({
+      where: { bookingId: { in: bookings.map((b) => b.id) } },
+      select: { bookingId: true, trainerId: true },
+    });
+    const trainerByBooking = new Map(sessions.map((s) => [s.bookingId, s.trainerId]));
+
+    return enriched.map((b) => ({ ...b, loggedTrainerId: trainerByBooking.get(b.id) ?? null }));
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+export async function logTrainingSession(trainerId, gymId, bookingId) {
+  try {
+    await assertTrainerBelongsToGym(trainerId, gymId);
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking || booking.gymId !== gymId) {
+      throw { status: 404, error: 'Booking not found at this gym' };
+    }
+    if (!booking.attendedAt) {
+      throw { status: 400, error: 'This booking has not been attended yet' };
+    }
+    const session = await prisma.trainingSession.upsert({
+      where: { bookingId },
+      update: { trainerId },
+      create: { bookingId, trainerId, gymId, customerId: booking.customerId },
+    });
+    track('training_session_logged', trainerId, { gym_id: gymId, booking_id: bookingId, customer_id: booking.customerId });
+    return session;
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+export async function getMyTrainingSessions(trainerId, gymId, days) {
+  try {
+    await assertTrainerBelongsToGym(trainerId, gymId);
+    const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
+      ? Number(days) : 30;
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - n);
+
+    const sessions = await prisma.trainingSession.findMany({
+      where: { trainerId, gymId, createdAt: { gte: fromDate } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const customerIds = [...new Set(sessions.map((s) => s.customerId))];
+    const nameByCustomer = new Map();
+    if (customerIds.length) {
+      try {
+        const batchRes = await axios.post(
+          `${AUTH_SERVICE_URL}/internal/users/batch`, { ids: customerIds }, await internalHeadersFor(AUTH_SERVICE_URL),
+        );
+        for (const u of batchRes.data?.data || []) nameByCustomer.set(u.id, u.name || null);
+      } catch (_) { /* graceful degradation */ }
+    }
+    return {
+      windowDays: n,
+      uniqueCustomerCount: customerIds.length,
+      sessions: sessions.map((s) => ({ ...s, customerName: nameByCustomer.get(s.customerId) ?? null })),
+    };
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Partner/admin dashboard: for every trainer at this gym, how many days
+// they appeared in the window and how many distinct customers they've
+// trained — "this data will be gold" per the ask this was built for.
+async function computeTrainersOverview(gymId, days) {
+  const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
+    ? Number(days) : 30;
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - n);
+  const fromDateString = fromDate.toISOString().split('T')[0];
+  const todayString = new Date().toISOString().split('T')[0];
+
+  const [attendanceRows, sessionRows] = await Promise.all([
+    prisma.trainerAttendance.findMany({
+      where: { gymId, date: { gte: fromDateString, lte: todayString } },
+      select: { trainerId: true, date: true },
+    }),
+    prisma.trainingSession.findMany({
+      where: { gymId, createdAt: { gte: fromDate } },
+      select: { trainerId: true, customerId: true },
+    }),
+  ]);
+
+  const byTrainer = new Map();
+  const get = (trainerId) => {
+    if (!byTrainer.has(trainerId)) {
+      byTrainer.set(trainerId, { trainerId, daysAppeared: 0, sessionCount: 0, customerIds: new Set() });
+    }
+    return byTrainer.get(trainerId);
+  };
+  for (const row of attendanceRows) get(row.trainerId).daysAppeared += 1;
+  for (const row of sessionRows) {
+    const entry = get(row.trainerId);
+    entry.sessionCount += 1;
+    entry.customerIds.add(row.customerId);
+  }
+
+  return {
+    windowDays: n,
+    trainers: [...byTrainer.values()].map((t) => ({
+      trainerId: t.trainerId,
+      daysAppeared: t.daysAppeared,
+      sessionCount: t.sessionCount,
+      uniqueCustomerCount: t.customerIds.size,
+    })),
+  };
+}
+
+export async function getTrainersOverviewForGym(gymId, partnerId, days) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    return computeTrainersOverview(gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+export async function getTrainersOverviewAdmin(gymId, days) {
+  try {
+    return computeTrainersOverview(gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
 // ---- Top-performing gyms (admin leaderboard) --------------------------------
 //
 // The mirror image of the existing getAdminAttendanceByGym (which sorts

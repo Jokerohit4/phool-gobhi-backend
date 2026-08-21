@@ -141,6 +141,8 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `trainer_account_created` | auth | partnerId | `trainerId`, `gymId` |
 | `trainer_account_deactivated` | auth | partnerId | `trainerId`, `gymId` |
 | `trainer_account_reactivated` | auth | partnerId | `trainerId`, `gymId` |
+| `trainer_checked_in` | booking | trainerId | `gym_id`, `date` |
+| `training_session_logged` | booking | trainerId | `gym_id`, `booking_id`, `customer_id` |
 | `buddy_profile_created` | buddy | userId | — |
 | `buddy_swiped` | buddy | swiperId | `action` |
 | `buddy_matched` | buddy | swiperId | `matchId`, `otherUserId` |

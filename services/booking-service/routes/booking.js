@@ -62,6 +62,18 @@ router.get('/admin/attendance-heatmap', requireRole('gobhi'), ctrl.getAdminAtten
 // existing supply-health view (which finds the worst gyms).
 router.get('/admin/top-gyms', requireRole('gobhi'), ctrl.getTopPerformingGyms);
 
+// Trainer self-service (role='trainer', see auth-service's new trainer
+// account type) — their own check-in + logging which attended customer
+// booking they trained.
+router.post('/gym/:gymId/trainer-checkin', requireRole('trainer'), ctrl.trainerCheckIn);
+router.get('/gym/:gymId/trainer-attendance/mine', requireRole('trainer'), ctrl.getMyTrainerAttendance);
+router.get('/gym/:gymId/trainer-sessions/today', requireRole('trainer'), ctrl.getTodaysTrainableBookings);
+router.post('/gym/:gymId/trainer-sessions', requireRole('trainer'), ctrl.logTrainingSession);
+router.get('/gym/:gymId/trainer-sessions/mine', requireRole('trainer'), ctrl.getMyTrainingSessions);
+// Partner/admin dashboard: per-trainer attendance + who they've trained.
+router.get('/gym/:gymId/trainers-overview', requireRole('partner'), ctrl.getTrainersOverviewForGym);
+router.get('/admin/gym/:gymId/trainers-overview', requireRole('gobhi'), ctrl.getTrainersOverviewAdmin);
+
 // Admin analytics dashboards (phool-gobhi-admin's /analytics page) — reads
 // from analytics_events via a separate pool (see analyticsQueryService.js),
 // not this service's own Prisma-backed operational DB.
