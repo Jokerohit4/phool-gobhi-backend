@@ -95,7 +95,7 @@ export const getRevenueTrend = async (req, res) => {
 
 export const getWebsiteTraffic = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getWebsiteTraffic(req.query.days) });
+    res.json({ data: await analyticsQuery.getWebsiteTraffic(req.query.days, req.query.country, req.query.city) });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -144,9 +144,9 @@ export const getKnownPropertyKeys = async (req, res) => {
 
 export const getKnownPropertyValues = async (req, res) => {
   try {
-    const { event, key, limit } = req.query;
+    const { event, key, limit, filterKey, filterValue } = req.query;
     if (!event || !key) return res.status(400).json({ error: 'event and key are required' });
-    res.json({ data: await analyticsQuery.getKnownPropertyValues(event, key, limit) });
+    res.json({ data: await analyticsQuery.getKnownPropertyValues(event, key, limit, filterKey, filterValue) });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }

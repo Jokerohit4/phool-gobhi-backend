@@ -209,6 +209,7 @@ note on `ip`):
 | `user_agent` | website (forwarded from the request's `User-Agent` header) | raw string |
 | `os_name` / `browser_name` / `browser_version` / `device_type` | gateway, parsed from `user_agent` via `ua-parser-js` | **backstop only** — the gateway fills these only when the event doesn't already carry them, so it never overwrites the richer app-supplied fields above; this is the primary source of OS/browser info for website traffic |
 | `ip` | gateway, from `req.ip` | every client event, via the gateway's `/api/events` handler |
+| `geo_country` / `geo_city` | website's `/api/events` BFF route (added 2026-08-24), from Vercel's `x-vercel-ip-country`/`x-vercel-ip-city` edge headers | country stored as its readable name (`'India'`, via `Intl.DisplayNames`) so filters don't need an ISO-code lookup; absent outside Vercel (local dev) and on rows that predate it. This is the visitor's real location — unlike `ip`, which for website traffic is the BFF's own egress address. Powers the admin traffic view's country/city filters (`?country=&city=` on `/admin/analytics/website-traffic`) |
 
 ---
 

@@ -255,33 +255,58 @@ export async function getRevenueTrend(days) {
 // matters for journey lookups but is left alone here: a rough visitor count
 // doesn't need that resolution, it would only double-count as "one more
 // person" for the same person before/after login on the same device).
-export async function getWebsiteTraffic(days) {
+
+// Country/city arrive stamped on every website event by the website's own
+// /api/events BFF route (Vercel edge geo headers), as geo_country /
+// geo_city. Rows before that shipped have neither property — they simply
+// don't match a country/city filter (visible under "All countries" only),
+// which getWebsiteTraffic's geoCoverage count makes explicit in the UI
+// rather than leaving an empty dashboard looking broken. Bound params
+// throughout; the slice() just keeps absurd inputs out of the DB round-trip.
+function geoClauses(country, city, params) {
+  let clauses = '';
+  if (country) {
+    const idx = params.push(String(country).slice(0, 100));
+    clauses += ` AND properties->>'geo_country' = $${idx}`;
+  }
+  if (city) {
+    const idx = params.push(String(city).slice(0, 100));
+    clauses += ` AND properties->>'geo_city' = $${idx}`;
+  }
+  return clauses;
+}
+
+export async function getWebsiteTraffic(days, country, city) {
   const n = daysParam(days);
+  // Same param array reused by every query below — each statement numbers its
+  // placeholders from $1, so the indices stay valid per-statement.
+  const params = [n];
+  const geo = geoClauses(country, city, params);
   const { rows: totals } = await query(
     `SELECT event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users
        FROM analytics_events
       WHERE event IN ('session_started', 'screen_viewed')
         AND properties->>'app' = 'website'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY event`,
-    [n]
+    params
   );
   const { rows: daily } = await query(
     `SELECT date_trunc('day', ts) AS day, event, count(*)::int AS n
        FROM analytics_events
       WHERE event IN ('session_started', 'screen_viewed')
         AND properties->>'app' = 'website'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY 1, 2 ORDER BY 1`,
-    [n]
+    params
   );
   const { rows: topPages } = await query(
     `SELECT properties->>'screen_name' AS page, count(*)::int AS views
        FROM analytics_events
       WHERE event = 'screen_viewed' AND properties->>'app' = 'website'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY 1 ORDER BY views DESC LIMIT 15`,
-    [n]
+    params
   );
 
   // How visitors landed — session_started carries this (see lib/analytics.ts's
@@ -294,18 +319,18 @@ export async function getWebsiteTraffic(days) {
             count(DISTINCT distinct_id)::int AS distinct_visitors
        FROM analytics_events
       WHERE event = 'session_started' AND properties->>'app' = 'website'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY 1 ORDER BY sessions DESC`,
-    [n]
+    params
   );
   const { rows: referrers } = await query(
     `SELECT properties->>'referrer_host' AS referrer_host, count(*)::int AS sessions
        FROM analytics_events
       WHERE event = 'session_started' AND properties->>'app' = 'website'
         AND properties->>'referrer_host' IS NOT NULL
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY 1 ORDER BY sessions DESC LIMIT 15`,
-    [n]
+    params
   );
   const { rows: campaigns } = await query(
     `SELECT properties->>'utm_source' AS utm_source,
@@ -314,19 +339,33 @@ export async function getWebsiteTraffic(days) {
        FROM analytics_events
       WHERE event = 'session_started' AND properties->>'app' = 'website'
         AND properties->>'utm_source' IS NOT NULL
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY 1, 2 ORDER BY sessions DESC LIMIT 15`,
-    [n]
+    params
   );
   const { rows: landingPages } = await query(
     `SELECT properties->>'landing_path' AS landing_path, count(*)::int AS sessions
        FROM analytics_events
       WHERE event = 'session_started' AND properties->>'app' = 'website'
         AND properties->>'landing_path' IS NOT NULL
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${geo}
       GROUP BY 1 ORDER BY sessions DESC LIMIT 15`,
+    params
+  );
+
+  // Coverage of the geo tag itself over ALL sessions in the window (never
+  // geo-filtered): tells the admin how much of what they're looking at
+  // predates location stamping, so an India-filtered near-zero reads as
+  // "tagging started recently", not "traffic stopped".
+  const { rows: coverageRows } = await query(
+    `SELECT count(*) FILTER (WHERE properties->>'geo_country' IS NOT NULL)::int AS tagged,
+            count(*) FILTER (WHERE properties->>'geo_country' IS NULL)::int AS untagged
+       FROM analytics_events
+      WHERE event = 'session_started' AND properties->>'app' = 'website'
+        AND ts > now() - ($1 || ' days')::interval`,
     [n]
   );
+  const coverage = coverageRows[0] || { tagged: 0, untagged: 0 };
 
   const sessions = totals.find((r) => r.event === 'session_started');
   const pageviews = totals.find((r) => r.event === 'screen_viewed');
@@ -340,6 +379,7 @@ export async function getWebsiteTraffic(days) {
     referrers,
     campaigns,
     landingPages,
+    geoCoverage: { tagged: coverage.tagged, untagged: coverage.untagged },
   };
 }
 
@@ -510,17 +550,29 @@ export async function getKnownPropertyKeys(event, limit) {
 // The actual "suggest a value" step — scoped to one event+key pair, since
 // values for e.g. screen_name and cta don't mean anything mixed together.
 // Counts included so the UI can show "most common first," same as
-// CleverTap's value picker.
-export async function getKnownPropertyValues(event, key, limit) {
+// CleverTap's value picker. filterKey/filterValue optionally narrow the rows
+// before grouping (e.g. key=geo_city scoped to filterKey=geo_country,
+// filterValue=India so the traffic view's city dropdown lists only cities
+// actually seen in the selected country) — same bound-param treatment as
+// everything else, so even the scope key can't inject SQL.
+export async function getKnownPropertyValues(event, key, limit, filterKey, filterValue) {
   const cappedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+  const params = [event, key];
+  let scopeClauses = '';
+  if (filterKey && filterValue) {
+    const keyIdx = params.push(String(filterKey).slice(0, 100));
+    const valueIdx = params.push(String(filterValue).slice(0, 200));
+    scopeClauses = ` AND properties ->> $${keyIdx} = $${valueIdx}`;
+  }
+  const limitIdx = params.push(cappedLimit);
   const { rows } = await query(
     `SELECT properties ->> $2 AS value, count(*)::int AS n
        FROM analytics_events
-      WHERE event = $1 AND properties ->> $2 IS NOT NULL
+      WHERE event = $1 AND properties ->> $2 IS NOT NULL${scopeClauses}
       GROUP BY 1
       ORDER BY n DESC
-      LIMIT $3`,
-    [event, key, cappedLimit]
+      LIMIT $${limitIdx}`,
+    params
   );
   return { values: rows };
 }
