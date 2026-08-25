@@ -437,6 +437,21 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
   }
 
+  // Attendance-SaaS wedge: if an existing user logs in via a gym's join link
+  // and they don't already have a linkedGymId, backfill it. Only sets when
+  // currently null — once set it's immutable (same contract as new-user flow).
+  if (user && !user.linkedGymId) {
+    const resolvedLinkedGymId = Number.isInteger(Number(linkedGymId)) && Number(linkedGymId) > 0
+      ? Number(linkedGymId)
+      : null;
+    if (resolvedLinkedGymId) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { linkedGymId: resolvedLinkedGymId },
+      });
+    }
+  }
+
   // Token is always keyed off the account's real DB role/type, never the
   // caller-supplied `role` above — that param only decides what a *new*
   // account gets created as. An existing account authenticates as whatever
