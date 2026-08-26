@@ -50,18 +50,23 @@ model CoinLedgerEntry {
 }
 
 // One row per real, verified attendance event (self-check-in OR
-// partner-verified OR completed booking — all three count, closing Wave 1's
-// known badge_earned undercounting gap for this new pipeline from day one).
-// Idempotent on bookingId so booking-service's fire-and-forget call can
-// safely retry.
+// partner-verified OR completed booking OR a booking-free attendance-SaaS
+// member check-in — all four count, closing Wave 1's known badge_earned
+// undercounting gap for this new pipeline from day one).
+// Idempotent on idempotencyKey (not bookingId — a member_checkin event has
+// no booking) so booking-service's fire-and-forget call can safely retry.
+// bookingId/memberAttendanceId are kept as plain nullable references for
+// analytics/debugging, not for uniqueness.
 model AttendanceEventLog {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  bookingId  Int      @unique
-  gymId      Int
-  attendedAt DateTime
-  source     String
-  createdAt  DateTime @default(now())
+  id                 Int      @id @default(autoincrement())
+  userId             Int
+  bookingId          Int?
+  memberAttendanceId Int?
+  gymId              Int
+  attendedAt         DateTime
+  source             String
+  idempotencyKey     String   @unique
+  createdAt          DateTime @default(now())
 
   @@index([userId, attendedAt])
   @@schema("challenge")

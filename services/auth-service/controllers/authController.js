@@ -506,6 +506,7 @@ const getUserInternal = async (req, res) => {
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,
+      linkedGymId: user.linkedGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

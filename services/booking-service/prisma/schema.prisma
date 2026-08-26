@@ -189,3 +189,22 @@ model AttendanceWarning {
   @@index([bookingId])
   @@schema("booking")
 }
+
+// Attendance-SaaS wedge: a parallel attendance record for customers who
+// joined via a gym's QR/link (User.linkedGymId). Unlike Booking, no
+// pre-booking is required — the customer shows up, geofences, and this row
+// is created. Also feeds challenge-service's coin/streak pipeline (source
+// 'member_checkin') so linked members earn the same streaks/coins as
+// booking customers, per the 2026-08-27 decision.
+model MemberAttendance {
+  id          Int      @id @default(autoincrement())
+  customerId  Int
+  gymId       Int
+  date        String
+  checkedInAt DateTime @default(now())
+
+  @@unique([customerId, gymId, date])
+  @@index([gymId, date])
+  @@index([customerId])
+  @@schema("booking")
+}

@@ -235,13 +235,16 @@ export const updateCoinCatalogItemAdmin = async (req, res) => {
 // turning one off doesn't silently also disable the other.
 export const recordAttendanceEventInternal = async (req, res) => {
   try {
-    const { userId, bookingId, gymId, attendedAt, source } = req.body || {};
-    if (!userId || !bookingId || !gymId || !attendedAt || !source) {
-      return res.status(400).json({ error: 'userId, bookingId, gymId, attendedAt and source are required' });
+    const { userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey } = req.body || {};
+    if (!userId || !gymId || !attendedAt || !source || !idempotencyKey) {
+      return res.status(400).json({ error: 'userId, gymId, attendedAt, source and idempotencyKey are required' });
+    }
+    if (!bookingId && !memberAttendanceId) {
+      return res.status(400).json({ error: 'One of bookingId or memberAttendanceId is required' });
     }
     let result = { alreadyRecorded: true };
     if (await isFeatureEnabled('streaksCoins')) {
-      result = await streakService.recordAttendanceEvent({ userId, bookingId, gymId, attendedAt, source });
+      result = await streakService.recordAttendanceEvent({ userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey });
     }
     if (await isFeatureEnabled('challenges')) {
       await challengeEnrollmentService.advanceOffPeakChallengesService(userId, attendedAt);
