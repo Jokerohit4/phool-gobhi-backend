@@ -19,6 +19,32 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
 
 const prisma = new PrismaClient();
 
+// "First-ever visit to this gym" spans BOTH attendance tables — a customer
+// who's booked at gym X and later does their first member-checkin at that
+// same gym X must not earn badge_earned twice. Checked across Booking AND
+// MemberAttendance every time, not per-table, regardless of which flow is
+// asking. excludeBookingId/excludeAttendanceId omit the very row just
+// created by the caller so it isn't counted as its own "prior" visit.
+export async function hasPriorVisitAtGym({ customerId, gymId, excludeBookingId, excludeAttendanceId }) {
+  const [priorBooking, priorMemberVisit] = await Promise.all([
+    prisma.booking.findFirst({
+      where: {
+        customerId, gymId, attendedAt: { not: null },
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+      },
+      select: { id: true },
+    }),
+    prisma.memberAttendance.findFirst({
+      where: {
+        customerId, gymId,
+        ...(excludeAttendanceId ? { id: { not: excludeAttendanceId } } : {}),
+      },
+      select: { id: true },
+    }),
+  ]);
+  return !!(priorBooking || priorMemberVisit);
+}
+
 // Gamification: badge = "first-ever attended booking at this gym" (Wave 1,
 // purely a derived analytics signal, no persisted row) + a fire-and-forget
 // attendance event to challenge-service (streak/coin subsystem). Called from
@@ -29,11 +55,8 @@ const prisma = new PrismaClient();
 // closes it for all three at once.
 async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
   try {
-    const priorVisit = await prisma.booking.findFirst({
-      where: { customerId, gymId, attendedAt: { not: null }, id: { not: bookingId } },
-      select: { id: true },
-    });
-    if (!priorVisit) {
+    const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeBookingId: bookingId });
+    if (!hadPriorVisit) {
       track('badge_earned', customerId, { gym_id: gymId, city: city ?? null });
     }
   } catch (badgeErr) {
@@ -46,16 +69,14 @@ async function emitAttendanceSignals({ customerId, bookingId, gymId, city, sourc
 }
 
 // Attendance-SaaS twin of emitAttendanceSignals, for linked members
-// checking in with no booking at all (see memberCheckIn below). Badge
-// first-visit check is keyed on MemberAttendance rows instead of Booking
-// rows since these customers may have neither.
+// checking in with no booking at all (see memberCheckIn below). Shares
+// hasPriorVisitAtGym's cross-table check so a member-checkin at a gym the
+// customer already has a booked visit at (or vice versa) doesn't re-earn
+// the badge.
 async function emitMemberAttendanceSignals({ customerId, attendanceId, gymId, city }) {
   try {
-    const priorVisit = await prisma.memberAttendance.findFirst({
-      where: { customerId, gymId, id: { not: attendanceId } },
-      select: { id: true },
-    });
-    if (!priorVisit) {
+    const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeAttendanceId: attendanceId });
+    if (!hadPriorVisit) {
       track('badge_earned', customerId, { gym_id: gymId, city: city ?? null });
     }
   } catch (badgeErr) {
