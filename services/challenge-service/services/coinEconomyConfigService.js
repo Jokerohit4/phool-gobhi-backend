@@ -10,9 +10,13 @@ export const DEFAULT_ECONOMY_CONFIG = {
   weeklyTargetBonus: 20,
   milestones: { '2': 50, '4': 150, '12': 500 },
   pairedStreakWeeklyBonus: 15,
+  qualifyingCheckinsPerWeek: 2,
 };
 
 const MAX_COIN_AMOUNT = 100_000; // sanity ceiling, mirrors wallet-service's HARD_MAX_TOPUP_AMOUNT convention
+// A week has 7 days — more than 7 qualifying check-ins in one week is not a
+// meaningful requirement, so this doubles as the sane upper bound.
+const MAX_QUALIFYING_CHECKINS_PER_WEEK = 7;
 
 export async function loadEconomyConfig() {
   const row = await prisma.coinEconomyConfig.findUnique({ where: { id: 1 } });
@@ -22,6 +26,7 @@ export async function loadEconomyConfig() {
     weeklyTargetBonus: row.weeklyTargetBonus,
     milestones: row.milestones,
     pairedStreakWeeklyBonus: row.pairedStreakWeeklyBonus,
+    qualifyingCheckinsPerWeek: row.qualifyingCheckinsPerWeek,
     updatedAt: row.updatedAt,
   };
 }
@@ -34,10 +39,17 @@ function validateAmount(value, label) {
   return n;
 }
 
-export async function updateEconomyConfig({ coinsPerCheckin, weeklyTargetBonus, milestones, pairedStreakWeeklyBonus }, updatedBy) {
+export async function updateEconomyConfig(
+  { coinsPerCheckin, weeklyTargetBonus, milestones, pairedStreakWeeklyBonus, qualifyingCheckinsPerWeek },
+  updatedBy
+) {
   const coinsPerCheckinValue = validateAmount(coinsPerCheckin, 'coinsPerCheckin');
   const weeklyTargetBonusValue = validateAmount(weeklyTargetBonus, 'weeklyTargetBonus');
   const pairedStreakWeeklyBonusValue = validateAmount(pairedStreakWeeklyBonus, 'pairedStreakWeeklyBonus');
+  const qualifyingCheckinsPerWeekValue = Number(qualifyingCheckinsPerWeek);
+  if (!Number.isInteger(qualifyingCheckinsPerWeekValue) || qualifyingCheckinsPerWeekValue < 1 || qualifyingCheckinsPerWeekValue > MAX_QUALIFYING_CHECKINS_PER_WEEK) {
+    throw { status: 400, error: `qualifyingCheckinsPerWeek must be a whole number between 1 and ${MAX_QUALIFYING_CHECKINS_PER_WEEK}` };
+  }
   if (typeof milestones !== 'object' || milestones === null || Array.isArray(milestones)) {
     throw { status: 400, error: 'milestones must be an object mapping week-number strings to coin amounts' };
   }
@@ -54,6 +66,7 @@ export async function updateEconomyConfig({ coinsPerCheckin, weeklyTargetBonus, 
     weeklyTargetBonus: weeklyTargetBonusValue,
     milestones: cleanMilestones,
     pairedStreakWeeklyBonus: pairedStreakWeeklyBonusValue,
+    qualifyingCheckinsPerWeek: qualifyingCheckinsPerWeekValue,
     updatedBy,
   };
   const updated = await prisma.coinEconomyConfig.upsert({
@@ -66,6 +79,7 @@ export async function updateEconomyConfig({ coinsPerCheckin, weeklyTargetBonus, 
     weeklyTargetBonus: updated.weeklyTargetBonus,
     milestones: updated.milestones,
     pairedStreakWeeklyBonus: updated.pairedStreakWeeklyBonus,
+    qualifyingCheckinsPerWeek: updated.qualifyingCheckinsPerWeek,
     updatedAt: updated.updatedAt,
   };
 }

@@ -3,11 +3,6 @@ import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 const prisma = new PrismaClient();
 
-// A week qualifies once a user logs this many verified attendance events
-// inside it. Strawman value from the 2026-08-15 planning doc; revisit once
-// real check-in frequency data exists.
-export const QUALIFYING_CHECKINS_PER_WEEK = 2;
-
 function startOfIsoWeek(date) {
   const d = new Date(date);
   const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
@@ -54,10 +49,10 @@ export async function closeWeek(weekStartDate) {
   const weekStart = startOfIsoWeek(weekStartDate);
   const weekStartKey = weekStart.toISOString();
   const weeks = await prisma.userStreakWeek.findMany({ where: { weekStart, closedAt: null } });
-  const { weeklyTargetBonus, milestones } = await loadEconomyConfig();
+  const { weeklyTargetBonus, milestones, qualifyingCheckinsPerWeek } = await loadEconomyConfig();
   const results = [];
   for (const week of weeks) {
-    const qualified = week.checkinCount >= QUALIFYING_CHECKINS_PER_WEEK;
+    const qualified = week.checkinCount >= qualifyingCheckinsPerWeek;
     await prisma.userStreakWeek.update({
       where: { id: week.id },
       data: { qualified, closedAt: new Date() },
