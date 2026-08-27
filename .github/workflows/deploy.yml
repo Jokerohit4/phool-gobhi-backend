@@ -127,17 +127,30 @@ jobs:
       # migrations dir existing — gym-service/buddy-service don't have one
       # yet, and `prisma migrate deploy` errors on a missing dir rather than
       # no-op'ing.
+      # DATABASE_URL now lives inside the consolidated <service>-secrets-<env>
+      # JSON payload (see deploy/README.md's "Consolidated secrets" section),
+      # not as its own Secret Manager entry — the old db-url-<env> secrets
+      # were deleted 2026-08-26 as part of that migration.
       - if: steps.svcmeta.outputs.has-prisma == 'true'
         id: dbsecret
         uses: google-github-actions/get-secretmanager-secrets@v2
         with:
           secrets: |-
-            DATABASE_URL:${{ vars.GCP_PROJECT_ID }}/db-url-${{ steps.env.outputs.ENV }}
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/${{ matrix.service }}-secrets-${{ steps.env.outputs.ENV }}
+
+      - if: steps.svcmeta.outputs.has-prisma == 'true'
+        id: dburl
+        env:
+          SECRETS_JSON: ${{ steps.dbsecret.outputs.SECRETS_JSON }}
+        run: |
+          URL=$(echo "$SECRETS_JSON" | jq -r '.DATABASE_URL')
+          echo "::add-mask::$URL"
+          echo "database-url=$URL" >> "$GITHUB_OUTPUT"
 
       - if: steps.svcmeta.outputs.has-prisma == 'true'
         working-directory: ${{ steps.svcmeta.outputs.source-dir }}
         env:
-          DATABASE_URL: ${{ steps.dbsecret.outputs.DATABASE_URL }}
+          DATABASE_URL: ${{ steps.dburl.outputs.database-url }}
         run: |
           if [ -d "prisma/migrations" ]; then
             npm ci

@@ -51,11 +51,24 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      # INTERNAL_API_KEY now lives inside the consolidated
+      # wallet-service-secrets-<env> JSON payload (see deploy/README.md's
+      # "Consolidated secrets" section), not as its own Secret Manager
+      # entry — the old internal-api-key-<env> secrets were deleted
+      # 2026-08-26 as part of that migration.
       - id: secret
         uses: google-github-actions/get-secretmanager-secrets@v2
         with:
           secrets: |-
-            INTERNAL_API_KEY:${{ vars.GCP_PROJECT_ID }}/internal-api-key-${{ matrix.env }}
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/wallet-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
 
       - id: svcurl
         run: |
@@ -75,5 +88,5 @@ jobs:
       - run: |
           curl --fail-with-body -sS -X POST \
             -H "Authorization: Bearer ${{ steps.reconcileauth.outputs.id_token }}" \
-            -H "x-internal-key: ${{ steps.secret.outputs.INTERNAL_API_KEY }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
             "${{ steps.svcurl.outputs.url }}/internal/orders/reconcile-pending"
