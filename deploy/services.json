@@ -26,7 +26,8 @@
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "gateway-secrets"
@@ -42,7 +43,8 @@
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "gateway-secrets"
@@ -254,9 +256,7 @@
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "db-url",
-            "INTERNAL_API_KEY": "internal-api-key"
+            "SECRETS_JSON": "challenge-service-secrets"
           }
         },
         "prod": {
@@ -269,9 +269,44 @@
             "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
-            "DATABASE_URL": "db-url",
-            "ANALYTICS_DATABASE_URL": "analytics-database-url",
-            "INTERNAL_API_KEY": "internal-api-key"
+            "SECRETS_JSON": "challenge-service-secrets"
+          }
+        }
+      }
+    },
+
+    "health-service": {
+      "cloudRunServiceBaseName": "health-service",
+      "sourceDir": "services/health-service",
+      "hasPrisma": true,
+      "healthCheckGuard": false,
+      "allowUnauthenticated": false,
+      "pathTriggers": ["services/health-service/**"],
+      "env": {
+        "dev": {
+          "plain": {
+            "NODE_ENV": "development",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "health-service",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "SECRETS_JSON": "health-service-secrets"
+          }
+        },
+        "prod": {
+          "plain": {
+            "NODE_ENV": "production",
+            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_SERVICE_NAME": "health-service",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
+          },
+          "secrets": {
+            "SECRETS_JSON": "health-service-secrets"
           }
         }
       }
