@@ -47,6 +47,14 @@ model Booking {
   // never fires for it — but completeBooking's partner payout DOES fire for
   // it now, unless partnerShare is null (see above).
   subscriptionId   Int?
+  // Snapshotted at booking-creation time from the covering GymSubscription's
+  // own isAttendanceSaas flag (wallet-service) — meaningless when
+  // subscriptionId is null (always false there). true routes this booking's
+  // completeBooking payout to wallet-service's PartnerBankSettlement ledger
+  // instead of crediting the wallet, same as every other commission field
+  // here: captured once so a later change to the gym's opt-out status never
+  // retroactively changes how an already-booked visit gets paid.
+  isAttendanceSaas Boolean       @default(false)
   // Set for a recurring-class booking instead of a plain-slot booking — the
   // class's own schedule (gym-service's GymClass) governs startTime/endTime
   // for this row, and its capacity pool is tracked separately from the
@@ -102,6 +110,46 @@ model Booking {
   // page/relation granularity under load, causing spurious serialization
   // conflicts for unrelated concurrent bookings.
   @@index([classId, date])
+  @@schema("booking")
+}
+
+// A gym trainer's own daily presence — deliberately separate from Booking
+// (a trainer has no slot/time-window to book against, just "did they show
+// up today"). One row per trainer per day: checking in again the same day
+// just bumps checkedInAt rather than creating a duplicate (see
+// trainerCheckIn's upsert). trainerId is a bare Int, not a Prisma relation —
+// the User row lives in auth-service's own database, same cross-service
+// convention as Booking.customerId.
+model TrainerAttendance {
+  id          Int      @id @default(autoincrement())
+  trainerId   Int
+  gymId       Int
+  date        String
+  checkedInAt DateTime @default(now())
+  method      String
+
+  @@unique([trainerId, date])
+  @@index([gymId, date])
+  @@schema("booking")
+}
+
+// The trainer half of "which customers is this trainer training" — a
+// trainer self-logs themselves against a specific customer BOOKING (not a
+// freeform customer pick), so every row has real provenance: it's tied to
+// an actual attended session, not a static, driftable assignment. One
+// trainer per booking (@unique on bookingId) — logging again just
+// overwrites (a correction), it doesn't create a second claim on the same
+// session.
+model TrainingSession {
+  id         Int      @id @default(autoincrement())
+  bookingId  Int      @unique
+  trainerId  Int
+  gymId      Int
+  customerId Int
+  createdAt  DateTime @default(now())
+
+  @@index([trainerId, gymId])
+  @@index([customerId])
   @@schema("booking")
 }
 

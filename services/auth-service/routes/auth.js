@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -71,6 +71,25 @@ router.patch('/me', verifyToken, updateMe);
 router.get('/internal/:id', requireInternal, getUserInternal);
 router.get('/internal/by-phone/:phone', requireInternal, getUserByPhoneInternal);
 router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
+// Scheduled trigger (see .github/workflows) — nudges gym-linked signups
+// with no activity N days after registering.
+router.post('/internal/attendance-saas/reengagement-sweep', requireInternal, runAttendanceSaasReengagementSweep);
+// Gobhi-only: admin's attendance-SaaS member roster for one gym.
+router.get('/admin/attendance-saas/members/:gymId', requireGobhi, listAttendanceSaasMembers);
+// Partner-facing equivalent (own gym, ownership-checked, no phone) — closes
+// the gap-analysis finding that the member roster existed only gobhi-side.
+router.get('/gym/:gymId/members', verifyToken, listGymMembersForPartner);
+// Partner-only: create/manage this gym's own personal trainers. The trainer
+// then logs in through the normal /send-otp + /verify-otp flow above.
+router.post('/gym/:gymId/trainers', verifyToken, createTrainer);
+router.get('/gym/:gymId/trainers', verifyToken, listTrainers);
+router.patch('/gym/:gymId/trainers/:trainerId', verifyToken, updateTrainerStatus);
+// Partner self-service bank details, for the attendance-SaaS bank-settlement
+// flow (wallet-service's PartnerBankSettlement) — admin needs the full
+// details to actually make the manual transfer, hence the admin route too.
+router.get('/bank-account', verifyToken, getBankAccount);
+router.put('/bank-account', verifyToken, updateBankAccount);
+router.get('/admin/bank-account/:userId', requireGobhi, getBankAccountAdmin);
 router.post('/fcm-token', verifyToken, updateFcmToken);
 
 // Pitch-deck access allowlist (moved off a hardcoded file in the website repo)

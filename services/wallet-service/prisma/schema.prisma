@@ -142,8 +142,49 @@ model GymSubscription {
   // stays true forever with nothing to ever flip it back, so the gift-box FAB
   // and reveal screen resurface on every app launch indefinitely.
   giftRevealSeenAt DateTime?
+  // Snapshotted at purchase time from the gym's attendanceSaasOptedOut
+  // status (negated) — NOT derivable from commissionPct alone, since a
+  // gym's opt-out status can change after this row is created and must
+  // never retroactively change how an already-purchased subscription's
+  // visits get paid out. true = commissionPct came from the honeymoon/SaaS
+  // model AND per-visit payouts route to PartnerBankSettlement instead of
+  // the wallet; false = commissionPct is the gym's standard marketplace
+  // rate AND payouts credit the wallet normally, exactly like a one-off
+  // booking. Backfilled to true for every row that existed before this
+  // field did — see migration — since every subscription was uniformly
+  // under the SaaS model before opt-out existed.
+  isAttendanceSaas Boolean @default(true)
+  // Snapshotted at purchase time from the gym's subscriptionPricingMode
+  // (gym-service) — "percentage" (commissionPct is a real percentage of
+  // price) or "flatPerUser" (commissionPct is the EQUIVALENT percentage
+  // that the flat per-user fee worked out to be for this specific price;
+  // still populated so every existing percentage-reading consumer of
+  // commissionPct keeps working unmodified). Purely a display/audit-trail
+  // field — pricing is otherwise identical in shape between the two modes
+  // once commissionPct/partnerShare are computed.
+  pricingMode String @default("percentage")
 
   @@index([customerId, gymId, status])
+  @@schema("wallet")
+}
+
+// Money owed directly to a partner's bank account for attendance-SaaS
+// subscription visits — deliberately NOT the Wallet/WalletTransaction
+// ledger above. settledAt null = pending; admin marks it settled once the
+// actual bank transfer has happened outside the app (manual, same posture
+// as the existing Wallet payout flow — no automated disbursement API).
+model PartnerBankSettlement {
+  id             Int       @id @default(autoincrement())
+  partnerId      Int
+  gymId          Int
+  bookingId      Int
+  subscriptionId Int
+  amount         Decimal   @db.Decimal(19, 2)
+  settledAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([partnerId, settledAt])
+  @@index([gymId])
   @@schema("wallet")
 }
 

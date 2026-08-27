@@ -32,6 +32,7 @@ model User {
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
   refreshTokens   RefreshToken[]
+  bankAccount     PartnerBankAccount?
   // Referral program: referralCode is this user's own shareable code,
   // deterministically derived from `id` right after creation (see
   // issueSessionForUser) — never random, so no collision-retry loop needed.
@@ -52,6 +53,18 @@ model User {
   // show a gym-scoped "linked member" home instead of the marketplace browse
   // home (see /api/auth/me).
   linkedGymId Int?
+  // Which gym employs this trainer — set once at account creation by the
+  // employing partner (see createTrainerService), never mutated after.
+  // Meaningless for every other role. Same "bare Int, unenforced
+  // cross-service reference" convention as linkedGymId above — Gym lives in
+  // gym-service's own database, not this one.
+  trainerGymId Int?
+  // Set once the attendance-SaaS re-engagement sweep has resolved this
+  // gym-linked user — either it sent them a nudge, or found them already
+  // active (a completed booking or subscription purchase) and no nudge was
+  // needed. Never reset either way, so a resolved user is never re-checked
+  // on a later sweep run — this is "processed," not strictly "was nudged."
+  reengagementNudgedAt DateTime?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -171,6 +184,28 @@ model SavedAddress {
   user             User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@schema("auth")
+}
+
+// A partner's bank details for the attendance-SaaS bank-settlement flow
+// (wallet-service's PartnerBankSettlement) — admin uses this to actually
+// make the manual bank transfer; there's no automated disbursement API
+// here, this is just where the destination details are recorded.
+// SECURITY NOTE: stored as plain columns, not encrypted at rest — same
+// posture as the rest of this schema (no field-level encryption anywhere
+// yet), flagged here explicitly since this is more sensitive than most of
+// what's on User. Worth a follow-up if this needs to satisfy a stricter
+// bar before real payout volume flows through it.
+model PartnerBankAccount {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  accountHolderName String
+  accountNumber     String
+  ifscCode          String
+  upiId             String?
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id])
+
   @@schema("auth")
 }
 
@@ -294,6 +329,9 @@ enum Role {
   customer
   partner
   gobhi
+  // A gym's own personal trainer — see ROLES.TRAINER in userEnums.js for the
+  // full distinction from GobhiType's trainer job-title label.
+  trainer
 
   @@schema("auth")
 }

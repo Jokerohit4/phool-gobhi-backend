@@ -26,6 +26,22 @@ async function internalHeadersFor(targetUrl) {
 const GYM_CITY_CACHE_TTL_MS = 60 * 60 * 1000;
 const gymCityCache = new Map(); // gymId -> { city, expiresAt }
 
+// Verifies the requesting partner actually owns gymId before this service
+// hands back gym-scoped data (the subscriptions half of the member roster)
+// — same posture as booking-service's/auth-service's own copies of this
+// check, duplicated per-service since these are independent microservices.
+export async function assertPartnerOwnsGym(gymId, partnerId) {
+  let gym;
+  try {
+    const res = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = res.data?.data || res.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
 export async function getGymCity(gymId) {
   const cached = gymCityCache.get(gymId);
   if (cached && cached.expiresAt > Date.now()) return cached.city;
@@ -34,6 +50,22 @@ export async function getGymCity(gymId) {
     const city = (res.data?.data || res.data)?.city ?? null;
     gymCityCache.set(gymId, { city, expiresAt: Date.now() + GYM_CITY_CACHE_TTL_MS });
     return city;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Same purpose as getGymCity above (denormalize context onto the
+// subscription_purchased_wallet event, attendance-SaaS funnel), but
+// deliberately NOT cached the same way: a per-gym cache is bounded by the
+// small, slow-growing number of gyms, while a per-user cache would grow
+// unbounded over the service's lifetime for no real benefit — a subscription
+// purchase is rare enough per user that a live lookup here isn't a hot path.
+// A lookup failure must never block the purchase it's attached to.
+export async function getUserLinkedGymId(userId) {
+  try {
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${userId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    return (res.data?.data || res.data)?.linkedGymId ?? null;
   } catch (_) {
     return null;
   }
@@ -53,17 +85,23 @@ export async function getGymCity(gymId) {
 // unchanged by this).
 const SUBSCRIPTION_SAAS_HONEYMOON_DAYS = Number(process.env.SUBSCRIPTION_SAAS_HONEYMOON_DAYS) || 30;
 export const DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_SAAS_COMMISSION_PERCENT) || 1;
+// Platform default when a gym is in flatPerUser pricing mode but hasn't been
+// given an explicit per-gym flat fee yet (Gym.subscriptionFlatFeePerUser is
+// null) — same "admin sets a per-gym override, else fall back to a platform
+// constant" convention as the percentage mode above.
+export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 10;
 
 // partnershipStartDate null (gym approved before this feature existed and
 // somehow missed the migration backfill) is treated as "no honeymoon" rather
 // than "always in honeymoon" — the safe direction if that ever happens is to
 // undercharge zero gyms for free, not to give every unbackfilled gym an
-// indefinite free ride.
-function computeSubscriptionSaasCommissionPct(partnershipStartDate, overridePct) {
-  const resolvedRate = overridePct ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
-  if (!partnershipStartDate) return resolvedRate;
+// indefinite free ride. Shared by both pricing modes below — the honeymoon
+// is a property of the GYM (when it went live), not of which commission
+// formula it's since been set to.
+function isInSubscriptionSaasHoneymoon(partnershipStartDate) {
+  if (!partnershipStartDate) return false;
   const honeymoonEndsAt = new Date(partnershipStartDate).getTime() + SUBSCRIPTION_SAAS_HONEYMOON_DAYS * 24 * 60 * 60 * 1000;
-  return Date.now() < honeymoonEndsAt ? 0 : resolvedRate;
+  return Date.now() < honeymoonEndsAt;
 }
 
 // Admin-portal-editable wallet top-up options (presets + optional
@@ -425,6 +463,108 @@ export async function getSubscriptionSummaryByGymService() {
   return [...byGym.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
+// Gobhi-only: individual GymSubscription rows for one gym, for the
+// attendance-SaaS member roster (see getSubscriptionSummaryByGymService for
+// the aggregate rollup this complements). One row per purchase, not
+// deduped per customer — a repeat customer legitimately shows multiple rows.
+export async function getSubscriptionsForGymService(gymId) {
+  const rows = await prisma.gymSubscription.findMany({
+    where: { gymId },
+    orderBy: { startDate: 'desc' },
+    select: {
+      customerId: true, planType: true, price: true, commissionPct: true,
+      partnerShare: true, startDate: true, endDate: true, status: true,
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    price: Number(r.price),
+    commissionPct: Number(r.commissionPct),
+    partnerShare: Number(r.partnerShare),
+  }));
+}
+
+// Internal, called by auth-service's attendance-SaaS re-engagement sweep —
+// bulk "has ever purchased a subscription" check across a batch of candidate
+// customerIds. Purchase itself is the signal (any status counts) — someone
+// who bought and let it lapse already converted, they're not "never engaged".
+export async function getCustomerIdsWithPurchasedSubscriptionService(customerIds) {
+  const rows = await prisma.gymSubscription.findMany({
+    where: { customerId: { in: customerIds } },
+    select: { customerId: true },
+    distinct: ['customerId'],
+  });
+  return rows.map((r) => r.customerId);
+}
+
+// --- Attendance-SaaS bank settlements -------------------------------------
+// A parallel ledger to Wallet/WalletTransaction, deliberately separate: this
+// money never touches the partner's in-app wallet balance. booking-service
+// calls recordPendingBankSettlementService at booking-completion time
+// instead of crediting the wallet, whenever a booking's payout is both
+// subscription-linked and isAttendanceSaas. Settlement itself (the actual
+// bank transfer) stays a manual, off-platform admin action — same posture
+// as the existing wallet payoutWalletService below, just a different ledger.
+
+export async function recordPendingBankSettlementService({ partnerId, gymId, bookingId, subscriptionId, amount }) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw { status: 400, error: 'amount must be a positive finite number' };
+  }
+  return prisma.partnerBankSettlement.create({
+    data: { partnerId, gymId, bookingId, subscriptionId, amount },
+  });
+}
+
+// Gobhi-only: every partner's pending (not yet settled) bank-settlement
+// total, grouped by partner — the admin equivalent of getPartnerBalancesService
+// but for this separate ledger.
+export async function getPendingBankSettlementsService() {
+  const rows = await prisma.partnerBankSettlement.findMany({
+    where: { settledAt: null },
+  });
+  const byPartner = new Map();
+  for (const row of rows) {
+    const bucket = byPartner.get(row.partnerId) ?? { partnerId: row.partnerId, amount: 0, count: 0 };
+    bucket.amount = Math.round((bucket.amount + Number(row.amount)) * 100) / 100;
+    bucket.count += 1;
+    byPartner.set(row.partnerId, bucket);
+  }
+  return enrichWithUserInfo([...byPartner.values()].sort((a, b) => b.amount - a.amount));
+}
+
+// Gobhi-only: marks every currently-pending settlement row for one partner
+// as settled (the admin has done the actual bank transfer outside the app).
+// Optionally scoped to one gym, matching getPartnerBalancesService/
+// payoutWalletService's per-user granularity but allowing a per-gym partial
+// settlement for a multi-gym partner.
+export async function settleBankSettlementsService(partnerId, gymId) {
+  const result = await prisma.partnerBankSettlement.updateMany({
+    where: { partnerId, settledAt: null, ...(gymId ? { gymId } : {}) },
+    data: { settledAt: new Date() },
+  });
+  return { settledCount: result.count };
+}
+
+// Partner-facing: their own pending total + settlement history, optionally
+// scoped to one gym (multi-gym partners).
+export async function getMyBankSettlementsService(partnerId, gymId) {
+  const rows = await prisma.partnerBankSettlement.findMany({
+    where: { partnerId, ...(gymId ? { gymId } : {}) },
+    orderBy: { createdAt: 'desc' },
+  });
+  const pending = rows.filter((r) => r.settledAt == null);
+  const settled = rows.filter((r) => r.settledAt != null);
+  return {
+    pendingAmount: Math.round(pending.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
+    pendingCount: pending.length,
+    history: rows.map((r) => ({
+      id: r.id, gymId: r.gymId, amount: Number(r.amount),
+      settledAt: r.settledAt, createdAt: r.createdAt,
+    })),
+    totalSettled: Math.round(settled.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
+  };
+}
+
 export async function payoutWalletService(userId, amount, description) {
   const explicitAmount = amount != null;
   if (explicitAmount && (!Number.isFinite(amount) || amount <= 0)) {
@@ -575,6 +715,15 @@ export async function fetchGymForSubscription(gymId, planType) {
     price: Number(price),
     partnershipStartDate: gym.partnershipStartDate ?? null,
     subscriptionCommissionPct: gym.subscriptionCommissionPct != null ? Number(gym.subscriptionCommissionPct) : null,
+    attendanceSaasOptedOut: gym.attendanceSaasOptedOut === true,
+    // Which formula to apply post-honeymoon — percentage-of-price
+    // (subscriptionCommissionPct above) or a flat fee regardless of price
+    // (subscriptionFlatFeePerUser below). Defaults to 'percentage' if
+    // absent (version-skew fallback, same posture as booking-service's
+    // marketplaceEnabled === false check — an old gym-service response
+    // simply won't have this key yet).
+    subscriptionPricingMode: gym.subscriptionPricingMode === 'flatPerUser' ? 'flatPerUser' : 'percentage',
+    subscriptionFlatFeePerUser: gym.subscriptionFlatFeePerUser != null ? Number(gym.subscriptionFlatFeePerUser) : null,
   };
 }
 
@@ -596,7 +745,21 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const { partnerId, price, partnershipStartDate, subscriptionCommissionPct: subscriptionCommissionPctOverride } = await fetchGymForSubscription(gymId, planType);
+  const {
+    partnerId, price, partnershipStartDate,
+    subscriptionCommissionPct: subscriptionCommissionPctOverride,
+    attendanceSaasOptedOut, subscriptionPricingMode, subscriptionFlatFeePerUser,
+  } = await fetchGymForSubscription(gymId, planType);
+
+  // Business-model selection: a gym that's opted out of attendance-SaaS
+  // doesn't offer this product at all — no registrations, at any price.
+  // (Previously this fell back to pricing the subscription like a one-off
+  // marketplace booking instead of blocking it; the two business models are
+  // now a real either/or/both choice, not "SaaS, or SaaS-priced-as-
+  // marketplace".)
+  if (attendanceSaasOptedOut) {
+    throw { status: 400, error: 'This gym does not offer attendance-SaaS registrations.' };
+  }
 
   // Same self-booking-fraud guard as booking-service's createBooking — a
   // partner shouldn't be able to buy a subscription to their own gym under
@@ -632,7 +795,32 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
-  const commissionPct = computeSubscriptionSaasCommissionPct(partnershipStartDate, subscriptionCommissionPctOverride);
+  // Every purchase that reaches this point is under the attendance-SaaS
+  // model (opted-out gyms were rejected above) — always true going
+  // forward. Historical rows can still be false from before opt-out was a
+  // hard gate; bookingCommissionFields/completeBooking in booking-service
+  // still reads this per-row for that reason.
+  const isAttendanceSaas = true;
+
+  let commissionAmount;
+  if (isInSubscriptionSaasHoneymoon(partnershipStartDate)) {
+    commissionAmount = 0;
+  } else if (subscriptionPricingMode === 'flatPerUser') {
+    // A flat fee can't exceed the price itself — a cheap weekly plan at a
+    // gym with a flat fee set higher than that plan's price is an edge
+    // case admin can misconfigure, not one this function should let
+    // through as a negative partnerShare.
+    commissionAmount = Math.min(subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER, price);
+  } else {
+    const pct = subscriptionCommissionPctOverride ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
+    commissionAmount = Math.round(price * pct / 100 * 100) / 100;
+  }
+  // Always stored as the equivalent percentage, regardless of which mode
+  // actually computed commissionAmount — every existing consumer of
+  // GymSubscription.commissionPct (revenue-split summaries, etc.) reads it
+  // as a plain percentage and shouldn't need to branch on pricingMode to
+  // stay correct.
+  const commissionPct = price > 0 ? Math.round((commissionAmount / price) * 100 * 100) / 100 : 0;
   // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
   // partner is credited partnerShare/days per completed visit instead (see
   // bookingCommissionFields/completeBooking in booking-service), so this
@@ -641,7 +829,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   // never paid out. Still upsert the partner's wallet row now so the first
   // per-visit credit never fails on a missing wallet (the bug that used to
   // strand a purchase in PROCESSING when a partner had no wallet yet).
-  const partnerShare = Math.round(price * (1 - commissionPct / 100) * 100) / 100;
+  const partnerShare = Math.round((price - commissionAmount) * 100) / 100;
   const days = PLAN_DAYS[planType];
   const startDate = new Date();
   const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
@@ -661,6 +849,8 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
       price,
       commissionPct,
       partnerShare,
+      isAttendanceSaas,
+      pricingMode: subscriptionPricingMode,
       startDate,
       endDate,
       razorpayOrderId: syntheticOrderId,

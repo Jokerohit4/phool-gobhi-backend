@@ -3,9 +3,16 @@
 
   "signup_completed":            { "source": "server", "service": "auth-service" },
   "login_completed":             { "source": "server", "service": "auth-service" },
+  "attendance_saas_reengagement_sent": { "source": "server", "service": "auth-service", "since": "2026-08-20", "notes": "attendance-SaaS wedge — nudge sent to a gym-linked signup with no booking/subscription activity" },
+  "partner_bank_settlement_recorded":  { "source": "server", "service": "wallet-service", "since": "2026-08-20", "notes": "admin marked a partner's pending attendance-SaaS bank settlement as paid (manual bank transfer, outside the app)" },
   "staff_account_created":       { "source": "server", "service": "auth-service" },
   "staff_account_revoked":       { "source": "server", "service": "auth-service" },
   "staff_account_reactivated":   { "source": "server", "service": "auth-service" },
+  "trainer_account_created":      { "source": "server", "service": "auth-service", "since": "2026-08-21", "notes": "partner created a gym-employed trainer account" },
+  "trainer_account_deactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
+  "trainer_account_reactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
+  "trainer_checked_in":           { "source": "server", "service": "booking-service", "since": "2026-08-21" },
+  "training_session_logged":      { "source": "server", "service": "booking-service", "since": "2026-08-21", "notes": "trainer self-logged which attended customer booking they trained" },
 
   "gym_created":                 { "source": "server", "service": "gym-service" },
   "gym_approved":                { "source": "server", "service": "gym-service" },

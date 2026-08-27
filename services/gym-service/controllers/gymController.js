@@ -548,6 +548,18 @@ export const updateGymSubscriptionCommission = async (req, res) => {
   }
 };
 
+export const updateGymSubscriptionPricingMode = async (req, res) => {
+  try {
+    const { subscriptionPricingMode, subscriptionFlatFeePerUser } = req.body ?? {};
+    const flatFee = subscriptionFlatFeePerUser === null || subscriptionFlatFeePerUser === undefined
+      ? null : Number(subscriptionFlatFeePerUser);
+    const gym = await gymService.updateGymSubscriptionPricingMode(parseInt(req.params.id), subscriptionPricingMode, flatFee);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getPartnerEditRequests = async (req, res) => {
   try {
     const requests = await gymService.getPartnerEditRequests(parseInt(req.params.id), req.userId);

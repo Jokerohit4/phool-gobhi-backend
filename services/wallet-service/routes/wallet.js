@@ -25,6 +25,13 @@ import {
   getWalletTopupConfigHandler,
   updateWalletTopupConfigHandler,
   getSubscriptionSummaryByGym,
+  getCustomerIdsWithPurchasedSubscription,
+  getSubscriptionsForGym,
+  getSubscriptionsForGymForPartner,
+  recordPendingBankSettlement,
+  getPendingBankSettlements,
+  settleBankSettlements,
+  getMyBankSettlements,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -55,11 +62,23 @@ router.post('/webhooks/razorpay', handleRazorpayWebhook); // Razorpay webhook (n
 // source rule).
 router.post('/subscriptions/purchase-with-wallet', requireAuth, purchaseSubscriptionWithWalletHandler);
 router.get('/subscriptions/admin/by-gym', requireRole('gobhi'), getSubscriptionSummaryByGym); // Admin: attendance-SaaS per-gym rollup (registered before /subscriptions/mine — literal path)
+router.get('/subscriptions/admin/by-gym/:gymId', requireRole('gobhi'), getSubscriptionsForGym); // Admin: individual subscription rows for one gym (member roster)
+router.get('/subscriptions/gym/:gymId', requireRole('partner'), getSubscriptionsForGymForPartner); // Partner: same rows, ownership-checked, for their own gym's member roster
 router.get('/subscriptions/mine', requireAuth, getMySubscriptions); // Customer's own subscriptions (optional ?gymId=)
 router.post('/subscriptions/:id/ack-gift-reveal', requireAuth, ackGiftReveal); // Customer confirms they've seen the /gift-reveal screen
 router.get('/internal/subscriptions/active', requireInternal, getActiveSubscriptionInternal); // booking-service entitlement check
 router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
 router.post('/internal/orders/reconcile-pending', requireInternal, reconcilePendingRazorpayOrdersInternal); // Razorpay top-up reconciliation trigger
+router.post('/internal/subscriptions/has-purchased-batch', requireInternal, getCustomerIdsWithPurchasedSubscription); // auth-service's attendance-SaaS re-engagement sweep
+
+// Attendance-SaaS bank settlements — a separate ledger from Wallet above;
+// this money never credits the partner's in-app wallet. Literal paths
+// (mine, admin/pending) registered before the /admin/:partnerId/settle
+// param route, same convention as elsewhere in this file.
+router.post('/internal/bank-settlements/record', requireInternal, recordPendingBankSettlement); // booking-service, at completion of a SaaS subscription visit
+router.get('/bank-settlements/mine', requireRole('partner'), getMyBankSettlements); // Partner's own pending total + history (optional ?gymId=)
+router.get('/bank-settlements/admin/pending', requireRole('gobhi'), getPendingBankSettlements); // Admin: every partner's pending total
+router.post('/bank-settlements/admin/:partnerId/settle', requireRole('gobhi'), settleBankSettlements); // Admin: mark a partner's pending rows settled (optional body {gymId})
 
 export default router;

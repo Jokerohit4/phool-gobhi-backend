@@ -1,7 +1,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
@@ -470,6 +470,7 @@ const getMe = async (req, res) => {
       fitnessGoals: user.fitnessGoals,
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
+      trainerGymId: user.trainerGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -499,6 +500,8 @@ const getUserInternal = async (req, res) => {
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,
+      linkedGymId: user.linkedGymId,
+      trainerGymId: user.trainerGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -542,6 +545,96 @@ const getUsersBatchInternal = async (req, res) => {
   }
 };
 
+// Scheduled trigger (see .github/workflows) for the attendance-SaaS
+// re-engagement sweep — nudges gym-linked signups with no activity.
+const runAttendanceSaasReengagementSweep = async (req, res) => {
+  try {
+    const result = await runAttendanceSaasReengagementSweepService();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only roster of a single gym's linked members (attendance-SaaS
+// wedge) — admin's /attendance-saas dashboard previously only had
+// gym-level aggregates (see wallet-service's getSubscriptionSummaryByGymService);
+// this is the individual-member list behind those numbers.
+const listAttendanceSaasMembers = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const members = await prisma.user.findMany({
+      where: { linkedGymId: gymId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, phone: true, createdAt: true },
+    });
+    res.json({ data: members });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Partner-facing member roster (attendance-SaaS gap-analysis finding: every
+// competitor treats "see your own members" as day-one baseline, and this
+// existed in code but was gobhi-only). Same query as
+// listAttendanceSaasMembers above, minus phone — partners must never see a
+// customer's phone number (same rule bookingController's getGymBookings
+// already enforces for the booking-history roster).
+export const listGymMembersForPartner = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    await assertPartnerOwnsGym(gymId, req.user.id);
+    const members = await prisma.user.findMany({
+      where: { linkedGymId: gymId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, createdAt: true },
+    });
+    res.json({ data: members });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Partner-only — creates a gym-employed trainer account (never public
+// self-signup, see the ROLES.TRAINER guard in issueSessionForUser). The
+// trainer subsequently logs in via the normal /send-otp + /verify-otp flow
+// using the phone number given here.
+export const createTrainer = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainer = await createTrainerService(req.body ?? {}, gymId, req.user.id);
+    res.status(201).json({ data: trainer });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listTrainers = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainers = await listTrainersForGymService(gymId, req.user.id);
+    res.json({ data: trainers });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateTrainerStatus = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainerId = parseInt(req.params.trainerId);
+    const isActive = req.body?.isActive === true;
+    const trainer = await updateTrainerStatusService(trainerId, isActive, gymId, req.user.id);
+    res.json({ data: trainer });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 // Lets a customer/partner set their name after signup, since phone+OTP
 // signup never collects one (see authService.js issueSessionForUser). Each
 // app nudges for this once name is null rather than blocking signup on it.
@@ -551,6 +644,56 @@ const updateMe = async (req, res) => {
     if (!name) return res.status(400).json({ error: 'name is required' });
     const user = await prisma.user.update({ where: { id: req.user.id }, data: { name } });
     res.json({ id: user.id, name: user.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Partner-only self-service — for the attendance-SaaS bank-settlement flow.
+// No masking on the way back to the partner: it's their own data, and admin
+// separately needs the full details to actually make the transfer, so
+// there's nothing gained by hiding it from the one person it belongs to.
+const getBankAccount = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const account = await prisma.partnerBankAccount.findUnique({ where: { userId: req.user.id } });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateBankAccount = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const { accountHolderName, accountNumber, ifscCode, upiId } = req.body ?? {};
+    if (!accountHolderName?.trim() || !accountNumber?.trim() || !ifscCode?.trim()) {
+      return res.status(400).json({ error: 'accountHolderName, accountNumber, and ifscCode are required' });
+    }
+    const data = {
+      accountHolderName: accountHolderName.trim(),
+      accountNumber: accountNumber.trim(),
+      ifscCode: ifscCode.trim().toUpperCase(),
+      upiId: upiId?.trim() || null,
+    };
+    const account = await prisma.partnerBankAccount.upsert({
+      where: { userId: req.user.id },
+      update: data,
+      create: { userId: req.user.id, ...data },
+    });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only — admin needs the full bank details to actually make the
+// manual settlement transfer (see wallet-service's PartnerBankSettlement).
+const getBankAccountAdmin = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const account = await prisma.partnerBankAccount.findUnique({ where: { userId } });
+    res.json({ data: account });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -567,6 +710,6 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, listStaff, createStaff, updateStaffStatus };
 
 

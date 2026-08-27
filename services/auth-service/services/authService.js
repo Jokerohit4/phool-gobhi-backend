@@ -7,6 +7,7 @@ import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { notifyUser } from '../utils/notifyUser.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
 
 const SKIP_OTP_CODE = '123456';
@@ -27,6 +28,8 @@ function safeCompareStrings(a, b) {
 }
 
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 
 // Best-effort onboarding summary for a partner, fetched from gym-service. Lets
 // the partner app route on login (dashboard vs. resume onboarding) from the
@@ -47,6 +50,112 @@ async function fetchPartnerGymSummary(partnerId) {
     console.error('fetchPartnerGymSummary error:', err.message);
     return null;
   }
+}
+
+// Verifies the requesting partner actually owns gymId before this service
+// hands back gym-scoped data (the member roster) — same posture as
+// booking-service's assertPartnerOwnsGym / wallet-service's ownership checks,
+// duplicated per-service rather than shared since these are independent
+// microservices with no shared code layer.
+export async function assertPartnerOwnsGym(gymId, partnerId) {
+  let gym;
+  try {
+    const res = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
+      headers: {
+        'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+        ...(await googleIdTokenHeader(GYM_SERVICE_URL)),
+      },
+    });
+    if (!res.ok) throw new Error('not ok');
+    const body = await res.json();
+    gym = body.data || body;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
+// Bulk "which of these customerIds have activity" lookup against another
+// service's batch endpoint — a failed/unreachable service degrades to "no
+// one there has activity" (empty array) rather than blocking the whole
+// sweep, same fail-open posture as fetchPartnerGymSummary above.
+async function fetchCustomerIdsWithActivity(serviceUrl, path, customerIds) {
+  try {
+    const res = await fetch(`${serviceUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+        'Content-Type': 'application/json',
+        ...(await googleIdTokenHeader(serviceUrl)),
+      },
+      body: JSON.stringify({ customerIds }),
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return Array.isArray(body.data) ? body.data : [];
+  } catch (err) {
+    console.error(`fetchCustomerIdsWithActivity(${path}) error:`, err.message);
+    return [];
+  }
+}
+
+const REENGAGEMENT_AFTER_DAYS = Number(process.env.REENGAGEMENT_AFTER_DAYS) || 3;
+// Caps how many candidates one sweep run processes — if there's ever a
+// backlog bigger than this, the oldest-signed-up candidates (ordered by
+// createdAt) get resolved first, and the rest wait for tomorrow's run
+// rather than the sweep growing unbounded in a single invocation.
+const REENGAGEMENT_BATCH_SIZE = 500;
+
+// Attendance-SaaS wedge: nudges a gym-linked signup who has shown no
+// activity (no completed booking, no subscription purchase) N days after
+// registering — at most once ever per user (see reengagementNudgedAt).
+// Runs on a schedule (see .github/workflows), not on-demand.
+export async function runAttendanceSaasReengagementSweepService() {
+  const cutoff = new Date(Date.now() - REENGAGEMENT_AFTER_DAYS * 24 * 60 * 60 * 1000);
+  const candidates = await prisma.user.findMany({
+    where: { linkedGymId: { not: null }, createdAt: { lt: cutoff }, reengagementNudgedAt: null },
+    orderBy: { createdAt: 'asc' },
+    take: REENGAGEMENT_BATCH_SIZE,
+    select: { id: true, fcmToken: true, linkedGymId: true },
+  });
+
+  if (!candidates.length) return { candidates: 0, nudged: 0, alreadyActive: 0 };
+
+  const customerIds = candidates.map((c) => c.id);
+  const [withBooking, withSubscription] = await Promise.all([
+    fetchCustomerIdsWithActivity(BOOKING_SERVICE_URL, '/internal/bookings/has-completed-batch', customerIds),
+    fetchCustomerIdsWithActivity(WALLET_SERVICE_URL, '/internal/subscriptions/has-purchased-batch', customerIds),
+  ]);
+  const activeIds = new Set([...withBooking, ...withSubscription]);
+
+  let nudged = 0;
+  let alreadyActive = 0;
+  for (const user of candidates) {
+    // Per-candidate try/catch — one bad row (e.g. a DB hiccup on the
+    // resolving update) must never abort the rest of the batch.
+    try {
+      if (activeIds.has(user.id)) {
+        alreadyActive++;
+      } else {
+        await notifyUser(user.fcmToken, {
+          title: "Don't lose your streak!",
+          body: 'Check in at your gym on Phool Gobhi to keep your attendance on record.',
+          data: { type: 'attendance_saas_reengagement' },
+        });
+        track('attendance_saas_reengagement_sent', user.id, {
+          linked_gym_id: user.linkedGymId,
+          had_fcm_token: Boolean(user.fcmToken),
+        });
+        nudged++;
+      }
+      await prisma.user.update({ where: { id: user.id }, data: { reengagementNudgedAt: new Date() } });
+    } catch (err) {
+      console.error(`Reengagement sweep failed for user ${user.id}:`, err.message);
+    }
+  }
+
+  return { candidates: candidates.length, nudged, alreadyActive };
 }
 
 export async function signupService({ name, email, password, role, type, gobhiType }) {
@@ -379,6 +488,16 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   const isNewUser = !user;
 
   if (!user) {
+    // Unlike GOBHI's block above (unconditional — gobhi never legitimately
+    // logs in via phone/OTP at all), this only guards NEW-account creation:
+    // an existing trainer (created by their employing partner via
+    // createTrainerService) must still be able to log in through this same
+    // phone/OTP flow — see the "token is always keyed off the account's
+    // real DB role" comment below for why the caller-supplied `role` is
+    // irrelevant once the row already exists.
+    if (role === ROLES.TRAINER) {
+      throw { status: 403, error: 'Trainer accounts can only be created by a gym partner.' };
+    }
     // Resolve an incoming referral code to the referrer's id — silently
     // ignored if the code doesn't match anyone (typo'd code shouldn't block
     // signup). Self-referral is structurally impossible: this user's own row
@@ -462,10 +581,15 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
 
   // Activation funnel: signup_completed (new) vs login_completed (returning).
   // distinct_id is the userId so this stitches with the client's pre-login
-  // anonymous events once the app calls identify(userId).
+  // anonymous events once the app calls identify(userId). linked_gym_id
+  // (attendance-SaaS wedge) is only ever non-null on a genuine signup_completed
+  // — an existing user's linkedGymId can't change on a later login (see the
+  // resolvedLinkedGymId comment above), so this measures the /join funnel
+  // without a separate event name.
   track(isNewUser ? 'signup_completed' : 'login_completed', user.id, {
     role: user.role,
     user_type: user.type,
+    linked_gym_id: user.linkedGymId ?? null,
   });
 
   // Tell partners, at login, whether their gym already exists so the app can
@@ -483,7 +607,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     refreshToken,
     isNewUser,
     ...(onboarding !== undefined && { onboarding }),
-    user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType, linkedGymId: user.linkedGymId },
+    user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType, linkedGymId: user.linkedGymId, trainerGymId: user.trainerGymId },
   };
 }
 
@@ -654,4 +778,75 @@ export async function updateStaffStatusService(targetId, isActive, actorId) {
       throw err;
     }
   }
+}
+
+// Partner-only — mirrors createStaffService's "never public self-signup"
+// posture (see the ROLES.TRAINER guard in issueSessionForUser above), but
+// phone+OTP instead of email+password since a gym trainer is exactly the
+// kind of individual who already expects that login pattern from the
+// customer/partner apps. assertPartnerOwnsGym is the same ownership check
+// booking-service/wallet-service already use for their own gym-scoped
+// partner endpoints — duplicated here for the same reason those are
+// duplicated per-service (independent microservices, no shared code layer).
+export async function createTrainerService({ name, phone: rawPhone }, gymId, partnerId) {
+  await assertPartnerOwnsGym(gymId, partnerId);
+
+  const phone = normalizePhone(rawPhone);
+  if (!phone) {
+    throw { status: 400, error: ERROR_MESSAGES.INVALID_PHONE.message, errorCode: ERROR_MESSAGES.INVALID_PHONE.code };
+  }
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) {
+    throw { status: 400, error: 'name is required' };
+  }
+
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) {
+    throw {
+      status: 409,
+      error: existing.role === ROLES.TRAINER
+        ? 'This phone number is already registered as a trainer.'
+        : `This phone number is already registered as a ${existing.role}. A phone number can only be one account.`,
+    };
+  }
+
+  const trainer = await prisma.user.create({
+    data: {
+      name: trimmedName,
+      phone,
+      role: ROLES.TRAINER,
+      type: 'general',
+      trainerGymId: gymId,
+      updatedAt: new Date(),
+    },
+  });
+  track('trainer_account_created', partnerId, { trainerId: trainer.id, gymId });
+  return { id: trainer.id, name: trainer.name, phone: trainer.phone, isActive: trainer.isActive, createdAt: trainer.createdAt };
+}
+
+export async function listTrainersForGymService(gymId, partnerId) {
+  await assertPartnerOwnsGym(gymId, partnerId);
+  return prisma.user.findMany({
+    where: { role: ROLES.TRAINER, trainerGymId: gymId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, name: true, phone: true, isActive: true, createdAt: true },
+  });
+}
+
+// No "last active trainer" floor (unlike updateStaffStatusService) — a gym
+// can legitimately have zero active trainers, that's just a gym without
+// trainers, not a locked-out platform.
+export async function updateTrainerStatusService(trainerId, isActive, gymId, partnerId) {
+  await assertPartnerOwnsGym(gymId, partnerId);
+  const trainer = await prisma.user.findUnique({ where: { id: trainerId } });
+  if (!trainer || trainer.role !== ROLES.TRAINER || trainer.trainerGymId !== gymId) {
+    throw { status: 404, error: 'Trainer not found at this gym' };
+  }
+  const updated = await prisma.user.update({
+    where: { id: trainerId },
+    data: { isActive },
+    select: { id: true, name: true, phone: true, isActive: true, createdAt: true },
+  });
+  track(isActive ? 'trainer_account_reactivated' : 'trainer_account_deactivated', partnerId, { trainerId, gymId });
+  return updated;
 }
