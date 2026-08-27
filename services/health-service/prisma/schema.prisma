@@ -1,0 +1,284 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["health"]
+}
+
+// See C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
+// for the full design doc. Two tracks, deliberately: structured in-app
+// logging (Exercise/WorkoutTemplate/WorkoutSession/WorkoutSet) for
+// naturally set-based strength training, and the lighter ExerciseRecord for
+// duration-based cardio/yoga/other plus device-synced workout summaries —
+// HealthKit/Health Connect don't hand over set-level data, so there's
+// nothing to decompose a synced workout into.
+
+enum Platform {
+  ios
+  android
+
+  @@schema("health")
+}
+
+// Gates the OS-level HealthKit/Health Connect permission prompt — separate
+// from the healthMetrics app-config flag, which only gates whether the
+// feature is visible at all. Revoking sets revokedAt rather than deleting
+// the row, so "was this ever granted, and when" survives a revoke for audit
+// purposes even though DELETE /me wipes every other table for this user.
+model HealthConsent {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  policyVersion String
+  platform      Platform
+
+  @@schema("health")
+}
+
+enum MuscleGroup {
+  chest
+  back
+  legs
+  shoulders
+  arms
+  core
+  cardio
+  fullBody
+
+  @@schema("health")
+}
+
+enum Equipment {
+  barbell
+  dumbbell
+  machine
+  cable
+  bodyweight
+  kettlebell
+  other
+
+  @@schema("health")
+}
+
+// Determines which fields the customer app's active-workout set-row shows
+// for this exercise (weight+reps vs. duration vs. duration+distance) — one
+// unified session flow handles strength AND cardio/yoga this way, rather
+// than forking into separate logging UIs per activity type.
+enum LoggingType {
+  sets_reps_weight
+  duration
+  duration_distance
+
+  @@schema("health")
+}
+
+// The exercise library — seeded (~80-100 common exercises at launch, see
+// prisma/seed.js) plus user-created custom entries (createdByUserId set).
+// primaryMuscles/secondaryMuscles drive the muscle-diagram highlight on the
+// exercise-detail screen; a custom exercise ships with empty muscle lists
+// and no demo/video content until/unless the user (or a future admin tool)
+// fills them in.
+model Exercise {
+  id              Int         @id @default(autoincrement())
+  name            String
+  muscleGroup     MuscleGroup
+  equipment       Equipment
+  loggingType     LoggingType
+  primaryMuscles  String[]
+  secondaryMuscles String[]
+  demoImageUrl    String?
+  createdByUserId Int?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  formVideos        ExerciseFormVideo[]
+  templateExercises TemplateExercise[]
+  sessionExercises  SessionExercise[]
+
+  @@index([muscleGroup])
+  @@index([createdByUserId])
+  @@schema("health")
+}
+
+// A curated, per-language demo video for one exercise. Content-ops, not
+// engineering — see the implementation plan's warning note: someone has to
+// find/vet a real video per exercise per language before this table has
+// meaningful data. youtubeVideoId only (never the full URL) so the app
+// builds the watch/deep-link URL itself and stays free to change embed vs.
+// link-out behavior later without a data migration.
+model ExerciseFormVideo {
+  id             Int      @id @default(autoincrement())
+  exerciseId     Int
+  exercise       Exercise @relation(fields: [exerciseId], references: [id])
+  languageCode   String
+  youtubeVideoId String
+  title          String
+  channelName    String
+  durationSeconds Int
+  order           Int     @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([exerciseId, languageCode])
+  @@schema("health")
+}
+
+// A reusable routine — "Push Day," "Leg Day." What a user starts a session
+// from (or an "empty workout" skips this entirely — WorkoutSession.templateId
+// is nullable for exactly that case).
+model WorkoutTemplate {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exercises TemplateExercise[]
+  sessions  WorkoutSession[]
+
+  @@index([userId])
+  @@schema("health")
+}
+
+// One exercise's slot in a template. supersetGroup (nullable) lets 2+
+// exercises be paired to alternate without rest between them — modeled now
+// even though the v1 Create Routine screen doesn't expose pairing yet, so
+// adding that UI later needs no migration.
+model TemplateExercise {
+  id          Int             @id @default(autoincrement())
+  templateId  Int
+  template    WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId  Int
+  exercise    Exercise        @relation(fields: [exerciseId], references: [id])
+  order       Int
+  targetSets  Int
+  targetReps  Int
+  restSeconds Int?
+  supersetGroup Int?
+
+  @@index([templateId])
+  @@schema("health")
+}
+
+// One logged gym visit's worth of structured training. endedAt null means
+// still in progress (the active-workout screen's live session) — a session
+// with endedAt null and startedAt older than ~24h is treated as abandoned by
+// the app (never auto-deleted server-side, just not resumed).
+model WorkoutSession {
+  id         Int              @id @default(autoincrement())
+  userId     Int
+  templateId Int?
+  template   WorkoutTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  startedAt  DateTime         @default(now())
+  endedAt    DateTime?
+  // Set once, the first time a finished session successfully credits coins
+  // (see gamificationService) — an idempotency guard so retrying/duplicating
+  // the finish call can never double-credit, independent of the ledger's own
+  // idempotencyKey check (belt-and-suspenders, cheap to keep in sync).
+  coinsAwarded Boolean        @default(false)
+
+  exercises SessionExercise[]
+
+  @@index([userId, startedAt])
+  @@schema("health")
+}
+
+// An exercise actually performed in this session — may differ from the
+// template if the user swapped/added something mid-workout (see
+// POST /sessions/:id/exercises).
+model SessionExercise {
+  id            Int            @id @default(autoincrement())
+  sessionId     Int
+  session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId    Int
+  exercise      Exercise       @relation(fields: [exerciseId], references: [id])
+  order         Int
+  supersetGroup Int?
+
+  sets WorkoutSet[]
+
+  @@index([sessionId])
+  @@index([exerciseId])
+  @@schema("health")
+}
+
+// The atomic logging unit. `completed` flips on the checkmark tap in the
+// active-workout screen — that's the whole interaction, per Strong's "3
+// taps to log a set" bar. weightKg/reps apply to sets_reps_weight exercises;
+// durationSeconds (and SessionExercise-level distance, tracked via the
+// exercise's own loggingType) applies to duration/duration_distance ones.
+model WorkoutSet {
+  id                Int             @id @default(autoincrement())
+  sessionExerciseId Int
+  sessionExercise   SessionExercise @relation(fields: [sessionExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  weightKg          Decimal?        @db.Decimal(6, 2)
+  reps              Int?
+  durationSeconds   Int?
+  distanceMeters    Decimal?        @db.Decimal(8, 2)
+  completed         Boolean         @default(false)
+  updatedAt         DateTime        @updatedAt
+
+  @@index([sessionExerciseId])
+  @@schema("health")
+}
+
+enum ExerciseRecordSource {
+  manual
+  healthkit
+  health_connect
+
+  @@schema("health")
+}
+
+// Narrower than it used to be in this doc's first draft — no longer covers
+// strength (that's WorkoutSession now). Duration-based cardio/yoga/other,
+// self-reported or synced. externalId is the source's own record id, used
+// only for synced rows (null for manual) so re-syncing the same HealthKit
+// workout is a no-op upsert, not a duplicate.
+model ExerciseRecord {
+  id              Int                  @id @default(autoincrement())
+  userId          Int
+  source          ExerciseRecordSource
+  externalId      String?
+  type            String
+  startedAt       DateTime
+  endedAt         DateTime
+  durationSeconds Int
+  caloriesBurned  Int?
+  distanceMeters  Decimal?             @db.Decimal(8, 2)
+  avgHeartRateBpm Int?
+  createdAt       DateTime             @default(now())
+
+  @@unique([userId, source, externalId])
+  @@index([userId, startedAt])
+  @@schema("health")
+}
+
+enum DailyActivitySource {
+  healthkit
+  health_connect
+
+  @@schema("health")
+}
+
+// One row per user per day — upserted wholesale on every sync (see
+// activityService.syncDailyActivity), never partially patched.
+model DailyActivityMetric {
+  id                  Int                 @id @default(autoincrement())
+  userId              Int
+  date                String
+  steps               Int?
+  activeCalories      Int?
+  distanceMeters      Decimal?            @db.Decimal(8, 2)
+  restingHeartRateBpm Int?
+  source              DailyActivitySource
+  syncedAt            DateTime            @default(now())
+
+  @@unique([userId, date])
+  @@schema("health")
+}

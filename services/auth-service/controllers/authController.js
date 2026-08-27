@@ -245,6 +245,9 @@ const DEFAULT_FEATURES = {
   streaksCoins: { enabled: false },
   challenges: { enabled: false },
   buddyPairedStreaks: { enabled: false },
+  // Exercise records, routines, workout sessions, watch/HealthKit sync —
+  // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
+  healthMetrics: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym

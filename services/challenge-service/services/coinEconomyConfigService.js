@@ -11,6 +11,12 @@ export const DEFAULT_ECONOMY_CONFIG = {
   milestones: { '2': 50, '4': 150, '12': 500 },
   pairedStreakWeeklyBonus: 15,
   qualifyingCheckinsPerWeek: 2,
+  // Health & Activity gamified layer (see health-service's implementation
+  // plan) — paid once per finished WorkoutSession that coincides with a
+  // verified AttendanceEventLog the same day. Deliberately higher than a
+  // bare check-in: logging a full structured session is more signal than
+  // just showing up.
+  coinsPerVerifiedWorkout: 15,
 };
 
 const MAX_COIN_AMOUNT = 100_000; // sanity ceiling, mirrors wallet-service's HARD_MAX_TOPUP_AMOUNT convention
@@ -27,6 +33,7 @@ export async function loadEconomyConfig() {
     milestones: row.milestones,
     pairedStreakWeeklyBonus: row.pairedStreakWeeklyBonus,
     qualifyingCheckinsPerWeek: row.qualifyingCheckinsPerWeek,
+    coinsPerVerifiedWorkout: row.coinsPerVerifiedWorkout,
     updatedAt: row.updatedAt,
   };
 }
@@ -40,12 +47,13 @@ function validateAmount(value, label) {
 }
 
 export async function updateEconomyConfig(
-  { coinsPerCheckin, weeklyTargetBonus, milestones, pairedStreakWeeklyBonus, qualifyingCheckinsPerWeek },
+  { coinsPerCheckin, weeklyTargetBonus, milestones, pairedStreakWeeklyBonus, qualifyingCheckinsPerWeek, coinsPerVerifiedWorkout },
   updatedBy
 ) {
   const coinsPerCheckinValue = validateAmount(coinsPerCheckin, 'coinsPerCheckin');
   const weeklyTargetBonusValue = validateAmount(weeklyTargetBonus, 'weeklyTargetBonus');
   const pairedStreakWeeklyBonusValue = validateAmount(pairedStreakWeeklyBonus, 'pairedStreakWeeklyBonus');
+  const coinsPerVerifiedWorkoutValue = validateAmount(coinsPerVerifiedWorkout, 'coinsPerVerifiedWorkout');
   const qualifyingCheckinsPerWeekValue = Number(qualifyingCheckinsPerWeek);
   if (!Number.isInteger(qualifyingCheckinsPerWeekValue) || qualifyingCheckinsPerWeekValue < 1 || qualifyingCheckinsPerWeekValue > MAX_QUALIFYING_CHECKINS_PER_WEEK) {
     throw { status: 400, error: `qualifyingCheckinsPerWeek must be a whole number between 1 and ${MAX_QUALIFYING_CHECKINS_PER_WEEK}` };
@@ -67,6 +75,7 @@ export async function updateEconomyConfig(
     milestones: cleanMilestones,
     pairedStreakWeeklyBonus: pairedStreakWeeklyBonusValue,
     qualifyingCheckinsPerWeek: qualifyingCheckinsPerWeekValue,
+    coinsPerVerifiedWorkout: coinsPerVerifiedWorkoutValue,
     updatedBy,
   };
   const updated = await prisma.coinEconomyConfig.upsert({
@@ -80,6 +89,7 @@ export async function updateEconomyConfig(
     milestones: updated.milestones,
     pairedStreakWeeklyBonus: updated.pairedStreakWeeklyBonus,
     qualifyingCheckinsPerWeek: updated.qualifyingCheckinsPerWeek,
+    coinsPerVerifiedWorkout: updated.coinsPerVerifiedWorkout,
     updatedAt: updated.updatedAt,
   };
 }

@@ -7,6 +7,7 @@ import * as challengeEnrollmentService from '../services/challengeEnrollmentServ
 import * as adminChallengeService from '../services/adminChallengeService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import * as pairedStreakService from '../services/pairedStreakService.js';
+import * as workoutCreditService from '../services/workoutCreditService.js';
 
 // ---- Customer-facing (requireAuth + requireFeatureFlag('streaksCoins')) ---
 
@@ -311,6 +312,24 @@ export const redeemCoinCatalogItemInternal = async (req, res) => {
   } catch (err) {
     const insufficient = err.message === 'Insufficient coins';
     res.status(insufficient ? 409 : (err.status || 500)).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Called by health-service, fire-and-forget, when a WorkoutSession finishes
+// (see health-service's implementation plan, "Gamified layer" section).
+// Always 200 — "not verified" and "not credited" are normal outcomes, not
+// errors, so a caller that doesn't check the response body still behaves
+// correctly (it just never gets told it was rewarded).
+export const creditWorkoutInternal = async (req, res) => {
+  try {
+    const { userId, sessionId, description, idempotencyKey } = req.body || {};
+    if (!userId || !sessionId || !idempotencyKey) {
+      return res.status(400).json({ error: 'userId, sessionId and idempotencyKey are required' });
+    }
+    const result = await workoutCreditService.verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

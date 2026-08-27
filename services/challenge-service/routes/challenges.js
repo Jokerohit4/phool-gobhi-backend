@@ -51,6 +51,12 @@ router.post('/internal/streak/close-week', requireInternal, requireFeatureFlag('
 router.post('/internal/coins/:userId/credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditCoinsInternal);
 router.post('/internal/coins/:userId/debit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.debitCoinsInternal);
 
+// Health & Activity gamified layer — health-service calls this once when a
+// WorkoutSession finishes (see its implementation plan's "Gamified layer"
+// section). Flag-gated like every other coin route: a harmless no-op until
+// streaksCoins is turned on.
+router.post('/internal/workout-credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditWorkoutInternal);
+
 // Subscription-discount redemption (wallet-service calls these at purchase
 // time — see wallet-service's purchaseSubscriptionWithWallet).
 router.post('/internal/coins/redemptions', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.redeemCoinCatalogItemInternal);

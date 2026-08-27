@@ -130,6 +130,10 @@ model CoinEconomyConfig {
   // hardcoded constant (QUALIFYING_CHECKINS_PER_WEEK = 2); moved here so it's
   // admin-editable with no redeploy, same as every other coin/streak number.
   qualifyingCheckinsPerWeek Int   @default(2)
+  // Health & Activity gamified layer — paid once per finished WorkoutSession
+  // (health-service's own DB, not this one) that coincides with a verified
+  // AttendanceEventLog the same day. See POST /internal/workout-credit.
+  coinsPerVerifiedWorkout Int      @default(15)
   updatedAt              DateTime @updatedAt
   updatedBy              Int?
 
