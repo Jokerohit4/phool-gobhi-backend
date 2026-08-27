@@ -13,7 +13,11 @@ name: Process lapsed subscriptions
 # Fetches INTERNAL_API_KEY-dev fresh from Secret Manager on every run via the
 # same Workload Identity Federation trust the deploy workflow already uses —
 # deliberately not a separately-stored GitHub secret, so this never creates a
-# second place that value lives.
+# second place that value lives. Reads it out of the consolidated
+# wallet-service-secrets-dev JSON payload (see deploy/README.md's
+# "Consolidated secrets" section) rather than a standalone secret — the old
+# internal-api-key-dev entry is a pre-migration leftover Secret Manager
+# never cleaned up, not something to keep depending on.
 #
 # Dev only for now — add a prod job (mirroring deploy.yml's ENV branching)
 # once this mechanic has run in dev long enough to trust it.
@@ -42,9 +46,17 @@ jobs:
         uses: google-github-actions/get-secretmanager-secrets@v2
         with:
           secrets: |-
-            INTERNAL_API_KEY:${{ vars.GCP_PROJECT_ID }}/internal-api-key-dev
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/wallet-service-secrets-dev
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
 
       - run: |
           curl --fail-with-body -sS -X POST \
-            -H "x-internal-key: ${{ steps.secret.outputs.INTERNAL_API_KEY }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
             https://wallet-service-dev-1077801427223.asia-south1.run.app/internal/subscriptions/process-lapsed
