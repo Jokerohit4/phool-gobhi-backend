@@ -111,6 +111,8 @@ router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn
 router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
 router.post('/gym/:gymId/self-checkin', requireRole('customer'), ctrl.selfCheckIn);
+router.post('/gym/:gymId/member-checkin', requireRole('customer'), ctrl.memberCheckIn);
+router.get('/mine/member-attendance', requireRole('customer'), ctrl.getMemberAttendance);
 router.put('/:id/complete', requireRole('partner'), ctrl.completeBooking);
 
 export default router;

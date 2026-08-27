@@ -428,14 +428,14 @@ const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'sixMonthly', 'yearl
 
 export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
   try {
-    const { gymId, planType } = req.body;
+    const { gymId, planType, coinCatalogItemKey } = req.body;
     const userId = req.userId;
 
     if (!gymId || !VALID_PLAN_TYPES.includes(planType)) {
       return res.status(400).json({ error: 'gymId and a valid planType are required' });
     }
 
-    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
+    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType, { coinCatalogItemKey });
     // linked_gym_id (attendance-SaaS funnel): non-null only when the buyer's
     // OWN linked gym matches the one they're subscribing to — that's the
     // actual funnel step ("a gym-linked signup converted into a paid
@@ -449,6 +449,8 @@ export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
       plan_type: planType,
       city: await getGymCity(Number(gymId)),
       linked_gym_id: buyerLinkedGymId === Number(gymId) ? buyerLinkedGymId : null,
+      coin_discount_amount: subscription.coinDiscountAmount ?? undefined,
+      coin_discount_coins: subscription.coinDiscountCoins ?? undefined,
     });
     res.status(201).json({ data: { subscription } });
   } catch (err) {

@@ -12,6 +12,7 @@ services:
       - GYM_SERVICE_URL=http://gym-service:5004
       - BOOKING_SERVICE_URL=http://booking-service:5005
       - BUDDY_SERVICE_URL=http://buddy-service:5007
+      - CHALLENGE_SERVICE_URL=http://challenge-service:5008
       - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
       - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
       - ANALYTICS_SERVICE_NAME=gateway
@@ -21,6 +22,7 @@ services:
       - gym-service
       - booking-service
       - buddy-service
+      - challenge-service
     networks:
       - phool-gobhi-net
     restart: on-failure
@@ -57,6 +59,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/walletdb
       - WALLET_SERVICE_PORT=5003
+      - CHALLENGE_SERVICE_URL=http://challenge-service:5008
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
       - RAZORPAY_SECRET=${RAZORPAY_SECRET}
@@ -67,6 +70,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      challenge-service:
+        condition: service_started
     networks:
       - phool-gobhi-net
     restart: on-failure
@@ -97,6 +102,7 @@ services:
       - BOOKING_SERVICE_PORT=5005
       - WALLET_SERVICE_URL=http://wallet-service:5003
       - GYM_SERVICE_URL=http://gym-service:5004
+      - CHALLENGE_SERVICE_URL=http://challenge-service:5008
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
       - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
@@ -108,6 +114,8 @@ services:
       wallet-service:
         condition: service_started
       gym-service:
+        condition: service_started
+      challenge-service:
         condition: service_started
     networks:
       - phool-gobhi-net
@@ -127,6 +135,27 @@ services:
       - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
       - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
       - ANALYTICS_SERVICE_NAME=buddy-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - phool-gobhi-net
+    restart: on-failure
+
+  challenge-service:
+    build: ./services/challenge-service
+    environment:
+      - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/challengedb
+      - CHALLENGE_SERVICE_PORT=5008
+      - AUTH_SERVICE_URL=http://auth-service:5001
+      - BOOKING_SERVICE_URL=http://booking-service:5005
+      - BUDDY_SERVICE_URL=http://buddy-service:5007
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - ANALYTICS_PROVIDER=${ANALYTICS_PROVIDER}
+      - ANALYTICS_DATABASE_URL=${ANALYTICS_DATABASE_URL}
+      - ANALYTICS_SERVICE_NAME=challenge-service
     depends_on:
       postgres:
         condition: service_healthy

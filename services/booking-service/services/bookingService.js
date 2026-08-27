@@ -6,6 +6,7 @@ import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
+import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -17,6 +18,75 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
 }
 
 const prisma = new PrismaClient();
+
+// "First-ever visit to this gym" spans BOTH attendance tables — a customer
+// who's booked at gym X and later does their first member-checkin at that
+// same gym X must not earn badge_earned twice. Checked across Booking AND
+// MemberAttendance every time, not per-table, regardless of which flow is
+// asking. excludeBookingId/excludeAttendanceId omit the very row just
+// created by the caller so it isn't counted as its own "prior" visit.
+export async function hasPriorVisitAtGym({ customerId, gymId, excludeBookingId, excludeAttendanceId }) {
+  const [priorBooking, priorMemberVisit] = await Promise.all([
+    prisma.booking.findFirst({
+      where: {
+        customerId, gymId, attendedAt: { not: null },
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+      },
+      select: { id: true },
+    }),
+    prisma.memberAttendance.findFirst({
+      where: {
+        customerId, gymId,
+        ...(excludeAttendanceId ? { id: { not: excludeAttendanceId } } : {}),
+      },
+      select: { id: true },
+    }),
+  ]);
+  return !!(priorBooking || priorMemberVisit);
+}
+
+// Gamification: badge = "first-ever attended booking at this gym" (Wave 1,
+// purely a derived analytics signal, no persisted row) + a fire-and-forget
+// attendance event to challenge-service (streak/coin subsystem). Called from
+// every path that records a *first* real attendedAt on a booking —
+// selfCheckIn, verifyAttendance, and completeBooking's manual-override
+// branch — so all three verification methods count equally. Originally only
+// selfCheckIn emitted badge_earned (Wave 1's known undercounting gap); this
+// closes it for all three at once.
+export async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
+  try {
+    const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeBookingId: bookingId });
+    if (!hadPriorVisit) {
+      track('badge_earned', customerId, { gym_id: gymId, city: city ?? null });
+    }
+  } catch (badgeErr) {
+    console.error('badge_earned check failed for booking', bookingId, badgeErr);
+  }
+  recordAttendanceEvent({
+    userId: customerId, bookingId, gymId, attendedAt: new Date().toISOString(), source,
+    idempotencyKey: `booking:${bookingId}`,
+  });
+}
+
+// Attendance-SaaS twin of emitAttendanceSignals, for linked members
+// checking in with no booking at all (see memberCheckIn below). Shares
+// hasPriorVisitAtGym's cross-table check so a member-checkin at a gym the
+// customer already has a booked visit at (or vice versa) doesn't re-earn
+// the badge.
+export async function emitMemberAttendanceSignals({ customerId, attendanceId, gymId, city }) {
+  try {
+    const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeAttendanceId: attendanceId });
+    if (!hadPriorVisit) {
+      track('badge_earned', customerId, { gym_id: gymId, city: city ?? null });
+    }
+  } catch (badgeErr) {
+    console.error('badge_earned check failed for member attendance', attendanceId, badgeErr);
+  }
+  recordAttendanceEvent({
+    userId: customerId, memberAttendanceId: attendanceId, gymId, attendedAt: new Date().toISOString(),
+    source: 'member_checkin', idempotencyKey: `member-checkin:${attendanceId}`,
+  });
+}
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
@@ -915,6 +985,14 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     }
     const updatedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
 
+    // Only fires on the manual-override branch above — if attendedAt was
+    // already set (a real verifyAttendance/selfCheckIn scan happened
+    // earlier), that scan already emitted this exact signal once; firing
+    // again here would double-count the attendance event and the badge check.
+    if (!booking.attendedAt) {
+      await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override' });
+    }
+
     // 7. Credit partner wallet — best-effort, never blocks completion.
     // partnerShare is null for bookings created before this field existed —
     // fall back to the full amount for those rather than paying out `null`.
@@ -1172,6 +1250,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
     });
+    await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym.city, source: 'partner_verified' });
 
     return {
       bookingId: updated.id,
@@ -1356,20 +1435,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
-    // Gamification wave 1: a badge is just "first-ever attended booking at
-    // this gym" — no persisted badge row, purely a fire-once analytics
-    // signal derived from the same attendance data /mine/visited-gyms reads.
-    try {
-      const priorVisit = await prisma.booking.findFirst({
-        where: { customerId, gymId, attendedAt: { not: null }, id: { not: booking.id } },
-        select: { id: true },
-      });
-      if (!priorVisit) {
-        track('badge_earned', customerId, { gym_id: gymId, city: gym?.city ?? null });
-      }
-    } catch (badgeErr) {
-      console.error('badge_earned check failed for booking', booking.id, badgeErr);
-    }
+    await emitAttendanceSignals({ customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin' });
 
     return {
       bookingId: updated.id,
@@ -2578,4 +2644,87 @@ export async function getPublicAttendanceStats() {
     console.error('getPublicAttendanceStats error:', err);
     throw { status: 500, error: err.message || 'Server error' };
   }
+}
+
+// ─── Attendance-SaaS: booking-free member check-in ────────────────────
+// Linked members (User.linkedGymId) can check in without a pre-existing
+// booking. One attendance record per customer+gym+day (upserted), and — per
+// the 2026-08-27 decision — the same badge/streak/coin signal a real booking
+// check-in would emit, so these customers see the same gamification the
+// booking flow gives everyone else.
+export async function memberCheckIn(gymId, customerId, lat, lng) {
+  // 1. Verify this customer is linked to this gym.
+  let user;
+  try {
+    const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    user = profileRes.data?.data || profileRes.data;
+  } catch (_) {
+    throw { status: 404, error: 'User not found' };
+  }
+  if (!user || user.linkedGymId !== gymId) {
+    throw { status: 403, error: 'This gym is not your linked gym', code: 'NOT_LINKED_GYM' };
+  }
+
+  // 2. Geofence check (≤50m) — same radius as requestCheckIn's GPS check.
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
+  }
+  let gym;
+  try {
+    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = gymRes.data?.data || gymRes.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  const withinRange = gym?.lat && gym?.lng ? distanceMeters(lat, lng, gym.lat, gym.lng) <= 50 : false;
+  if (!withinRange) {
+    throw { status: 400, error: "You don't seem to be at the gym yet — move closer and try again", code: 'TOO_FAR' };
+  }
+
+  // 3. Upsert — one record per customer+gym+day.
+  const todayString = todayDateStringIST();
+  const existing = await prisma.memberAttendance.findUnique({
+    where: { customerId_gymId_date: { customerId, gymId, date: todayString } },
+  });
+  if (existing) {
+    return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: true };
+  }
+  const record = await prisma.memberAttendance.create({
+    data: { customerId, gymId, date: todayString },
+  });
+
+  await emitMemberAttendanceSignals({ customerId, attendanceId: record.id, gymId, city: gym?.city });
+
+  return { attendanceId: record.id, checkedInAt: record.checkedInAt, alreadyCheckedIn: false };
+}
+
+// Attendance history for a linked member — returns all their attendance
+// records (no wallet/debit, no booking coupling).
+export async function getMemberAttendance(customerId) {
+  const records = await prisma.memberAttendance.findMany({
+    where: { customerId },
+    orderBy: { checkedInAt: 'desc' },
+  });
+  const gymIds = [...new Set(records.map((r) => r.gymId))];
+  const gymNameById = {};
+  if (gymIds.length > 0) {
+    try {
+      await Promise.all(
+        gymIds.map(async (id) => {
+          const res = await axios.get(`${GYM_SERVICE_URL}/internal/${id}`, await internalHeadersFor(GYM_SERVICE_URL));
+          const g = res.data?.data || res.data;
+          gymNameById[id] = g?.name ?? null;
+        })
+      );
+    } catch (_) {
+      // Best-effort gym name resolution — a failure shouldn't block the list.
+    }
+  }
+  return records.map((r) => ({
+    id: r.id,
+    gymId: r.gymId,
+    gymName: gymNameById[r.gymId] ?? null,
+    date: r.date,
+    checkedInAt: r.checkedInAt,
+  }));
 }

@@ -1,0 +1,517 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["challenge"]
+}
+
+// Phase 0 subset only — this schema grows in later phases (ChallengeDefinition,
+// Challenge, ChallengeEnrollment, ChallengeCheckpoint, Sponsor, CoinCatalogItem,
+// PairedStreak, etc.). See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
+// Everything below exists to prove one thing end-to-end: verified attendance ->
+// weekly streak -> a coin ledger that mirrors wallet-service's real-money ledger
+// pattern but is a fully separate, non-convertible currency (no wallet_credit
+// anywhere in this schema, by deliberate design — see the plan's Context section).
+
+enum CoinLedgerEntryType {
+  credit
+  debit
+
+  @@schema("challenge")
+}
+
+model CoinBalance {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  balance   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("challenge")
+}
+
+model CoinLedgerEntry {
+  id             Int                 @id @default(autoincrement())
+  userId         Int
+  type           CoinLedgerEntryType
+  amount         Int
+  description    String
+  // Same idempotency convention as wallet-service's WalletTransaction —
+  // a caller retrying a fire-and-forget credit/debit must never double-apply it.
+  idempotencyKey String?             @unique
+  createdAt      DateTime            @default(now())
+
+  @@index([userId, createdAt])
+  @@schema("challenge")
+}
+
+// One row per real, verified attendance event (self-check-in OR
+// partner-verified OR completed booking OR a booking-free attendance-SaaS
+// member check-in — all four count, closing Wave 1's known badge_earned
+// undercounting gap for this new pipeline from day one).
+// Idempotent on idempotencyKey (not bookingId — a member_checkin event has
+// no booking) so booking-service's fire-and-forget call can safely retry.
+// bookingId/memberAttendanceId are kept as plain nullable references for
+// analytics/debugging, not for uniqueness.
+model AttendanceEventLog {
+  id                 Int      @id @default(autoincrement())
+  userId             Int
+  bookingId          Int?
+  memberAttendanceId Int?
+  gymId              Int
+  attendedAt         DateTime
+  source             String
+  idempotencyKey     String   @unique
+  createdAt          DateTime @default(now())
+
+  @@index([userId, attendedAt])
+  @@schema("challenge")
+}
+
+// Running weekly-cadence streak counter (per challenge-service-tech-spec.html
+// and the 2026-08-15 planning decision this supersedes: most users train
+// 3-4x/week, not daily, so a literal-consecutive-day streak — the customer
+// app's old client-side calc — rarely survives long enough for a milestone to
+// matter). Starts at 0 from cutover; no historical backfill.
+model UserStreak {
+  id                     Int       @id @default(autoincrement())
+  userId                 Int       @unique
+  currentStreak          Int       @default(0)
+  longestStreak          Int       @default(0)
+  lastQualifiedWeekStart DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@schema("challenge")
+}
+
+// One row per ISO week (Monday-start) a user has any activity in. `qualified`
+// and `closedAt` are only set once the weekly cron (POST
+// /internal/streak/close-week) finalizes the week — never computed live,
+// so the streak stays server-authoritative even if a client re-requests it
+// mid-week.
+model UserStreakWeek {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  weekStart    DateTime
+  checkinCount Int       @default(0)
+  qualified    Boolean   @default(false)
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, weekStart])
+  @@index([userId, weekStart])
+  @@schema("challenge")
+}
+
+// Phase 2 — Coin economy tuning, singleton row (id always 1), admin-editable
+// from day one (per the 2026-08-21 decision to ship with the planning docs'
+// placeholder numbers rather than block on finalized ones). Same convention
+// as auth-service's ProfileCompletionBonusSetting / AppVersionSetting.
+// milestones is a JSON map of "consecutive qualified weeks reached" -> coin
+// bonus (default {"2":50,"4":150,"12":500}, the only concrete numbers any
+// planning doc proposed) — stored as JSON so an admin can add/remove tiers
+// without a migration.
+model CoinEconomyConfig {
+  id                     Int      @id @default(1)
+  coinsPerCheckin        Int      @default(10)
+  weeklyTargetBonus      Int      @default(20)
+  milestones             Json     @default("{\"2\":50,\"4\":150,\"12\":500}")
+  // Phase 4 — paid to BOTH members of a paired streak for every week it
+  // survives (i.e. both independently qualified). Strawman default.
+  pairedStreakWeeklyBonus Int     @default(15)
+  // How many qualifying attendance events inside a calendar week are needed
+  // for that week to count toward a streak (streakService.closeWeek). Was a
+  // hardcoded constant (QUALIFYING_CHECKINS_PER_WEEK = 2); moved here so it's
+  // admin-editable with no redeploy, same as every other coin/streak number.
+  qualifyingCheckinsPerWeek Int   @default(2)
+  // Health & Activity gamified layer — paid once per finished WorkoutSession
+  // (health-service's own DB, not this one) that coincides with a verified
+  // AttendanceEventLog the same day. See POST /internal/workout-credit.
+  coinsPerVerifiedWorkout Int      @default(15)
+  updatedAt              DateTime @updatedAt
+  updatedBy              Int?
+
+  @@schema("challenge")
+}
+
+// subscription_discount is the only category with real fulfillment wired up
+// (booking flows through wallet-service's purchaseSubscriptionWithWallet).
+// priority_booking/buddy_unlock are reserved per the planning docs but have
+// no product spec for what redeeming them would actually DO yet — no catalog
+// items are seeded in those categories until that's designed. brand_product
+// is reserved for Phase 3's docs' own gate (a signed brand relationship),
+// not offered until one exists.
+enum CoinCatalogCategory {
+  subscription_discount
+  priority_booking
+  buddy_unlock
+  brand_product
+
+  @@schema("challenge")
+}
+
+model CoinCatalogItem {
+  id             Int                 @id @default(autoincrement())
+  // Stable machine key referenced by callers (e.g. wallet-service's
+  // subscription purchase flow) — never reuse a key for a different item.
+  key            String              @unique
+  category       CoinCatalogCategory
+  title          String
+  description    String?
+  coinCost       Int
+  // Only meaningful for category == subscription_discount: the rupee amount
+  // knocked off a subscription's price when this item is redeemed. Null for
+  // every other category (nothing to fulfill yet — see enum comment above).
+  discountAmount Int?
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  redemptions    CoinRedemption[]
+
+  @@schema("challenge")
+}
+
+enum CoinRedemptionStatus {
+  fulfilled
+  refunded
+
+  @@schema("challenge")
+}
+
+model CoinRedemption {
+  id             Int                  @id @default(autoincrement())
+  userId         Int
+  catalogItemId  Int
+  catalogItem    CoinCatalogItem      @relation(fields: [catalogItemId], references: [id])
+  coinCost       Int
+  status         CoinRedemptionStatus @default(fulfilled)
+  // Free-form context for the specific redemption — e.g. for
+  // subscription_discount: { gymId, discountAmount }. The calling service
+  // (wallet-service) remains the source of truth for the actual purchase;
+  // this is just this service's record of "coins were spent for X".
+  metadata       Json?
+  // Coins were debited under this key (see coinCatalogService.redeem) — a
+  // caller retrying the same purchase attempt must never double-debit.
+  idempotencyKey String?              @unique
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([userId, createdAt])
+  @@schema("challenge")
+}
+
+// ---------------------------------------------------------------------
+// Phase 3 — Challenges. Pilot launches exactly 2 (per the docs' own
+// Phase-0-of-the-docs gate): "Off-Peak Hunter" (gym_native, verified via
+// booking-service's existing attendance-event hook) and an outside-gym
+// city-explorer quest (verified via qr_scan + gps_geofence co-required on
+// the same checkpoint — the anti-replay defense IS the co-requirement, not
+// a signed token, since these are static physical stickers many different
+// users scan). Both are free-tier only, per the docs' Phase-0 gate — no
+// medal/subscriber-tier logic is exercised yet, so Sponsor/
+// SponsorMedalBudget/ChallengeTeam/ChallengeWinner exist below for schema
+// fidelity with challenge-service-tech-spec.html but have no live code path
+// until a team/subscriber/sponsored challenge actually ships. step_api
+// (pedometer) is deliberately dropped from VerificationMethod — no such
+// client integration exists anywhere in this app.
+
+enum ChallengeCategory {
+  gym_native
+  outside_gym_city
+  social
+
+  @@schema("challenge")
+}
+
+enum ChallengeType {
+  off_peak_hunter
+  city_gym_circuit
+  poi_checkin_tour
+  landmark_hunt
+  city_marathon_series
+  buddy_squad
+  gym_date_night
+
+  @@schema("challenge")
+}
+
+enum VerificationMethod {
+  booking_attendance
+  qr_scan
+  gps_geofence
+  photo_review
+  manual_admin
+
+  @@schema("challenge")
+}
+
+enum ChallengeStatus {
+  draft
+  active
+  completed
+  archived
+
+  @@schema("challenge")
+}
+
+enum EnrollmentStatus {
+  active
+  completed
+  abandoned
+
+  @@schema("challenge")
+}
+
+// No wallet_credit — this build's core rule (coins never convert to cash).
+enum RewardType {
+  coins
+  physical_medal
+  leaderboard_recognition
+
+  @@schema("challenge")
+}
+
+enum SponsorType {
+  gym
+  brand
+
+  @@schema("challenge")
+}
+
+enum SponsorStatus {
+  active
+  inactive
+
+  @@schema("challenge")
+}
+
+enum TeamRole {
+  leader
+  member
+
+  @@schema("challenge")
+}
+
+model ChallengeDefinition {
+  id                        Int                 @id @default(autoincrement())
+  key                       String              @unique
+  type                      ChallengeType
+  category                  ChallengeCategory
+  title                     String
+  description               String?
+  defaultVerificationMethod VerificationMethod
+  // Off-peak-hunter style challenges pair booking_attendance with a time
+  // window (see Challenge.offPeakWindows); city-quest style challenges pair
+  // qr_scan with gps_geofence — this flag records that co-requirement so a
+  // future admin-created challenge of this type inherits the same anti-cheat
+  // posture without re-deciding it per instance.
+  requiresGeofenceWithQr    Boolean             @default(false)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  challenges                Challenge[]
+
+  @@schema("challenge")
+}
+
+model Challenge {
+  id                    Int                       @id @default(autoincrement())
+  challengeDefinitionId Int
+  challengeDefinition   ChallengeDefinition       @relation(fields: [challengeDefinitionId], references: [id])
+  city                  String
+  status                ChallengeStatus           @default(active)
+  startsAt              DateTime                  @default(now())
+  endsAt                DateTime?
+  // Off-peak-hunter: number of qualifying off-peak attendances required.
+  // City quest: number of checkpoint spots required (usually all of them).
+  targetCount           Int
+  rewardCoins           Int
+  // Off-peak-hunter only — list of {startHourIst, endHourIst} windows (24h,
+  // IST) an attendance must fall inside to count. Null/ignored for other
+  // challenge types.
+  offPeakWindows        Json?
+  sponsorId             Int?
+  sponsor               Sponsor?                  @relation(fields: [sponsorId], references: [id])
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  enrollments           ChallengeEnrollment[]
+  checkpointSpots       ChallengeCheckpointSpot[]
+  teams                 ChallengeTeam[]
+  winners               ChallengeWinner[]
+  medalBudgets          SponsorMedalBudget[]
+
+  @@index([status, city])
+  @@schema("challenge")
+}
+
+// Unified gym/brand sponsor model per gamification-wave2-product-spec.html's
+// reconciliation decision (one Sponsor type with a discriminator, not two
+// separate sponsor taxonomies). No live challenge in this pilot has one.
+model Sponsor {
+  id           Int                  @id @default(autoincrement())
+  type         SponsorType
+  name         String
+  status       SponsorStatus        @default(active)
+  contactInfo  String?
+  createdAt    DateTime             @default(now())
+  challenges   Challenge[]
+  medalBudgets SponsorMedalBudget[]
+
+  @@schema("challenge")
+}
+
+model SponsorMedalBudget {
+  id           Int       @id @default(autoincrement())
+  sponsorId    Int
+  sponsor      Sponsor   @relation(fields: [sponsorId], references: [id])
+  challengeId  Int
+  challenge    Challenge @relation(fields: [challengeId], references: [id])
+  totalMedals  Int
+  issuedMedals Int       @default(0)
+
+  @@schema("challenge")
+}
+
+model ChallengeEnrollment {
+  id               Int                        @id @default(autoincrement())
+  userId           Int
+  challengeId      Int
+  challenge        Challenge                  @relation(fields: [challengeId], references: [id])
+  status           EnrollmentStatus           @default(active)
+  progressCount    Int                        @default(0)
+  startedAt        DateTime                   @default(now())
+  completedAt      DateTime?
+  checkpointVisits ChallengeCheckpointVisit[]
+  rewardIssuance   RewardIssuance?
+
+  @@unique([userId, challengeId])
+  @@index([challengeId, status])
+  @@schema("challenge")
+}
+
+// Squad-style challenges (buddy_squad) — schema-ready, not exercised by
+// either pilot challenge (both are solo). Verifying team members are real
+// mutual buddy-service matches is deferred until a team challenge actually
+// ships (would need a new buddy-service GET /internal/matches/:userId route
+// that doesn't exist yet).
+model ChallengeTeam {
+  id          Int                   @id @default(autoincrement())
+  challengeId Int
+  challenge   Challenge             @relation(fields: [challengeId], references: [id])
+  name        String
+  createdAt   DateTime              @default(now())
+  members     ChallengeTeamMember[]
+
+  @@schema("challenge")
+}
+
+model ChallengeTeamMember {
+  id     Int           @id @default(autoincrement())
+  teamId Int
+  team   ChallengeTeam @relation(fields: [teamId], references: [id])
+  userId Int
+  role   TeamRole      @default(member)
+
+  @@unique([teamId, userId])
+  @@schema("challenge")
+}
+
+// Physical/static checkpoint location for a city-quest challenge — one row
+// per printed sticker. `code` is what the sticker's QR encodes (a plain
+// identifier, not a signed token: the anti-replay defense is the
+// gps_geofence co-requirement below, not the code itself, since one sticker
+// is scanned by many different users).
+model ChallengeCheckpointSpot {
+  id           Int       @id @default(autoincrement())
+  challengeId  Int
+  challenge    Challenge @relation(fields: [challengeId], references: [id])
+  sequence     Int
+  label        String
+  lat          Float
+  lng          Float
+  radiusMeters Int       @default(75)
+  code         String    @unique
+  createdAt    DateTime  @default(now())
+  visits       ChallengeCheckpointVisit[]
+
+  @@schema("challenge")
+}
+
+// One row per enrollment per spot actually visited (verified gps_geofence
+// match against the spot's registered lat/lng) — unique so re-scanning an
+// already-visited spot is a no-op, not repeat progress.
+model ChallengeCheckpointVisit {
+  id               Int                     @id @default(autoincrement())
+  enrollmentId     Int
+  enrollment       ChallengeEnrollment     @relation(fields: [enrollmentId], references: [id])
+  checkpointSpotId Int
+  checkpointSpot   ChallengeCheckpointSpot @relation(fields: [checkpointSpotId], references: [id])
+  lat              Float
+  lng              Float
+  verifiedAt       DateTime                @default(now())
+
+  @@unique([enrollmentId, checkpointSpotId])
+  @@schema("challenge")
+}
+
+// Competitive-leaderboard resolution — schema-ready, not exercised by either
+// pilot challenge (both are "complete your own progress", not ranked
+// against others).
+model ChallengeWinner {
+  id          Int       @id @default(autoincrement())
+  challengeId Int
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+  userId      Int
+  rank        Int
+  resolvedAt  DateTime  @default(now())
+
+  @@schema("challenge")
+}
+
+// The join point between a completed enrollment and the actual reward.
+// Every reward in this pilot is `coins` (issued via coinLedgerService,
+// idempotent on enrollmentId) — physical_medal/leaderboard_recognition are
+// schema-ready but unused until a subscriber-tier or competitive challenge
+// ships.
+model RewardIssuance {
+  id           Int                 @id @default(autoincrement())
+  enrollmentId Int                 @unique
+  enrollment   ChallengeEnrollment @relation(fields: [enrollmentId], references: [id])
+  rewardType   RewardType
+  coinAmount   Int?
+  medalSerial  String?
+  issuedAt     DateTime            @default(now())
+
+  @@schema("challenge")
+}
+
+// ---------------------------------------------------------------------
+// Phase 4 — buddy-loop paired streaks, per buddy-loop-retention-playbook.html.
+// Deliberately scoped to just mechanic #1 ("build first") of the doc's four
+// — peer win-back nudges, Book Together, and activity visibility are
+// explicitly deferred per the doc's own warning against building all four
+// before validating this one moves retention. Reuses the existing weekly
+// streak/coin infra; introduces no new currency or taxonomy bucket, per the
+// doc's own framing as "a variant of the existing Streak bucket."
+// matchId is buddy-service's Match.id — a plain cross-service reference
+// (same convention as gymId/userId elsewhere), verified via buddy-service's
+// GET /internal/matches/:matchId/verify/:userId at opt-in time, never
+// trusted as-is from the client.
+model PairedStreak {
+  id                     Int       @id @default(autoincrement())
+  matchId                Int       @unique
+  userAId                Int
+  userBId                Int
+  currentStreak          Int       @default(0)
+  longestStreak          Int       @default(0)
+  lastQualifiedWeekStart DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@schema("challenge")
+}

@@ -163,6 +163,14 @@ model GymSubscription {
   // field — pricing is otherwise identical in shape between the two modes
   // once commissionPct/partnerShare are computed.
   pricingMode String @default("percentage")
+  // Gamification Phase 2: set only when the customer redeemed a coin
+  // discount at purchase (see purchaseSubscriptionWithWallet). Coins are
+  // debited in challenge-service, never converted into wallet credit —
+  // these two fields exist purely so this subscription's revenue reporting
+  // stays honest about "real price charged" vs. "platform absorbed as a
+  // coin discount", not to represent any money that changed hands as coins.
+  coinDiscountAmount Decimal? @db.Decimal(19, 2)
+  coinDiscountCoins  Int?
 
   @@index([customerId, gymId, status])
   @@schema("wallet")

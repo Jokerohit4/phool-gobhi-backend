@@ -238,6 +238,16 @@ const DEFAULT_FEATURES = {
   buddy: { enabled: true },
   otp: { provider: 'firebase' },
   profileCompletionBonus: { amount: 20 },
+  // Gamification suite — each phase ships behind its own kill-switch,
+  // default OFF until an admin deliberately turns it on from /settings.
+  // See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
+  badges: { enabled: false },
+  streaksCoins: { enabled: false },
+  challenges: { enabled: false },
+  buddyPairedStreaks: { enabled: false },
+  // Exercise records, routines, workout sessions, watch/HealthKit sync —
+  // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
+  healthMetrics: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym

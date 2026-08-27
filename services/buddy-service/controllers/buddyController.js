@@ -207,3 +207,15 @@ export const syncProfile = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// Called by challenge-service to authorize a paired-streak opt-in.
+export const verifyMatchMembership = async (req, res) => {
+  try {
+    const result = await buddyService.verifyActiveMatchMembership(
+      req.params.matchId, parseInt(req.params.userId),
+    );
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

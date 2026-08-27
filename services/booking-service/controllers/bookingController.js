@@ -448,3 +448,27 @@ export const confirmBooking = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// ─── Attendance-SaaS: booking-free member check-in ────────────────────
+export const memberCheckIn = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const { lat, lng } = req.body;
+    const result = await bookingService.memberCheckIn(gymId, req.userId, lat, lng);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+    });
+  }
+};
+
+export const getMemberAttendance = async (req, res) => {
+  try {
+    const records = await bookingService.getMemberAttendance(req.userId);
+    res.json({ data: records });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

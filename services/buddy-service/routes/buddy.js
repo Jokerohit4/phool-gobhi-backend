@@ -39,4 +39,9 @@ router.get('/blocks', requireAuth, ctrl.listBlocked);
 // cache from drifting (see services/buddyService.js#syncProfileFromAuth).
 router.post('/internal/profile-sync/:userId', requireInternal, ctrl.syncProfile);
 
+// Gamification Phase 4 (paired streaks) — challenge-service calls this to
+// verify a customer-supplied matchId is real, active, and includes them
+// before letting them opt a pair into a shared streak.
+router.get('/internal/matches/:matchId/verify/:userId', requireInternal, ctrl.verifyMatchMembership);
+
 export default router;

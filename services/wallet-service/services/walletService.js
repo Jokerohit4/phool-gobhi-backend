@@ -10,10 +10,49 @@ const prisma = new PrismaClient();
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
 async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
+}
+
+// Gamification Phase 2: redeems a coin catalog item at subscription-purchase
+// time. Deliberately NOT best-effort — if the customer asked for a coin
+// discount, a failure here (insufficient coins, feature off, network) must
+// abort the whole purchase rather than silently charging full price when
+// they may not have the wallet balance to cover it.
+async function redeemCoinsForSubscriptionDiscount(userId, catalogItemKey, idempotencyKey, gymId) {
+  try {
+    const res = await axios.post(
+      `${CHALLENGE_SERVICE_URL}/internal/coins/redemptions`,
+      { userId, catalogItemKey, idempotencyKey, metadata: { gymId } },
+      await internalHeadersFor(CHALLENGE_SERVICE_URL),
+    );
+    return res.data?.data;
+  } catch (err) {
+    if (err.response?.status === 409) {
+      throw { status: 409, error: 'Not enough coins for this discount', code: 'INSUFFICIENT_COINS' };
+    }
+    throw { status: 502, error: 'Could not apply coin discount — please try again', code: 'COIN_DISCOUNT_FAILED' };
+  }
+}
+
+// Reverses a coin redemption whose subscription purchase failed after the
+// coins were already debited. Best-effort logging only — if this itself
+// fails, the redemption is refundable later via the same idempotent call, and
+// the customer/support can be made whole manually; it must never throw back
+// into an error path that's already unwinding a failed purchase.
+async function refundCoinRedemption(redemptionId, idempotencyKey) {
+  try {
+    await axios.post(
+      `${CHALLENGE_SERVICE_URL}/internal/coins/redemptions/${redemptionId}/refund`,
+      { idempotencyKey },
+      await internalHeadersFor(CHALLENGE_SERVICE_URL),
+    );
+  } catch (err) {
+    console.error('refundCoinRedemption failed for redemption', redemptionId, err.message);
+  }
 }
 
 // Denormalizes gym city onto the subscription_purchased_wallet analytics
@@ -683,6 +722,7 @@ function serializeSubscription(sub) {
     price: Number(sub.price),
     commissionPct: Number(sub.commissionPct),
     partnerShare: Number(sub.partnerShare),
+    coinDiscountAmount: sub.coinDiscountAmount != null ? Number(sub.coinDiscountAmount) : null,
     // Derived, not stored — booking-service needs the plan's total day count
     // to split partnerShare into a per-visit amount (partnerShare/days) and
     // has no PLAN_DAYS map of its own, so it rides along on every serialized
@@ -739,7 +779,7 @@ export async function fetchGymForSubscription(gymId, planType) {
 // top-up) rather than silently falling back to Razorpay — that's a
 // deliberate client-side decision, not something this function should make
 // on the caller's behalf.
-export async function purchaseSubscriptionWithWallet(customerId, gymId, planType) {
+export async function purchaseSubscriptionWithWallet(customerId, gymId, planType, { coinCatalogItemKey } = {}) {
   const existingBefore = await getActiveSubscriptionService(customerId, gymId);
   if (existingBefore) {
     throw { status: 409, error: 'You already have an active subscription for this gym' };
@@ -768,17 +808,36 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
     throw { status: 403, error: 'You cannot subscribe to your own gym' };
   }
 
-  const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
-  if (!wallet || Number(wallet.balance) < price) {
-    throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price };
-  }
-
   // No real Razorpay order exists for this path — synthesize a unique id so
   // GymSubscription.razorpayOrderId (required + unique) still has something
-  // to key on, and so the debit's idempotency key is deterministic per order.
+  // to key on, and so every idempotency key below (wallet debit, coin
+  // redemption, coin refund) is deterministic per purchase attempt.
   const syntheticOrderId = `wallet_${customerId}_${gymId}_${Date.now()}`;
+
+  // Gamification Phase 2: redeem the chosen coin discount BEFORE checking
+  // wallet balance, so the balance check below is against what will actually
+  // be charged. Coins are spent here, in full — never converted into wallet
+  // credit; `chargeAmount` is simply reduced by however much the redeemed
+  // item is worth. Any failure here aborts the purchase outright (no wallet
+  // debit attempted).
+  let redemption = null;
+  let discountAmount = 0;
+  if (coinCatalogItemKey) {
+    redemption = await redeemCoinsForSubscriptionDiscount(
+      customerId, coinCatalogItemKey, `subscription-coin-discount-${syntheticOrderId}`, gymId,
+    );
+    discountAmount = redemption?.discountAmount || 0;
+  }
+  const chargeAmount = Math.max(0, price - discountAmount);
+
+  const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
+  if (!wallet || Number(wallet.balance) < chargeAmount) {
+    if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+    throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+  }
+
   await debitWalletService(
-    customerId, price,
+    customerId, chargeAmount,
     `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
     `subscription-wallet-order-${syntheticOrderId}`,
     gymId
@@ -786,12 +845,14 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
 
   // A concurrent purchase (e.g. a double-tap racing this same function on
   // another request) could have landed between the check above and this
-  // debit — guard again and reverse the wallet debit if so.
+  // debit — guard again and reverse the wallet debit (and any coin
+  // redemption) if so.
   const existingAfter = await getActiveSubscriptionService(customerId, gymId);
   if (existingAfter) {
-    await creditWalletService(customerId, price,
+    await creditWalletService(customerId, chargeAmount,
       `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`,
       null, 'customer', gymId);
+    if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
@@ -829,6 +890,10 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   // never paid out. Still upsert the partner's wallet row now so the first
   // per-visit credit never fails on a missing wallet (the bug that used to
   // strand a purchase in PROCESSING when a partner had no wallet yet).
+  // partnerShare is computed off the full, undiscounted price (both here and
+  // above via commissionAmount) — a coin discount (Gamification Phase 2) is
+  // Phool Gobhi's own acquisition spend out of its commission margin, never
+  // the partner's.
   const partnerShare = Math.round((price - commissionAmount) * 100) / 100;
   const days = PLAN_DAYS[planType];
   const startDate = new Date();
@@ -855,6 +920,8 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
       endDate,
       razorpayOrderId: syntheticOrderId,
       payoutModel: 'perVisit',
+      coinDiscountAmount: redemption ? discountAmount : null,
+      coinDiscountCoins: redemption ? redemption.coinCost : null,
     },
   });
 
