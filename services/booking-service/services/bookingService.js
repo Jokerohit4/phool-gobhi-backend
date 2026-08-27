@@ -53,7 +53,7 @@ export async function hasPriorVisitAtGym({ customerId, gymId, excludeBookingId, 
 // branch — so all three verification methods count equally. Originally only
 // selfCheckIn emitted badge_earned (Wave 1's known undercounting gap); this
 // closes it for all three at once.
-async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
+export async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
   try {
     const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeBookingId: bookingId });
     if (!hadPriorVisit) {
@@ -73,7 +73,7 @@ async function emitAttendanceSignals({ customerId, bookingId, gymId, city, sourc
 // hasPriorVisitAtGym's cross-table check so a member-checkin at a gym the
 // customer already has a booked visit at (or vice versa) doesn't re-earn
 // the badge.
-async function emitMemberAttendanceSignals({ customerId, attendanceId, gymId, city }) {
+export async function emitMemberAttendanceSignals({ customerId, attendanceId, gymId, city }) {
   try {
     const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeAttendanceId: attendanceId });
     if (!hadPriorVisit) {
