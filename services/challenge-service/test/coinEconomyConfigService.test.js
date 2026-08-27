@@ -42,6 +42,7 @@ const VALID_BASE = {
   weeklyTargetBonus: 20,
   milestones: { '2': 50, '4': 150, '12': 500 },
   pairedStreakWeeklyBonus: 15,
+  coinsPerVerifiedWorkout: 15,
 };
 
 test('rejects qualifyingCheckinsPerWeek = 0 (below min)', async () => {
