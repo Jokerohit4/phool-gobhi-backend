@@ -680,10 +680,10 @@ export async function googleSignInService({ idToken }) {
   if (!idToken) {
     throw { status: 400, error: 'idToken is required', errorCode: 'ID_TOKEN_REQUIRED' };
   }
-  const { verifyFirebaseIdToken } = await import('../utils/firebaseAdmin.js');
+  const { verifyStaffFirebaseIdToken } = await import('../utils/firebaseAdmin.js');
   let decoded;
   try {
-    decoded = await verifyFirebaseIdToken(idToken);
+    decoded = await verifyStaffFirebaseIdToken(idToken);
   } catch (err) {
     console.error('Google ID token verification failed:', err.message);
     throw { status: 401, error: 'Invalid or expired Google sign-in token', errorCode: 'INVALID_FIREBASE_TOKEN' };
