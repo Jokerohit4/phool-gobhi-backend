@@ -9,6 +9,18 @@ import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import * as pairedStreakService from '../services/pairedStreakService.js';
 import * as workoutCreditService from '../services/workoutCreditService.js';
 
+// The gateway forwards the customer app's location headers unchanged, and
+// the app attaches them on every request (they back gym discovery the same
+// way). They back the 20km challenge radius — see utils/location.js.
+function parseLocation(req) {
+  const userLat = parseFloat(req.headers['x-user-lat']);
+  const userLng = parseFloat(req.headers['x-user-lng']);
+  return {
+    userLat: Number.isNaN(userLat) ? null : userLat,
+    userLng: Number.isNaN(userLng) ? null : userLng,
+  };
+}
+
 // ---- Customer-facing (requireAuth + requireFeatureFlag('streaksCoins')) ---
 
 export const getMyStreak = async (req, res) => {
@@ -43,7 +55,7 @@ export const getCoinCatalog = async (req, res) => {
 
 export const getChallenges = async (req, res) => {
   try {
-    const challenges = await challengeCatalogService.listActiveChallengesService(req.userId);
+    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, ...parseLocation(req) });
     res.json({ data: challenges });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -52,7 +64,7 @@ export const getChallenges = async (req, res) => {
 
 export const getChallengeDetail = async (req, res) => {
   try {
-    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, req.userId);
+    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, ...parseLocation(req) });
     res.json({ data: detail });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -61,8 +73,17 @@ export const getChallengeDetail = async (req, res) => {
 
 export const enrollInChallenge = async (req, res) => {
   try {
-    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id);
+    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id, parseLocation(req));
     res.status(201).json({ data: enrollment });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const leaveChallenge = async (req, res) => {
+  try {
+    const enrollment = await challengeEnrollmentService.leaveChallengeService(req.userId, req.params.id);
+    res.json({ data: enrollment });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

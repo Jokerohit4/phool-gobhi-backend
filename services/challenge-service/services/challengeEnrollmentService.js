@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
+import { isWithinMaxChallengeRange } from '../utils/location.js';
 const prisma = new PrismaClient();
 
 // Same haversine formula as booking-service's self-check-in geofence check
@@ -47,9 +48,20 @@ async function completeAndReward(enrollment, challenge) {
   return updated;
 }
 
-export async function enrollService(userId, challengeId) {
+export async function enrollService(userId, challengeId, { userLat, userLng } = {}) {
   const challenge = await prisma.challenge.findUnique({ where: { id: Number(challengeId) } });
   if (!challenge || challenge.status !== 'active') throw { status: 404, error: 'Challenge not found or inactive' };
+
+  // Location gate — the 20km radius is enforced at enrollment too, so the
+  // list filter can't be bypassed by deep-linking a far challenge's id. Fails
+  // closed: no location headers (client hasn't shared/resolved GPS) or no
+  // challenge anchor both reject rather than assume in-range.
+  if (userLat == null || userLng == null) {
+    throw { status: 400, error: 'Location is required to join this challenge' };
+  }
+  if (!isWithinMaxChallengeRange(userLat, userLng, challenge)) {
+    throw { status: 403, error: 'This challenge is only available within 20km of your location' };
+  }
 
   const existing = await prisma.challengeEnrollment.findUnique({
     where: { userId_challengeId: { userId, challengeId: challenge.id } },
@@ -62,6 +74,28 @@ export async function enrollService(userId, challengeId) {
 export async function getMyEnrollmentService(userId, challengeId) {
   return prisma.challengeEnrollment.findUnique({
     where: { userId_challengeId: { userId, challengeId: Number(challengeId) } },
+  });
+}
+
+// Customer-facing "leave challenge". Only an 'active' enrollment can be left:
+// a 'completed' (or already 'abandoned') enrollment is a legal no-op that
+// returns the row unchanged — the same non-action convention
+// visitCheckpointService uses for non-active enrollments, so the call never
+// errors on a record we don't own. Marks the row 'abandoned' rather than
+// deleting it: keeps visit/reward history for admin analytics and preserves
+// the (userId, challengeId) uniqueness so the app never re-enrolls into a
+// phantom. (Note: enrollService currently returns any existing row as-is, so
+// re-joining after leaving returns the abandoned record — a deliberate future
+// decision point, not addressed here.)
+export async function leaveChallengeService(userId, challengeId) {
+  const enrollment = await prisma.challengeEnrollment.findUnique({
+    where: { userId_challengeId: { userId, challengeId: Number(challengeId) } },
+  });
+  if (!enrollment) throw { status: 400, error: 'Enroll in this challenge first' };
+  if (enrollment.status !== 'active') return enrollment;
+  return prisma.challengeEnrollment.update({
+    where: { id: enrollment.id },
+    data: { status: 'abandoned' },
   });
 }
 

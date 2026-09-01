@@ -1,6 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
+// A challenge without an anchor coordinate can never be shown or joined (the
+// 20km radius requires one — see utils/location.js). The admin form accepts
+// a city-center anchor; anything supplied here is validated so garbage
+// coordinates never reach the DB, and creators are told the challenge stays
+// hidden until an anchor exists.
+function validateCoordinates(lat, lng) {
+  if (lat === undefined && lng === undefined) return;
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+    throw { status: 400, error: 'lat and lng must be valid numbers' };
+  }
+  if (latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) {
+    throw { status: 400, error: 'lat/lng are out of range' };
+  }
+}
+
 export async function listChallengeDefinitionsAdminService() {
   return prisma.challengeDefinition.findMany({ orderBy: { id: 'asc' } });
 }
@@ -23,19 +40,26 @@ export async function listChallengesAdminService() {
 }
 
 export async function createChallengeAdminService(data) {
-  const { challengeDefinitionId, city, targetCount, rewardCoins, offPeakWindows, sponsorId } = data;
+  const { challengeDefinitionId, city, targetCount, rewardCoins, offPeakWindows, sponsorId, lat, lng } = data;
   if (!challengeDefinitionId || !city || !Number.isInteger(targetCount) || targetCount <= 0 || !Number.isInteger(rewardCoins) || rewardCoins < 0) {
     throw { status: 400, error: 'challengeDefinitionId, city, a positive targetCount and a non-negative rewardCoins are required' };
   }
+  validateCoordinates(lat, lng);
   return prisma.challenge.create({
-    data: { challengeDefinitionId: Number(challengeDefinitionId), city, targetCount, rewardCoins, offPeakWindows: offPeakWindows ?? null, sponsorId: sponsorId ?? null },
+    data: {
+      challengeDefinitionId: Number(challengeDefinitionId), city, targetCount, rewardCoins,
+      offPeakWindows: offPeakWindows ?? null, sponsorId: sponsorId ?? null,
+      lat: lat === undefined ? null : Number(lat),
+      lng: lng === undefined ? null : Number(lng),
+    },
   });
 }
 
 export async function updateChallengeAdminService(id, data) {
   const existing = await prisma.challenge.findUnique({ where: { id: Number(id) } });
   if (!existing) throw { status: 404, error: 'Challenge not found' };
-  const { status, targetCount, rewardCoins, offPeakWindows, endsAt } = data;
+  const { status, targetCount, rewardCoins, offPeakWindows, endsAt, lat, lng } = data;
+  validateCoordinates(lat, lng);
   return prisma.challenge.update({
     where: { id: Number(id) },
     data: {
@@ -44,6 +68,8 @@ export async function updateChallengeAdminService(id, data) {
       ...(rewardCoins !== undefined ? { rewardCoins: Number(rewardCoins) } : {}),
       ...(offPeakWindows !== undefined ? { offPeakWindows } : {}),
       ...(endsAt !== undefined ? { endsAt: endsAt ? new Date(endsAt) : null } : {}),
+      ...(lat !== undefined ? { lat: lat === null ? null : Number(lat) } : {}),
+      ...(lng !== undefined ? { lng: lng === null ? null : Number(lng) } : {}),
     },
   });
 }

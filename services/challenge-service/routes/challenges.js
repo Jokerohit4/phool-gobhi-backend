@@ -14,6 +14,7 @@ router.get('/coins/catalog', requireAuth, requireFeatureFlag('streaksCoins'), ct
 router.get('/', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallenges);
 router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallengeDetail);
 router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);
+router.post('/:id/leave', requireAuth, requireFeatureFlag('challenges'), ctrl.leaveChallenge);
 router.post('/:id/checkpoint', requireAuth, requireFeatureFlag('challenges'), ctrl.visitCheckpoint);
 router.post('/paired-streaks/opt-in', requireAuth, requireFeatureFlag('buddyPairedStreaks'), ctrl.optInPairedStreak);
 router.get('/paired-streaks/me', requireAuth, requireFeatureFlag('buddyPairedStreaks'), ctrl.getMyPairedStreaks);

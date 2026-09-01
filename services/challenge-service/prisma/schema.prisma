@@ -335,6 +335,14 @@ model Challenge {
   // IST) an attendance must fall inside to count. Null/ignored for other
   // challenge types.
   offPeakWindows        Json?
+  // Geographic anchor for the 20km discovery/enrollment radius (see
+  // utils/location.js MAX_CHALLENGE_DISTANCE_KM): city center for
+  // gym-native challenges, the checkpoint-cluster centroid for city quests.
+  // Nullable so the idempotent seed can backfill pre-location rows; a
+  // challenge without coordinates is never shown or joinable (can't be
+  // proven within 20km), matching gym-service's drop-null-coordinates rule.
+  lat                   Float?
+  lng                   Float?
   sponsorId             Int?
   sponsor               Sponsor?                  @relation(fields: [sponsorId], references: [id])
   createdAt             DateTime                  @default(now())
