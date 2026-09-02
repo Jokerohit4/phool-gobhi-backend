@@ -352,6 +352,7 @@ model Challenge {
   teams                 ChallengeTeam[]
   winners               ChallengeWinner[]
   medalBudgets          SponsorMedalBudget[]
+  sproutSpawns          SproutSpawn[]
 
   @@index([status, city])
   @@schema("challenge")
@@ -521,5 +522,49 @@ model PairedStreak {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
+  @@schema("challenge")
+}
+
+// ---------------------------------------------------------------------
+// Wave 2 — Explore Map redesign (see
+// sprint2/explore-map-wave2-pokemongo-redesign-spec.html §12-13). The first
+// server-authoritative reward surface in this schema whose state can't be
+// derived from an existing table the way badges/attendance are — a spawn's
+// existence, expiry and "who caught it" have to live somewhere the client
+// can't fake, since a catch pays real coins.
+//
+// Species catalog (name/archetype/coinValue per rarity) is a small static
+// list in sproutSpawnService.js, not a table — same reasoning Wave 1 used to
+// avoid a Badge table: it's reference data, not data that changes shape.
+// speciesKey/rarity/coinValue are denormalized onto each spawn row at spawn
+// time so a later catalog edit never changes an already-live spawn's payout
+// underneath a player mid-encounter.
+enum SproutRarity {
+  common
+  uncommon
+  rare
+  legendary
+
+  @@schema("challenge")
+}
+
+// Seeded lazily (see getNearbySproutsService) when a challenge has fewer than
+// a few live spawns near the caller — no background job, just seed-on-read,
+// same "cheapest slice that proves the mechanic" posture as Wave 1's badges.
+model SproutSpawn {
+  id             Int          @id @default(autoincrement())
+  challengeId    Int
+  challenge      Challenge    @relation(fields: [challengeId], references: [id])
+  speciesKey     String
+  rarity         SproutRarity
+  coinValue      Int
+  lat            Float
+  lng            Float
+  expiresAt      DateTime
+  caughtByUserId Int?
+  caughtAt       DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([challengeId, expiresAt])
   @@schema("challenge")
 }

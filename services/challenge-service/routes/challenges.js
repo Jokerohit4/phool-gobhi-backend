@@ -16,6 +16,9 @@ router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChalle
 router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);
 router.post('/:id/leave', requireAuth, requireFeatureFlag('challenges'), ctrl.leaveChallenge);
 router.post('/:id/checkpoint', requireAuth, requireFeatureFlag('challenges'), ctrl.visitCheckpoint);
+// Wave 2 — wild Sprout spawns (see sprint2/explore-map-wave2-pokemongo-redesign-spec.html §12-13).
+router.get('/:id/sprouts', requireAuth, requireFeatureFlag('challenges'), ctrl.getNearbySprouts);
+router.post('/:id/sprouts/:spawnId/catch', requireAuth, requireFeatureFlag('challenges'), ctrl.catchSprout);
 router.post('/paired-streaks/opt-in', requireAuth, requireFeatureFlag('buddyPairedStreaks'), ctrl.optInPairedStreak);
 router.get('/paired-streaks/me', requireAuth, requireFeatureFlag('buddyPairedStreaks'), ctrl.getMyPairedStreaks);
 

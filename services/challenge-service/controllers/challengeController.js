@@ -8,6 +8,7 @@ import * as adminChallengeService from '../services/adminChallengeService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import * as pairedStreakService from '../services/pairedStreakService.js';
 import * as workoutCreditService from '../services/workoutCreditService.js';
+import * as sproutSpawnService from '../services/sproutSpawnService.js';
 
 // The gateway forwards the customer app's location headers unchanged, and
 // the app attaches them on every request (they back gym discovery the same
@@ -117,6 +118,38 @@ export const visitCheckpoint = async (req, res) => {
     }
     const enrollment = await challengeEnrollmentService.visitCheckpointService(req.userId, req.params.id, { code, lat, lng });
     res.json({ data: enrollment });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
+  }
+};
+
+// Wave 2 — wild Sprout spawns for a challenge's live map. `lat`/`lng` are
+// optional (only used to anchor spawns for a gym-native challenge, which has
+// no checkpoint spots of its own) — a city-quest challenge ignores them.
+export const getNearbySprouts = async (req, res) => {
+  try {
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const spawns = await sproutSpawnService.getNearbySproutsService(req.params.id, {
+      lat: Number.isNaN(lat) ? undefined : lat,
+      lng: Number.isNaN(lng) ? undefined : lng,
+    });
+    res.json({ data: spawns });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const catchSprout = async (req, res) => {
+  try {
+    const { lat, lng } = req.body || {};
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ error: 'lat and lng are required' });
+    }
+    const result = await sproutSpawnService.catchSproutService(
+      req.userId, req.params.id, req.params.spawnId, { lat, lng },
+    );
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
   }
