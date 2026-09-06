@@ -472,3 +472,13 @@ export const getMemberAttendance = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+export const getGymLeaderboard = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getGymLeaderboard(gymId, req.query.window, req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

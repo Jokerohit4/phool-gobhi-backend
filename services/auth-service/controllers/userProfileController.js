@@ -154,6 +154,7 @@ function formatUser(user) {
     weeklyFrequencyIntent: user.weeklyFrequencyIntent || null,
     referralCode: user.referralCode || null,
     linkedGymId: user.linkedGymId || null,
+    leaderboardOptIn: user.leaderboardOptIn,
   };
 }
 

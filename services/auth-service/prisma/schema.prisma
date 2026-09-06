@@ -65,9 +65,35 @@ model User {
   // needed. Never reset either way, so a resolved user is never re-checked
   // on a later sweep run — this is "processed," not strictly "was nudged."
   reengagementNudgedAt DateTime?
+  // Per-gym attendance leaderboards (booking-service, MemberAttendance-backed)
+  // are opt-in — a check-in is otherwise private. False by default; toggled
+  // from the customer app's settings screen. Global, not per-gym: someone who
+  // opts in is visible on every gym's board their check-ins would rank on.
+  leaderboardOptIn Boolean @default(false)
+  // Map collectibles (veggie pickups) are a standalone currency, deliberately
+  // NOT coins and NOT tied to gyms/bookings/badges in any way -- just walk
+  // near a spawn point on the Explore map and it's yours. Spawn points are
+  // deterministic client-side (fixed grid, no catalog table needed); this
+  // relation is only "which ones has this user found."
+  collectibleFinds CollectibleFind[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
+  @@schema("auth")
+}
+
+// One row per veggie collectible a user has picked up on the Explore map.
+// collectibleId is a client-generated deterministic id (grid cell reference,
+// e.g. "veg_12_7") -- there's no server-side spawn catalog, so this table is
+// purely "has this user found this id," nothing more.
+model CollectibleFind {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  collectibleId String
+  foundAt       DateTime @default(now())
+
+  @@unique([userId, collectibleId])
   @@schema("auth")
 }
 

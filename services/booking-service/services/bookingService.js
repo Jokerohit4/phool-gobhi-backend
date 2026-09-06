@@ -2728,3 +2728,89 @@ export async function getMemberAttendance(customerId) {
     checkedInAt: r.checkedInAt,
   }));
 }
+
+// ─── Attendance leaderboard: per-gym, opt-in, ranked by check-in count ──────
+// Reads the same MemberAttendance rows memberCheckIn writes -- "check-in
+// count" is literally "how many distinct days has this user checked in at
+// this gym". Opt-in (User.leaderboardOptIn, auth-service) -- a check-in is
+// otherwise private, so non-opted-in users are excluded from the visible
+// list entirely rather than shown anonymized. Three windows, all reading the
+// same underlying rows: weekly/monthly reset (filtered by date), all-time
+// never does (no filter) -- no separate reward-cycle bucket, per the 2026-09
+// decision to keep the periodic-prize idea unbuilt for now.
+const LEADERBOARD_TOP_N = 50;
+
+function currentWeekStartIST() {
+  const todayString = todayDateStringIST();
+  const today = new Date(`${todayString}T00:00:00Z`);
+  const daysSinceMonday = (today.getUTCDay() + 6) % 7; // Monday=0..Sunday=6
+  today.setUTCDate(today.getUTCDate() - daysSinceMonday);
+  return today.toISOString().split('T')[0];
+}
+
+async function checkInCountsByCustomer(gymId, window) {
+  const todayString = todayDateStringIST();
+  const dateFilter = window === 'weekly'
+    ? { gte: currentWeekStartIST() }
+    : window === 'monthly'
+      ? { gte: `${todayString.slice(0, 7)}-01` }
+      : undefined; // 'all' -- lifetime, no filter
+
+  const rows = await prisma.memberAttendance.groupBy({
+    by: ['customerId'],
+    where: { gymId, ...(dateFilter ? { date: dateFilter } : {}) },
+    _count: { _all: true },
+  });
+  return rows
+    .map((r) => ({ customerId: r.customerId, checkIns: r._count._all }))
+    .sort((a, b) => b.checkIns - a.checkIns);
+}
+
+export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
+  const validWindow = ['weekly', 'monthly', 'all'].includes(window) ? window : 'all';
+  const allRows = await checkInCountsByCustomer(gymId, validWindow);
+
+  // Always include the requester even at 0 check-ins, so "where would I
+  // rank" works before their first visit.
+  const customerIds = [...new Set([...allRows.map((r) => r.customerId), requestingCustomerId])];
+  let userById = {};
+  try {
+    const res = await axios.post(
+      `${AUTH_SERVICE_URL}/internal/users/batch`,
+      { ids: customerIds },
+      await internalHeadersFor(AUTH_SERVICE_URL),
+    );
+    const users = res.data?.data || [];
+    userById = Object.fromEntries(users.map((u) => [u.id, u]));
+  } catch (_) {
+    // Opt-in can't be verified -- safer to show nobody than to guess.
+    return { window: validWindow, entries: [], me: { rank: null, checkIns: 0, optedIn: false } };
+  }
+
+  const ranked = allRows
+    .filter((r) => userById[r.customerId]?.leaderboardOptIn === true)
+    .map((r, i) => ({
+      rank: i + 1,
+      customerId: r.customerId,
+      name: userById[r.customerId]?.name || 'Anonymous',
+      photoUrl: userById[r.customerId]?.profileImageUrl || null,
+      checkIns: r.checkIns,
+    }));
+
+  // The requester's own position within that same opted-in ranking, computed
+  // whether or not they're actually opted in -- so someone deciding whether
+  // to opt in can see where they'd land first.
+  const myCheckIns = allRows.find((r) => r.customerId === requestingCustomerId)?.checkIns ?? 0;
+  const myListedRank = ranked.findIndex((r) => r.customerId === requestingCustomerId) + 1;
+  const myRank = myListedRank || ranked.filter((r) => r.checkIns > myCheckIns).length + 1;
+
+  return {
+    window: validWindow,
+    entries: ranked.slice(0, LEADERBOARD_TOP_N),
+    me: {
+      rank: myRank,
+      checkIns: myCheckIns,
+      optedIn: userById[requestingCustomerId]?.leaderboardOptIn === true,
+    },
+  };
+}
