@@ -62,9 +62,10 @@ export async function deleteAllDataService(userId) {
     prisma.exercise.deleteMany({ where: { createdByUserId: userId } }),
     prisma.exerciseRecord.deleteMany({ where: { userId } }),
     prisma.dailyActivityMetric.deleteMany({ where: { userId } }),
-    // Body measurements are among the most sensitive rows here, so they must
-    // never outlive the account (FR-12 + the BRD's 30-day erasure line).
-    prisma.measurement.deleteMany({ where: { userId } }),
+    // Biometric entries (weight/body-fat today, resting HR/sleep/HRV once
+    // Health+ Phase 1 lands) are among the most sensitive rows here, so they
+    // must never outlive the account (the BRD's 30-day erasure line).
+    prisma.biometricEntry.deleteMany({ where: { userId } }),
     // Suggestion impressions/votes are per-user behavioural data — the
     // aggregate GS-5 numbers are recomputed from what remains, never
     // retained per-user after deletion.
