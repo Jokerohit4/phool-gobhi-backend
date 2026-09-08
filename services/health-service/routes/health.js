@@ -8,6 +8,7 @@ import * as sessionCtrl from '../controllers/sessionController.js';
 import * as activityCtrl from '../controllers/activityController.js';
 import * as progressCtrl from '../controllers/progressController.js';
 import * as measurementCtrl from '../controllers/measurementController.js';
+import * as personalisationCtrl from '../controllers/personalisationController.js';
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
 import * as adminCtrl from '../controllers/adminController.js';
@@ -76,6 +77,16 @@ router.delete('/measurements/:localDate', ...gated, measurementCtrl.deleteMeasur
 // the user reacts to it — both halves are needed for GS-5 to mean anything.
 router.post('/suggestions/impressions', ...gated, suggestionFeedbackCtrl.recordImpression);
 router.patch('/suggestions/impressions/:id/vote', ...gated, suggestionFeedbackCtrl.recordVote);
+
+// ---- Personalisation (FR-25/26/27) --------------------------------------
+// GET never 404s — "skipped the whole setup" is a valid state and returns
+// the same empty shape, so Settings renders without branching.
+router.get('/personalisation', ...gated, personalisationCtrl.getProfile);
+router.put('/personalisation', ...gated, personalisationCtrl.updateProfile);
+// Separate route because this is the consent-bearing write: switching to a
+// personalised mode requires a privacyVersion, switching back to neutral
+// never does.
+router.put('/personalisation/programming-mode', ...gated, personalisationCtrl.setProgrammingMode);
 
 // ---- Data export (FR-16) ------------------------------------------------
 router.get('/export', ...gated, exportCtrl.exportMyData);

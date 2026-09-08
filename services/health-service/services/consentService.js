@@ -69,6 +69,9 @@ export async function deleteAllDataService(userId) {
     // aggregate GS-5 numbers are recomputed from what remains, never
     // retained per-user after deletion.
     prisma.suggestionFeedback.deleteMany({ where: { userId } }),
+    // Personalisation (height/weight/injury zones/programming mode) goes
+    // with the account too — including the consent record itself.
+    prisma.personalisationProfile.deleteMany({ where: { userId } }),
     prisma.healthConsent.deleteMany({ where: { userId } }),
   ]);
 }

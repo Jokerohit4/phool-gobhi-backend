@@ -357,6 +357,77 @@ enum SuggestionVote {
   @@schema("health")
 }
 
+// FR-25/27, but deliberately NOT shaped the way the BRD's Tech §3.2 sketch
+// proposed (cycleAware/pregnancyFlag/postpartumFlag booleans server-side).
+//
+// The suggestion engine only ever needs to know HOW to program, never WHY —
+// so this stores the derived mode and nothing else. A user who tells the app
+// she's pregnant has that mapped, on-device, to `low_impact_recovery`; the
+// medical fact itself is never transmitted or stored. That removes an entire
+// class of risk (DB dumps, logs, backups, a future analytics join leaking
+// pregnancy status) instead of trying to encrypt it away, and it satisfies
+// the BRD's own P6 "never medical" line more honestly than a pregnancyFlag
+// column would.
+//
+// `neutral` is the default and the "Show neutral suggestions" escape hatch
+// (FR-25). `female_default` biases toward the lower-body/hip-mobility
+// emphasis the doc describes. `low_impact_recovery` suppresses PR pushes
+// and aggressive progression.
+enum ProgrammingMode {
+  neutral
+  female_default
+  low_impact_recovery
+
+  @@schema("health")
+}
+
+enum ExperienceLevel {
+  none
+  lt_1_year
+  one_to_three_years
+  over_three_years
+
+  @@schema("health")
+}
+
+enum EnergyPattern {
+  morning
+  afternoon
+  evening
+
+  @@schema("health")
+}
+
+// FR-26 — "detailed but skippable". Every single field is nullable/defaulted
+// precisely because the PRD's P7 principle is that any of it can be skipped
+// forever without degrading the app: a null here means "not asked / declined"
+// and the engine falls back to neutral behaviour, never to a nag.
+model PersonalisationProfile {
+  userId           Int              @id
+  heightCm         Int?
+  // The setup-time weight only. Ongoing weight lives in Measurement (FR-12)
+  // so the two never fight over which is current — this one exists just to
+  // seed programming before any measurement has been logged.
+  setupWeightKg    Decimal?         @db.Decimal(5, 2)
+  experienceLevel  ExperienceLevel?
+  // Free-form list from a fixed chip set (knee/shoulder/lower_back/wrist/…).
+  // Used only to bias volume/impact away from those zones — never rendered
+  // back as anything diagnostic.
+  injuryZones      String[]
+  energyPattern    EnergyPattern?
+  // 0 = Sunday .. 6 = Saturday, matching Dart's DateTime.weekday % 7.
+  preferredRestDay Int?
+  programmingMode  ProgrammingMode  @default(neutral)
+  // Set the moment a user opts into personalised (non-neutral) programming.
+  // Records THAT consent was given and under which policy version — never
+  // what was disclosed to arrive at the mode.
+  consentAt        DateTime?
+  privacyVersion   String?
+  updatedAt        DateTime         @updatedAt
+
+  @@schema("health")
+}
+
 // FR-15 — every suggestion the app SHOWS gets a row (vote null until the
 // user reacts), not just the ones that get voted on. Without the impression
 // side there's no denominator for GS-5 (suggestion uptake), and no honest
