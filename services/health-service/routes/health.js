@@ -11,6 +11,7 @@ import * as measurementCtrl from '../controllers/measurementController.js';
 import * as personalisationCtrl from '../controllers/personalisationController.js';
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
+import * as recapCtrl from '../controllers/recapController.js';
 import * as adminCtrl from '../controllers/adminController.js';
 
 const router = Router();
@@ -87,6 +88,12 @@ router.put('/personalisation', ...gated, personalisationCtrl.updateProfile);
 // personalised mode requires a privacyVersion, switching back to neutral
 // never does.
 router.put('/personalisation/programming-mode', ...gated, personalisationCtrl.setProgrammingMode);
+
+// ---- Weekly recap (FR-13) -----------------------------------------------
+// Numbers only — the client renders the shareable card. No name/gym/photo in
+// the payload at all, so the "no PII on the card" guarantee holds no matter
+// which client renders it.
+router.get('/recap', ...gated, recapCtrl.getWeeklyRecap);
 
 // ---- Data export (FR-16) ------------------------------------------------
 router.get('/export', ...gated, exportCtrl.exportMyData);
