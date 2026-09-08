@@ -15,12 +15,14 @@ let bookingResult = null;
 let memberAttendanceResult = null;
 let throwOnBookingLookup = false;
 const notifyCalls = [];
+const healthNotifyCalls = [];
 
 function resetFakes() {
   bookingResult = null;
   memberAttendanceResult = null;
   throwOnBookingLookup = false;
   notifyCalls.length = 0;
+  healthNotifyCalls.length = 0;
 }
 
 let emitAttendanceSignals, emitMemberAttendanceSignals;
@@ -45,6 +47,9 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
   t.mock.module(new URL('../utils/notifyChallengeService.js', import.meta.url).href, {
     exports: { recordAttendanceEvent: async (args) => { notifyCalls.push(args); } },
   });
+  t.mock.module(new URL('../utils/notifyHealthService.js', import.meta.url).href, {
+    exports: { recordAttendanceForWorkout: async (args) => { healthNotifyCalls.push(args); } },
+  });
 
   ({ emitAttendanceSignals, emitMemberAttendanceSignals } = await import('../services/bookingService.js'));
   assert.equal(typeof emitAttendanceSignals, 'function');
@@ -57,6 +62,9 @@ test('emitAttendanceSignals: first-ever visit -> badge check runs clean, notify 
   assert.equal(notifyCalls[0].bookingId, 100);
   assert.equal(notifyCalls[0].idempotencyKey, 'booking:100');
   assert.equal(notifyCalls[0].source, 'self_checkin');
+  assert.equal(healthNotifyCalls.length, 1, 'health-service must be notified on every attendance event too (Fitness+ session-attach)');
+  assert.equal(healthNotifyCalls[0].bookingId, 100);
+  assert.equal(healthNotifyCalls[0].idempotencyKey, 'booking:100');
 });
 
 test('emitAttendanceSignals: prior visit exists -> notify still fires (badge suppression does not affect the coin/streak signal)', async () => {

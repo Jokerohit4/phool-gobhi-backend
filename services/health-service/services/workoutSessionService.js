@@ -52,15 +52,33 @@ async function attachPreviousPerformance(session) {
   return { ...session, exercises: exercisesWithPrevious };
 }
 
+// Derives the user-local 'YYYY-MM-DD' this attendance/session belongs to.
+// Fixed to Asia/Kolkata for now (the platform's only launched market) —
+// see the BRD's edge-case note on travelling users for why this becomes a
+// per-user tz lookup later, not a hardcoded offset forever.
+function localDateIST(date) {
+  return new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 // Starting from a template pre-populates every SessionExercise/WorkoutSet
 // row from its targets (targetSets rows per exercise, each carrying the
 // previous-performance ghost values) — so the active-workout screen has
 // something to render immediately, before the user taps anything.
 // templateId omitted entirely means an "empty workout": zero exercises,
-// added one at a time via POST /sessions/:id/exercises.
-export async function startSessionService(userId, templateId) {
+// added one at a time via POST /sessions/:id/exercises. `attendance` is the
+// optional {bookingId, gymId} the client already knows about (e.g. starting
+// a session from the gym-detail screen mid-visit) — usually left undefined
+// and filled in later by getOrCreateDraftForAttendanceService instead.
+export async function startSessionService(userId, templateId, attendance) {
+  const attachData = attendance
+    ? {
+        bookingId: attendance.bookingId ?? null,
+        gymId: attendance.gymId ?? null,
+        localDate: localDateIST(attendance.attendedAt ?? new Date()),
+      }
+    : {};
   if (!templateId) {
-    return prisma.workoutSession.create({ data: { userId }, include: includeFull });
+    return prisma.workoutSession.create({ data: { userId, ...attachData }, include: includeFull });
   }
   const template = await prisma.workoutTemplate.findUnique({
     where: { id: templateId },
@@ -75,6 +93,7 @@ export async function startSessionService(userId, templateId) {
     data: {
       userId,
       templateId,
+      ...attachData,
       exercises: {
         create: template.exercises.map((te) => ({
           exerciseId: te.exerciseId,
@@ -89,6 +108,50 @@ export async function startSessionService(userId, templateId) {
     include: includeFull,
   });
   return attachPreviousPerformance(session);
+}
+
+// Called from health-service's /internal/attendance-events, itself fired by
+// booking-service's emitAttendanceSignals on every verified booking
+// check-in (see notifyHealthService.recordAttendanceForWorkout on the
+// booking-service side — NOT yet wired to emitMemberAttendanceSignals, the
+// attendance-SaaS member-checkin path, since that flow isn't live). Turns
+// "log a session" into "confirm a session" — the draft already carries
+// booking/gym/day context before the user opens the app. Idempotent on
+// bookingId (a retried/duplicate attendance event for the same booking must
+// never create a second draft); the no-bookingId fallback keys off
+// (userId, gymId, localDate) instead, since that's the only natural key
+// available once a member-checkin path is wired here later — a real second
+// visit to the same gym on the same day is the one case that dedupes away,
+// judged an acceptable v0 tradeoff over a separate idempotency table for a
+// still-unlaunched path.
+export async function getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt }) {
+  const localDate = localDateIST(attendedAt);
+  const existing = await prisma.workoutSession.findFirst({
+    where: bookingId
+      ? { userId, bookingId }
+      : { userId, gymId, localDate, bookingId: null },
+  });
+  if (existing) return existing;
+  return prisma.workoutSession.create({
+    data: { userId, bookingId: bookingId ?? null, gymId: gymId ?? null, localDate },
+  });
+}
+
+// Powers the Home "log today's session" card: the one thing a client needs
+// to know is "is there a session for today, and is it still unconfirmed
+// (type null)?" — one query instead of listing everything and filtering
+// client-side. Most-recently-started wins on the rare two-gyms-same-day
+// case, matching the BRD's "streak counts one flame" call for that edge
+// case (PRD §10.1) — the other same-day session is still reachable via the
+// normal list/detail endpoints, just not the one Home highlights.
+export async function getTodaySessionService(userId) {
+  const today = localDateIST(new Date());
+  const session = await prisma.workoutSession.findFirst({
+    where: { userId, localDate: today },
+    include: includeFull,
+    orderBy: { startedAt: 'desc' },
+  });
+  return session ? attachPreviousPerformance(session) : null;
 }
 
 export async function listSessionsService(userId) {
@@ -192,14 +255,22 @@ export async function addSetToExerciseService(sessionId, sessionExerciseId, user
 // service's own idempotency guard, independent of challenge-service's
 // ledger-level one, so a client retrying PATCH /sessions/:id after a
 // timeout can never trigger a second credit attempt.
-export async function finishSessionService(sessionId, userId) {
+export async function finishSessionService(sessionId, userId, { type, rpe } = {}) {
   const session = await assertOwnsSession(sessionId, userId);
   if (session.endedAt) {
     return prisma.workoutSession.findUnique({ where: { id: sessionId }, include: includeFull });
   }
   const updated = await prisma.workoutSession.update({
     where: { id: sessionId },
-    data: { endedAt: new Date() },
+    data: {
+      endedAt: new Date(),
+      ...(type !== undefined ? { type } : {}),
+      ...(rpe !== undefined ? { rpe } : {}),
+      // A session finished with no bookingId yet (started before any
+      // attendance draft existed, e.g. offline) still gets a localDate so
+      // it's never excluded from day-keyed charts later.
+      ...(session.localDate ? {} : { localDate: localDateIST(new Date()) }),
+    },
     include: includeFull,
   });
 
