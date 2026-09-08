@@ -321,30 +321,68 @@ model DailyActivityMetric {
   @@schema("health")
 }
 
-// FR-12 — user-entered body progress, deliberately separate from
-// DailyActivityMetric (that's device-synced steps/calories, not something a
-// user types). One row per user per localDate: re-entering a weight on the
-// same day corrects that day rather than stacking a second row, which is
-// what the 2-tap entry flow implies ("value + auto-today"). Every field is
-// nullable — logging just a weight, or just a photo, is valid.
-model Measurement {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  localDate  String
-  weightKg   Decimal? @db.Decimal(5, 2)
-  bodyFatPct Decimal? @db.Decimal(4, 1)
-  // Reserved, deliberately unwired in v1. The PRD's own privacy stance on
-  // progress photos is "local + encrypted sync only, never surfaced to any
-  // share flow" (§6 UX-5) — so body photos stay on the device and are never
-  // uploaded, rather than living on a public Cloudinary URL the way profile
-  // pictures do. Kept nullable here so an encrypted-sync path can populate it
-  // later without a migration.
-  photoUrl   String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+// The metric types a user can log by hand today. Deliberately the union of
+// Fitness+ FR-12 (weight, body_fat) and Health+ Phase-1 FR-01 (resting HR,
+// sleep, steps, stress, HRV) rather than two separate tables — see the
+// BiometricEntry comment for why.
+enum BiometricMetric {
+  weight
+  body_fat
+  resting_hr
+  sleep_minutes
+  steps
+  hrv
+  stress
 
-  @@unique([userId, localDate])
-  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// Where a value came from. `manual` is the only one written today; the
+// device sources exist now so wearable auto-fill later lands in these same
+// rows instead of a parallel table (both PG-HEALTH-001 §FR-01 and the
+// preventive-health vision doc's user_biometrics require exactly this).
+enum BiometricSource {
+  manual
+  healthkit
+  health_connect
+
+  @@schema("health")
+}
+
+// Fitness+ FR-12 (body measurements) and Health+ FR-01 (manual biometric
+// entry) are the same feature at different scopes, so this is one table, in
+// the generic (metric, value, unit, source) shape Health+ Phase 1 needs —
+// not a fitness-only weight/body-fat table that Health+ would have to
+// duplicate or migrate around.
+//
+// One row per (user, metric, localDate): re-entering today's weight corrects
+// today rather than stacking a second row, which is what the 2-tap "value +
+// auto-today" entry implies. A day-grain key also means a future wearable
+// sync upserts the same row rather than flooding the series with intraday
+// samples — intraday raw data, if it's ever wanted, belongs in the vision
+// doc's time-series store, not here.
+//
+// NOTE: progress photos are deliberately absent. The PRD's own stance is
+// "local + encrypted sync only, never surfaced to any share flow" (§6 UX-5),
+// so body photos stay on-device rather than living on a public Cloudinary
+// URL the way profile pictures do.
+model BiometricEntry {
+  id         Int             @id @default(autoincrement())
+  userId     Int
+  metric     BiometricMetric
+  // Decimal(8,2) covers every metric on one column: 74.25 kg, 18.5 %,
+  // 52 bpm, 420 min, 11,500 steps, 68.5 ms.
+  value      Decimal         @db.Decimal(8, 2)
+  // Stored per row rather than derived from the metric, so a later unit
+  // change (lb, or sleep in hours) never silently reinterprets old rows.
+  unit       String
+  source     BiometricSource @default(manual)
+  localDate  String
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([userId, metric, localDate])
+  @@index([userId, metric, localDate])
   @@schema("health")
 }
 
@@ -404,11 +442,15 @@ enum EnergyPattern {
 // and the engine falls back to neutral behaviour, never to a nag.
 model PersonalisationProfile {
   userId           Int              @id
+  // The one static body metric kept here for now. Height moves to Health+'s
+  // health profile (PG-HEALTH-001 FR-02: height/weight, conditions,
+  // medications, allergies, family history) when that lands — this is a
+  // deliberate placeholder, not the long-term home.
+  //
+  // Weight is deliberately NOT here: it lives in BiometricEntry as a
+  // time series, so there's exactly one source of truth for "what does this
+  // user weigh" instead of a setup copy that immediately goes stale.
   heightCm         Int?
-  // The setup-time weight only. Ongoing weight lives in Measurement (FR-12)
-  // so the two never fight over which is current — this one exists just to
-  // seed programming before any measurement has been logged.
-  setupWeightKg    Decimal?         @db.Decimal(5, 2)
   experienceLevel  ExperienceLevel?
   // Free-form list from a fixed chip set (knee/shoulder/lower_back/wrist/…).
   // Used only to bias volume/impact away from those zones — never rendered

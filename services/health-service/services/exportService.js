@@ -10,7 +10,7 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
     ? { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) }
     : undefined;
 
-  const [sessions, measurements] = await Promise.all([
+  const [sessions, biometrics] = await Promise.all([
     prisma.workoutSession.findMany({
       where: {
         userId,
@@ -25,9 +25,9 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
       },
       orderBy: { startedAt: 'asc' },
     }),
-    prisma.measurement.findMany({
+    prisma.biometricEntry.findMany({
       where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
-      orderBy: { localDate: 'asc' },
+      orderBy: [{ localDate: 'asc' }, { metric: 'asc' }],
     }),
   ]);
 
@@ -59,10 +59,16 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
         volumeKg: Math.round(volumeKg),
       };
     }),
-    measurements: measurements.map((m) => ({
-      localDate: m.localDate,
-      weightKg: m.weightKg !== null ? Number(m.weightKg) : null,
-      bodyFatPct: m.bodyFatPct !== null ? Number(m.bodyFatPct) : null,
+    // Long-format (one row per metric per day) rather than a wide
+    // weight/bodyFat pair — it stays correct as Health+ Phase 1 adds sleep,
+    // resting HR, HRV and steps without the CSV growing a column per metric
+    // and old exports changing shape.
+    biometrics: biometrics.map((b) => ({
+      localDate: b.localDate,
+      metric: b.metric,
+      value: Number(b.value),
+      unit: b.unit,
+      source: b.source,
     })),
   };
 }
@@ -87,18 +93,18 @@ const SESSION_COLUMNS = [
   'sessionId', 'localDate', 'startedAt', 'endedAt', 'durationMinutes',
   'type', 'rpe', 'gymId', 'bookingId', 'exerciseCount', 'completedSets', 'volumeKg',
 ];
-const MEASUREMENT_COLUMNS = ['localDate', 'weightKg', 'bodyFatPct'];
+const BIOMETRIC_COLUMNS = ['localDate', 'metric', 'value', 'unit', 'source'];
 
 // Two logical tables in one file, separated by a blank line and a header —
-// a single flat CSV would either duplicate session rows per measurement or
+// a single flat CSV would either duplicate session rows per biometric or
 // drop one of the two entirely. Sheets/Excel both handle this fine.
-export function seriesToCsv({ sessions, measurements }) {
+export function seriesToCsv({ sessions, biometrics }) {
   return [
     '# sessions',
     toCsv(sessions, SESSION_COLUMNS),
     '',
-    '# measurements',
-    toCsv(measurements, MEASUREMENT_COLUMNS),
+    '# biometrics',
+    toCsv(biometrics, BIOMETRIC_COLUMNS),
     '',
   ].join('\n');
 }

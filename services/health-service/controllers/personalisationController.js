@@ -6,7 +6,7 @@ const ENERGY_PATTERNS = ['morning', 'afternoon', 'evening'];
 const PROGRAMMING_MODES = ['neutral', 'female_default', 'low_impact_recovery'];
 const INJURY_ZONES = ['knee', 'shoulder', 'lower_back', 'wrist', 'neck'];
 
-// Same posture as measurementController's bounds: reject typos and unit
+// Same posture as biometricService's METRIC_BOUNDS: reject typos and unit
 // mix-ups, never comment on the value itself.
 const HEIGHT_MIN_CM = 90;
 const HEIGHT_MAX_CM = 250;

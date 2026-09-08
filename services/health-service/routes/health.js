@@ -7,7 +7,7 @@ import * as templateCtrl from '../controllers/templateController.js';
 import * as sessionCtrl from '../controllers/sessionController.js';
 import * as activityCtrl from '../controllers/activityController.js';
 import * as progressCtrl from '../controllers/progressController.js';
-import * as measurementCtrl from '../controllers/measurementController.js';
+import * as biometricCtrl from '../controllers/biometricController.js';
 import * as personalisationCtrl from '../controllers/personalisationController.js';
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
@@ -66,12 +66,16 @@ router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
 router.get('/progress/summary', ...gated, progressCtrl.getProgressSummary);
 router.get('/progress/muscle-readiness', ...gated, progressCtrl.getMuscleReadiness);
 
-// ---- Body measurements (FR-12) ------------------------------------------
-// POST upserts today's row (or an explicit localDate) rather than creating —
-// see measurementService for why one row per user-day.
-router.post('/measurements', ...gated, measurementCtrl.upsertMeasurement);
-router.get('/measurements', ...gated, measurementCtrl.listMeasurements);
-router.delete('/measurements/:localDate', ...gated, measurementCtrl.deleteMeasurement);
+// ---- Biometric entries (Fitness+ FR-12 + Health+ FR-01) -----------------
+// One table, one set of endpoints for both: Fitness+ surfaces weight and
+// body_fat ("Track body"), Health+ Phase 1 adds resting HR / sleep / steps /
+// HRV / stress on the same schema, wearable-ready. POST accepts either a
+// single {metric,value} or {entries:[...]} for the multi-metric quick-add.
+router.post('/biometrics', ...gated, biometricCtrl.upsertEntries);
+router.get('/biometrics', ...gated, biometricCtrl.listEntries);
+// Must precede the :metric route below so "latest" isn't parsed as a metric.
+router.get('/biometrics/latest', ...gated, biometricCtrl.getLatest);
+router.delete('/biometrics/:metric/:localDate', ...gated, biometricCtrl.deleteEntry);
 
 // ---- Suggestion feedback (FR-15) ----------------------------------------
 // The impression POST fires when a suggestion is shown, the vote PATCH when

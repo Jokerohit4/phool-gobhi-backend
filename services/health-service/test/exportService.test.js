@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 let sessions = [];
-let measurements = [];
+let biometrics = [];
 
 let buildRangeSeriesService, seriesToCsv;
 
@@ -16,7 +16,7 @@ test('setup: mock prisma once, import exportService once', async (t) => {
       PrismaClient: class {
         constructor() {
           this.workoutSession = { findMany: async () => sessions };
-          this.measurement = { findMany: async () => measurements };
+          this.biometricEntry = { findMany: async () => biometrics };
         }
       },
       Prisma: {},
@@ -52,7 +52,7 @@ test('buildRangeSeries sums volume from completed weighted sets only', async () 
       ],
     },
   ];
-  measurements = [];
+  biometrics = [];
 
   const series = await buildRangeSeriesService(1, {});
   const row = series.sessions[0];
@@ -63,34 +63,41 @@ test('buildRangeSeries sums volume from completed weighted sets only', async () 
   assert.equal(row.bookingId, 100);
 });
 
-test('buildRangeSeries converts measurement decimals to plain numbers', async () => {
+test('buildRangeSeries emits biometrics long-format, one row per metric-day', async () => {
   sessions = [];
-  measurements = [{ localDate: '2026-09-08', weightKg: 74.2, bodyFatPct: 18.5 }];
+  biometrics = [
+    { localDate: '2026-09-08', metric: 'weight', value: 74.2, unit: 'kg', source: 'manual' },
+    { localDate: '2026-09-08', metric: 'body_fat', value: 18.5, unit: 'percent', source: 'manual' },
+  ];
 
   const series = await buildRangeSeriesService(1, {});
-  assert.deepEqual(series.measurements, [
-    { localDate: '2026-09-08', weightKg: 74.2, bodyFatPct: 18.5 },
+  // Long format survives Health+ Phase 1 adding sleep/HR/HRV without the CSV
+  // growing a column per metric (which would change the shape of old exports).
+  assert.deepEqual(series.biometrics, [
+    { localDate: '2026-09-08', metric: 'weight', value: 74.2, unit: 'kg', source: 'manual' },
+    { localDate: '2026-09-08', metric: 'body_fat', value: 18.5, unit: 'percent', source: 'manual' },
   ]);
 });
 
 test('seriesToCsv emits both tables with headers', () => {
   const csv = seriesToCsv({
-    sessions: [{ sessionId: 1, localDate: '2026-09-08', volumeKg: 500 }],
-    measurements: [{ localDate: '2026-09-08', weightKg: 74.2, bodyFatPct: null }],
+    sessions: [{ sessionId: 1, localDate: '2026-09-08', volumeKg: 500, rpe: null }],
+    biometrics: [{ localDate: '2026-09-08', metric: 'weight', value: 74.2, unit: 'kg', source: 'manual' }],
   });
   const lines = csv.split('\n');
   assert.equal(lines[0], '# sessions');
   assert.ok(lines[1].startsWith('sessionId,localDate'));
   assert.ok(lines[2].startsWith('1,2026-09-08'));
-  assert.ok(csv.includes('# measurements'));
+  assert.ok(csv.includes('# biometrics'));
+  assert.ok(csv.includes('2026-09-08,weight,74.2,kg,manual'));
   // A null renders as an empty field, not the string "null".
-  assert.ok(csv.includes('2026-09-08,74.2,'));
+  assert.ok(!csv.includes('null'));
 });
 
 test('seriesToCsv quotes values containing commas or quotes', () => {
   const csv = seriesToCsv({
     sessions: [{ sessionId: 1, localDate: 'a,b', type: 'say "hi"' }],
-    measurements: [],
+    biometrics: [],
   });
   assert.ok(csv.includes('"a,b"'), 'a comma-containing value must be quoted');
   assert.ok(csv.includes('"say ""hi"""'), 'embedded quotes must be doubled');
