@@ -363,10 +363,28 @@ export const getPublicAttendanceStats = async (req, res) => {
   }
 };
 
+const CANCELLATION_REASONS = ['not_this_time', 'injury', 'work', 'travel', 'other'];
+const NEXT_VISIT_INTENTS = ['today', 'this_week', 'this_month', 'unsure'];
+
 export const cancelBooking = async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);
-    const booking = await bookingService.cancelBooking(bookingId, req.userId);
+    // FR-14 — both optional. An invalid value is rejected rather than
+    // silently dropped, since a client sending garbage here is a bug worth
+    // surfacing; omitting them entirely is the normal "skipped" path.
+    const { cancellationReason, nextVisitIntent } = req.body || {};
+    if (cancellationReason !== undefined && cancellationReason !== null
+        && !CANCELLATION_REASONS.includes(cancellationReason)) {
+      return res.status(400).json({ error: `cancellationReason must be one of: ${CANCELLATION_REASONS.join(', ')}` });
+    }
+    if (nextVisitIntent !== undefined && nextVisitIntent !== null
+        && !NEXT_VISIT_INTENTS.includes(nextVisitIntent)) {
+      return res.status(400).json({ error: `nextVisitIntent must be one of: ${NEXT_VISIT_INTENTS.join(', ')}` });
+    }
+    const booking = await bookingService.cancelBooking(bookingId, req.userId, {
+      cancellationReason,
+      nextVisitIntent,
+    });
     res.json({ data: booking });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

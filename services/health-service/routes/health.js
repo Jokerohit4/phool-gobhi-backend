@@ -7,6 +7,11 @@ import * as templateCtrl from '../controllers/templateController.js';
 import * as sessionCtrl from '../controllers/sessionController.js';
 import * as activityCtrl from '../controllers/activityController.js';
 import * as progressCtrl from '../controllers/progressController.js';
+import * as measurementCtrl from '../controllers/measurementController.js';
+import * as personalisationCtrl from '../controllers/personalisationController.js';
+import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
+import * as exportCtrl from '../controllers/exportController.js';
+import * as recapCtrl from '../controllers/recapController.js';
 import * as adminCtrl from '../controllers/adminController.js';
 
 const router = Router();
@@ -61,6 +66,38 @@ router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
 router.get('/progress/summary', ...gated, progressCtrl.getProgressSummary);
 router.get('/progress/muscle-readiness', ...gated, progressCtrl.getMuscleReadiness);
 
+// ---- Body measurements (FR-12) ------------------------------------------
+// POST upserts today's row (or an explicit localDate) rather than creating —
+// see measurementService for why one row per user-day.
+router.post('/measurements', ...gated, measurementCtrl.upsertMeasurement);
+router.get('/measurements', ...gated, measurementCtrl.listMeasurements);
+router.delete('/measurements/:localDate', ...gated, measurementCtrl.deleteMeasurement);
+
+// ---- Suggestion feedback (FR-15) ----------------------------------------
+// The impression POST fires when a suggestion is shown, the vote PATCH when
+// the user reacts to it — both halves are needed for GS-5 to mean anything.
+router.post('/suggestions/impressions', ...gated, suggestionFeedbackCtrl.recordImpression);
+router.patch('/suggestions/impressions/:id/vote', ...gated, suggestionFeedbackCtrl.recordVote);
+
+// ---- Personalisation (FR-25/26/27) --------------------------------------
+// GET never 404s — "skipped the whole setup" is a valid state and returns
+// the same empty shape, so Settings renders without branching.
+router.get('/personalisation', ...gated, personalisationCtrl.getProfile);
+router.put('/personalisation', ...gated, personalisationCtrl.updateProfile);
+// Separate route because this is the consent-bearing write: switching to a
+// personalised mode requires a privacyVersion, switching back to neutral
+// never does.
+router.put('/personalisation/programming-mode', ...gated, personalisationCtrl.setProgrammingMode);
+
+// ---- Weekly recap (FR-13) -----------------------------------------------
+// Numbers only — the client renders the shareable card. No name/gym/photo in
+// the payload at all, so the "no PII on the card" guarantee holds no matter
+// which client renders it.
+router.get('/recap', ...gated, recapCtrl.getWeeklyRecap);
+
+// ---- Data export (FR-16) ------------------------------------------------
+router.get('/export', ...gated, exportCtrl.exportMyData);
+
 // Internal — booking-service fires this on every verified check-in
 // (self-checkin, partner-verify, manual-override, member-checkin), same
 // fan-out that already feeds challenge-service's /internal/attendance-events.
@@ -79,5 +116,8 @@ router.delete('/me', requireAuth, consentCtrl.deleteAllMyData);
 // ---- Admin (gobhi) — aggregate only, no per-user drill-down, per the
 // customer-only visibility decision in the implementation plan -----------
 router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptionSummary);
+// Whether the readiness suggestions are landing at all (GS-5) — aggregate
+// counts only, no per-user rows.
+router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
 
 export default router;
