@@ -164,6 +164,22 @@ model TemplateExercise {
   @@schema("health")
 }
 
+// The attendance-grounded differentiator (see
+// phool-gobhi-fitness-plus-BRD.html Tech §2/§3): strength/cardio/etc. type
+// picked at finish time in the quick-log sheet. `rest` exists so a
+// no-exercise "rest day" entry can still be a first-class WorkoutSession row
+// (streak/adherence math wants one row per day, not a null).
+enum WorkoutType {
+  strength
+  cardio
+  hiit
+  yoga_mobility
+  full_body
+  rest
+
+  @@schema("health")
+}
+
 // One logged gym visit's worth of structured training. endedAt null means
 // still in progress (the active-workout screen's live session) — a session
 // with endedAt null and startedAt older than ~24h is treated as abandoned by
@@ -173,6 +189,26 @@ model WorkoutSession {
   userId     Int
   templateId Int?
   template   WorkoutTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  // Attendance attachment (Fitness+ delta, 2026-09-08) — set either by the
+  // client at session start (if it already knows which booking it's for) or
+  // by attendanceService.getOrCreateDraftForAttendance when booking-service's
+  // recordAttendanceForWorkout fires on a verified check-in. bookingId is
+  // null for attendance-SaaS member check-ins (memberAttendanceId path) and
+  // for any session started with no known booking context at all.
+  bookingId  Int?
+  gymId      Int?
+  // 'YYYY-MM-DD' in the user's tz at entry — NOT derived from startedAt at
+  // read time, so a session logged just after midnight (or backfilled while
+  // travelling) keys to the day the user experienced, not the server's UTC
+  // wall-date. Drives streak/adherence grouping once that lands.
+  localDate  String?
+  // Null until the quick-log sheet's finish step sets it (or a draft is
+  // auto-created and never gets confirmed — stays null, excluded from
+  // volume/streak math the same way a REST log excludes itself from volume).
+  type       WorkoutType?
+  // 1-10, set once at finish; null for `type = rest` and for any
+  // never-confirmed draft.
+  rpe        Int?
   startedAt  DateTime         @default(now())
   endedAt    DateTime?
   // Set once, the first time a finished session successfully credits coins
@@ -184,6 +220,8 @@ model WorkoutSession {
   exercises SessionExercise[]
 
   @@index([userId, startedAt])
+  @@index([userId, bookingId])
+  @@index([userId, localDate])
   @@schema("health")
 }
 

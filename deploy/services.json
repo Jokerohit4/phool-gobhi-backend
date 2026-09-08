@@ -182,7 +182,8 @@
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "booking-service-secrets"
@@ -196,7 +197,8 @@
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "booking-service-secrets"

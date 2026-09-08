@@ -7,6 +7,7 @@ import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSess
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
+import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -63,6 +64,10 @@ export async function emitAttendanceSignals({ customerId, bookingId, gymId, city
     console.error('badge_earned check failed for booking', bookingId, badgeErr);
   }
   recordAttendanceEvent({
+    userId: customerId, bookingId, gymId, attendedAt: new Date().toISOString(), source,
+    idempotencyKey: `booking:${bookingId}`,
+  });
+  recordAttendanceForWorkout({
     userId: customerId, bookingId, gymId, attendedAt: new Date().toISOString(), source,
     idempotencyKey: `booking:${bookingId}`,
   });

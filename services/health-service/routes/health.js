@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import * as consentCtrl from '../controllers/consentController.js';
 import * as exerciseCtrl from '../controllers/exerciseController.js';
@@ -56,6 +56,14 @@ router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
 // ---- Progress -------------------------------------------------------------
 router.get('/progress/summary', ...gated, progressCtrl.getProgressSummary);
 router.get('/progress/muscle-readiness', ...gated, progressCtrl.getMuscleReadiness);
+
+// Internal — booking-service fires this on every verified check-in
+// (self-checkin, partner-verify, manual-override, member-checkin), same
+// fan-out that already feeds challenge-service's /internal/attendance-events.
+// Not flag-gated at the route level — the handler checks healthMetrics
+// itself, so booking-service can call this unconditionally and it's inert
+// until an admin turns the phase on.
+router.post('/internal/attendance-events', requireInternal, sessionCtrl.recordAttendanceForWorkoutInternal);
 
 // ---- Account-wide deletion (called by the same flow that deletes the rest
 // of a user's account — see auth-service's onDeleteAccount). Deliberately
