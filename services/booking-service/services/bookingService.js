@@ -776,7 +776,10 @@ async function cancellationRefundRate(hoursUntil) {
   return null;
 }
 
-export async function cancelBooking(bookingId, customerId) {
+// `feedback` carries FR-14's optional {cancellationReason, nextVisitIntent}.
+// Never validated as required and never allowed to fail the cancellation —
+// the whole point of the prompt is that it's skippable (BRD PRD §7.3).
+export async function cancelBooking(bookingId, customerId, feedback = {}) {
   try {
     // 1. Find booking
     let booking = normalizeBookingMoney(await prisma.booking.findUnique({
@@ -839,7 +842,14 @@ export async function cancelBooking(bookingId, customerId) {
     // second cancel attempt no-op instead of double-crediting.
     const { count } = await prisma.booking.updateMany({
       where: { id: bookingId, customerId, status: { in: ['pending', 'confirmed'] } },
-      data: { status: 'cancelled' },
+      data: {
+        status: 'cancelled',
+        // Written in the same conditional update as the status flip, so a
+        // reason can never be recorded against a booking that wasn't
+        // actually cancelled by this call.
+        ...(feedback.cancellationReason ? { cancellationReason: feedback.cancellationReason } : {}),
+        ...(feedback.nextVisitIntent ? { nextVisitIntent: feedback.nextVisitIntent } : {}),
+      },
     });
     if (count !== 1) {
       throw {
@@ -873,12 +883,23 @@ export async function cancelBooking(bookingId, customerId) {
       }
     }
 
-    const updatedBooking = { ...booking, status: 'cancelled', refundAmount, refundRate };
+    const updatedBooking = {
+      ...booking,
+      status: 'cancelled',
+      refundAmount,
+      refundRate,
+      cancellationReason: feedback.cancellationReason ?? null,
+      nextVisitIntent: feedback.nextVisitIntent ?? null,
+    };
 
     track('booking_cancelled', customerId, {
       booking_id: booking.id, gym_id: booking.gymId, amount: booking.amount, date: booking.date,
       refund_rate: refundRate, refund_amount: refundAmount, hours_until_slot: hoursUntil,
       city: await getGymCity(booking.gymId),
+      // FR-14: null here is meaningful data too (the customer skipped the
+      // prompt), which is why these are always emitted rather than omitted.
+      cancellation_reason: feedback.cancellationReason ?? null,
+      next_visit_intent: feedback.nextVisitIntent ?? null,
     });
 
     notifyCustomer(customerId, {

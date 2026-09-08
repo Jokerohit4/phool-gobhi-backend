@@ -320,3 +320,62 @@ model DailyActivityMetric {
   @@unique([userId, date])
   @@schema("health")
 }
+
+// FR-12 — user-entered body progress, deliberately separate from
+// DailyActivityMetric (that's device-synced steps/calories, not something a
+// user types). One row per user per localDate: re-entering a weight on the
+// same day corrects that day rather than stacking a second row, which is
+// what the 2-tap entry flow implies ("value + auto-today"). Every field is
+// nullable — logging just a weight, or just a photo, is valid.
+model Measurement {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  localDate  String
+  weightKg   Decimal? @db.Decimal(5, 2)
+  bodyFatPct Decimal? @db.Decimal(4, 1)
+  // Reserved, deliberately unwired in v1. The PRD's own privacy stance on
+  // progress photos is "local + encrypted sync only, never surfaced to any
+  // share flow" (§6 UX-5) — so body photos stay on the device and are never
+  // uploaded, rather than living on a public Cloudinary URL the way profile
+  // pictures do. Kept nullable here so an encrypted-sync path can populate it
+  // later without a migration.
+  photoUrl   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, localDate])
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+enum SuggestionVote {
+  up
+  down
+  skip
+  done
+
+  @@schema("health")
+}
+
+// FR-15 — every suggestion the app SHOWS gets a row (vote null until the
+// user reacts), not just the ones that get voted on. Without the impression
+// side there's no denominator for GS-5 (suggestion uptake), and no honest
+// way to evaluate the ML upgrade against the shipped rules later.
+// suggestionKey is the readiness engine's own output identity (the
+// suggested template id, or 'rest' when it suggested recovery) so feedback
+// can be grouped by what was actually recommended.
+model SuggestionFeedback {
+  id            Int             @id @default(autoincrement())
+  userId        Int
+  suggestionKey String
+  // Snapshot of why it was suggested at display time (readiness state,
+  // suggested template) — kept as JSON so evaluating a past suggestion
+  // never depends on recomputing today's readiness, which has since moved.
+  reasoning     Json?
+  vote          SuggestionVote?
+  shownAt       DateTime        @default(now())
+  votedAt       DateTime?
+
+  @@index([userId, shownAt])
+  @@schema("health")
+}

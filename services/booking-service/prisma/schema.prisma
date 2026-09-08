@@ -82,6 +82,15 @@ model Booking {
   // values). Customer-facing only; never exposed on partner-facing reads.
   slotShiftWarning Boolean @default(false)
 
+  // FR-14 — captured at cancel time, both optional. Null means the customer
+  // dismissed the prompt (or cancelled before this feature existed), which
+  // is itself the BRD's "left as-is" case: never block the cancellation on
+  // answering. Customer-facing and analytics only — deliberately NOT exposed
+  // on any partner-facing read, since "why did your customer bail" is not a
+  // partner's business.
+  cancellationReason CancellationReason?
+  nextVisitIntent    NextVisitIntent?
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -193,6 +202,33 @@ enum BookingStatus {
   started
   cancelled
   completed
+
+  @@schema("booking")
+}
+
+// FR-14 (see phool-gobhi-fitness-plus-BRD.html) — why a customer cancelled,
+// asked non-judgementally at cancel time. Always optional: dismissing the
+// picker still cancels the booking, it just records no reason. `other` is a
+// real answer, not a fallback for "didn't ask" (that's null).
+enum CancellationReason {
+  not_this_time
+  injury
+  work
+  travel
+  other
+
+  @@schema("booking")
+}
+
+// FR-14's second half: the re-plan prompt. The point is turning a
+// cancellation into an intent rather than a silent drop-off, so this is
+// deliberately coarse — an actual re-booking happens through the normal
+// booking flow, this is only the stated intent.
+enum NextVisitIntent {
+  today
+  this_week
+  this_month
+  unsure
 
   @@schema("booking")
 }
