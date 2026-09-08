@@ -37,6 +37,10 @@ router.delete('/templates/:id', ...gated, templateCtrl.deleteTemplate);
 // ---- Workout sessions ---------------------------------------------------
 router.post('/sessions', ...gated, sessionCtrl.startSession);
 router.get('/sessions', ...gated, sessionCtrl.listSessions);
+// Must be registered before /sessions/:id — otherwise "today" is parsed as
+// the :id param (same route-ordering footgun the app.js /health comment
+// already calls out for this service).
+router.get('/sessions/today', ...gated, sessionCtrl.getTodaySession);
 router.get('/sessions/:id', ...gated, sessionCtrl.getSessionDetail);
 router.patch('/sessions/:id/sets/:setId', ...gated, sessionCtrl.updateSet);
 router.post('/sessions/:id/exercises', ...gated, sessionCtrl.addExerciseToSession);

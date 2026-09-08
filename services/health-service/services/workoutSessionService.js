@@ -111,17 +111,19 @@ export async function startSessionService(userId, templateId, attendance) {
 }
 
 // Called from health-service's /internal/attendance-events, itself fired by
-// booking-service's emitAttendanceSignals/emitMemberAttendanceSignals on
-// every verified check-in (see notifyHealthService.recordAttendanceForWorkout
-// on the booking-service side). Turns "log a session" into "confirm a
-// session" — the draft already carries booking/gym/day context before the
-// user opens the app. Idempotent on bookingId (a retried/duplicate
-// attendance event for the same booking must never create a second draft);
-// the memberAttendanceId path (no booking) instead keys off
-// (userId, gymId, localDate) since that's the only natural key available —
-// a real second visit to the same gym on the same day is the one case this
-// dedupes away, judged an acceptable v0 tradeoff over building a separate
-// idempotency table for a still-unlaunched attendance-SaaS path.
+// booking-service's emitAttendanceSignals on every verified booking
+// check-in (see notifyHealthService.recordAttendanceForWorkout on the
+// booking-service side — NOT yet wired to emitMemberAttendanceSignals, the
+// attendance-SaaS member-checkin path, since that flow isn't live). Turns
+// "log a session" into "confirm a session" — the draft already carries
+// booking/gym/day context before the user opens the app. Idempotent on
+// bookingId (a retried/duplicate attendance event for the same booking must
+// never create a second draft); the no-bookingId fallback keys off
+// (userId, gymId, localDate) instead, since that's the only natural key
+// available once a member-checkin path is wired here later — a real second
+// visit to the same gym on the same day is the one case that dedupes away,
+// judged an acceptable v0 tradeoff over a separate idempotency table for a
+// still-unlaunched path.
 export async function getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt }) {
   const localDate = localDateIST(attendedAt);
   const existing = await prisma.workoutSession.findFirst({
@@ -133,6 +135,23 @@ export async function getOrCreateDraftForAttendanceService({ userId, bookingId, 
   return prisma.workoutSession.create({
     data: { userId, bookingId: bookingId ?? null, gymId: gymId ?? null, localDate },
   });
+}
+
+// Powers the Home "log today's session" card: the one thing a client needs
+// to know is "is there a session for today, and is it still unconfirmed
+// (type null)?" — one query instead of listing everything and filtering
+// client-side. Most-recently-started wins on the rare two-gyms-same-day
+// case, matching the BRD's "streak counts one flame" call for that edge
+// case (PRD §10.1) — the other same-day session is still reachable via the
+// normal list/detail endpoints, just not the one Home highlights.
+export async function getTodaySessionService(userId) {
+  const today = localDateIST(new Date());
+  const session = await prisma.workoutSession.findFirst({
+    where: { userId, localDate: today },
+    include: includeFull,
+    orderBy: { startedAt: 'desc' },
+  });
+  return session ? attachPreviousPerformance(session) : null;
 }
 
 export async function listSessionsService(userId) {

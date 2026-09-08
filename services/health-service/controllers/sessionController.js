@@ -22,6 +22,15 @@ export const listSessions = async (req, res) => {
   }
 };
 
+export const getTodaySession = async (req, res) => {
+  try {
+    const session = await workoutSessionService.getTodaySessionService(req.userId);
+    res.json({ data: session ? serializeDecimals(session) : null });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getSessionDetail = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
