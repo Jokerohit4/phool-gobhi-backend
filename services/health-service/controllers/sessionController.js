@@ -75,14 +75,23 @@ export const addSetToExercise = async (req, res) => {
   }
 };
 
+const WORKOUT_TYPES = ['strength', 'cardio', 'hiit', 'yoga_mobility', 'full_body', 'rest'];
+
 export const finishSession = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);
     const { type, rpe } = req.body || {};
-    const session = await workoutSessionService.finishSessionService(sessionId, req.userId, {
-      type,
-      rpe: rpe !== undefined ? parseInt(rpe) : undefined,
-    });
+    if (type !== undefined && type !== null && !WORKOUT_TYPES.includes(type)) {
+      return res.status(400).json({ error: `type must be one of: ${WORKOUT_TYPES.join(', ')}` });
+    }
+    let parsedRpe;
+    if (rpe !== undefined && rpe !== null) {
+      parsedRpe = parseInt(rpe);
+      if (!Number.isInteger(parsedRpe) || parsedRpe < 1 || parsedRpe > 10) {
+        return res.status(400).json({ error: 'rpe must be an integer between 1 and 10' });
+      }
+    }
+    const session = await workoutSessionService.finishSessionService(sessionId, req.userId, { type, rpe: parsedRpe });
     res.json({ data: serializeDecimals(session) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
