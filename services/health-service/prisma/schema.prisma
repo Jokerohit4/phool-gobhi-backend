@@ -386,6 +386,24 @@ model BiometricEntry {
   @@schema("health")
 }
 
+// DPDPA purpose-limitation config, singleton row (id always 1),
+// admin-editable from day one so a retention period can change on legal
+// advice without a redeploy — same convention as challenge-service's
+// CoinEconomyConfig.
+//
+// Only PURPOSE-LIMITED TELEMETRY is configurable here. The user's own record
+// (sessions, biometrics, personalisation) is deleted with the account, never
+// on a timer, and financial records elsewhere are under statutory retention.
+// See retentionService.js for why those three buckets must not be conflated.
+model RetentionPolicy {
+  id                     Int      @id @default(1)
+  suggestionFeedbackDays Int      @default(180)
+  updatedAt              DateTime @updatedAt
+  updatedBy              Int?
+
+  @@schema("health")
+}
+
 enum SuggestionVote {
   up
   down

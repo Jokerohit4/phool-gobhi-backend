@@ -12,6 +12,7 @@ import * as personalisationCtrl from '../controllers/personalisationController.j
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
 import * as recapCtrl from '../controllers/recapController.js';
+import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
 
 const router = Router();
@@ -21,6 +22,31 @@ const router = Router();
 // streaksCoins, and more important here since this feature collects new
 // personal (and DPDP-sensitive) data.
 const gated = [requireAuth, requireFeatureFlag('healthMetrics')];
+
+// Two features sit behind their OWN flags on top of healthMetrics, because
+// they need legal sign-off that the rest of the health layer does not (see
+// docs/phool-gobhi-counsel-brief-20260908.html):
+//
+//   healthPersonalisation — the only consent-bearing write in this service
+//     (a non-neutral programming mode records a privacyVersion). The consent
+//     wording has to be reviewed before a real user ever agrees to it.
+//   recapSharing — the only feature producing an artifact intended to leave
+//     the platform. The payload carries no PII by construction, but "we
+//     believe it carries no PII" is exactly the sort of claim worth having
+//     checked before it becomes shareable.
+//
+// Both are additive, so healthMetrics can be switched on to test the logging
+// loop while these two stay off.
+const personalisationGated = [
+  requireAuth,
+  requireFeatureFlag('healthMetrics'),
+  requireFeatureFlag('healthPersonalisation'),
+];
+const recapGated = [
+  requireAuth,
+  requireFeatureFlag('healthMetrics'),
+  requireFeatureFlag('recapSharing'),
+];
 
 // ---- Consent -------------------------------------------------------------
 router.post('/consent', ...gated, consentCtrl.grantConsent);
@@ -86,18 +112,18 @@ router.patch('/suggestions/impressions/:id/vote', ...gated, suggestionFeedbackCt
 // ---- Personalisation (FR-25/26/27) --------------------------------------
 // GET never 404s — "skipped the whole setup" is a valid state and returns
 // the same empty shape, so Settings renders without branching.
-router.get('/personalisation', ...gated, personalisationCtrl.getProfile);
-router.put('/personalisation', ...gated, personalisationCtrl.updateProfile);
+router.get('/personalisation', ...personalisationGated, personalisationCtrl.getProfile);
+router.put('/personalisation', ...personalisationGated, personalisationCtrl.updateProfile);
 // Separate route because this is the consent-bearing write: switching to a
 // personalised mode requires a privacyVersion, switching back to neutral
 // never does.
-router.put('/personalisation/programming-mode', ...gated, personalisationCtrl.setProgrammingMode);
+router.put('/personalisation/programming-mode', ...personalisationGated, personalisationCtrl.setProgrammingMode);
 
 // ---- Weekly recap (FR-13) -----------------------------------------------
 // Numbers only — the client renders the shareable card. No name/gym/photo in
 // the payload at all, so the "no PII on the card" guarantee holds no matter
 // which client renders it.
-router.get('/recap', ...gated, recapCtrl.getWeeklyRecap);
+router.get('/recap', ...recapGated, recapCtrl.getWeeklyRecap);
 
 // ---- Data export (FR-16) ------------------------------------------------
 router.get('/export', ...gated, exportCtrl.exportMyData);
@@ -129,5 +155,14 @@ router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptio
 // Whether the readiness suggestions are landing at all (GS-5) — aggregate
 // counts only, no per-user rows.
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
+
+// ---- Retention policy (DPDPA purpose limitation) ------------------------
+// Admin-editable so a period can change on legal advice without a redeploy.
+router.get('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.getRetentionPolicy);
+router.put('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.updateRetentionPolicy);
+// Run by a scheduled workflow, same pattern as the Razorpay reconcile sweep.
+// Deliberately NOT flag-gated: purpose limitation is an obligation, not a
+// feature, so it must keep running whatever else is switched off.
+router.post('/internal/retention/sweep', requireInternal, retentionCtrl.runRetentionSweepInternal);
 
 export default router;
