@@ -161,6 +161,10 @@ router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptio
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
 
 // ---- Retention policy (DPDPA purpose limitation) ------------------------
+// Customer-readable copy of the policy, for the in-app "what we keep and for
+// how long" screen (Health+ FR-06). Same flag gate as the rest of the health
+// surface — the screen only exists inside that section.
+router.get('/retention-policy', ...gated, retentionCtrl.getMyRetentionPolicy);
 // Admin-editable so a period can change on legal advice without a redeploy.
 router.get('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.getRetentionPolicy);
 router.put('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.updateRetentionPolicy);
