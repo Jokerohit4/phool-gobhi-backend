@@ -52,14 +52,15 @@
         }
       }
     },
-
     "auth-service": {
       "cloudRunServiceBaseName": "auth-service",
       "sourceDir": "services/auth-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/auth-service/**"],
+      "pathTriggers": [
+        "services/auth-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {
@@ -70,7 +71,9 @@
             "OTP_PROVIDER": "firebase",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
-            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app"
+            "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "auth-service-secrets"
@@ -85,7 +88,9 @@
             "OTP_PROVIDER": "firebase",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
-            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app"
+            "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "auth-service-secrets"
@@ -93,14 +98,15 @@
         }
       }
     },
-
     "gym-service": {
       "cloudRunServiceBaseName": "gym-service",
       "sourceDir": "services/gym-service",
       "hasPrisma": true,
       "healthCheckGuard": true,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/gym-service/**"],
+      "pathTriggers": [
+        "services/gym-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {
@@ -126,14 +132,15 @@
         }
       }
     },
-
     "wallet-service": {
       "cloudRunServiceBaseName": "wallet-service",
       "sourceDir": "services/wallet-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/wallet-service/**"],
+      "pathTriggers": [
+        "services/wallet-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {
@@ -165,14 +172,15 @@
         }
       }
     },
-
     "booking-service": {
       "cloudRunServiceBaseName": "booking-service",
       "sourceDir": "services/booking-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/booking-service/**"],
+      "pathTriggers": [
+        "services/booking-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {
@@ -206,14 +214,15 @@
         }
       }
     },
-
     "buddy-service": {
       "cloudRunServiceBaseName": "buddy-service",
       "sourceDir": "services/buddy-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/buddy-service/**"],
+      "pathTriggers": [
+        "services/buddy-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {
@@ -239,14 +248,15 @@
         }
       }
     },
-
     "challenge-service": {
       "cloudRunServiceBaseName": "challenge-service",
       "sourceDir": "services/challenge-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/challenge-service/**"],
+      "pathTriggers": [
+        "services/challenge-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {
@@ -276,14 +286,15 @@
         }
       }
     },
-
     "health-service": {
       "cloudRunServiceBaseName": "health-service",
       "sourceDir": "services/health-service",
       "hasPrisma": true,
       "healthCheckGuard": false,
       "allowUnauthenticated": false,
-      "pathTriggers": ["services/health-service/**"],
+      "pathTriggers": [
+        "services/health-service/**"
+      ],
       "env": {
         "dev": {
           "plain": {

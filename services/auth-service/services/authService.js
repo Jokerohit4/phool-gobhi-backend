@@ -8,6 +8,7 @@ import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyUser } from '../utils/notifyUser.js';
+import { eraseUserAcrossServices } from '../utils/eraseAcrossServices.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
 
 const SKIP_OTP_CODE = '123456';
@@ -280,11 +281,37 @@ export async function loginService({ email, password }) {
   }
 }
 
+// Account deletion = erasure across the whole platform, not just this
+// service. Until this was wired, deleting an account removed exactly one
+// row (the User below) and left the person's buddy profile, private chat
+// messages, uploaded photos, gym check-in history, coin ledger, streaks and
+// health data intact in four other services — reachable by user id forever.
+//
+// Order matters and is deliberate: **downstream first, identity last.**
+// Deleting the User row first would strand that data with nothing left to
+// look it up by, making it both undeletable and undiscoverable. So if any
+// downstream service fails, the account survives and the whole operation can
+// simply be retried — a user who is still able to press "delete" again is a
+// far better failure mode than silently orphaned personal data.
 export async function deleteUserService(userId) {
   try {
+    const erasure = await eraseUserAcrossServices(userId);
+    if (!erasure.ok) {
+      console.error('deleteUserService: refusing to delete User row —', erasure.failures);
+      throw {
+        status: 502,
+        error: 'Could not delete all of your data right now. Nothing was deleted — please try again.',
+        errorCode: 'ERASURE_INCOMPLETE',
+        // Named so support/logs can see which service to chase, without
+        // leaking service topology to the client.
+        failedServices: erasure.failures.map((f) => f.service),
+      };
+    }
+
     await prisma.user.delete({ where: { id: userId } });
-    return { message: 'User deleted' };
+    return { message: 'User deleted', erased: erasure.results };
   } catch (err) {
+    if (err?.errorCode === 'ERASURE_INCOMPLETE') throw err;
     if (err.name === 'PrismaClientInitializationError') {
       console.error('Database connection error:', err);
       throw { status: 500, error: ERROR_MESSAGES.SERVER_ERROR.message, errorCode: ERROR_MESSAGES.SERVER_ERROR.code };

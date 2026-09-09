@@ -110,6 +110,12 @@ router.get('/export', ...gated, exportCtrl.exportMyData);
 // until an admin turns the phase on.
 router.post('/internal/attendance-events', requireInternal, sessionCtrl.recordAttendanceForWorkoutInternal);
 
+// DPDPA erasure — the internal twin of DELETE /me below, called by
+// auth-service's account-deletion orchestration. Not flag-gated: health data
+// must be deletable even with healthMetrics switched off, or a user who
+// tried the feature during a pilot could never get their data removed.
+router.post('/internal/erase/:userId', requireInternal, consentCtrl.eraseUserInternal);
+
 // ---- Account-wide deletion (called by the same flow that deletes the rest
 // of a user's account — see auth-service's onDeleteAccount). Deliberately
 // NOT flag-gated — same reasoning as challenge-service's refund route: a

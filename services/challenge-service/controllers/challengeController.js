@@ -1,4 +1,5 @@
 import * as coinLedgerService from '../services/coinLedgerService.js';
+import * as erasureService from '../services/erasureService.js';
 import * as streakService from '../services/streakService.js';
 import * as coinCatalogService from '../services/coinCatalogService.js';
 import * as coinEconomyConfigService from '../services/coinEconomyConfigService.js';
@@ -397,6 +398,22 @@ export const refundCoinRedemptionInternal = async (req, res) => {
     const { idempotencyKey } = req.body || {};
     const redemption = await coinCatalogService.refundRedemptionService(req.params.redemptionId, idempotencyKey);
     res.json({ data: redemption });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// DPDPA erasure — called by auth-service's account-deletion orchestration.
+// Not flag-gated, for the same reason the coin-refund route isn't: a user
+// must always be able to have their data deleted, whatever phase is on.
+export const eraseUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const result = await erasureService.eraseUserService(userId);
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
