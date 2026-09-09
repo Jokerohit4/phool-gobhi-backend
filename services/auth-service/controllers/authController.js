@@ -248,6 +248,19 @@ const DEFAULT_FEATURES = {
   // Exercise records, routines, workout sessions, watch/HealthKit sync —
   // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
   healthMetrics: { enabled: false },
+  // Held separately from healthMetrics because these two need legal sign-off
+  // the rest of the health layer doesn't (see
+  // docs/phool-gobhi-counsel-brief-20260908.html). Additive: healthMetrics
+  // can be on to test the logging loop while these stay off.
+  //
+  //   healthPersonalisation — the only consent-bearing write in health-service
+  //     (a non-neutral programming mode records a privacyVersion). The consent
+  //     wording needs review before a real user agrees to it.
+  //   recapSharing — the only feature producing an artifact meant to leave the
+  //     platform. It carries no PII by construction, but that claim is worth
+  //     checking before the card is shareable.
+  healthPersonalisation: { enabled: false },
+  recapSharing: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
