@@ -32,6 +32,18 @@ export async function eraseUserService(userId) {
           where: { enrollmentId: { in: enrollmentIds } },
         })]
       : []),
+    // RewardIssuance -> ChallengeEnrollment is RESTRICT in the database, not
+    // Cascade. Without this delete, the enrollment delete below throws a
+    // foreign-key violation for any user who ever completed a challenge and
+    // had a reward issued — and because auth-service refuses to delete the
+    // identity row when a downstream erasure fails, that user could never
+    // delete their account at all. Verified against the live constraint
+    // (auth-service/scripts/verify-erasure-live.mjs), not inferred.
+    ...(enrollmentIds.length > 0
+      ? [prisma.rewardIssuance.deleteMany({
+          where: { enrollmentId: { in: enrollmentIds } },
+        })]
+      : []),
     prisma.challengeTeamMember.deleteMany({ where: { userId } }),
     prisma.challengeWinner.deleteMany({ where: { userId } }),
     prisma.challengeEnrollment.deleteMany({ where: { userId } }),
@@ -47,6 +59,18 @@ export async function eraseUserService(userId) {
     // streak/coins are untouched.
     prisma.pairedStreak.deleteMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
+    }),
+    // A caught sprout is two things at once: world state belonging to the
+    // challenge (this spawn is used up and must not be re-caught) and a
+    // record that THIS person was at that lat/lng at that time. Deleting the
+    // row would resurrect a spent spawn for everyone else; keeping the user
+    // id would leave location history behind. So the spawn stays and the
+    // person is removed from it — caughtAt is retained deliberately, since
+    // "caught, by nobody in particular" is the state that is both true and
+    // anonymous.
+    prisma.sproutSpawn.updateMany({
+      where: { caughtByUserId: userId },
+      data: { caughtByUserId: null },
     }),
   ]);
 
