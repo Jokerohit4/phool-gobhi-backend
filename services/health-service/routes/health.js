@@ -12,6 +12,7 @@ import * as personalisationCtrl from '../controllers/personalisationController.j
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
 import * as goalCtrl from '../controllers/goalController.js';
+import * as statsCtrl from '../controllers/statsController.js';
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
@@ -160,6 +161,11 @@ router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptio
 // Whether the readiness suggestions are landing at all (GS-5) — aggregate
 // counts only, no per-user rows.
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
+
+// ---- Progress stats (FR-06) ---------------------------------------------
+// Everything the Progress screen draws, in one request, computed from the
+// same range builder the export uses so the two can never disagree.
+router.get('/stats', ...gated, statsCtrl.getStats);
 
 // ---- Weekly goal (FR-04) -------------------------------------------------
 // Progress comes back with the target: one response backs the whole ring, so
