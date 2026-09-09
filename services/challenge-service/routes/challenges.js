@@ -67,4 +67,7 @@ router.post('/internal/coins/redemptions', requireInternal, requireFeatureFlag('
 // Deliberately NOT flag-gated — see the handler's own comment.
 router.post('/internal/coins/redemptions/:redemptionId/refund', requireInternal, ctrl.refundCoinRedemptionInternal);
 
+// DPDPA erasure. Not flag-gated, same reasoning as the refund route above.
+router.post('/internal/erase/:userId', requireInternal, ctrl.eraseUserInternal);
+
 export default router;

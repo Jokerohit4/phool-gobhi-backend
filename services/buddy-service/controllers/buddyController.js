@@ -1,4 +1,5 @@
 import * as buddyService from '../services/buddyService.js';
+import * as erasureService from '../services/erasureService.js';
 
 // ---- Profile ----------------------------------------------------------
 
@@ -214,6 +215,22 @@ export const verifyMatchMembership = async (req, res) => {
     const result = await buddyService.verifyActiveMatchMembership(
       req.params.matchId, parseInt(req.params.userId),
     );
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// DPDPA erasure — called by auth-service's account-deletion orchestration
+// (see its deleteUserService). Internal-only: a user reaches this through
+// deleting their account, never directly.
+export const eraseUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const result = await erasureService.eraseUserService(userId);
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

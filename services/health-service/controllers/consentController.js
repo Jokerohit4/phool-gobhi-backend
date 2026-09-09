@@ -27,6 +27,22 @@ export const getConsentStatus = async (req, res) => {
   }
 };
 
+// Internal twin of deleteAllMyData, called by auth-service when the whole
+// account is being deleted. Same service call, different caller identity —
+// the user is authenticated to auth-service, not to this one.
+export const eraseUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    await consentService.deleteAllDataService(userId);
+    res.json({ data: { erased: true } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 // Deliberately not flag-gated at the route level (see routes/health.js) —
 // a user must always be able to delete their own data.
 export const deleteAllMyData = async (req, res) => {

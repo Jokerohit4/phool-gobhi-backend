@@ -44,4 +44,8 @@ router.post('/internal/profile-sync/:userId', requireInternal, ctrl.syncProfile)
 // before letting them opt a pair into a shared streak.
 router.get('/internal/matches/:matchId/verify/:userId', requireInternal, ctrl.verifyMatchMembership);
 
+// DPDPA erasure. Deliberately NOT feature-flagged: a user must always be
+// able to have their data deleted, whatever else is switched off.
+router.post('/internal/erase/:userId', requireInternal, ctrl.eraseUser);
+
 export default router;
