@@ -7,6 +7,10 @@ const router = Router();
 
 // Internal service-to-service endpoint (gym-service calls this to compute slot availability)
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
+// DPDPA access right (s.11). Called by auth-service's platform-wide export
+// fan-out; internal only, never reachable through the gateway.
+router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
+
 // Internal (gym-service calls this to compute class-occurrence availability)
 router.get('/internal/class-counts/:classId', requireInternal, ctrl.getClassCounts);
 // Internal (gym-service's deleteGymAdmin — refuses to hard-delete a gym with booking history)

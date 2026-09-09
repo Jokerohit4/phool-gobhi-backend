@@ -141,6 +141,10 @@ router.post('/internal/attendance-events', requireInternal, sessionCtrl.recordAt
 // must be deletable even with healthMetrics switched off, or a user who
 // tried the feature during a pilot could never get their data removed.
 router.post('/internal/erase/:userId', requireInternal, consentCtrl.eraseUserInternal);
+// DPDPA access right (s.11) - the read twin of /internal/erase above. Called
+// by auth-service's platform-wide export fan-out; internal only, never
+// reachable through the gateway.
+router.get('/internal/export/:userId', requireInternal, exportCtrl.exportUserInternal);
 
 // ---- Account-wide deletion (called by the same flow that deletes the rest
 // of a user's account — see auth-service's onDeleteAccount). Deliberately

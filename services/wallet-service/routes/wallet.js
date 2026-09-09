@@ -22,6 +22,7 @@ import {
   getMySubscriptions,
   ackGiftReveal,
   getTransactionByKeyInternal,
+  exportUserInternal,
   getWalletTopupConfigHandler,
   updateWalletTopupConfigHandler,
   getSubscriptionSummaryByGym,
@@ -51,6 +52,10 @@ router.get('/:userId/transactions', requireAuth, getWalletTransactions); // Get 
 router.post('/:userId/credit', requireInternal, creditWallet); // Credit wallet (internal: payouts, refunds, verified top-ups)
 router.post('/:userId/debit', requireInternal, debitWallet); // Debit wallet (internal: booking charges)
 router.get('/internal/transactions/by-key/:key', requireInternal, getTransactionByKeyInternal); // booking-service reconciliation lookup
+// DPDPA access right (s.11). Called by auth-service's platform-wide export
+// fan-out; internal only, never reachable through the gateway.
+router.get('/internal/export/:userId', requireInternal, exportUserInternal);
+
 
 // Razorpay routes
 router.post('/orders', requireAuth, createTopUpOrder); // Create Razorpay order

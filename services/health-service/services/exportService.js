@@ -108,3 +108,90 @@ export function seriesToCsv({ sessions, biometrics }) {
     '',
   ].join('\n');
 }
+
+// The full DPDPA access-right slice for this service, called by
+// auth-service's platform-wide export. Distinct from buildRangeSeriesService
+// above, which is FR-16's user-facing training export: that one is a
+// date-ranged view built for reading and charting, this one is "everything
+// health-service holds about you", with no range and nothing summarised away.
+//
+// The list below deliberately mirrors consentService.deleteAllDataService
+// one-for-one. If a table is added to the erasure and not to this, we would
+// be deleting on request something we never showed on request - so keep the
+// two in step.
+export async function buildFullExportService(userId) {
+  const [consent, personalisation, templates, customExercises, records, activity, biometrics, feedback] =
+    await Promise.all([
+      prisma.healthConsent.findUnique({ where: { userId } }),
+      prisma.personalisationProfile.findUnique({ where: { userId } }),
+      prisma.workoutTemplate.findMany({
+        where: { userId },
+        include: { exercises: { include: { exercise: { select: { name: true } } }, orderBy: { order: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.exercise.findMany({ where: { createdByUserId: userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.exerciseRecord.findMany({ where: { userId }, orderBy: { startedAt: 'asc' } }),
+      prisma.dailyActivityMetric.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+      prisma.biometricEntry.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { metric: 'asc' }] }),
+      prisma.suggestionFeedback.findMany({ where: { userId }, orderBy: { shownAt: 'asc' } }),
+    ]);
+
+  // Reuses the range builder with no range, so the session shape in a
+  // platform export and in the user's own FR-16 download can never drift
+  // apart - the Robin Hood rule applied across two endpoints instead of two
+  // formats.
+  const { sessions } = await buildRangeSeriesService(userId);
+
+  return {
+    consent: consent
+      ? { grantedAt: consent.grantedAt, revokedAt: consent.revokedAt, policyVersion: consent.policyVersion, platform: consent.platform }
+      : null,
+    personalisation: personalisation
+      ? {
+          heightCm: personalisation.heightCm,
+          experienceLevel: personalisation.experienceLevel,
+          injuryZones: personalisation.injuryZones,
+          energyPattern: personalisation.energyPattern,
+          preferredRestDay: personalisation.preferredRestDay,
+          programmingMode: personalisation.programmingMode,
+          // Records THAT consent was given and under which policy version.
+          // There is deliberately nothing here about what was disclosed to
+          // arrive at the mode, because that was never transmitted.
+          consentAt: personalisation.consentAt,
+          privacyVersion: personalisation.privacyVersion,
+        }
+      : null,
+    sessions,
+    routines: templates.map((t) => ({
+      name: t.name,
+      createdAt: t.createdAt,
+      exercises: t.exercises.map((te) => ({
+        name: te.exercise?.name ?? null, targetSets: te.targetSets, targetReps: te.targetReps, restSeconds: te.restSeconds,
+      })),
+    })),
+    customExercises: customExercises.map((e) => ({
+      name: e.name, muscleGroup: e.muscleGroup, equipment: e.equipment, loggingType: e.loggingType, createdAt: e.createdAt,
+    })),
+    cardioAndOther: records.map((r) => ({
+      type: r.type, source: r.source, startedAt: r.startedAt, endedAt: r.endedAt,
+      durationSeconds: r.durationSeconds, caloriesBurned: r.caloriesBurned,
+      distanceMeters: r.distanceMeters === null ? null : Number(r.distanceMeters),
+      avgHeartRateBpm: r.avgHeartRateBpm,
+    })),
+    dailyActivity: activity.map((a) => ({
+      date: a.date, steps: a.steps, activeCalories: a.activeCalories,
+      distanceMeters: a.distanceMeters === null ? null : Number(a.distanceMeters),
+      restingHeartRateBpm: a.restingHeartRateBpm, source: a.source, syncedAt: a.syncedAt,
+    })),
+    biometrics: biometrics.map((b) => ({
+      localDate: b.localDate, metric: b.metric, value: Number(b.value), unit: b.unit, source: b.source,
+    })),
+    // Included because it is per-user behavioural data we hold, even though
+    // it exists only to be aggregated away - see retentionService bucket 1.
+    // It is the one slice here that expires on a clock rather than with the
+    // account, so the export says so rather than leaving that surprising.
+    suggestionFeedback: feedback.map((f) => ({ shownAt: f.shownAt, suggestionKey: f.suggestionKey })),
+    retentionNote:
+      'suggestionFeedback is purpose-limited telemetry and is deleted automatically once it ages past the configured retention window; everything else here is kept for as long as your account exists',
+  };
+}

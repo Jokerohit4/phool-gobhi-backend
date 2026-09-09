@@ -10,6 +10,13 @@ router.get('/', ctrl.listGyms);
 // Internal service-to-service only (e.g. booking-service resolving a gym by
 // id) — returns the full row with no approval/active filtering, so this must
 // never be reachable without the shared secret.
+// DPDPA access right (s.11). Called by auth-service's platform-wide export
+// fan-out; internal only, never reachable through the gateway.
+//
+// MUST stay above /internal/:id — registered after it, Express would match
+// that route first and parse "export" as a gym id. Same footgun app.js calls
+// out for this service's /health route.
+router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
 router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);

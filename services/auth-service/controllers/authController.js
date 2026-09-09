@@ -1,4 +1,5 @@
 
+import { buildFullExportService } from '../services/exportService.js';
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
 import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
@@ -63,6 +64,29 @@ const login = async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
+  }
+};
+
+// DPDPA access right (s.11). Always scoped to req.user.id — there is no
+// parameter here that could widen it to anyone else's record, which is why
+// this lives on the authenticated session and the per-service twins are
+// internal-only.
+//
+// ?format=download sets Content-Disposition so a browser saves the file
+// instead of rendering it; the default returns JSON inline so an app can
+// display it. Same document either way.
+const exportMyData = async (req, res) => {
+  try {
+    const data = await buildFullExportService(req.user.id);
+    if (req.query?.format === 'download') {
+      const stamp = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="phool-gobhi-my-data-${stamp}.json"`);
+      return res.send(JSON.stringify(data, null, 2));
+    }
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Unknown error' });
   }
 };
 
@@ -781,6 +805,6 @@ const collectCollectible = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus };
 
 

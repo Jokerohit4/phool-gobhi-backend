@@ -69,5 +69,9 @@ router.post('/internal/coins/redemptions/:redemptionId/refund', requireInternal,
 
 // DPDPA erasure. Not flag-gated, same reasoning as the refund route above.
 router.post('/internal/erase/:userId', requireInternal, ctrl.eraseUserInternal);
+// DPDPA access right (s.11) - the read twin of /internal/erase above. Called
+// by auth-service's platform-wide export fan-out; internal only, never
+// reachable through the gateway.
+router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
 
 export default router;

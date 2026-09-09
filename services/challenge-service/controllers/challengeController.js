@@ -1,5 +1,6 @@
 import * as coinLedgerService from '../services/coinLedgerService.js';
 import * as erasureService from '../services/erasureService.js';
+import * as exportService from '../services/exportService.js';
 import * as streakService from '../services/streakService.js';
 import * as coinCatalogService from '../services/coinCatalogService.js';
 import * as coinEconomyConfigService from '../services/coinEconomyConfigService.js';
@@ -414,6 +415,25 @@ export const eraseUserInternal = async (req, res) => {
     }
     const result = await erasureService.eraseUserService(userId);
     res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+
+// ---- DPDPA access right (s.11) -------------------------------------------
+// Internal only: auth-service authenticates the user and fans out to every
+// service that holds their data, then assembles one document. Never exposed
+// at the gateway, so there is no path where a userId in a URL could let one
+// person read another's slice.
+export const exportUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const data = await exportService.buildExportService(userId);
+    res.json({ data });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

@@ -34,6 +34,7 @@ import {
   settleBankSettlementsService,
   getMyBankSettlementsService,
 } from '../services/walletService.js';
+import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
@@ -639,5 +640,23 @@ export const handleRazorpayWebhook = async (req, res) => {
   } catch (err) {
     console.error('Webhook error:', err.message);
     res.status(200).json({ received: true }); // Return 200 to prevent Razorpay retries
+  }
+};
+
+// ---- DPDPA access right (s.11) -------------------------------------------
+// Internal only: auth-service authenticates the user and fans out to every
+// service that holds their data, then assembles one document. Never exposed
+// at the gateway, so there is no path where a userId in a URL could let one
+// person read another's financial history.
+export const exportUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const data = await exportService.buildExportService(userId);
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };

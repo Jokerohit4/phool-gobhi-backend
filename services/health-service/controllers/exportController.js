@@ -24,3 +24,21 @@ export const exportMyData = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// DPDPA access right (s.11) — the read twin of eraseUserInternal. Internal
+// only: auth-service authenticates the user and fans out, so the :userId in
+// this URL is never attacker-controlled. Distinct from exportMyData above,
+// which is FR-16's date-ranged training download; this is everything the
+// service holds, unranged and unsummarised.
+export const exportUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const data = await exportService.buildFullExportService(userId);
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

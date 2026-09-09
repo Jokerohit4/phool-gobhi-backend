@@ -1,4 +1,5 @@
 import * as bookingService from '../services/bookingService.js';
+import * as exportService from '../services/exportService.js';
 
 export const createBooking = async (req, res) => {
   try {
@@ -496,6 +497,25 @@ export const getGymLeaderboard = async (req, res) => {
     const gymId = parseInt(req.params.gymId);
     const result = await bookingService.getGymLeaderboard(gymId, req.query.window, req.userId);
     res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+
+// ---- DPDPA access right (s.11) -------------------------------------------
+// Internal only: auth-service authenticates the user and fans out to every
+// service that holds their data, then assembles one document. Never exposed
+// at the gateway, so there is no path where a userId in a URL could let one
+// person read another's slice.
+export const exportUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const data = await exportService.buildExportService(userId);
+    res.json({ data });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
