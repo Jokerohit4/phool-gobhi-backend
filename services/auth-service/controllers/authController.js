@@ -545,6 +545,12 @@ const getUserInternal = async (req, res) => {
       dateOfBirth: user.dateOfBirth,
       gender: user.gender,
       fitnessGoals: user.fitnessGoals,
+      // Onboarding answers health-service reads to seed a weekly training
+      // goal (FR-04) instead of measuring everyone against one hardcoded
+      // number. Preferences, not sensitive data — the same class as
+      // fitnessGoals directly above.
+      experienceLevel: user.experienceLevel,
+      weeklyFrequencyIntent: user.weeklyFrequencyIntent,
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,

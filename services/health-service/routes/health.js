@@ -11,6 +11,7 @@ import * as biometricCtrl from '../controllers/biometricController.js';
 import * as personalisationCtrl from '../controllers/personalisationController.js';
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
+import * as goalCtrl from '../controllers/goalController.js';
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
@@ -159,6 +160,13 @@ router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptio
 // Whether the readiness suggestions are landing at all (GS-5) — aggregate
 // counts only, no per-user rows.
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
+
+// ---- Weekly goal (FR-04) -------------------------------------------------
+// Progress comes back with the target: one response backs the whole ring, so
+// the client never derives "this week" itself and can't disagree with the
+// streak week challenge-service keeps.
+router.get('/goal', ...gated, goalCtrl.getGoal);
+router.put('/goal', ...gated, goalCtrl.updateGoal);
 
 // ---- Retention policy (DPDPA purpose limitation) ------------------------
 // Customer-readable copy of the policy, for the in-app "what we keep and for

@@ -120,10 +120,11 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, templates, customExercises, records, activity, biometrics, feedback] =
+  const [consent, personalisation, weeklyGoal, templates, customExercises, records, activity, biometrics, feedback] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
+      prisma.weeklyGoal.findUnique({ where: { userId } }),
       prisma.workoutTemplate.findMany({
         where: { userId },
         include: { exercises: { include: { exercise: { select: { name: true } } }, orderBy: { order: 'asc' } } },
@@ -160,6 +161,12 @@ export async function buildFullExportService(userId) {
           consentAt: personalisation.consentAt,
           privacyVersion: personalisation.privacyVersion,
         }
+      : null,
+    // The user's weekly training target, and whether they chose it or it was
+    // derived from their onboarding answer. Exported for the same reason it
+    // is erased: it's their preference, not our configuration.
+    weeklyGoal: weeklyGoal
+      ? { sessionsPerWeek: weeklyGoal.sessionsPerWeek, setByUser: weeklyGoal.setByUser, updatedAt: weeklyGoal.updatedAt }
       : null,
     sessions,
     routines: templates.map((t) => ({

@@ -84,17 +84,17 @@ enum LoggingType {
 // and no demo/video content until/unless the user (or a future admin tool)
 // fills them in.
 model Exercise {
-  id              Int         @id @default(autoincrement())
-  name            String
-  muscleGroup     MuscleGroup
-  equipment       Equipment
-  loggingType     LoggingType
-  primaryMuscles  String[]
+  id               Int         @id @default(autoincrement())
+  name             String
+  muscleGroup      MuscleGroup
+  equipment        Equipment
+  loggingType      LoggingType
+  primaryMuscles   String[]
   secondaryMuscles String[]
-  demoImageUrl    String?
-  createdByUserId Int?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  demoImageUrl     String?
+  createdByUserId  Int?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 
   formVideos        ExerciseFormVideo[]
   templateExercises TemplateExercise[]
@@ -112,15 +112,15 @@ model Exercise {
 // builds the watch/deep-link URL itself and stays free to change embed vs.
 // link-out behavior later without a data migration.
 model ExerciseFormVideo {
-  id             Int      @id @default(autoincrement())
-  exerciseId     Int
-  exercise       Exercise @relation(fields: [exerciseId], references: [id])
-  languageCode   String
-  youtubeVideoId String
-  title          String
-  channelName    String
+  id              Int      @id @default(autoincrement())
+  exerciseId      Int
+  exercise        Exercise @relation(fields: [exerciseId], references: [id])
+  languageCode    String
+  youtubeVideoId  String
+  title           String
+  channelName     String
   durationSeconds Int
-  order           Int     @default(0)
+  order           Int      @default(0)
   createdAt       DateTime @default(now())
 
   @@index([exerciseId, languageCode])
@@ -149,15 +149,15 @@ model WorkoutTemplate {
 // even though the v1 Create Routine screen doesn't expose pairing yet, so
 // adding that UI later needs no migration.
 model TemplateExercise {
-  id          Int             @id @default(autoincrement())
-  templateId  Int
-  template    WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  exerciseId  Int
-  exercise    Exercise        @relation(fields: [exerciseId], references: [id])
-  order       Int
-  targetSets  Int
-  targetReps  Int
-  restSeconds Int?
+  id            Int             @id @default(autoincrement())
+  templateId    Int
+  template      WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId    Int
+  exercise      Exercise        @relation(fields: [exerciseId], references: [id])
+  order         Int
+  targetSets    Int
+  targetReps    Int
+  restSeconds   Int?
   supersetGroup Int?
 
   @@index([templateId])
@@ -185,37 +185,37 @@ enum WorkoutType {
 // with endedAt null and startedAt older than ~24h is treated as abandoned by
 // the app (never auto-deleted server-side, just not resumed).
 model WorkoutSession {
-  id         Int              @id @default(autoincrement())
-  userId     Int
-  templateId Int?
-  template   WorkoutTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  id           Int              @id @default(autoincrement())
+  userId       Int
+  templateId   Int?
+  template     WorkoutTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   // Attendance attachment (Fitness+ delta, 2026-09-08) — set either by the
   // client at session start (if it already knows which booking it's for) or
   // by attendanceService.getOrCreateDraftForAttendance when booking-service's
   // recordAttendanceForWorkout fires on a verified check-in. bookingId is
   // null for attendance-SaaS member check-ins (memberAttendanceId path) and
   // for any session started with no known booking context at all.
-  bookingId  Int?
-  gymId      Int?
+  bookingId    Int?
+  gymId        Int?
   // 'YYYY-MM-DD' in the user's tz at entry — NOT derived from startedAt at
   // read time, so a session logged just after midnight (or backfilled while
   // travelling) keys to the day the user experienced, not the server's UTC
   // wall-date. Drives streak/adherence grouping once that lands.
-  localDate  String?
+  localDate    String?
   // Null until the quick-log sheet's finish step sets it (or a draft is
   // auto-created and never gets confirmed — stays null, excluded from
   // volume/streak math the same way a REST log excludes itself from volume).
-  type       WorkoutType?
+  type         WorkoutType?
   // 1-10, set once at finish; null for `type = rest` and for any
   // never-confirmed draft.
-  rpe        Int?
-  startedAt  DateTime         @default(now())
-  endedAt    DateTime?
+  rpe          Int?
+  startedAt    DateTime         @default(now())
+  endedAt      DateTime?
   // Set once, the first time a finished session successfully credits coins
   // (see gamificationService) — an idempotency guard so retrying/duplicating
   // the finish call can never double-credit, independent of the ledger's own
   // idempotencyKey check (belt-and-suspenders, cheap to keep in sync).
-  coinsAwarded Boolean        @default(false)
+  coinsAwarded Boolean          @default(false)
 
   exercises SessionExercise[]
 
@@ -367,19 +367,19 @@ enum BiometricSource {
 // so body photos stay on-device rather than living on a public Cloudinary
 // URL the way profile pictures do.
 model BiometricEntry {
-  id         Int             @id @default(autoincrement())
-  userId     Int
-  metric     BiometricMetric
+  id        Int             @id @default(autoincrement())
+  userId    Int
+  metric    BiometricMetric
   // Decimal(8,2) covers every metric on one column: 74.25 kg, 18.5 %,
   // 52 bpm, 420 min, 11,500 steps, 68.5 ms.
-  value      Decimal         @db.Decimal(8, 2)
+  value     Decimal         @db.Decimal(8, 2)
   // Stored per row rather than derived from the metric, so a later unit
   // change (lb, or sleep in hours) never silently reinterprets old rows.
-  unit       String
-  source     BiometricSource @default(manual)
-  localDate  String
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  unit      String
+  source    BiometricSource @default(manual)
+  localDate String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 
   @@unique([userId, metric, localDate])
   @@index([userId, metric, localDate])
@@ -508,5 +508,29 @@ model SuggestionFeedback {
   votedAt       DateTime?
 
   @@index([userId, shownAt])
+  @@schema("health")
+}
+
+// FR-04 — the user's own weekly session target, and the thing the home
+// ring is measured against.
+//
+// Before this, the ring compared everyone to a hardcoded 5 sessions a week
+// while `weeklyFrequencyIntent` (collected at onboarding, in auth-service)
+// went unread. Someone who said "once or twice a week" saw a ring stuck
+// near 40% forever, which inverts the product's own rule that charts
+// celebrate consistency rather than shame gaps.
+//
+// A row exists only once a target has been RESOLVED for the user — either
+// they set one, or one was derived from their onboarding intent and
+// persisted so the number stops moving under them. `setByUser` keeps those
+// two apart: a derived default may be re-derived if onboarding intent
+// changes, an explicit choice must never be silently overwritten.
+model WeeklyGoal {
+  userId          Int      @id
+  sessionsPerWeek Int
+  setByUser       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
   @@schema("health")
 }

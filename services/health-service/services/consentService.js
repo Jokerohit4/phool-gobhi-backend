@@ -73,6 +73,9 @@ export async function deleteAllDataService(userId) {
     // Personalisation (height/weight/injury zones/programming mode) goes
     // with the account too — including the consent record itself.
     prisma.personalisationProfile.deleteMany({ where: { userId } }),
+    // The weekly training target is the user's own preference, so it goes
+    // with the account like the rest of their record.
+    prisma.weeklyGoal.deleteMany({ where: { userId } }),
     prisma.healthConsent.deleteMany({ where: { userId } }),
   ]);
 }
