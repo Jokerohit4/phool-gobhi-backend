@@ -266,17 +266,29 @@ const DEFAULT_FEATURES = {
   // default OFF until an admin deliberately turns it on from /settings.
   // See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
   //
-  // Defaults flipped ON 2026-09-10 on the owner's instruction. These are
-  // only DEFAULTS: a stored app-config blob (written by the admin portal's
-  // /settings page) overrides them key by key, so the portal stays the live
-  // switch and this is what a fresh environment starts as.
-  badges: { enabled: true },
-  streaksCoins: { enabled: true },
-  challenges: { enabled: true },
-  buddyPairedStreaks: { enabled: true },
+  // These are only DEFAULTS: a stored app-config blob (written by the admin
+  // portal's /settings page) overrides them key by key, so the portal is the
+  // live switch and this is what an environment with no blob starts as.
+  //
+  // Flipped ON then back OFF on 2026-09-10, deliberately. The owner asked
+  // for all flags on; turning the DEFAULTS on turned out to be the wrong
+  // mechanism for it, because prod's blob says nothing about these keys and
+  // main was 73 commits behind. Promoting main with true defaults would have
+  // switched the entire programme on for real users at deploy - including
+  // the cron that sends push notifications - rather than landing it dark.
+  //
+  // So: features land OFF in a new environment and are enabled per
+  // environment from the portal, which is the one place that decision is
+  // visible and reversible without a deploy. Dev is unaffected by this
+  // revert for the four below plus healthMetrics: its blob already has them
+  // explicitly true.
+  badges: { enabled: false },
+  streaksCoins: { enabled: false },
+  challenges: { enabled: false },
+  buddyPairedStreaks: { enabled: false },
   // Exercise records, routines, workout sessions, watch/HealthKit sync —
   // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
-  healthMetrics: { enabled: true },
+  healthMetrics: { enabled: false },
   // Held separately from healthMetrics because these two needed legal
   // sign-off the rest of the health layer doesn't (see
   // docs/phool-gobhi-counsel-brief-20260908.html). Both flipped ON
@@ -293,8 +305,8 @@ const DEFAULT_FEATURES = {
   //   recapSharing — the only feature producing an artifact meant to leave the
   //     platform. It carries no PII by construction, but that claim is worth
   //     checking before the card is shareable.
-  healthPersonalisation: { enabled: true },
-  recapSharing: { enabled: true },
+  healthPersonalisation: { enabled: false },
+  recapSharing: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
