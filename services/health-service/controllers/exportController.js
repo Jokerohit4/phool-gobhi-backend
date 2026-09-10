@@ -1,9 +1,12 @@
 import * as exportService from '../services/exportService.js';
+import { recordAudit } from '../services/auditService.js';
 
 // FR-16 — the user's own data only, always scoped to req.userId; there's no
 // parameter here that could widen it to anyone else's rows.
 export const exportMyData = async (req, res) => {
   try {
+    // Self-service: actor and subject are the same person.
+    recordAudit({ userId: req.userId, actorId: req.userId, action: 'export', dataType: 'sessions+biometrics' });
     const { from, to, format } = req.query || {};
     for (const [name, value] of [['from', from], ['to', to]]) {
       if (value !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -36,6 +39,11 @@ export const exportUserInternal = async (req, res) => {
     if (!Number.isInteger(userId)) {
       return res.status(400).json({ error: 'A numeric userId is required' });
     }
+    // Fan-out from auth-service's platform export. The actor is the user
+    // themselves - this path is only ever reached by their own request -
+    // but it is logged separately because it returns strictly more than
+    // the self-service export above.
+    recordAudit({ userId, actorId: userId, action: 'export', dataType: 'all' });
     const data = await exportService.buildFullExportService(userId);
     res.json({ data });
   } catch (err) {

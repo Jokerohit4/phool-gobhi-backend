@@ -100,3 +100,21 @@ export async function getStreakService(userId) {
   const streak = await prisma.userStreak.findUnique({ where: { userId } });
   return streak || { userId, currentStreak: 0, longestStreak: 0, lastQualifiedWeekStart: null };
 }
+
+// Read side of the attendance log, for health-service's "you attended but
+// haven't logged" surfaces (FR-03's unlogged feed and FR-08's log-nudge).
+//
+// Lives here rather than being re-derived in health-service because this
+// table is the platform's single unified attendance signal - booking
+// check-ins, self-check-ins and attendance-SaaS member check-ins all land
+// in it, and a second implementation would inevitably cover fewer of them.
+export async function listAttendanceSinceService(since, { userId } = {}) {
+  return prisma.attendanceEventLog.findMany({
+    where: {
+      attendedAt: { gte: since },
+      ...(userId ? { userId } : {}),
+    },
+    select: { userId: true, bookingId: true, gymId: true, attendedAt: true, source: true },
+    orderBy: { attendedAt: 'asc' },
+  });
+}

@@ -13,6 +13,7 @@ import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackContro
 import * as exportCtrl from '../controllers/exportController.js';
 import * as goalCtrl from '../controllers/goalController.js';
 import * as statsCtrl from '../controllers/statsController.js';
+import * as nudgeCtrl from '../controllers/nudgeController.js';
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
@@ -162,6 +163,13 @@ router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptio
 // counts only, no per-user rows.
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
 
+// ---- Unlogged attendance (FR-03) + nudges (FR-08) -----------------------
+// "You were at the gym and haven't said what you did" - the read that turns
+// the attendance attachment into a prompt.
+router.get('/unlogged', ...gated, nudgeCtrl.getUnlogged);
+router.get('/nudges', ...gated, nudgeCtrl.getNudgeSettings);
+router.put('/nudges', ...gated, nudgeCtrl.updateNudgeSettings);
+
 // ---- Progress stats (FR-06) ---------------------------------------------
 // Everything the Progress screen draws, in one request, computed from the
 // same range builder the export uses so the two can never disagree.
@@ -186,5 +194,10 @@ router.put('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.update
 // Deliberately NOT flag-gated: purpose limitation is an obligation, not a
 // feature, so it must keep running whatever else is switched off.
 router.post('/internal/retention/sweep', requireInternal, retentionCtrl.runRetentionSweepInternal);
+// Nudge sweep, run by a scheduled workflow. NOT flag-gated on healthMetrics
+// at the route: the sweep's own candidate queries return nothing while the
+// feature is off, and a 403 here would make a broken cron look like a quiet
+// one in the CI log.
+router.post('/internal/nudges/sweep', requireInternal, nudgeCtrl.runNudgeSweepInternal);
 
 export default router;

@@ -1,0 +1,119 @@
+name: Send health nudges (FR-08)
+
+# Fires health-service's nudge sweep (runNudgeSweepService, via POST
+# /internal/nudges/sweep): the log reminder for someone who checked in and
+# never said what they did, and the comeback nudge for someone who used to
+# log and has gone quiet for a week.
+#
+# Scheduled from GitHub Actions rather than an in-process timer for the same
+# reason as sweep-health-retention.yml and reconcile-razorpay-orders.yml:
+# Cloud Run throttles CPU to near-zero between requests, so a setInterval
+# callback never gets enough CPU to open a Postgres connection.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS CADENCE, AND WHY IT IS NOT THE SPEC'S
+#
+# Tech S6.3 specifies a 5-minute cron so the log nudge lands exactly 90
+# minutes after a check-in. GitHub Actions cannot honour that: its scheduler
+# is best-effort and routinely runs 10-30 minutes late, and a 5-minute cron
+# would also mean ~288 runs a day against a Neon free-tier compute budget
+# that has already been hit once (the 2026-08-21 compute-cap incident).
+#
+# So the promise is relaxed deliberately: the sweep runs every two hours
+# between 09:00 and 21:00 IST, and the nudge says "log today's session"
+# rather than anything implying it knows how long ago you left. A reminder
+# arriving 90 or 150 minutes after a workout reads identically to the person
+# receiving it; one arriving at 03:00 does not, which is what the quiet-hours
+# guard in nudgeService is for. The service checks quiet hours itself rather
+# than trusting the cron - a delayed run must not turn into a 22:30 push.
+#
+# Every run is idempotent in the way that matters: the frequency guards (max
+# 3/week, never two within 24h, per-user opt-out) mean a double run sends
+# nothing the second time. A missed run costs one reminder.
+# ---------------------------------------------------------------------------
+#
+# READ THIS BEFORE ASSUMING IT RUNS
+#
+# GitHub Actions `schedule` triggers fire ONLY from the repository's DEFAULT
+# branch. This repo's default is `main`, and `main` lags `dev` - health-service
+# does not exist there yet. Until this file reaches `main` the cron is inert
+# and the only way to run the sweep is the workflow_dispatch button. That is
+# not hypothetical: close-weekly-streak.yml and attendance-saas-reengagement.yml
+# had both never executed once for exactly this reason as of 2026-09-09.
+#
+# Note also that nudges send nothing at all while the healthMetrics flag is
+# off, because the candidate queries have no sessions and no attendance to
+# find. That is the intended order: flags on, then a real user, then nudges.
+
+on:
+  schedule:
+    # 03:30, 05:30 ... 15:30 UTC = 09:00 ... 21:00 IST. Inside quiet hours by
+    # construction, with the service double-checking.
+    - cron: '30 3,5,7,9,11,13,15 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  nudge:
+    strategy:
+      matrix:
+        env: [dev]   # prod deliberately absent until health-service is promoted AND the flag is on
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # health-service-secrets-<env> JSON payload (the standalone
+      # internal-api-key-<env> secrets were retired in the 2026-08-26
+      # consolidation).
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/health-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "health-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required: x-internal-key satisfies the app's
+      # requireInternal check, the Google-signed ID token satisfies Cloud
+      # Run's IAM invoker check. Omitting the token yields a Google 403 HTML
+      # page rather than an app error - how process-subscription-lifecycle.yml
+      # failed silently every day until 2026-09-09.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      # The response reports what was sent AND what was suppressed, so the
+      # run log shows the guards working rather than just a silent zero.
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/nudges/sweep"

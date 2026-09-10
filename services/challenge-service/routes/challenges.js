@@ -51,6 +51,8 @@ router.post('/admin/sponsors', requireRole('gobhi'), ctrl.createSponsorAdmin);
 // independently. A cron fires the weekly streak close; other backend
 // services call the coin credit/debit pair for redemption/reward flows.
 router.post('/internal/attendance-events', requireInternal, ctrl.recordAttendanceEventInternal);
+// Read side, for health-service's unlogged feed and log-nudge.
+router.get('/internal/attendance-events', requireInternal, ctrl.listAttendanceInternal);
 router.post('/internal/streak/close-week', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.closeWeekInternal);
 router.post('/internal/coins/:userId/credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditCoinsInternal);
 router.post('/internal/coins/:userId/debit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.debitCoinsInternal);

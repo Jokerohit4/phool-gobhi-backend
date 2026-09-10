@@ -290,6 +290,28 @@ export const updateCoinCatalogItemAdmin = async (req, res) => {
 // recording (streaksCoins flag) and off-peak-challenge progress (challenges
 // flag). Each is gated on its OWN flag rather than the route as a whole, so
 // turning one off doesn't silently also disable the other.
+// Read side of the same log. health-service asks "who attended since X"
+// to build its unlogged feed (FR-03) and to pick log-nudge candidates
+// (FR-08), rather than re-deriving attendance from booking-service and
+// missing the self-check-in and member-checkin paths this table already
+// unifies.
+//
+// Deliberately NOT flag-gated on streaksCoins. The rows only exist when
+// that flag is on, so gating would be redundant, and a 403 here would make
+// health-service's feed look empty rather than genuinely quiet - a
+// difference worth keeping visible.
+export const listAttendanceInternal = async (req, res) => {
+  try {
+    const hours = Math.min(Math.max(parseInt(req.query?.hours ?? '48', 10) || 48, 1), 720);
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const userId = req.query?.userId ? parseInt(req.query.userId, 10) : undefined;
+    const events = await streakService.listAttendanceSinceService(since, { userId });
+    res.json({ data: events });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const recordAttendanceEventInternal = async (req, res) => {
   try {
     const { userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey } = req.body || {};

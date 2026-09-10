@@ -36,6 +36,16 @@ model HealthConsent {
   revokedAt     DateTime?
   policyVersion String
   platform      Platform
+  // FR-09. Which classes of health data the grant covers. Today the only
+  // one the product can act on is `logs` - nothing shares health data
+  // with a coach, a partner or a leaderboard, because none of those
+  // surfaces exist (FR-21 is deferred).
+  //
+  // So this is storage and a gate, not a settings screen: a scope is
+  // added when the surface needing it ships, and the app only offers a
+  // toggle for a scope that can change something. Offering "share with
+  // your coach" today would imply a data flow that cannot happen.
+  scopes        String[]  @default(["logs"])
 
   @@schema("health")
 }
@@ -209,6 +219,12 @@ model WorkoutSession {
   // 1-10, set once at finish; null for `type = rest` and for any
   // never-confirmed draft.
   rpe          Int?
+  // FR-23. A client-generated id for one logical save, so replaying a
+  // queued log after a reconnect returns the session that already exists
+  // instead of creating a second one. Null for anything created
+  // server-side (the attendance draft) or by a client old enough not to
+  // send one.
+  clientRef    String?          @unique
   startedAt    DateTime         @default(now())
   endedAt      DateTime?
   // Set once, the first time a finished session successfully credits coins
@@ -532,5 +548,62 @@ model WeeklyGoal {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@schema("health")
+}
+
+// FR-08. Which nudge types a user has switched off. A row means "stop
+// sending me this one" — absence means allowed, so the default is opt-in
+// without needing a row per user per type.
+enum NudgeType {
+  log
+  comeback
+
+  @@schema("health")
+}
+
+model NudgeOptOut {
+  userId Int
+  type   NudgeType
+  at     DateTime  @default(now())
+
+  @@id([userId, type])
+  @@schema("health")
+}
+
+// Every nudge actually sent. This is not analytics — it is what the
+// frequency guards read: max 3 a week, never two within 24 hours. Without a
+// record of what went out there is no way to enforce either, and the
+// failure mode of getting it wrong is push-spamming someone.
+model NudgeLog {
+  id     Int       @id @default(autoincrement())
+  userId Int
+  type   NudgeType
+  sentAt DateTime  @default(now())
+
+  @@index([userId, sentAt])
+  @@schema("health")
+}
+
+// Health+ FR-04 / Tech §08 — both blueprints call this P0 and neither
+// shipped it. Every read, write, export and delete of health data, with
+// who did it and when.
+//
+// Deliberately NOT a general application log: it exists so a user (or a
+// regulator) can be told who touched their health record, which means it
+// records the ACTOR and never the data. No values, no marker names, no
+// biometric readings — an audit trail that copies the sensitive rows it is
+// auditing has doubled the exposure it was meant to control.
+model HealthDataAuditLog {
+  id       Int      @id @default(autoincrement())
+  // Whose record was touched.
+  userId   Int
+  // Who touched it — the same id for a self-service action, a staff id
+  // when an admin reads someone's data, null for a scheduled job.
+  actorId  Int?
+  action   String // read | write | export | delete
+  dataType String // sessions | biometrics | personalisation | consent | all
+  at       DateTime @default(now())
+
+  @@index([userId, at])
   @@schema("health")
 }

@@ -1,4 +1,5 @@
 import * as consentService from '../services/consentService.js';
+import { recordAudit } from '../services/auditService.js';
 
 export const grantConsent = async (req, res) => {
   try {
@@ -37,6 +38,10 @@ export const eraseUserInternal = async (req, res) => {
       return res.status(400).json({ error: 'A numeric userId is required' });
     }
     await consentService.deleteAllDataService(userId);
+    // Written AFTER the delete, and deliberately not swept away with it:
+    // the audit row is how an erasure can later be evidenced, so erasing
+    // it alongside the data would destroy the proof.
+    recordAudit({ userId, actorId: null, action: 'delete', dataType: 'all' });
     res.json({ data: { erased: true } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -48,6 +53,7 @@ export const eraseUserInternal = async (req, res) => {
 export const deleteAllMyData = async (req, res) => {
   try {
     await consentService.deleteAllDataService(req.userId);
+    recordAudit({ userId: req.userId, actorId: req.userId, action: 'delete', dataType: 'all' });
     res.json({ data: { deleted: true } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

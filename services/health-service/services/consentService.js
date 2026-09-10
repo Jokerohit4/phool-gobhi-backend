@@ -76,6 +76,19 @@ export async function deleteAllDataService(userId) {
     // The weekly training target is the user's own preference, so it goes
     // with the account like the rest of their record.
     prisma.weeklyGoal.deleteMany({ where: { userId } }),
+    // Nudge suppression and the send log: per-user behavioural rows with
+    // no purpose once the account is gone.
+    prisma.nudgeOptOut.deleteMany({ where: { userId } }),
+    prisma.nudgeLog.deleteMany({ where: { userId } }),
+    // NOT deleted here: HealthDataAuditLog. It is the record of who touched
+    // this person's health data, which is precisely the thing an erasure
+    // request may later need to be evidenced against - deleting the audit
+    // trail as part of the erasure would erase the proof the erasure
+    // happened. It carries no health values by construction (actor, action,
+    // data class, timestamp), and its userId stops resolving to a person
+    // once auth-service's User row is gone. Same reasoning the financial
+    // records in wallet/booking-service already rely on; see the
+    // three-bucket note in retentionService.js.
     prisma.healthConsent.deleteMany({ where: { userId } }),
   ]);
 }

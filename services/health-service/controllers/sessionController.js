@@ -4,9 +4,20 @@ import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 
 export const startSession = async (req, res) => {
   try {
-    const { templateId, bookingId, gymId, attendedAt } = req.body || {};
+    const { templateId, bookingId, gymId, attendedAt, clientRef } = req.body || {};
     const attendance = bookingId || gymId ? { bookingId: bookingId ? parseInt(bookingId) : null, gymId: gymId ? parseInt(gymId) : null, attendedAt } : undefined;
-    const session = await workoutSessionService.startSessionService(req.userId, templateId ? parseInt(templateId) : null, attendance);
+    // clientRef (FR-23) makes the create idempotent for the offline queue.
+    // Length-capped because it is client-supplied and lands in a unique
+    // index; the shape itself is the client's business (a UUID today).
+    if (clientRef !== undefined && (typeof clientRef !== 'string' || clientRef.length < 8 || clientRef.length > 64)) {
+      return res.status(400).json({ error: 'clientRef must be a string of 8-64 characters' });
+    }
+    const session = await workoutSessionService.startSessionService(
+      req.userId,
+      templateId ? parseInt(templateId) : null,
+      attendance,
+      clientRef,
+    );
     res.status(201).json({ data: serializeDecimals(session) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

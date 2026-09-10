@@ -69,7 +69,15 @@ function localDateIST(date) {
 // optional {bookingId, gymId} the client already knows about (e.g. starting
 // a session from the gym-detail screen mid-visit) — usually left undefined
 // and filled in later by getOrCreateDraftForAttendanceService instead.
-export async function startSessionService(userId, templateId, attendance) {
+// FR-23. `clientRef` is a client-generated id for ONE logical save. A log
+// queued offline and replayed on reconnect sends the same ref, so the
+// retry returns the session it already created instead of a duplicate.
+//
+// Checked before insert AND caught on the unique violation after it: two
+// replays racing each other both pass the check, and only the loser sees
+// P2002. Without the second half, a double-tap on a flaky connection still
+// produces two sessions - the exact failure the column exists to prevent.
+export async function startSessionService(userId, templateId, attendance, clientRef) {
   const attachData = attendance
     ? {
         bookingId: attendance.bookingId ?? null,
@@ -77,8 +85,41 @@ export async function startSessionService(userId, templateId, attendance) {
         localDate: localDateIST(attendance.attendedAt ?? new Date()),
       }
     : {};
+
+  if (clientRef) {
+    const existing = await prisma.workoutSession.findUnique({
+      where: { clientRef },
+      include: includeFull,
+    });
+    // Scoped to the caller: a ref is client-generated, so treating someone
+    // else's as "already done" would hand them another user's session.
+    if (existing && existing.userId === userId) return existing;
+    if (existing) {
+      const err = new Error('clientRef already used');
+      err.status = 409;
+      throw err;
+    }
+  }
+
+  const createData = { userId, ...attachData, ...(clientRef ? { clientRef } : {}) };
+
+  try {
+    return await createSessionRow(createData, templateId, userId);
+  } catch (err) {
+    if (clientRef && err?.code === 'P2002') {
+      const raced = await prisma.workoutSession.findUnique({
+        where: { clientRef },
+        include: includeFull,
+      });
+      if (raced && raced.userId === userId) return raced;
+    }
+    throw err;
+  }
+}
+
+async function createSessionRow(createData, templateId, userId) {
   if (!templateId) {
-    return prisma.workoutSession.create({ data: { userId, ...attachData }, include: includeFull });
+    return prisma.workoutSession.create({ data: createData, include: includeFull });
   }
   const template = await prisma.workoutTemplate.findUnique({
     where: { id: templateId },
@@ -91,9 +132,8 @@ export async function startSessionService(userId, templateId, attendance) {
   }
   const session = await prisma.workoutSession.create({
     data: {
-      userId,
+      ...createData,
       templateId,
-      ...attachData,
       exercises: {
         create: template.exercises.map((te) => ({
           exerciseId: te.exerciseId,
