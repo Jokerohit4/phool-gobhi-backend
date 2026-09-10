@@ -12,6 +12,7 @@ import * as personalisationCtrl from '../controllers/personalisationController.j
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
 import * as goalCtrl from '../controllers/goalController.js';
+import * as consistencyStreakCtrl from '../controllers/consistencyStreakController.js';
 import * as statsCtrl from '../controllers/statsController.js';
 import * as nudgeCtrl from '../controllers/nudgeController.js';
 import * as recapCtrl from '../controllers/recapController.js';
@@ -181,6 +182,16 @@ router.get('/stats', ...gated, statsCtrl.getStats);
 // streak week challenge-service keeps.
 router.get('/goal', ...gated, goalCtrl.getGoal);
 router.put('/goal', ...gated, goalCtrl.updateGoal);
+
+// ---- Consistency streak (home track, D-01) ------------------------------
+// The streak for people who train at home, derived from their own logged
+// sessions. Pays no coins and grants no milestone — that stays with
+// challenge-service's verified, check-in-backed streak, because a coin
+// redeems for a real gym pass and a self-reported log must never mint one.
+// Lives here rather than in challenge-service so there is no import path
+// from this number to the coin ledger. Derived on read, so there's nothing
+// extra to erase or export beyond the sessions it comes from.
+router.get('/consistency-streak', ...gated, consistencyStreakCtrl.getConsistencyStreak);
 
 // ---- Retention policy (DPDPA purpose limitation) ------------------------
 // Customer-readable copy of the policy, for the in-app "what we keep and for
