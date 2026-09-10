@@ -198,6 +198,7 @@ jobs:
             --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
             $([ "${{ steps.svcmeta.outputs.allow-unauthenticated }}" = "true" ] && echo --allow-unauthenticated || echo --no-allow-unauthenticated) \
             --quiet \
+            --service-account="${{ steps.flags.outputs.service-account }}" \
             --set-env-vars="${{ steps.flags.outputs.env-vars }}" \
             --set-secrets="${{ steps.flags.outputs.secrets }}"
 

@@ -1,9 +1,14 @@
 {
   "project": "phool-gobhi",
   "region": "asia-south1",
+  "runtimeServiceAccounts": {
+    "dev": "1077801427223-compute@developer.gserviceaccount.com",
+    "prod": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com"
+  },
   "services": {
     "gateway": {
       "cloudRunServiceBaseName": "gateway",
+      "runtimeServiceAccount": "gateway-sa@phool-gobhi.iam.gserviceaccount.com",
       "sourceDir": ".",
       "hasPrisma": false,
       "healthCheckGuard": false,
