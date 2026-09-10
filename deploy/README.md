@@ -50,11 +50,12 @@ difference — so every inter-service URL here is standardized on the canonical 
 form. The first CI deploy of most services will therefore update a handful of plain env
 vars to match; this is a cosmetic normalization, not a behavior change.
 
-## Consolidated secrets (dev only, as of 2026-08-21)
+## Consolidated secrets (dev + prod, as of 2026-08-21)
 
-Every dev service's `env.dev.secrets` block is now a single entry:
-`"SECRETS_JSON": "<service>-secrets"` (resolves to `<service>-secrets-dev:latest`).
-That one Secret Manager secret holds a JSON object with all of that service's actual
+Every service's `env.<dev|prod>.secrets` block is now a single entry:
+`"SECRETS_JSON": "<service>-secrets"` (resolves to `<service>-secrets-dev:latest` or
+`<service>-secrets-prod:latest`). That one Secret Manager secret holds a JSON object
+with all of that service's actual
 secret keys (`DATABASE_URL`, `JWT_SECRET`, etc.) as string values. Each service's
 entrypoint (`app.js`/`index.js`) imports `./bootstrap-secrets.js` as its **first**
 import — before `dotenv`, before anything else — which parses `SECRETS_JSON` and
@@ -68,16 +69,19 @@ Why: Cloud Run re-mounts every referenced secret on each cold start, and with
 charges from repeated individual-secret fetches. One secret per service cuts that
 by 5-10x.
 
-**To add a new secret to a dev service**: don't create a new individual Secret
+**To add a new secret to a service**: don't create a new individual Secret
 Manager secret and add it to `services.json`'s `secrets` map — that key would never
 reach the container, since only `SECRETS_JSON` is mounted. Instead add the key to
-the existing `<service>-secrets-dev` secret's JSON payload
-(`gcloud secrets versions add <service>-secrets-dev --data-file=-` with the full
-updated JSON) and just read `process.env.YOUR_NEW_KEY` in code as normal — no
-`services.json` change needed for dev.
+the existing `<service>-secrets-<dev|prod>` secret's JSON payload
+(`gcloud secrets versions add <service>-secrets-<dev|prod> --data-file=-` with the
+full updated JSON, keeping every existing key — this replaces the whole payload,
+it doesn't merge) and just read `process.env.YOUR_NEW_KEY` in code as normal — no
+`services.json` change needed.
 
-`env.prod.secrets` is untouched (still one Secret Manager secret per key) —
-prod hasn't been migrated to this pattern yet.
+The old individual per-key secrets (`jwt-secret-dev`, `internal-api-key-prod`,
+etc.) were deliberately left in place, not deleted, as a rollback path — reverting
+just needs `services.json`'s `secrets` map restored to the old per-key form, no
+secret recreation.
 
 ## One resolved discrepancy
 
