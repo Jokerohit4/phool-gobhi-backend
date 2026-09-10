@@ -59,6 +59,18 @@ jobs:
             echo "scripts/check-analytics-events.cjs not present on this branch — skipping."
           fi
 
+      # An undeclared import builds fine and then exits(1) on boot, so the
+      # deploy fails at "container failed to start and listen on PORT" with
+      # the real cause buried in Cloud Logging. Cheap to check here, expensive
+      # to diagnose there. Guarded the same way as the analytics check above:
+      # absent on a branch means not-applicable, not a permanent block.
+      - run: |
+          if [ -f "deploy/scripts/check-undeclared-imports.cjs" ]; then
+            node deploy/scripts/check-undeclared-imports.cjs
+          else
+            echo "deploy/scripts/check-undeclared-imports.cjs not present on this branch — skipping."
+          fi
+
   # PR events never deploy (the WIF provider's attribute-condition wouldn't
   # accept a PR merge ref anyway) — instead just prove each changed service's
   # Dockerfile still builds, catching a broken install/`prisma generate`
