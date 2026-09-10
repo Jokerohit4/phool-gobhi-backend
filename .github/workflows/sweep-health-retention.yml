@@ -1,0 +1,114 @@
+name: Sweep expired health telemetry (DPDPA purpose limitation)
+
+# Fires health-service's retention sweep (runRetentionSweepService, via POST
+# /internal/retention/sweep) — the thing that makes DPDPA purpose limitation
+# real rather than a comment in a schema file. Without a caller, the endpoint
+# exists and nothing ever expires.
+#
+# Scheduled from GitHub Actions rather than an in-process timer for the same
+# reason as reconcile-razorpay-orders.yml: Cloud Run throttles CPU to
+# near-zero between requests unless cpu-throttling is disabled (it isn't for
+# this service), so a setInterval callback never gets enough CPU to open a
+# Postgres connection. A genuine incoming request gets a full CPU allocation.
+#
+# The sweep is idempotent and deletes by age, so a missed run costs nothing
+# and a double run finds nothing the second time. Weekly is deliberate: the
+# default window is 180 days, so daily runs would be 179 days of no-ops
+# against a Neon free-tier compute budget that has already been hit once
+# (see the 2026-08-21 compute-cap incident that cut reconcile 15min -> hourly).
+#
+# It sweeps purpose-limited telemetry ONLY — never a user's own training
+# history, never a financial record. See health-service's retentionService.js
+# for the three-bucket reasoning, and its test suite for the assertion that
+# keeps it that way.
+#
+# NOT feature-flagged, deliberately: purpose limitation is an obligation, not
+# a feature, so it must keep running whatever else is switched off.
+#
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE ASSUMING IT RUNS
+#
+# GitHub Actions `schedule` triggers fire ONLY from the repository's DEFAULT
+# branch. This repo's default is `main`, and `main` currently lags `dev` by
+# dozens of commits — health-service does not exist there yet. Until this file
+# reaches `main`, the cron below is inert and the only way to run the sweep is
+# the workflow_dispatch button.
+#
+# That is not hypothetical: close-weekly-streak.yml and
+# attendance-saas-reengagement.yml were both added on `dev` and, as of
+# 2026-09-09, had never executed a single time for exactly this reason.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    - cron: '30 1 * * 1'   # 01:30 UTC every Monday (07:00 IST)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sweep:
+    strategy:
+      matrix:
+        env: [dev, prod]
+      fail-fast: false   # health-service is dev-only today; the prod leg is expected to fail until it is promoted
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # health-service-secrets-<env> JSON payload, not as its own Secret
+      # Manager entry — the standalone internal-api-key-<env> secrets were
+      # retired in the 2026-08-26 consolidation (only internal-api-key-dev
+      # survives as a leftover, and nothing new should reference it).
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/health-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "health-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required and neither substitutes for the other: the
+      # x-internal-key header satisfies the app's requireInternal check, and
+      # this Google-signed ID token satisfies Cloud Run's IAM invoker check on
+      # a no-allow-unauthenticated service. Omitting the token yields a
+      # Google-generated 403 HTML page rather than an app error — which is
+      # precisely how process-subscription-lifecycle.yml failed silently every
+      # day until 2026-09-09.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      # The response names what was deleted AND what was deliberately
+      # retained, so the run log is the audit trail for the sweep.
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/retention/sweep"

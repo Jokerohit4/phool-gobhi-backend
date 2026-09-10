@@ -39,4 +39,17 @@ router.get('/blocks', requireAuth, ctrl.listBlocked);
 // cache from drifting (see services/buddyService.js#syncProfileFromAuth).
 router.post('/internal/profile-sync/:userId', requireInternal, ctrl.syncProfile);
 
+// Gamification Phase 4 (paired streaks) — challenge-service calls this to
+// verify a customer-supplied matchId is real, active, and includes them
+// before letting them opt a pair into a shared streak.
+router.get('/internal/matches/:matchId/verify/:userId', requireInternal, ctrl.verifyMatchMembership);
+
+// DPDPA erasure. Deliberately NOT feature-flagged: a user must always be
+// able to have their data deleted, whatever else is switched off.
+router.post('/internal/erase/:userId', requireInternal, ctrl.eraseUser);
+// DPDPA access right (s.11) - the read twin of /internal/erase above. Called
+// by auth-service's platform-wide export fan-out; internal only, never
+// reachable through the gateway.
+router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
+
 export default router;

@@ -3,9 +3,16 @@
 
   "signup_completed":            { "source": "server", "service": "auth-service" },
   "login_completed":             { "source": "server", "service": "auth-service" },
+  "attendance_saas_reengagement_sent": { "source": "server", "service": "auth-service", "since": "2026-08-20", "notes": "attendance-SaaS wedge — nudge sent to a gym-linked signup with no booking/subscription activity" },
+  "partner_bank_settlement_recorded":  { "source": "server", "service": "wallet-service", "since": "2026-08-20", "notes": "admin marked a partner's pending attendance-SaaS bank settlement as paid (manual bank transfer, outside the app)" },
   "staff_account_created":       { "source": "server", "service": "auth-service" },
   "staff_account_revoked":       { "source": "server", "service": "auth-service" },
   "staff_account_reactivated":   { "source": "server", "service": "auth-service" },
+  "trainer_account_created":      { "source": "server", "service": "auth-service", "since": "2026-08-21", "notes": "partner created a gym-employed trainer account" },
+  "trainer_account_deactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
+  "trainer_account_reactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
+  "trainer_checked_in":           { "source": "server", "service": "booking-service", "since": "2026-08-21" },
+  "training_session_logged":      { "source": "server", "service": "booking-service", "since": "2026-08-21", "notes": "trainer self-logged which attended customer booking they trained" },
 
   "gym_created":                 { "source": "server", "service": "gym-service" },
   "gym_approved":                { "source": "server", "service": "gym-service" },
@@ -20,6 +27,7 @@
   "checkin_requested":           { "source": "server", "service": "booking-service" },
   "attendance_verified":         { "source": "server", "service": "booking-service", "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'" },
   "attendance_slot_mismatch_confirmed": { "source": "server", "service": "booking-service", "since": "2026-07-29", "notes": "fires instead of attendance_verified when a partner scans a booking's QR before its session window opens and confirms shifting the slot time" },
+  "badge_earned":                { "source": "server", "service": "booking-service", "since": "2026-08-18", "notes": "gamification wave 1 — fires on selfCheckIn when this is the customer's first-ever attended booking at gymId" },
 
   "wallet_topup_order_created":  { "source": "server", "service": "wallet-service" },
   "wallet_topup_succeeded":      { "source": "server", "service": "wallet-service" },
@@ -48,6 +56,8 @@
   "checkin_tapped":                 { "source": "client", "apps": ["phool_gobhi"] },
   "topup_tapped":                   { "source": "client", "apps": ["phool_gobhi"] },
   "referral_shared":                { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-03", "notes": "Share your code tapped on the Refer & Earn screen" },
+  "map_explored_opened":            { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-18", "notes": "gamification wave 1 — fog-of-war explore map opened" },
+  "badge_shelf_viewed":             { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-18", "notes": "gamification wave 1 — badge shelf opened" },
   "session_started":                { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23", "notes": "as of 2026-08-15, the website's copy also carries properties.channel ('direct'|'organic_search'|'social'|'referral'|'campaign:<utm_source>'), referrer_host, utm_source/medium/campaign/term/content, and landing_path — captured once at the very first paint of the session, before any client-side navigation — backing the admin's traffic-source breakdown" },
   "session_ended":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23" },
   "update_required_shown":          { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"], "notes": "force-update splash screen shown (min version gate)" },

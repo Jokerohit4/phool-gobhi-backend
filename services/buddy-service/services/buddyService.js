@@ -396,6 +396,19 @@ async function assertParticipant(matchId, userId) {
   return match;
 }
 
+// Used by challenge-service (internal) to authorize a paired-streak opt-in —
+// a customer only ever sends a matchId they already saw in their own
+// matches list, never an arbitrary otherUserId, so this is what turns that
+// matchId into a verified, mutual otherUserId rather than trusting the
+// client's word for it.
+export async function verifyActiveMatchMembership(matchId, userId) {
+  const match = await prisma.match.findUnique({ where: { id: Number(matchId) } });
+  if (!match || match.status !== 'active') return { matched: false };
+  if (match.userLowId !== userId && match.userHighId !== userId) return { matched: false };
+  const otherUserId = match.userLowId === userId ? match.userHighId : match.userLowId;
+  return { matched: true, otherUserId };
+}
+
 export async function getMatches(userId) {
   const matches = await prisma.match.findMany({
     where: { status: 'active', OR: [{ userLowId: userId }, { userHighId: userId }] },

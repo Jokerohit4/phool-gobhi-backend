@@ -56,7 +56,30 @@ jobs:
           echo "::add-mask::$KEY"
           echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
 
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "wallet-service-dev" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Cloud Run's IAM invoker check needs a Google-signed ID token scoped to
+      # the target service's own URL — the x-internal-key header alone only
+      # satisfies the app-level requireInternal check, which the request never
+      # reaches. Without this step every run returned a Google-generated
+      # "403 Forbidden" HTML page, which it had been doing daily since this
+      # workflow was written (confirmed from run logs 2026-09-09). Mirrors
+      # reconcile-razorpay-orders.yml, which had it from the start and passes.
+      - id: lapsedauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
       - run: |
           curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.lapsedauth.outputs.id_token }}" \
             -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
-            https://wallet-service-dev-1077801427223.asia-south1.run.app/internal/subscriptions/process-lapsed
+            "${{ steps.svcurl.outputs.url }}/internal/subscriptions/process-lapsed"

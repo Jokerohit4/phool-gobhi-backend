@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { VALID_GENDERS, VALID_FITNESS_GOALS } from '../constants/userEnums.js';
+import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_EXPERIENCE_LEVELS, VALID_FREQUENCY_INTENTS } from '../constants/userEnums.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
@@ -150,7 +150,11 @@ function formatUser(user) {
     gender: user.gender || null,
     dateOfBirth: user.dateOfBirth || null,
     fitnessGoals: user.fitnessGoals || [],
+    experienceLevel: user.experienceLevel || null,
+    weeklyFrequencyIntent: user.weeklyFrequencyIntent || null,
     referralCode: user.referralCode || null,
+    linkedGymId: user.linkedGymId || null,
+    leaderboardOptIn: user.leaderboardOptIn,
   };
 }
 

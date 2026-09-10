@@ -1,7 +1,8 @@
 
+import { buildFullExportService } from '../services/exportService.js';
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
@@ -63,6 +64,29 @@ const login = async (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
+  }
+};
+
+// DPDPA access right (s.11). Always scoped to req.user.id — there is no
+// parameter here that could widen it to anyone else's record, which is why
+// this lives on the authenticated session and the per-service twins are
+// internal-only.
+//
+// ?format=download sets Content-Disposition so a browser saves the file
+// instead of rendering it; the default returns JSON inline so an app can
+// display it. Same document either way.
+const exportMyData = async (req, res) => {
+  try {
+    const data = await buildFullExportService(req.user.id);
+    if (req.query?.format === 'download') {
+      const stamp = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="phool-gobhi-my-data-${stamp}.json"`);
+      return res.send(JSON.stringify(data, null, 2));
+    }
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Unknown error' });
   }
 };
 
@@ -238,6 +262,51 @@ const DEFAULT_FEATURES = {
   buddy: { enabled: true },
   otp: { provider: 'firebase' },
   profileCompletionBonus: { amount: 20 },
+  // Gamification suite — each phase ships behind its own kill-switch,
+  // default OFF until an admin deliberately turns it on from /settings.
+  // See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
+  //
+  // These are only DEFAULTS: a stored app-config blob (written by the admin
+  // portal's /settings page) overrides them key by key, so the portal is the
+  // live switch and this is what an environment with no blob starts as.
+  //
+  // Flipped ON then back OFF on 2026-09-10, deliberately. The owner asked
+  // for all flags on; turning the DEFAULTS on turned out to be the wrong
+  // mechanism for it, because prod's blob says nothing about these keys and
+  // main was 73 commits behind. Promoting main with true defaults would have
+  // switched the entire programme on for real users at deploy - including
+  // the cron that sends push notifications - rather than landing it dark.
+  //
+  // So: features land OFF in a new environment and are enabled per
+  // environment from the portal, which is the one place that decision is
+  // visible and reversible without a deploy. Dev is unaffected by this
+  // revert for the four below plus healthMetrics: its blob already has them
+  // explicitly true.
+  badges: { enabled: false },
+  streaksCoins: { enabled: false },
+  challenges: { enabled: false },
+  buddyPairedStreaks: { enabled: false },
+  // Exercise records, routines, workout sessions, watch/HealthKit sync —
+  // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
+  healthMetrics: { enabled: false },
+  // Held separately from healthMetrics because these two needed legal
+  // sign-off the rest of the health layer doesn't (see
+  // docs/phool-gobhi-counsel-brief-20260908.html). Both flipped ON
+  // 2026-09-10 on the owner's instruction - that review is the owner's call
+  // and it has been made. The reasoning below stays so the reason they were
+  // ever separate isn't lost, and because either can still be pulled
+  // independently from /settings, which now carries both toggles (until
+  // 2026-09-10 these were the only two flags the portal could not reach, so
+  // their "off" was a code default rather than a decision).
+  //
+  //   healthPersonalisation — the only consent-bearing write in health-service
+  //     (a non-neutral programming mode records a privacyVersion). The consent
+  //     wording needs review before a real user agrees to it.
+  //   recapSharing — the only feature producing an artifact meant to leave the
+  //     platform. It carries no PII by construction, but that claim is worth
+  //     checking before the card is shareable.
+  healthPersonalisation: { enabled: false },
+  recapSharing: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
@@ -469,6 +538,9 @@ const getMe = async (req, res) => {
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
       referralCode: user.referralCode,
+      linkedGymId: user.linkedGymId,
+      trainerGymId: user.trainerGymId,
+      leaderboardOptIn: user.leaderboardOptIn,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -495,9 +567,17 @@ const getUserInternal = async (req, res) => {
       dateOfBirth: user.dateOfBirth,
       gender: user.gender,
       fitnessGoals: user.fitnessGoals,
+      // Onboarding answers health-service reads to seed a weekly training
+      // goal (FR-04) instead of measuring everyone against one hardcoded
+      // number. Preferences, not sensitive data — the same class as
+      // fitnessGoals directly above.
+      experienceLevel: user.experienceLevel,
+      weeklyFrequencyIntent: user.weeklyFrequencyIntent,
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,
+      linkedGymId: user.linkedGymId,
+      trainerGymId: user.trainerGymId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -533,11 +613,101 @@ const getUsersBatchInternal = async (req, res) => {
     if (!ids.length) return res.json({ data: [] });
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, phone: true, profileImageUrl: true },
+      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true },
     });
     res.json({ data: users });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Scheduled trigger (see .github/workflows) for the attendance-SaaS
+// re-engagement sweep — nudges gym-linked signups with no activity.
+const runAttendanceSaasReengagementSweep = async (req, res) => {
+  try {
+    const result = await runAttendanceSaasReengagementSweepService();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only roster of a single gym's linked members (attendance-SaaS
+// wedge) — admin's /attendance-saas dashboard previously only had
+// gym-level aggregates (see wallet-service's getSubscriptionSummaryByGymService);
+// this is the individual-member list behind those numbers.
+const listAttendanceSaasMembers = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const members = await prisma.user.findMany({
+      where: { linkedGymId: gymId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, phone: true, createdAt: true },
+    });
+    res.json({ data: members });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Partner-facing member roster (attendance-SaaS gap-analysis finding: every
+// competitor treats "see your own members" as day-one baseline, and this
+// existed in code but was gobhi-only). Same query as
+// listAttendanceSaasMembers above, minus phone — partners must never see a
+// customer's phone number (same rule bookingController's getGymBookings
+// already enforces for the booking-history roster).
+export const listGymMembersForPartner = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    await assertPartnerOwnsGym(gymId, req.user.id);
+    const members = await prisma.user.findMany({
+      where: { linkedGymId: gymId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, createdAt: true },
+    });
+    res.json({ data: members });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Partner-only — creates a gym-employed trainer account (never public
+// self-signup, see the ROLES.TRAINER guard in issueSessionForUser). The
+// trainer subsequently logs in via the normal /send-otp + /verify-otp flow
+// using the phone number given here.
+export const createTrainer = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainer = await createTrainerService(req.body ?? {}, gymId, req.user.id);
+    res.status(201).json({ data: trainer });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listTrainers = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainers = await listTrainersForGymService(gymId, req.user.id);
+    res.json({ data: trainers });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateTrainerStatus = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const trainerId = parseInt(req.params.trainerId);
+    const isActive = req.body?.isActive === true;
+    const trainer = await updateTrainerStatusService(trainerId, isActive, gymId, req.user.id);
+    res.json({ data: trainer });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 
@@ -555,6 +725,56 @@ const updateMe = async (req, res) => {
   }
 };
 
+// Partner-only self-service — for the attendance-SaaS bank-settlement flow.
+// No masking on the way back to the partner: it's their own data, and admin
+// separately needs the full details to actually make the transfer, so
+// there's nothing gained by hiding it from the one person it belongs to.
+const getBankAccount = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const account = await prisma.partnerBankAccount.findUnique({ where: { userId: req.user.id } });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const updateBankAccount = async (req, res) => {
+  try {
+    if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const { accountHolderName, accountNumber, ifscCode, upiId } = req.body ?? {};
+    if (!accountHolderName?.trim() || !accountNumber?.trim() || !ifscCode?.trim()) {
+      return res.status(400).json({ error: 'accountHolderName, accountNumber, and ifscCode are required' });
+    }
+    const data = {
+      accountHolderName: accountHolderName.trim(),
+      accountNumber: accountNumber.trim(),
+      ifscCode: ifscCode.trim().toUpperCase(),
+      upiId: upiId?.trim() || null,
+    };
+    const account = await prisma.partnerBankAccount.upsert({
+      where: { userId: req.user.id },
+      update: data,
+      create: { userId: req.user.id, ...data },
+    });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only — admin needs the full bank details to actually make the
+// manual settlement transfer (see wallet-service's PartnerBankSettlement).
+const getBankAccountAdmin = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const account = await prisma.partnerBankAccount.findUnique({ where: { userId } });
+    res.json({ data: account });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
@@ -566,6 +786,53 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, updateFcmToken, listStaff, createStaff, updateStaffStatus };
+// Per-gym attendance leaderboards (booking-service) are opt-in — a check-in
+// is otherwise private. This is the only way leaderboardOptIn ever changes.
+const updateLeaderboardOptIn = async (req, res) => {
+  try {
+    const { optIn } = req.body;
+    if (typeof optIn !== 'boolean') return res.status(400).json({ error: 'optIn (boolean) required' });
+    await prisma.user.update({ where: { id: req.user.id }, data: { leaderboardOptIn: optIn } });
+    res.json({ ok: true, leaderboardOptIn: optIn });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Map collectibles (veggie pickups) -- a standalone currency, deliberately
+// NOT coins and NOT tied to gyms/bookings/badges. Spawn points are
+// deterministic client-side (fixed grid, see the customer app's
+// VeggieCollectibleGrid); there's no server-side catalog, so this is purely
+// which ids a user has found.
+const listMyCollectibles = async (req, res) => {
+  try {
+    const finds = await prisma.collectibleFind.findMany({
+      where: { userId: req.user.id },
+      select: { collectibleId: true },
+    });
+    res.json({ data: finds.map((f) => f.collectibleId) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+const collectCollectible = async (req, res) => {
+  try {
+    const { collectibleId } = req.params;
+    if (!collectibleId) return res.status(400).json({ error: 'collectibleId required' });
+    // Idempotent: walking near an already-found spawn point again (or a
+    // retried request) is a no-op, not an error.
+    await prisma.collectibleFind.upsert({
+      where: { userId_collectibleId: { userId: req.user.id, collectibleId } },
+      create: { userId: req.user.id, collectibleId },
+      update: {},
+    });
+    res.json({ ok: true, collectibleId });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus };
 
 

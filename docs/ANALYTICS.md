@@ -117,8 +117,9 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 
 | Event | Service | distinct_id | Key properties |
 |---|---|---|---|
-| `signup_completed` | auth | userId | `role`, `user_type` |
-| `login_completed` | auth | userId | `role`, `user_type` |
+| `signup_completed` | auth | userId | `role`, `user_type`, `linked_gym_id` (attendance-SaaS wedge — non-null only on a genuine new signup via a gym's /join link) |
+| `login_completed` | auth | userId | `role`, `user_type`, `linked_gym_id` (always the account's existing value, if any — set once at signup, never changes on login) |
+| `attendance_saas_reengagement_sent` | auth | userId | `linked_gym_id`, `had_fcm_token` — fired by the scheduled re-engagement sweep, once ever per user |
 | `booking_confirmed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `start_time` |
 | `booking_failed` | booking | customerId | `gym_id`, `reason` (`slot_full`/`insufficient_balance`), `amount` |
 | `booking_cancelled` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
@@ -128,7 +129,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `wallet_topup_order_created` | wallet | userId | `amount`, `order_id` |
 | `wallet_topup_succeeded` | wallet | userId | `amount`, `order_id`, `via` (`webhook` if async) |
 | `wallet_topup_failed` | wallet | userId | `amount`, `order_id` |
-| `subscription_purchased_wallet` | wallet | userId | `amount`, `gym_id`, `plan_type` |
+| `subscription_purchased_wallet` | wallet | userId | `amount`, `gym_id`, `plan_type`, `city`, `linked_gym_id` (attendance-SaaS wedge — non-null only when this purchase is at the buyer's own linked gym, i.e. the actual join→register conversion step, not just any subscription sale) |
 | `partner_payout_recorded` | wallet | partnerId | `amount` |
 | `gym_created` | gym | partnerId | `gym_id`, `city`, `session_price` |
 | `gym_approved` | gym | partnerId | `gym_id`, `city` |
@@ -137,6 +138,11 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `staff_account_created` | auth | actorId | `newUserId`, `gobhiType` |
 | `staff_account_revoked` | auth | actorId | `targetUserId` |
 | `staff_account_reactivated` | auth | actorId | `targetUserId` |
+| `trainer_account_created` | auth | partnerId | `trainerId`, `gymId` |
+| `trainer_account_deactivated` | auth | partnerId | `trainerId`, `gymId` |
+| `trainer_account_reactivated` | auth | partnerId | `trainerId`, `gymId` |
+| `trainer_checked_in` | booking | trainerId | `gym_id`, `date` |
+| `training_session_logged` | booking | trainerId | `gym_id`, `booking_id`, `customer_id` |
 | `buddy_profile_created` | buddy | userId | — |
 | `buddy_swiped` | buddy | swiperId | `action` |
 | `buddy_matched` | buddy | swiperId | `matchId`, `otherUserId` |
@@ -204,8 +210,11 @@ note on `ip`):
 | `device_model` | apps (Android `.model`, iOS `utsname.machine`, e.g. `"iPhone14,5"`) | iOS uses the specific hardware id, not the generic `.model`, to distinguish device generations — needs a lookup table to become human-readable |
 | `device_manufacturer` | apps (Android `.manufacturer`, iOS hardcoded `'Apple'`) | |
 | `app_version` / `app_build_number` | apps, via `package_info_plus` | |
-| `device_language` | apps, via `Platform.localeName` | |
-| `app_theme` | apps (`'dark'`/`'light'`), static flag kept in sync by each app's `ThemeProvider` | |
+| `device_language` | apps, via `Platform.localeName` | kept for historical continuity with existing rows/dashboards — see `system_language` below for the same value under its explicit name |
+| `system_language` | apps, via `Platform.localeName` (added 2026-08-17, partner app only so far) | the OS locale, read fresh at send time — identical value to `device_language`, added under an explicit name alongside `app_language` |
+| `app_language` | apps (added 2026-08-17, partner app only so far) | the language the app is actually rendering in. Partner app has no in-app language picker yet (English-only, hardcoded strings) so this is currently always `'en'` — kept as its own property so the schema doesn't need to change the day a real language switcher ships |
+| `app_theme` | apps (`'dark'`/`'light'`), static flag kept in sync by each app's `ThemeProvider` | the app's active theme choice — may diverge from `system_theme` once a user manually overrides it |
+| `system_theme` | apps (`'dark'`/`'light'`, added 2026-08-17, partner app only so far), via `PlatformDispatcher.instance.platformBrightness` read fresh at send time | the OS's live brightness setting, independent of any in-app override — distinct from `app_theme` specifically to catch drift between the two |
 | `user_agent` | website (forwarded from the request's `User-Agent` header) | raw string |
 | `os_name` / `browser_name` / `browser_version` / `device_type` | gateway, parsed from `user_agent` via `ua-parser-js` | **backstop only** — the gateway fills these only when the event doesn't already carry them, so it never overwrites the richer app-supplied fields above; this is the primary source of OS/browser info for website traffic |
 | `ip` | gateway, from `req.ip` | every client event, via the gateway's `/api/events` handler |
@@ -235,6 +244,15 @@ note on `ip`):
    (wallet-debit purchase, no separate order/verify events). Rows before that
    date use the retired `subscription_order_created` → `subscription_purchased`
    two-step names — see the retired-events note in §4.
+9. **Attendance-SaaS wedge (gym-linked signup → paid registration)** —
+   `signup_completed` where `linked_gym_id` is non-null → `subscription_purchased_wallet`
+   where `linked_gym_id` is non-null, joined on `distinct_id`. No separate
+   "joined the /join page" step is captured server-side (that's a client page
+   view, not a truth event) — this measures signup-to-paid-registration only,
+   not top-of-funnel page traffic. `attendance_saas_reengagement_sent` marks
+   the scheduled nudge sent to signups still inactive after
+   `REENGAGEMENT_AFTER_DAYS` (env, default 3) — a re-entry point into the
+   same funnel, not a step within it.
 
 In PostHog: Product → Funnels → add these events as ordered steps, breakdown by
 `role` / `city` / `platform` as needed.

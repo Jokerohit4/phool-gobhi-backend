@@ -47,6 +47,14 @@ model Booking {
   // never fires for it — but completeBooking's partner payout DOES fire for
   // it now, unless partnerShare is null (see above).
   subscriptionId   Int?
+  // Snapshotted at booking-creation time from the covering GymSubscription's
+  // own isAttendanceSaas flag (wallet-service) — meaningless when
+  // subscriptionId is null (always false there). true routes this booking's
+  // completeBooking payout to wallet-service's PartnerBankSettlement ledger
+  // instead of crediting the wallet, same as every other commission field
+  // here: captured once so a later change to the gym's opt-out status never
+  // retroactively changes how an already-booked visit gets paid.
+  isAttendanceSaas Boolean       @default(false)
   // Set for a recurring-class booking instead of a plain-slot booking — the
   // class's own schedule (gym-service's GymClass) governs startTime/endTime
   // for this row, and its capacity pool is tracked separately from the
@@ -73,6 +81,15 @@ model Booking {
   // match the actual scan time (see AttendanceWarning for the original
   // values). Customer-facing only; never exposed on partner-facing reads.
   slotShiftWarning Boolean @default(false)
+
+  // FR-14 — captured at cancel time, both optional. Null means the customer
+  // dismissed the prompt (or cancelled before this feature existed), which
+  // is itself the BRD's "left as-is" case: never block the cancellation on
+  // answering. Customer-facing and analytics only — deliberately NOT exposed
+  // on any partner-facing read, since "why did your customer bail" is not a
+  // partner's business.
+  cancellationReason CancellationReason?
+  nextVisitIntent    NextVisitIntent?
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -102,6 +119,46 @@ model Booking {
   // page/relation granularity under load, causing spurious serialization
   // conflicts for unrelated concurrent bookings.
   @@index([classId, date])
+  @@schema("booking")
+}
+
+// A gym trainer's own daily presence — deliberately separate from Booking
+// (a trainer has no slot/time-window to book against, just "did they show
+// up today"). One row per trainer per day: checking in again the same day
+// just bumps checkedInAt rather than creating a duplicate (see
+// trainerCheckIn's upsert). trainerId is a bare Int, not a Prisma relation —
+// the User row lives in auth-service's own database, same cross-service
+// convention as Booking.customerId.
+model TrainerAttendance {
+  id          Int      @id @default(autoincrement())
+  trainerId   Int
+  gymId       Int
+  date        String
+  checkedInAt DateTime @default(now())
+  method      String
+
+  @@unique([trainerId, date])
+  @@index([gymId, date])
+  @@schema("booking")
+}
+
+// The trainer half of "which customers is this trainer training" — a
+// trainer self-logs themselves against a specific customer BOOKING (not a
+// freeform customer pick), so every row has real provenance: it's tied to
+// an actual attended session, not a static, driftable assignment. One
+// trainer per booking (@unique on bookingId) — logging again just
+// overwrites (a correction), it doesn't create a second claim on the same
+// session.
+model TrainingSession {
+  id         Int      @id @default(autoincrement())
+  bookingId  Int      @unique
+  trainerId  Int
+  gymId      Int
+  customerId Int
+  createdAt  DateTime @default(now())
+
+  @@index([trainerId, gymId])
+  @@index([customerId])
   @@schema("booking")
 }
 
@@ -149,6 +206,33 @@ enum BookingStatus {
   @@schema("booking")
 }
 
+// FR-14 (see phool-gobhi-fitness-plus-BRD.html) — why a customer cancelled,
+// asked non-judgementally at cancel time. Always optional: dismissing the
+// picker still cancels the booking, it just records no reason. `other` is a
+// real answer, not a fallback for "didn't ask" (that's null).
+enum CancellationReason {
+  not_this_time
+  injury
+  work
+  travel
+  other
+
+  @@schema("booking")
+}
+
+// FR-14's second half: the re-plan prompt. The point is turning a
+// cancellation into an intent rather than a silent drop-off, so this is
+// deliberately coarse — an actual re-booking happens through the normal
+// booking flow, this is only the stated intent.
+enum NextVisitIntent {
+  today
+  this_week
+  this_month
+  unsure
+
+  @@schema("booking")
+}
+
 enum AttendanceMethod {
   qr_scan
   manual_override
@@ -187,5 +271,24 @@ model AttendanceWarning {
 
   @@index([customerId])
   @@index([bookingId])
+  @@schema("booking")
+}
+
+// Attendance-SaaS wedge: a parallel attendance record for customers who
+// joined via a gym's QR/link (User.linkedGymId). Unlike Booking, no
+// pre-booking is required — the customer shows up, geofences, and this row
+// is created. Also feeds challenge-service's coin/streak pipeline (source
+// 'member_checkin') so linked members earn the same streaks/coins as
+// booking customers, per the 2026-08-27 decision.
+model MemberAttendance {
+  id          Int      @id @default(autoincrement())
+  customerId  Int
+  gymId       Int
+  date        String
+  checkedInAt DateTime @default(now())
+
+  @@unique([customerId, gymId, date])
+  @@index([gymId, date])
+  @@index([customerId])
   @@schema("booking")
 }

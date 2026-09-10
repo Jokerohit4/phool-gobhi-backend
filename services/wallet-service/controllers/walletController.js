@@ -21,10 +21,20 @@ import {
   ackGiftRevealService,
   getTransactionByIdempotencyKeyService,
   getGymCity,
+  getUserLinkedGymId,
   reconcilePendingRazorpayOrdersService,
   getWalletTopupConfigCached,
   updateWalletTopupConfig,
+  getSubscriptionSummaryByGymService,
+  getCustomerIdsWithPurchasedSubscriptionService,
+  getSubscriptionsForGymService,
+  assertPartnerOwnsGym,
+  recordPendingBankSettlementService,
+  getPendingBankSettlementsService,
+  settleBankSettlementsService,
+  getMyBankSettlementsService,
 } from '../services/walletService.js';
+import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
@@ -173,12 +183,116 @@ export const listPayoutHistory = async (req, res) => {
   }
 };
 
+export const getSubscriptionSummaryByGym = async (req, res) => {
+  try {
+    const summary = await getSubscriptionSummaryByGymService();
+    res.json({ data: summary });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Gobhi-only: individual subscription rows for one gym (attendance-SaaS
+// member roster — auth-service's listAttendanceSaasMembers is the sibling
+// "who's linked" half, this is the "what have they paid" half; the admin
+// portal joins them client-side by customerId, same join-in-the-frontend
+// convention as its existing /attendance page).
+export const getSubscriptionsForGym = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const subscriptions = await getSubscriptionsForGymService(gymId);
+    res.json({ data: subscriptions });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Partner-facing equivalent of getSubscriptionsForGym above — the "what
+// have they paid" half of the member roster, ownership-checked instead of
+// gobhi-only (attendance-SaaS gap-analysis finding: this existed in code but
+// never reached the partner). Admin joins this with auth-service's roster
+// client-side by customerId; the partner-web/app screen does the same join.
+export const getSubscriptionsForGymForPartner = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    await assertPartnerOwnsGym(gymId, req.userId);
+    const subscriptions = await getSubscriptionsForGymService(gymId);
+    res.json({ data: subscriptions });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getCustomerIdsWithPurchasedSubscription = async (req, res) => {
+  try {
+    const customerIds = Array.isArray(req.body?.customerIds)
+      ? req.body.customerIds.map(Number).filter(Number.isFinite)
+      : [];
+    if (!customerIds.length) return res.json({ data: [] });
+    const active = await getCustomerIdsWithPurchasedSubscriptionService(customerIds);
+    res.json({ data: active });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
 export const payoutPartner = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, description } = req.body;
     const result = await payoutWalletService(Number(userId), amount, description);
     track('partner_payout_recorded', Number(userId), { amount: result.transaction.amount });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Internal (requireInternal): booking-service calls this instead of
+// crediting the wallet, for a subscription-linked, isAttendanceSaas booking.
+export const recordPendingBankSettlement = async (req, res) => {
+  try {
+    const { partnerId, gymId, bookingId, subscriptionId, amount } = req.body;
+    const settlement = await recordPendingBankSettlementService({
+      partnerId: Number(partnerId), gymId: Number(gymId),
+      bookingId: Number(bookingId), subscriptionId: Number(subscriptionId),
+      amount: Number(amount),
+    });
+    res.json({ data: settlement });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only: every partner's pending attendance-SaaS bank-settlement total.
+export const getPendingBankSettlements = async (req, res) => {
+  try {
+    const rows = await getPendingBankSettlementsService();
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Gobhi-only: admin has done the actual bank transfer outside the app —
+// marks this partner's (optionally one gym's) pending rows settled.
+export const settleBankSettlements = async (req, res) => {
+  try {
+    const { partnerId } = req.params;
+    const { gymId } = req.body;
+    const result = await settleBankSettlementsService(Number(partnerId), gymId ? Number(gymId) : undefined);
+    track('partner_bank_settlement_recorded', Number(partnerId), { settled_count: result.settledCount, gym_id: gymId ?? null });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Partner-facing: their own pending total + settlement history.
+export const getMyBankSettlements = async (req, res) => {
+  try {
+    const gymId = req.query.gymId ? Number(req.query.gymId) : undefined;
+    const result = await getMyBankSettlementsService(req.userId, gymId);
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -315,16 +429,29 @@ const VALID_PLAN_TYPES = ['weekly', 'monthly', 'quarterly', 'sixMonthly', 'yearl
 
 export const purchaseSubscriptionWithWalletHandler = async (req, res) => {
   try {
-    const { gymId, planType } = req.body;
+    const { gymId, planType, coinCatalogItemKey } = req.body;
     const userId = req.userId;
 
     if (!gymId || !VALID_PLAN_TYPES.includes(planType)) {
       return res.status(400).json({ error: 'gymId and a valid planType are required' });
     }
 
-    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType);
+    const subscription = await purchaseSubscriptionWithWallet(userId, Number(gymId), planType, { coinCatalogItemKey });
+    // linked_gym_id (attendance-SaaS funnel): non-null only when the buyer's
+    // OWN linked gym matches the one they're subscribing to — that's the
+    // actual funnel step ("a gym-linked signup converted into a paid
+    // registration"), not just "a linked user bought any subscription
+    // anywhere." A buyer with no linkedGymId, or one buying at a different
+    // gym than they're linked to, still shows up as a plain marketplace sale.
+    const buyerLinkedGymId = await getUserLinkedGymId(userId);
     track('subscription_purchased_wallet', userId, {
-      amount: subscription.price, gym_id: gymId, plan_type: planType, city: await getGymCity(Number(gymId)),
+      amount: subscription.price,
+      gym_id: gymId,
+      plan_type: planType,
+      city: await getGymCity(Number(gymId)),
+      linked_gym_id: buyerLinkedGymId === Number(gymId) ? buyerLinkedGymId : null,
+      coin_discount_amount: subscription.coinDiscountAmount ?? undefined,
+      coin_discount_coins: subscription.coinDiscountCoins ?? undefined,
     });
     res.status(201).json({ data: { subscription } });
   } catch (err) {
@@ -513,5 +640,23 @@ export const handleRazorpayWebhook = async (req, res) => {
   } catch (err) {
     console.error('Webhook error:', err.message);
     res.status(200).json({ received: true }); // Return 200 to prevent Razorpay retries
+  }
+};
+
+// ---- DPDPA access right (s.11) -------------------------------------------
+// Internal only: auth-service authenticates the user and fans out to every
+// service that holds their data, then assembles one document. Never exposed
+// at the gateway, so there is no path where a userId in a URL could let one
+// person read another's financial history.
+export const exportUserInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const data = await exportService.buildExportService(userId);
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
