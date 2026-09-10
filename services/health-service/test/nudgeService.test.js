@@ -15,6 +15,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+// 12:00 IST on a Thursday, expressed in UTC (IST = UTC+5:30). Every date in
+// this suite is derived from this instant.
+const FIXED_NOW = new Date('2026-09-10T06:30:00Z');
+
 let optOuts = [];
 let nudgeLogs = [];
 let created = [];
@@ -25,12 +29,18 @@ let unloggedUsers = [];
 
 let nudge;
 
-function daysAgo(n) {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+// Offsets are measured from the SAME fixed clock the assertions inject,
+// never from Date.now(). Mixing the two made this suite time-of-day
+// dependent: "30 hours ago" sat 28.5h before the fixed midday when the
+// suite ran in the morning and 22.5h before it in the afternoon, so the
+// 24-hour guard flipped and the run failed after lunch. A test whose
+// result depends on when you run it is worse than no test.
+function daysAgo(n, from = FIXED_NOW) {
+  return new Date(from.getTime() - n * 24 * 60 * 60 * 1000);
 }
 
-function hoursAgo(n) {
-  return new Date(Date.now() - n * 60 * 60 * 1000);
+function hoursAgo(n, from = FIXED_NOW) {
+  return new Date(from.getTime() - n * 60 * 60 * 1000);
 }
 
 test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
@@ -105,8 +115,7 @@ function reset() {
   unloggedUsers = [];
 }
 
-// 12:00 and 03:00 IST, expressed in UTC (IST = UTC+5:30).
-const middayIST = new Date('2026-09-10T06:30:00Z');
+const middayIST = FIXED_NOW;
 const nightIST = new Date('2026-09-10T21:30:00Z');
 
 test('quiet hours are decided by the service, not by the schedule', () => {
