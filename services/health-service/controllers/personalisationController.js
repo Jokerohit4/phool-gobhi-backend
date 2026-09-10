@@ -1,4 +1,5 @@
 import * as personalisationService from '../services/personalisationService.js';
+import { recordAudit } from '../services/auditService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
 
 const EXPERIENCE_LEVELS = ['none', 'lt_1_year', 'one_to_three_years', 'over_three_years'];
@@ -94,6 +95,12 @@ export const setProgrammingMode = async (req, res) => {
       programmingMode,
       privacyVersion,
     );
+    // The one consent-bearing write in this service: switching to a
+    // non-neutral mode records a privacyVersion, i.e. the user agreeing to
+    // personalised programming. Audited for the same reason as the health
+    // consent itself — the fact and timing of the agreement, never what was
+    // disclosed to arrive at the mode (which was never transmitted anyway).
+    recordAudit({ userId: req.userId, actorId: req.userId, action: 'write', dataType: 'personalisation' });
     res.json({ data: serializeDecimals(profile) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

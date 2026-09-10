@@ -4,6 +4,12 @@ import { recordAudit } from '../services/auditService.js';
 export const grantConsent = async (req, res) => {
   try {
     const consent = await consentService.grantConsentService(req.userId, req.body || {});
+    // Audited as a write because this row IS the legal basis for holding any
+    // of it. Routine data writes are not logged — a biometric entry carries
+    // its own timestamp and the user made it themselves — but "when did this
+    // person consent, and under which policy version" is the question an
+    // audit trail exists to answer.
+    recordAudit({ userId: req.userId, actorId: req.userId, action: 'write', dataType: 'consent' });
     res.status(201).json({ data: consent });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -13,6 +19,9 @@ export const grantConsent = async (req, res) => {
 export const revokeConsent = async (req, res) => {
   try {
     const consent = await consentService.revokeConsentService(req.userId);
+    // Withdrawal is the half of the consent record most likely to be
+    // disputed later, so it is logged as deliberately as the grant.
+    recordAudit({ userId: req.userId, actorId: req.userId, action: 'write', dataType: 'consent' });
     res.json({ data: consent });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
