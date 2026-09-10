@@ -265,17 +265,27 @@ const DEFAULT_FEATURES = {
   // Gamification suite — each phase ships behind its own kill-switch,
   // default OFF until an admin deliberately turns it on from /settings.
   // See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
-  badges: { enabled: false },
-  streaksCoins: { enabled: false },
-  challenges: { enabled: false },
-  buddyPairedStreaks: { enabled: false },
+  //
+  // Defaults flipped ON 2026-09-10 on the owner's instruction. These are
+  // only DEFAULTS: a stored app-config blob (written by the admin portal's
+  // /settings page) overrides them key by key, so the portal stays the live
+  // switch and this is what a fresh environment starts as.
+  badges: { enabled: true },
+  streaksCoins: { enabled: true },
+  challenges: { enabled: true },
+  buddyPairedStreaks: { enabled: true },
   // Exercise records, routines, workout sessions, watch/HealthKit sync —
   // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
-  healthMetrics: { enabled: false },
-  // Held separately from healthMetrics because these two need legal sign-off
-  // the rest of the health layer doesn't (see
-  // docs/phool-gobhi-counsel-brief-20260908.html). Additive: healthMetrics
-  // can be on to test the logging loop while these stay off.
+  healthMetrics: { enabled: true },
+  // Held separately from healthMetrics because these two needed legal
+  // sign-off the rest of the health layer doesn't (see
+  // docs/phool-gobhi-counsel-brief-20260908.html). Both flipped ON
+  // 2026-09-10 on the owner's instruction - that review is the owner's call
+  // and it has been made. The reasoning below stays so the reason they were
+  // ever separate isn't lost, and because either can still be pulled
+  // independently from /settings, which now carries both toggles (until
+  // 2026-09-10 these were the only two flags the portal could not reach, so
+  // their "off" was a code default rather than a decision).
   //
   //   healthPersonalisation — the only consent-bearing write in health-service
   //     (a non-neutral programming mode records a privacyVersion). The consent
@@ -283,8 +293,8 @@ const DEFAULT_FEATURES = {
   //   recapSharing — the only feature producing an artifact meant to leave the
   //     platform. It carries no PII by construction, but that claim is worth
   //     checking before the card is shareable.
-  healthPersonalisation: { enabled: false },
-  recapSharing: { enabled: false },
+  healthPersonalisation: { enabled: true },
+  recapSharing: { enabled: true },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
