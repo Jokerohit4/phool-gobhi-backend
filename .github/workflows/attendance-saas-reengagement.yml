@@ -25,7 +25,22 @@ jobs:
   reengagement-sweep:
     strategy:
       matrix:
-        env: [dev, prod]
+        # prod deliberately absent, same posture as send-health-nudges.yml.
+        #
+        # This sweep sends real FCM pushes and is NOT feature-flag gated --
+        # runAttendanceSaasReengagementSweepService pushes to every user with
+        # linkedGymId set, older than the cutoff, not yet nudged, and it stamps
+        # reengagementNudgedAt even when there is no token, so the one-shot is
+        # spent either way. Until the 2026-09-10 promotion this file could not
+        # fire at all (GH Actions schedules only run from the default branch,
+        # and main was 73 commits behind), so it going live made it live
+        # against prod for the first time with nobody having decided that.
+        #
+        # The attendance-SaaS wedge itself is also still unvalidated -- its
+        # consent/legal question is open and no gym has piloted it. Add `prod`
+        # back deliberately, once that is settled and someone has actually
+        # counted the candidate rows in the prod DB.
+        env: [dev]
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
