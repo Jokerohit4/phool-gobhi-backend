@@ -502,17 +502,22 @@ export async function getSubscriptionSummaryByGymService() {
   return [...byGym.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
-// Gobhi-only: individual GymSubscription rows for one gym, for the
+// Gobhi/partner: individual GymSubscription rows for one gym, for the
 // attendance-SaaS member roster (see getSubscriptionSummaryByGymService for
 // the aggregate rollup this complements). One row per purchase, not
 // deduped per customer — a repeat customer legitimately shows multiple rows.
-export async function getSubscriptionsForGymService(gymId) {
+// { onlyAttendanceSaas }: the partner-facing roster is the attendance-SaaS
+// wedge (same population as auth-service's linkedGymId members), so its
+// subscriptions should exclude a linked member's marketplace subscription
+// purchases — the gobhi admin path passes nothing and sees every row.
+export async function getSubscriptionsForGymService(gymId, { onlyAttendanceSaas = false } = {}) {
   const rows = await prisma.gymSubscription.findMany({
-    where: { gymId },
+    where: { gymId, ...(onlyAttendanceSaas ? { isAttendanceSaas: true } : {}) },
     orderBy: { startDate: 'desc' },
     select: {
       customerId: true, planType: true, price: true, commissionPct: true,
       partnerShare: true, startDate: true, endDate: true, status: true,
+      isAttendanceSaas: true, coinDiscountAmount: true, createdAt: true,
     },
   });
   return rows.map((r) => ({
@@ -520,6 +525,7 @@ export async function getSubscriptionsForGymService(gymId) {
     price: Number(r.price),
     commissionPct: Number(r.commissionPct),
     partnerShare: Number(r.partnerShare),
+    coinDiscountAmount: r.coinDiscountAmount != null ? Number(r.coinDiscountAmount) : null,
   }));
 }
 
