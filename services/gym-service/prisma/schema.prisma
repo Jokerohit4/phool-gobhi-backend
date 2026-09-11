@@ -71,15 +71,16 @@ model Gym {
   // every gym until an admin overrides it.
   commissionPct Decimal    @default(20) @db.Decimal(5, 2)
   // Attendance-SaaS wedge: when this gym first went live (isApproved flipped
-  // true), set once in approveGym and never moved after — drives wallet-
-  // service's 1-month honeymoon window on GymSubscription purchases. Null
-  // until first approval. Backfilled to createdAt for gyms already approved
-  // before this feature existed (see migration) so no already-live gym gets
-  // a free honeymoon it never had.
+  // true), set once in approveGym and never moved after. Null until first
+  // approval. Backfilled to createdAt for gyms already approved before this
+  // feature existed (see migration). Historical/display use only — a
+  // free-commission honeymoon window keyed off this date existed from
+  // 2026-08-19 to 2026-09-11 and was removed; every subscription purchase
+  // now carries a platform commission from day one.
   partnershipStartDate DateTime?
-  // Post-honeymoon commission on GymSubscription purchases specifically —
-  // separate lever from commissionPct, which keeps governing one-off
-  // marketplace bookings unchanged. Null = platform default (see
+  // Commission on GymSubscription purchases specifically — separate lever
+  // from commissionPct, which keeps governing one-off marketplace bookings
+  // unchanged. Null = platform default (see
   // DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT in wallet-service).
   subscriptionCommissionPct Decimal? @db.Decimal(5, 2)
   // Partner's own opt-out of the attendance-SaaS program — applied
@@ -101,7 +102,7 @@ model Gym {
   marketplaceEnabled Boolean @default(true)
   // Admin-only (gobhi, see PUT /:id/subscription-pricing-mode) — which
   // formula wallet-service applies to a GymSubscription purchase's
-  // post-honeymoon commission: a percentage of the plan price
+  // commission: a percentage of the plan price
   // (subscriptionCommissionPct above), or a flat fee per registration
   // regardless of plan price (subscriptionFlatFeePerUser below). Platform
   // default is flatPerUser (Rs 1/customer, see wallet-service's

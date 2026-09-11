@@ -110,38 +110,23 @@ export async function getUserLinkedGymId(userId) {
   }
 }
 
-// Attendance-SaaS wedge (finalized 2026-08-19): GymSubscription purchases no
-// longer share Gym.commissionPct with one-off marketplace bookings. Instead,
-// every gym gets a flat honeymoon window from its own
-// Gym.partnershipStartDate (set once, at first approval) during which
-// subscription purchases carry ZERO platform commission; after that window
-// the platform takes a flat cut — the platform default below, or a
+// Attendance-SaaS wedge (finalized 2026-08-19, honeymoon window removed
+// 2026-09-11): GymSubscription purchases don't share Gym.commissionPct with
+// one-off marketplace bookings — every subscription purchase carries a
+// platform commission from day one, either the platform default below or a
 // per-gym override via gym-service's admin-editable
-// Gym.subscriptionCommissionPct (PUT /:id/subscription-commission). This is
-// deliberately decoupled from commissionPct: a customer who also books
+// Gym.subscriptionCommissionPct (PUT /:id/subscription-commission) /
+// Gym.subscriptionFlatFeePerUser (PUT /:id/subscription-pricing-mode). This
+// is deliberately decoupled from commissionPct: a customer who also books
 // through the regular marketplace still pays that 20%-by-default rate on
 // those bookings separately (see bookingCommissionFields in booking-service,
 // unchanged by this).
-const SUBSCRIPTION_SAAS_HONEYMOON_DAYS = Number(process.env.SUBSCRIPTION_SAAS_HONEYMOON_DAYS) || 30;
 export const DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_SAAS_COMMISSION_PERCENT) || 1;
 // Platform default when a gym is in flatPerUser pricing mode but hasn't been
 // given an explicit per-gym flat fee yet (Gym.subscriptionFlatFeePerUser is
 // null) — same "admin sets a per-gym override, else fall back to a platform
 // constant" convention as the percentage mode above.
 export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 1;
-
-// partnershipStartDate null (gym approved before this feature existed and
-// somehow missed the migration backfill) is treated as "no honeymoon" rather
-// than "always in honeymoon" — the safe direction if that ever happens is to
-// undercharge zero gyms for free, not to give every unbackfilled gym an
-// indefinite free ride. Shared by both pricing modes below — the honeymoon
-// is a property of the GYM (when it went live), not of which commission
-// formula it's since been set to.
-function isInSubscriptionSaasHoneymoon(partnershipStartDate) {
-  if (!partnershipStartDate) return false;
-  const honeymoonEndsAt = new Date(partnershipStartDate).getTime() + SUBSCRIPTION_SAAS_HONEYMOON_DAYS * 24 * 60 * 60 * 1000;
-  return Date.now() < honeymoonEndsAt;
-}
 
 // Admin-portal-editable wallet top-up options (presets + optional
 // custom-amount range). Cached briefly since createTopUpOrder reads this on
@@ -457,9 +442,9 @@ export async function getPayoutHistoryService() {
 }
 
 // Attendance-SaaS admin rollup: per-gym subscription counts + revenue,
-// keyed by gymId only — gym name/city/honeymoon status are resolved by the
-// admin-portal caller against gym-service (same split as the /attendance
-// admin page's by-gym view), so this stays a single-service, single-query
+// keyed by gymId only — gym name/city are resolved by the admin-portal
+// caller against gym-service (same split as the /attendance admin page's
+// by-gym view), so this stays a single-service, single-query
 // endpoint. status:'active' alone doesn't mean "currently in-window" (the
 // SubscriptionStatus enum only ever gets set to 'active' — nothing writes
 // 'cancelled' today, and a lapsed-but-unprocessed row stays 'active'
@@ -480,7 +465,6 @@ export async function getSubscriptionSummaryByGymService() {
         gymId: s.gymId,
         subscriptionCount: 0,
         activeCount: 0,
-        honeymoonSubscriptionCount: 0,
         totalRevenue: 0,
         // Commission the platform is owed across this gym's subscriptions
         // (price - partnerShare per subscription) — a ceiling realized
@@ -494,7 +478,6 @@ export async function getSubscriptionSummaryByGymService() {
     const partnerShare = Number(s.partnerShare);
     bucket.subscriptionCount += 1;
     if (s.status === 'active' && s.endDate >= now) bucket.activeCount += 1;
-    if (Number(s.commissionPct) === 0) bucket.honeymoonSubscriptionCount += 1;
     bucket.totalRevenue = Math.round((bucket.totalRevenue + price) * 100) / 100;
     bucket.totalPlatformShare = Math.round((bucket.totalPlatformShare + (price - partnerShare)) * 100) / 100;
   }
@@ -753,10 +736,9 @@ export async function fetchGymForSubscription(gymId, planType) {
   return {
     partnerId: gym.partnerId,
     price: Number(price),
-    partnershipStartDate: gym.partnershipStartDate ?? null,
     subscriptionCommissionPct: gym.subscriptionCommissionPct != null ? Number(gym.subscriptionCommissionPct) : null,
     attendanceSaasOptedOut: gym.attendanceSaasOptedOut === true,
-    // Which formula to apply post-honeymoon — percentage-of-price
+    // Which formula to apply — percentage-of-price
     // (subscriptionCommissionPct above) or a flat fee regardless of price
     // (subscriptionFlatFeePerUser below). Defaults to 'percentage' if
     // absent (version-skew fallback, same posture as booking-service's
@@ -786,7 +768,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   }
 
   const {
-    partnerId, price, partnershipStartDate,
+    partnerId, price,
     subscriptionCommissionPct: subscriptionCommissionPctOverride,
     attendanceSaasOptedOut, subscriptionPricingMode, subscriptionFlatFeePerUser,
   } = await fetchGymForSubscription(gymId, planType);
@@ -864,9 +846,7 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   const isAttendanceSaas = true;
 
   let commissionAmount;
-  if (isInSubscriptionSaasHoneymoon(partnershipStartDate)) {
-    commissionAmount = 0;
-  } else if (subscriptionPricingMode === 'flatPerUser') {
+  if (subscriptionPricingMode === 'flatPerUser') {
     // A flat fee can't exceed the price itself — a cheap weekly plan at a
     // gym with a flat fee set higher than that plan's price is an edge
     // case admin can misconfigure, not one this function should let

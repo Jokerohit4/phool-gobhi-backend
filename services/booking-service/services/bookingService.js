@@ -120,7 +120,7 @@ function normalizeBookingMoney(booking) {
 // older gym-service revision) — the real rate is per-gym, gym-service's
 // Gym.commissionPct (admin-editable, defaults to 20 there too). This rate is
 // untouched by the attendance-SaaS wedge — GymSubscription purchases now
-// carry their own separate honeymoon/1%-or-flat-fee commission computed in
+// carry their own separate percentage-or-flat-fee commission computed in
 // wallet-service (purchaseSubscriptionWithWallet), independent of this
 // constant and of commissionPct.
 const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
@@ -2399,7 +2399,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
     // (subscription-covered — the attendance-SaaS "someone registered with
     // this gym and is visiting under a plan" revenue) — split purely on
     // subscriptionId, regardless of whether that subscription is under the
-    // honeymoon/SaaS commission or an opted-out gym's standard rate, since
+    // attendance-SaaS commission or an opted-out gym's standard rate, since
     // from the partner's perspective both are still "a member visiting
     // under a plan," not a one-off marketplace booking.
     function bucketFor(predicate) {

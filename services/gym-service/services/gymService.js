@@ -965,7 +965,7 @@ export async function approveGym(gymId, { approved = true, reason = null } = {})
       isApproved: approved,
       rejectionReason: approved ? null : reason,
       // First approval only — a later reject/re-approve cycle must not reset
-      // the honeymoon clock the gym already started.
+      // when this gym first went live.
       ...(approved && !gym.partnershipStartDate ? { partnershipStartDate: new Date() } : {}),
     },
   }));
@@ -988,7 +988,7 @@ export async function updateGymCommission(gymId, commissionPct) {
 }
 
 // gobhi-only, same shape as updateGymCommission — overrides the
-// attendance-SaaS post-honeymoon rate wallet-service applies to this gym's
+// attendance-SaaS rate wallet-service applies to this gym's
 // GymSubscription purchases when subscriptionPricingMode is 'percentage'
 // (see purchaseSubscriptionWithWallet). null resets to the platform default
 // instead of a fixed number.
@@ -1009,7 +1009,7 @@ export async function updateGymSubscriptionCommission(gymId, subscriptionCommiss
 }
 
 // gobhi-only, same shape as updateGymCommission — picks which formula
-// wallet-service applies to this gym's post-honeymoon GymSubscription
+// wallet-service applies to this gym's GymSubscription
 // commission: a percentage of the plan price (subscriptionCommissionPct
 // above), or a flat fee per registration regardless of price
 // (flatFeePerUser). flatFeePerUser is only meaningful when mode is
