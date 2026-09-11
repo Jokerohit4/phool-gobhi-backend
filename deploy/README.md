@@ -93,3 +93,62 @@ so this was a naming inconsistency, not a functional bug. Standardized on `fireb
 for both envs here. The first CI deploy of `buddy-service-prod` after this manifest lands
 will therefore repoint that one secret reference (zero behavior change, since the underlying
 credential is identical).
+
+## Bootstrapping a service into a NEW environment (learned the hard way, 2026-09-10)
+
+Adding a service to `services.json` and merging is **not** enough to deploy it into an
+environment for the first time. CI assumes three pieces of GCP state already exist, and
+none of them are created by the deploy workflow. The `dev → main` promotion on
+2026-09-10 failed on exactly this: `health-service` and `challenge-service` had been
+running on dev for weeks, so the manifest looked complete, but neither had ever existed
+in prod. Both jobs died at the very first GCP step with
+
+```
+google-github-actions/get-secretmanager-secrets failed with: failed to access secret
+"projects/phool-gobhi/secrets/health-service-secrets-prod/versions/latest": (403)
+Permission 'secretmanager.versions.access' denied on resource (or it may not exist).
+```
+
+Note the "**or it may not exist**" — a missing secret and a genuine permission gap are
+indistinguishable from this message alone. Check existence first (`gcloud secrets list`)
+before going anywhere near IAM; in this case the secrets simply were not there.
+
+For each new `<service>` × `<env>`:
+
+**1. The consolidated secret.** Create `<service>-secrets-<env>` holding that service's
+keys as one JSON object (see "Consolidated secrets" above for the payload contract).
+Within an env every service shares the same `DATABASE_URL` (one Neon DB, schema per
+service — the Prisma `init` migration does `CREATE SCHEMA IF NOT EXISTS`) and the same
+`INTERNAL_API_KEY`, so the payload can be derived from a sibling service's secret in the
+same env. Add only the keys the service actually reads (`grep -rho 'process\.env\.[A-Z_0-9]*'`)
+— e.g. `health-service` needs `FIREBASE_SERVICE_ACCOUNT_JSON` for nudge pushes,
+`challenge-service` does not. Watch for the trailing-newline bug that has bitten this
+project twice (`internal-api-key-*`, then all three `cloudinary-*-prod`).
+
+**2. `secretAccessor` on that secret** for two principals — the deployer
+(`github-actions-deployer`, which reads `DATABASE_URL` out of it to run
+`prisma migrate deploy` from the runner) and the **runtime** SA that Cloud Run mounts it
+as. There are no project-level `secretmanager` grants here by design; every secret is
+bound individually.
+
+**3. `roles/run.invoker` on the new Cloud Run service** — which can only be granted
+*after* the service exists, i.e. after a successful first deploy. Match the siblings:
+`gateway-sa` (the gateway proxies to it), `backend-svc-sa` (service-to-service),
+`github-actions-deployer` (**required — CI's own post-deploy health check calls
+`/health` with an audience-scoped ID token, and every service deploys
+`--no-allow-unauthenticated`, so without this the first deploy fails at `verify-health`
+even though the revision is healthy**), and the compute default SA on dev.
+
+### Runtime identity is now pinned, not defaulted
+
+`gcloud run deploy` defaults the runtime SA **only when creating a service**; on an
+existing one it preserves what is already there. That default is the Compute Engine
+default SA, which holds **`roles/editor`** on this project — whereas every prod service
+deliberately runs as `backend-svc-sa`, which has *no* project-level roles at all. So a
+brand-new prod service would have silently come up with Editor, and nothing in the deploy
+output would have said so. `build-deploy-flags.cjs` now resolves a
+`service-account=` output from `services.json`'s `runtimeServiceAccounts` map (with a
+per-service `runtimeServiceAccount` override, used by the gateway for `gateway-sa`) and
+the workflow passes it on every deploy. Verified against `gcloud run services list` at
+the time of the change: all 16 service×env pairs resolve to the identity already live, so
+this is a no-op for existing services and a fix only for new ones.
