@@ -103,12 +103,14 @@ model Gym {
   // formula wallet-service applies to a GymSubscription purchase's
   // post-honeymoon commission: a percentage of the plan price
   // (subscriptionCommissionPct above), or a flat fee per registration
-  // regardless of plan price (subscriptionFlatFeePerUser below). Some gyms
-  // are a better fit for "we take a cut of what you charge," others for
-  // "we charge you a flat Rs-per-signup fee" — this lets gobhi pick per gym.
-  subscriptionPricingMode SubscriptionPricingMode @default(percentage)
+  // regardless of plan price (subscriptionFlatFeePerUser below). Platform
+  // default is flatPerUser (Rs 1/customer, see wallet-service's
+  // DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER) — some gyms are a better fit for
+  // "we take a cut of what you charge" instead, which is why gobhi can still
+  // pick per gym.
+  subscriptionPricingMode SubscriptionPricingMode @default(flatPerUser)
   // Only meaningful when subscriptionPricingMode = flatPerUser. Null uses
-  // wallet-service's platform-default flat fee.
+  // wallet-service's platform-default flat fee (currently Rs 1).
   subscriptionFlatFeePerUser Decimal? @db.Decimal(10, 2)
   weeklyPlanPrice     Decimal? @db.Decimal(19, 2)
   monthlyPlanPrice    Decimal? @db.Decimal(19, 2)

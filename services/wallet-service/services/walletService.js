@@ -128,7 +128,7 @@ export const DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT = Number(process.env.S
 // given an explicit per-gym flat fee yet (Gym.subscriptionFlatFeePerUser is
 // null) — same "admin sets a per-gym override, else fall back to a platform
 // constant" convention as the percentage mode above.
-export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 10;
+export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 1;
 
 // partnershipStartDate null (gym approved before this feature existed and
 // somehow missed the migration backfill) is treated as "no honeymoon" rather
