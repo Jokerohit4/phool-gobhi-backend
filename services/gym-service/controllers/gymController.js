@@ -859,3 +859,50 @@ export const exportUserInternal = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// ---- Leads (attendance-SaaS sales pipeline, partner-owned) ----------------
+export const listLeads = async (req, res) => {
+  try {
+    const gymId = parseInt(req.query.gymId);
+    if (!Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'gymId query param is required' });
+    }
+    const leads = await gymService.listLeads(gymId, req.userId, {
+      status: req.query.status,
+    });
+    res.json({ data: leads });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createLead = async (req, res) => {
+  try {
+    const gymId = parseInt(req.body.gymId);
+    if (!Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'gymId is required' });
+    }
+    const lead = await gymService.createLead(gymId, req.userId, req.body);
+    res.status(201).json({ data: lead });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateLead = async (req, res) => {
+  try {
+    const lead = await gymService.updateLead(parseInt(req.params.id), req.userId, req.body);
+    res.json({ data: lead });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const deleteLead = async (req, res) => {
+  try {
+    const deleted = await gymService.deleteLead(parseInt(req.params.id), req.userId);
+    res.json({ data: deleted });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

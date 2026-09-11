@@ -122,6 +122,7 @@ model Gym {
   slotBlocks   SlotBlock[]
   slotPrices   GymSlotPrice[]
   editRequests GymEditRequest[]
+  leads        GymLead[]
   operatingHours GymOperatingHours[]
   classes        GymClass[]
 
@@ -295,6 +296,43 @@ enum EditRequestStatus {
   // PendingEditBanner-style "your change was not approved" messaging never
   // fires for something the partner withdrew on their own.
   withdrawn
+
+  @@schema("gym")
+}
+
+// Sales pipeline for the attendance-SaaS side of the operation: a prospective
+// member the partner is following up on. Purely partner-owned bookkeeping —
+// "converting" a lead is a status the partner records, not a backend action
+// (membership books live in booking-service), so a converted lead is
+// best-effort signal and the phone turning up in the Members roster later is
+// the real proof of a sale.
+model GymLead {
+  id        Int        @id @default(autoincrement())
+  gymId     Int
+  partnerId Int
+  name      String?
+  phone     String?
+  notes     String?
+  // Where the inquiry came from — freeform partner input, defaulted to
+  // 'walk_in' by the service when omitted. Plain String keeps the app and the
+  // migration flexible; becomes an enum only if it grows fixed options.
+  source    String     @default("walk_in")
+  status    LeadStatus @default(new)
+  gym       Gym        @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([gymId, status])
+  @@index([partnerId])
+  @@schema("gym")
+}
+
+enum LeadStatus {
+  new
+  contacted
+  scheduled_visit
+  converted
+  lost
 
   @@schema("gym")
 }
