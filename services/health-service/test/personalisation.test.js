@@ -15,7 +15,7 @@ function daysAgo(n) {
 }
 
 let getMuscleReadinessService;
-let setProgrammingModeService, upsertProfileService, getProfileService;
+let setProgrammingModeService, upsertProfileService, getProfileService, updateTrainingLocationService;
 
 test('setup: mock prisma once, import the services once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -40,7 +40,7 @@ test('setup: mock prisma once, import the services once', async (t) => {
     },
   });
   ({ getMuscleReadinessService } = await import('../services/progressService.js'));
-  ({ setProgrammingModeService, upsertProfileService, getProfileService } = await import(
+  ({ setProgrammingModeService, upsertProfileService, getProfileService, updateTrainingLocationService } = await import(
     '../services/personalisationService.js'
   ));
   assert.equal(typeof getMuscleReadinessService, 'function');
@@ -168,4 +168,29 @@ test('Step A and Step B save independently without wiping each other', async () 
 
   assert.equal(profile.heightCm, 175, 'Step B must not wipe Step A');
   assert.deepEqual(profile.injuryZones, ['shoulder']);
+});
+
+// H-19 (docs/../sprint2/PG-HUNT-001). trainingLocation is deliberately a
+// SEPARATE write path from upsertProfileService above — it must never touch
+// consentAt/privacyVersion, unlike setProgrammingModeService, because it's a
+// UI-routing preference, not a disclosure someone is consenting to.
+test('setting trainingLocation never touches consentAt or privacyVersion', async () => {
+  profile = null;
+  const updated = await updateTrainingLocationService(1, 'home');
+
+  assert.equal(updated.trainingLocation, 'home');
+  assert.equal(updated.consentAt, undefined);
+  assert.equal(updated.privacyVersion, undefined);
+});
+
+test('trainingLocation can change independently of an existing programming mode', async () => {
+  profile = null;
+  await setProgrammingModeService(1, 'female_default', 'v1');
+  const updated = await updateTrainingLocationService(1, 'both');
+
+  assert.equal(updated.trainingLocation, 'both');
+  // The consent recorded for the programming mode survives untouched — this
+  // write path only ever sets one field.
+  assert.equal(updated.programmingMode, 'female_default');
+  assert.ok(updated.consentAt);
 });

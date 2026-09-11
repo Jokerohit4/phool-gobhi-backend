@@ -120,11 +120,12 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, templates, customExercises, records, activity, biometrics, feedback] =
+  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
       prisma.weeklyGoal.findUnique({ where: { userId } }),
+      prisma.userActivePlan.findUnique({ where: { userId }, include: { plan: { select: { key: true, name: true } } } }),
       prisma.workoutTemplate.findMany({
         where: { userId },
         include: { exercises: { include: { exercise: { select: { name: true } } }, orderBy: { order: 'asc' } } },
@@ -150,6 +151,7 @@ export async function buildFullExportService(userId) {
     personalisation: personalisation
       ? {
           heightCm: personalisation.heightCm,
+          setupWeightKg: personalisation.setupWeightKg === null ? null : Number(personalisation.setupWeightKg),
           experienceLevel: personalisation.experienceLevel,
           injuryZones: personalisation.injuryZones,
           energyPattern: personalisation.energyPattern,
@@ -160,6 +162,7 @@ export async function buildFullExportService(userId) {
           // arrive at the mode, because that was never transmitted.
           consentAt: personalisation.consentAt,
           privacyVersion: personalisation.privacyVersion,
+          trainingLocation: personalisation.trainingLocation,
         }
       : null,
     // The user's weekly training target, and whether they chose it or it was
@@ -168,12 +171,19 @@ export async function buildFullExportService(userId) {
     weeklyGoal: weeklyGoal
       ? { sessionsPerWeek: weeklyGoal.sessionsPerWeek, setByUser: weeklyGoal.setByUser, updatedAt: weeklyGoal.updatedAt }
       : null,
+    // Which multi-week plan the user has active, and since when — not the
+    // day-by-day derived position (that's a live computation, not a stored
+    // fact about them; getActivePlanService is the source for "what day is
+    // it", this is only the source for "which plan, since when").
+    activePlan: activePlan
+      ? { planKey: activePlan.plan.key, planName: activePlan.plan.name, startedOn: activePlan.startedOn, completedAt: activePlan.completedAt }
+      : null,
     sessions,
     routines: templates.map((t) => ({
       name: t.name,
       createdAt: t.createdAt,
       exercises: t.exercises.map((te) => ({
-        name: te.exercise?.name ?? null, targetSets: te.targetSets, targetReps: te.targetReps, restSeconds: te.restSeconds,
+        name: te.exercise?.name ?? null, targetSets: te.targetSets, targetReps: te.targetReps, targetDurationSeconds: te.targetDurationSeconds, restSeconds: te.restSeconds,
       })),
     })),
     customExercises: customExercises.map((e) => ({

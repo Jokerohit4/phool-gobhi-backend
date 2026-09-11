@@ -5,6 +5,7 @@ import { serializeDecimals } from '../utils/serializeDecimals.js';
 const EXPERIENCE_LEVELS = ['none', 'lt_1_year', 'one_to_three_years', 'over_three_years'];
 const ENERGY_PATTERNS = ['morning', 'afternoon', 'evening'];
 const PROGRAMMING_MODES = ['neutral', 'female_default', 'low_impact_recovery'];
+const TRAINING_LOCATIONS = ['gym', 'home', 'both'];
 const INJURY_ZONES = ['knee', 'shoulder', 'lower_back', 'wrist', 'neck'];
 
 // Same posture as biometricService's METRIC_BOUNDS: reject typos and unit
@@ -75,6 +76,23 @@ export const updateProfile = async (req, res) => {
     const profile = await personalisationService.upsertProfileService(req.userId, {
       heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay,
     });
+    res.json({ data: serializeDecimals(profile) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// H-19. Gated on healthMetrics alone (see routes/health.js) — deliberately
+// NOT behind healthPersonalisation, since this is a UI-routing preference,
+// never a disclosure. "Never nagged toward a gym" (H-25) starts here: this
+// is the one screen that asks, and it's skippable to `both`.
+export const updateTrainingLocation = async (req, res) => {
+  try {
+    const { trainingLocation } = req.body || {};
+    if (!TRAINING_LOCATIONS.includes(trainingLocation)) {
+      return res.status(400).json({ error: `trainingLocation must be one of: ${TRAINING_LOCATIONS.join(', ')}` });
+    }
+    const profile = await personalisationService.updateTrainingLocationService(req.userId, trainingLocation);
     res.json({ data: serializeDecimals(profile) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

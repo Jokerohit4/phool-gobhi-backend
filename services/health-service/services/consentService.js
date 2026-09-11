@@ -76,6 +76,11 @@ export async function deleteAllDataService(userId) {
     // The weekly training target is the user's own preference, so it goes
     // with the account like the rest of their record.
     prisma.weeklyGoal.deleteMany({ where: { userId } }),
+    // Which multi-week plan a user is on — a preference row, not a record
+    // of anything they did (the sessions they actually logged are already
+    // covered by the WorkoutSession delete above and survive independently
+    // of whether a plan pointed at them).
+    prisma.userActivePlan.deleteMany({ where: { userId } }),
     // Nudge suppression and the send log: per-user behavioural rows with
     // no purpose once the account is gone.
     prisma.nudgeOptOut.deleteMany({ where: { userId } }),

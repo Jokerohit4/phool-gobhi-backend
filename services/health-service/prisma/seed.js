@@ -47,6 +47,27 @@ const exercises = [
   { name: 'Running', muscleGroup: 'cardio', equipment: 'other', loggingType: 'duration_distance', primaryMuscles: ['Legs', 'Cardiovascular'], secondaryMuscles: [] },
   { name: 'Cycling', muscleGroup: 'cardio', equipment: 'other', loggingType: 'duration_distance', primaryMuscles: ['Legs', 'Cardiovascular'], secondaryMuscles: [] },
   { name: 'Yoga Flow', muscleGroup: 'fullBody', equipment: 'bodyweight', loggingType: 'duration', primaryMuscles: ['Full Body'], secondaryMuscles: [] },
+
+  // No-equipment additions for the home track (docs/../sprint2/PG-HUNT-001
+  // H-21) — the exercises the 12 system routines in seedHomeTrack.js are
+  // built from. Every one of these needs zero equipment and fits in a
+  // 2m x 2m space; verify that yourself before adding to this list.
+  { name: 'Bodyweight Squat', muscleGroup: 'legs', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Quadriceps', 'Glutes'], secondaryMuscles: [] },
+  { name: 'Incline Push-up', muscleGroup: 'chest', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Chest'], secondaryMuscles: ['Triceps'] },
+  { name: 'Glute Bridge', muscleGroup: 'legs', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Glutes'], secondaryMuscles: ['Hamstrings'] },
+  { name: 'Dead Bug', muscleGroup: 'core', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Core'], secondaryMuscles: [] },
+  { name: 'Pike Push-up', muscleGroup: 'shoulders', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Shoulders'], secondaryMuscles: ['Triceps'] },
+  { name: 'Chair Dip', muscleGroup: 'arms', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Triceps'], secondaryMuscles: [] },
+  { name: 'Towel Row', muscleGroup: 'back', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Back'], secondaryMuscles: ['Biceps'] },
+  { name: 'Superman', muscleGroup: 'back', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Back'], secondaryMuscles: [] },
+  { name: 'Split Squat', muscleGroup: 'legs', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Quadriceps', 'Glutes'], secondaryMuscles: [] },
+  { name: 'Calf Raise', muscleGroup: 'legs', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Calves'], secondaryMuscles: [] },
+  { name: 'Wall Sit', muscleGroup: 'legs', equipment: 'bodyweight', loggingType: 'duration', primaryMuscles: ['Quadriceps'], secondaryMuscles: [] },
+  { name: 'Side Plank', muscleGroup: 'core', equipment: 'bodyweight', loggingType: 'duration', primaryMuscles: ['Core'], secondaryMuscles: [] },
+  { name: 'Hollow Hold', muscleGroup: 'core', equipment: 'bodyweight', loggingType: 'duration', primaryMuscles: ['Core'], secondaryMuscles: [] },
+  { name: 'March in Place', muscleGroup: 'cardio', equipment: 'bodyweight', loggingType: 'duration', primaryMuscles: ['Legs', 'Cardiovascular'], secondaryMuscles: [] },
+  { name: 'Step-Back Lunge', muscleGroup: 'legs', equipment: 'bodyweight', loggingType: 'sets_reps_weight', primaryMuscles: ['Quadriceps', 'Glutes'], secondaryMuscles: [] },
+  { name: 'Shadow Boxing', muscleGroup: 'cardio', equipment: 'bodyweight', loggingType: 'duration', primaryMuscles: ['Cardiovascular', 'Shoulders'], secondaryMuscles: [] },
 ];
 
 async function main() {
