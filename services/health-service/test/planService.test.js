@@ -77,6 +77,11 @@ test('setup: mock prisma once, import planService once', async (t) => {
               activePlans.delete(where.userId);
               return { count: 1 };
             },
+            update: async ({ where, data }) => {
+              const row = { ...activePlans.get(where.userId), ...data };
+              activePlans.set(where.userId, row);
+              return row;
+            },
           };
         }
       },
@@ -146,6 +151,41 @@ test('a plan abandoned long ago clamps at the last day instead of running past t
   assert.equal(active.weekIndex, 4);
   assert.equal(active.dayIndex, 7);
   assert.equal(active.isLastDay, true);
+});
+
+// Bug fixed 2026-09-11: completedAt was defined on the model and exposed in
+// the DPDPA export, but nothing anywhere ever wrote it — a plan could run
+// its full 28 days and STILL read back completedAt: null forever.
+test('a plan that has genuinely run its full course gets completedAt set', async () => {
+  reset();
+  const plan = seedPlan({ weeks: 4 }); // 28 days
+  activePlans.set(1, { userId: 1, planId: plan.id, startedOn: daysAgo(100), completedAt: null });
+
+  const active = await getActivePlanService(1);
+  assert.equal(active.isFinished, true);
+  assert.ok(active.completedAt, 'completedAt must be set once the plan is finished');
+});
+
+test('exactly on the last day, the plan is NOT yet finished — only past it', async () => {
+  reset();
+  const plan = seedPlan({ weeks: 4 }); // 28 days
+  activePlans.set(1, { userId: 1, planId: plan.id, startedOn: daysAgo(27), completedAt: null }); // day 28 exactly
+
+  const active = await getActivePlanService(1);
+  assert.equal(active.dayNumber, 28);
+  assert.equal(active.isLastDay, true);
+  assert.equal(active.isFinished, false);
+  assert.equal(active.completedAt, null);
+});
+
+test('completedAt is set exactly once and never overwritten on a later read', async () => {
+  reset();
+  const plan = seedPlan({ weeks: 4 });
+  activePlans.set(1, { userId: 1, planId: plan.id, startedOn: daysAgo(100), completedAt: null });
+
+  const first = await getActivePlanService(1);
+  const second = await getActivePlanService(1);
+  assert.equal(first.completedAt.getTime(), second.completedAt.getTime());
 });
 
 test('a scheduled rest day (no template) is a valid day, not a seeding gap', async () => {

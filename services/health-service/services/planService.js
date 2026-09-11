@@ -17,12 +17,15 @@ function toLocalDateOnly(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-// 1-based day-of-plan, capped at the plan's total length. Never negative,
-// never zero, never past the end — so week/day math downstream can assume
-// a value that's always a valid position in the plan.
-function calendarDayNumber(startedOn, totalDays, now = new Date()) {
+// 1-based day-of-plan, NOT clamped — can run past totalDays once the plan
+// has genuinely finished, and callers that need "which day's content do I
+// show" clamp this themselves (see getActivePlanService). Keeping the raw
+// count separate from the clamped one is what lets isFinished be computed
+// honestly: a clamped value can never tell "still on day 28" apart from
+// "day 51, still clamped to 28".
+function rawDayNumber(startedOn, now = new Date()) {
   const elapsed = Math.floor((toLocalDateOnly(now) - toLocalDateOnly(startedOn)) / MS_PER_DAY);
-  return Math.min(Math.max(elapsed + 1, 1), totalDays);
+  return elapsed + 1;
 }
 
 function dayNumberToWeekAndDay(dayNumber) {
@@ -51,9 +54,26 @@ export async function getActivePlanService(userId) {
   if (!active) return null;
 
   const totalDays = active.plan.weeks * 7;
-  const dayNumber = calendarDayNumber(active.startedOn, totalDays);
+  const raw = rawDayNumber(active.startedOn);
+  const dayNumber = Math.min(Math.max(raw, 1), totalDays);
   const { weekIndex, dayIndex } = dayNumberToWeekAndDay(dayNumber);
   const isLastDay = dayNumber === totalDays;
+  const isFinished = raw > totalDays;
+
+  // Persisted the first time it's observed true, same convention
+  // goalService.resolveGoalService uses for a derived fact that shouldn't
+  // recompute differently between two reads — completedAt was previously
+  // set only on create/restart (always null) and never had anything that
+  // set it true, so a finished plan could never actually be marked
+  // finished. This is that missing write, made exactly once.
+  let completedAt = active.completedAt;
+  if (isFinished && !completedAt) {
+    const updated = await prisma.userActivePlan.update({
+      where: { userId },
+      data: { completedAt: new Date() },
+    });
+    completedAt = updated.completedAt;
+  }
 
   const planDay = await prisma.workoutPlanDay.findUnique({
     where: { planId_weekIndex_dayIndex: { planId: active.planId, weekIndex, dayIndex } },
@@ -65,14 +85,18 @@ export async function getActivePlanService(userId) {
     planKey: active.plan.key,
     planName: active.plan.name,
     startedOn: active.startedOn,
-    completedAt: active.completedAt,
+    completedAt,
     totalDays,
     dayNumber,
     weekIndex,
     dayIndex,
     isLastDay,
+    isFinished,
     // Null template on a valid plan day means a scheduled rest day, not a
     // seeding gap — see the WorkoutPlanDay.templateId schema comment.
+    // Still returned once finished (the last day's content), so a client
+    // that hasn't shipped a "plan complete" screen yet degrades to
+    // "showing the last day forever" instead of a blank state.
     todayTemplate: planDay?.template ?? null,
   };
 }

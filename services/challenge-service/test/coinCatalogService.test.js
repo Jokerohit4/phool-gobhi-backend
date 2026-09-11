@@ -79,6 +79,11 @@ function dbSurface() {
         for (const d of data) catalogItems.push({ id: nextId++, isActive: true, gymId: null, unitCostPaise: null, discountAmount: null, fundedBy: null, ...d });
         return { count: data.length };
       },
+      update: async ({ where, data }) => {
+        const item = findItem(where);
+        Object.assign(item, data);
+        return item;
+      },
     },
     coinRedemption: {
       findUnique: async ({ where, include }) => {
@@ -119,7 +124,7 @@ function dbSurface() {
   };
 }
 
-let redeemCatalogItemByUserService, redeemCatalogItemService, listActiveCatalogService, createCatalogItemAdminService;
+let redeemCatalogItemByUserService, redeemCatalogItemService, listActiveCatalogService, createCatalogItemAdminService, updateCatalogItemAdminService;
 
 test('setup: mock prisma + coinEconomyConfigService, import coinCatalogService once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -158,6 +163,7 @@ test('setup: mock prisma + coinEconomyConfigService, import coinCatalogService o
   redeemCatalogItemService = mod.redeemCatalogItemService;
   listActiveCatalogService = mod.listActiveCatalogService;
   createCatalogItemAdminService = mod.createCatalogItemAdminService;
+  updateCatalogItemAdminService = mod.updateCatalogItemAdminService;
 });
 
 function seedSubDiscount() {
@@ -365,10 +371,44 @@ test('an empty catalog seeds BOTH sub_discount_50 and buddy_boost_50, not just o
 test('createCatalogItemAdminService requires a gymId for a gym_trial item', async () => {
   reset();
   await assert.rejects(
-    () => createCatalogItemAdminService({ key: 'x', category: 'gym_trial', title: 'X', coinCost: 100 }),
+    () => createCatalogItemAdminService({ key: 'x', category: 'gym_trial', title: 'X', coinCost: 100, unitCostPaise: 30000 }),
     (err) => {
       assert.equal(err.status, 400);
       assert.match(err.error, /gymId/);
+      return true;
+    }
+  );
+});
+
+// The settlement pairing (D-05) only works if every gym_trial item's payable
+// is captured at creation time — an item that could be created without one
+// would redeem successfully forever with no way to know what's owed.
+test('createCatalogItemAdminService requires unitCostPaise for a gym_trial item', async () => {
+  reset();
+  await assert.rejects(
+    () => createCatalogItemAdminService({ key: 'x', category: 'gym_trial', title: 'X', coinCost: 100, gymId: 7 }),
+    (err) => {
+      assert.equal(err.status, 400);
+      assert.match(err.error, /unitCostPaise/);
+      return true;
+    }
+  );
+});
+
+test('unitCostPaise stays optional for a non-gym_trial category', async () => {
+  reset();
+  const item = await createCatalogItemAdminService({ key: 'x', category: 'subscription_discount', title: 'X', coinCost: 100, discountAmount: 10 });
+  assert.equal(item.unitCostPaise, null);
+});
+
+test('updateCatalogItemAdminService rejects clearing unitCostPaise on an existing gym_trial item', async () => {
+  reset();
+  const item = await createCatalogItemAdminService({ key: 'x', category: 'gym_trial', title: 'X', coinCost: 100, gymId: 7, unitCostPaise: 30000 });
+  await assert.rejects(
+    () => updateCatalogItemAdminService(item.id, { unitCostPaise: null }),
+    (err) => {
+      assert.equal(err.status, 400);
+      assert.match(err.error, /unitCostPaise/);
       return true;
     }
   );

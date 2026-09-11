@@ -112,7 +112,18 @@ export async function createCatalogItemAdminService({ key, category, title, desc
   if (category === 'gym_trial' && (!Number.isInteger(gymId) || gymId <= 0)) {
     throw { status: 400, error: 'gymId is required for a gym_trial item' };
   }
-  if (category === 'gym_trial' && (unitCostPaise !== undefined && unitCostPaise !== null && (!Number.isInteger(unitCostPaise) || unitCostPaise < 0))) {
+  // Required, not just validated-if-present, for gym_trial specifically: an
+  // item with no unitCostPaise would redeem successfully and silently
+  // record `unitCostPaise: null` in every one of its redemptions' metadata,
+  // which is exactly the field the monthly settlement (D-05) is reconciled
+  // against — a gym_trial item that can be created without it is a payable
+  // that can never be recovered. Every other category leaves it optional
+  // (it means nothing to them).
+  if (category === 'gym_trial') {
+    if (!Number.isInteger(unitCostPaise) || unitCostPaise < 0) {
+      throw { status: 400, error: 'unitCostPaise (in paise) is required for a gym_trial item' };
+    }
+  } else if (unitCostPaise !== undefined && unitCostPaise !== null && (!Number.isInteger(unitCostPaise) || unitCostPaise < 0)) {
     throw { status: 400, error: 'unitCostPaise must be a non-negative integer' };
   }
   return prisma.coinCatalogItem.create({
@@ -134,6 +145,13 @@ export async function createCatalogItemAdminService({ key, category, title, desc
 export async function updateCatalogItemAdminService(id, { title, description, coinCost, discountAmount, unitCostPaise, fundedBy, isActive }) {
   const existing = await prisma.coinCatalogItem.findUnique({ where: { id: Number(id) } });
   if (!existing) throw { status: 404, error: 'Catalog item not found' };
+  // Same requirement as creation, checked here too: an update that clears
+  // unitCostPaise on a gym_trial item would strand every future redemption
+  // of it with no recorded payable — the price can change, but it can
+  // never go back to unset.
+  if (existing.category === 'gym_trial' && unitCostPaise === null) {
+    throw { status: 400, error: 'unitCostPaise cannot be cleared on a gym_trial item' };
+  }
   if (unitCostPaise !== undefined && unitCostPaise !== null && (!Number.isInteger(unitCostPaise) || unitCostPaise < 0)) {
     throw { status: 400, error: 'unitCostPaise must be a non-negative integer' };
   }
