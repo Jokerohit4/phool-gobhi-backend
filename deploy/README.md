@@ -132,12 +132,20 @@ as. There are no project-level `secretmanager` grants here by design; every secr
 bound individually.
 
 **3. `roles/run.invoker` on the new Cloud Run service** — which can only be granted
-*after* the service exists, i.e. after a successful first deploy. Match the siblings:
-`gateway-sa` (the gateway proxies to it), `backend-svc-sa` (service-to-service),
-`github-actions-deployer` (**required — CI's own post-deploy health check calls
-`/health` with an audience-scoped ID token, and every service deploys
-`--no-allow-unauthenticated`, so without this the first deploy fails at `verify-health`
-even though the revision is healthy**), and the compute default SA on dev.
+*after* the service exists, i.e. after a successful first deploy. Needed by
+`gateway-sa` (the gateway proxies to it, and every service deploys
+`--no-allow-unauthenticated`, so without this every route through the gateway 403s)
+and `backend-svc-sa` (service-to-service: health-service calls challenge-service for
+attendance, for instance). Add the compute default SA on dev, where services run as it.
+
+`github-actions-deployer` does **not** need a per-service binding, despite CI's own
+post-deploy health check calling `/health` with an audience-scoped ID token against a
+`--no-allow-unauthenticated` service: it holds project-level `roles/run.admin`, which
+already includes `run.routes.invoke`. Measured, not assumed — on 2026-09-11 both
+`health-service-prod` and `challenge-service-prod` passed `verify-health` on their very
+first deploy while their IAM policies were still completely empty. So a new service's
+first deploy goes green in one pass; only the gateway and inter-service calls are broken
+until the two bindings above are added.
 
 ### Runtime identity is now pinned, not defaulted
 
