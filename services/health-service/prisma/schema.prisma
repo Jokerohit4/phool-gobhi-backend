@@ -140,17 +140,39 @@ model ExerciseFormVideo {
 // A reusable routine — "Push Day," "Leg Day." What a user starts a session
 // from (or an "empty workout" skips this entirely — WorkoutSession.templateId
 // is nullable for exactly that case).
+//
+// userId nullable + isSystem (docs/../sprint2/PG-HUNT-001 H-21, added
+// 2026-09-11): a system template has no owner and is visible to every
+// user, the same way a user's own template is visible only to them. This is
+// how the 12 seeded no-equipment routines (prisma/seedHomeTrack.js) are
+// shared without copying a row per user — templateService.listTemplatesService
+// unions `userId = caller` with `isSystem = true`.
 model WorkoutTemplate {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int            @id @default(autoincrement())
+  userId      Int?
+  isSystem    Boolean        @default(false)
+  name        String
+  // System templates only — shown on the routine picker. Null for a user's
+  // own templates; they don't need to describe a workout to themselves.
+  description String?
+  estMinutes  Int?
+  level       TemplateLevel?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   exercises TemplateExercise[]
   sessions  WorkoutSession[]
+  planDays  WorkoutPlanDay[]
 
   @@index([userId])
+  @@index([isSystem])
+  @@schema("health")
+}
+
+enum TemplateLevel {
+  beginner
+  intermediate
+
   @@schema("health")
 }
 
@@ -166,11 +188,83 @@ model TemplateExercise {
   exercise      Exercise        @relation(fields: [exerciseId], references: [id])
   order         Int
   targetSets    Int
-  targetReps    Int
+  // Exactly one of targetReps/targetDurationSeconds is meaningful per row —
+  // which one depends on the exercise's own loggingType (sets_reps_weight
+  // vs duration), same split WorkoutSet already has for the real logged
+  // values (reps vs durationSeconds). targetReps was NOT-NULL until
+  // 2026-09-11: fine while every template exercise was sets_reps_weight,
+  // wrong the moment a duration exercise (plank, wall sit — see the home
+  // track's seeded routines) needed a target with no rep count at all.
+  targetReps            Int?
+  targetDurationSeconds Int?
   restSeconds   Int?
   supersetGroup Int?
 
   @@index([templateId])
+  @@schema("health")
+}
+
+// A multi-week sequence of templates (D-02/H-22) — a thin wrapper, not a
+// new logging concept. Every session it schedules is a normal
+// WorkoutSession started from a normal WorkoutTemplate; this only says
+// which template belongs on which day.
+//
+// Free, not sold — see D-02 (docs/../sprint2/PG-HUNT-001): pricing this in
+// coins would strand anyone who installed organically rather than through
+// the QR-hunt chain, since coins are gym-only per D-01.
+model WorkoutPlan {
+  id          Int    @id @default(autoincrement())
+  // Stable machine key, same convention as CoinCatalogItem.key — referenced
+  // by the client and by any future admin tooling; never reuse a key for a
+  // different plan.
+  key         String @unique
+  name        String
+  description String?
+  weeks       Int
+  isSystem    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  days       WorkoutPlanDay[]
+  activeFor  UserActivePlan[]
+
+  @@schema("health")
+}
+
+model WorkoutPlanDay {
+  id         Int             @id @default(autoincrement())
+  planId     Int
+  plan       WorkoutPlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  weekIndex  Int             // 1-based
+  dayIndex   Int             // 1-7, 1-based, matches ISO weekday order
+  // Null = a scheduled rest day. Deliberately a real day in the plan, not
+  // an absence — see planService.getActivePlanService, which always
+  // returns exactly `weeks * 7` days so the client never has to guess
+  // whether a missing day means "rest" or "not seeded yet".
+  templateId Int?
+  template   WorkoutTemplate? @relation(fields: [templateId], references: [id])
+
+  @@unique([planId, weekIndex, dayIndex])
+  @@schema("health")
+}
+
+// One row per user — a user can be actively on at most one plan at a time,
+// same simplicity constraint as the rest of this v1. startedOn is the only
+// state kept; the current day/week is always DERIVED from calendar days
+// elapsed since then (planService), never stored as a separate pointer that
+// could desync from it — same "derive on read" principle
+// consistencyStreakService already uses for the same reason (a second
+// source of truth for a number that's cheap to recompute is a bug waiting
+// to happen, not a feature).
+model UserActivePlan {
+  userId      Int         @id
+  planId      Int
+  plan        WorkoutPlan @relation(fields: [planId], references: [id])
+  startedOn   DateTime
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
   @@schema("health")
 }
 
@@ -485,6 +579,13 @@ model PersonalisationProfile {
   // time series, so there's exactly one source of truth for "what does this
   // user weigh" instead of a setup copy that immediately goes stale.
   heightCm         Int?
+  // Pre-existing bug fixed 2026-09-11, unrelated to trainingLocation below:
+  // personalisationService/personalisationController have read and written
+  // setupWeightKg since this model was built, but the column never existed
+  // — any client that actually sent it would have hit a Prisma "Unknown
+  // argument" error. Decimal(8,2) to match BiometricEntry.value and every
+  // other weight field in this schema.
+  setupWeightKg    Decimal?         @db.Decimal(8, 2)
   experienceLevel  ExperienceLevel?
   // Free-form list from a fixed chip set (knee/shoulder/lower_back/wrist/…).
   // Used only to bias volume/impact away from those zones — never rendered
@@ -499,7 +600,22 @@ model PersonalisationProfile {
   // what was disclosed to arrive at the mode.
   consentAt        DateTime?
   privacyVersion   String?
+  // Which track a user trains on (docs/../sprint2/PG-HUNT-001 H-19).
+  // Deliberately NOT consent-bearing — unlike programmingMode above, setting
+  // or changing this never touches consentAt/privacyVersion, and it is
+  // gated on healthMetrics alone (see routes/health.js), never on
+  // healthPersonalisation. It's a UI-routing preference ("what does my home
+  // screen lead with"), not a disclosure a user is consenting to.
+  trainingLocation TrainingLocation?
   updatedAt        DateTime         @updatedAt
+
+  @@schema("health")
+}
+
+enum TrainingLocation {
+  gym
+  home
+  both
 
   @@schema("health")
 }

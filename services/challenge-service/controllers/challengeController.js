@@ -49,10 +49,35 @@ export const getMyCoinWallet = async (req, res) => {
 
 export const getCoinCatalog = async (req, res) => {
   try {
-    const items = await coinCatalogService.listActiveCatalogService();
+    // userId (not just "is authenticated") lets a gym_trial item come back
+    // with alreadyClaimedByUser correctly set for THIS user, not just the
+    // shared monthly count.
+    const items = await coinCatalogService.listActiveCatalogService(req.userId);
     res.json({ data: items });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// The customer redemption route (H-16, D-06) — POST /coins/redeem. Unlike
+// getCoinCatalog above (read-only, safe to retry freely), this one spends a
+// scarce resource, so Idempotency-Key is required rather than optional; see
+// coinCatalogService.redeemCatalogItemByUserService for why.
+export const redeemCoinCatalogItem = async (req, res) => {
+  try {
+    const { catalogItemKey } = req.body || {};
+    const idempotencyKey = req.headers['idempotency-key'];
+    if (!catalogItemKey) return res.status(400).json({ error: 'catalogItemKey is required' });
+    if (!idempotencyKey) return res.status(400).json({ error: 'Idempotency-Key header is required' });
+
+    const redemption = await coinCatalogService.redeemCatalogItemByUserService({
+      userId: req.userId,
+      catalogItemKey,
+      idempotencyKey,
+    });
+    res.json({ data: redemption });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
   }
 };
 

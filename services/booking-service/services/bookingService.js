@@ -1858,23 +1858,88 @@ export async function getAdminAttendanceHeatmap(gymId, days) {
 // every one of those views is really just a different sort/reverse of the
 // same per-member rows.
 //
-// "Time spent" is the sum of each attended booking's BOOKED slot duration
+// Population: the attendance-SaaS wedge ONLY — the same set served on the
+// partner Members page's roster. Two sources, both included and merged per
+// customer:
+//   1. Bookings covered by a subscription (isAttendanceSaas=true) that were
+//      verified attended (attendedAt set).
+//   2. QR/link geofence member check-ins (MemberAttendance) — these never
+//      create a Booking row, so a read of just Booking used to silently drop
+//      anyone who joined via the QR/link without pre-booking.
+// Marketplace (non-SaaS) bookings are deliberately excluded so the leaderboard
+// describes exactly the members shown in the roster above it.
+//
+// "Time spent" is the sum of each verified booking's BOOKED slot duration
 // (endTime - startTime), not a measured presence duration — there's no
 // check-out event anywhere in the system (see fetchLiveOccupancy's comment),
 // so this is the closest real proxy: how much session time this member
-// attended, not how long they were physically in the building.
+// attended, not how long they were physically in the building. A bare
+// QR/link check-in has no slot, so it contributes a visit + time-of-day but
+// zero minutes.
 //
-// consistencyRatio: for each member, the fraction of their visits that fall
-// in their single most-common hour-of-day. Close to 1 means "always shows
-// up around the same time"; low means their visit times vary a lot. Only
-// meaningful with 2+ visits — a single visit trivially scores 1.0.
+// "Same-time-ness" (consistencyRatio) is computed from the member's ARRIVAL
+// time — the attendance timestamp (attendedAt / checkedInAt, converted to
+// IST) — not the booked slot's startTime, so "Routine 7 AM" reflects when
+// they actually showed up. Clustered with a fixed time tolerance rather than
+// bucketed by clock hour (see clusterSameTimeVisits); close to 1 means
+// "always shows up around the same time", low means their visit times vary a
+// lot. Only meaningful with 2+ visits — a single visit trivially scores 1.0.
 const MEMBER_ACTIVITY_MAX_DAYS = 90;
+// A visit joins an existing "same time" cluster when its minute-of-day lands
+// within this tolerance of the cluster's running-mean center. 30m keeps a
+// realistic gym-going timeslot together (6:45/7:00/7:30) while still
+// separating genuinely different habits (7:00 vs 13:00).
+const MEMBER_ACTIVITY_TIME_TOLERANCE_MINUTES = 30;
 
 function minutesBetweenTimes(startTime, endTime) {
   const [sh, sm] = String(startTime).split(':').map(Number);
   const [eh, em] = String(endTime).split(':').map(Number);
   if ([sh, sm, eh, em].some((n) => !Number.isFinite(n))) return 0;
   return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
+}
+
+// IST = UTC + 5:30. Minutes-of-day of a stored attendance timestamp — all
+// service timestamps persist as UTC, and "what hour did they really come"
+// must be read in the gym's local day, not UTC.
+function minutesOfDayIST(date) {
+  if (!date) return 0;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return 0;
+  return (d.getUTCHours() * 60 + d.getUTCMinutes() + 330) % 1440;
+}
+
+// Pure helper (unit-tested): group minute-of-day visit times into "same
+// time" clusters by greedy nearest-center join and report how dominant the
+// biggest cluster is. mostCommonHour is that cluster's mean time of day
+// rounded to the nearest hour (6:52 -> 7) — the hour shown on the partner
+// app's "Routine 7 AM" badge.
+export function clusterSameTimeVisits(times, tolerance = MEMBER_ACTIVITY_TIME_TOLERANCE_MINUTES) {
+  if (!times || times.length === 0) return { mostCommonHour: 0, consistencyRatio: 0 };
+  const clusters = [];
+  for (const t of times) {
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < clusters.length; i += 1) {
+      const d = Math.abs(clusters[i].center - t);
+      if (d <= tolerance && d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx >= 0) {
+      const c = clusters[bestIdx];
+      c.sum += t;
+      c.count += 1;
+      c.center = Math.round(c.sum / c.count);
+    } else {
+      clusters.push({ sum: t, count: 1, center: t });
+    }
+  }
+  const largest = clusters.reduce((best, c) => (c.count > best.count ? c : best), clusters[0]);
+  return {
+    mostCommonHour: Math.round(largest.center / 60),
+    consistencyRatio: largest.count / times.length,
+  };
 }
 
 async function computeMemberActivity(gymId, days) {
@@ -1885,32 +1950,43 @@ async function computeMemberActivity(gymId, days) {
   const fromDateString = fromDate.toISOString().split('T')[0];
   const todayString = new Date().toISOString().split('T')[0];
 
-  const bookings = await prisma.booking.findMany({
-    where: { gymId, attendedAt: { not: null }, date: { gte: fromDateString, lte: todayString } },
-    select: { customerId: true, startTime: true, endTime: true },
-  });
+  const [bookings, memberCheckins] = await Promise.all([
+    prisma.booking.findMany({
+      where: { gymId, attendedAt: { not: null }, isAttendanceSaas: true, date: { gte: fromDateString, lte: todayString } },
+      select: { customerId: true, startTime: true, endTime: true, attendedAt: true },
+    }),
+    prisma.memberAttendance.findMany({
+      where: { gymId, date: { gte: fromDateString, lte: todayString } },
+      select: { customerId: true, checkedInAt: true },
+    }),
+  ]);
 
   const byCustomer = new Map();
+  const accountFor = (customerId) => {
+    const entry = byCustomer.get(customerId) ?? { customerId, visitCount: 0, totalMinutes: 0, visitTimes: [] };
+    byCustomer.set(customerId, entry);
+    return entry;
+  };
   for (const b of bookings) {
-    const entry = byCustomer.get(b.customerId) ?? { customerId: b.customerId, visitCount: 0, totalMinutes: 0, hourCounts: {} };
+    const entry = accountFor(b.customerId);
     entry.visitCount += 1;
     entry.totalMinutes += minutesBetweenTimes(b.startTime, b.endTime);
-    const hour = parseInt(String(b.startTime).split(':')[0], 10) || 0;
-    entry.hourCounts[hour] = (entry.hourCounts[hour] || 0) + 1;
-    byCustomer.set(b.customerId, entry);
+    entry.visitTimes.push(minutesOfDayIST(b.attendedAt));
+  }
+  for (const m of memberCheckins) {
+    const entry = accountFor(m.customerId);
+    entry.visitCount += 1;
+    entry.visitTimes.push(minutesOfDayIST(m.checkedInAt));
   }
 
   const rows = [...byCustomer.values()].map((e) => {
-    const hourEntries = Object.entries(e.hourCounts);
-    const [mostCommonHour, mostCommonCount] = hourEntries.reduce(
-      (best, cur) => (cur[1] > best[1] ? cur : best), ['0', 0],
-    );
+    const { mostCommonHour, consistencyRatio } = clusterSameTimeVisits(e.visitTimes);
     return {
       customerId: e.customerId,
       visitCount: e.visitCount,
       totalMinutes: e.totalMinutes,
-      mostCommonHour: Number(mostCommonHour),
-      consistencyRatio: e.visitCount ? mostCommonCount / e.visitCount : 0,
+      mostCommonHour,
+      consistencyRatio,
     };
   });
 

@@ -42,6 +42,15 @@ router.get('/upload-signature', requireRole('partner'), ctrl.getUploadSignature)
 // see ctrl.getNearestGymDistance.
 router.get('/nearest-distance', ctrl.getNearestGymDistance);
 
+// Lead management (attendance-SaaS sales pipeline, partner-owned per gym) —
+// same footgun, same fix: `GET /leads` must stay above `GET /:id` or Express
+// treats "leads" as a gym id. ?gymId= required for list; ?status= optional
+// (new|contacted|scheduled_visit|converted|lost).
+router.get('/leads', requireRole('partner'), ctrl.listLeads);
+router.post('/leads', requireRole('partner'), ctrl.createLead);
+router.put('/leads/:id', requireRole('partner'), ctrl.updateLead);
+router.delete('/leads/:id', requireRole('partner'), ctrl.deleteLead);
+
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/availability', ctrl.getGymAvailability);

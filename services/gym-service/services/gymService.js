@@ -1769,3 +1769,65 @@ export async function getSubscriptionPlans(gymId) {
 
   return { gymId, priciestSlotPrice, plans };
 }
+
+// ── Leads (attendance-SaaS sales pipeline) ─────────────────────────────
+// Partner-owned follow-up rows. Every op re-checks the gym's partnerId so a
+// partner can never touch another gym's (or another partner's) leads.
+
+async function assertGymOwnedByPartner(gymId, partnerId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
+async function getLeadOwnedByPartner(id, partnerId) {
+  const lead = await prisma.gymLead.findUnique({ where: { id } });
+  if (!lead) throw { status: 404, error: 'Lead not found' };
+  await assertGymOwnedByPartner(lead.gymId, partnerId);
+  return lead;
+}
+
+export async function listLeads(gymId, partnerId, { status } = {}) {
+  await assertGymOwnedByPartner(gymId, partnerId);
+  const leads = await prisma.gymLead.findMany({
+    where: { gymId, ...(status ? { status } : {}) },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+  });
+  return leads;
+}
+
+export async function createLead(gymId, partnerId, { name, phone, notes, source } = {}) {
+  await assertGymOwnedByPartner(gymId, partnerId);
+  const lead = await prisma.gymLead.create({
+    data: {
+      gymId,
+      partnerId,
+      name: name?.trim() || null,
+      phone: phone?.trim() || null,
+      notes: notes?.trim() || null,
+      source: source?.trim() || 'walk_in',
+    },
+  });
+  return lead;
+}
+
+export async function updateLead(id, partnerId, { name, phone, notes, source, status } = {}) {
+  await getLeadOwnedByPartner(id, partnerId);
+  const data = {};
+  if (name !== undefined) data.name = name.trim() || null;
+  if (phone !== undefined) data.phone = phone.trim() || null;
+  if (notes !== undefined) data.notes = notes.trim() || null;
+  if (source !== undefined) data.source = source.trim() || 'walk_in';
+  if (status !== undefined) data.status = status;
+  return prisma.gymLead.update({ where: { id }, data });
+}
+
+export async function deleteLead(id, partnerId) {
+  await getLeadOwnedByPartner(id, partnerId);
+  await prisma.gymLead.delete({ where: { id } });
+}
+
+export async function getLeadInternal(id) {
+  return prisma.gymLead.findUnique({ where: { id } });
+}

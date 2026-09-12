@@ -22,6 +22,40 @@ async function alreadyApplied(userId, idempotencyKey) {
   return serializeBalance(await prisma.coinBalance.findUnique({ where: { userId } }));
 }
 
+// The actual atomic decrement, factored out so a caller that already holds
+// its own transaction (e.g. coinCatalogService's customer-redemption path,
+// where an inventory-cap check and the coin debit must commit or fail
+// together as one unit) can run it inside THAT transaction instead of
+// opening a second, nested one — Prisma's interactive transactions don't
+// nest, and a debit that committed separately from the cap check it was
+// supposed to be conditioned on would defeat the point of checking at all.
+//
+// No idempotency pre-check in here: the caller's own transaction is the
+// unit of retry and idempotency. A duplicate call still can't double-debit
+// (the same atomic updateMany guard applies), it just surfaces as
+// "Insufficient coins" or a unique-constraint error on the ledger insert
+// instead of a clean early return — which is fine, because a caller with
+// its own transaction also has its own idempotency check upstream (see
+// redeemCatalogItemByUserService).
+export async function debitCoinsInTx(tx, userId, amount, description, idempotencyKey = null) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('amount must be a positive finite number');
+  }
+  // Atomic check-and-decrement under the row lock — the balance can't go
+  // negative even under concurrent debits, because the WHERE clause and the
+  // decrement happen in one statement.
+  const { count } = await tx.coinBalance.updateMany({
+    where: { userId, balance: { gte: amount } },
+    data: { balance: { decrement: amount } },
+  });
+  if (count === 0) throw new Error('Insufficient coins');
+  const updated = await tx.coinBalance.findUnique({ where: { userId } });
+  await tx.coinLedgerEntry.create({
+    data: { userId, type: 'debit', amount, description, idempotencyKey },
+  });
+  return updated;
+}
+
 export async function creditCoinsService(userId, amount, description, idempotencyKey = null) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('amount must be a positive finite number');
@@ -48,29 +82,10 @@ export async function creditCoinsService(userId, amount, description, idempotenc
 }
 
 export async function debitCoinsService(userId, amount, description, idempotencyKey = null) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('amount must be a positive finite number');
-  }
   const already = await alreadyApplied(userId, idempotencyKey);
   if (already) return already;
   try {
-    const updated = await prisma.$transaction(async (tx) => {
-      const balance = await tx.coinBalance.findUnique({ where: { userId } });
-      if (!balance) throw new Error('Coin balance not found');
-      // Atomic check-and-decrement under the row lock — same race guard as
-      // wallet-service's debitWalletService, needed for the same reason
-      // (two concurrent redemptions must not both pass a stale balance read).
-      const { count } = await tx.coinBalance.updateMany({
-        where: { userId, balance: { gte: amount } },
-        data: { balance: { decrement: amount } },
-      });
-      if (count === 0) throw new Error('Insufficient coins');
-      const updated = await tx.coinBalance.findUnique({ where: { userId } });
-      await tx.coinLedgerEntry.create({
-        data: { userId, type: 'debit', amount, description, idempotencyKey },
-      });
-      return updated;
-    });
+    const updated = await prisma.$transaction((tx) => debitCoinsInTx(tx, userId, amount, description, idempotencyKey));
     return serializeBalance(updated);
   } catch (err) {
     if (idempotencyKey && err.code === 'P2002') return alreadyApplied(userId, idempotencyKey);

@@ -216,7 +216,10 @@ export const getSubscriptionsForGymForPartner = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
     await assertPartnerOwnsGym(gymId, req.userId);
-    const subscriptions = await getSubscriptionsForGymService(gymId);
+    // attendance-SaaS rows only — the partner roster is that wedge, and a
+    // linked member's marketplace purchases must not inflate their "lifetime
+    // spend" on the Members page.
+    const subscriptions = await getSubscriptionsForGymService(gymId, { onlyAttendanceSaas: true });
     res.json({ data: subscriptions });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

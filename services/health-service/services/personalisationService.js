@@ -11,6 +11,7 @@ const EMPTY_PROFILE = {
   programmingMode: 'neutral',
   consentAt: null,
   privacyVersion: null,
+  trainingLocation: null,
 };
 
 // Never 404s on "no profile yet" — a user who has skipped the whole setup is
@@ -65,4 +66,20 @@ export async function setProgrammingModeService(userId, mode, privacyVersion) {
 
 export async function deleteProfileService(userId) {
   await prisma.personalisationProfile.deleteMany({ where: { userId } });
+}
+
+// H-19. Deliberately its own function, not folded into upsertProfileService's
+// generic patch: trainingLocation is reachable via a route gated only on
+// healthMetrics (routes/health.js), never on healthPersonalisation, because
+// setting it is a UI-routing preference, not a disclosure — unlike
+// programmingMode, it never touches consentAt/privacyVersion. Keeping it on
+// its own write path is what makes that guarantee structural rather than a
+// convention someone could accidentally break by adding it to the shared
+// patch allowlist.
+export async function updateTrainingLocationService(userId, trainingLocation) {
+  return prisma.personalisationProfile.upsert({
+    where: { userId },
+    create: { userId, injuryZones: [], trainingLocation },
+    update: { trainingLocation },
+  });
 }

@@ -12,6 +12,8 @@ import * as personalisationCtrl from '../controllers/personalisationController.j
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
 import * as goalCtrl from '../controllers/goalController.js';
+import * as consistencyStreakCtrl from '../controllers/consistencyStreakController.js';
+import * as planCtrl from '../controllers/planController.js';
 import * as statsCtrl from '../controllers/statsController.js';
 import * as nudgeCtrl from '../controllers/nudgeController.js';
 import * as recapCtrl from '../controllers/recapController.js';
@@ -122,6 +124,12 @@ router.put('/personalisation', ...personalisationGated, personalisationCtrl.upda
 // never does.
 router.put('/personalisation/programming-mode', ...personalisationGated, personalisationCtrl.setProgrammingMode);
 
+// ---- Training location (home track, H-19) --------------------------------
+// Gated on healthMetrics alone, NOT personalisationGated — see the
+// updateTrainingLocationService comment for why this must never inherit the
+// consent-bearing healthPersonalisation flag.
+router.put('/personalisation/training-location', ...gated, personalisationCtrl.updateTrainingLocation);
+
 // ---- Weekly recap (FR-13) -----------------------------------------------
 // Numbers only — the client renders the shareable card. No name/gym/photo in
 // the payload at all, so the "no PII on the card" guarantee holds no matter
@@ -181,6 +189,25 @@ router.get('/stats', ...gated, statsCtrl.getStats);
 // streak week challenge-service keeps.
 router.get('/goal', ...gated, goalCtrl.getGoal);
 router.put('/goal', ...gated, goalCtrl.updateGoal);
+
+// ---- Consistency streak (home track, D-01) ------------------------------
+// The streak for people who train at home, derived from their own logged
+// sessions. Pays no coins and grants no milestone — that stays with
+// challenge-service's verified, check-in-backed streak, because a coin
+// redeems for a real gym pass and a self-reported log must never mint one.
+// Lives here rather than in challenge-service so there is no import path
+// from this number to the coin ledger. Derived on read, so there's nothing
+// extra to erase or export beyond the sessions it comes from.
+router.get('/consistency-streak', ...gated, consistencyStreakCtrl.getConsistencyStreak);
+
+// ---- Multi-week plans (home track, H-21/H-22) ---------------------------
+// Free, not sold — see the WorkoutPlan schema comment (D-02). "today"
+// before "active" isn't a route-ordering concern here (no :id/:key
+// collision), unlike sessions/today above.
+router.get('/plans', ...gated, planCtrl.listPlans);
+router.get('/plans/active', ...gated, planCtrl.getActivePlan);
+router.post('/plans/:key/start', ...gated, planCtrl.startPlan);
+router.delete('/plans/active', ...gated, planCtrl.abandonPlan);
 
 // ---- Retention policy (DPDPA purpose limitation) ------------------------
 // Customer-readable copy of the policy, for the in-app "what we keep and for

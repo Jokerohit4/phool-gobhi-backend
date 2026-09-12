@@ -134,6 +134,19 @@ model CoinEconomyConfig {
   // (health-service's own DB, not this one) that coincides with a verified
   // AttendanceEventLog the same day. See POST /internal/workout-credit.
   coinsPerVerifiedWorkout Int      @default(15)
+  // Gym trials, D-05/D-06 (see docs/../sprint2/PG-HUNT-001). A hard,
+  // shared cap across ALL gym_trial catalog items combined — not per item —
+  // because the founder is personally funding every unit at that gym's real
+  // session rate (~Rs 3-6k/month at these defaults) and it is a monthly
+  // payable, not a pilot allowance. Admin-editable so the founder can raise
+  // or lower the monthly spend without a redeploy.
+  gymTrialMonthlyCap   Int @default(10)
+  // "One trial per user, ever" — across the whole gym_trial category, not
+  // per gym tier, or a single enthusiast could claim the neighbourhood,
+  // mid-tier AND premium trial in one month. 1, not a boolean, so the
+  // number is visible in the same admin surface as every other coin figure
+  // and could be raised later without a schema change.
+  gymTrialPerUserLimit Int @default(1)
   updatedAt              DateTime @updatedAt
   updatedBy              Int?
 
@@ -142,13 +155,21 @@ model CoinEconomyConfig {
 
 // subscription_discount is the only category with real fulfillment wired up
 // (booking flows through wallet-service's purchaseSubscriptionWithWallet).
-// priority_booking/buddy_unlock are reserved per the planning docs but have
-// no product spec for what redeeming them would actually DO yet — no catalog
-// items are seeded in those categories until that's designed. brand_product
-// is reserved for Phase 3's docs' own gate (a signed brand relationship),
-// not offered until one exists.
+// gym_trial is the second (see CoinCatalogItem.gymId/unitCostPaise below and
+// coinCatalogService.redeemCatalogItemByUserService — the customer-facing
+// redemption path with the monthly-cap + per-user-limit enforcement).
+// buddy_unlock now has ONE seeded item (a 24h deck-priority boost, D-03) —
+// but redeeming it only debits coins and records the redemption; nothing in
+// buddy-service actually reads a redemption yet and grants the boost. That
+// integration is unbuilt (verified 2026-09-11: no priority/boost concept
+// anywhere in buddy-service) and is a separate piece of work, not covered
+// by this schema change. priority_booking is reserved but has no product
+// spec for what redeeming it would DO — not offered. brand_product is
+// reserved for Phase 3's docs' own gate (a signed brand relationship), not
+// offered until one exists.
 enum CoinCatalogCategory {
   subscription_discount
+  gym_trial
   priority_booking
   buddy_unlock
   brand_product
@@ -169,11 +190,33 @@ model CoinCatalogItem {
   // knocked off a subscription's price when this item is redeemed. Null for
   // every other category (nothing to fulfill yet — see enum comment above).
   discountAmount Int?
+  // gym_trial only. Which gym the trial is for — each gym sets its own
+  // coinCost per D-05, so one gym_trial item exists per gym per tier, not
+  // one item shared across gyms. Not a Gym-model foreign key: gym-service
+  // owns that table in a separate database, so this is a plain reference,
+  // same convention bookingId/gymId already use elsewhere in this schema.
+  gymId          Int?
+  // gym_trial only. What THIS gym is owed per redemption, in paise, at the
+  // moment the item was priced — copied into CoinRedemption.metadata at
+  // redemption time so a later price change here can't retroactively alter
+  // what's owed for a trial that already went out. Real money the founder
+  // pays the gym; see gymTrialMonthlyCap above for why this is capped.
+  unitCostPaise  Int?
+  // gym_trial only, for now. Who is funding this reward — "founder" is the
+  // only value that exists today (D-05), kept as free text rather than an
+  // enum since the funding model is deliberately expected to change (a gym
+  // absorbing its own trials as a marketing cost was the alternative
+  // considered and rejected for the pilot, not for all time).
+  fundedBy       String?
   isActive       Boolean             @default(true)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   redemptions    CoinRedemption[]
 
+  // Serves the gym_trial monthly-cap query, which counts redemptions
+  // across every item in the category, not one item — see
+  // CoinEconomyConfig.gymTrialMonthlyCap.
+  @@index([category])
   @@schema("challenge")
 }
 
@@ -192,17 +235,30 @@ model CoinRedemption {
   coinCost       Int
   status         CoinRedemptionStatus @default(fulfilled)
   // Free-form context for the specific redemption — e.g. for
-  // subscription_discount: { gymId, discountAmount }. The calling service
-  // (wallet-service) remains the source of truth for the actual purchase;
-  // this is just this service's record of "coins were spent for X".
+  // subscription_discount: { gymId, discountAmount }; for gym_trial:
+  // { gymId, unitCostPaise } snapshotted at redemption time. The calling
+  // service (wallet-service) remains the source of truth for a
+  // subscription purchase; for a gym trial, THIS row is the source of
+  // truth for what's owed — see settled/settledAt below.
   metadata       Json?
   // Coins were debited under this key (see coinCatalogService.redeem) — a
   // caller retrying the same purchase attempt must never double-debit.
   idempotencyKey String?              @unique
+  // gym_trial payables only (D-05). False for every other category — there
+  // is nothing to settle for a coin-off-a-subscription redemption, only for
+  // a real day pass the founder owes the gym cash for. Left as a plain
+  // boolean + admin-toggled rather than a workflow status: at 10/month this
+  // is reconciled by hand off this table, not through an approval flow.
+  settled        Boolean              @default(false)
+  settledAt      DateTime?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
   @@index([userId, createdAt])
+  // The two queries the gym_trial cap and the (future) settlement list both
+  // run: "how many fulfilled redemptions of category X landed this month"
+  // and "which redemptions for this item are still unsettled".
+  @@index([catalogItemId, status, createdAt])
   @@schema("challenge")
 }
 

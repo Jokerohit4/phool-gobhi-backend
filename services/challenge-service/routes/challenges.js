@@ -11,6 +11,12 @@ const router = Router();
 router.get('/streak/me', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyStreak);
 router.get('/coins/wallet', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyCoinWallet);
 router.get('/coins/catalog', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getCoinCatalog);
+// The customer redemption path (H-16, D-06) — separate from the internal
+// /internal/coins/redemptions route below, which only wallet-service calls
+// as a step inside a purchase it controls end to end. This one is reachable
+// directly by a client and enforces the gym_trial monthly cap + per-user
+// limit inside its own transaction; see coinCatalogService for why.
+router.post('/coins/redeem', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.redeemCoinCatalogItem);
 router.get('/', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallenges);
 router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallengeDetail);
 router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);
