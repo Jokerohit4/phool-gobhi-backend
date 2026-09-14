@@ -129,10 +129,11 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      # gym-service footgun guard — CI port of .claude/commands/deploy.md's
-      # manual "/health before router" check (regressed once already, 3b3def4).
+      # health-before-router footgun guard — CI port of .claude/commands/deploy.md's
+      # manual check (regressed once already for gym-service, 3b3def4). Any service
+      # with healthCheckGuard=true gets validated.
       - if: steps.svcmeta.outputs.health-guard == 'true'
-        run: node deploy/scripts/check-gym-health-route-order.cjs
+        run: node deploy/scripts/check-gym-health-route-order.cjs ${{ matrix.service }}
 
       # Prisma migrations run from the runner (DB is externally reachable,
       # not Cloud SQL) BEFORE the new revision is deployed. Guard on the
