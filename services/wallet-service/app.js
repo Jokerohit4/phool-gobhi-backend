@@ -1,13 +1,15 @@
 import './bootstrap-secrets.js';
-import express from 'express';
 import dotenv from 'dotenv';
+dotenv.config();
+import { connectDB } from './db.js';
+connectDB();
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
 import { extractUser } from './middleware/requireAuth.js';
 import walletRoutes from './routes/wallet.js';
-import { pool } from './db.js';
-
-dotenv.config();
 
 const app = express();
+const prisma = new PrismaClient();
 // Razorpay signs the exact raw bytes of the webhook payload — stash them here
 // since express.json() only exposes the re-parsed object, and re-serializing
 // that with JSON.stringify is not guaranteed to match byte-for-byte (key
@@ -17,16 +19,26 @@ app.use(express.json({
 }));
 app.use(extractUser);
 
+// Health must be registered before the router: walletRoutes is mounted at '/' and its
+// GET /:userId would otherwise capture /health as a userId.
 app.get('/health', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
-    res.json({ status: 'ok' });
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'Wallet Service is healthy' });
   } catch (err) {
     res.status(503).json({ status: 'unhealthy', error: err.message });
   }
 });
 
 app.use('/', walletRoutes);
+
+// Global error handler — catches anything a route/middleware passes to next(err)
+// instead of handling it itself, so unexpected errors return JSON rather than
+// Express's default HTML error page.
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(err?.status || 500).json({ error: err?.message || 'Server error' });
+});
 
 const PORT = process.env.PORT || process.env.WALLET_SERVICE_PORT || 5003;
 app.listen(PORT, () => {

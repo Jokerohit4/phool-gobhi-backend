@@ -139,7 +139,7 @@ export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRI
 const TOPUP_CONFIG_CACHE_TTL_MS = 30 * 1000;
 let walletTopupConfigCache = null; // { value, expiresAt }
 
-function serializeTopupConfig(row) {
+export function serializeTopupConfig(row) {
   if (!row) return { ...DEFAULT_WALLET_TOPUP_CONFIG, updatedAt: null };
   return {
     presets: row.presets,
@@ -239,15 +239,15 @@ const CASH_BONUS = {
 // read boundary, immediately after every Prisma read, so every caller past
 // this point (controllers, analytics, cross-service calls) just sees plain
 // numbers and never has to think about Decimal.
-function serializeWallet(wallet) {
+export function serializeWallet(wallet) {
   if (!wallet) return wallet;
   return { ...wallet, balance: Number(wallet.balance) };
 }
-function serializeTransaction(tx) {
+export function serializeTransaction(tx) {
   if (!tx) return tx;
   return { ...tx, amount: Number(tx.amount) };
 }
-function serializeOrder(order) {
+export function serializeOrder(order) {
   if (!order) return order;
   return { ...order, amount: Number(order.amount) };
 }
@@ -704,7 +704,7 @@ export async function updateRazorpayOrderStatusService(orderId, status, razorpay
 
 // Gym subscriptions ----------------------------------------------------------
 
-function serializeSubscription(sub) {
+export function serializeSubscription(sub) {
   if (!sub) return sub;
   return {
     ...sub,
@@ -936,7 +936,7 @@ async function fetchLastVisitDate(subscriptionId) {
   }
 }
 
-function daysSince(dateStr) {
+export function daysSince(dateStr) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
 }
 
