@@ -12,7 +12,7 @@ import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
 import { withGoogleIdToken } from './utils/googleIdToken.js';
 
-const app = express();
+export const app = express();
 
 // Single source of truth for valid event names (docs/analytics-events.json,
 // checked for drift by scripts/check-analytics-events.cjs). Only the
@@ -23,7 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const analyticsEventsRegistry = JSON.parse(
   readFileSync(join(__dirname, 'docs', 'analytics-events.json'), 'utf8')
 );
-const CLIENT_EVENT_ALLOWLIST = new Set(
+export const CLIENT_EVENT_ALLOWLIST = new Set(
   Object.entries(analyticsEventsRegistry)
     .filter(([key, v]) => !key.startsWith('$') && v.source === 'client')
     .map(([key]) => key)
@@ -71,11 +71,11 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/health/ },
 ];
 
-function isPublicRoute(method, path) {
+export function isPublicRoute(method, path) {
   return PUBLIC_ROUTES.some(r => r.method === method && r.pattern.test(path));
 }
 
-function authMiddleware(req, res, next) {
+export function authMiddleware(req, res, next) {
   // Never let a client inject identity/internal headers — the gateway is the only
   // component allowed to set these, derived from a verified JWT.
   delete req.headers['x-user-id'];
@@ -156,7 +156,7 @@ app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timest
 // app sends its own distinct_id (anon id pre-login, userId after identify).
 // express.json is scoped to this route so it can't interfere with the proxied
 // request bodies below. Accepts a single event or { events: [...] }.
-app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
+export function eventsHandler(req, res) {
   try {
     // Parsed once per request (same header applies to every event in a
     // batch). This is a backstop, not the primary source: the apps already
@@ -200,7 +200,9 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
     // swallow — analytics never fails the client
   }
   res.status(202).json({ ok: true });
-});
+}
+
+app.post('/api/events', express.json({ limit: '128kb' }), eventsHandler);
 
 // Each proxy call attaches a Google ID token scoped to that specific backend
 // service's URL (see utils/googleIdToken.js) — on Cloud Run this is what lets
@@ -255,4 +257,6 @@ app.use('/api/health', proxy(HEALTH_SERVICE_URL, {
 }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
-app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
+}
