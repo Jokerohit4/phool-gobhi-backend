@@ -1030,12 +1030,29 @@ export async function updateGymSubscriptionPricingMode(gymId, mode, flatFeePerUs
   const gym = await prisma.gym.findUnique({ where: { id: gymId } });
   if (!gym) throw { status: 404, error: 'Gym not found' };
 
+return normalizeGymMoney(await prisma.gym.update({
+where: { id: gymId },
+data: {
+subscriptionPricingMode: mode,
+subscriptionFlatFeePerUser: flatFeePerUser ?? null,
+},
+}));
+}
+
+// Gobhi-only attendance-SaaS opt-out toggle (admin counterpart to the
+// partner's own switch inside updateGym). Same "keep at least one business
+// model enabled" guard so a gym can't end up with marketplace disabled AND
+// attendance-SaaS opted out at once.
+export async function setAttendanceSaasOptedOut(gymId, optOut) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  const nextOptOut = !!optOut;
+  if (!gym.marketplaceEnabled && nextOptOut) {
+    throw { status: 400, error: 'At least one business model (marketplace or attendance-SaaS) must stay enabled.' };
+  }
   return normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
-    data: {
-      subscriptionPricingMode: mode,
-      subscriptionFlatFeePerUser: flatFeePerUser ?? null,
-    },
+    data: { attendanceSaasOptedOut: nextOptOut },
   }));
 }
 

@@ -159,6 +159,36 @@ export async function runAttendanceSaasReengagementSweepService() {
   return { candidates: candidates.length, nudged, alreadyActive };
 }
 
+// Attendance-SaaS monthly bill: count of users who joined each of the given
+// gyms in a calendar month (YYYY-MM, IST boundaries — a "month" is the
+// Indian business month). Joined means linkedGymId set at account creation,
+// so createdAt in the month window is the exact proxy. Returns a map of
+// gymId -> count; a gym with no joiners keys to 0? No — it's simply absent,
+// so callers should default missing keys to 0.
+export async function countGymJoinedUsersByMonthService(gymIds, month) {
+  const { start, end } = istMonthRange(month);
+  const rows = await prisma.user.groupBy({
+    by: ['linkedGymId'],
+    where: { linkedGymId: { in: gymIds }, createdAt: { gte: start, lt: end } },
+    _count: { linkedGymId: true },
+  });
+  const counts = {};
+  for (const row of rows) counts[row.linkedGymId] = row._count.linkedGymId;
+  return counts;
+}
+
+// Turns 'YYYY-MM' into [start, end) UTC instants for the Indian business
+// month. Pure arithmetic, no tz library: IST is UTC+05:30, so the first
+// instant of the 1st is `Date.UTC(y, m-1, 1)` minus 5h30m.
+function istMonthRange(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw { status: 400, error: 'month must be YYYY-MM' };
+  const [y, m] = month.split('-').map(Number);
+  if (m < 1 || m > 12) throw { status: 400, error: 'month must be YYYY-MM' };
+  const start = new Date(Date.UTC(y, m - 1, 1) - 5.5 * 60 * 60 * 1000);
+  const end = new Date(Date.UTC(y, m, 1) - 5.5 * 60 * 60 * 1000);
+  return { start, end };
+}
+
 export async function signupService({ name, email, password, role, type, gobhiType }) {
   // Validate role and type
   if (!VALID_ROLES.includes(role)) {

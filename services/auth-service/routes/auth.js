@@ -1,6 +1,6 @@
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -78,6 +78,10 @@ router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 // Scheduled trigger (see .github/workflows) — nudges gym-linked signups
 // with no activity N days after registering.
 router.post('/internal/attendance-saas/reengagement-sweep', requireInternal, runAttendanceSaasReengagementSweep);
+// Internal: per-gym "users joined this month" counts, the numerator of the
+// attendance-SaaS monthly flat-per-user bill (wallet-service computes the
+// amount and debits the partner wallet).
+router.post('/internal/attendance-saas/joined-counts', requireInternal, countGymJoinedUsersByMonthInternal);
 // Gobhi-only: admin's attendance-SaaS member roster for one gym.
 router.get('/admin/attendance-saas/members/:gymId', requireGobhi, listAttendanceSaasMembers);
 // Partner-facing equivalent (own gym, ownership-checked, no phone) — closes

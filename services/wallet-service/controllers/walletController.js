@@ -33,6 +33,9 @@ import {
   getPendingBankSettlementsService,
   settleBankSettlementsService,
   getMyBankSettlementsService,
+  computeAttendanceSaasBillService,
+  computeAttendanceSaasBillsService,
+  applyAttendanceSaasBillService,
 } from '../services/walletService.js';
 import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
@@ -299,6 +302,72 @@ export const getMyBankSettlements = async (req, res) => {
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+// Gobhi/partner: compute (not apply) the open attendance-SaaS bill for one
+// gym and month — how many users joined that month x the per-user flat fee.
+// Read-only; the apply endpoint below is what actually debits the wallet.
+export const getAttendanceSaasBill = async (req, res) => {
+  try {
+    const gymId = Number(req.params.gymId);
+    const { month } = req.query;
+    if (!Number.isFinite(gymId) || !/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'gymId and month (YYYY-MM) are required' });
+    }
+    const bill = await computeAttendanceSaasBillService(gymId, String(month));
+    res.json({ data: bill });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only batch: compute the open bill for every requested gym at once —
+// backs the admin /attendance-saas per-gym bill column.
+export const getAttendanceSaasBills = async (req, res) => {
+  try {
+    const gymIds = Array.isArray(req.body?.gymIds) ? req.body.gymIds.map(Number).filter(Number.isFinite) : [];
+    const { month } = req.body || {};
+    if (!/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'month (YYYY-MM) is required' });
+    }
+    const bills = await computeAttendanceSaasBillsService(gymIds, String(month));
+    res.json({ data: bills });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only: apply the (gym, month) bill — debit the partner wallet by
+// usersJoined x flatFee, negative-allowed + idempotent per (gym, month).
+export const applyAttendanceSaasBill = async (req, res) => {
+  try {
+    const gymId = Number(req.params.gymId);
+    const { month } = req.body;
+    if (!Number.isFinite(gymId) || !/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'gymId and month (YYYY-MM) are required' });
+    }
+    const result = await applyAttendanceSaasBillService(gymId, String(month));
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Partner-facing: compute the open bill for one of the partner's OWN gyms
+// (ownership-checked), for the partner-web wallet dues surface.
+export const getMyAttendanceSaasBill = async (req, res) => {
+  try {
+    const gymId = Number(req.params.gymId);
+    const { month } = req.query;
+    if (!Number.isFinite(gymId) || !/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'gymId and month (YYYY-MM) are required' });
+    }
+    await assertPartnerOwnsGym(gymId, req.userId);
+    const bill = await computeAttendanceSaasBillService(gymId, String(month));
+    res.json({ data: bill });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

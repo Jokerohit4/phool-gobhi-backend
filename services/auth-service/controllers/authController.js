@@ -2,7 +2,7 @@
 import { buildFullExportService } from '../services/exportService.js';
 import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
@@ -629,6 +629,21 @@ const runAttendanceSaasReengagementSweep = async (req, res) => {
     res.json({ data: result });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Internal (requireInternal): count of users who joined each gym in a given
+// calendar month (YYYY-MM, IST) — the "users joined" numerator behind the
+// attendance-SaaS monthly flat-per-user bill (wallet-service computes
+// amount = joinedCount x flatFee and debits the partner wallet).
+const countGymJoinedUsersByMonthInternal = async (req, res) => {
+  try {
+    const gymIds = Array.isArray(req.body?.gymIds) ? req.body.gymIds.map(Number).filter(Number.isFinite) : [];
+    if (!gymIds.length) return res.status(400).json({ error: 'gymIds required' });
+    const counts = await countGymJoinedUsersByMonthService(gymIds, req.body?.month);
+    res.json({ data: { month: req.body?.month, counts } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 

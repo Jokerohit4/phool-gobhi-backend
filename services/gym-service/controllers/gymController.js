@@ -561,6 +561,16 @@ export const updateGymSubscriptionPricingMode = async (req, res) => {
   }
 };
 
+export const setGymAttendanceSaasOptedOut = async (req, res) => {
+  try {
+    const { attendanceSaasOptedOut } = req.body ?? {};
+    const gym = await gymService.setAttendanceSaasOptedOut(parseInt(req.params.id), attendanceSaasOptedOut);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getPartnerEditRequests = async (req, res) => {
   try {
     const requests = await gymService.getPartnerEditRequests(parseInt(req.params.id), req.userId);

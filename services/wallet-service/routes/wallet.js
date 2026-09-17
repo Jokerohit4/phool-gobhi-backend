@@ -33,6 +33,10 @@ import {
   getPendingBankSettlements,
   settleBankSettlements,
   getMyBankSettlements,
+  getAttendanceSaasBill,
+  getAttendanceSaasBills,
+  applyAttendanceSaasBill,
+  getMyAttendanceSaasBill,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -85,5 +89,12 @@ router.post('/internal/bank-settlements/record', requireInternal, recordPendingB
 router.get('/bank-settlements/mine', requireRole('partner'), getMyBankSettlements); // Partner's own pending total + history (optional ?gymId=)
 router.get('/bank-settlements/admin/pending', requireRole('gobhi'), getPendingBankSettlements); // Admin: every partner's pending total
 router.post('/bank-settlements/admin/:partnerId/settle', requireRole('gobhi'), settleBankSettlements); // Admin: mark a partner's pending rows settled (optional body {gymId})
+
+// Attendance-SaaS monthly flat-per-user bill (see walletService.js) —
+// computed on access, no cron, negative partner balance allowed.
+router.get('/attendance-saas/bill/:gymId', requireRole('gobhi'), getAttendanceSaasBill); // Admin: read-only computed bill for (gym, month)
+router.post('/attendance-saas/bills', requireRole('gobhi'), getAttendanceSaasBills); // Admin: batch compute for many gyms (body {gymIds, month})
+router.post('/attendance-saas/bill/:gymId/apply', requireRole('gobhi'), applyAttendanceSaasBill); // Admin: charge the (gym, month) bill
+router.get('/attendance-saas/bill/:gymId/mine', requireRole('partner'), getMyAttendanceSaasBill); // Partner: their gym's open bill (ownership-checked)
 
 export default router;

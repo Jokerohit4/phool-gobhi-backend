@@ -360,7 +360,11 @@ export async function creditWalletService(userId, amount, description, idempoten
   }
 }
 
-export async function debitWalletService(userId, amount, description, idempotencyKey = null, gymId = null) {
+// opts.allowNegative (attendance-SaaS monthly bill): permits the partner
+// wallet to go negative — the flat-per-user fee is owed regardless of
+// balance and settles against future earnings. Every other caller keeps the
+// default balance>=amount guard below.
+export async function debitWalletService(userId, amount, description, idempotencyKey = null, gymId = null, { allowNegative = false } = {}) {
   if (!Number.isFinite(amount) || amount <= 0) {
     // Defense in depth — the controller already rejects this, but a Decimal
     // wallet.balance compared against NaN/undefined via `<` would silently
@@ -381,9 +385,11 @@ export async function debitWalletService(userId, amount, description, idempotenc
       // same wallet is in flight — a plain findUnique-then-update let two
       // concurrent debits both pass the same balance check and both commit,
       // driving the balance negative. `wallet` above is only used for its
-      // id now, not for the balance check.
+      // id now, not for the balance check. The allowNegative path instead
+      // drops the guard so an owed bill can take the balance below zero
+      // (same row-lock atomicity via updateMany's WHERE).`
       const { count } = await tx.wallet.updateMany({
-        where: { userId, balance: { gte: amount } },
+        where: allowNegative ? { userId } : { userId, balance: { gte: amount } },
         data: { balance: { decrement: amount } },
       });
       if (count === 0) throw new Error('Insufficient balance');
@@ -591,6 +597,136 @@ export async function getMyBankSettlementsService(partnerId, gymId) {
     })),
     totalSettled: Math.round(settled.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
   };
+}
+
+// --- Attendance-SaaS monthly flat-per-user bill ---------------------------
+// The other half of the attendance-SaaS wedge: REGISTRATION is the product.
+// A user who joins a gym (User.linkedGymId set in auth-service at signup) is
+// billable at ₹1/user per month — no honeymoon, no cron. The bill is computed
+// on access (admin "charge" button on the /attendance-saas page, or any
+// read), idempotently applied per (gymId, month), and may drive the partner
+// wallet negative (settled out of future earnings). Quantity comes from
+// auth-service's joined-count endpoint; unit fee = gym's flatPerUser override
+// (Gym.subscriptionFlatFeePerUser) or the platform default below.
+
+// Idempotency key for a month's bill — deterministic per (gym, month) so a
+// double-clicked admin approve, or a retry after a crash, can never charge
+// the same month twice.
+function attendanceSaasBillIdempotencyKey(gymId, month) {
+  return `attendance-saas-bill-${gymId}-${month}`;
+}
+
+// Looks up whether / when a (gym, month) bill was already applied, via the
+// transaction row its debit created. Mirrors alreadyAppliedWallet but only
+// needs the transaction, not the wallet — so the read path can answer
+// "already billed?" without creating a wallet.
+export async function getAttendanceSaasBillAppliedAtService(gymId, month) {
+  const tx = await prisma.walletTransaction.findUnique({
+    where: { idempotencyKey: attendanceSaasBillIdempotencyKey(gymId, month) },
+    select: { createdAt: true },
+  });
+  return tx?.createdAt ?? null;
+}
+
+// Fetches the fee + billing posture for one gym from gym-service. Shared with
+// the apply path so compute and charge can never disagree about the rate.
+// Throws a friendly 404 if the gym doesn't exist (the caller validates that
+// upstream too via assertPartnerOwnsGym where a partner is involved).
+async function fetchGymBillingConfig(gymId) {
+  let gym;
+  try {
+    const res = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = res.data?.data || res.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  return {
+    partnerId: gym.partnerId,
+    attendanceSaasOptedOut: gym.attendanceSaasOptedOut === true,
+    subscriptionPricingMode: gym.subscriptionPricingMode === 'flatPerUser' ? 'flatPerUser' : 'percentage',
+    subscriptionFlatFeePerUser: gym.subscriptionFlatFeePerUser != null ? Number(gym.subscriptionFlatFeePerUser) : null,
+  };
+}
+
+// Computes the open bill for (gymId, month) WITHOUT applying it: how many
+// users joined that month x the per-user flat fee. Read-only — used by the
+// admin page per-gym column and the partner-web wallet dues surface. If the
+// bill is already applied, appliedAt is set and amountDue reflects it (the
+// caller shows "billed <date>" instead of an open amount).
+export async function computeAttendanceSaasBillService(gymId, month) {
+  const [bill] = await computeAttendanceSaasBillsService([gymId], month);
+  return bill;
+}
+
+// Batch form of the above: one auth-service joined-counts call and one
+// applied-key lookup for the whole set (the admin page computes every gym at
+// once), with the per-gym config fan-out in parallel. Callers must not pass
+// an empty list — a gym with no joiners simply yields usersJoined 0.
+export async function computeAttendanceSaasBillsService(gymIds, month) {
+  if (!gymIds.length) return [];
+  const keys = gymIds.map((id) => attendanceSaasBillIdempotencyKey(id, month));
+  const [configs, countsRes, appliedRows] = await Promise.all([
+    Promise.all(gymIds.map((id) => fetchGymBillingConfig(id))),
+    axios.post(`${AUTH_SERVICE_URL}/internal/attendance-saas/joined-counts`,
+      { gymIds, month }, await internalHeadersFor(AUTH_SERVICE_URL)),
+    prisma.walletTransaction.findMany({
+      where: { idempotencyKey: { in: keys } },
+      select: { idempotencyKey: true, createdAt: true },
+    }),
+  ]);
+  const counts = countsRes.data?.data?.counts ?? {};
+  const appliedByKey = new Map(appliedRows.map((r) => [r.idempotencyKey, r.createdAt]));
+  return gymIds.map((gymId, i) => {
+    const config = configs[i];
+    const usersJoined = counts[gymId] ?? 0;
+    const flatFeePerUser = config.subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER;
+    return {
+      gymId,
+      month,
+      usersJoined,
+      flatFeePerUser,
+      amountDue: Math.round(usersJoined * flatFeePerUser * 100) / 100,
+      appliedAt: appliedByKey.get(attendanceSaasBillIdempotencyKey(gymId, month)) ?? null,
+      attendanceSaasOptedOut: config.attendanceSaasOptedOut,
+      subscriptionPricingMode: config.subscriptionPricingMode,
+    };
+  });
+}
+
+// Applies the (gymId, month) bill: debits the owning partner's wallet by
+// usersJoined x flatFee, negative-allowed and idempotent per (gym, month).
+// A gym that opted out of attendance-SaaS, or a month with zero joiners, has
+// nothing to charge — returns the computed bill with appliedAt null rather
+// than debiting 0.
+export async function applyAttendanceSaasBillService(gymId, month) {
+  const config = await fetchGymBillingConfig(gymId);
+  if (config.attendanceSaasOptedOut) {
+    const bill = await computeAttendanceSaasBillService(gymId, month);
+    return { ...bill, applied: false, reason: 'ATTENDANCE_SAAS_OPTED_OUT' };
+  }
+
+  const bill = await computeAttendanceSaasBillService(gymId, month);
+  if (bill.appliedAt) return { ...bill, applied: false, reason: 'ALREADY_APPLIED' };
+  if (bill.amountDue <= 0) return { ...bill, applied: false, reason: 'NO_USERS_JOINED' };
+
+  const description = `Attendance SaaS bill - Gym ${gymId} - ${month} (${bill.usersJoined} user${bill.usersJoined === 1 ? '' : 's'} x Rs ${bill.flatFeePerUser})`;
+  const wallet = await debitWalletService(
+    config.partnerId,
+    bill.amountDue,
+    description,
+    attendanceSaasBillIdempotencyKey(gymId, month),
+    gymId,
+    { allowNegative: true },
+  );
+  track('attendance_saas_bill_charged', config.partnerId, {
+    gym_id: gymId,
+    month,
+    users_joined: bill.usersJoined,
+    flat_fee_per_user: bill.flatFeePerUser,
+    amount_due: bill.amountDue,
+  });
+  return { ...bill, applied: true, balance: wallet.balance };
 }
 
 export async function payoutWalletService(userId, amount, description) {

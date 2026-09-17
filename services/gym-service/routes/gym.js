@@ -92,6 +92,7 @@ router.put('/:id/subscription-commission', requireRole('gobhi'), ctrl.updateGymS
 // Body: {subscriptionPricingMode: 'percentage'|'flatPerUser', subscriptionFlatFeePerUser: number|null} —
 // picks which formula wallet-service applies to this gym's attendance-SaaS commission.
 router.put('/:id/subscription-pricing-mode', requireRole('gobhi'), ctrl.updateGymSubscriptionPricingMode);
+router.put('/admin/:id/attendance-saas-opt-out', requireRole('gobhi'), ctrl.setGymAttendanceSaasOptedOut);
 // List all gyms regardless of owner/approval status; ?status=pending|approved|rejected
 router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 // Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)
