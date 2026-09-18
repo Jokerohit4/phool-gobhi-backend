@@ -1,86 +1,471 @@
 {
-  "$comment": "Single source of truth for every analytics event name shipped anywhere in the platform (backend track()/ingest() calls, both Flutter apps' AnalyticsEvents constants, website). Checked by scripts/check-analytics-events.cjs, which fails a deploy if code uses an event string not listed here (docs/analytics-events.json) — this is what would have caught the 2026-07-22 silent subscription-funnel rename before it shipped. 'source' is 'server' (emitted in-process via track(), never touches the gateway's /api/events route) or 'client' (sent by an app/website via ingest(), and therefore the set the gateway's /api/events allowlist is built from). Retired events are kept here, flagged retired, so historical rows remain queryable and the checker doesn't complain about old code that no longer exists.",
-
-  "signup_completed":            { "source": "server", "service": "auth-service" },
-  "login_completed":             { "source": "server", "service": "auth-service" },
-  "attendance_saas_reengagement_sent": { "source": "server", "service": "auth-service", "since": "2026-08-20", "notes": "attendance-SaaS wedge — nudge sent to a gym-linked signup with no booking/subscription activity" },
-  "attendance_saas_bill_charged": { "source": "server", "service": "wallet-service", "since": "2026-09-17", "notes": "admin applied a gym's monthly attendance-SaaS bill — users joined that month x flat per-user fee debited from the partner wallet (negative balance allowed)" },
-  "partner_bank_settlement_recorded":  { "source": "server", "service": "wallet-service", "since": "2026-08-20", "notes": "admin marked a partner's pending attendance-SaaS bank settlement as paid (manual bank transfer, outside the app)" },
-  "staff_account_created":       { "source": "server", "service": "auth-service" },
-  "staff_account_revoked":       { "source": "server", "service": "auth-service" },
-  "staff_account_reactivated":   { "source": "server", "service": "auth-service" },
-  "trainer_account_created":      { "source": "server", "service": "auth-service", "since": "2026-08-21", "notes": "partner created a gym-employed trainer account" },
-  "trainer_account_deactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
-  "trainer_account_reactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
-  "trainer_checked_in":           { "source": "server", "service": "booking-service", "since": "2026-08-21" },
-  "training_session_logged":      { "source": "server", "service": "booking-service", "since": "2026-08-21", "notes": "trainer self-logged which attended customer booking they trained" },
-
-  "gym_created":                 { "source": "server", "service": "gym-service" },
-  "gym_approved":                { "source": "server", "service": "gym-service" },
-  "gym_rejected":                { "source": "server", "service": "gym-service" },
-
-  "booking_confirmed":           { "source": "server", "service": "booking-service" },
-  "booking_failed":              { "source": "server", "service": "booking-service" },
-  "booking_cancelled":           { "source": "server", "service": "booking-service" },
-  "booking_completed":           { "source": "server", "service": "booking-service" },
-  "booking_created":             { "source": "server", "service": "booking-service" },
-  "referral_credited":           { "source": "server", "service": "booking-service", "since": "2026-08-03", "notes": "fires when a referred customer's first completed booking triggers the ₹50/₹50 wallet credit" },
-  "checkin_requested":           { "source": "server", "service": "booking-service" },
-  "attendance_verified":         { "source": "server", "service": "booking-service", "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'" },
-  "attendance_slot_mismatch_confirmed": { "source": "server", "service": "booking-service", "since": "2026-07-29", "notes": "fires instead of attendance_verified when a partner scans a booking's QR before its session window opens and confirms shifting the slot time" },
-  "badge_earned":                { "source": "server", "service": "booking-service", "since": "2026-08-18", "notes": "gamification wave 1 — fires on selfCheckIn when this is the customer's first-ever attended booking at gymId" },
-
-  "wallet_topup_order_created":  { "source": "server", "service": "wallet-service" },
-  "wallet_topup_succeeded":      { "source": "server", "service": "wallet-service" },
-  "wallet_topup_failed":         { "source": "server", "service": "wallet-service" },
-  "partner_payout_recorded":     { "source": "server", "service": "wallet-service" },
-  "wallet_topup_config_updated": { "source": "server", "service": "wallet-service", "since": "2026-08-06", "notes": "admin edits WalletTopupConfig (presets/allowCustomAmount/min/max) via phool-gobhi-admin's Settings page" },
-  "subscription_purchased_wallet": { "source": "server", "service": "wallet-service", "since": "2026-07-22", "notes": "replaces the retired two-step subscription_order_created/subscription_purchased flow as of commit b8c7251" },
-  "subscription_order_created":  { "source": "server", "service": "wallet-service", "retired": true, "retiredSince": "2026-07-22", "notes": "superseded by subscription_purchased_wallet; historical rows only" },
-  "subscription_purchased":      { "source": "server", "service": "wallet-service", "retired": true, "retiredSince": "2026-07-22", "notes": "superseded by subscription_purchased_wallet; historical rows only" },
-
-  "buddy_profile_created":       { "source": "server", "service": "buddy-service" },
-  "buddy_swiped":                { "source": "server", "service": "buddy-service" },
-  "buddy_matched":               { "source": "server", "service": "buddy-service" },
-  "buddy_unmatched":             { "source": "server", "service": "buddy-service" },
-  "buddy_message_sent":          { "source": "server", "service": "buddy-service" },
-  "buddy_blocked":               { "source": "server", "service": "buddy-service" },
-
-  "otp_requested":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "otp_submitted":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "identify":                       { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "screen_viewed":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "search_performed":               { "source": "client", "apps": ["phool_gobhi"] },
-  "gym_viewed":                     { "source": "client", "apps": ["phool_gobhi"] },
-  "slot_selected":                  { "source": "client", "apps": ["phool_gobhi"] },
-  "book_tapped":                    { "source": "client", "apps": ["phool_gobhi"] },
-  "checkin_tapped":                 { "source": "client", "apps": ["phool_gobhi"] },
-  "topup_tapped":                   { "source": "client", "apps": ["phool_gobhi"] },
-  "referral_shared":                { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-03", "notes": "Share your code tapped on the Refer & Earn screen" },
-  "map_explored_opened":            { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-18", "notes": "gamification wave 1 — fog-of-war explore map opened" },
-  "badge_shelf_viewed":             { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-18", "notes": "gamification wave 1 — badge shelf opened" },
-  "session_started":                { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23", "notes": "as of 2026-08-15, the website's copy also carries properties.channel ('direct'|'organic_search'|'social'|'referral'|'campaign:<utm_source>'), referrer_host, utm_source/medium/campaign/term/content, and landing_path — captured once at the very first paint of the session, before any client-side navigation — backing the admin's traffic-source breakdown" },
-  "session_ended":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23" },
-  "update_required_shown":          { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"], "notes": "force-update splash screen shown (min version gate)" },
-  "update_now_tapped":               { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
-  "soft_update_shown":               { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"], "notes": "dismissible nudge shown (latest version gate)" },
-  "soft_update_dismissed":           { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
-  "soft_update_tapped":              { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
-  "onboarding_started":              { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_step_completed":       { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_gym_photo_added":      { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_doc_added":            { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_submitted":            { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "gym_image_uploaded":              { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to GymScreenCubit.addImage on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "gym_doc_uploaded":                { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to GymScreenCubit.addDoc on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "gym_profile_updated":             { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to GymScreenCubit.updateGym on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "dashboard_viewed":                { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to HomeScreenTwo.initState on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "booking_checked_in":              { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to CameraCubit's QR-scan verify-attendance success on 2026-08-17 (properties.method = 'qr_scan'|'qr_scan_slot_shift') — previously reserved but unwired since 2026-07-23" },
-  "gym_switched":                    { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "SelectedGymCubit.selectGym, only fires on an actual change of selection — backs multi-gym engagement visibility, which had zero analytics coverage before this" },
-  "gym_class_created":               { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "new recurring-class supply feature (ClassesCubit.addClass); properties.pending reflects whether it needs gobhi approval like other gym edits" },
-  "schedule_slot_blocked":           { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "ScheduleCubit.toggleBlock; properties.action is 'blocked'|'unblocked'" },
-  "schedule_hours_updated":          { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "ScheduleCubit.saveHours (operating-hours editor)" },
-  "logout_tapped":                   { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "fires before AuthCubit.onTapSignOut/reset() so the event still carries the outgoing user's distinct_id" },
-  "cta_clicked":                     { "source": "client", "apps": ["website"], "since": "2026-07-23", "notes": "generic CTA click event, properties.cta identifies which one (e.g. 'whatsapp', 'signup')" },
-  "location_resolved":               { "source": "client", "apps": ["website"], "since": "2026-08-15", "notes": "fires once per session after the site's silent geolocation grab settles. properties.permission is 'granted'|'denied'|'unsupported'|'timeout'|'error'; when granted, properties.nearest_gym_distance_km is the TRUE nearest-gym distance computed server-side (no 40km discovery cutoff) — backs the admin Location Reach view" }
+  "$comment": "Single source of truth for every analytics event name shipped anywhere in the platform (backend track()/ingest() calls, both Flutter apps' AnalyticsEvents constants, website). Checked by scripts/check-analytics-events.cjs, which fails a deploy if code uses an event string not listed here (docs/analytics-events.json) \u2014 this is what would have caught the 2026-07-22 silent subscription-funnel rename before it shipped. 'source' is 'server' (emitted in-process via track(), never touches the gateway's /api/events route) or 'client' (sent by an app/website via ingest(), and therefore the set the gateway's /api/events allowlist is built from). Retired events are kept here, flagged retired, so historical rows remain queryable and the checker doesn't complain about old code that no longer exists.",
+  "signup_completed": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "login_completed": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "attendance_saas_reengagement_sent": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-20",
+    "notes": "attendance-SaaS wedge \u2014 nudge sent to a gym-linked signup with no booking/subscription activity"
+  },
+  "attendance_saas_bill_charged": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-09-17",
+    "notes": "admin applied a gym's monthly attendance-SaaS bill \u2014 users joined that month x flat per-user fee debited from the partner wallet (negative balance allowed)"
+  },
+  "partner_bank_settlement_recorded": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-08-20",
+    "notes": "admin marked a partner's pending attendance-SaaS bank settlement as paid (manual bank transfer, outside the app)"
+  },
+  "staff_account_created": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "staff_account_revoked": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "staff_account_reactivated": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "trainer_account_created": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-21",
+    "notes": "partner created a gym-employed trainer account"
+  },
+  "trainer_account_deactivated": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-21"
+  },
+  "trainer_account_reactivated": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-21"
+  },
+  "trainer_checked_in": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-21"
+  },
+  "training_session_logged": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-21",
+    "notes": "trainer self-logged which attended customer booking they trained"
+  },
+  "gym_created": {
+    "source": "server",
+    "service": "gym-service"
+  },
+  "gym_approved": {
+    "source": "server",
+    "service": "gym-service"
+  },
+  "gym_rejected": {
+    "source": "server",
+    "service": "gym-service"
+  },
+  "booking_confirmed": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_failed": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_cancelled": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_completed": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_created": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "referral_credited": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-03",
+    "notes": "fires when a referred customer's first completed booking triggers the \u20b950/\u20b950 wallet credit"
+  },
+  "checkin_requested": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "independent_checkin": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "attendance_verified": {
+    "source": "server",
+    "service": "booking-service",
+    "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'"
+  },
+  "attendance_slot_mismatch_confirmed": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-07-29",
+    "notes": "fires instead of attendance_verified when a partner scans a booking's QR before its session window opens and confirms shifting the slot time"
+  },
+  "badge_earned": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-18",
+    "notes": "gamification wave 1 \u2014 fires on selfCheckIn when this is the customer's first-ever attended booking at gymId"
+  },
+  "wallet_topup_order_created": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "wallet_topup_succeeded": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "wallet_topup_failed": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "partner_payout_recorded": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "wallet_topup_config_updated": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-08-06",
+    "notes": "admin edits WalletTopupConfig (presets/allowCustomAmount/min/max) via phool-gobhi-admin's Settings page"
+  },
+  "subscription_purchased_wallet": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-07-22",
+    "notes": "replaces the retired two-step subscription_order_created/subscription_purchased flow as of commit b8c7251"
+  },
+  "subscription_order_created": {
+    "source": "server",
+    "service": "wallet-service",
+    "retired": true,
+    "retiredSince": "2026-07-22",
+    "notes": "superseded by subscription_purchased_wallet; historical rows only"
+  },
+  "subscription_purchased": {
+    "source": "server",
+    "service": "wallet-service",
+    "retired": true,
+    "retiredSince": "2026-07-22",
+    "notes": "superseded by subscription_purchased_wallet; historical rows only"
+  },
+  "buddy_profile_created": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_swiped": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_matched": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_unmatched": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_message_sent": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_blocked": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "otp_requested": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "otp_submitted": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "identify": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "screen_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "search_performed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "gym_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "slot_selected": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "book_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "checkin_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "topup_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "referral_shared": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-08-03",
+    "notes": "Share your code tapped on the Refer & Earn screen"
+  },
+  "map_explored_opened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-08-18",
+    "notes": "gamification wave 1 \u2014 fog-of-war explore map opened"
+  },
+  "badge_shelf_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-08-18",
+    "notes": "gamification wave 1 \u2014 badge shelf opened"
+  },
+  "session_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ],
+    "since": "2026-07-23",
+    "notes": "as of 2026-08-15, the website's copy also carries properties.channel ('direct'|'organic_search'|'social'|'referral'|'campaign:<utm_source>'), referrer_host, utm_source/medium/campaign/term/content, and landing_path \u2014 captured once at the very first paint of the session, before any client-side navigation \u2014 backing the admin's traffic-source breakdown"
+  },
+  "session_ended": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ],
+    "since": "2026-07-23"
+  },
+  "update_required_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "notes": "force-update splash screen shown (min version gate)"
+  },
+  "update_now_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ]
+  },
+  "soft_update_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "notes": "dismissible nudge shown (latest version gate)"
+  },
+  "soft_update_dismissed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ]
+  },
+  "soft_update_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_step_completed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_gym_photo_added": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_doc_added": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_submitted": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "gym_image_uploaded": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to GymScreenCubit.addImage on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "gym_doc_uploaded": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to GymScreenCubit.addDoc on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "gym_profile_updated": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to GymScreenCubit.updateGym on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "dashboard_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to HomeScreenTwo.initState on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "booking_checked_in": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to CameraCubit's QR-scan verify-attendance success on 2026-08-17 (properties.method = 'qr_scan'|'qr_scan_slot_shift') \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "gym_switched": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "SelectedGymCubit.selectGym, only fires on an actual change of selection \u2014 backs multi-gym engagement visibility, which had zero analytics coverage before this"
+  },
+  "gym_class_created": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "new recurring-class supply feature (ClassesCubit.addClass); properties.pending reflects whether it needs gobhi approval like other gym edits"
+  },
+  "schedule_slot_blocked": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "ScheduleCubit.toggleBlock; properties.action is 'blocked'|'unblocked'"
+  },
+  "schedule_hours_updated": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "ScheduleCubit.saveHours (operating-hours editor)"
+  },
+  "logout_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "fires before AuthCubit.onTapSignOut/reset() so the event still carries the outgoing user's distinct_id"
+  },
+  "cta_clicked": {
+    "source": "client",
+    "apps": [
+      "website"
+    ],
+    "since": "2026-07-23",
+    "notes": "generic CTA click event, properties.cta identifies which one (e.g. 'whatsapp', 'signup')"
+  },
+  "location_resolved": {
+    "source": "client",
+    "apps": [
+      "website"
+    ],
+    "since": "2026-08-15",
+    "notes": "fires once per session after the site's silent geolocation grab settles. properties.permission is 'granted'|'denied'|'unsupported'|'timeout'|'error'; when granted, properties.nearest_gym_distance_km is the TRUE nearest-gym distance computed server-side (no 40km discovery cutoff) \u2014 backs the admin Location Reach view"
+  }
 }
