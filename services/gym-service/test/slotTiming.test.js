@@ -4,10 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-let isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST;
+let isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES;
 
 test('setup: import slotTiming', async () => {
-  ({ isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST } = await import('../utils/slotTiming.js'));
+  ({ isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES } = await import('../utils/slotTiming.js'));
 });
 
 // Pinned "now": UTC 2026-09-14 10:00 == IST 15:30. Lead = 60 min -> cutover at UTC 11:00.
@@ -58,4 +58,16 @@ test('todayDateStringIST: resolves "today" in IST even when UTC is a different d
 test('todayDateStringIST: mid-afternoon UTC keeps the same IST calendar date', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC }); // UTC 10:00 == IST 15:30 same day
   assert.equal(todayDateStringIST(), '2026-09-14');
+});
+
+// MIN_LEAD_MINUTES is served to clients (GET /:id/slots -> leadTimeMinutes) so
+// they can word "book at least N minutes ahead" from the server's own rule.
+// This pins it to the same boundary isSlotInPastOrTooSoon enforces, so the two
+// can't drift into a UI that promises one thing while the gate does another.
+test('MIN_LEAD_MINUTES matches the boundary the gate actually enforces', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  assert.equal(MIN_LEAD_MINUTES, 60);
+  // One minute inside the advertised lead is rejected, exactly on it is allowed.
+  assert.equal(isSlotInPastOrTooSoon('2026-09-14', '16:29'), true);
+  assert.equal(isSlotInPastOrTooSoon('2026-09-14', '16:30'), false);
 });

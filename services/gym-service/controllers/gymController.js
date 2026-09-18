@@ -3,7 +3,7 @@ import * as exportService from '../services/exportService.js';
 import * as placesService from '../services/placesService.js';
 import { generateWindowedSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
 
@@ -94,7 +94,22 @@ export const getGymInternal = async (req, res) => {
   }
 };
 
-async function getAnnotatedSlotsForDate(gym, gymId, date) {
+// [includeUnbookable] keeps slots that exist and have capacity but start
+// inside the MIN_LEAD_MS booking window, returning them flagged
+// `bookable: false` instead of dropping them.
+//
+// Why opt-in rather than always-on: silently deleting them is a real UX bug
+// (at 18:20 the 19:00 slot just vanishes, and if every remaining slot today is
+// inside the window the whole date chip disappears — which reads as "this gym
+// is full", not "you're too late to pre-book"). But this same helper backs
+// getGymAvailability, and the website/partner slot grids treat every returned
+// slot as tappable. So the default stays byte-identical for existing callers,
+// and a client opts in only once it actually renders the disabled state.
+//
+// Safe to expose: booking creation independently re-checks the lead time
+// (booking-service bookingService.js, isSlotInPastOrTooSoon), so a client that
+// ignores the flag and posts anyway is still rejected server-side.
+async function getAnnotatedSlotsForDate(gym, gymId, date, { includeUnbookable = false } = {}) {
   // A date-less call (no known caller today, but preserved for safety) has
   // no day-of-week to resolve hours against — default to today's IST
   // calendar day rather than guessing.
@@ -141,21 +156,42 @@ async function getAnnotatedSlotsForDate(gym, gymId, date) {
     .map(s => {
       const booked = counts[s.startTime] || 0;
       const available = Math.max(gym.capacity - booked, 0);
-      return { ...s, booked, available };
+      const bookable = !date || !isSlotInPastOrTooSoon(date, s.startTime);
+      return {
+        ...s,
+        booked,
+        available,
+        bookable,
+        ...(bookable ? {} : { unbookableReason: 'LEAD_TIME' }),
+      };
     })
+    // A full slot is genuinely gone — nothing the customer can do about it, so
+    // it stays filtered in both modes. Lead-time slots are different: they are
+    // bookable information ("too late for this one"), which is why only they
+    // survive when includeUnbookable is set.
     .filter(s => s.available > 0)
-    .filter(s => !date || !isSlotInPastOrTooSoon(date, s.startTime));
+    .filter(s => includeUnbookable || s.bookable);
 }
 
 export const getGymSlots = async (req, res) => {
   try {
     const gymId = parseInt(req.params.id);
     const { date } = req.query;
+    const includeUnbookable = req.query.includeUnbookable === 'true';
 
     const gym = await gymService.getGymById(gymId);
-    const annotated = await getAnnotatedSlotsForDate(gym, gymId, date);
+    const annotated = await getAnnotatedSlotsForDate(gym, gymId, date, { includeUnbookable });
 
-    res.json({ data: { slots: annotated, capacity: gym.capacity } });
+    // leadTimeMinutes is echoed so a client can word its own "book at least N
+    // minutes ahead" copy from the server's rule instead of hardcoding 60 and
+    // silently drifting if the rule ever changes.
+    res.json({
+      data: {
+        slots: annotated,
+        capacity: gym.capacity,
+        leadTimeMinutes: MIN_LEAD_MINUTES,
+      },
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -182,10 +218,23 @@ export const getGymAvailability = async (req, res) => {
     );
 
     const results = await Promise.all(
-      dates.map(async date => ({
-        date,
-        available: (await getAnnotatedSlotsForDate(gym, gymId, date)).length > 0
-      }))
+      dates.map(async date => {
+        // One pass including lead-time-blocked slots, so both facts come from
+        // the same data: `available` keeps its original meaning (something can
+        // actually be booked), while `hasSlots` says the gym is open then but
+        // every remaining slot is inside the booking lead.
+        //
+        // Without the second flag a client can't tell "this gym is shut today"
+        // from "you're too late to pre-book today", and the date chip vanishes
+        // either way — which is exactly what made the lead-time rule read as a
+        // bug rather than a rule.
+        const slots = await getAnnotatedSlotsForDate(gym, gymId, date, { includeUnbookable: true });
+        return {
+          date,
+          available: slots.some(s => s.bookable),
+          hasSlots: slots.length > 0,
+        };
+      })
     );
 
     res.json({ data: { dates: results } });
@@ -737,21 +786,29 @@ export const getClassOccurrences = async (req, res) => {
     const istNow = new Date(Date.now() + IST_OFFSET_MS);
     const anchor = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate());
 
+    // Same opt-in as GET /:id/slots — see getAnnotatedSlotsForDate. Dropping a
+    // lead-time-blocked occurrence is worse here than for a slot: because this
+    // loop fills up to `days` entries, removing today's silently promotes NEXT
+    // WEEK's date into its place, so a 7pm class at 6:20pm doesn't just vanish
+    // — the list confidently shows the same class seven days later with no
+    // indication that today's was skipped.
+    const includeUnbookable = req.query.includeUnbookable === 'true';
     const dates = [];
     for (let i = 0; dates.length < days && i < days * 7 + 7; i++) {
       const d = new Date(anchor + i * 86400000);
       if (d.getUTCDay() !== cls.dayOfWeek) continue;
       const dateStr = d.toISOString().split('T')[0];
       if (cancelledDates.has(dateStr)) continue;
-      if (isSlotInPastOrTooSoon(dateStr, cls.startTime)) continue;
-      dates.push(dateStr);
+      const bookable = !isSlotInPastOrTooSoon(dateStr, cls.startTime);
+      if (!bookable && !includeUnbookable) continue;
+      dates.push({ date: dateStr, bookable });
     }
 
     let counts = {};
     if (dates.length) {
       try {
         const resp = await fetch(
-          `${BOOKING_SERVICE_URL}/internal/class-counts/${classId}?dates=${encodeURIComponent(dates.join(','))}`,
+          `${BOOKING_SERVICE_URL}/internal/class-counts/${classId}?dates=${encodeURIComponent(dates.map(d => d.date).join(','))}`,
           {
             headers: {
               'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
@@ -768,15 +825,17 @@ export const getClassOccurrences = async (req, res) => {
       }
     }
 
-    const occurrences = dates.map(date => ({
+    const occurrences = dates.map(({ date, bookable }) => ({
       date,
       startTime: cls.startTime,
       endTime: cls.endTime,
       booked: counts[date] || 0,
       available: Math.max(cls.capacity - (counts[date] || 0), 0),
+      bookable,
+      ...(bookable ? {} : { unbookableReason: 'LEAD_TIME' }),
     }));
 
-    res.json({ data: occurrences });
+    res.json({ data: occurrences, leadTimeMinutes: MIN_LEAD_MINUTES });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

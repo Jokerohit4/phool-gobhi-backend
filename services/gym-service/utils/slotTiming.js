@@ -17,6 +17,11 @@ export function isSlotInPastOrTooSoon(date, startTime) {
   return slotInstantUTC(date, startTime) < Date.now() + MIN_LEAD_MS;
 }
 
+// The same rule in the unit a UI wants to say out loud ("book at least 60
+// minutes ahead"). Exported so clients render the rule rather than restate it
+// — a hardcoded 60 in three apps is three places to miss when this changes.
+export const MIN_LEAD_MINUTES = MIN_LEAD_MS / 60000;
+
 // Weekday (0=Sunday..6=Saturday) of a plain IST calendar-date string —
 // timezone-invariant, since it only depends on the calendar date itself, not
 // the instant it represents (India has no DST).
