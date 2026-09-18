@@ -467,5 +467,45 @@
     ],
     "since": "2026-08-15",
     "notes": "fires once per session after the site's silent geolocation grab settles. properties.permission is 'granted'|'denied'|'unsupported'|'timeout'|'error'; when granted, properties.nearest_gym_distance_km is the TRUE nearest-gym distance computed server-side (no 40km discovery cutoff) \u2014 backs the admin Location Reach view"
+  },
+  "offline_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "the app-wide no-internet screen was shown (OfflineGate) \u2014 how often a transport failure interrupts someone mid-task"
+  },
+  "app_error": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "a handled client-side error surfaced to the user"
+  },
+  "sprout_encountered": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "map collectible came into range on the Explore map"
+  },
+  "sprout_caught": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "map collectible picked up"
+  },
+  "delete_account_confirmed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-09-18",
+    "notes": "partner confirmed account deletion. Constant is declared but not yet wired to a call site \u2014 registered so the name is reserved and the checker stays green"
   }
 }

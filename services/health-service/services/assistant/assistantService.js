@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { getProvider, ProviderError } from './providers/index.js';
+import { getProvider, isProviderConfigured, ProviderError } from './providers/index.js';
 import { buildUserContextService } from './contextService.js';
 import { canSendMessageService, recordMessageSentService } from './rateLimitService.js';
 import {
@@ -22,12 +22,17 @@ const MAX_MESSAGE_CHARS = 2000;
 // --- consent ---------------------------------------------------------------
 
 export async function getConsentStatusService(userId) {
+  // Reported alongside consent because the screen needs both before it can
+  // decide what to show: the flag can be on, the user can have agreed, and
+  // the assistant still have no model behind it.
+  const available = isProviderConfigured();
   const row = await prisma.assistantConsent.findUnique({ where: { userId } });
   if (!row) {
-    return { granted: false, needsReconsent: false, policyVersion: CURRENT_POLICY_VERSION };
+    return { granted: false, needsReconsent: false, available, policyVersion: CURRENT_POLICY_VERSION };
   }
   const active = !row.revokedAt;
   return {
+    available,
     granted: active && row.policyVersion === CURRENT_POLICY_VERSION,
     // Distinct from "never agreed": the UI should explain that the terms
     // changed rather than showing a first-run screen to a returning user.
@@ -110,6 +115,16 @@ export async function sendMessageService(userId, { conversationId, message }) {
   if (!text) throw { status: 400, error: 'Message cannot be empty' };
   if (text.length > MAX_MESSAGE_CHARS) {
     throw { status: 400, error: 'Message is too long (max ' + MAX_MESSAGE_CHARS + ' characters)' };
+  }
+
+  // Checked before the rate limit so an unconfigured provider never burns a
+  // user's hourly allowance on a request that could not have succeeded.
+  if (!isProviderConfigured()) {
+    throw {
+      status: 503,
+      error: 'The assistant is not switched on yet. Nothing you typed was lost.',
+      code: 'ASSISTANT_NOT_CONFIGURED',
+    };
   }
 
   const refusal = classifyMessage(text);

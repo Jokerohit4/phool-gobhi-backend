@@ -34,3 +34,12 @@ if (USING_OLLAMA && process.env.NODE_ENV === 'production') {
 export function getProvider() {
   return USING_OLLAMA ? ollamaProvider : hostedProvider;
 }
+
+/// Whether the active provider has everything it needs to answer.
+///
+/// Surfaced so the feature can report itself as not-yet-available rather than
+/// letting someone type a message and collect a 503. A flag being on and a
+/// provider being reachable are different facts, and the UI needs both.
+export function isProviderConfigured() {
+  return getProvider().isConfigured();
+}

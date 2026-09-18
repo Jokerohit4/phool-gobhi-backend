@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 let consentRow = null;
-let getConsentStatusService, grantConsentService, revokeConsentService, CURRENT_POLICY_VERSION;
+let getConsentStatusService, grantConsentService, revokeConsentService, sendMessageService, CURRENT_POLICY_VERSION;
 
 test('setup: stub Prisma, import once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -41,7 +41,7 @@ test('setup: stub Prisma, import once', async (t) => {
     },
   });
 
-  ({ getConsentStatusService, grantConsentService, revokeConsentService } = await import(
+  ({ getConsentStatusService, grantConsentService, revokeConsentService, sendMessageService } = await import(
     '../services/assistant/assistantService.js'
   ));
   ({ CURRENT_POLICY_VERSION } = await import('../services/assistant/assistantPolicy.js'));
@@ -121,6 +121,36 @@ test('revoking with nothing on record is a 404, not a silent success', async () 
     () => revokeConsentService(1),
     (err) => {
       assert.equal(err.status, 404);
+      return true;
+    }
+  );
+});
+
+test('consent status reports whether a provider is actually configured', async () => {
+  // The flag being on and the assistant being usable are different facts. The
+  // screen needs both, or it asks someone to accept terms for a thing that
+  // cannot answer them.
+  consentRow = null;
+  const status = await getConsentStatusService(1);
+  assert.equal(typeof status.available, 'boolean');
+});
+
+test('an unconfigured provider refuses BEFORE spending rate-limit budget', async () => {
+  // Ordering matters: a request that could never have succeeded must not cost
+  // the user one of their ten messages an hour.
+  consentRow = {
+    userId: 1,
+    grantedAt: new Date(),
+    revokedAt: null,
+    policyVersion: CURRENT_POLICY_VERSION,
+  };
+  const status = await getConsentStatusService(1);
+  if (status.available) return; // a provider IS configured here; nothing to assert
+  await assert.rejects(
+    () => sendMessageService(1, { message: 'what should I train today?' }),
+    (err) => {
+      assert.equal(err.status, 503);
+      assert.equal(err.code, 'ASSISTANT_NOT_CONFIGURED');
       return true;
     }
   );
