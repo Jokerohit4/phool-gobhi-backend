@@ -579,7 +579,7 @@ model PersonalisationProfile {
   // time series, so there's exactly one source of truth for "what does this
   // user weigh" instead of a setup copy that immediately goes stale.
   heightCm         Int?
-  // Pre-existing bug fixed 2026-09-11, unrelated to trainingLocation below:
+  // Pre-existing bug fixed 2026-09-11:
   // personalisationService/personalisationController have read and written
   // setupWeightKg since this model was built, but the column never existed
   // — any client that actually sent it would have hit a Prisma "Unknown
@@ -600,41 +600,7 @@ model PersonalisationProfile {
   // what was disclosed to arrive at the mode.
   consentAt        DateTime?
   privacyVersion   String?
-  // Which track a user trains on (docs/../sprint2/PG-HUNT-001 H-19).
-  // Deliberately NOT consent-bearing — unlike programmingMode above, setting
-  // or changing this never touches consentAt/privacyVersion, and it is
-  // gated on healthMetrics alone (see routes/health.js), never on
-  // healthPersonalisation. It's a UI-routing preference ("what does my home
-  // screen lead with"), not a disclosure a user is consenting to.
-  /// DEPRECATED (2026-09-18) — do not read, do not wire up.
-  ///
-  /// This predates auth-service's `User.appMode` and duplicates it. A grep of
-  /// both repos at the time of writing found it is only ever WRITTEN (by the
-  /// route below) and included in the DPDPA export; nothing anywhere reads it
-  /// to make a decision, so it has never influenced a single user's
-  /// experience.
-  ///
-  /// `User.appMode` is the single source of truth for "which experience does
-  /// this person lead with" — it is derived server-side from the onboarding
-  /// answers, it is what the app's Home branches on, and it is available at
-  /// boot from /me without depending on the healthMetrics flag being on.
-  /// Two independently-settable fields meaning the same thing is how you get
-  /// a user whose home screen and whose training engine disagree.
-  ///
-  /// Kept rather than dropped because the column may hold values from earlier
-  /// testing and dropping it is a destructive migration for no gain. If this
-  /// service's engine ever needs the fact, mirror it from appMode rather than
-  /// reviving the independent write path.
-  trainingLocation TrainingLocation?
   updatedAt        DateTime         @updatedAt
-
-  @@schema("health")
-}
-
-enum TrainingLocation {
-  gym
-  home
-  both
 
   @@schema("health")
 }

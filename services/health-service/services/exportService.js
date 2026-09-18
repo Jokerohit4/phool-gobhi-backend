@@ -224,7 +224,6 @@ export async function buildFullExportService(userId) {
           // arrive at the mode, because that was never transmitted.
           consentAt: personalisation.consentAt,
           privacyVersion: personalisation.privacyVersion,
-          trainingLocation: personalisation.trainingLocation,
         }
       : null,
     // The user's weekly training target, and whether they chose it or it was

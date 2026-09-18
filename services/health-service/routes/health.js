@@ -178,12 +178,6 @@ router.put('/personalisation', ...personalisationGated, personalisationCtrl.upda
 // never does.
 router.put('/personalisation/programming-mode', ...personalisationGated, personalisationCtrl.setProgrammingMode);
 
-// ---- Training location (home track, H-19) --------------------------------
-// Gated on healthMetrics alone, NOT personalisationGated — see the
-// updateTrainingLocationService comment for why this must never inherit the
-// consent-bearing healthPersonalisation flag.
-router.put('/personalisation/training-location', ...gated, personalisationCtrl.updateTrainingLocation);
-
 // ---- Weekly recap (FR-13) -----------------------------------------------
 // Numbers only — the client renders the shareable card. No name/gym/photo in
 // the payload at all, so the "no PII on the card" guarantee holds no matter
