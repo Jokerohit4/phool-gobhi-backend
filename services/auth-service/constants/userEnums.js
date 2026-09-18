@@ -58,3 +58,31 @@ export const VALID_GENDERS = Object.values(GENDERS);
 export const VALID_FITNESS_GOALS = Object.values(FITNESS_GOALS);
 export const VALID_EXPERIENCE_LEVELS = Object.values(EXPERIENCE_LEVELS);
 export const VALID_FREQUENCY_INTENTS = Object.values(FREQUENCY_INTENTS);
+// --- Onboarding branch (2026-09-18) -----------------------------------------
+
+export const TRAINING_LOCATION_PREFS = {
+  HOME: 'home',
+  GYM: 'gym',
+  FITNESS_CENTRE: 'fitness_centre',
+  OTHER: 'other',
+};
+
+export const APP_MODES = {
+  // Booking/PAYG leads. Home shows discovery.
+  GYM_SEEKER: 'gym_seeker',
+  // The user already trains somewhere we don't necessarily sell. The app is a
+  // workout/progress/habit tool and PAYG is demoted to a single card.
+  HOME_TRACK: 'home_track',
+};
+
+export const FREE_TIME_WINDOWS = {
+  MORNING: 'morning',
+  AFTERNOON: 'afternoon',
+  EVENING: 'evening',
+  LATE_NIGHT: 'late_night',
+  FLEXIBLE: 'flexible',
+};
+
+export const VALID_TRAINING_LOCATION_PREFS = Object.values(TRAINING_LOCATION_PREFS);
+export const VALID_APP_MODES = Object.values(APP_MODES);
+export const VALID_FREE_TIME_WINDOWS = Object.values(FREE_TIME_WINDOWS);

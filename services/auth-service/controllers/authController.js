@@ -307,6 +307,40 @@ const DEFAULT_FEATURES = {
   //     checking before the card is shareable.
   healthPersonalisation: { enabled: false },
   recapSharing: { enabled: false },
+  // Onboarding branch (2026-09-18). Gates the new question graph ("do you work
+  // out / where / how often") and the writes it produces. Off means the
+  // existing two-step onboarding runs untouched, so this can ship dark and be
+  // turned on for a cohort.
+  //
+  // Note this gates COLLECTION only. Whether the answers actually change the
+  // app is a separate flag (homeTrackHome) — deliberately, so the branch split
+  // can be measured on real users before anyone builds on the assumption.
+  brandedOnboarding: { enabled: false },
+  // Whether appMode actually changes what the user sees. Separate from
+  // brandedOnboarding on purpose: collection and consequence are staged
+  // independently, so the real home/partner-gym/non-partner split can be
+  // measured on live users before any home screen is built on the assumption.
+  // Requires healthMetrics to be on as well — the home-track screen leads with
+  // workout/routine widgets that flag gates.
+  homeTrackHome: { enabled: false },
+  // The fitness assistant. Its own flag on top of healthMetrics, like
+  // healthPersonalisation and recapSharing, and for the same reason: an AI
+  // answering questions about someone's body is a bigger claim than logging
+  // their sets, and the disclaimer wording wants sign-off before a real user
+  // agrees to it. Also independently switchable, so the assistant can be
+  // pulled without taking workout logging down with it.
+  fitnessAssistant: { enabled: false },
+  // Cycle tracking. Its own flag AND its own consent scope, because this
+  // reverses FR-27 (2026-09-08), which deliberately kept zero cycle columns
+  // server-side. Off is the correct default until the consent wording has
+  // been reviewed — the same bar healthPersonalisation was held to, and this
+  // is more sensitive than that was.
+  cycleTracking: { enabled: false },
+  // Non-partner gyms: Places-sourced unclaimed gym records + GPS check-in.
+  // Gated because resolving a place calls Google Places (billable) on every
+  // request and writes a row — it needs a real kill switch, not just a hidden
+  // button in the app.
+  nonPartnerAttendance: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
@@ -541,6 +575,15 @@ const getMe = async (req, res) => {
       linkedGymId: user.linkedGymId,
       trainerGymId: user.trainerGymId,
       leaderboardOptIn: user.leaderboardOptIn,
+      // Onboarding branch — appMode in particular is read at app boot to pick
+      // which Home to render, alongside linkedGymId directly above. Shipping
+      // it on /me (not only on the profile endpoint) is what lets the app
+      // branch on the first call rather than after a second round trip.
+      currentlyWorksOut: user.currentlyWorksOut ?? null,
+      trainingLocationPref: user.trainingLocationPref,
+      trainingLocationOther: user.trainingLocationOther,
+      appMode: user.appMode,
+      freeTimeWindow: user.freeTimeWindow,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

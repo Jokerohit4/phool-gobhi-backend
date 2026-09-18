@@ -28,6 +28,34 @@ model User {
   // WhatsApp-handoff CTA to new/restarting users only.
   experienceLevel       ExperienceLevel?
   weeklyFrequencyIntent FrequencyIntent?
+  // --- Onboarding branch (2026-09-18) -------------------------------------
+  // Who this user is, decided once at onboarding and revisable later. These
+  // live here rather than in health-service because the app must branch its
+  // Home tab on them at boot, from the same /me call that already carries
+  // linkedGymId — anything read only from health-service is unreachable
+  // whenever the healthMetrics flag is off, which would be the wrong
+  // dependency for tab routing.
+  //
+  // "Do you work out?" — null means never asked (pre-existing accounts, or
+  // onboarding completed before this shipped), which is NOT the same as false.
+  currentlyWorksOut Boolean?
+  // Answers both phrasings of the same question ("where do you work out" for
+  // an existing exerciser, "where would you prefer" for someone starting) —
+  // one column, because the downstream behaviour is identical either way.
+  trainingLocationPref TrainingLocationPref?
+  // Free text behind the "Other" option. Deliberately unconstrained and never
+  // parsed — it exists to be read by a human deciding what the next enum
+  // value should be.
+  trainingLocationOther String?
+  // The derived, mutable field the app's Home tab branches on. Derivation
+  // lives in authService (deriveAppMode) rather than being trusted from the
+  // client, so the rule stays in one place when it changes.
+  appMode AppMode?
+  // Coarse "when are you usually free" bucket. Consumed for nudge send-time
+  // and off-peak targeting — NOT collected for its own sake. If that consumer
+  // ever goes away, delete the field rather than leaving it to rot the way
+  // fitnessGoals did.
+  freeTimeWindow FreeTimeWindow?
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
@@ -406,5 +434,64 @@ enum FrequencyIntent {
   three_four
   five_plus
 
+  @@schema("auth")
+}
+
+// Where the user trains, or would prefer to. `gym` and `fitness_centre` are
+// kept distinct because the whiteboard flow asks for them separately and the
+// distinction is meaningful to users even though today they route the same —
+// collapsing them now would be a lossy migration to undo later.
+enum TrainingLocationPref {
+  home
+  gym
+  fitness_centre
+  other
+
+  @@schema("auth")
+}
+
+// Which experience the app leads with.
+//   gym_seeker — booking/PAYG is the proposition; Home leads with discovery.
+//   home_track — the user already trains; the app is a workout/progress/habit
+//                tool and PAYG is demoted to a single "try a gym" card.
+// Two values, not four: this drives one branch, and every extra value here is
+// another Home variant somebody has to build and maintain.
+enum AppMode {
+  gym_seeker
+  home_track
+
+  @@schema("auth")
+}
+
+enum FreeTimeWindow {
+  morning
+  afternoon
+  evening
+  late_night
+  flexible
+
+  @@schema("auth")
+}
+// Every time a user switches which experience the app leads with.
+//
+// Append-only, and the reason it exists is measurement rather than
+// correctness: the onboarding branch is a guess about how people split, and
+// this is how you find out whether the guess was right. If users switch once
+// and stay, the split was good; if they oscillate, the question was wrong.
+//
+// Also the audit trail for a field that changes what a user sees — without
+// it, "why does my app look different" has no answer.
+model AppModeHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  // Null on the first row for a user: they came from onboarding, not from
+  // switching away from something.
+  fromMode  AppMode?
+  toMode    AppMode
+  // 'onboarding' | 'floating_prompt' | 'settings'
+  source    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
   @@schema("auth")
 }

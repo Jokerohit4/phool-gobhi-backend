@@ -51,6 +51,15 @@ export async function buildFullExportService(userId) {
       // person is would be a handle to a third party's account.
       wasReferred: user.referredByUserId !== null,
       leaderboardOptIn: user.leaderboardOptIn,
+      // Onboarding branch answers — preference data about this person, so it
+      // belongs in their DPDPA access-right export like every other answer
+      // they gave us. Added here at the same time as the columns, rather than
+      // left to be noticed later.
+      currentlyWorksOut: user.currentlyWorksOut,
+      trainingLocationPref: user.trainingLocationPref,
+      trainingLocationOther: user.trainingLocationOther,
+      appMode: user.appMode,
+      freeTimeWindow: user.freeTimeWindow,
       joinedAt: user.createdAt,
     },
     savedAddresses: addresses.map((a) => ({

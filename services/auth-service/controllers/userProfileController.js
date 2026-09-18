@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_EXPERIENCE_LEVELS, VALID_FREQUENCY_INTENTS } from '../constants/userEnums.js';
+import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_EXPERIENCE_LEVELS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES } from '../constants/userEnums.js';
+import { deriveAppMode } from '../services/appModeService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
@@ -155,6 +156,15 @@ function formatUser(user) {
     referralCode: user.referralCode || null,
     linkedGymId: user.linkedGymId || null,
     leaderboardOptIn: user.leaderboardOptIn,
+    // Onboarding branch. `?? null` rather than `|| null` for
+    // currentlyWorksOut specifically: it is a tri-state (true/false/unasked)
+    // and `false || null` would collapse "no, I don't work out" — the answer
+    // that routes someone into the gym_seeker experience — into "never asked".
+    currentlyWorksOut: user.currentlyWorksOut ?? null,
+    trainingLocationPref: user.trainingLocationPref || null,
+    trainingLocationOther: user.trainingLocationOther || null,
+    appMode: user.appMode || null,
+    freeTimeWindow: user.freeTimeWindow || null,
   };
 }
 
@@ -228,12 +238,79 @@ export const uploadProfilePicture = async (req, res) => {
 };
 
 // PUT /users/:userId — update name, phone, profileImageUrl, fcmToken
+// PUT /users/:userId/app-mode — the user deliberately switching which
+// experience the app leads with ("I want to try a gym" / "not into gyms").
+//
+// Its own route rather than a field on updateProfile, because this is a
+// different kind of act: updateProfile derives appMode from the onboarding
+// answers, whereas this is the user overriding that derivation. Keeping them
+// apart is what lets every override be logged without also logging every
+// incidental profile edit.
+export const updateAppMode = async (req, res) => {
+  try {
+    const requestingUserId = parseInt(req.headers['x-user-id']);
+    const targetUserId = parseInt(req.params.userId);
+    if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
+
+    const { appMode, source } = req.body || {};
+    if (!VALID_APP_MODES.includes(appMode)) {
+      return res.status(400).json({ error: `Invalid appMode. Must be one of: ${VALID_APP_MODES.join(', ')}` });
+    }
+
+    const before = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!before) return res.status(404).json({ error: 'User not found' });
+
+    // Switching to the mode you are already in is a no-op, not a log entry —
+    // otherwise the switch-frequency signal this log exists to produce gets
+    // drowned in duplicates from a double-tapped button.
+    if (before.appMode === appMode) {
+      return res.json({ data: formatUser(before) });
+    }
+
+    const [user] = await prisma.$transaction([
+      prisma.user.update({ where: { id: targetUserId }, data: { appMode } }),
+      prisma.appModeHistory.create({
+        data: {
+          userId: targetUserId,
+          fromMode: before.appMode,
+          toMode: appMode,
+          source: typeof source === 'string' && source ? source : 'floating_prompt',
+        },
+      }),
+    ]);
+
+    res.json({ data: formatUser(user) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const updateProfile = async (req, res) => {
   try {
     const requestingUserId = parseInt(req.headers['x-user-id']);
     const targetUserId = parseInt(req.params.userId);
     if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
-    const { name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals } = req.body;
+    const {
+      name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
+      currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
+    } = req.body;
+
+    // appMode is deliberately NOT accepted here. It is derived server-side
+    // from the answers below (deriveAppMode) so the branching rule lives in
+    // one place; a client that wants to switch mode calls the dedicated
+    // PUT /users/:userId/app-mode route instead, which logs the change.
+    if (trainingLocationPref !== undefined && trainingLocationPref !== null
+        && !VALID_TRAINING_LOCATION_PREFS.includes(trainingLocationPref)) {
+      return res.status(400).json({ error: `Invalid trainingLocationPref. Must be one of: ${VALID_TRAINING_LOCATION_PREFS.join(', ')}` });
+    }
+    if (freeTimeWindow !== undefined && freeTimeWindow !== null
+        && !VALID_FREE_TIME_WINDOWS.includes(freeTimeWindow)) {
+      return res.status(400).json({ error: `Invalid freeTimeWindow. Must be one of: ${VALID_FREE_TIME_WINDOWS.join(', ')}` });
+    }
+    if (currentlyWorksOut !== undefined && currentlyWorksOut !== null
+        && typeof currentlyWorksOut !== 'boolean') {
+      return res.status(400).json({ error: 'currentlyWorksOut must be a boolean' });
+    }
 
     if (gender !== undefined && gender !== null && !VALID_GENDERS.includes(gender)) {
       return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
@@ -262,6 +339,19 @@ export const updateProfile = async (req, res) => {
     if (gender !== undefined) updates.gender = gender;
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
+    if (currentlyWorksOut !== undefined) updates.currentlyWorksOut = currentlyWorksOut;
+    if (trainingLocationPref !== undefined) updates.trainingLocationPref = trainingLocationPref;
+    if (trainingLocationOther !== undefined) updates.trainingLocationOther = trainingLocationOther;
+    if (freeTimeWindow !== undefined) updates.freeTimeWindow = freeTimeWindow;
+
+    // Re-derive appMode whenever an input to it changes, from the merged
+    // (before + updates) view rather than the request alone — onboarding sends
+    // these answers across more than one PATCH, and deriving from a partial
+    // body would flip mode on the first call and flip it back on the second.
+    if (currentlyWorksOut !== undefined || trainingLocationPref !== undefined) {
+      updates.appMode = deriveAppMode({ ...before, ...updates });
+    }
+
     const user = await prisma.user.update({ where: { id: targetUserId }, data: updates });
 
     if (gender !== undefined || dateOfBirth !== undefined || fitnessGoals !== undefined) {
