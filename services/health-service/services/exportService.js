@@ -120,7 +120,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback] =
+  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
@@ -136,6 +136,20 @@ export async function buildFullExportService(userId) {
       prisma.dailyActivityMetric.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
       prisma.biometricEntry.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { metric: 'asc' }] }),
       prisma.suggestionFeedback.findMany({ where: { userId }, orderBy: { shownAt: 'asc' } }),
+      // The comment above this function is explicit that export and erasure
+      // must stay in step — we must not delete on request something we never
+      // showed on request. The assistant transcript is the clearest case of
+      // that: it is the most sensitive thing here and the thing a person is
+      // most likely to actually want a copy of.
+      prisma.assistantConsent.findUnique({ where: { userId } }),
+      prisma.assistantConversation.findMany({
+        where: { userId },
+        include: { messages: { orderBy: { createdAt: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.assistantMemory.findMany({ where: { userId }, orderBy: { updatedAt: 'asc' } }),
+      prisma.cycleTrackingProfile.findUnique({ where: { userId } }),
+      prisma.cyclePhaseEntry.findMany({ where: { userId }, orderBy: { startDate: 'asc' } }),
     ]);
 
   // Reuses the range builder with no range, so the session shape in a
@@ -145,6 +159,54 @@ export async function buildFullExportService(userId) {
   const { sessions } = await buildRangeSeriesService(userId);
 
   return {
+    // Cycle tracking. Included for the same reason as everything else here:
+    // we must not delete on request what we never showed on request, and this
+    // is the data a person is most entitled to a copy of.
+    cycleTracking: cycleProfile
+      ? {
+          consentAt: cycleProfile.consentAt,
+          averageCycleLengthDays: cycleProfile.averageCycleLengthDays,
+          averagePeriodLengthDays: cycleProfile.averagePeriodLengthDays,
+          lastPeriodStartDate: cycleProfile.lastPeriodStartDate,
+          // `source` rides along so a prediction is never mistaken in the
+          // export for something she reported.
+          phases: cyclePhases.map((e) => ({
+            startDate: e.startDate,
+            endDate: e.endDate,
+            phase: e.phase,
+            source: e.source,
+          })),
+        }
+      : null,
+    assistant: {
+      consent: assistantConsent
+        ? {
+            grantedAt: assistantConsent.grantedAt,
+            revokedAt: assistantConsent.revokedAt,
+            policyVersion: assistantConsent.policyVersion,
+          }
+        : null,
+      // Full transcripts, both sides. policyVersion/promptVersion ride along
+      // so the export shows not just what was said but under which posture —
+      // which is the point of recording them per message.
+      conversations: assistantConversations.map((c) => ({
+        startedAt: c.createdAt,
+        title: c.title,
+        messages: c.messages.map((m) => ({
+          at: m.createdAt,
+          role: m.role,
+          content: m.content,
+          policyVersion: m.policyVersion,
+          promptVersion: m.promptVersion,
+        })),
+      })),
+      remembered: assistantMemories.map((m) => ({
+        key: m.key,
+        value: m.value,
+        source: m.source,
+        updatedAt: m.updatedAt,
+      })),
+    },
     consent: consent
       ? { grantedAt: consent.grantedAt, revokedAt: consent.revokedAt, policyVersion: consent.policyVersion, platform: consent.platform }
       : null,

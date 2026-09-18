@@ -16,6 +16,10 @@ import * as consistencyStreakCtrl from '../controllers/consistencyStreakControll
 import * as planCtrl from '../controllers/planController.js';
 import * as statsCtrl from '../controllers/statsController.js';
 import * as nudgeCtrl from '../controllers/nudgeController.js';
+import * as assistantCtrl from '../controllers/assistantController.js';
+import * as cycleCtrl from '../controllers/cycleTrackingController.js';
+import { requireCycleConsent } from '../middleware/requireCycleConsent.js';
+import { requireAssistantConsent } from '../middleware/requireAssistantConsent.js';
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
@@ -52,6 +56,56 @@ const recapGated = [
   requireFeatureFlag('healthMetrics'),
   requireFeatureFlag('recapSharing'),
 ];
+
+// The fitness assistant, layered the same way — its own flag ON TOP of
+// healthMetrics, because it needs its own sign-off (an AI answering questions
+// about someone's body is a bigger claim than logging their sets) and because
+// it should be switchable off independently of the workout logging it reads.
+//
+// Consent is a SEPARATE middleware from the flag, and only on the routes that
+// actually talk to the model: the flag answers "does this feature exist",
+// consent answers "has this person agreed to it", and they fail differently
+// (403 FEATURE_DISABLED vs a prompt the UI can act on). Reading consent or
+// granting it must stay reachable without already having it, or there is no
+// way in.
+const assistantGated = [
+  requireAuth,
+  requireFeatureFlag('healthMetrics'),
+  requireFeatureFlag('fitnessAssistant'),
+];
+
+// ---- Cycle tracking ------------------------------------------------------
+// Two independent gates, and they fail differently on purpose. The FLAG says
+// whether the feature exists at all (403 FEATURE_DISABLED); the CONSENT SCOPE
+// says whether this user opted in, and its absence is a prompt the UI can act
+// on rather than an error. Reading the profile and granting consent must stay
+// reachable without already having consent, or there is no way to opt in.
+const cycleGated = [
+  requireAuth,
+  requireFeatureFlag('healthMetrics'),
+  requireFeatureFlag('cycleTracking'),
+];
+router.get('/cycle', ...cycleGated, cycleCtrl.getProfile);
+router.post('/cycle/consent', ...cycleGated, cycleCtrl.grantConsent);
+router.delete('/cycle/consent', ...cycleGated, cycleCtrl.revokeConsent);
+router.put('/cycle', ...cycleGated, requireCycleConsent, cycleCtrl.updateProfile);
+router.get('/cycle/phases', ...cycleGated, requireCycleConsent, cycleCtrl.listPhases);
+router.post('/cycle/phases', ...cycleGated, requireCycleConsent, cycleCtrl.logPhase);
+// NOT flag-gated, same reasoning as DELETE /me: a user must always be able to
+// delete their own data, even if the feature that collected it is switched off.
+router.delete('/cycle', requireAuth, cycleCtrl.deleteAllData);
+
+// ---- Fitness assistant ---------------------------------------------------
+router.get('/assistant/consent', ...assistantGated, assistantCtrl.getConsent);
+router.post('/assistant/consent', ...assistantGated, assistantCtrl.grantConsent);
+router.delete('/assistant/consent', ...assistantGated, assistantCtrl.revokeConsent);
+router.get('/assistant/conversations', ...assistantGated, requireAssistantConsent, assistantCtrl.listConversations);
+router.post('/assistant/messages', ...assistantGated, requireAssistantConsent, assistantCtrl.sendMessage);
+// MUST stay below /assistant/conversations above — otherwise ":id" swallows
+// "conversations" on the collection route. Same one-path-segment footgun this
+// repo hits in gym-service's routes.
+router.get('/assistant/conversations/:id', ...assistantGated, requireAssistantConsent, assistantCtrl.getConversation);
+router.delete('/assistant/conversations/:id', ...assistantGated, assistantCtrl.deleteConversation);
 
 // ---- Consent -------------------------------------------------------------
 router.post('/consent', ...gated, consentCtrl.grantConsent);

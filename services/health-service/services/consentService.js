@@ -95,5 +95,23 @@ export async function deleteAllDataService(userId) {
     // records in wallet/booking-service already rely on; see the
     // three-bucket note in retentionService.js.
     prisma.healthConsent.deleteMany({ where: { userId } }),
+    // Fitness assistant. Conversations cascade to their messages via the FK,
+    // but messages are deleted explicitly first anyway: the delete is ordered
+    // for a reader, not just for the database, and "the transcript goes" is
+    // the single most important line in this list to be able to point at.
+    //
+    // These transcripts are the most sensitive rows this service holds — a
+    // user may have typed an injury, a condition or a medication into them —
+    // so they must never outlive the account.
+    prisma.assistantMessage.deleteMany({ where: { userId } }),
+    prisma.assistantConversation.deleteMany({ where: { userId } }),
+    prisma.assistantMemory.deleteMany({ where: { userId } }),
+    prisma.assistantRateLimitLog.deleteMany({ where: { userId } }),
+    prisma.assistantConsent.deleteMany({ where: { userId } }),
+    // Cycle tracking. The most sensitive rows in this service — a record of
+    // someone's menstrual history — so they go with the account without
+    // exception. Wired in with the migration that created them, not later.
+    prisma.cyclePhaseEntry.deleteMany({ where: { userId } }),
+    prisma.cycleTrackingProfile.deleteMany({ where: { userId } }),
   ]);
 }

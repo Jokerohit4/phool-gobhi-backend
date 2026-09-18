@@ -76,6 +76,11 @@ export async function deleteProfileService(userId) {
 // its own write path is what makes that guarantee structural rather than a
 // convention someone could accidentally break by adding it to the shared
 // patch allowlist.
+/// DEPRECATED (2026-09-18). See PersonalisationProfile.trainingLocation in
+/// this service's schema: auth-service's User.appMode is the source of truth
+/// for which experience a user leads with, and nothing reads this field.
+/// Left functional (no caller ships today) rather than silently no-op'd —
+/// a write that pretends to succeed is worse than one nobody makes.
 export async function updateTrainingLocationService(userId, trainingLocation) {
   return prisma.personalisationProfile.upsert({
     where: { userId },

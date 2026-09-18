@@ -120,7 +120,8 @@
             "NODE_ENV": "development",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "gym-service",
-            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "gym-service-secrets"
@@ -131,7 +132,8 @@
             "NODE_ENV": "production",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "gym-service",
-            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app"
+            "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "gym-service-secrets"
@@ -310,7 +312,10 @@
             "ANALYTICS_SERVICE_NAME": "health-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
+            "ASSISTANT_PROVIDER": "hosted",
+            "ASSISTANT_MAX_OUTPUT_TOKENS": "600",
+            "ASSISTANT_STRICTNESS": "full"
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"
@@ -323,7 +328,10 @@
             "ANALYTICS_SERVICE_NAME": "health-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
+            "ASSISTANT_PROVIDER": "hosted",
+            "ASSISTANT_MAX_OUTPUT_TOKENS": "600",
+            "ASSISTANT_STRICTNESS": "full"
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"
