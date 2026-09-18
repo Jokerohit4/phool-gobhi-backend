@@ -2916,3 +2916,110 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
     },
   };
 }
+
+// --- Non-partner gym check-in (2026-09-18) ----------------------------------
+
+// Same radius as the customer self-check-in against a partner gym. Kept as its
+// own constant rather than shared so the two can diverge: a partner gym's
+// coordinates were entered by its owner and verified during approval, while an
+// unclaimed gym's come from a Google Places pin nobody has checked.
+const INDEPENDENT_CHECKIN_RADIUS_METERS = 300;
+
+/// A customer checking in at a gym Phool Gobhi has no partnership with.
+///
+/// No Booking is created or touched: there is no slot, no price, no capacity
+/// and no partner to pay. GPS inside the geofence is the entire proof, which is
+/// weaker than a partner's QR scan and deliberately so — the alternative for
+/// this user is no record at all.
+///
+/// [unclaimedGymId] is a gym-service UnclaimedGym id, NOT a Gym id. The two
+/// live in separate id spaces; `source` on the emitted attendance event is
+/// what tells a later reader which table to resolve gymId against.
+export async function independentCheckIn(customerId, unclaimedGymId, lat, lng) {
+  try {
+    let gym;
+    try {
+      const res = await axios.get(
+        `${GYM_SERVICE_URL}/internal/unclaimed-gyms/${unclaimedGymId}`,
+        await internalHeadersFor(GYM_SERVICE_URL)
+      );
+      gym = res.data?.data || res.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || gym?.lat == null || gym?.lng == null) {
+      throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
+    }
+    if (distanceMeters(lat, lng, gym.lat, gym.lng) > INDEPENDENT_CHECKIN_RADIUS_METERS) {
+      throw {
+        status: 400,
+        error: `You need to be at ${gym.name} to check in`,
+        code: 'TOO_FAR',
+      };
+    }
+
+    const date = todayDateStringIST();
+
+    // Checking in twice in a day is a normal thing for a person to do (they
+    // reopened the app, the first tap looked like it failed). It is not an
+    // error and must not read as one — return the existing row and let the UI
+    // say "you're already checked in today".
+    const existing = await prisma.independentCheckIn.findUnique({
+      where: { customerId_unclaimedGymId_date: { customerId, unclaimedGymId, date } },
+    });
+    if (existing) {
+      return { checkIn: existing, alreadyCheckedIn: true };
+    }
+
+    let checkIn;
+    try {
+      checkIn = await prisma.independentCheckIn.create({
+        // lat/lng are verified above and deliberately not persisted — see
+        // the IndependentCheckIn model comment.
+        data: { customerId, unclaimedGymId, date },
+      });
+    } catch (err) {
+      // Two taps racing each other land here (P2002 on the unique index).
+      // Same outcome as the read above — the day is already recorded.
+      if (err?.code === 'P2002') {
+        const row = await prisma.independentCheckIn.findUnique({
+          where: { customerId_unclaimedGymId_date: { customerId, unclaimedGymId, date } },
+        });
+        return { checkIn: row, alreadyCheckedIn: true };
+      }
+      throw err;
+    }
+
+    // Only on a genuinely new check-in, so a duplicate tap can't inflate a
+    // streak. Fire-and-forget, like every other attendance emission here.
+    recordAttendanceEvent({
+      userId: customerId,
+      bookingId: null,
+      memberAttendanceId: null,
+      gymId: unclaimedGymId,
+      attendedAt: checkIn.checkedInAt,
+      source: 'independent_gym_geofence',
+      idempotencyKey: `independent-${checkIn.id}`,
+    });
+
+    track('independent_checkin', customerId, {
+      unclaimed_gym_id: unclaimedGymId,
+      date,
+    });
+
+    return { checkIn, alreadyCheckedIn: false };
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+/// This customer's own non-partner check-in history, newest first.
+export async function listIndependentCheckIns(customerId, { limit = 60 } = {}) {
+  return prisma.independentCheckIn.findMany({
+    where: { customerId },
+    orderBy: { checkedInAt: 'desc' },
+    take: Math.min(Math.max(limit, 1), 200),
+  });
+}

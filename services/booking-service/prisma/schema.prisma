@@ -292,3 +292,40 @@ model MemberAttendance {
   @@index([customerId])
   @@schema("booking")
 }
+
+// A check-in at a gym we have no partnership with — the customer told us they
+// train there (see gym-service's UnclaimedGym), and proved presence with GPS.
+//
+// Structurally close to MemberAttendance above, and deliberately NOT a
+// Booking: there is no slot, no price, no capacity and no partner to pay, so
+// every column Booking carries would be null or meaningless here. The one
+// thing this shares with a booking is that it produces an AttendanceEventLog
+// row, which is what makes it count toward streaks and progress.
+//
+// Deliberately stores NO coordinates. The GPS fix is checked against the
+// gym's geofence at write time and then discarded: keeping it would build a
+// location history of a person in a service that is deliberately excluded
+// from the DPDPA erasure fan-out (see auth-service's eraseAcrossServices —
+// booking-service is skipped precisely because it holds no PII, and that
+// exclusion is only safe while it stays true). The proof is the act of
+// passing the check, not the reading that passed it.
+//
+// The unique constraint is the dedupe: one check-in per person per gym per
+// day. It lives here rather than relying on challenge-service's
+// idempotencyKey because that service's ingest route is behind the
+// streaksCoins flag, so while that flag is off it would accept nothing and
+// dedupe would silently not exist.
+model IndependentCheckIn {
+  id              Int      @id @default(autoincrement())
+  customerId      Int
+  // gym-service's UnclaimedGym.id — NOT a Gym.id. Bare Int, unenforced,
+  // same cross-service convention as every other id here.
+  unclaimedGymId  Int
+  // IST calendar date ("YYYY-MM-DD"), matching MemberAttendance's convention.
+  date            String
+  checkedInAt     DateTime @default(now())
+
+  @@unique([customerId, unclaimedGymId, date])
+  @@index([customerId, checkedInAt])
+  @@schema("booking")
+}

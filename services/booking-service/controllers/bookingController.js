@@ -456,6 +456,37 @@ export const selfCheckIn = async (req, res) => {
   }
 };
 
+// Check in at a gym we have no partnership with. :unclaimedGymId is a
+// gym-service UnclaimedGym id, never a Gym id — the path segment is named for
+// that so a future reader can't mistake the two.
+export const independentCheckIn = async (req, res) => {
+  try {
+    const unclaimedGymId = parseInt(req.params.unclaimedGymId);
+    const { lat, lng } = req.body || {};
+    const result = await bookingService.independentCheckIn(
+      req.userId,
+      unclaimedGymId,
+      Number(lat),
+      Number(lng)
+    );
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+    });
+  }
+};
+
+export const myIndependentCheckIns = async (req, res) => {
+  try {
+    const rows = await bookingService.listIndependentCheckIns(req.userId);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const confirmBooking = async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);

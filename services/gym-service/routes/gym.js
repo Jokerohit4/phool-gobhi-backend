@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
+import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { uploadGymImage, uploadGymDoc } from '../utils/upload.js';
 import * as ctrl from '../controllers/gymController.js';
+import * as unclaimedCtrl from '../controllers/unclaimedGymController.js';
 
 const router = Router();
 
@@ -17,6 +19,9 @@ router.get('/', ctrl.listGyms);
 // that route first and parse "export" as a gym id. Same footgun app.js calls
 // out for this service's /health route.
 router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
+// MUST stay above /internal/:id for the same reason /internal/export does —
+// registered after it, "unclaimed-gyms" would be parsed as a gym id.
+router.get('/internal/unclaimed-gyms/:id', requireInternal, unclaimedCtrl.getUnclaimedGymInternal);
 router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
@@ -28,6 +33,19 @@ router.get('/internal/classes/:classId', requireInternal, ctrl.getClassInternal)
 // an `:id` value (same footgun class as this service's gym-health route
 // ordering). ?status=pending|approved|rejected
 router.get('/edit-requests', requireRole('gobhi'), ctrl.listEditRequestsAdmin);
+
+// Non-partner gyms. Same one-path-segment footgun as the routes above: all
+// three must stay ahead of `GET /:id`, or "unclaimed" is read as a gym id.
+// Flag-gated server-side, not just hidden in the app: resolvePlace calls
+// Google Places on every request (billable) and writes a new row, so it needs
+// a real kill switch rather than a client that can be asked nicely.
+//
+// The two gobhi routes are deliberately NOT gated — the acquisition list is
+// internal staff reporting over data already collected, and switching the
+// customer-facing feature off should not also blind sales to what it gathered.
+router.post('/unclaimed', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.resolvePlace);
+router.get('/unclaimed', requireRole('gobhi'), unclaimedCtrl.listUnclaimedGymsAdmin);
+router.put('/unclaimed/:id/claim-status', requireRole('gobhi'), unclaimedCtrl.updateClaimStatusAdmin);
 router.get('/edit-requests/:id', requireRole('gobhi'), ctrl.getEditRequestAdmin);
 router.put('/edit-requests/:id/approve', requireRole('gobhi'), ctrl.approveEditRequest);
 // Body: {reason} (required)

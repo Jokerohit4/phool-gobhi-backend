@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
+import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import * as ctrl from '../controllers/bookingController.js';
 import * as analyticsCtrl from '../controllers/analyticsController.js';
 
@@ -115,6 +116,14 @@ router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn
 router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
 router.post('/gym/:gymId/self-checkin', requireRole('customer'), ctrl.selfCheckIn);
+// Non-partner gym check-in: GPS only, no booking, no QR. Distinct path prefix
+// from /gym/:gymId above because the id spaces are different (UnclaimedGym vs
+// Gym) and silently confusing them would credit attendance to the wrong place.
+router.post('/unclaimed-gym/:unclaimedGymId/checkin', requireRole('customer'), requireFeatureFlag('nonPartnerAttendance'), ctrl.independentCheckIn);
+// Reading your OWN past check-ins stays ungated, like health-service's
+// DELETE /me: switching a feature off must not hide data a user already
+// created from them.
+router.get('/mine/independent-checkins', requireRole('customer'), ctrl.myIndependentCheckIns);
 router.post('/gym/:gymId/member-checkin', requireRole('customer'), ctrl.memberCheckIn);
 router.get('/mine/member-attendance', requireRole('customer'), ctrl.getMemberAttendance);
 router.get('/gym/:gymId/leaderboard', requireRole('customer'), ctrl.getGymLeaderboard);

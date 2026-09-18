@@ -364,3 +364,49 @@ model GymEditRequest {
   @@index([status])
   @@schema("gym")
 }
+
+// A gym a customer told us they train at, which is NOT a Phool Gobhi partner.
+//
+// Deliberately a separate model rather than a nullable Gym.partnerId: that
+// column is load-bearing across commission, payout and every partner
+// "my gyms" query, and making it optional would force an audit of each of
+// those reads for a case none of them should ever see. An unclaimed gym has
+// no partner, no slots, no prices, no bookings and no QR — it exists so a
+// customer's attendance can be recorded against a real place, and so sales
+// can see which gyms our users already go to.
+//
+// Sourced from Google Places, keyed on googlePlaceId and upserted, so repeat
+// searches for the same place converge on one row — which is what makes
+// "how many distinct users attend here" a meaningful number rather than a
+// count of how often people searched.
+model UnclaimedGym {
+  id            Int         @id @default(autoincrement())
+  googlePlaceId String      @unique
+  name          String
+  address       String
+  city          String      @default("")
+  lat           Float
+  lng           Float
+  // The first customer who named this place. A bare Int, unenforced, same
+  // cross-service convention as every other userId in this codebase.
+  addedByUserId Int
+  claimStatus   ClaimStatus @default(unclaimed)
+  // Set once a partner onboards this place for real, so historical attendance
+  // logged against the UnclaimedGym id stays attributable afterwards. Bare
+  // Int by the same convention — it points at Gym.id in this same schema, but
+  // is written by a sales/ops action rather than a relation we cascade on.
+  claimedGymId  Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([claimStatus])
+  @@schema("gym")
+}
+
+enum ClaimStatus {
+  unclaimed
+  claim_pending
+  claimed
+
+  @@schema("gym")
+}
