@@ -606,6 +606,25 @@ model PersonalisationProfile {
   // gated on healthMetrics alone (see routes/health.js), never on
   // healthPersonalisation. It's a UI-routing preference ("what does my home
   // screen lead with"), not a disclosure a user is consenting to.
+  /// DEPRECATED (2026-09-18) — do not read, do not wire up.
+  ///
+  /// This predates auth-service's `User.appMode` and duplicates it. A grep of
+  /// both repos at the time of writing found it is only ever WRITTEN (by the
+  /// route below) and included in the DPDPA export; nothing anywhere reads it
+  /// to make a decision, so it has never influenced a single user's
+  /// experience.
+  ///
+  /// `User.appMode` is the single source of truth for "which experience does
+  /// this person lead with" — it is derived server-side from the onboarding
+  /// answers, it is what the app's Home branches on, and it is available at
+  /// boot from /me without depending on the healthMetrics flag being on.
+  /// Two independently-settable fields meaning the same thing is how you get
+  /// a user whose home screen and whose training engine disagree.
+  ///
+  /// Kept rather than dropped because the column may hold values from earlier
+  /// testing and dropping it is a destructive migration for no gain. If this
+  /// service's engine ever needs the fact, mirror it from appMode rather than
+  /// reviving the independent write path.
   trainingLocation TrainingLocation?
   updatedAt        DateTime         @updatedAt
 
@@ -721,5 +740,208 @@ model HealthDataAuditLog {
   at       DateTime @default(now())
 
   @@index([userId, at])
+  @@schema("health")
+}
+
+// --- Fitness assistant (2026-09-18) -----------------------------------------
+//
+// Lives in health-service rather than a new service on purpose: the gateway
+// already proxies /api/health wholesale (no gateway change), this service is
+// already a registered DPDPA erasure/export target (no new fan-out entry), and
+// the chat has to read the workout sessions and injuryZones that live here
+// anyway. A new service would have meant repeating the manual GCP secret
+// bootstrap that has already caused one prod incident, for no isolation gain.
+
+enum AssistantRole {
+  user
+  assistant
+
+  @@schema("health")
+}
+
+model AssistantConversation {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  title  String?
+  // Rolling compression of everything before summarizedThroughMessageId.
+  // This is what keeps the prompt bounded as a conversation grows, instead of
+  // the cost per turn climbing with its length.
+  summary                    String? @db.Text
+  summarizedThroughMessageId Int?
+  archivedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages AssistantMessage[]
+
+  @@index([userId, updatedAt])
+  @@schema("health")
+}
+
+model AssistantMessage {
+  id             Int                   @id @default(autoincrement())
+  conversationId Int
+  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  // Denormalised so a per-user read or erasure never needs the join.
+  userId         Int
+  role           AssistantRole
+  content        String                @db.Text
+  // Which posture and prompt were in force when this was said. Recorded on
+  // every turn because the product's advice scope is a decision that has
+  // changed once and can change again — without this, "what did we tell this
+  // person, under which policy" is unanswerable after the fact.
+  policyVersion  String?
+  promptVersion  String?
+  providerModel  String?
+  tokensIn       Int?
+  tokensOut      Int?
+  latencyMs      Int?
+  // An audit of what the prompt actually saw (counts and ids, never the
+  // content itself) — enough to reconstruct why an answer was what it was,
+  // without copying the sensitive rows it was built from.
+  usedContext    Json?
+  createdAt      DateTime              @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([userId, createdAt])
+  @@schema("health")
+}
+
+// Separate from HealthConsent (device sync) and PersonalisationProfile.consentAt
+// (non-neutral programming). This one gates a specific thing: that an AI may
+// read your training history and answer questions about your body.
+model AssistantConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  // Stamped server-side from assistantPolicy.CURRENT_POLICY_VERSION, never
+  // accepted from the client — which is what makes "re-consent when the
+  // wording changes" enforceable here, unlike HealthConsent.policyVersion
+  // (a free-text string the client supplies and nothing validates).
+  policyVersion String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// Free-text context the assistant itself learned mid-conversation: goals,
+// dietary preferences, allergies, available equipment.
+//
+// Deliberately NOT the same store as PersonalisationProfile.injuryZones. That
+// field has its own consent gate and drives real programming decisions; if the
+// assistant wrote into it directly it would be an unaudited side channel into
+// a field other features trust. Injuries mentioned in chat land here and are
+// used in-session only, until the user explicitly promotes them.
+model AssistantMemory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  // 'goal' | 'injury_mentioned' | 'allergy' | 'equipment' | 'preference'
+  key       String
+  value     String
+  // 'extracted' (the model inferred it) | 'user_confirmed'
+  source    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@schema("health")
+}
+
+// One row per accepted message, read as a rolling-window count.
+//
+// DB-backed rather than in-process because every service here runs with
+// min-instances=0: an in-memory counter resets on every cold start and is not
+// shared across instances, so it would enforce nothing precisely when load
+// made it matter. Same reasoning already applied to OtpCode's cooldown and
+// NudgeLog's frequency budget.
+model AssistantRateLimitLog {
+  id     Int      @id @default(autoincrement())
+  userId Int
+  sentAt DateTime @default(now())
+
+  @@index([userId, sentAt])
+  @@schema("health")
+}
+
+// --- Cycle tracking (2026-09-18) --------------------------------------------
+//
+// RECORDED OVERRIDE. FR-27 (decision dated 2026-09-08) deliberately kept ZERO
+// cycle/pregnancy columns server-side: a life-stage disclosure resolved
+// ON-DEVICE into a ProgrammingMode enum, and only that coarse mode ever
+// reached the server. The stated rationale was that the medical fact itself
+// should never be transmitted or stored.
+//
+// On 2026-09-18 the decision was taken to store cycle dates, predictions and
+// phase history server-side, knowingly departing from that. These tables are
+// the result. Three things keep that departure contained and reversible:
+//
+//   1. Their own feature flag (cycleTracking) AND their own consent scope
+//      ('cycle_tracking' in HealthConsent.scopes) — two independent gates,
+//      because "the feature does not exist" and "this user has not opted in"
+//      are different states that must fail differently.
+//   2. ProgrammingMode remains the ONLY thing that touches training load.
+//      Cycle data feeds it through one derivation; no suggestion code reads
+//      CyclePhaseEntry directly. Switch the flag off and the training engine
+//      behaves exactly as it does today.
+//   3. Both tables are in the DPDPA erasure and export paths from the first
+//      commit, not added later.
+//
+// This is the most sensitive data the platform holds. Treat it accordingly.
+
+enum CyclePhase {
+  menstrual
+  follicular
+  ovulation
+  luteal
+
+  @@schema("health")
+}
+
+enum CycleEntrySource {
+  // The user said so.
+  user_logged
+  // We derived it from their average cycle length. Kept distinct because a
+  // prediction must never be shown back as though it were a fact she reported.
+  predicted
+
+  @@schema("health")
+}
+
+model CycleTrackingProfile {
+  userId Int @id
+  // Set when the user opts in. Null means the row exists (from an earlier
+  // opt-in) but consent is currently withdrawn.
+  consentAt      DateTime?
+  privacyVersion String?
+  averageCycleLengthDays  Int?
+  averagePeriodLengthDays Int?
+  lastPeriodStartDate     DateTime? @db.Date
+  // Whether cycle sync owns PersonalisationProfile.programmingMode for this
+  // user.
+  //
+  // Without this, the "don't downgrade a user-chosen low-impact mode" guard
+  // cannot tell a mode the USER set after an injury from one THIS SERVICE set
+  // during her last period — so the first logged period would pin her to
+  // low-impact permanently, which is both wrong and unexplainable to her.
+  // Set the first time sync legitimately takes ownership; never set when it
+  // declined to overwrite a mode it did not set.
+  managesProgrammingMode  Boolean   @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("health")
+}
+
+model CyclePhaseEntry {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  startDate DateTime         @db.Date
+  endDate   DateTime?        @db.Date
+  phase     CyclePhase
+  source    CycleEntrySource
+  createdAt DateTime         @default(now())
+
+  @@index([userId, startDate])
   @@schema("health")
 }
