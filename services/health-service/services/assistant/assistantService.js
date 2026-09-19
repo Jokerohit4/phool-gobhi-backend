@@ -189,14 +189,17 @@ export async function sendMessageService(userId, { conversationId, message }) {
       messages: history.reverse().map((m) => ({ role: m.role, content: m.content })),
     });
   } catch (err) {
-    // The user's message is already saved, so nothing they typed is lost and
-    // a retry continues the same conversation rather than starting over.
-    throw {
-      status: 503,
-      error: 'The assistant is not available right now. Your message was saved — try again shortly.',
-      code: 'ASSISTANT_UNAVAILABLE',
-      cause: err.message,
-    };
+    const failure = describeProviderFailure(err);
+    if (failure.code === 'ASSISTANT_CAPACITY') {
+      // Distinctive enough to filter on in Cloud Run logs. This is the line
+      // that means "buy more capacity", and it should not be buried among
+      // genuine provider faults.
+      console.warn(
+        `[assistant] upstream capacity limit hit (provider 429) — userId=${userId}. ` +
+          'The model provider is refusing on quota, not failing.'
+      );
+    }
+    throw failure;
   }
 
   const assistantMessage = await prisma.assistantMessage.create({
@@ -225,6 +228,36 @@ export async function sendMessageService(userId, { conversationId, message }) {
   maybeSummariseConversation(convo.id).catch(() => {});
 
   return { conversationId: convo.id, message: assistantMessage };
+}
+
+/// Maps a provider failure onto what the client is told.
+///
+/// "We are out of upstream quota" and "the provider is broken" look identical
+/// to the person typing, but they are completely different to whoever is on
+/// call: the first is a billing decision, the second is an incident. Split so
+/// the first capacity wall is legible instead of looking like an outage.
+///
+/// Both stay 503 rather than forwarding the upstream 429. A 429 here would
+/// collide with the per-user cap, which the client already branches on and
+/// answers with retryAfterSeconds — and unlike that cap, this is not something
+/// the user caused or can fix by asking less.
+///
+/// Exported for the tests: the alternative is standing up the entire message
+/// pipeline to assert one error code.
+export function describeProviderFailure(err) {
+  const throttledUpstream = err instanceof ProviderError && err.status === 429;
+  // The user's message is already persisted by the time this runs, either
+  // way, so nothing they typed is lost and a retry continues the same
+  // conversation rather than starting over. CoachChat relies on that: both
+  // codes are in its MESSAGE_WAS_SAVED_CODES list.
+  return {
+    status: 503,
+    error: throttledUpstream
+      ? 'The coach is at capacity right now. Your message was saved — try again in a minute.'
+      : 'The assistant is not available right now. Your message was saved — try again shortly.',
+    code: throttledUpstream ? 'ASSISTANT_CAPACITY' : 'ASSISTANT_UNAVAILABLE',
+    cause: err.message,
+  };
 }
 
 /// One retry, on transient failures only. A 4xx means the request is wrong and
