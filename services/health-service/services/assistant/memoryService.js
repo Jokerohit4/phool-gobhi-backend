@@ -3,9 +3,37 @@ import { getProvider } from './providers/index.js';
 
 const prisma = new PrismaClient();
 
-/// The only keys that may ever be written. The model proposes; this list
-/// disposes. Anything else it invents is dropped rather than stored, so a
-/// hallucinated category cannot quietly become permanent context.
+/// The only keys that may ever be written, and everything that differs between
+/// them. The model proposes; this table disposes — anything it invents is
+/// dropped rather than stored, so a hallucinated category cannot quietly
+/// become permanent context.
+///
+/// Three properties, because a single uniform rule is wrong for at least one
+/// key whichever rule you pick:
+///
+///   tier         What this is worth when space or storage runs out. 1 is
+///                safety (getting it wrong can hurt someone), 2 is direction
+///                (what the advice should aim at), 3 is colour (makes answers
+///                better; losing one is harmless). Drives prompt ordering,
+///                truncation and eviction — see buildUserContextService and
+///                enforceCap below.
+///
+///   cardinality  'one' replaces on write, 'many' accumulates. A new goal
+///                means the old goal is over — that is what changing your mind
+///                is, and keeping both would have the coach serve two
+///                contradictory targets. A new allergy means there are now two
+///                allergies, and replacing would delete a fact that matters.
+///
+///   max          Per-key ceiling. Without one, a chatty user's memory list
+///                grows until it crowds the rest of the context out of the
+///                prompt.
+///
+/// Tier lives here rather than in a column on purpose: it is a property of the
+/// key, not of the row. There is no such thing as a low-priority allergy, so a
+/// per-row value could only ever drift out of agreement with itself, and
+/// re-tiering a key would need a migration instead of this one line. A stored
+/// column would earn its place if tiers varied per user or had to be retuned
+/// without a deploy; neither is true.
 ///
 /// Note what is NOT here: nothing that writes to PersonalisationProfile.
 /// injuryZones has its own consent gate and drives real programming decisions
@@ -13,7 +41,22 @@ const prisma = new PrismaClient();
 /// stays advisory until a human promotes it. That separation is a correctness
 /// boundary, not a compliance one — a model-extracted injury silently changing
 /// someone's training plan is a bug in any regime.
-export const MEMORY_KEYS = ['goal', 'injury_mentioned', 'allergy', 'equipment', 'preference'];
+export const KEY_POLICY = {
+  allergy: { tier: 1, cardinality: 'many', max: 12 },
+  injury_mentioned: { tier: 1, cardinality: 'many', max: 12 },
+  goal: { tier: 2, cardinality: 'one', max: 1 },
+  equipment: { tier: 3, cardinality: 'many', max: 10 },
+  preference: { tier: 3, cardinality: 'many', max: 10 },
+};
+
+export const MEMORY_KEYS = Object.keys(KEY_POLICY);
+
+/// Tier of a key, for callers that order or trim a memory list. Unknown keys
+/// sort last rather than throwing — a key that somehow escaped validation
+/// should lose its place in the prompt, not break the prompt.
+export function tierOf(key) {
+  return KEY_POLICY[key]?.tier ?? 9;
+}
 
 const MAX_VALUE_CHARS = 200;
 const MAX_MEMORIES_PER_TURN = 3;
@@ -84,21 +127,44 @@ export function parseMemories(raw) {
   if (!parsed || !Array.isArray(parsed.memories)) return [];
 
   const seen = new Set();
+  const singularUsed = new Set();
   const out = [];
   for (const m of parsed.memories) {
     if (!m || typeof m.key !== 'string' || typeof m.value !== 'string') continue;
     const key = m.key.trim().toLowerCase();
-    const value = m.value.trim().replace(/\s+/g, ' ');
+    const value = normaliseValue(m.value);
     if (!MEMORY_KEYS.includes(key)) continue;
     if (!value || value.length > MAX_VALUE_CHARS) continue;
-    // (userId, key) is unique in the schema, so two proposals for one key in a
-    // single turn would race each other; keep the first.
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // (userId, key, value) is unique in the schema, so the same fact twice in
+    // one turn would race itself.
+    const pair = `${key}\u0000${value}`;
+    if (seen.has(pair)) continue;
+    // A 'one' key can only take a single value, so two proposals for it in a
+    // single message are a contradiction the model has handed us rather than a
+    // pair of facts. Keep the first and drop the rest — guessing which of two
+    // conflicting goals is current is not something to do silently.
+    if (KEY_POLICY[key].cardinality === 'one') {
+      if (singularUsed.has(key)) continue;
+      singularUsed.add(key);
+    }
+    seen.add(pair);
     out.push({ key, value });
     if (out.length >= MAX_MEMORIES_PER_TURN) break;
   }
   return out;
+}
+
+/// One spelling per fact. Without this "Peanuts" and "peanuts " are two rows
+/// that the unique index cannot tell apart, and the list fills with the same
+/// thing written differently.
+///
+/// Lower-casing costs a little in the panel ("hiit" rather than "HIIT"); these
+/// are short third-person phrases, so that is the cheaper side of the trade.
+/// It does NOT solve near-duplicates — "peanuts" and "peanut allergy" are one
+/// fact and will still be two rows, because no index can see meaning. The cap
+/// below and the user's own delete button are the mitigation there.
+function normaliseValue(raw) {
+  return String(raw ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 /// Learn durable facts from one user message and store them.
@@ -126,22 +192,67 @@ export async function extractMemoriesService(userId, text) {
   const memories = parseMemories(result?.content);
   if (!memories.length) return [];
 
-  await Promise.all(
-    memories.map((m) =>
-      prisma.assistantMemory
-        .upsert({
-          where: { userId_key: { userId, key: m.key } },
-          // Last statement wins: someone who says "actually my goal is
-          // strength now" has changed their mind, and keeping the older value
-          // would make the coach argue with them.
-          update: { value: m.value, source: 'extracted' },
-          create: { userId, key: m.key, value: m.value, source: 'extracted' },
-        })
-        .catch(() => null)
-    )
-  );
+  for (const m of memories) {
+    await storeMemory(userId, m.key, m.value, 'extracted').catch(() => null);
+  }
 
   return memories;
+}
+
+/// Write one fact, honouring its key's cardinality, then enforce its cap.
+///
+/// Sequential rather than parallel across a turn's memories: two writes to the
+/// same key racing each other would both read the row count before either
+/// inserted, and the cap would be enforced against a stale number.
+async function storeMemory(userId, key, value, source) {
+  const policy = KEY_POLICY[key];
+
+  if (policy.cardinality === 'one') {
+    // Replace rather than accumulate. Prisma has no "delete others and
+    // upsert" primitive, so this is a transaction: a crash between the two
+    // would otherwise leave the user with no goal at all.
+    await prisma.$transaction([
+      prisma.assistantMemory.deleteMany({ where: { userId, key, NOT: { value } } }),
+      prisma.assistantMemory.upsert({
+        where: { userId_key_value: { userId, key, value } },
+        update: { source },
+        create: { userId, key, value, source },
+      }),
+    ]);
+    return;
+  }
+
+  await prisma.assistantMemory.upsert({
+    where: { userId_key_value: { userId, key, value } },
+    // Restating a fact is not new information, but it does mean they still
+    // hold it — touch the row so the cap evicts genuinely stale entries.
+    update: { source },
+    create: { userId, key, value, source },
+  });
+  await enforceCap(userId, key, policy.max);
+}
+
+/// Keep a key within its ceiling, oldest first.
+///
+/// Only 'extracted' rows are ever evicted. A fact the user stated by hand must
+/// not be pushed out by one a model inferred — that would let the coach
+/// silently overrule its own user. If the cap is full of confirmed rows the
+/// list simply stays at its size; confirmMemoryService refuses to add more and
+/// says so, rather than deleting something the person chose to keep.
+async function enforceCap(userId, key, max) {
+  const total = await prisma.assistantMemory.count({ where: { userId, key } });
+  if (total <= max) return;
+
+  const evictable = await prisma.assistantMemory.findMany({
+    where: { userId, key, source: 'extracted' },
+    orderBy: { updatedAt: 'asc' },
+    take: total - max,
+    select: { id: true },
+  });
+  if (!evictable.length) return;
+  await prisma.assistantMemory.deleteMany({
+    where: { id: { in: evictable.map((r) => r.id) } },
+  });
 }
 
 /// Promote a memory the user has explicitly confirmed, or correct one.
@@ -154,25 +265,54 @@ export async function confirmMemoryService(userId, key, value) {
   if (!MEMORY_KEYS.includes(cleanKey)) {
     throw { status: 400, error: `key must be one of: ${MEMORY_KEYS.join(', ')}` };
   }
-  const cleanValue = String(value || '').trim().replace(/\s+/g, ' ');
+  const cleanValue = normaliseValue(value);
   if (!cleanValue) throw { status: 400, error: 'value cannot be empty' };
   if (cleanValue.length > MAX_VALUE_CHARS) {
     throw { status: 400, error: `value is too long (max ${MAX_VALUE_CHARS} characters)` };
   }
 
-  return prisma.assistantMemory.upsert({
-    where: { userId_key: { userId, key: cleanKey } },
-    update: { value: cleanValue, source: 'user_confirmed' },
-    create: { userId, key: cleanKey, value: cleanValue, source: 'user_confirmed' },
+  const policy = KEY_POLICY[cleanKey];
+  if (policy.cardinality === 'many') {
+    // Refuse rather than evict. enforceCap only ever removes extracted rows,
+    // so silently making room here would mean deleting something the user
+    // deliberately kept in order to store something else they deliberately
+    // kept. Telling them which one to drop is their decision to make.
+    const existing = await prisma.assistantMemory.count({
+      where: { userId, key: cleanKey, NOT: { value: cleanValue } },
+    });
+    if (existing >= policy.max) {
+      throw {
+        status: 409,
+        error: `You can keep up to ${policy.max} of these — remove one first.`,
+        code: 'MEMORY_LIMIT',
+      };
+    }
+  }
+
+  await storeMemory(userId, cleanKey, cleanValue, 'user_confirmed');
+  return prisma.assistantMemory.findUnique({
+    where: { userId_key_value: { userId, key: cleanKey, value: cleanValue } },
   });
 }
 
+/// Ordered the same way the prompt is: safety first, then direction, then
+/// colour. The panel and the model should not disagree about what matters, or
+/// someone scanning the list will assume the coach weighs it as they see it.
+///
+/// Sorted here rather than in SQL because tier lives in KEY_POLICY, not in a
+/// column — see the note there for why that is the right place for it.
 export async function listMemoriesService(userId) {
-  return prisma.assistantMemory.findMany({
+  const rows = await prisma.assistantMemory.findMany({
     where: { userId },
     orderBy: { updatedAt: 'desc' },
     select: { id: true, key: true, value: true, source: true, updatedAt: true },
   });
+  return rows.sort(
+    (a, b) =>
+      tierOf(a.key) - tierOf(b.key) ||
+      a.key.localeCompare(b.key) ||
+      new Date(b.updatedAt) - new Date(a.updatedAt)
+  );
 }
 
 /// Forgetting has to be as easy as remembering. Without this the only way to

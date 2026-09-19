@@ -822,7 +822,13 @@ model AssistantMemory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, key])
+  // (userId, key, VALUE), not (userId, key): allergies and injuries are
+  // additive, and keying on the pair alone made every new one silently
+  // overwrite the last. Cardinality is now declared per key in
+  // memoryService.KEY_POLICY — 'one' keys replace on write, 'many' accumulate
+  // up to their cap. Including value also makes restating a fact idempotent.
+  @@unique([userId, key, value])
+  @@index([userId, key])
   @@schema("health")
 }
 

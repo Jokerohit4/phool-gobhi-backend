@@ -8,13 +8,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-let parseMemories, looksMemorable, MEMORY_KEYS;
+let parseMemories, looksMemorable, MEMORY_KEYS, KEY_POLICY, tierOf;
 
 test('setup: stub Prisma, import the service once', async (t) => {
   t.mock.module('@prisma/client', {
     exports: { PrismaClient: class {}, Prisma: {} },
   });
-  ({ parseMemories, looksMemorable, MEMORY_KEYS } = await import(
+  ({ parseMemories, looksMemorable, MEMORY_KEYS, KEY_POLICY, tierOf } = await import(
     '../services/assistant/memoryService.js'
   ));
 });
@@ -104,8 +104,10 @@ test('an over-long value is dropped rather than truncated', () => {
   assert.deepEqual(out, []);
 });
 
-test('duplicate keys in one proposal keep only the first', () => {
-  // (userId, key) is unique, so two writes for one key in a turn would race.
+test('two conflicting goals in one turn keep only the first', () => {
+  // goal is cardinality 'one'. Two in a single message is a contradiction the
+  // model handed us, not two facts — picking between them silently is the one
+  // thing not to do.
   const out = parseMemories(
     JSON.stringify({
       memories: [
@@ -115,6 +117,69 @@ test('duplicate keys in one proposal keep only the first', () => {
     })
   );
   assert.deepEqual(out, [{ key: 'goal', value: 'first' }]);
+});
+
+test('two allergies in one turn are BOTH kept', () => {
+  // The regression that motivated the whole change: allergy is 'many', so
+  // "I'm allergic to peanuts and shellfish" must not collapse to one.
+  const out = parseMemories(
+    JSON.stringify({
+      memories: [
+        { key: 'allergy', value: 'peanuts' },
+        { key: 'allergy', value: 'shellfish' },
+      ],
+    })
+  );
+  assert.deepEqual(out, [
+    { key: 'allergy', value: 'peanuts' },
+    { key: 'allergy', value: 'shellfish' },
+  ]);
+});
+
+test('the same fact twice in one turn is stored once', () => {
+  const out = parseMemories(
+    JSON.stringify({
+      memories: [
+        { key: 'allergy', value: 'Peanuts' },
+        { key: 'allergy', value: '  peanuts  ' },
+      ],
+    })
+  );
+  assert.deepEqual(out, [{ key: 'allergy', value: 'peanuts' }]);
+});
+
+// --- the policy table ------------------------------------------------------
+
+test('every key declares all three properties', () => {
+  for (const key of MEMORY_KEYS) {
+    const p = KEY_POLICY[key];
+    assert.ok([1, 2, 3].includes(p.tier), `${key} tier`);
+    assert.ok(['one', 'many'].includes(p.cardinality), `${key} cardinality`);
+    assert.ok(Number.isInteger(p.max) && p.max > 0, `${key} max`);
+  }
+});
+
+test('safety-tier keys are the ones whose loss can hurt someone', () => {
+  // Tier drives prompt ordering and truncation: tier 1 is rendered first so a
+  // long workout history can never push it out of the context block. If this
+  // ever changes, that protection changes with it.
+  assert.equal(tierOf('allergy'), 1);
+  assert.equal(tierOf('injury_mentioned'), 1);
+  assert.ok(tierOf('preference') > tierOf('goal'));
+  assert.ok(tierOf('goal') > tierOf('allergy'));
+});
+
+test('an unknown key sorts last rather than throwing', () => {
+  // A key that somehow escaped validation should lose its place in the
+  // prompt, not break the prompt.
+  assert.ok(tierOf('something_invented') > 3);
+});
+
+test('only goal replaces on write; everything additive accumulates', () => {
+  assert.equal(KEY_POLICY.goal.cardinality, 'one');
+  for (const key of ['allergy', 'injury_mentioned', 'equipment', 'preference']) {
+    assert.equal(KEY_POLICY[key].cardinality, 'many', key);
+  }
 });
 
 test('at most three memories come out of one turn', () => {

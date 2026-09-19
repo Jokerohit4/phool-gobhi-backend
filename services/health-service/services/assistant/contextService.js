@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
+import { tierOf } from './memoryService.js';
 
 const prisma = new PrismaClient();
 
@@ -168,7 +169,24 @@ export async function buildUserContextService(userId) {
     prisma.weeklyGoal.findUnique({ where: { userId } }).catch(() => null),
   ]);
 
-  const parts = [summariseAttendance(events), summariseSessions(sessions)];
+  // Safety-tier memories go FIRST, ahead of attendance and workouts.
+  //
+  // The block below is truncated by slicing the tail at MAX_CONTEXT_CHARS, so
+  // whatever sits last is what gets dropped. Memories used to sit last —
+  // meaning a long workout history could silently cut an allergy out of the
+  // prompt entirely. Ordering by tier makes the truncation eat preferences
+  // instead. Bounded because KEY_POLICY caps tier 1 at 12 entries a key, so
+  // this can never crowd out the training context in the other direction.
+  const byTier = (t) => memories.filter((m) => tierOf(m.key) === t);
+  const renderMemories = (rows) =>
+    rows.map((m) => `- ${m.key}: ${m.value}`).join('\n');
+
+  const safety = byTier(1);
+  const parts = [];
+  if (safety.length) {
+    parts.push(`Important — they have told the assistant:\n${renderMemories(safety)}`);
+  }
+  parts.push(summariseAttendance(events), summariseSessions(sessions));
 
   if (weeklyGoal?.sessionsPerWeek) {
     parts.push(`Weekly goal: ${pluralise(weeklyGoal.sessionsPerWeek, 'session', 'sessions')}.`);
@@ -179,12 +197,13 @@ export async function buildUserContextService(userId) {
   if (personalisation?.injuryZones?.length) {
     parts.push(`Areas they have flagged as sensitive: ${personalisation.injuryZones.join(', ')}.`);
   }
-  if (memories.length) {
-    parts.push(
-      `Things they have told the assistant:\n${memories
-        .map((m) => `- ${m.key}: ${m.value}`)
-        .join('\n')}`
-    );
+  // Tiers 2 and 3 last, in that order, because this is the end of the block
+  // and the end of the block is what truncation removes. Losing a preference
+  // costs a slightly less tailored answer; losing an allergy is the reason
+  // this ordering exists at all.
+  const rest = [...byTier(2), ...byTier(3)];
+  if (rest.length) {
+    parts.push(`Things they have told the assistant:\n${renderMemories(rest)}`);
   }
 
   let text = parts.join('\n');
