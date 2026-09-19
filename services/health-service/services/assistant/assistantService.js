@@ -166,7 +166,9 @@ export async function sendMessageService(userId, { conversationId, message }) {
   });
 
   const [context, history] = await Promise.all([
-    buildUserContextService(userId),
+    // The message steers which memories are loaded — see
+    // selectMemoriesForMessage. Safety-tier facts are included regardless.
+    buildUserContextService(userId, { message: text }),
     prisma.assistantMessage.findMany({
       where: { conversationId: convo.id },
       orderBy: { createdAt: 'desc' },

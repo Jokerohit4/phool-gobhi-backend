@@ -61,6 +61,115 @@ export function tierOf(key) {
 const MAX_VALUE_CHARS = 200;
 const MAX_MEMORIES_PER_TURN = 3;
 
+/// Words that mean a key is probably relevant even when the memory's own text
+/// shares nothing with the message. "what should I eat after training?" has no
+/// token in common with "peanuts", but it is obviously an allergy question.
+///
+/// Deliberately prefix-matched, so "allerg" covers allergy/allergic/allergies
+/// and "injur" covers injury/injured/injuries — a stemmer would be a
+/// dependency and a source of surprises for five short lists.
+const KEY_ALIASES = {
+  allergy: ['allerg', 'food', 'eat', 'diet', 'nutrition', 'meal', 'protein', 'supplement', 'snack', 'intoleran'],
+  injury_mentioned: ['injur', 'pain', 'hurt', 'sore', 'knee', 'back', 'shoulder', 'wrist', 'hip', 'ankle', 'elbow', 'neck', 'physio', 'surger', 'rehab'],
+  goal: ['goal', 'aim', 'target', 'progress', 'strength', 'muscle', 'weight', 'lose', 'gain', 'bulk', 'cut'],
+  equipment: ['equipment', 'gym', 'home', 'dumbbell', 'barbell', 'kettlebell', 'machine', 'band', 'rack', 'bench', 'treadmill', 'kit', 'weight'],
+  preference: ['prefer', 'like', 'hate', 'enjoy', 'avoid', 'morning', 'evening', 'time', 'schedule', 'style', 'vegan', 'vegetarian', 'diet'],
+};
+
+// Too common to carry signal; scoring on them would rank every memory equally.
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'you', 'your', 'are', 'was', 'were', 'this', 'that', 'with',
+  'have', 'has', 'had', 'but', 'not', 'can', 'should', 'would', 'could', 'what',
+  'when', 'how', 'why', 'who', 'about', 'from', 'they', 'them', 'there', 'their',
+  'get', 'got', 'any', 'all', 'some', 'out', 'now', 'today', 'tomorrow', 'week',
+]);
+
+function tokenise(text) {
+  return new Set(
+    String(text ?? '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t.length >= 3 && !STOPWORDS.has(t))
+  );
+}
+
+/// How well one memory answers this particular message.
+///
+/// Deterministic on purpose. Asking the model which memories to load would be
+/// a second call per turn — doubling usage against the token-per-minute limit
+/// that is already the binding constraint — and would make the context
+/// non-reproducible for anyone debugging an answer later.
+function scoreMemory(memory, messageTokens) {
+  const valueText = ` ${memory.value} `;
+  const aliases = KEY_ALIASES[memory.key] ?? [];
+  let score = 0;
+  for (const token of messageTokens) {
+    // The memory's own words are the strongest signal: asking about "peanuts"
+    // should surface the peanut allergy above anything merely food-adjacent.
+    if (valueText.includes(token)) score += 3;
+    else if (aliases.some((a) => token.startsWith(a) || a.startsWith(token))) score += 1;
+  }
+  return score;
+}
+
+/// Choose which memories go into this turn's prompt.
+///
+/// Modelled on how an index-plus-bodies memory works: the cheap complete list
+/// is always known, and the expensive detail is fetched only when it bears on
+/// the question. That is what makes it scale — a user with forty remembered
+/// facts costs the same per turn as one with five.
+///
+/// The one place it deliberately departs: tier 1 is NEVER subject to
+/// selection. If a relevance score misses an allergy on a nutrition question,
+/// someone gets hurt — that is not a risk worth taking to save a hundred
+/// characters, so safety-tier facts are included unconditionally and are
+/// exempt from the budget. Their per-key caps are what bounds them.
+///
+/// Returns the chosen rows plus a count of what was left out, so the caller
+/// can tell the model what it knows but is not currently looking at.
+export function selectMemoriesForMessage(memories, message, budgetChars) {
+  const always = [];
+  const candidates = [];
+  for (const m of memories) {
+    if (tierOf(m.key) === 1) always.push(m);
+    else candidates.push(m);
+  }
+
+  const cost = (m) => m.key.length + m.value.length + 5; // "- key: value\n"
+  let spent = 0;
+  const messageTokens = tokenise(message);
+
+  const ranked = candidates
+    .map((m) => ({ m, score: scoreMemory(m, messageTokens) }))
+    // Tier before score: a goal is direction and outranks a well-matching
+    // preference. Recency breaks a tie, so the most recently restated fact
+    // wins when nothing else separates them.
+    .sort(
+      (a, b) =>
+        tierOf(a.m.key) - tierOf(b.m.key) ||
+        b.score - a.score ||
+        new Date(b.m.updatedAt ?? 0) - new Date(a.m.updatedAt ?? 0)
+    );
+
+  const selected = [];
+  const omitted = [];
+  for (const { m } of ranked) {
+    if (spent + cost(m) <= budgetChars) {
+      selected.push(m);
+      spent += cost(m);
+    } else {
+      omitted.push(m);
+    }
+  }
+
+  // Counts by key, not values — this is the "there is more, ask for it" line,
+  // and spelling the contents out would defeat the point of omitting them.
+  const omittedByKey = {};
+  for (const m of omitted) omittedByKey[m.key] = (omittedByKey[m.key] || 0) + 1;
+
+  return { always, selected, omittedByKey };
+}
+
 // Cheap gate before spending a model call. Most turns in a coaching
 // conversation are questions, acknowledgements or small talk and contain no
 // durable fact at all — running an extraction on those would roughly double

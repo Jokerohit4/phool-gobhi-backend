@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
-import { tierOf } from './memoryService.js';
+import { tierOf, selectMemoriesForMessage } from './memoryService.js';
 
 const prisma = new PrismaClient();
 
@@ -9,6 +9,12 @@ const prisma = new PrismaClient();
 // message on the platform.
 const MAX_CONTEXT_CHARS = 1800;
 const ATTENDANCE_WINDOW_HOURS = 24 * 30;
+// Memories get their own slice rather than competing with attendance and
+// workouts for MAX_CONTEXT_CHARS. A shared budget means whoever is rendered
+// last loses, which is how an allergy could previously be cut by a long
+// training history — the priority has to be stated, not emerge from ordering.
+// Safety-tier rows are additional to this; see selectMemoriesForMessage.
+const MEMORY_BUDGET_CHARS = 600;
 const RECENT_SESSION_LIMIT = 10;
 
 function pluralise(n, one, many) {
@@ -155,7 +161,7 @@ function summariseSessions(sessions) {
 /// Injuries come from PersonalisationProfile.injuryZones — the field that
 /// already exists and already has a consent gate — rather than being collected
 /// a second time in chat. One place to revoke, one place to erase.
-export async function buildUserContextService(userId) {
+export async function buildUserContextService(userId, { message = '' } = {}) {
   const [events, sessions, personalisation, memories, weeklyGoal] = await Promise.all([
     fetchAttendanceSince(ATTENDANCE_WINDOW_HOURS, { userId }),
     prisma.workoutSession.findMany({
@@ -169,22 +175,26 @@ export async function buildUserContextService(userId) {
     prisma.weeklyGoal.findUnique({ where: { userId } }).catch(() => null),
   ]);
 
-  // Safety-tier memories go FIRST, ahead of attendance and workouts.
+  // Memories are SELECTED against this message rather than all loaded, which
+  // is what stops a user's twentieth remembered fact costing them on every
+  // turn thereafter. Safety-tier rows bypass selection entirely — see
+  // selectMemoriesForMessage.
   //
-  // The block below is truncated by slicing the tail at MAX_CONTEXT_CHARS, so
-  // whatever sits last is what gets dropped. Memories used to sit last —
-  // meaning a long workout history could silently cut an allergy out of the
-  // prompt entirely. Ordering by tier makes the truncation eat preferences
-  // instead. Bounded because KEY_POLICY caps tier 1 at 12 entries a key, so
-  // this can never crowd out the training context in the other direction.
-  const byTier = (t) => memories.filter((m) => tierOf(m.key) === t);
+  // They also get their own budget instead of competing with attendance for
+  // the global one. Sharing it is how an allergy could previously be cut from
+  // the prompt by a long workout history: a budget that everything draws from
+  // means the loser is decided by ordering rather than by intent.
+  const { always, selected, omittedByKey } = selectMemoriesForMessage(
+    memories,
+    message,
+    MEMORY_BUDGET_CHARS
+  );
   const renderMemories = (rows) =>
     rows.map((m) => `- ${m.key}: ${m.value}`).join('\n');
 
-  const safety = byTier(1);
   const parts = [];
-  if (safety.length) {
-    parts.push(`Important — they have told the assistant:\n${renderMemories(safety)}`);
+  if (always.length) {
+    parts.push(`Important — they have told the assistant:\n${renderMemories(always)}`);
   }
   parts.push(summariseAttendance(events), summariseSessions(sessions));
 
@@ -197,13 +207,25 @@ export async function buildUserContextService(userId) {
   if (personalisation?.injuryZones?.length) {
     parts.push(`Areas they have flagged as sensitive: ${personalisation.injuryZones.join(', ')}.`);
   }
-  // Tiers 2 and 3 last, in that order, because this is the end of the block
-  // and the end of the block is what truncation removes. Losing a preference
-  // costs a slightly less tailored answer; losing an allergy is the reason
-  // this ordering exists at all.
-  const rest = [...byTier(2), ...byTier(3)];
-  if (rest.length) {
-    parts.push(`Things they have told the assistant:\n${renderMemories(rest)}`);
+  if (selected.length) {
+    parts.push(`Things they have told the assistant:\n${renderMemories(selected)}`);
+  }
+
+  // The index line. What was left out is named by category and count but never
+  // by content — enough for the model to know the shape of what it holds and
+  // offer to use it ("you've mentioned some equipment, want me to work around
+  // it?"), without paying for the detail on a turn that does not need it.
+  //
+  // This is the part that makes the whole thing honest: without it the coach
+  // would silently appear to have forgotten things it simply is not looking at
+  // this turn, which is indistinguishable from the bug we just fixed.
+  const omittedSummary = Object.entries(omittedByKey)
+    .map(([key, n]) => `${n} ${key}`)
+    .join(', ');
+  if (omittedSummary) {
+    parts.push(
+      `Also on file but not shown this turn: ${omittedSummary}. Offer to check if it becomes relevant.`
+    );
   }
 
   let text = parts.join('\n');
@@ -224,6 +246,10 @@ export async function buildUserContextService(userId) {
       workoutSessions: sessions.length,
       injuryZones: personalisation?.injuryZones?.length ?? 0,
       memories: memories.length,
+      // Selection makes "how many did it hold" and "how many did it look at"
+      // different numbers, and only the second explains an answer.
+      memoriesShown: always.length + selected.length,
+      memoriesOmitted: Object.values(omittedByKey).reduce((n, v) => n + v, 0),
       contextChars: text.length,
     },
   };
