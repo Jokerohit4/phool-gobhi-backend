@@ -1,4 +1,5 @@
 import * as assistantService from '../services/assistant/assistantService.js';
+import * as memoryService from '../services/assistant/memoryService.js';
 import { DISCLAIMER } from '../services/assistant/assistantPolicy.js';
 
 function fail(res, err) {
@@ -81,6 +82,42 @@ export const sendMessage = async (req, res) => {
       message,
       conversationId: conversationId ? parseInt(conversationId) : undefined,
     });
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// ---- What the coach remembers ---------------------------------------------
+//
+// Memories are written by the model, from things the user said. That makes
+// showing them back non-optional: a fact nobody can see is a fact nobody can
+// correct, and it is replayed into every future prompt.
+
+export const listMemories = async (req, res) => {
+  try {
+    const data = await memoryService.listMemoriesService(req.userId);
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+/// Upsert a fact the user states directly. Recorded as 'user_confirmed', which
+/// is the difference between something they told us and something we inferred.
+export const confirmMemory = async (req, res) => {
+  try {
+    const { key, value } = req.body || {};
+    const data = await memoryService.confirmMemoryService(req.userId, key, value);
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const forgetMemory = async (req, res) => {
+  try {
+    const data = await memoryService.forgetMemoryService(req.userId, parseInt(req.params.id));
     res.json({ data });
   } catch (err) {
     fail(res, err);

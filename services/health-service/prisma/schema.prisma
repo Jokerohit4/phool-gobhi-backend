@@ -181,13 +181,13 @@ enum TemplateLevel {
 // even though the v1 Create Routine screen doesn't expose pairing yet, so
 // adding that UI later needs no migration.
 model TemplateExercise {
-  id            Int             @id @default(autoincrement())
-  templateId    Int
-  template      WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  exerciseId    Int
-  exercise      Exercise        @relation(fields: [exerciseId], references: [id])
-  order         Int
-  targetSets    Int
+  id                    Int             @id @default(autoincrement())
+  templateId            Int
+  template              WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId            Int
+  exercise              Exercise        @relation(fields: [exerciseId], references: [id])
+  order                 Int
+  targetSets            Int
   // Exactly one of targetReps/targetDurationSeconds is meaningful per row —
   // which one depends on the exercise's own loggingType (sets_reps_weight
   // vs duration), same split WorkoutSet already has for the real logged
@@ -197,8 +197,8 @@ model TemplateExercise {
   // track's seeded routines) needed a target with no rep count at all.
   targetReps            Int?
   targetDurationSeconds Int?
-  restSeconds   Int?
-  supersetGroup Int?
+  restSeconds           Int?
+  supersetGroup         Int?
 
   @@index([templateId])
   @@schema("health")
@@ -213,30 +213,30 @@ model TemplateExercise {
 // coins would strand anyone who installed organically rather than through
 // the QR-hunt chain, since coins are gym-only per D-01.
 model WorkoutPlan {
-  id          Int    @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   // Stable machine key, same convention as CoinCatalogItem.key — referenced
   // by the client and by any future admin tooling; never reuse a key for a
   // different plan.
-  key         String @unique
+  key         String   @unique
   name        String
   description String?
   weeks       Int
-  isSystem    Boolean @default(true)
+  isSystem    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  days       WorkoutPlanDay[]
-  activeFor  UserActivePlan[]
+  days      WorkoutPlanDay[]
+  activeFor UserActivePlan[]
 
   @@schema("health")
 }
 
 model WorkoutPlanDay {
-  id         Int             @id @default(autoincrement())
+  id         Int              @id @default(autoincrement())
   planId     Int
-  plan       WorkoutPlan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  weekIndex  Int             // 1-based
-  dayIndex   Int             // 1-7, 1-based, matches ISO weekday order
+  plan       WorkoutPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  weekIndex  Int // 1-based
+  dayIndex   Int // 1-7, 1-based, matches ISO weekday order
   // Null = a scheduled rest day. Deliberately a real day in the plan, not
   // an absence — see planService.getActivePlanService, which always
   // returns exactly `weeks * 7` days so the client never has to guess
@@ -726,17 +726,17 @@ enum AssistantRole {
 }
 
 model AssistantConversation {
-  id     Int    @id @default(autoincrement())
-  userId Int
-  title  String?
+  id                         Int       @id @default(autoincrement())
+  userId                     Int
+  title                      String?
   // Rolling compression of everything before summarizedThroughMessageId.
   // This is what keeps the prompt bounded as a conversation grows, instead of
   // the cost per turn climbing with its length.
-  summary                    String? @db.Text
+  summary                    String?   @db.Text
   summarizedThroughMessageId Int?
-  archivedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  archivedAt                 DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   messages AssistantMessage[]
 
@@ -745,28 +745,40 @@ model AssistantConversation {
 }
 
 model AssistantMessage {
-  id             Int                   @id @default(autoincrement())
-  conversationId Int
-  conversation   AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id               Int                   @id @default(autoincrement())
+  conversationId   Int
+  conversation     AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   // Denormalised so a per-user read or erasure never needs the join.
-  userId         Int
-  role           AssistantRole
-  content        String                @db.Text
+  userId           Int
+  role             AssistantRole
+  content          String                @db.Text
   // Which posture and prompt were in force when this was said. Recorded on
   // every turn because the product's advice scope is a decision that has
   // changed once and can change again — without this, "what did we tell this
   // person, under which policy" is unanswerable after the fact.
-  policyVersion  String?
-  promptVersion  String?
-  providerModel  String?
-  tokensIn       Int?
-  tokensOut      Int?
-  latencyMs      Int?
+  policyVersion    String?
+  promptVersion    String?
+  providerModel    String?
+  tokensIn         Int?
+  tokensOut        Int?
+  // Part of tokensIn, not additional to it: how much of the prompt the
+  // provider served from its prefix cache. Cached tokens are discounted and
+  // exempt from the provider rate limit, so this is what says how much quota
+  // headroom is really left. Null means the provider did not report it.
+  tokensCached     Int?
+  latencyMs        Int?
   // An audit of what the prompt actually saw (counts and ids, never the
   // content itself) — enough to reconstruct why an answer was what it was,
   // without copying the sensitive rows it was built from.
-  usedContext    Json?
-  createdAt      DateTime              @default(now())
+  usedContext      Json?
+  // The system prompt verbatim, exactly as the model received it. usedContext
+  // above says how MUCH fed an answer; this says WHAT, which is the only form
+  // that helps when a user reports the coach saying something wrong. Entirely
+  // derived from rows this service already holds, on a table already in the
+  // erasure and export paths, beside the user's own free text - so it opens no
+  // exposure that was not already open.
+  usedSystemPrompt String?               @db.Text
+  createdAt        DateTime              @default(now())
 
   @@index([conversationId, createdAt])
   @@index([userId, createdAt])
@@ -875,11 +887,11 @@ enum CycleEntrySource {
 }
 
 model CycleTrackingProfile {
-  userId Int @id
+  userId                  Int       @id
   // Set when the user opts in. Null means the row exists (from an earlier
   // opt-in) but consent is currently withdrawn.
-  consentAt      DateTime?
-  privacyVersion String?
+  consentAt               DateTime?
+  privacyVersion          String?
   averageCycleLengthDays  Int?
   averagePeriodLengthDays Int?
   lastPeriodStartDate     DateTime? @db.Date
@@ -893,8 +905,8 @@ model CycleTrackingProfile {
   // Set the first time sync legitimately takes ownership; never set when it
   // declined to overwrite a mode it did not set.
   managesProgrammingMode  Boolean   @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   @@schema("health")
 }

@@ -63,6 +63,15 @@ export async function generate({ systemPrompt, messages, maxTokens, timeoutMs = 
     content: content.trim(),
     tokensIn: body?.usage?.prompt_tokens ?? null,
     tokensOut: body?.usage?.completion_tokens ?? null,
+    // How much of the prompt the provider served from its cache. Part of
+    // tokensIn, not additional to it.
+    //
+    // Providers that support prefix caching bill these at a discount AND
+    // exempt them from the rate limit, which makes this the number that says
+    // how much quota headroom actually remains. Null on any provider that does
+    // not report it — absent is not zero, and recording it as zero would make
+    // a cache that is working look like one that is not.
+    tokensCached: body?.usage?.prompt_tokens_details?.cached_tokens ?? null,
     model: body?.model || MODEL,
   };
 }

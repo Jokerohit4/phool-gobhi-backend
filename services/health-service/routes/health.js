@@ -107,6 +107,14 @@ router.post('/assistant/messages', ...assistantGated, requireAssistantConsent, a
 router.get('/assistant/conversations/:id', ...assistantGated, requireAssistantConsent, assistantCtrl.getConversation);
 router.delete('/assistant/conversations/:id', ...assistantGated, assistantCtrl.deleteConversation);
 
+// What the coach has learned about this user. Consent-gated like the chat
+// itself for reads and writes - but NOT for the delete, on the same reasoning
+// as the DPDPA erasure routes above: withdrawing consent must never be the
+// thing that strands data a user wants removed.
+router.get('/assistant/memories', ...assistantGated, requireAssistantConsent, assistantCtrl.listMemories);
+router.put('/assistant/memories', ...assistantGated, requireAssistantConsent, assistantCtrl.confirmMemory);
+router.delete('/assistant/memories/:id', ...assistantGated, assistantCtrl.forgetMemory);
+
 // ---- Consent -------------------------------------------------------------
 router.post('/consent', ...gated, consentCtrl.grantConsent);
 router.delete('/consent', ...gated, consentCtrl.revokeConsent);

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { getProvider, isProviderConfigured, ProviderError } from './providers/index.js';
 import { buildUserContextService } from './contextService.js';
 import { canSendMessageService, recordMessageSentService } from './rateLimitService.js';
+import { extractMemoriesService } from './memoryService.js';
 import {
   CURRENT_POLICY_VERSION,
   CURRENT_PROMPT_VERSION,
@@ -213,8 +214,20 @@ export async function sendMessageService(userId, { conversationId, message }) {
       providerModel: reply.model,
       tokensIn: reply.tokensIn,
       tokensOut: reply.tokensOut,
+      // Of tokensIn, how many the provider served from its prompt cache.
+      // Worth recording because cached tokens are both half price and exempt
+      // from the rate limit, so this is the number that says how much headroom
+      // actually remains — without it, "are we near the ceiling" is a guess.
+      tokensCached: reply.tokensCached ?? null,
       latencyMs: Date.now() - started,
       usedContext: context.audit,
+      // Exactly what the model was told, verbatim. usedContext's counts say
+      // how MUCH fed an answer; this says WHAT, which is the only thing that
+      // helps when someone reports the coach saying something wrong. It is
+      // derived entirely from rows we already hold, lives on a table already
+      // covered by the erasure and export paths, and sits beside the user's
+      // own free text — so it widens no exposure that was not already open.
+      usedSystemPrompt: systemPrompt,
     },
   });
 
@@ -223,9 +236,12 @@ export async function sendMessageService(userId, { conversationId, message }) {
     data: { updatedAt: new Date() },
   });
 
-  // Fire-and-forget: a failed compaction costs a slightly longer prompt next
-  // turn, which is not worth failing a reply the user already has.
+  // Both fire-and-forget: a failed compaction costs a slightly longer prompt
+  // next turn, and a failed extraction a slightly less personal answer. Neither
+  // is worth failing a reply the user already has, and neither should add
+  // latency to it.
   maybeSummariseConversation(convo.id).catch(() => {});
+  extractMemoriesService(userId, text).catch(() => {});
 
   return { conversationId: convo.id, message: assistantMessage };
 }
