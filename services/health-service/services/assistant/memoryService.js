@@ -41,12 +41,17 @@ const prisma = new PrismaClient();
 /// stays advisory until a human promotes it. That separation is a correctness
 /// boundary, not a compliance one — a model-extracted injury silently changing
 /// someone's training plan is a bug in any regime.
+///   max          Per-key ceiling, and the reason no retrieval step is needed.
+///                Every memory goes into every prompt, so the caps ARE the
+///                budget: 25 rows at 80 characters is the entire worst case,
+///                and it fits. Retrieval exists for unbounded corpora; this
+///                one is bounded by construction.
 export const KEY_POLICY = {
-  allergy: { tier: 1, cardinality: 'many', max: 12 },
-  injury_mentioned: { tier: 1, cardinality: 'many', max: 12 },
+  allergy: { tier: 1, cardinality: 'many', max: 6 },
+  injury_mentioned: { tier: 1, cardinality: 'many', max: 6 },
   goal: { tier: 2, cardinality: 'one', max: 1 },
-  equipment: { tier: 3, cardinality: 'many', max: 10 },
-  preference: { tier: 3, cardinality: 'many', max: 10 },
+  equipment: { tier: 3, cardinality: 'many', max: 6 },
+  preference: { tier: 3, cardinality: 'many', max: 6 },
 };
 
 export const MEMORY_KEYS = Object.keys(KEY_POLICY);
@@ -58,117 +63,16 @@ export function tierOf(key) {
   return KEY_POLICY[key]?.tier ?? 9;
 }
 
-const MAX_VALUE_CHARS = 200;
+// A memory is a PHRASE, not a sentence and not a keyword.
+//
+// Enforced structurally rather than by asking the model nicely: the extraction
+// prompt requests a short phrase, but nothing stopped it returning two
+// sentences while this cap sat at 200 characters. 200 is a paragraph. At 80 a
+// value that sprawls is rejected rather than stored, which also keeps the
+// worst-case memory block (every key at its cap) inside the context budget.
+const MAX_VALUE_CHARS = 80;
 const MAX_MEMORIES_PER_TURN = 3;
 
-/// Words that mean a key is probably relevant even when the memory's own text
-/// shares nothing with the message. "what should I eat after training?" has no
-/// token in common with "peanuts", but it is obviously an allergy question.
-///
-/// Deliberately prefix-matched, so "allerg" covers allergy/allergic/allergies
-/// and "injur" covers injury/injured/injuries — a stemmer would be a
-/// dependency and a source of surprises for five short lists.
-const KEY_ALIASES = {
-  allergy: ['allerg', 'food', 'eat', 'diet', 'nutrition', 'meal', 'protein', 'supplement', 'snack', 'intoleran'],
-  injury_mentioned: ['injur', 'pain', 'hurt', 'sore', 'knee', 'back', 'shoulder', 'wrist', 'hip', 'ankle', 'elbow', 'neck', 'physio', 'surger', 'rehab'],
-  goal: ['goal', 'aim', 'target', 'progress', 'strength', 'muscle', 'weight', 'lose', 'gain', 'bulk', 'cut'],
-  equipment: ['equipment', 'gym', 'home', 'dumbbell', 'barbell', 'kettlebell', 'machine', 'band', 'rack', 'bench', 'treadmill', 'kit', 'weight'],
-  preference: ['prefer', 'like', 'hate', 'enjoy', 'avoid', 'morning', 'evening', 'time', 'schedule', 'style', 'vegan', 'vegetarian', 'diet'],
-};
-
-// Too common to carry signal; scoring on them would rank every memory equally.
-const STOPWORDS = new Set([
-  'the', 'and', 'for', 'you', 'your', 'are', 'was', 'were', 'this', 'that', 'with',
-  'have', 'has', 'had', 'but', 'not', 'can', 'should', 'would', 'could', 'what',
-  'when', 'how', 'why', 'who', 'about', 'from', 'they', 'them', 'there', 'their',
-  'get', 'got', 'any', 'all', 'some', 'out', 'now', 'today', 'tomorrow', 'week',
-]);
-
-function tokenise(text) {
-  return new Set(
-    String(text ?? '')
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((t) => t.length >= 3 && !STOPWORDS.has(t))
-  );
-}
-
-/// How well one memory answers this particular message.
-///
-/// Deterministic on purpose. Asking the model which memories to load would be
-/// a second call per turn — doubling usage against the token-per-minute limit
-/// that is already the binding constraint — and would make the context
-/// non-reproducible for anyone debugging an answer later.
-function scoreMemory(memory, messageTokens) {
-  const valueText = ` ${memory.value} `;
-  const aliases = KEY_ALIASES[memory.key] ?? [];
-  let score = 0;
-  for (const token of messageTokens) {
-    // The memory's own words are the strongest signal: asking about "peanuts"
-    // should surface the peanut allergy above anything merely food-adjacent.
-    if (valueText.includes(token)) score += 3;
-    else if (aliases.some((a) => token.startsWith(a) || a.startsWith(token))) score += 1;
-  }
-  return score;
-}
-
-/// Choose which memories go into this turn's prompt.
-///
-/// Modelled on how an index-plus-bodies memory works: the cheap complete list
-/// is always known, and the expensive detail is fetched only when it bears on
-/// the question. That is what makes it scale — a user with forty remembered
-/// facts costs the same per turn as one with five.
-///
-/// The one place it deliberately departs: tier 1 is NEVER subject to
-/// selection. If a relevance score misses an allergy on a nutrition question,
-/// someone gets hurt — that is not a risk worth taking to save a hundred
-/// characters, so safety-tier facts are included unconditionally and are
-/// exempt from the budget. Their per-key caps are what bounds them.
-///
-/// Returns the chosen rows plus a count of what was left out, so the caller
-/// can tell the model what it knows but is not currently looking at.
-export function selectMemoriesForMessage(memories, message, budgetChars) {
-  const always = [];
-  const candidates = [];
-  for (const m of memories) {
-    if (tierOf(m.key) === 1) always.push(m);
-    else candidates.push(m);
-  }
-
-  const cost = (m) => m.key.length + m.value.length + 5; // "- key: value\n"
-  let spent = 0;
-  const messageTokens = tokenise(message);
-
-  const ranked = candidates
-    .map((m) => ({ m, score: scoreMemory(m, messageTokens) }))
-    // Tier before score: a goal is direction and outranks a well-matching
-    // preference. Recency breaks a tie, so the most recently restated fact
-    // wins when nothing else separates them.
-    .sort(
-      (a, b) =>
-        tierOf(a.m.key) - tierOf(b.m.key) ||
-        b.score - a.score ||
-        new Date(b.m.updatedAt ?? 0) - new Date(a.m.updatedAt ?? 0)
-    );
-
-  const selected = [];
-  const omitted = [];
-  for (const { m } of ranked) {
-    if (spent + cost(m) <= budgetChars) {
-      selected.push(m);
-      spent += cost(m);
-    } else {
-      omitted.push(m);
-    }
-  }
-
-  // Counts by key, not values — this is the "there is more, ask for it" line,
-  // and spelling the contents out would defeat the point of omitting them.
-  const omittedByKey = {};
-  for (const m of omitted) omittedByKey[m.key] = (omittedByKey[m.key] || 0) + 1;
-
-  return { always, selected, omittedByKey };
-}
 
 // Cheap gate before spending a model call. Most turns in a coaching
 // conversation are questions, acknowledgements or small talk and contain no
@@ -213,6 +117,16 @@ const EXTRACTION_PROMPT = [
   '- Only facts the user states about themselves. Never infer, never guess.',
   '- Ignore questions, one-off events ("I trained legs today") and small talk.',
   '- value: a short third-person phrase, e.g. "wants to add 5kg of muscle".',
+  // A negation is a fact the user stated, so without this rule "I don't have
+  // any allergies" becomes `allergy: none` — which then renders inside the
+  // safety block as though it were an allergy, and occupies one of six slots.
+  '- Skip negations. "I have no allergies" and "nothing hurts" are not facts to store.',
+  // The single most likely way this store goes wrong: a passing complaint
+  // becomes a permanent entry in the one tier that is never evicted or
+  // truncated, and biases advice forever.
+  '- Skip anything temporary. "my knee is sore today" is not an injury to remember;',
+  '  "had knee surgery in 2023" is. If it might pass in a week, leave it out.',
+  '- When a fact has a timeframe the user gave, keep it in the phrase ("since 2023").',
   `- Return {"memories":[]} when there is nothing durable. That is the common case.`,
 ].join('\n');
 
@@ -404,24 +318,30 @@ export async function confirmMemoryService(userId, key, value) {
   });
 }
 
-/// Ordered the same way the prompt is: safety first, then direction, then
-/// colour. The panel and the model should not disagree about what matters, or
-/// someone scanning the list will assume the coach weighs it as they see it.
+/// Stable ordering: tier, then key, then id.
+///
+/// Used by BOTH the panel and the prompt, and it has to be byte-stable across
+/// turns for the second of those. The prompt's prefix is cached by the
+/// provider — cached tokens are half price AND exempt from the rate limit — so
+/// a memory block that reshuffles between turns silently costs full price on
+/// everything after it. Ordering by updatedAt would do exactly that, because
+/// restating a fact touches the row.
 ///
 /// Sorted here rather than in SQL because tier lives in KEY_POLICY, not in a
 /// column — see the note there for why that is the right place for it.
+export function orderMemories(rows) {
+  return [...rows].sort(
+    (a, b) =>
+      tierOf(a.key) - tierOf(b.key) || a.key.localeCompare(b.key) || a.id - b.id
+  );
+}
+
 export async function listMemoriesService(userId) {
   const rows = await prisma.assistantMemory.findMany({
     where: { userId },
-    orderBy: { updatedAt: 'desc' },
     select: { id: true, key: true, value: true, source: true, updatedAt: true },
   });
-  return rows.sort(
-    (a, b) =>
-      tierOf(a.key) - tierOf(b.key) ||
-      a.key.localeCompare(b.key) ||
-      new Date(b.updatedAt) - new Date(a.updatedAt)
-  );
+  return orderMemories(rows);
 }
 
 /// Forgetting has to be as easy as remembering. Without this the only way to

@@ -96,12 +96,29 @@ test('nothing in MEMORY_KEYS writes to a field other features trust', () => {
   assert.ok(MEMORY_KEYS.includes('injury_mentioned'));
 });
 
-test('an over-long value is dropped rather than truncated', () => {
-  // Truncating would store a half-sentence as though it were a fact.
+test('a value longer than a phrase is dropped rather than truncated', () => {
+  // The cap is what makes "phrase, not sentence" structural rather than a
+  // polite request in the prompt. Truncating instead would store half a
+  // sentence as though it were a fact.
   const out = parseMemories(
-    JSON.stringify({ memories: [{ key: 'preference', value: 'x'.repeat(201) }] })
+    JSON.stringify({ memories: [{ key: 'preference', value: 'x'.repeat(81) }] })
   );
   assert.deepEqual(out, []);
+  // And one that fits is kept.
+  const ok = parseMemories(
+    JSON.stringify({ memories: [{ key: 'preference', value: 'x'.repeat(80) }] })
+  );
+  assert.equal(ok.length, 1);
+});
+
+test('the caps keep the worst-case store inside the context budget', () => {
+  // Load-everything is only safe because this product is bounded. If a cap or
+  // the value limit grows, the whole no-retrieval design needs revisiting.
+  const worstCase = Object.entries(KEY_POLICY).reduce(
+    (total, [key, p]) => total + p.max * (key.length + 80 + 5),
+    0
+  );
+  assert.ok(worstCase < 2800, `worst-case memory block is ${worstCase} chars`);
 });
 
 test('two conflicting goals in one turn keep only the first', () => {
