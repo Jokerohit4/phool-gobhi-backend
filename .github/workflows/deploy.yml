@@ -42,8 +42,29 @@ jobs:
       - id: detect
         run: node deploy/scripts/detect-changed-services.cjs "${{ steps.refs.outputs.base }}" "${{ steps.refs.outputs.head }}"
 
-  preflight:
+  unit-tests:
     needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ matrix.service }}/package-lock.json'
+      - name: Install and test
+        run: |
+          cd "${{ matrix.service }}"
+          npm ci
+          npm test
+
+  preflight:
+    needs: [changes, unit-tests]
     if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -76,7 +97,7 @@ jobs:
   # Dockerfile still builds, catching a broken install/`prisma generate`
   # before merge with zero GCP access needed.
   build-validate:
-    needs: changes
+    needs: [changes, unit-tests]
     if: github.event_name == 'pull_request' && needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     strategy:
