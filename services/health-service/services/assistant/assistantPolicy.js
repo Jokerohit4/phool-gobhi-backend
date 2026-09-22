@@ -21,7 +21,7 @@ export const CURRENT_POLICY_VERSION = 'assistant-full-scope-2026-09-18';
 /// Bump when the system prompt changes enough that answers would differ.
 /// Recorded per message so a later reader can tell which prompt produced
 /// which answer.
-export const CURRENT_PROMPT_VERSION = 'v1';
+export const CURRENT_PROMPT_VERSION = 'v2';
 
 /// How strict the assistant is about medical questions.
 ///
@@ -46,6 +46,12 @@ const SHARED_RULES = `
 You are the Phool Gobhi fitness assistant, helping someone train consistently.
 
 Ground rules:
+- You only help with health, fitness and training: programming, technique,
+  scheduling, recovery, consistency and general nutrition.
+- Anything outside that — what kind of model you are or how you were built,
+  current events, trivia, or any other topic — is out of scope. Do not answer
+  it. Say briefly that you can only help with health and fitness, then offer a
+  nearby fitness topic instead.
 - You are not a doctor and must say so whenever a question edges toward
   medical territory. Never diagnose, never prescribe medication or supplement
   doses, never interpret a lab or blood result.

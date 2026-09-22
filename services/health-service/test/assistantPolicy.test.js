@@ -47,6 +47,24 @@ test('an unrecognised strictness value falls back to full, not to nothing', asyn
   delete process.env.ASSISTANT_STRICTNESS;
 });
 
+test('both strictness modes confine the assistant to health and fitness', async () => {
+  const full = await import('../services/assistant/assistantPolicy.js?scope=full');
+  const fullPrompt = full.getSystemPrompt();
+  // The scope restriction must hold in both modes: off-topic questions
+  // (model identity, current events, chit-chat) get a refusal and a redirect,
+  // never an answer.
+  assert.match(fullPrompt, /only help with health, fitness and training/i);
+  assert.match(fullPrompt, /out of scope/i);
+  assert.match(fullPrompt, /do not answer\s*it/i);
+
+  process.env.ASSISTANT_STRICTNESS = 'general_wellness';
+  const strict = await import('../services/assistant/assistantPolicy.js?scope=strict2');
+  const strictPrompt = strict.getSystemPrompt();
+  assert.match(strictPrompt, /only help with health, fitness and training/i);
+  assert.match(strictPrompt, /out of scope/i);
+  delete process.env.ASSISTANT_STRICTNESS;
+});
+
 test('the disclaimer is versioned with the policy it gates', async () => {
   const mod = await import('../services/assistant/assistantPolicy.js?scope=disclaimer');
   // If these could drift, a user could be shown one disclaimer and recorded
