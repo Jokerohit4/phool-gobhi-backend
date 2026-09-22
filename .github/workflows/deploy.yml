@@ -81,7 +81,11 @@ jobs:
           # actually depends on prisma — "npx prisma" on a service that does
           # not (like the root gateway) would fetch the latest release instead.
           if [ -d "node_modules/prisma" ]; then npx prisma generate; fi
-          npm test
+          # Some services (the root gateway) define no test script at all;
+          # skip the suite for those instead of failing the deploy gate.
+          if [ "$(node -p "!!require('./package.json').scripts && !!require('./package.json').scripts.test")" = "true" ]; then
+            npm test
+          fi
 
   preflight:
     needs: [changes, unit-tests]
