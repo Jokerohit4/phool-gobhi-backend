@@ -2783,12 +2783,23 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
     throw { status: 400, error: "You don't seem to be at the gym yet — move closer and try again", code: 'TOO_FAR' };
   }
 
-  // 3. Upsert — one record per customer+gym+day.
+  // 3. One record per customer+gym+day. A same-day re-entry after checking
+  // out re-nulls checkedOutAt in place — it must NOT create a second row (the
+  // unique index below enforces that anyway) and must NOT re-notify
+  // challenge-service: the day already earned its coin/streak signal on the
+  // first check-in, and re-entry is the same visit day, not a new one.
   const todayString = todayDateStringIST();
   const existing = await prisma.memberAttendance.findUnique({
     where: { customerId_gymId_date: { customerId, gymId, date: todayString } },
   });
   if (existing) {
+    if (existing.checkedOutAt) {
+      await prisma.memberAttendance.update({
+        where: { id: existing.id },
+        data: { checkedOutAt: null },
+      });
+      return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: false };
+    }
     return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: true };
   }
   const record = await prisma.memberAttendance.create({
@@ -2798,6 +2809,45 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
   await emitMemberAttendanceSignals({ customerId, attendanceId: record.id, gymId, city: gym?.city });
 
   return { attendanceId: record.id, checkedInAt: record.checkedInAt, alreadyCheckedIn: false };
+}
+
+// Records when a linked member leaves for the day — the mirror of
+// memberCheckIn. No lat/lng: check-out is meaningful from anywhere (the
+// member may already be walking out), so there's no geofence to verify.
+// There must be a same-day check-in to check out of; otherwise it's a 400
+// (the app's toggle only offers "Check out" while checked in, so this is a
+// belt-and-braces guard against a stale/mismatched client).
+export async function memberCheckOut(gymId, customerId) {
+  // 1. Verify this customer is linked to this gym — same guard as check-in,
+  // so a user can't check out of a gym they never checked into today.
+  let user;
+  try {
+    const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    user = profileRes.data?.data || profileRes.data;
+  } catch (_) {
+    throw { status: 404, error: 'User not found' };
+  }
+  if (!user || user.linkedGymId !== gymId) {
+    throw { status: 403, error: 'This gym is not your linked gym', code: 'NOT_LINKED_GYM' };
+  }
+
+  // 2. Stamp checkedOutAt on today's attendance row.
+  const todayString = todayDateStringIST();
+  const existing = await prisma.memberAttendance.findUnique({
+    where: { customerId_gymId_date: { customerId, gymId, date: todayString } },
+  });
+  if (!existing) {
+    throw { status: 400, error: "You haven't checked in at this gym today", code: 'NOT_CHECKED_IN' };
+  }
+  if (existing.checkedOutAt) {
+    return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, checkedOutAt: existing.checkedOutAt, alreadyCheckedOut: true };
+  }
+  const record = await prisma.memberAttendance.update({
+    where: { id: existing.id },
+    data: { checkedOutAt: new Date() },
+  });
+
+  return { attendanceId: record.id, checkedInAt: record.checkedInAt, checkedOutAt: record.checkedOutAt, alreadyCheckedOut: false };
 }
 
 // Attendance history for a linked member — returns all their attendance
@@ -2828,6 +2878,7 @@ export async function getMemberAttendance(customerId) {
     gymName: gymNameById[r.gymId] ?? null,
     date: r.date,
     checkedInAt: r.checkedInAt,
+    checkedOutAt: r.checkedOutAt ?? null,
   }));
 }
 

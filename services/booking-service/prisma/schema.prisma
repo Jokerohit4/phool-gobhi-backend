@@ -281,11 +281,17 @@ model AttendanceWarning {
 // 'member_checkin') so linked members earn the same streaks/coins as
 // booking customers, per the 2026-08-27 decision.
 model MemberAttendance {
-  id          Int      @id @default(autoincrement())
-  customerId  Int
-  gymId       Int
-  date        String
-  checkedInAt DateTime @default(now())
+  id           Int       @id @default(autoincrement())
+  customerId   Int
+  gymId        Int
+  date         String
+  checkedInAt  DateTime  @default(now())
+  // When a linked member taps "check out" on the work-out home the same day.
+  // Null means they're still checked in (or never checked out yet). One
+  // check-in per customer+gym+day is still guaranteed by the unique below —
+  // a same-day re-entry after checking out re-nulls this column rather than
+  // creating a second row (see bookingService.memberCheckIn).
+  checkedOutAt DateTime?
 
   @@unique([customerId, gymId, date])
   @@index([gymId, date])

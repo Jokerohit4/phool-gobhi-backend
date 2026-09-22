@@ -523,6 +523,23 @@ export const getMemberAttendance = async (req, res) => {
   }
 };
 
+// Mirror of memberCheckIn — records when a linked member leaves for the day.
+// No lat/lng (check-out is meaningful from anywhere), no geofence. Errors are
+// surfaced with their code (NOT_LINKED_GYM / NOT_CHECKED_IN) so the client
+// can distinguish "wrong gym" from "wasn't ever checked in today".
+export const memberCheckOut = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.memberCheckOut(gymId, req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+    });
+  }
+};
+
 export const getGymLeaderboard = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);

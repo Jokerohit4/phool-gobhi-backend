@@ -1,5 +1,6 @@
 // Covers QA test plan Section C (member check-in core flow), D1/D6 (coin
-// crediting + idempotent notify), and getMemberAttendance. Run with:
+// crediting + idempotent notify), getMemberAttendance, and the check-out
+// mirror (memberCheckOut + same-day re-entry clearing checkedOutAt). Run with:
 //   node --experimental-test-module-mocks --test
 //
 // bookingService.js, axios, googleIdToken and notifyChallengeService are
@@ -35,7 +36,7 @@ function resetFakes() {
   nextAttendanceId = 1;
 }
 
-let memberCheckIn, getMemberAttendance;
+let memberCheckIn, getMemberAttendance, memberCheckOut;
 
 test('setup: mock dependencies once, import bookingService once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -48,6 +49,12 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
             create: async ({ data }) => {
               const row = { id: nextAttendanceId++, checkedInAt: new Date('2026-08-27T06:00:00Z'), ...data };
               memberAttendanceRows.set(`${data.customerId}|${data.gymId}|${data.date}`, row);
+              return row;
+            },
+            update: async ({ where: { id }, data }) => {
+              const row = [...memberAttendanceRows.values()].find((r) => r.id === id);
+              if (!row) throw new Error(`no MemberAttendance row with id ${id}`);
+              Object.assign(row, data);
               return row;
             },
             findFirst: async () => null, // badge check inside emitMemberAttendanceSignals — not under test here
@@ -89,8 +96,9 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
     exports: { recordAttendanceEvent: async (args) => { notifyCalls.push(args); } },
   });
 
-  ({ memberCheckIn, getMemberAttendance } = await import('../services/bookingService.js'));
+  ({ memberCheckIn, getMemberAttendance, memberCheckOut } = await import('../services/bookingService.js'));
   assert.equal(typeof memberCheckIn, 'function');
+  assert.equal(typeof memberCheckOut, 'function');
 });
 
 test('customer profile lookup fails entirely -> User not found', async () => {
@@ -215,4 +223,86 @@ test('getMemberAttendance falls back to gymName: null when gym-name resolution f
   const records = await getMemberAttendance(1);
   assert.equal(records.length, 1);
   assert.equal(records[0].gymName, null);
+});
+
+// ─── memberCheckOut ─────────────────────────────────────────────────────────
+
+test('memberCheckOut: customer profile lookup fails -> User not found', async () => {
+  resetFakes();
+  userLookupThrows = true;
+  await assert.rejects(
+    () => memberCheckOut(GYM.id, 1),
+    (err) => { assert.equal(err.status, 404); assert.equal(err.error, 'User not found'); return true; }
+  );
+});
+
+test('memberCheckOut: customer with no linkedGymId -> NOT_LINKED_GYM', async () => {
+  resetFakes();
+  user = { id: 1, linkedGymId: null };
+  await assert.rejects(
+    () => memberCheckOut(GYM.id, 1),
+    (err) => { assert.equal(err.status, 403); assert.equal(err.code, 'NOT_LINKED_GYM'); return true; }
+  );
+});
+
+test('memberCheckOut: no same-day check-in -> NOT_CHECKED_IN', async () => {
+  resetFakes(); // no attendance row exists yet
+  await assert.rejects(
+    () => memberCheckOut(GYM.id, 1),
+    (err) => { assert.equal(err.status, 400); assert.equal(err.code, 'NOT_CHECKED_IN'); return true; }
+  );
+});
+
+test('memberCheckOut: linked + checked in today -> stamps checkedOutAt, alreadyCheckedOut false', async () => {
+  resetFakes();
+  const nearLat = GYM.lat + metersToLatOffset(10);
+  await memberCheckIn(GYM.id, 1, nearLat, GYM.lng); // ensures today's row exists
+
+  const result = await memberCheckOut(GYM.id, 1);
+
+  assert.equal(result.alreadyCheckedOut, false);
+  assert.ok(result.checkedOutAt, 'checkedOutAt should be set');
+  assert.equal(memberAttendanceRows.size, 1, 'no extra row created on check-out');
+  assert.equal(notifyCalls.length, 1, 'check-out must NOT fire a second challenge-service notify');
+});
+
+test('memberCheckOut: checking out twice is idempotent — alreadyCheckedOut true, timestamp kept', async () => {
+  resetFakes();
+  const nearLat = GYM.lat + metersToLatOffset(10);
+  await memberCheckIn(GYM.id, 1, nearLat, GYM.lng);
+  const first = await memberCheckOut(GYM.id, 1);
+
+  const second = await memberCheckOut(GYM.id, 1);
+
+  assert.equal(second.alreadyCheckedOut, true);
+  assert.equal(second.attendanceId, first.attendanceId);
+  assert.equal(second.checkedOutAt.getTime(), first.checkedOutAt.getTime());
+});
+
+test('same-day re-entry after check-out: re-nulls checkedOutAt, alreadyCheckedIn false, no duplicate row/notify', async () => {
+  resetFakes();
+  const nearLat = GYM.lat + metersToLatOffset(10);
+  await memberCheckIn(GYM.id, 1, nearLat, GYM.lng);
+  const checkout = await memberCheckOut(GYM.id, 1);
+  assert.equal(notifyCalls.length, 1, 'one notify from the initial check-in');
+
+  const reEntry = await memberCheckIn(GYM.id, 1, nearLat, GYM.lng);
+
+  assert.equal(reEntry.alreadyCheckedIn, false, 're-entry is a fresh check-in, not an already-checked-in');
+  assert.equal(reEntry.attendanceId, checkout.attendanceId, 'same row, re-used');
+  assert.equal(memberAttendanceRows.size, 1, 'no duplicate row on re-entry');
+  assert.equal([...memberAttendanceRows.values()][0].checkedOutAt, null, 'checkedOutAt cleared for re-entry');
+  assert.equal(notifyCalls.length, 1, 're-entry must NOT re-notify challenge-service (same day already credited)');
+});
+
+test('getMemberAttendance exposes checkedOutAt (set after checkout, null before)', async () => {
+  resetFakes();
+  const nearLat = GYM.lat + metersToLatOffset(10);
+  await memberCheckIn(GYM.id, 1, nearLat, GYM.lng);
+  assert.equal((await getMemberAttendance(1))[0].checkedOutAt, null);
+
+  await memberCheckOut(GYM.id, 1);
+  const after = await getMemberAttendance(1);
+  assert.ok(after[0].checkedOutAt, 'checkedOutAt present after check-out');
+  assert.equal(after[0].checkedInAt instanceof Date, true);
 });

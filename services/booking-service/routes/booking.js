@@ -125,6 +125,10 @@ router.post('/unclaimed-gym/:unclaimedGymId/checkin', requireRole('customer'), r
 // created from them.
 router.get('/mine/independent-checkins', requireRole('customer'), ctrl.myIndependentCheckIns);
 router.post('/gym/:gymId/member-checkin', requireRole('customer'), ctrl.memberCheckIn);
+// Check-out is intentionally ungated-geofence: there's no location to verify
+// (the member may already be walking out), just the linked-gym + same-day
+// check-in guards in bookingService.memberCheckOut.
+router.post('/gym/:gymId/member-checkout', requireRole('customer'), ctrl.memberCheckOut);
 router.get('/mine/member-attendance', requireRole('customer'), ctrl.getMemberAttendance);
 router.get('/gym/:gymId/leaderboard', requireRole('customer'), ctrl.getGymLeaderboard);
 router.put('/:id/complete', requireRole('partner'), ctrl.completeBooking);

@@ -1,7 +1,7 @@
-// Controller-layer coverage for the two new HTTP handlers (memberCheckIn,
-// getMemberAttendance) — thin wrappers around the service functions already
-// covered in memberCheckIn.test.js, tested here with a fake req/res instead
-// of a real Express app. Run with:
+// Controller-layer coverage for the three Attendance-SaaS handlers
+// (memberCheckIn, getMemberAttendance, memberCheckOut) — thin wrappers around
+// the service functions already covered in memberCheckIn.test.js, tested
+// here with a fake req/res instead of a real Express app. Run with:
 //   node --experimental-test-module-mocks --test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,17 +15,19 @@ function fakeRes() {
 
 let memberCheckInImpl = async () => { throw new Error('not configured'); };
 let getMemberAttendanceImpl = async () => { throw new Error('not configured'); };
+let memberCheckOutImpl = async () => { throw new Error('not configured'); };
 
-let memberCheckIn, getMemberAttendance;
+let memberCheckIn, getMemberAttendance, memberCheckOut;
 
 test('setup: mock bookingService once, import the controller once', async (t) => {
   t.mock.module(new URL('../services/bookingService.js', import.meta.url).href, {
     exports: {
       memberCheckIn: (...args) => memberCheckInImpl(...args),
       getMemberAttendance: (...args) => getMemberAttendanceImpl(...args),
+      memberCheckOut: (...args) => memberCheckOutImpl(...args),
     },
   });
-  ({ memberCheckIn, getMemberAttendance } = await import('../controllers/bookingController.js'));
+  ({ memberCheckIn, getMemberAttendance, memberCheckOut } = await import('../controllers/bookingController.js'));
   assert.equal(typeof memberCheckIn, 'function');
 });
 
@@ -88,4 +90,54 @@ test('getMemberAttendance controller: service error is mapped to status + error'
 
   assert.equal(res.statusCode, 401);
   assert.deepEqual(res.body, { error: 'Unauthorized' });
+});
+
+test('memberCheckOut controller: parses gymId, forwards userId, returns {data}', async () => {
+  let receivedArgs = null;
+  memberCheckOutImpl = async (gymId, customerId) => {
+    receivedArgs = { gymId, customerId };
+    return { attendanceId: 1, checkedInAt: new Date('2026-08-27T06:00:00Z'), checkedOutAt: new Date('2026-08-27T08:00:00Z'), alreadyCheckedOut: false };
+  };
+  const req = { params: { gymId: '9' }, userId: 42 };
+  const res = fakeRes();
+
+  await memberCheckOut(req, res);
+
+  assert.deepEqual(receivedArgs, { gymId: 9, customerId: 42 });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.data.attendanceId, 1);
+  assert.equal(res.body.data.alreadyCheckedOut, false);
+});
+
+test('memberCheckOut controller: service error keeps status + error + code', async () => {
+  memberCheckOutImpl = async () => { throw { status: 400, error: "You haven't checked in at this gym today", code: 'NOT_CHECKED_IN' }; };
+  const req = { params: { gymId: '9' }, userId: 42 };
+  const res = fakeRes();
+
+  await memberCheckOut(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, { error: "You haven't checked in at this gym today", code: 'NOT_CHECKED_IN' });
+});
+
+test('memberCheckOut controller: an error with no status defaults to 500', async () => {
+  memberCheckOutImpl = async () => { throw new Error('boom'); };
+  const req = { params: { gymId: '9' }, userId: 42 };
+  const res = fakeRes();
+
+  await memberCheckOut(req, res);
+
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.body.error, 'boom');
+});
+
+test('memberCheckOut controller: a non-numeric gymId is still passed through (parse NaN)', async () => {
+  let receivedGymId = null;
+  memberCheckOutImpl = async (gymId) => { receivedGymId = gymId; return {}; };
+  const req = { params: { gymId: 'abc' }, userId: 42 };
+  const res = fakeRes();
+
+  await memberCheckOut(req, res);
+
+  assert.equal(Number.isNaN(receivedGymId), true);
 });
