@@ -52,11 +52,14 @@ jobs:
         service: ${{ fromJSON(needs.changes.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+      # Note: built-in npm caching deliberately omitted. setup-node's npm cache
+      # step has failed on this matrix ("Some specified paths were not resolved,
+      # unable to cache dependencies") even though every service lockfile exists
+      # at the expected path — the cache is a speed nicety, not worth gating
+      # every deploy on. npm ci below is lockfile-pinned regardless.
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: '${{ matrix.service }}/package-lock.json'
       - name: Install and test
         run: |
           cd "${{ matrix.service }}"
