@@ -77,9 +77,10 @@ jobs:
           npm ci
           # A service that uses Prisma needs its client generated: on a fresh
           # checkout @prisma/client ships no PrismaClient export until "prisma
-          # generate" runs against schemas/prisma. (The deploy job does this in
-          # its Dockerfile; the tests need it too.)
-          if [ -d "prisma" ]; then npx prisma generate; fi
+          # generate" runs against its schema. Only run it when the project
+          # actually depends on prisma — "npx prisma" on a service that does
+          # not (like the root gateway) would fetch the latest release instead.
+          if [ -d "node_modules/prisma" ]; then npx prisma generate; fi
           npm test
 
   preflight:
