@@ -63,7 +63,12 @@ jobs:
           "
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # The dev toolchain (and these tests, which use Node's experimental
+          # test module-mocks to stub @prisma/client) runs on Node 24; Node 20's
+          # mock loader cannot intercept the dual-published client's named
+          # exports, so every service suite failed under 20. Production still
+          # builds from node:20-alpine in its own Dockerfile.
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: '${{ steps.svcmeta.outputs.source-dir }}/package-lock.json'
       - name: Install and test
