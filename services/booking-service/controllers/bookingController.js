@@ -530,6 +530,12 @@ export const getMemberAttendance = async (req, res) => {
 export const memberCheckOut = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
+    // A non-numeric id would otherwise sail through as NaN and surface a
+    // misleading NOT_LINKED_GYM ("not your linked gym") for what is really a
+    // malformed request — reject it up front.
+    if (!Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'Invalid gym id', code: 'INVALID_GYM_ID' });
+    }
     const result = await bookingService.memberCheckOut(gymId, req.userId);
     res.json({ data: result });
   } catch (err) {

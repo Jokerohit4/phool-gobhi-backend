@@ -131,13 +131,15 @@ test('memberCheckOut controller: an error with no status defaults to 500', async
   assert.equal(res.body.error, 'boom');
 });
 
-test('memberCheckOut controller: a non-numeric gymId is still passed through (parse NaN)', async () => {
-  let receivedGymId = null;
-  memberCheckOutImpl = async (gymId) => { receivedGymId = gymId; return {}; };
+test('memberCheckOut controller: a non-numeric gymId is rejected as 400, service never called', async () => {
+  let serviceCalled = false;
+  memberCheckOutImpl = async () => { serviceCalled = true; return {}; };
   const req = { params: { gymId: 'abc' }, userId: 42 };
   const res = fakeRes();
 
   await memberCheckOut(req, res);
 
-  assert.equal(Number.isNaN(receivedGymId), true);
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, { error: 'Invalid gym id', code: 'INVALID_GYM_ID' });
+  assert.equal(serviceCalled, false, 'service must not run on a malformed id');
 });
