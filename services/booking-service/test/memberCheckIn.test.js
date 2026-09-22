@@ -279,6 +279,18 @@ test('memberCheckOut: checking out twice is idempotent — alreadyCheckedOut tru
   assert.equal(second.checkedOutAt.getTime(), first.checkedOutAt.getTime());
 });
 
+test('memberCheckOut: linked gym changed after check-in -> NOT_LINKED_GYM even though checked in', async () => {
+  resetFakes();
+  const nearLat = GYM.lat + metersToLatOffset(10);
+  await memberCheckIn(GYM.id, 1, nearLat, GYM.lng); // checked in at GYM.id
+  user = { id: 1, linkedGymId: 12345 }; // link changes mid-day
+
+  await assert.rejects(
+    () => memberCheckOut(GYM.id, 1),
+    (err) => { assert.equal(err.status, 403); assert.equal(err.code, 'NOT_LINKED_GYM'); return true; }
+  );
+});
+
 test('same-day re-entry after check-out: re-nulls checkedOutAt, alreadyCheckedIn false, no duplicate row/notify', async () => {
   resetFakes();
   const nearLat = GYM.lat + metersToLatOffset(10);
