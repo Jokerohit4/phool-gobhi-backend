@@ -327,10 +327,18 @@ export const updateCoinCatalogItemAdmin = async (req, res) => {
 // difference worth keeping visible.
 export const listAttendanceInternal = async (req, res) => {
   try {
+    // Defaults to a trailing window (hours) for the existing callers
+    // (health-service's fetchAttendance). booking-service's leaderboard
+    // score passes an explicit `from` (ISO date or datetime) so it can ask
+    // for up to a 90-day 'all' window without splitting it into 30-day
+    // chunks — a `from` overrides `hours`.
     const hours = Math.min(Math.max(parseInt(req.query?.hours ?? '48', 10) || 48, 1), 720);
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const from = req.query?.from
+      ? new Date(req.query.from)
+      : new Date(Date.now() - hours * 60 * 60 * 1000);
     const userId = req.query?.userId ? parseInt(req.query.userId, 10) : undefined;
-    const events = await streakService.listAttendanceSinceService(since, { userId });
+    const gymId = req.query?.gymId ? parseInt(req.query.gymId, 10) : undefined;
+    const events = await streakService.listAttendanceSinceService(from, { userId, gymId });
     res.json({ data: events });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

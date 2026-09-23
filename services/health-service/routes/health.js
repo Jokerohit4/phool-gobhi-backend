@@ -212,6 +212,10 @@ router.post('/internal/erase/:userId', requireInternal, consentCtrl.eraseUserInt
 // by auth-service's platform-wide export fan-out; internal only, never
 // reachable through the gateway.
 router.get('/internal/export/:userId', requireInternal, exportCtrl.exportUserInternal);
+// Multi-user daily-activity feed for booking-service's leaderboard score
+// (ids + from/to). Internal only — the public /daily-activity read stays
+// strictly per-user.
+router.get('/internal/daily-activity', requireInternal, activityCtrl.getDailyActivityInternal);
 
 // ---- Account-wide deletion (called by the same flow that deletes the rest
 // of a user's account — see auth-service's onDeleteAccount). Deliberately

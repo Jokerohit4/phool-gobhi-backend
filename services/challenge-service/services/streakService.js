@@ -108,11 +108,12 @@ export async function getStreakService(userId) {
 // table is the platform's single unified attendance signal - booking
 // check-ins, self-check-ins and attendance-SaaS member check-ins all land
 // in it, and a second implementation would inevitably cover fewer of them.
-export async function listAttendanceSinceService(since, { userId } = {}) {
+export async function listAttendanceSinceService(since, { userId, gymId } = {}) {
   return prisma.attendanceEventLog.findMany({
     where: {
       attendedAt: { gte: since },
       ...(userId ? { userId } : {}),
+      ...(gymId ? { gymId } : {}),
     },
     select: { userId: true, bookingId: true, gymId: true, attendedAt: true, source: true },
     orderBy: { attendedAt: 'asc' },

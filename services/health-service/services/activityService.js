@@ -113,3 +113,18 @@ export async function getDailyActivityService(userId, { from, to } = {}) {
     orderBy: { date: 'desc' },
   });
 }
+
+// Multi-user read for booking-service's leaderboard score — daily step/activity
+// rows for a set of users in a date range. Internal-only: the public surface
+// stays strictly per-user via req.userId, and the score feed never needs to
+// cross the gateway. Mirrors the public filter (date `from`/`to` are the same
+// 'YYYY-MM-DD' strings DailyActivityMetric.date holds), just on `id IN (...)`.
+export async function getDailyActivityForUsersService(userIds, { from, to } = {}) {
+  return prisma.dailyActivityMetric.findMany({
+    where: {
+      userId: { in: userIds },
+      ...(from || to ? { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+    },
+    orderBy: { date: 'desc' },
+  });
+}

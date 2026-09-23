@@ -25,7 +25,7 @@ function resetFakes() {
   creditCalls = [];
 }
 
-let recordAttendanceEvent, closeWeek, getStreakService;
+let recordAttendanceEvent, closeWeek, getStreakService, listAttendanceSinceService;
 
 test('setup: mock dependencies once, import the real module once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -39,6 +39,13 @@ test('setup: mock dependencies once, import the real module once', async (t) => 
               db.attendanceEvents.set(data.idempotencyKey, row);
               return row;
             },
+            findMany: async ({ where }) =>
+              [...db.attendanceEvents.values()].filter(
+                (r) =>
+                  r.attendedAt >= where.attendedAt.gte &&
+                  (where.userId === undefined || r.userId === where.userId) &&
+                  (where.gymId === undefined || r.gymId === where.gymId),
+              ),
           };
           this.userStreakWeek = {
             upsert: async ({ where, update, create }) => {
@@ -88,8 +95,31 @@ test('setup: mock dependencies once, import the real module once', async (t) => 
     exports: { loadEconomyConfig: async () => economyConfig },
   });
 
-  ({ recordAttendanceEvent, closeWeek, getStreakService } = await import('../services/streakService.js'));
+  ({ recordAttendanceEvent, closeWeek, getStreakService, listAttendanceSinceService } = await import('../services/streakService.js'));
   assert.equal(typeof recordAttendanceEvent, 'function');
+});
+
+test('listAttendanceSinceService filters by gymId and the since bound (leaderboard window)', async () => {
+  resetFakes();
+  await recordAttendanceEvent({ userId: 1, bookingId: 501, gymId: 9, attendedAt: '2026-09-01T10:00:00Z', source: 'booking', idempotencyKey: 'b:501' });
+  await recordAttendanceEvent({ userId: 1, bookingId: 502, gymId: 9, attendedAt: '2026-09-08T10:00:00Z', source: 'booking', idempotencyKey: 'b:502' });
+  await recordAttendanceEvent({ userId: 1, memberAttendanceId: 71, gymId: 10, attendedAt: '2026-09-09T10:00:00Z', source: 'member_checkin', idempotencyKey: 'm:71' });
+  await recordAttendanceEvent({ userId: 2, memberAttendanceId: 72, gymId: 9, attendedAt: '2026-09-09T10:00:00Z', source: 'self_checkin', idempotencyKey: 'm:72' });
+
+  const all = await listAttendanceSinceService(new Date('2026-09-01T00:00:00Z'), {});
+  assert.equal(all.length, 4);
+
+  const gym9 = await listAttendanceSinceService(new Date('2026-09-01T00:00:00Z'), { gymId: 9 });
+  assert.equal(gym9.length, 3);
+  assert.ok(gym9.every((e) => e.gymId === 9));
+
+  const sinceSep8 = await listAttendanceSinceService(new Date('2026-09-08T00:00:00Z'), { gymId: 9 });
+  assert.equal(sinceSep8.length, 2);
+  assert.ok(sinceSep8.every((e) => e.attendedAt >= new Date('2026-09-08T00:00:00Z')));
+
+  const user2 = await listAttendanceSinceService(new Date('2026-09-08T00:00:00Z'), { gymId: 9, userId: 2 });
+  assert.equal(user2.length, 1);
+  assert.equal(user2[0].source, 'self_checkin');
 });
 
 test('recordAttendanceEvent is idempotent on idempotencyKey (booking retry)', async () => {

@@ -8,6 +8,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
 import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
+import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -96,6 +97,8 @@ export async function emitMemberAttendanceSignals({ customerId, attendanceId, gy
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
+const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 const REFERRAL_BONUS = 50;
 
@@ -2882,16 +2885,48 @@ export async function getMemberAttendance(customerId) {
   }));
 }
 
-// ─── Attendance leaderboard: per-gym, opt-in, ranked by check-in count ──────
-// Reads the same MemberAttendance rows memberCheckIn writes -- "check-in
-// count" is literally "how many distinct days has this user checked in at
-// this gym". Opt-in (User.leaderboardOptIn, auth-service) -- a check-in is
-// otherwise private, so non-opted-in users are excluded from the visible
-// list entirely rather than shown anonymized. Three windows, all reading the
-// same underlying rows: weekly/monthly reset (filtered by date), all-time
-// never does (no filter) -- no separate reward-cycle bucket, per the 2026-09
-// decision to keep the periodic-prize idea unbuilt for now.
+// ─── Attendance leaderboard: per-gym, opt-in, ranked by composite score ─────
+// Ranks by the 70/20/10 score from attendanceScoreService.js (verified
+// presence at THIS gym via challenge-service's AttendanceEventLog trust
+// ladder, steps from health-service's DailyActivityMetric, recent-week
+// bonus), with check-in day count as the tie-break. The MemberAttendance
+// rows are still the source for `checkIns` (the one-per-customer-gym-day
+// record memberCheckIn self-check-in / partner-verify writes) — the score
+// layers proof-of-presence weight on top of that same presence. Opt-in
+// (User.leaderboardOptIn, auth-service) -- a check-in is otherwise private,
+// so non-opted-in users are excluded from the visible list entirely rather
+// than shown anonymized. Three windows, all reading the same underlying rows:
+// weekly/monthly reset (filtered by date), all-time never does (no filter).
+// Both cross-service feeds are best-effort: a down challenge-service or
+// health-service silently degrades the score to whatever it can still see
+// (check-ins + steps, or check-ins alone) rather than failing the board.
 const LEADERBOARD_TOP_N = 50;
+// Internal read of the two score feeds. Each defaults to graceful degradation
+// (return []) so a flaky sibling never takes the whole leaderboard down.
+async function fetchGymAttendanceEvents(gymId, fromUtc) {
+  try {
+    const res = await axios.get(`${CHALLENGE_SERVICE_URL}/internal/attendance-events`, {
+      params: { gymId, from: fromUtc.toISOString() },
+      ...(await internalHeadersFor(CHALLENGE_SERVICE_URL)),
+    });
+    return res.data?.data ?? [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function fetchDailyActivityRows(userIds, fromKey, toKey) {
+  if (userIds.length === 0) return [];
+  try {
+    const res = await axios.get(`${HEALTH_SERVICE_URL}/internal/daily-activity`, {
+      params: { ids: userIds.join(','), from: fromKey, to: toKey },
+      ...(await internalHeadersFor(HEALTH_SERVICE_URL)),
+    });
+    return res.data?.data ?? [];
+  } catch (_) {
+    return [];
+  }
+}
 
 function currentWeekStartIST() {
   const todayString = todayDateStringIST();
@@ -2940,29 +2975,55 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
     return { window: validWindow, entries: [], me: { rank: null, checkIns: 0, optedIn: false } };
   }
 
+  // Score feeds for the same window the board shows (weekly=7 / monthly=30 /
+  // all=90), across everyone who could appear + the requester.
+  const { startKey, startUtc } = scoreWindow(new Date(), validWindow);
+  const todayKey = new Date(Date.now() + (5 * 60 + 30) * 60000).toISOString().split('T')[0];
+  const [eventRows, activityRows] = await Promise.all([
+    fetchGymAttendanceEvents(gymId, startUtc),
+    fetchDailyActivityRows(customerIds, startKey, todayKey),
+  ]);
+  const scores = computeScores({
+    gymId,
+    attendanceEvents: eventRows,
+    dailyActivityRows: activityRows,
+    userIds: customerIds,
+    window: validWindow,
+  });
+
   const ranked = allRows
     .filter((r) => userById[r.customerId]?.leaderboardOptIn === true)
+    .map((r) => ({ customerId: r.customerId, checkIns: r.checkIns, score: scores[r.customerId] ?? 0 }))
+    .sort((a, b) => b.score - a.score || b.checkIns - a.checkIns)
     .map((r, i) => ({
       rank: i + 1,
       customerId: r.customerId,
       name: userById[r.customerId]?.name || 'Anonymous',
       photoUrl: userById[r.customerId]?.profileImageUrl || null,
       checkIns: r.checkIns,
+      score: r.score,
     }));
 
   // The requester's own position within that same opted-in ranking, computed
   // whether or not they're actually opted in -- so someone deciding whether
-  // to opt in can see where they'd land first.
+  // to opt in can see where they'd land first. Ranked the same way entries
+  // are: score desc, check-ins as the tie-break.
   const myCheckIns = allRows.find((r) => r.customerId === requestingCustomerId)?.checkIns ?? 0;
+  const myScore = scores[requestingCustomerId] ?? 0;
+  const strictlyAbove = ranked.filter(
+    (r) => r.score > myScore || (r.score === myScore && r.checkIns > myCheckIns),
+  ).length;
   const myListedRank = ranked.findIndex((r) => r.customerId === requestingCustomerId) + 1;
-  const myRank = myListedRank || ranked.filter((r) => r.checkIns > myCheckIns).length + 1;
+  const myRank = myListedRank || strictlyAbove + 1;
 
   return {
     window: validWindow,
+    windowDays: windowDaysFor(validWindow),
     entries: ranked.slice(0, LEADERBOARD_TOP_N),
     me: {
       rank: myRank,
       checkIns: myCheckIns,
+      score: myScore,
       optedIn: userById[requestingCustomerId]?.leaderboardOptIn === true,
     },
   };
