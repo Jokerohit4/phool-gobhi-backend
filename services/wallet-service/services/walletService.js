@@ -127,6 +127,10 @@ export const DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT = Number(process.env.S
 // null) — same "admin sets a per-gym override, else fall back to a platform
 // constant" convention as the percentage mode above.
 export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 1;
+// Floor for a positive attendance-SaaS bill: if a gym's computed bill for a
+// month is under this, it is billed the minimum instead (a gym with zero
+// joiners still bills Rs 0 — see the NO_USERS_JOINED guard in apply).
+export const ATTENDANCE_SAAS_MIN_BILLED_AMOUNT = 99;
 
 // Admin-portal-editable wallet top-up options (presets + optional
 // custom-amount range). Cached briefly since createTopUpOrder reads this on
@@ -681,12 +685,16 @@ export async function computeAttendanceSaasBillsService(gymIds, month) {
     const config = configs[i];
     const usersJoined = counts[gymId] ?? 0;
     const flatFeePerUser = config.subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER;
+    let amountDue = Math.round(usersJoined * flatFeePerUser * 100) / 100;
+    if (amountDue > 0 && amountDue < ATTENDANCE_SAAS_MIN_BILLED_AMOUNT) {
+      amountDue = ATTENDANCE_SAAS_MIN_BILLED_AMOUNT;
+    }
     return {
       gymId,
       month,
       usersJoined,
       flatFeePerUser,
-      amountDue: Math.round(usersJoined * flatFeePerUser * 100) / 100,
+      amountDue,
       appliedAt: appliedByKey.get(attendanceSaasBillIdempotencyKey(gymId, month)) ?? null,
       attendanceSaasOptedOut: config.attendanceSaasOptedOut,
       subscriptionPricingMode: config.subscriptionPricingMode,
