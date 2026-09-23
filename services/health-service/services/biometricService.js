@@ -32,6 +32,14 @@ export const METRIC_BOUNDS = {
   stress: [0, 100],
 };
 
+// Metrics that only ever arrive MEASURED (HealthKit / Health Connect, via the
+// daily-activity sync), never typed. Steps is the one addressed today: the
+// device count is the single source of truth, so a hand-entered value from any
+// source would corrupt the very series it feeds. Writes are rejected outright —
+// regardless of `source` — keeping one home per metric (biometricEntry for
+// things a person can type, DailyActivityMetric for the device copy).
+export const MEASURED_ONLY_METRICS = ['steps'];
+
 function localDateIST(date) {
   return new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
@@ -50,6 +58,12 @@ export function validateMetricValue(metric, value) {
 // rather than stacking a second row. `source` is carried so a later wearable
 // sync overwrites the same row and the series stays one-row-per-day.
 export async function upsertEntryService(userId, { metric, value, localDate, source = 'manual' }) {
+  if (MEASURED_ONLY_METRICS.includes(metric)) {
+    const err = new Error(
+      `${metric} is measured automatically by your phone or watch and cannot be entered by hand — it syncs via daily activity`);
+    err.status = 400;
+    throw err;
+  }
   const day = localDate || localDateIST(new Date());
   const unit = METRIC_UNITS[metric];
   return prisma.biometricEntry.upsert({

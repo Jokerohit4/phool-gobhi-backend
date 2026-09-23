@@ -143,6 +143,23 @@ test('source defaults to manual and is carried, so wearable sync later reuses th
   assert.equal(entryRows[0].source, 'healthkit');
 });
 
+test('steps writes are rejected outright — it is measured-only, single home is daily-activity', async () => {
+  resetFakes();
+  // Hand-typed, whatever the source: the device copy belongs in
+  // DailyActivityMetric, never in biometricEntry, so no path may write it.
+  await assert.rejects(
+    () => upsertEntryService(1, { metric: 'steps', value: 8000, localDate: '2026-09-08' }),
+    (err) => err.status === 400 && /measured automatically/.test(err.message),
+  );
+  await assert.rejects(
+    () => upsertEntryService(1, {
+      metric: 'steps', value: 8000, localDate: '2026-09-08', source: 'health_connect',
+    }),
+    (err) => err.status === 400,
+  );
+  assert.equal(entryRows.length, 0, 'a rejected steps write must not leave a row');
+});
+
 test('the multi-metric quick-add saves every metric in one call', async () => {
   resetFakes();
   const saved = await upsertManyService(1, [
@@ -171,7 +188,7 @@ test('bounds reject unit mix-ups without commenting on the value', () => {
 test('listEntries can filter to one metric', async () => {
   resetFakes();
   await upsertEntryService(1, { metric: 'weight', value: 74.2, localDate: '2026-09-07' });
-  await upsertEntryService(1, { metric: 'steps', value: 8000, localDate: '2026-09-07' });
+  await upsertEntryService(1, { metric: 'resting_hr', value: 52, localDate: '2026-09-07' });
 
   const all = await listEntriesService(1);
   assert.equal(all.length, 2);
