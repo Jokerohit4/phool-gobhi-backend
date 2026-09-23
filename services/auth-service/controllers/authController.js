@@ -844,8 +844,10 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-// Per-gym attendance leaderboards (booking-service) are opt-in — a check-in
-// is otherwise private. This is the only way leaderboardOptIn ever changes.
+// Per-gym attendance leaderboards (booking-service) are on by default — a
+// check-in is public on the boards it would rank on. This opt-out is the only
+// way leaderboardOptIn ever changes, and it is reachable from the customer
+// app's profile screen only (no toggle on the board itself).
 const updateLeaderboardOptIn = async (req, res) => {
   try {
     const { optIn } = req.body;

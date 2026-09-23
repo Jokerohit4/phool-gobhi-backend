@@ -94,10 +94,11 @@ model User {
   // on a later sweep run — this is "processed," not strictly "was nudged."
   reengagementNudgedAt DateTime?
   // Per-gym attendance leaderboards (booking-service, MemberAttendance-backed)
-  // are opt-in — a check-in is otherwise private. False by default; toggled
-  // from the customer app's settings screen. Global, not per-gym: someone who
-  // opts in is visible on every gym's board their check-ins would rank on.
-  leaderboardOptIn Boolean @default(false)
+  // are on by default — a check-in is public on the boards it would rank on.
+  // True by default; opt-out by the user, from the customer app's profile
+  // screen only. Global, not per-gym: someone who stays on is visible on every
+  // gym's board their check-ins would rank on.
+  leaderboardOptIn Boolean @default(true)
   // Map collectibles (veggie pickups) are a standalone currency, deliberately
   // NOT coins and NOT tied to gyms/bookings/badges in any way -- just walk
   // near a spawn point on the Explore map and it's yours. Spawn points are

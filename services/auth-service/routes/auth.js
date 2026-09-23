@@ -99,7 +99,8 @@ router.get('/bank-account', verifyToken, getBankAccount);
 router.put('/bank-account', verifyToken, updateBankAccount);
 router.get('/admin/bank-account/:userId', requireGobhi, getBankAccountAdmin);
 router.post('/fcm-token', verifyToken, updateFcmToken);
-// Per-gym attendance leaderboards (booking-service) are opt-in.
+// Per-gym attendance leaderboards (booking-service) are on by default; this
+// is the profile-side opt-out (no toggle on the board itself).
 router.put('/leaderboard-opt-in', verifyToken, updateLeaderboardOptIn);
 // Map collectibles (veggie pickups) -- standalone currency, no coins/gyms
 // involved. Spawn points are deterministic client-side; these just record
