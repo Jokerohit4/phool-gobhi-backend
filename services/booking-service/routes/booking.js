@@ -131,6 +131,7 @@ router.post('/gym/:gymId/member-checkin', requireRole('customer'), ctrl.memberCh
 router.post('/gym/:gymId/member-checkout', requireRole('customer'), ctrl.memberCheckOut);
 router.get('/mine/member-attendance', requireRole('customer'), ctrl.getMemberAttendance);
 router.get('/gym/:gymId/leaderboard', requireRole('customer'), ctrl.getGymLeaderboard);
+router.get('/leaderboard/global', requireRole('customer'), ctrl.getGlobalLeaderboard);
 router.put('/:id/complete', requireRole('partner'), ctrl.completeBooking);
 
 export default router;

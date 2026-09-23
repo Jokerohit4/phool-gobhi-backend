@@ -70,6 +70,11 @@ export function scoreWindow(today, window) {
 // DailyActivityMetric rows carrying {userId, date, steps}; `userIds` is the
 // full set to always include, so a never-checked-in challenger scores 0
 // rather than vanishing. `today` pins the clock for tests.
+//
+// Returns one object per userId: `score` (0-100, round(capped sum)) plus the
+// three component scores (attendance / steps / recent, each its own 0-100
+// bucket normalized to its own cap and rounded) so a board can both rank on
+// the composite AND show/rank per criterion.
 export function computeScores({ gymId, attendanceEvents, dailyActivityRows, userIds, window, today = new Date() }) {
   const { winDays, startKey } = scoreWindow(today, window);
   const todayKey = istDayKey(today);
@@ -127,7 +132,13 @@ export function computeScores({ gymId, attendanceEvents, dailyActivityRows, user
       SCORE_WEIGHTS.recent,
       SCORE_WEIGHTS.recent * (recentDays / SCORE_RECENT_WINDOW_DAYS),
     );
-    scores[userId] = Math.max(0, Math.min(100, Math.round(attendancePart + stepsPart + recentPart)));
+    const rawTotal = attendancePart + stepsPart + recentPart;
+    scores[userId] = {
+      score: Math.max(0, Math.min(100, Math.round(rawTotal))),
+      attendance: Math.round(attendancePart),
+      steps: Math.round(stepsPart),
+      recent: Math.round(recentPart),
+    };
   }
   return scores;
 }

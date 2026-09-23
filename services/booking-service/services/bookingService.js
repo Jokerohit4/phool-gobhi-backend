@@ -2885,17 +2885,17 @@ export async function getMemberAttendance(customerId) {
   }));
 }
 
-// ─── Attendance leaderboard: per-gym, opt-in, ranked by composite score ─────
+// ─── Attendance leaderboard: per-gym, opt-out, ranked by composite score ────
 // Ranks by the 70/20/10 score from attendanceScoreService.js (verified
 // presence at THIS gym via challenge-service's AttendanceEventLog trust
 // ladder, steps from health-service's DailyActivityMetric, recent-week
 // bonus), with check-in day count as the tie-break. The MemberAttendance
 // rows are still the source for `checkIns` (the one-per-customer-gym-day
 // record memberCheckIn self-check-in / partner-verify writes) — the score
-// layers proof-of-presence weight on top of that same presence. Opt-in
-// (User.leaderboardOptIn, auth-service) -- a check-in is otherwise private,
-// so non-opted-in users are excluded from the visible list entirely rather
-// than shown anonymized. Three windows, all reading the same underlying rows:
+// layers proof-of-presence weight on top of that same presence. On by default
+// (User.leaderboardOptIn, auth-service, default true); users who opted out
+// are excluded from the visible list entirely rather than shown anonymized.
+// Three windows, all reading the same underlying rows:
 // weekly/monthly reset (filtered by date), all-time never does (no filter).
 // Both cross-service feeds are best-effort: a down challenge-service or
 // health-service silently degrades the score to whatever it can still see
@@ -2993,7 +2993,17 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
 
   const ranked = allRows
     .filter((r) => userById[r.customerId]?.leaderboardOptIn === true)
-    .map((r) => ({ customerId: r.customerId, checkIns: r.checkIns, score: scores[r.customerId] ?? 0 }))
+    .map((r) => {
+      const s = scores[r.customerId] ?? { score: 0, attendance: 0, steps: 0, recent: 0 };
+      return {
+        customerId: r.customerId,
+        checkIns: r.checkIns,
+        score: s.score,
+        attendanceScore: s.attendance,
+        stepsScore: s.steps,
+        recentScore: s.recent,
+      };
+    })
     .sort((a, b) => b.score - a.score || b.checkIns - a.checkIns)
     .map((r, i) => ({
       rank: i + 1,
@@ -3002,19 +3012,44 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
       photoUrl: userById[r.customerId]?.profileImageUrl || null,
       checkIns: r.checkIns,
       score: r.score,
+      attendanceScore: r.attendanceScore,
+      stepsScore: r.stepsScore,
+      recentScore: r.recentScore,
     }));
 
   // The requester's own position within that same opted-in ranking, computed
   // whether or not they're actually opted in -- so someone deciding whether
   // to opt in can see where they'd land first. Ranked the same way entries
   // are: score desc, check-ins as the tie-break.
+  const myScores = scores[requestingCustomerId] ?? { score: 0, attendance: 0, steps: 0, recent: 0 };
   const myCheckIns = allRows.find((r) => r.customerId === requestingCustomerId)?.checkIns ?? 0;
-  const myScore = scores[requestingCustomerId] ?? 0;
   const strictlyAbove = ranked.filter(
-    (r) => r.score > myScore || (r.score === myScore && r.checkIns > myCheckIns),
+    (r) => r.score > myScores.score || (r.score === myScores.score && r.checkIns > myCheckIns),
   ).length;
   const myListedRank = ranked.findIndex((r) => r.customerId === requestingCustomerId) + 1;
   const myRank = myListedRank || strictlyAbove + 1;
+
+  // Per-criterion ranks within the same opted-in population -- "where do I
+  // stand on attendance alone / steps alone / recent-week alone". Ranked by
+  // each component (score desc, check-ins as the tie-break), the user found
+  // whether or not they're opted in, never invited.
+  const CRITERIA = ['attendance', 'steps', 'recent'];
+  const meRanks = {};
+  for (const key of CRITERIA) {
+    const keyScore = `${key}Score`;
+    const myCriterionScore = myScores[key];
+    const byCriterion = [...ranked].sort(
+      (a, b) => b[keyScore] - a[keyScore] || b.checkIns - a.checkIns,
+    );
+    const myIndex = byCriterion.findIndex((r) => r.customerId === requestingCustomerId) + 1;
+    const strictlyAboveCriterion = byCriterion.filter(
+      (r) => r[keyScore] > myCriterionScore || (r[keyScore] === myCriterionScore && r.checkIns > myCheckIns),
+    ).length;
+    meRanks[key] = {
+      rank: myIndex || strictlyAboveCriterion + 1,
+      score: myCriterionScore,
+    };
+  }
 
   return {
     window: validWindow,
@@ -3023,7 +3058,11 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
     me: {
       rank: myRank,
       checkIns: myCheckIns,
-      score: myScore,
+      score: myScores.score,
+      attendanceScore: myScores.attendance,
+      stepsScore: myScores.steps,
+      recentScore: myScores.recent,
+      ranks: meRanks,
       optedIn: userById[requestingCustomerId]?.leaderboardOptIn === true,
     },
   };

@@ -230,7 +230,17 @@ test('one booking check-in today scores 17 on the weekly board (trust x day-cred
   const result = await getGymLeaderboard(GYM, 'weekly', 1);
   // 70/4 x 0.9 (booking trust) = 15.75 attendance + 10/7 recent = 17.18 -> 17.
   assert.equal(result.entries[0].score, 17);
+  assert.equal(result.entries[0].attendanceScore, 16);
+  assert.equal(result.entries[0].stepsScore, 0);
+  assert.equal(result.entries[0].recentScore, 1);
   assert.equal(result.me.score, 17);
+  assert.equal(result.me.rank, 1);
+  assert.equal(result.me.ranks.attendance.rank, 1);
+  assert.equal(result.me.ranks.attendance.score, 16);
+  assert.equal(result.me.ranks.steps.rank, 1);
+  assert.equal(result.me.ranks.steps.score, 0);
+  assert.equal(result.me.ranks.recent.rank, 1);
+  assert.equal(result.me.ranks.recent.score, 1);
 });
 
 test('score is the primary sort: fewer visits but verified presence beat many unencoded check-ins', async () => {
@@ -257,6 +267,43 @@ test('score is the primary sort: fewer visits but verified presence beat many un
   assert.equal(result.entries[1].customerId, 2);
   assert.equal(result.entries[1].score, 0);
   assert.equal(result.me.rank, 2);
+});
+
+test('per-criterion ranks are resolved within the same opted-in population', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true },
+    2: { id: 2, name: 'Bob', leaderboardOptIn: true },
+    3: { id: 3, name: 'Carol', leaderboardOptIn: true },
+  };
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 3, gymId: GYM, date: TODAY },
+  ];
+  // Alice: verified presence only. Bob: high steps, no presence event.
+  attendanceEvents = [{ userId: 1, gymId: GYM, attendedAt: new Date().toISOString(), source: 'member_checkin' }];
+  activityRows = Array.from({ length: 7 }, (_, i) => ({
+    userId: 2,
+    date: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
+    steps: 10000,
+  }));
+
+  const result = await getGymLeaderboard(GYM, 'weekly', 3);
+
+  // Composite: Bob's full steps bucket (20) leads, then Alice's verified
+  // presence (19), then Carol with nothing.
+  assert.equal(result.entries[0].customerId, 2);
+  assert.equal(result.entries[0].score, 20);
+  assert.equal(result.me.rank, 3, 'Carol ranks last on the composite');
+  // Attendance criterion: Alice #1, everyone else 0.
+  assert.equal(result.me.ranks.attendance.rank, 3);
+  assert.equal(result.me.ranks.attendance.score, 0);
+  assert.equal(result.entries.find((e) => e.customerId === 1).attendanceScore, 18);
+  // Steps criterion: Bob maxes it at 20, Carol still 0 but tied with Alice.
+  assert.equal(result.entries.find((e) => e.customerId === 2).stepsScore, 20);
+  assert.equal(result.entries.find((e) => e.customerId === 2).stepsScore, 20);
+  assert.equal(result.me.ranks.steps.score, 0);
 });
 
 test('a down score feed degrades to check-in-only rather than failing the board', async () => {

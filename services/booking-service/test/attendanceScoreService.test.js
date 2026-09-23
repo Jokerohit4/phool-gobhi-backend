@@ -49,10 +49,10 @@ test('trust ladder: better-proven check-ins score more for the same attendance',
       today: TODAY,
     })[userId];
 
-  assert.ok(score('member_checkin') > score('booking'));
-  assert.ok(score('booking') > score('self_checkin'));
-  assert.ok(score('self_checkin') > score('manual'));
-  assert.equal(score('self_checkin') + 0, score('self_checkin'));
+  assert.ok(score('member_checkin').score > score('booking').score);
+  assert.ok(score('booking').score > score('self_checkin').score);
+  assert.ok(score('self_checkin').score > score('manual').score);
+  assert.ok(Number.isFinite(score('self_checkin').score));
 });
 
 test('trust ladder: an unknown source contributes nothing, not a default', () => {
@@ -65,7 +65,7 @@ test('trust ladder: an unknown source contributes nothing, not a default', () =>
     window: 'weekly',
     today: TODAY,
   })[userId];
-  assert.equal(s, 0);
+  assert.equal(s.score, 0);
 });
 
 test('per-day best trust: two methods the same day pay the higher trust once', () => {
@@ -89,7 +89,7 @@ test('per-day best trust: two methods the same day pay the higher trust once', (
     window: 'weekly',
     today: TODAY,
   })[userId];
-  assert.equal(both, single, 'a second, lower-trust event the same day must not double-pay');
+  assert.equal(both.score, single.score, 'a second, lower-trust event the same day must not double-pay');
 });
 
 test('decay: an old visit contributes less than today\'s, and old-enough days drop out', () => {
@@ -110,7 +110,7 @@ test('decay: an old visit contributes less than today\'s, and old-enough days dr
     window: 'monthly',
     today: TODAY,
   })[userId];
-  assert.ok(todayScore > oldScore, 'a fresh visit must outweigh an old one');
+  assert.ok(todayScore.score > oldScore.score, 'a fresh visit must outweigh an old one');
 
   const outOfWindow = computeScores({
     gymId: 9,
@@ -120,7 +120,7 @@ test('decay: an old visit contributes less than today\'s, and old-enough days dr
     window: 'monthly',
     today: TODAY,
   })[userId];
-  assert.equal(outOfWindow, 0, 'an event before the window must not count');
+  assert.equal(outOfWindow.score, 0, 'an event before the window must not count');
 });
 
 test('gym scoping: another gym\'s events never credit this gym\'s board', () => {
@@ -133,7 +133,7 @@ test('gym scoping: another gym\'s events never credit this gym\'s board', () => 
     window: 'weekly',
     today: TODAY,
   })[userId];
-  assert.equal(s, 0);
+  assert.equal(s.score, 0);
 });
 
 test('steps: a 10k/day week maxes the steps bucket; partial coverage scales', () => {
@@ -150,7 +150,7 @@ test('steps: a 10k/day week maxes the steps bucket; partial coverage scales', ()
     window: 'weekly',
     today: TODAY,
   })[userId];
-  assert.equal(weekFull, 20, 'full 10k/day week = full 20-point steps bucket');
+  assert.equal(weekFull.score, 20, 'full 10k/day week = full 20-point steps bucket');
 
   const oneDay = computeScores({
     gymId: 9,
@@ -160,7 +160,7 @@ test('steps: a 10k/day week maxes the steps bucket; partial coverage scales', ()
     window: 'weekly',
     today: TODAY,
   })[userId];
-  assert.equal(oneDay, 3, 'one 10k day = 20/7 ~ 2.86 -> rounds to 3');
+  assert.equal(oneDay.score, 3, 'one 10k day = 20/7 ~ 2.86 -> rounds to 3');
 });
 
 test('recent bonus: 7/7 attended days in the last week hits the 10-point cap', () => {
@@ -181,7 +181,7 @@ test('recent bonus: 7/7 attended days in the last week hits the 10-point cap', (
   });
   // 7 distinct recent days cap the recent bonus at 10; a full week of the
   // highest-trust check-ins tops the attendance bucket at 70.
-  assert.equal(score[userId], 80, '70 attendance + 10 recent, no steps');
+  assert.equal(score[userId].score, 80, '70 attendance + 10 recent, no steps');
 });
 
 test('composition: attendance + steps + recent cap at 100', () => {
@@ -205,7 +205,30 @@ test('composition: attendance + steps + recent cap at 100', () => {
     window: 'weekly',
     today: TODAY,
   });
-  assert.equal(score[userId], 100);
+  assert.equal(score[userId].score, 100);
+});
+
+test('composition parts: attendance + steps + recent exposed as components', () => {
+  const userId = 1;
+  const s = computeScores({
+    gymId: 9,
+    attendanceEvents: [
+      { userId, gymId: 9, attendedAt: day(0), source: 'member_checkin' },
+      { userId, gymId: 9, attendedAt: day(-1), source: 'member_checkin' },
+    ],
+    dailyActivityRows: [{ userId, date: day(0).toISOString().slice(0, 10), steps: 10000 }],
+    userIds: [userId],
+    window: 'weekly',
+    today: TODAY,
+  })[userId];
+  assert.equal(typeof s, 'object');
+  // 2 of ~4 expected visits * 70/4 for this window's cadence, best trust 1.0,
+  // the second day slightly decayed (half-life = winDays/2).
+  assert.equal(s.attendance, 32);
+  // One 10k day toward 70k needed for the weekly window.
+  assert.equal(s.steps, 3);
+  assert.equal(s.recent, 3, '2/7 days in the recent window -> rounds to 3');
+  assert.equal(s.score, 38);
 });
 
 test('a user with no events and no activity scores 0 but is still present', () => {
@@ -218,7 +241,7 @@ test('a user with no events and no activity scores 0 but is still present', () =
     window: 'all',
     today: TODAY,
   });
-  assert.equal(scores[userId], 0);
+  assert.equal(scores[userId].score, 0);
   assert.ok(99 in scores);
 });
 
