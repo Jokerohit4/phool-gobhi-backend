@@ -23,6 +23,7 @@ import { requireAssistantConsent } from '../middleware/requireAssistantConsent.j
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
+import * as runCtrl from '../controllers/runController.js';
 
 const router = Router();
 
@@ -72,6 +73,17 @@ const assistantGated = [
   requireAuth,
   requireFeatureFlag('healthMetrics'),
   requireFeatureFlag('fitnessAssistant'),
+];
+
+// GPS run tracker (run-tracker-spec.html §12 Q1: recommended to depend on
+// healthMetrics — reuses its consent/storage/export/erase plumbing and
+// ships dark alongside the rest of Health+ rather than needing its own
+// legal sign-off). Layered the same way as fitnessAssistant/cycleTracking:
+// its own flag ON TOP of healthMetrics, independently switchable.
+const runTrackerGated = [
+  requireAuth,
+  requireFeatureFlag('healthMetrics'),
+  requireFeatureFlag('runTracker'),
 ];
 
 // ---- Cycle tracking ------------------------------------------------------
@@ -154,6 +166,19 @@ router.post('/exercise-records', ...gated, activityCtrl.createExerciseRecord);
 router.get('/exercise-records', ...gated, activityCtrl.listExerciseRecords);
 router.post('/daily-activity/sync', ...gated, activityCtrl.syncDailyActivity);
 router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
+
+// ---- GPS run tracker (run-tracker-spec.html §10) -------------------------
+// Order matters: /runs/summary must be registered before /runs/:id, or
+// "summary" is parsed as the :id param — same footgun /sessions/today
+// above and gym-service's /health route ordering call out.
+router.post('/runs', ...runTrackerGated, runCtrl.createRun);
+router.get('/runs', ...runTrackerGated, runCtrl.listRuns);
+router.get('/runs/summary', ...runTrackerGated, runCtrl.getRunSummary);
+router.get('/runs/:id', ...runTrackerGated, runCtrl.getRunDetail);
+// Deletion is deliberately NOT flag-gated beyond requireAuth, same as
+// DELETE /biometrics/:metric/:localDate and DELETE /me: a user must always
+// be able to remove their own data even if runTracker gets switched off.
+router.delete('/runs/:id', requireAuth, runCtrl.deleteRun);
 
 // ---- Progress -------------------------------------------------------------
 router.get('/progress/summary', ...gated, progressCtrl.getProgressSummary);

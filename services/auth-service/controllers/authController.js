@@ -341,6 +341,11 @@ const DEFAULT_FEATURES = {
   // request and writes a row — it needs a real kill switch, not just a hidden
   // button in the app.
   nonPartnerAttendance: { enabled: false },
+  // GPS run/walk tracker (run-tracker-spec.html, 2026-09-24). Its own flag
+  // ON TOP of healthMetrics (health-service's requireFeatureFlag chain),
+  // same layering as fitnessAssistant/cycleTracking — independently
+  // switchable, but inert unless healthMetrics is also on.
+  runTracker: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym

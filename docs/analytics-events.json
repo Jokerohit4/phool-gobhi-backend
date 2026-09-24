@@ -507,5 +507,93 @@
     ],
     "since": "2026-09-18",
     "notes": "partner confirmed account deletion. Constant is declared but not yet wired to a call site \u2014 registered so the name is reserved and the checker stays green"
+  },
+  "run_start_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "run tracker Start screen opened \u2014 props gps_ready, has_weight (run-tracker-spec.html \u00a713)"
+  },
+  "run_permission_result": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "location/notification/precise-location permission prompt resolved \u2014 props kind, result"
+  },
+  "run_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "recording began \u2014 props type (run/walk), gps_ready_at_start, countdown_on"
+  },
+  "run_paused": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props auto (bool), elapsed_s"
+  },
+  "run_resumed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props auto (bool), elapsed_s"
+  },
+  "run_recovered": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "app relaunched into the \"resume your run?\" sheet after an OS kill/crash \u2014 props choice (resume/finish/discard), gap_s"
+  },
+  "run_finished": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "hold-to-finish completed \u2014 props type, distance_m, moving_s, had_gap"
+  },
+  "run_saved": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props distance_m"
+  },
+  "run_discarded": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props distance_m, reason (too_short/user)"
+  },
+  "run_upload_failed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "pending-queue upload attempt failed \u2014 props attempt, http_status"
+  },
+  "run_history_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props count"
   }
 }

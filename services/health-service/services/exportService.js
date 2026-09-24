@@ -132,7 +132,11 @@ export async function buildFullExportService(userId) {
         orderBy: { createdAt: 'asc' },
       }),
       prisma.exercise.findMany({ where: { createdByUserId: userId }, orderBy: { createdAt: 'asc' } }),
-      prisma.exerciseRecord.findMany({ where: { userId }, orderBy: { startedAt: 'asc' } }),
+      // include: runTrack — a GPS run's route/splits are personal data
+      // (run-tracker-spec.html §12) and must travel with the export the
+      // same as everything else here, not be a silent gap between what's
+      // shown on /export and what a deleted run actually removed.
+      prisma.exerciseRecord.findMany({ where: { userId }, include: { runTrack: true }, orderBy: { startedAt: 'asc' } }),
       prisma.dailyActivityMetric.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
       prisma.biometricEntry.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { metric: 'asc' }] }),
       prisma.suggestionFeedback.findMany({ where: { userId }, orderBy: { shownAt: 'asc' } }),

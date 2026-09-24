@@ -379,6 +379,11 @@ enum ExerciseRecordSource {
   manual
   healthkit
   health_connect
+  // Our own GPS run tracker (run-tracker-spec.html §10) — distinct from
+  // healthkit/health_connect because those are device-synced summaries with
+  // no route, while this source always carries a RunTrack. adminService's
+  // adoption count treats it separately from "synced" for that reason.
+  gps_tracker
 
   @@schema("health")
 }
@@ -387,7 +392,10 @@ enum ExerciseRecordSource {
 // strength (that's WorkoutSession now). Duration-based cardio/yoga/other,
 // self-reported or synced. externalId is the source's own record id, used
 // only for synced rows (null for manual) so re-syncing the same HealthKit
-// workout is a no-op upsert, not a duplicate.
+// workout is a no-op upsert, not a duplicate. For gps_tracker rows,
+// externalId is the app's own clientRunId (a UUID it generates when the run
+// starts), which makes a retried/offline-queued upload idempotent the same
+// way a re-synced HealthKit workout is.
 model ExerciseRecord {
   id              Int                  @id @default(autoincrement())
   userId          Int
@@ -401,9 +409,41 @@ model ExerciseRecord {
   distanceMeters  Decimal?             @db.Decimal(8, 2)
   avgHeartRateBpm Int?
   createdAt       DateTime             @default(now())
+  runTrack        RunTrack?
 
   @@unique([userId, source, externalId])
   @@index([userId, startedAt])
+  @@schema("health")
+}
+
+// One row per GPS-tracked run/walk, 1:1 with its ExerciseRecord — kept out
+// of that table so a plain list of records never drags the polyline along.
+// See run-tracker-spec.html §10 for the full field-by-field reasoning
+// (splits, polyline precision, why weightKgUsed is frozen at save time).
+model RunTrack {
+  id               Int            @id @default(autoincrement())
+  exerciseRecordId Int            @unique
+  exerciseRecord   ExerciseRecord @relation(fields: [exerciseRecordId], references: [id], onDelete: Cascade)
+  // Google encoded polyline, precision 5, Douglas-Peucker simplified
+  // client-side (~2 m tolerance) before upload.
+  polyline         String         @db.Text
+  // A small (<=40 point), further-simplified polyline for list thumbnails,
+  // so GET /runs never has to ship the full-resolution route.
+  thumbPolyline    String         @db.Text
+  // [{ km: 1, seconds: 392 }, ...] — one entry per completed kilometre.
+  splits           Json
+  movingSeconds    Int
+  elapsedSeconds   Int
+  avgPaceSecPerKm  Int?
+  bestKmSeconds    Int?
+  pauseCount       Int            @default(0)
+  pointCount       Int
+  hadGap           Boolean        @default(false)
+  weightKgUsed     Decimal?       @db.Decimal(5, 1)
+  appVersion       String?
+  platform         Platform?
+  createdAt        DateTime       @default(now())
+
   @@schema("health")
 }
 
