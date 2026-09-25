@@ -19,6 +19,8 @@ import * as nudgeCtrl from '../controllers/nudgeController.js';
 import * as assistantCtrl from '../controllers/assistantController.js';
 import * as cycleCtrl from '../controllers/cycleTrackingController.js';
 import { requireCycleConsent } from '../middleware/requireCycleConsent.js';
+import * as locationRoutesCtrl from '../controllers/locationRoutesController.js';
+import { requireLocationRoutesConsent } from '../middleware/requireLocationRoutesConsent.js';
 import { requireAssistantConsent } from '../middleware/requireAssistantConsent.js';
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
@@ -168,13 +170,26 @@ router.post('/daily-activity/sync', ...gated, activityCtrl.syncDailyActivity);
 router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
 
 // ---- GPS run tracker (run-tracker-spec.html §10) -------------------------
+// Two independent gates, mirroring cycle tracking above. The FLAG says whether
+// the feature exists (403 FEATURE_DISABLED); the `location_routes` CONSENT SCOPE
+// says whether this user agreed to their precise location being stored. A run
+// is a precise location history and most runs start and end at home, so this
+// scope is separate from cycle_tracking and separately withdrawable.
+//
+// Reading consent and granting it stay reachable WITHOUT the scope, or there
+// would be no way to opt in. Everything that touches recorded route data
+// requires it.
+router.get('/runs/consent', ...runTrackerGated, locationRoutesCtrl.getConsent);
+router.post('/runs/consent', ...runTrackerGated, locationRoutesCtrl.grantConsent);
+router.delete('/runs/consent', requireAuth, locationRoutesCtrl.revokeConsent);
+
 // Order matters: /runs/summary must be registered before /runs/:id, or
 // "summary" is parsed as the :id param — same footgun /sessions/today
 // above and gym-service's /health route ordering call out.
-router.post('/runs', ...runTrackerGated, runCtrl.createRun);
-router.get('/runs', ...runTrackerGated, runCtrl.listRuns);
-router.get('/runs/summary', ...runTrackerGated, runCtrl.getRunSummary);
-router.get('/runs/:id', ...runTrackerGated, runCtrl.getRunDetail);
+router.post('/runs', ...runTrackerGated, requireLocationRoutesConsent, runCtrl.createRun);
+router.get('/runs', ...runTrackerGated, requireLocationRoutesConsent, runCtrl.listRuns);
+router.get('/runs/summary', ...runTrackerGated, requireLocationRoutesConsent, runCtrl.getRunSummary);
+router.get('/runs/:id', ...runTrackerGated, requireLocationRoutesConsent, runCtrl.getRunDetail);
 // Deletion is deliberately NOT flag-gated beyond requireAuth, same as
 // DELETE /biometrics/:metric/:localDate and DELETE /me: a user must always
 // be able to remove their own data even if runTracker gets switched off.
