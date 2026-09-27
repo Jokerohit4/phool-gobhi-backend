@@ -3,7 +3,7 @@
 How product events are captured across the Flutter apps and the Node backend, and
 how they roll up into the funnels that matter for the business.
 
-> **Status (updated 2026-07-23):** instrumentation shipped (backend + both apps
+> **Status (updated 2026-09-24):** instrumentation shipped (backend + both apps
 > + website). The **active sink is first-party Postgres** — events are written
 > to an `analytics_events` table we own (no third party). Server events write
 > directly; client events POST to the gateway `/api/events` route, which now
@@ -13,10 +13,14 @@ how they roll up into the funnels that matter for the business.
 > `node scripts/check-analytics-events.cjs` to check for drift (it's a hard
 > gate in `/deploy`). A dashboard now lives in the admin portal at `/analytics`
 > (Supply/Conversion/Fulfillment/Activation/Wallet/Buddy tabs), backed by new
-> `GET /api/bookings/admin/analytics/*` endpoints (see §8); the SQL there
-> remains useful for anything not yet on that page. **Production is still
-> pending a dedicated analytics DB** (§6) — until that lands, `/analytics` and
-> the SQL below only reflect dev traffic.
+> `GET /api/bookings/admin/analytics/*` endpoints (see §8). **Production is
+> LIVE:** all 8 prod services + the gateway run `ANALYTICS_PROVIDER=postgres`
+> against a dedicated Neon analytics DB (verified flowing 2026-09-24 — 6,570
+> events / 1,073 users cumulative), so `/analytics` and the SQL below reflect
+> real prod traffic. `challenge-service` and `health-service` prod secrets were
+> missing `ANALYTICS_DATABASE_URL` until 2026-09-24 — added and both services
+> redeployed; keep that key in every `*-secrets-prod` payload (`DATABASE_URL`
+> is not a substitute).
 
 ---
 

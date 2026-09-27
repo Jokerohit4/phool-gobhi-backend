@@ -9,4 +9,4 @@ Run the analytics funnel digest and interpret it for the user.
 2. If it reports no `ANALYTICS_DATABASE_URL`, tell the user to populate `scripts/.analytics.env` (gitignored) once — pulling the URL from Secret Manager via a `!` command so the secret never enters chat — then stop.
 3. Otherwise, relay the digest and add a one-line read: call out the biggest funnel drop-off step and any day-over-day change worth noticing. Keep it to a few lines — this runs on a loop, so be concise.
 
-Note: prod analytics is currently `ANALYTICS_PROVIDER=none`, so this reflects **dev** traffic until prod is enabled.
+Note: `scripts/.analytics.env` / `ANALYTICS_DATABASE_URL` should point at the **prod** analytics Neon DB (pull from a `*-service-secrets-prod` payload) — all prod services run `ANALYTICS_PROVIDER=postgres` (2026-09-24 verified). Only populate from a `*-dev` secret if you specifically want dev traffic.
