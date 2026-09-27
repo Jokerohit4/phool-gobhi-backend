@@ -5,6 +5,7 @@ import {
   RUN_MAX_AVG_SPEED_MPS,
   RUN_MAX_POLYLINE_BYTES,
   RUN_DISTANCE_MISMATCH_TOLERANCE,
+  RUN_ACTIVITY_TYPES,
 } from '../constants/healthEnums.js';
 import { decodePolyline, polylineDistanceMeters, thumbnailPolyline } from '../utils/polyline.js';
 
@@ -36,8 +37,8 @@ function validateRunPayload(body) {
   if (!clientRunId || typeof clientRunId !== 'string') {
     throw badRequest('clientRunId is required');
   }
-  if (!['run', 'walk'].includes(type)) {
-    throw badRequest('type must be run or walk');
+  if (!RUN_ACTIVITY_TYPES.includes(type)) {
+    throw badRequest(`type must be one of ${RUN_ACTIVITY_TYPES.join(', ')}`);
   }
   if (!startedAt || !endedAt) {
     throw badRequest('startedAt and endedAt are required');
@@ -89,6 +90,12 @@ function validateRunPayload(body) {
   if (movingSeconds > 0) {
     const avgSpeedMps = distanceMeters / movingSeconds;
     const cap = RUN_MAX_AVG_SPEED_MPS[type];
+    // Unreachable while RUN_ACTIVITY_TYPES is derived from this map's keys, and
+    // kept anyway: without it a future hand-added type would compare against
+    // `undefined` and quietly skip the check rather than fail loudly.
+    if (cap === undefined) {
+      throw badRequest(`no average-speed cap configured for type "${type}"`);
+    }
     if (avgSpeedMps > cap) {
       throw badRequest(`average speed exceeds what's plausible for a ${type} (${cap} m/s)`);
     }

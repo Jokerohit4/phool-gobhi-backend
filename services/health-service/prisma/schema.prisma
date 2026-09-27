@@ -416,7 +416,7 @@ model ExerciseRecord {
   @@schema("health")
 }
 
-// One row per GPS-tracked run/walk, 1:1 with its ExerciseRecord — kept out
+// One row per GPS-tracked run/walk/cycle, 1:1 with its ExerciseRecord — kept out
 // of that table so a plain list of records never drags the polyline along.
 // See run-tracker-spec.html §10 for the full field-by-field reasoning
 // (splits, polyline precision, why weightKgUsed is frozen at save time).

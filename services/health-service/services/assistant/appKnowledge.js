@@ -18,7 +18,7 @@
 // anything the user has not connected. They are called out as unavailable so
 // the model does not describe a roadmap item as though it were one tap away.
 //
-// The GPS run/walk tracker is the awkward one, and it is called out here
+// The GPS run/walk/cycle tracker is the awkward one, and it is called out here
 // because the reason has changed. The run screens DO exist in the customer app
 // (see openRunEntry and the run/ pages), but they sit behind the `runTracker`
 // feature flag, which is `enabled: false` in auth-service's app-config, on top
@@ -129,7 +129,7 @@ Do not offer these — there is no screen for the user to find:
 - GPS run tracking, or importing runs from a watch. This one is built but not
   released yet, so there is nothing to tap. If someone says they can already
   see a run screen, they are on a pre-release build: you can tell them what it
-  does (records a run or walk with GPS, then reviews route, splits and pace),
+  does (records a run, walk or cycle with GPS, then reviews route, splits and pace),
   but do not tell anyone else to go looking for it.
 
 ### Support

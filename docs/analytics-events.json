@@ -530,7 +530,7 @@
       "phool_gobhi"
     ],
     "since": "2026-09-24",
-    "notes": "recording began \u2014 props type (run/walk), gps_ready_at_start, countdown_on"
+    "notes": "recording began \u2014 props type (run/walk/cycle), gps_ready_at_start, countdown_on"
   },
   "run_paused": {
     "source": "client",

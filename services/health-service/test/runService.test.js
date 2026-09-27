@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { encodePolyline } from '../utils/polyline.js';
+import { RUN_ACTIVITY_TYPES, RUN_MAX_AVG_SPEED_MPS } from '../constants/healthEnums.js';
 
 // A real ~1.11 km straight-ish line (roughly north along a meridian, so the
 // haversine distance is easy to reason about): 0.01 degrees of latitude is
@@ -127,7 +128,7 @@ function baseRun(overrides = {}) {
 }
 
 test('validation: rejects bad type, non-chronological times, and out-of-bounds elapsed/distance', async () => {
-  await assert.rejects(() => createRunService(1, baseRun({ type: 'cycle' })), /type must be run or walk/);
+  await assert.rejects(() => createRunService(1, baseRun({ type: 'sprint' })), /type must be one of run, walk, cycle/);
   await assert.rejects(
     () => createRunService(1, baseRun({ startedAt: '2026-09-24T02:00:00Z', endedAt: '2026-09-24T01:00:00Z' })),
     /endedAt must be after startedAt/,
@@ -142,6 +143,48 @@ test('validation: rejects an implausible average speed for the given type', asyn
   await assert.rejects(
     () => createRunService(1, baseRun({ distanceMeters: 20_000, movingSeconds: 1000 })),
     /average speed exceeds what's plausible/,
+  );
+});
+
+test('validation: every accepted type has an average-speed cap', () => {
+  // The regression this guards: runService indexes RUN_MAX_AVG_SPEED_MPS by
+  // type, and a miss compares against undefined — which is always false, so
+  // the speed check would be skipped rather than fail. RUN_ACTIVITY_TYPES is
+  // derived from the cap keys, so this is a tautology today and a tripwire if
+  // anyone reintroduces a hand-written list beside the map.
+  for (const type of RUN_ACTIVITY_TYPES) {
+    assert.equal(
+      typeof RUN_MAX_AVG_SPEED_MPS[type],
+      'number',
+      `RUN_MAX_AVG_SPEED_MPS is missing a cap for "${type}"`,
+    );
+  }
+  assert.deepEqual(RUN_ACTIVITY_TYPES, ['run', 'walk', 'cycle']);
+});
+
+test('validation: cycle is accepted and gets its own, higher speed cap', async () => {
+  // 10 km in 1250 moving seconds = 8 m/s (28.8 km/h), a normal club ride. Under
+  // the run cap of 7 this would have been rejected outright, which is why cycle
+  // needs its own entry rather than sharing the run threshold.
+  const { record } = await createRunService(1, baseRun({
+    clientRunId: 'cycle-1',
+    type: 'cycle',
+    distanceMeters: 10_000,
+    movingSeconds: 1250,
+  }));
+  assert.equal(record.type, 'cycle');
+  assert.equal(record.source, 'gps_tracker');
+
+  // 13 m/s (46.8 km/h) sustained is beyond any real ride and must be caught.
+  // Without a cycle key this comparison would silently evaluate false.
+  await assert.rejects(
+    () => createRunService(1, baseRun({
+      clientRunId: 'cycle-2',
+      type: 'cycle',
+      distanceMeters: 13_000,
+      movingSeconds: 1000,
+    })),
+    /average speed exceeds what's plausible for a cycle/,
   );
 });
 
@@ -228,7 +271,7 @@ test('controller: validation error surfaces as 400 with the message, success as 
   const bad = makeRes();
   await createRun({ userId: 10, body: baseRun({ clientRunId: 'run-j', type: 'sprint' }) }, bad);
   assert.equal(bad.statusCode, 400);
-  assert.match(bad.body.error, /type must be run or walk/);
+  assert.match(bad.body.error, /type must be one of run, walk, cycle/);
 
   const ok = makeRes();
   await createRun({ userId: 10, body: baseRun({ clientRunId: 'run-k' }) }, ok);
