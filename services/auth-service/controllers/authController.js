@@ -346,6 +346,33 @@ const DEFAULT_FEATURES = {
   // same layering as fitnessAssistant/cycleTracking — independently
   // switchable, but inert unless healthMetrics is also on.
   runTracker: { enabled: false },
+  // Health Ledger (phool-gobhi-health-ledger-plan-20260927.html): the
+  // brokerage-style daily health score, its candlestick/line chart, the
+  // nutrition target engine, the food log, and the optional medical-records
+  // vault. Layered on healthMetrics like every other feature above, so it can
+  // be pulled without taking workout logging down.
+  //
+  // Three reasons this one is the highest bar in the file:
+  //
+  //   1. It is the first feature here whose whole premise is a SCORE. Every
+  //      other health feature logs; this one grades. The plan's own
+  //      eating-disorder guard (a calorie target that never drops below BMR,
+  //      under-eating never rewarded, a "calm mode" that removes red
+  //      entirely) is a product requirement, not a nice-to-have.
+  //   2. It stores what is close to a medical record — conditions, the
+  //      doctor's own advice, lab slips — behind its own `medical_records`
+  //      consent scope. CDSCO's "General Wellness Software" carve-out only
+  //      holds while the app tracks the doctor's plan and never writes one,
+  //      so this is the flag to pull if that line is ever questioned.
+  //   3. Photo food logging sends an image to a third-party model provider.
+  //      That has its own sub-flag below and is off until Zero Data Retention
+  //      is confirmed on the provider account.
+  healthLedger: { enabled: false },
+  // Sub-flag of healthLedger, not a peer: the ledger is useless without
+  // search-based food logging, so it must never be gated behind this one.
+  // Only the photo path is separable, because it is the only part that puts a
+  // user's image on someone else's infrastructure.
+  foodPhotoLogging: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym

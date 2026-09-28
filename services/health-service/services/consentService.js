@@ -56,8 +56,7 @@ export async function getConsentStatusService(userId) {
 // Custom exercises the user created are deleted too — their personal data,
 // not the seeded shared library.
 export async function deleteAllDataService(userId) {
-  await prisma.$transaction([
-    prisma.workoutSession.deleteMany({ where: { userId } }),
+  await prisma.$transaction([    prisma.workoutSession.deleteMany({ where: { userId } }),
     prisma.workoutTemplate.deleteMany({ where: { userId } }),
     prisma.exercise.deleteMany({ where: { createdByUserId: userId } }),
     prisma.exerciseRecord.deleteMany({ where: { userId } }),
@@ -113,5 +112,66 @@ export async function deleteAllDataService(userId) {
     // exception. Wired in with the migration that created them, not later.
     prisma.cyclePhaseEntry.deleteMany({ where: { userId } }),
     prisma.cycleTrackingProfile.deleteMany({ where: { userId } }),
+    // --- Health Ledger ----------------------------------------------------
+    //
+    // A daily record of exactly what someone ate, plus their nutrition targets
+    // and the plan built from them. This is behavioural health data at the
+    // most granular resolution the service holds, and it is the newest table
+    // group, so it is the easiest to forget. It must not outlive the account.
+    //
+    // FK order matters twice over:
+    //   - SavedMealLine cascades from SavedMeal, and PlanItemCompletion from
+    //     PlanItem, so deleting the parents is enough for those.
+    //   - HealthGoal is the parent of NutritionTarget (Cascade), but the target
+    //     is also deleted explicitly because it is what "why these numbers?"
+    //     reads, and the goal row goes last so the cascade cannot beat us to
+    //     it during an account deletion where the order is being read by a
+    //     human trying to prove what was erased.
+    prisma.savedMeal.deleteMany({ where: { userId } }),
+    prisma.foodLog.deleteMany({ where: { userId } }),
+    prisma.foodItem.deleteMany({ where: { createdByUserId: userId } }),
+    prisma.scoreDaySnapshot.deleteMany({ where: { userId } }),
+    prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+    prisma.planItem.deleteMany({ where: { userId } }),
+    prisma.nutritionTarget.deleteMany({ where: { userId } }),
+    prisma.healthCondition.deleteMany({ where: { userId } }),
+    prisma.doctorAppointment.deleteMany({ where: { userId } }),
+    // The goal row is the FK parent of NutritionTarget, so it goes after it.
+    prisma.healthGoal.deleteMany({ where: { userId } }),
+    // Medical documents: a prescription or a lab report is the single most
+    // sensitive row this service can hold, and it is the newest one. Leaving
+    // it behind on account deletion would be the worst possible miss, so it is
+    // deleted here and not deferred to the scope-revocation path (which only
+    // runs if the user happened to visit the consent screen first).
+    //
+    // SavedMealLine and PlanItemCompletion are deliberately absent from this
+    // list: both are onDelete: Cascade from a parent deleted above, so an
+    // explicit delete would be redundant.
+    prisma.medicalDocument.deleteMany({ where: { userId } }),
   ]);
+
+  // The medical BLOBS are swept here, after the transaction has committed.
+  //
+  // Not inside it, and not at all if the transaction throws: GCS is not a
+  // database, so a storage outage must never roll back an erasure that has
+  // already been committed, and holding a transaction open across a network
+  // call to a third party is how a deletion silently stops completing.
+  //
+  // This is a prefix sweep rather than a list of paths, because by this point
+  // the rows naming those paths are gone — read the paths first and a partial
+  // failure leaves blobs with no database row and no record of what they were.
+  // Every object is written under `medical/{userId}/`, so the prefix reclaims
+  // them without needing the row to have survived.
+  //
+  // Best-effort, and deliberately not rethrown: the database erasure is the
+  // legally meaningful part and it has already happened. An orphaned object
+  // under a random-uuid name in a per-user prefix cannot be reached by any code
+  // path in this service, so it is a storage-lifecycle concern, not a privacy
+  // hole. A bucket retention rule is the second line of defence.
+  try {
+    const { deleteUserObjects } = await import('./ledger/medicalDocumentStorage.js');
+    await deleteUserObjects(userId);
+  } catch (err) {
+    console.error('[consent] medical blob sweep failed:', err?.message);
+  }
 }

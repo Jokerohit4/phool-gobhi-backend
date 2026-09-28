@@ -26,8 +26,17 @@ import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
 import * as runCtrl from '../controllers/runController.js';
+// The health ledger (nutrition, plan, score, medical documents) lives in its
+// own router because it needs a different gate shape: three layers rather than
+// one, and two distinct per-person consent scopes. Mixing those into `gated`
+// here would mean every ledger route inherited healthMetrics alone.
+import ledgerRouter from './ledger.js';
 
 const router = Router();
+
+// Mounted, not spread. The ledger carries its own requireAuth, its own flag
+// checks and its own consent middlewares, and they have to run in that order.
+router.use(ledgerRouter);
 
 // Every customer-facing route is server-side gated on the healthMetrics
 // flag, not just client-hidden — same posture challenge-service takes with
