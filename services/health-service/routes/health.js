@@ -26,6 +26,7 @@ import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
 import * as runCtrl from '../controllers/runController.js';
+import * as ledgerCtrl from '../controllers/ledgerController.js';
 // The health ledger (nutrition, plan, score, medical documents) lives in its
 // own router because it needs a different gate shape: three layers rather than
 // one, and two distinct per-person consent scopes. Mixing those into `gated`
@@ -279,6 +280,17 @@ router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptio
 // Whether the readiness suggestions are landing at all (GS-5) — aggregate
 // counts only, no per-user rows.
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
+// Reclaims food photos that were uploaded for recognition and never confirmed.
+//
+// An admin route rather than a scheduled job on purpose: this fleet is Cloud Run
+// with min-instances=0 and no cron, so a timer configured in the service would
+// be a sweep that silently stops running the first time nothing calls the
+// service. Called from outside it runs when it is asked to.
+//
+// The response is a count, never a path or a userId — this route is the one
+// place a gobhi account can reach food-photo storage, and it has no reason to be
+// able to name a single photo.
+router.post('/admin/food-photos/sweep', requireRole('gobhi'), ledgerCtrl.sweepFoodPhotos);
 
 // ---- Unlogged attendance (FR-03) + nudges (FR-08) -----------------------
 // "You were at the gym and haven't said what you did" - the read that turns

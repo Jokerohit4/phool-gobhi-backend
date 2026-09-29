@@ -174,4 +174,19 @@ export async function deleteAllDataService(userId) {
   } catch (err) {
     console.error('[consent] medical blob sweep failed:', err?.message);
   }
+
+  // The food photos get the same treatment, for the same reason and with the
+  // same trade-off. The ledger stores the photo on the log rather than behind a
+  // short-lived link - the user chose to keep it - so deleting the account has
+  // to reclaim the objects, not only the rows, or a picture of somebody's diet
+  // outlives the account that was supposed to take it with them.
+  //
+  // Prefix sweep, best-effort, after the transaction, never rethrown. A bucket
+  // retention rule is the second line of defence for whatever GCS refuses here.
+  try {
+    const { deleteUserPhotos } = await import('./ledger/foodPhotoStorage.js');
+    await deleteUserPhotos(userId);
+  } catch (err) {
+    console.error('[consent] food photo blob sweep failed:', err?.message);
+  }
 }

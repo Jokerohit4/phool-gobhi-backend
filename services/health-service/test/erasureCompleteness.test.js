@@ -100,6 +100,38 @@ test('the medical blob sweep runs after the transaction, not inside it', async (
   assert.match(serviceSource, /catch \(err\) \{[\s\S]*?medical blob sweep failed/);
 });
 
+// Food photos are the second kind of blob this service holds, and unlike the
+// medical ones they are NOT throwaway: the user chose to keep the picture on the
+// log. That makes the blob sweep a deletion obligation rather than a courtesy,
+// and it is exactly the kind of thing that gets added later and never wired into
+// the erasure path.
+test('the food photo blobs are swept on erasure, after the transaction', () => {
+  const sweep = serviceSource.indexOf('deleteUserPhotos');
+  const transactionEnd = serviceSource.lastIndexOf(']);');
+  assert.ok(sweep > -1, 'deleteUserPhotos is never called - photos outlive the account');
+  assert.ok(
+    sweep > transactionEnd,
+    'the food photo sweep must run after the transaction commits, like the medical one',
+  );
+  // Same reasoning: the row erasure is the meaningful part and has happened.
+  assert.match(serviceSource, /catch \(err\) \{[\s\S]*?food photo blob sweep failed/);
+});
+
+test('revoking nutrition consent reclaims the photos too, not just the rows', () => {
+  // A user who withdraws nutrition consent has asked us to stop holding their
+  // food record. The rows going is not enough while the photographs - which show
+  // the same information and more - stay in the bucket.
+  const source = readFileSync(
+    join(here, '..', 'services', 'ledger', 'ledgerConsentService.js'),
+    'utf8',
+  );
+  assert.match(source, /photoPath: \{ not: null \}/, 'the photo paths are never read before the delete');
+  assert.match(source, /deletePhotos/);
+  // And the request ledger goes in the same transaction - a row recording what
+  // this user photographed, and what it cost, is itself part of the record.
+  assert.match(source, /prisma\.foodPhotoRequestLog\.deleteMany/);
+});
+
 test('the cascading models are named in the source with their parent', () => {
   // A reader auditing this list should not have to open the schema to know why
   // two tables are missing from it.

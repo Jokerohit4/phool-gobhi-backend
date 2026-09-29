@@ -4,6 +4,7 @@ import * as scoreService from '../services/ledger/scoreService.js';
 import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
+import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 
@@ -241,9 +242,26 @@ export const getDayTotals = handle(async (req) => {
   };
 });
 
-export const deleteFoodLog = handle(async (req) =>
-  nutritionService.deleteLog(prisma, req.userId, req.params.id),
-);
+export const deleteFoodLog = handle(async (req) => {
+  // The photo is read before the delete, because after it the row is gone and
+  // there is nothing left to ask about the object behind it.
+  const before = await prisma.foodLog.findFirst({
+    where: { id: Number(req.params.id), userId: req.userId },
+    select: { id: true, photoPath: true },
+  });
+  const deleted = await nutritionService.deleteLog(prisma, req.userId, req.params.id);
+
+  // Only the LAST line from a photo releases the object - one photo produces
+  // several logs, and deleting on the first would break the photo still shown
+  // on the others. Best-effort, same as the medical document path above.
+  if (before?.photoPath) {
+    await foodPhotoService
+      .releasePhotoIfUnreferenced(prisma, { photoPath: before.photoPath })
+      .catch((err) => console.error('[ledger] photo release failed:', err.message));
+  }
+
+  return deleted;
+});
 
 export const saveMeal = handle(async (req) => {
   const b = req.body || {};
@@ -496,3 +514,84 @@ export const deleteMedicalDocument = handle(async (req) => {
   );
   return { deleted: true };
 });
+
+// ---- Photo food logging ----------------------------------------------------
+
+// The one surface in this service that sends an image to a third party, and the
+// one that stores an image the user chose to keep. Everything else about a
+// prescription in this file is deliberately undone here: the medical path stores
+// bytes and never reads them, and this one sends them to a model on purpose. The
+// two live in separate modules and separate buckets for exactly that reason -
+// see foodPhotoStorage.js and the invariants in medicalDocumentStorage.js.
+//
+// Two calls, and the split is the feature. Recognize proposes, confirm writes.
+export const recognizeFoodPhoto = handle(async (req) => {
+  if (!req.file) {
+    throw Object.assign(new Error('No photo received'), { status: 400, code: 'NO_PHOTO' });
+  }
+
+  const out = await foodPhotoService.recognizePhoto(prisma, {
+    userId: req.userId,
+    buffer: req.file.buffer,
+    mimeType: req.file.mimetype,
+  });
+
+  // Shape only. Never the proposed food names, never a count of what was on the
+  // plate: a photo of a plate is a description of someone's diet, and this
+  // dictionary is read by everyone who can query the analytics database.
+  track('health_food_photo_recognized', req.userId, {
+    is_food: out.isFood === true,
+    matched_count: out.items.length,
+    unmatched_count: out.unmatched.length,
+  });
+
+  return out;
+});
+
+export const confirmFoodPhoto = handle(async (req) => {
+  const b = req.body || {};
+  const out = await foodPhotoService.confirmPhotoLog(prisma, {
+    userId: req.userId,
+    photoPath: b.photoPath,
+    localDate: b.localDate,
+    slot: b.slot,
+    lines: Array.isArray(b.lines) ? b.lines : [],
+  });
+
+  // Reached the same foods-logged funnel as search and saved-meal repeat, with
+  // the origin split already on that event's `source`. Splitting photo into its
+  // own event would have made "how many foods does this app log" a sum across
+  // three queries instead of one.
+  track('health_food_logged', req.userId, {
+    slot: b.slot,
+    source: 'photo_confirmed',
+    logged_count: out.logged,
+  });
+  // The launch metric, as a funnel rather than a dashboard-only number: if
+  // corrections stay high, this is the event that says the feature is not
+  // earning its per-photo cost.
+  track('health_food_photo_confirmed', req.userId, {
+    slot: b.slot,
+    logged_count: out.logged,
+    corrections: out.corrections,
+    rejected_count: out.rejected.length,
+  });
+
+  return out;
+});
+
+export const getFoodPhotoLink = handle(async (req) => {
+  const { url } = await foodPhotoService.getPhotoLink(prisma, {
+    userId: req.userId,
+    logId: req.params.id,
+  });
+  return { url, expiresInSeconds: 300 };
+});
+
+// Reclaims photos that were uploaded and never confirmed. Exposed on the health
+// admin surface rather than run by a scheduler, because this fleet has no cron
+// and an unset interval in Cloud Run is a job that silently never runs. The
+// endpoint is deliberately not part of the customer app's routes.
+export const sweepFoodPhotos = handle(async () =>
+  foodPhotoService.sweepUnconfirmedPhotos(prisma, { olderThanHours: 24 }),
+);

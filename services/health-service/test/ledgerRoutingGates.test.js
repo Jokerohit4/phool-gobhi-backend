@@ -46,9 +46,9 @@ const all = routeLines();
 assert.ok(all.length > 20, `expected the ledger routes, found ${all.length}`);
 
 test('every ledger route is authenticated', () => {
-  // Each of these spreads `...nutrition`, `...medical` or `...consentGated`, all
-  // of which begin with requireAuth.
-  const ungated = all.filter((r) => !/\.\.\.(nutrition|medical|consentGated)/.test(r.line));
+  // Each of these spreads `...nutrition`, `...medical`, `...consentGated` or
+  // `...photo`, all of which begin with requireAuth.
+  const ungated = all.filter((r) => !/\.\.\.(nutrition|medical|consentGated|photo)\b/.test(r.line));
   assert.deepEqual(
     ungated.map((r) => `${r.n}: ${r.line}`),
     [],
@@ -68,6 +68,66 @@ test('every ledger route is behind the healthLedger flag', () => {
       `${which} must build on ledgerGated`,
     );
   }
+  // `photo` deliberately builds on `nutrition` rather than on `ledgerGated`, so
+  // it inherits both the healthLedger flag AND the nutrition scope. Asserted
+  // separately because the rule it has to satisfy is different, and folding it
+  // into the loop above would assert the wrong thing about it.
+  assert.match(
+    routes,
+    /const photo = \[\.\.\.nutrition,\s*requireFeatureFlag\('foodPhotoLogging'\)\]/,
+    'the photo gate must build on the nutrition gate and add the photo flag',
+  );
+});
+
+// The photo routes are the only ones in this file that send a user's image to a
+// third party, so their gating is asserted separately and in full rather than
+// inferred from a shared array.
+test('the photo routes are on the photo gate, and the photo gate is a fourth flag', () => {
+  const photoRoutes = all.filter((r) => r.line.includes('/ledger/food-photos'));
+  assert.equal(photoRoutes.length, 2, 'expected recognise and confirm');
+
+  for (const r of photoRoutes) {
+    assert.match(r.line, /\.\.\.photo\b/, `${r.n}: ${r.line} is not on the photo gate`);
+    assert.doesNotMatch(
+      r.line,
+      /\.\.\.consentGated\b/,
+      `${r.n}: a feature route must not be reachable without nutrition consent`,
+    );
+  }
+
+  // A flag the admin can turn on, and that a route can therefore also be wired
+  // without. Asserted by name so that renaming the array - or dropping the flag
+  // from it - is a failure rather than a silent widening of the gate.
+  const decl = routes.match(/const photo = \[([^\]]*)\]/)?.[1] || '';
+  assert.match(decl, /requireFeatureFlag\('foodPhotoLogging'\)/);
+  assert.match(decl, /\.\.\.nutrition\b/);
+});
+
+test('the photo upload runs after the photo flag, not before it', () => {
+  // Same ordering argument as the medical upload, and it matters more here: the
+  // bytes in question are a photograph of somebody's plate, and the check that
+  // decides whether we may read it has to happen before the server holds it.
+  const upload = photoRoute('/ledger/food-photos/recognize');
+  const flagAt = upload.line.indexOf('...photo');
+  const multerAt = upload.line.indexOf('uploadFoodPhotoMiddleware');
+  assert.ok(flagAt > -1 && multerAt > -1, 'could not find both middlewares on the photo upload route');
+  assert.ok(flagAt < multerAt, 'the photo flag must come before the upload middleware');
+});
+
+test('a photo already confirmed stays readable after the flag is switched off', () => {
+  // Deliberately on `nutrition` and NOT on the photo gate. A user who confirmed
+  // a photo while the feature was on has to still be able to see it, and this
+  // route only mints a link for a photo this service already holds - it moves no
+  // image anywhere new, so it introduces no capability to gate.
+  const link = all.find((r) => r.line.includes('/ledger/food-logs/:id/photo'));
+  assert.ok(link, 'no photo link route found');
+  assert.match(link.line, /^router\.get\(/);
+  assert.match(link.line, /\.\.\.nutrition\b/);
+  assert.doesNotMatch(
+    link.line,
+    /\.\.\.photo\b/,
+    'a confirmed photo must not become unreadable when the flag is turned off',
+  );
 });
 
 // The gate arrays are declared once and then spread by every route, which is
@@ -174,11 +234,17 @@ test('the upload middleware runs after the consent gate, not before', () => {
   );
 });
 
+function photoRoute(pathFragment) {
+  const found = all.find((r) => r.line.includes(pathFragment));
+  assert.ok(found, `no route found for ${pathFragment}`);
+  return found;
+}
+
 test('the consent gate does not appear after a handler', () => {
   // Guards against `router.post(path, handler, ...gated)`, which Express would
   // run with no auth at all.
   for (const r of all) {
-    const gateAt = r.line.search(/\.\.\.(nutrition|medical|consentGated)/);
+    const gateAt = r.line.search(/\.\.\.(nutrition|medical|consentGated|photo)\b/);
     const handlerAt = r.line.search(/ledgerCtrl\.|ledgerConsentCtrl\./);
     if (gateAt > -1 && handlerAt > -1) {
       assert.ok(gateAt < handlerAt, `${r.n}: ${r.line} runs the handler before the gate`);

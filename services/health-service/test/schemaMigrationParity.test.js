@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -15,10 +15,26 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaRaw = readFileSync(join(here, '..', 'prisma', 'schema.prisma'), 'utf8');
-const migrationRaw = readFileSync(
-  join(here, '..', 'prisma', 'migrations', '20260927000000_add_health_ledger', 'migration.sql'),
-  'utf8',
-);
+
+// Every migration, concatenated, not just the one that created the ledger.
+//
+// This originally read only `20260927000000_add_health_ledger`, which was
+// correct while that was the only migration touching these models and quietly
+// wrong the moment it stopped being true. Photo logging added its columns in a
+// later ALTER, and a test pinned to the original CREATE TABLE would have
+// reported every one of them as "in the schema but not the migration" - a false
+// alarm pointing the other way, at a developer who did nothing wrong.
+//
+// The union is the right shape for this question. The question is "is every
+// column the schema declares created by the migrations, in some migration", and
+// an ALTER and a CREATE are both ways to create a column. Order is irrelevant to
+// a column's existence, and a column added then dropped correctly shows up in
+// the reverse check below rather than being silently tolerated here.
+const migrationsDir = join(here, '..', 'prisma', 'migrations');
+const migrationRaw = readdirSync(migrationsDir, { withFileTypes: true })
+  .filter((e) => e.isDirectory())
+  .map((e) => readFileSync(join(migrationsDir, e.name, 'migration.sql'), 'utf8'))
+  .join('\n');
 
 // Comments are stripped before anything is matched. The migration carries a
 // lot of `--` explanation, and several of those sentences contain a semicolon -
@@ -63,15 +79,33 @@ function schemaFields(name) {
 }
 
 function migrationColumns(name) {
+  const cols = new Set();
   const table = migrationCreateTable(name);
-  if (!table) return null;
-  // The column type varies - `INTEGER`, `DECIMAL(8,2)`, and for enums the
-  // schema-qualified `"health"."MealSlot"` - so the match only anchors on the
-  // quoted column name at the start of a line. Requiring a bare type token here
-  // silently skipped every enum-typed column, which is most of this schema.
-  return new Set(
-    [...table.matchAll(/^\s+"(\w+)"\s+\S/gm)].map((m) => m[1]),
-  );
+  if (table) {
+    // The column type varies - `INTEGER`, `DECIMAL(8,2)`, and for enums the
+    // schema-qualified `"health"."MealSlot"` - so the match only anchors on the
+    // quoted column name at the start of a line. Requiring a bare type token here
+    // silently skipped every enum-typed column, which is most of this schema.
+    for (const m of table.matchAll(/^\s+"(\w+)"\s+\S/gm)) cols.add(m[1]);
+  }
+
+  // Columns added after the fact, via ALTER TABLE.
+  //
+  // This was missing, and it was missing in the direction that hides a real
+  // regression: every model here was created by one big migration, so a CREATE
+  // TABLE scan looked complete right up until the first feature that needed a
+  // new column, at which point every later column reported as missing from the
+  // migrations and pointed the reader at the wrong file. A column is created
+  // whether the statement that creates it is a CREATE or an ALTER.
+  // `(?!\w)` rather than `\b`: the pattern ends on a closing quote, and a word
+  // boundary requires a word character on one side of it. `\b` after a quote is
+  // unsatisfiable, which made this silently match nothing.
+  for (const stmt of migration.split(';')) {
+    if (!new RegExp(`^\\s*ALTER TABLE (?:IF EXISTS )?"?\\w*"\\."${name}"(?!\\w)`, 'i').test(stmt)) continue;
+    for (const m of stmt.matchAll(/ADD COLUMN (?:IF NOT EXISTS )?"(\w+)"/gi)) cols.add(m[1]);
+  }
+
+  return cols.size ? cols : null;
 }
 
 const LEDGER_MODELS = [

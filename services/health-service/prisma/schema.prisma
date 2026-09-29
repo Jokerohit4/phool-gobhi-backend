@@ -1356,6 +1356,23 @@ model FoodLog {
   // than half of photo logs get corrected, the feature is not earning its
   // cost).
   photoCorrections Int           @default(0)
+  // Set only when the log came from a photo, and only after the user confirmed
+  // it. GCS object path, never a URL: the bucket has no public access, so a path
+  // on its own cannot become a picture without minting a signed link per read.
+  // See foodPhotoStorage.js.
+  photoPath         String?
+  // What the model proposed for this line, retained AFTER confirmation. The
+  // counter above says how often the model was wrong; this is what makes that
+  // number debuggable, because "corrected 4 times" cannot tell you whether it
+  // swapped dal for rice or misread an entire plate.
+  photoProposedName String?
+  // The provider's confidence in its own proposal, 0..1, or null when it did not
+  // report one. Kept so a confidence threshold can be chosen from real numbers
+  // later instead of guessed now.
+  photoConfidence   Float?
+  // Which model produced the proposal. Prompt and model version move together,
+  // and without this an accuracy regression cannot be dated.
+  photoModel        String?
   // Name and veg flag copied at log time, alongside `nutrients`. The same
   // reason as the nutrient snapshot, extended to presentation: a day's log
   // renders without a join, and the label survives the FoodItem being deleted
@@ -1565,6 +1582,32 @@ model FoodPhotoRequestLog {
   id          Int      @id @default(autoincrement())
   userId      Int
   requestedAt DateTime @default(now())
+  // This table is the cost ledger for a paid vision call, so it records what
+  // happened and not merely that a request arrived. `requestedAt` alone answers
+  // "is this user hammering the endpoint", which is the rate-limit question; the
+  // rest answers the one that decides whether the feature is worth its price.
+  //
+  // outcome: 'ok' (foods matched the catalogue) | 'no_food' (a photo of
+  // something that is not food, or nothing identifiable) | 'rejected' (nothing
+  // was logged from this photo) | 'provider_error' | 'rate_limited'.
+  outcome       String?
+  latencyMs     Int?
+  // Token counts, so per-photo spend can be attributed and a prompt change can
+  // be shown to have made it more expensive rather than merely different.
+  tokensIn      Int?
+  tokensOut     Int?
+  // Where the photo went, so an image nobody ever confirmed can be reclaimed.
+  // Null when the request failed before anything was stored.
+  photoPath     String?
+  model         String?
+  // How many proposed items the catalogue did not contain. The honest early
+  // signal that the model is naming things we have never heard of: a high rate
+  // here means the catalogue is the bottleneck, not the vision model.
+  unmatchedCount Int     @default(0)
+  // The user later confirmed nothing from this photo. Set on the row when the
+  // photo is swept, so abandonment is measurable instead of inferred from a
+  // missing FoodLog.
+  abandonedAt   DateTime?
 
   @@index([userId, requestedAt])
   @@schema("health")

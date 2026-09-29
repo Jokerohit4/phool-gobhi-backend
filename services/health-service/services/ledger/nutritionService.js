@@ -121,8 +121,14 @@ export async function searchFoods(prisma, userId, { query, includeUnverified = f
  *
  * Requires nutrition consent. The snapshot is written here, at log time, and
  * is never recomputed.
+ *
+ * `photo` is the provenance of a photo-sourced log: `{ path, proposedName,
+ * confidence, model }`. Every field is optional and all are written only when
+ * `source === 'photo_confirmed'`, so a search or saved-meal log is unaffected -
+ * which is the point of grouping them behind one argument instead of four more
+ * parameters that every caller would have to know to leave undefined.
  */
-export async function logFood(prisma, { userId, localDate, slot, foodItemId, grams, servings, servingLabel, source = DEFAULT_FOOD_LOG_SOURCE, photoCorrections = 0 }) {
+export async function logFood(prisma, { userId, localDate, slot, foodItemId, grams, servings, servingLabel, source = DEFAULT_FOOD_LOG_SOURCE, photoCorrections = 0, photo = null }) {
   if (!MEAL_SLOTS.includes(slot)) {
     throw badRequest(`slot must be one of: ${MEAL_SLOTS.join(', ')}`);
   }
@@ -151,6 +157,23 @@ export async function logFood(prisma, { userId, localDate, slot, foodItemId, gra
 
   const nutrients = computePortion(food, resolvedGrams);
 
+  // Photo provenance is only meaningful for a photo-sourced log. Gating on the
+  // source rather than on the presence of `photo` keeps a caller from attaching
+  // a photo to a row that claims to have come from a search, which would make
+  // the correction metric - "of the lines that came from a photo, how many were
+  // corrected" - quietly wrong.
+  const photoFields =
+    source === 'photo_confirmed'
+      ? {
+          photoPath: photo?.path || null,
+          photoProposedName: photo?.proposedName || null,
+          photoConfidence: Number.isFinite(Number(photo?.confidence))
+            ? Number(photo.confidence)
+            : null,
+          photoModel: photo?.model || null,
+        }
+      : {};
+
   return prisma.foodLog.create({
     data: {
       userId,
@@ -163,6 +186,7 @@ export async function logFood(prisma, { userId, localDate, slot, foodItemId, gra
       nutrients,
       source,
       photoCorrections: Number(photoCorrections) || 0,
+      ...photoFields,
       // Copied onto the row so a day's log can be rendered without joining
       // FoodItem, and so the name survives the food being deleted.
       name: food.name,

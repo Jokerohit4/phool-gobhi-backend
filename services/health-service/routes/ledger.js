@@ -5,6 +5,7 @@ import { requireNutritionConsent, requireMedicalRecordsConsent } from '../middle
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
 import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js';
+import { uploadFoodPhotoMiddleware } from '../middleware/foodPhotoUpload.js';
 
 const router = Router();
 
@@ -82,6 +83,37 @@ router.get('/ledger/food-totals/:localDate', ...nutrition, ledgerCtrl.getDayTota
 router.get('/ledger/saved-meals', ...nutrition, ledgerCtrl.listSavedMeals);
 router.post('/ledger/saved-meals', ...nutrition, ledgerCtrl.saveMeal);
 router.post('/ledger/saved-meals/:id/log', ...nutrition, ledgerCtrl.logSavedMeal);
+
+// ---- Photo food logging ---------------------------------------------------
+//
+// A fourth gate, on top of the three above, and the only route group in this
+// file that needs one.
+//
+// `foodPhotoLogging` is not a sub-feature of the ledger the way `healthMetrics`
+// and `healthLedger` are. Those two say "does this exist"; this one says
+// "may this user's image leave our infrastructure". It is a separate flag with
+// its own default because the ledger being on says nothing about consent to
+// third-party image processing, and a user who is happy to log dal by hand has
+// not agreed to a photo of their plate going to a model.
+//
+// Nutrition consent still applies on top of it. Both gates, in that order, so a
+// request is refused on the flag before the bytes are buffered - the multer
+// middleware sits after the gates for the same reason it does on the medical
+// route.
+const photo = [...nutrition, requireFeatureFlag('foodPhotoLogging')];
+
+router.post(
+  '/ledger/food-photos/recognize',
+  ...photo,
+  uploadFoodPhotoMiddleware,
+  ledgerCtrl.recognizeFoodPhoto,
+);
+// Not flag-gated on `foodPhotoLogging`. A photo that was confirmed while the
+// flag was on has to stay readable after an admin switches it off - and a read
+// mints a signed link for an image this service already holds, so it introduces
+// no new capability to gate.
+router.get('/ledger/food-logs/:id/photo', ...nutrition, ledgerCtrl.getFoodPhotoLink);
+router.post('/ledger/food-photos/confirm', ...photo, ledgerCtrl.confirmFoodPhoto);
 
 // ---- Plan -----------------------------------------------------------------
 

@@ -192,6 +192,16 @@ async function removeScope(userId, scope, { purge = false } = {}) {
   }
 
   if (purge && scope === NUTRITION_SCOPE) {
+    // The photo paths are read BEFORE the transaction, for the same reason the
+    // medical scope reads its document paths first: once the rows are gone
+    // nothing knows what the objects were called, and a food photo kept for a
+    // user who has just withdrawn consent is a record of their diet that they
+    // asked us to stop holding.
+    const photos = await prisma.foodLog.findMany({
+      where: { userId, photoPath: { not: null } },
+      select: { photoPath: true },
+      distinct: ['photoPath'],
+    });
     // FK-safe order: SavedMealLine cascades from SavedMeal, so the parent
     // delete is enough. FoodLog.foodItemId is SetNull, and the custom foods
     // themselves go last — a seeded FoodItem belongs to no one, so only the
@@ -201,7 +211,21 @@ async function removeScope(userId, scope, { purge = false } = {}) {
       prisma.foodLog.deleteMany({ where: { userId } }),
       prisma.nutritionTarget.deleteMany({ where: { userId } }),
       prisma.foodItem.deleteMany({ where: { createdByUserId: userId } }),
+      // The request ledger, for the same reason. A row that records "this user
+      // sent a photo, this model read it, this is what it cost" is itself a
+      // record of the user's food logging habits.
+      prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
     ]);
+
+    if (photos.length) {
+      // Lazily imported for the same reason as the medical cleanup below: a
+      // revoke must not fail because a storage SDK is misconfigured, and the
+      // rows are already gone by this point either way.
+      const { deletePhotos } = await import('./foodPhotoStorage.js');
+      await deletePhotos(photos.map((p) => p.photoPath)).catch((err) =>
+        console.error('[consent] food photo cleanup failed:', err.message),
+      );
+    }
   }
 
   if (purge && scope === MEDICAL_RECORDS_SCOPE) {
