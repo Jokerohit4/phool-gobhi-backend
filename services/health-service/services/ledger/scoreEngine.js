@@ -163,6 +163,7 @@ export function computeEarns({
   localDate,
   late = false,
   hasPlannedWorkout = false,
+  hasPlannedWorkoutDone = false,
   unplannedWorkout = false,
   restDay = false,
 }) {
@@ -220,8 +221,17 @@ export function computeEarns({
     lines.push(line(`item_done_${item.id}`, label, item.kind, points, item, latePenalty));
   }
 
-  // An unplanned workout. Worth something, less than completing the plan.
-  if (unplannedWorkout && !hasPlannedWorkout) {
+  // An unplanned workout — real effort, paid at less than completing the plan so
+  // the score never rewards skipping the plan in favour of improvising.
+  //
+  // The guard is `hasPlannedWorkoutDone`, not `hasPlannedWorkout`. Those are
+  // different questions and the difference is the whole point of the line: a
+  // user who trained on their scheduled-workout day but never ticked it off has
+  // both done a workout and left the plan item unclaimed, and that is the
+  // person this is meant to pay. Guarding on "was a workout scheduled" instead
+  // meant anyone with a workout item in their plan could never see these points
+  // at all, however they actually trained.
+  if (unplannedWorkout && !hasPlannedWorkoutDone) {
     lines.push({
       key: 'workout_unplanned',
       label: 'Extra workout',
@@ -306,6 +316,7 @@ export function computeDay({
   totals = null,
   closed = true,
   hasPlannedWorkout = false,
+  hasPlannedWorkoutDone = false,
   unplannedWorkout = false,
 }) {
   const earns = computeEarns({
@@ -315,6 +326,7 @@ export function computeDay({
     totals,
     localDate,
     hasPlannedWorkout,
+    hasPlannedWorkoutDone,
     unplannedWorkout,
   });
   const misses = closed ? computeMisses({ planItems, completions, targets, totals, localDate }) : [];

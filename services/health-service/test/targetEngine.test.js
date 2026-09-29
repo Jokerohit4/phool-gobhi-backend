@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computeTargets, bmr, goalAdjustmentKcal, bandForMeasuredBurn } from '../services/ledger/targetEngine.js';
+import { computeTargets, bmr, goalAdjustmentKcal, maxDeficitKcal, bandForMeasuredBurn } from '../services/ledger/targetEngine.js';
 import {
   SAFETY,
   POINTS,
@@ -108,26 +108,94 @@ test('the absolute floor binds when BMR is lower than it', () => {
 });
 
 test('no goal can produce a target faster than 0.75 kg/week', () => {
-  for (const weightKg of [42, 55, 70, 95, 130]) {
-    const r = computeTargets('lose_fat', { ...MALE_29, weightKg, sex: 'female' });
-    const actualDeficit = r.inputs.maintenanceKcal - r.targets.kcal;
-    // 7700 kcal per kg of body fat, per week.
-    const kgPerWeek = (actualDeficit * 7) / 7700;
+  // The weight range deliberately runs well past the point where the
+  // proportional 1%-of-body-weight bound stops being the tighter one. The
+  // original test stopped at 130 kg, which is below the ~143 kg crossover, so
+  // it never exercised the case that was actually broken.
+  for (const weightKg of [42, 55, 70, 95, 130, 143, 150, 200, 250, 300]) {
+    for (const sex of ['female', 'male']) {
+      const r = computeTargets('lose_fat', { ...MALE_29, weightKg, sex });
+      const actualDeficit = r.inputs.maintenanceKcal - r.targets.kcal;
+      // 7700 kcal per kg of body fat, per week.
+      const kgPerWeek = (actualDeficit * 7) / 7700;
+      assert.ok(
+        kgPerWeek <= SAFETY.maxWeeklyLossKg + 0.01,
+        `${weightKg} kg ${sex}: ${kgPerWeek.toFixed(2)} kg/week exceeds the cap`,
+      );
+    }
+  }
+});
+
+test('the loss ceiling is a real 0.75 kg/week at every weight', () => {
+  // The direct assertion. The bounds cross at 0.75 / 0.01 = 75 kg: below it the
+  // 1%-of-body-weight rule is tighter, above it the absolute 0.75 kg/week rule
+  // is. Either way the realised rate must never exceed the number the intake
+  // screen states out loud.
+  //
+  // This is the case the old formula got wrong. It computed
+  // 0.75 x weightKg x 7700, which is a fraction of body weight wearing the
+  // name of an absolute limit — under the cap at 130 kg, but 1.05 kg/week at
+  // 200 kg and 1.31 at 250 kg. No test caught it because the only goal that
+  // asks for a deficit asks for -400, which is below the ceiling for every
+  // adult above ~36 kg, so the wrong value was never actually used.
+  for (const weightKg of [30, 42, 55, 75, 95, 130, 143, 200, 250, 300]) {
+    const ceiling = maxDeficitKcal(weightKg);
+    const kgPerWeek = (ceiling.value * 7) / 7700;
     assert.ok(
-      kgPerWeek <= SAFETY.maxWeeklyLossKg + 0.01,
-      `${weightKg} kg: ${kgPerWeek.toFixed(2)} kg/week exceeds the cap`,
+      kgPerWeek <= SAFETY.maxWeeklyLossKg + 1e-9,
+      `${weightKg} kg: ceiling implies ${kgPerWeek.toFixed(3)} kg/week`,
+    );
+  }
+
+  // And each bound is named correctly on its own side of the crossover.
+  assert.equal(maxDeficitKcal(30).rule, 'max_weekly_loss_pct_body_weight');
+  assert.equal(maxDeficitKcal(75).rule, 'max_weekly_loss_pct_body_weight');
+  assert.equal(maxDeficitKcal(76).rule, 'max_weekly_loss_0.75kg');
+  assert.equal(maxDeficitKcal(300).rule, 'max_weekly_loss_0.75kg');
+});
+
+test('neither bound steals the adjustment from an ordinary adult', () => {
+  // Guards the opposite failure: "fixing" the 200 kg bug by over-tightening the
+  // ceiling would silently under-serve every normal user, and that is harder to
+  // notice because nobody complains about a smaller deficit.
+  for (const weightKg of [42, 55, 70, 100, 250, 300]) {
+    assert.equal(
+      goalAdjustmentKcal('lose_fat', weightKg).value,
+      -400,
+      `${weightKg} kg should get the full -400`,
     );
   }
 });
 
-test('the kg/week clamp is reported rather than silent', () => {
-  // A 42 kg woman asking for the nominal -400 kcal. The cap computes to
-  // ~243 kcal, so the clamp binds and the response has to SAY SO — a target
+test('a light user is protected by the kcal floor, not by the loss cap', () => {
+  // Worth stating explicitly because the previous test claimed the kg/week cap
+  // was what protected a 42 kg woman. It was not: 1% of 42 kg allows 462
+  // kcal/day, so -400 passed through unclamped. What actually bound was the
+  // 1200 kcal floor, which is the real protection and is reported as such.
+  const r = computeTargets('lose_fat', {
+    weightKg: 42, heightCm: 150, age: 24, sex: 'female', activity: 'light',
+  });
+  assert.equal(r.inputs.goalAdjustmentKcal, -400);
+  assert.equal(r.inputs.clampedBy, undefined);
+  assert.equal(r.inputs.kcalFloorApplied, SAFETY.kcalFloorFemale);
+  assert.equal(r.inputs.kcalFloorReason, 'absolute_floor');
+  // And the realised rate is well inside the cap, because the floor raised it.
+  const kgPerWeek = ((r.inputs.maintenanceKcal - r.targets.kcal) * 7) / 7700;
+  assert.ok(kgPerWeek <= SAFETY.maxWeeklyLossKg, kgPerWeek.toFixed(3));
+});
+
+test('a clamp is reported rather than silent, and names its bound', () => {
+  // A 30 kg adult asking for the nominal -400 kcal. The 1%-of-body-weight rule
+  // allows 330, so the clamp binds and the response has to SAY SO — a target
   // that quietly differs from the formula is worse than one that explains
   // itself, because the intake screen promises a stated safe pace.
-  const r = computeTargets('lose_fat', { weightKg: 42, heightCm: 150, age: 24, sex: 'female', activity: 'light' });
-  assert.equal(r.inputs.clampedBy, 'max_weekly_loss_0.75kg');
-  assert.equal(r.inputs.goalAdjustmentRequestedKcal, -400);
+  //
+  // The bound named has to be the one that actually applied. Labeling the
+  // proportional clamp as the 0.75 kg/week cap would tell the user their
+  // target was limited by a rule that was not the one doing the limiting.
+  const r = computeTargets('lose_fat', { weightKg: 30, heightCm: 140, age: 22, sex: 'female', activity: 'light' });
+  assert.equal(r.inputs.clampedBy, 'max_weekly_loss_pct_body_weight');
+  assert.equal(r.inputs.clampedFromKcal, -400);
   // Weaker in magnitude than asked for, and never stronger.
   assert.ok(r.inputs.goalAdjustmentKcal > -400);
   assert.ok(r.inputs.goalAdjustmentKcal < 0);
@@ -319,3 +387,4 @@ test('under-eating and over-eating cost exactly the same', () => {
   // well-meaning "but undereating is worse!" change.
   assert.equal(POINTS.caloriesOffTarget, -8);
 });
+

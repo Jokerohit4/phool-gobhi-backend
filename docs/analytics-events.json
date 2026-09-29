@@ -595,5 +595,77 @@
     ],
     "since": "2026-09-24",
     "notes": "props count"
-  }
+  },
+  "health_nutrition_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "nutrition scope granted. props version = the privacy-policy version the client asserted it was showing, so a build that consents on behalf of copy it never displayed is visible here rather than in a support ticket"
+  },
+  "health_nutrition_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "nutrition scope withdrawn. props purged (true = the collected food logs were also deleted). A revoke is a churn signal; purged=true is the one to look at hardest"
+  },
+  "health_medical_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "medical-records scope granted, independently of nutrition. No props: the words of the consent are not an analytics property"
+  },
+  "health_medical_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "medical-records scope withdrawn. props purged. Kept separate from the nutrition revoke because the two scopes are granted and withdrawn independently, and folding them together would make a partial withdrawal invisible"
+  },
+  "health_intake_saved": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "target intake accepted. props skipped, hasGoal, weightWritten \u2014 shape only, never the values. A body weight is not an analytics property. Does NOT fire on a refusal; see health_targets_pace_rejected"
+  },
+  "health_targets_pace_rejected": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "the requested loss pace was refused as unsafe, so nothing was saved. props code, limited_by ('max_weekly_loss_0.75kg'|'max_weekly_loss_pct_body_weight' \u2014 which bound actually fired), weeks_needed, max_weekly_loss_kg. The highest-signal event in this feature: it separates 'users ask for goals we decline' from 'users abandon the wizard', and limited_by shows whether our own cap is the constraint"
+  },
+  "health_target_recomputed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "targets recalculated from current weight. props written, skipped"
+  },
+  "health_food_logged": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "food(s) added to a day. Two shapes on one event so foods-logged is a single funnel with an origin split, not two events that have to be summed correctly by hand. Search path: props slot, source='search' (one food). Saved-meal repeat path: props slot, source='saved_meal', logged_count, skipped_count \u2014 a repeat writes many foods in one request, so counting it as a single food would understate the feature, and skipped_count > 0 means foods left the catalogue after the meal was saved and the user was shown a partial-write warning"
+  },
+  "health_saved_meal_created": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a day's slot snapshotted as a reusable meal. props slot, line_count. A distinct decision from logging a food, and the one that predicts repeat use \u2014 a create with no later repeat is the drop-off"
+  },
+  "health_plan_regenerated": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "suggested plan rebuilt. props created, dropped"
+  },
+  "health_day_closed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a day was finalised. props frozen (false = the day was already closed, so the call was a no-op)"
+  },
+  "health_medical_doc_uploaded": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a medical document was stored. props kind only \u2014 never the filename, storage path, or contents; a path is a capability and the document is the user's private data"
+}
 }

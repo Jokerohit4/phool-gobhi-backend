@@ -17,7 +17,7 @@ function resetFakes() {
 }
 
 let upsertEntryService, upsertManyService, listEntriesService, latestByMetricService,
-  validateMetricValue, METRIC_UNITS;
+  validateMetricValue, validateLocalDate, validateUnit, METRIC_UNITS;
 let recordImpressionService, recordVoteService, getFeedbackStatsService;
 
 test('setup: mock prisma once, import the services once', async (t) => {
@@ -96,7 +96,7 @@ test('setup: mock prisma once, import the services once', async (t) => {
 
   ({
     upsertEntryService, upsertManyService, listEntriesService, latestByMetricService,
-    validateMetricValue, METRIC_UNITS,
+    validateMetricValue, validateLocalDate, validateUnit, METRIC_UNITS,
   } = await import('../services/biometricService.js'));
   ({ recordImpressionService, recordVoteService, getFeedbackStatsService } = await import(
     '../services/suggestionFeedbackService.js'
@@ -129,6 +129,103 @@ test('the unit is set from the canonical map, never trusted from the caller', as
   assert.equal(entryRows[0].unit, 'minutes');
   assert.equal(METRIC_UNITS.weight, 'kg');
   assert.equal(METRIC_UNITS.hrv, 'ms');
+});
+
+test('a wrong unit is rejected, not silently relabelled as the canonical one', async () => {
+  // The canonical-unit write is not the same claim as "the value we received
+  // was in that unit". A 68 kg person typing 150 lb used to get a clean 201 and
+  // a stored 150 kg row that reads back as authoritative — and that row is
+  // what computes the calorie target, 3396 instead of 2125 kcal.
+  //
+  // The service could convert, and deliberately does not: choosing which unit
+  // the user meant is guessing from a typo, on a number that drives a medical-
+  // adjacent suggestion. A 400 costs one retry and says what went wrong.
+  resetFakes();
+  await assert.rejects(
+    () => upsertEntryService(1, { metric: 'weight', value: 150, unit: 'lb', localDate: '2026-09-08' }),
+    (err) => err.status === 400 && /must be recorded in kg, not lb/.test(err.message),
+  );
+  assert.equal(entryRows.length, 0, 'a rejected unit must not leave a row');
+
+  // Omitting the unit is still fine — the canonical unit is not a secret, and
+  // most clients just send the number.
+  await upsertEntryService(1, { metric: 'weight', value: 68, localDate: '2026-09-08' });
+  assert.equal(entryRows.length, 1);
+  assert.equal(entryRows[0].unit, 'kg');
+
+  // The canonical unit sent explicitly is accepted, so a client that always
+  // sends it is not broken by the check.
+  await upsertEntryService(1, { metric: 'weight', value: 67.8, unit: 'kg', localDate: '2026-09-09' });
+  assert.equal(entryRows.length, 2);
+
+  // sleep in hours is the mix-up the bounds cannot catch, since 7 is inside
+  // [0, 1440].
+  assert.match(validateUnit('sleep_minutes', 'hours'), /minutes, not hours/);
+  assert.equal(validateUnit('sleep_minutes', 'minutes'), null);
+  assert.equal(validateUnit('sleep_minutes', undefined), null);
+  assert.equal(validateUnit('weight', null), null);
+});
+
+test('a localDate that is not a real calendar date is rejected', async () => {
+  // The shape check is not the whole check. /^\d{4}-\d{2}-\d{2}$/ accepts all of
+  // these, and that matters because rows are keyed one-per-day and sort
+  // lexically: 2026-02-31 becomes its own point on a chart between 28 Feb and
+  // 1 Mar, and new Date('2026-02-31') rolls over to 3 March rather than failing,
+  // so anything parsing it later reads a different day than was written.
+  resetFakes();
+  for (const bad of ['2026-02-31', '2026-13-45', '2026-00-00', '2026-04-31', '26-02-31', '2026-2-3']) {
+    await assert.rejects(
+      () => upsertEntryService(1, { metric: 'weight', value: 74, localDate: bad }),
+      (err) => err.status === 400,
+      `${bad} should be rejected`,
+    );
+  }
+  assert.equal(entryRows.length, 0, 'no impossible date may leave a row');
+
+  // Real dates around the boundaries still work, including a leap day.
+  for (const good of ['2026-02-28', '2026-03-01', '2024-02-29']) {
+    await upsertEntryService(1, { metric: 'weight', value: 74, localDate: good }, { today: '2026-09-28' });
+  }
+  assert.equal(entryRows.length, 3);
+});
+
+test('a future localDate is rejected at write time, not just ignored at read time', async () => {
+  // targetService.latestWeightKg already skipped future-dated readings, which
+  // is why this was invisible: the bad row was stored, listed in exports, drawn
+  // on charts, and only quietly not used for the target. Rejecting it at the
+  // write means the series never claims to contain a measurement that has not
+  // happened.
+  resetFakes();
+  await assert.rejects(
+    () => upsertEntryService(1, { metric: 'weight', value: 74, localDate: '2099-01-01' }),
+    (err) => err.status === 400 && /cannot be in the future/.test(err.message),
+  );
+  assert.equal(entryRows.length, 0);
+
+  // Today itself is fine — it is the same timezone-aware day the service
+  // defaults to.
+  await upsertEntryService(1, { metric: 'weight', value: 74, localDate: '2026-09-28' }, { today: '2026-09-28' });
+  assert.equal(entryRows.length, 1);
+
+  // Yesterday is fine, because a wearable sync can land after midnight local.
+  await upsertEntryService(1, { metric: 'weight', value: 74, localDate: '2026-09-27' }, { today: '2026-09-28' });
+  assert.equal(entryRows.length, 2);
+});
+
+test('a whole batch is rejected rather than partly saved', async () => {
+  // upsertManyService writes entry by entry, so a bad entry at position two
+  // would otherwise leave the first one committed. For a metric that decides a
+  // calorie target, half a quick-add is worse than none: the user sees an
+  // error and reasonably assumes nothing was saved.
+  resetFakes();
+  await assert.rejects(
+    () => upsertManyService(1, [
+      { metric: 'weight', value: 74.2, localDate: '2026-09-08' },
+      { metric: 'resting_hr', value: 52, localDate: '2026-13-45' },
+    ]),
+    (err) => err.status === 400,
+  );
+  assert.equal(entryRows.length, 0, 'the valid entry before the bad one must not be committed');
 });
 
 test('source defaults to manual and is carried, so wearable sync later reuses the row', async () => {

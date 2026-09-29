@@ -33,20 +33,49 @@ export function bmr({ weightKg, heightCm, age, sex }) {
 // targets screen say "we asked for 400 and gave you 300 because 400 would be
 // faster than is safe" instead of quietly returning a different number than
 // the formula's nominal output.
+// The largest daily deficit this engine will ask anyone to run, and which of
+// the two rules set it.
+//
+// Exported on its own because it is the safety function: it is worth testing
+// directly at every weight, rather than only through a goal that happens to ask
+// for more than the answer. The nominal adjustment is -400 kcal, so for any
+// adult above ~36 kg neither bound binds and this value is not exercised at all
+// by the goal path — which is precisely why the old formula could be wrong at
+// 200 kg without a test noticing.
+export function maxDeficitKcal(weightKg) {
+  const absolute = (SAFETY.maxWeeklyLossKg * 7700) / 7;
+  const proportional =
+    (SAFETY.maxWeeklyLossFractionOfBodyWeight * weightKg * 7700) / 7;
+  return {
+    value: Math.min(absolute, proportional),
+    // Tie goes to the proportional bound, because that is the one describing
+    // this specific user's scale rather than a universal ceiling. Reporting the
+    // tighter of two equal numbers as the looser would be the more confusing
+    // of the two claims.
+    rule:
+      proportional <= absolute
+        ? 'max_weekly_loss_pct_body_weight'
+        : 'max_weekly_loss_0.75kg',
+  };
+}
+
+// Returns the adjustment to apply, the one the formula asked for, and which
+// bound (if any) reduced it.
 export function goalAdjustmentKcal(goal, weightKg) {
   const [min, max] = GOAL_KCAL_ADJUSTMENT[goal] || [0, 0];
   let value = Math.round((min + max) / 2);
+  let clampedBy = null;
 
   if (min < 0) {
     const requested = Math.abs(value);
-    const maxDeficit =
-      (SAFETY.maxWeeklyLossKg * 7 * weightKg * 7700) / 1000 / 7;
+    const { value: maxDeficit, rule } = maxDeficitKcal(weightKg);
     if (requested > maxDeficit) {
       value = -Math.round(maxDeficit);
+      clampedBy = rule;
     }
   }
 
-  return { value, requested: Math.round((min + max) / 2) };
+  return { value, requested: Math.round((min + max) / 2), clampedBy };
 }
 
 // Validates and normalises the inputs, returning null-safe values plus the
@@ -191,12 +220,16 @@ export function computeTargets(goal, raw) {
       maintenanceKcal: Math.round(maintenance),
       goalAdjustmentKcal: adjustment.value,
       goalAdjustmentRequestedKcal: adjustment.requested,
-      // Present only when the kg/week cap bound. Absent means the requested
-      // adjustment was used as-is, which is the normal case.
+      // Present only when one of the loss bounds bound. Absent means the
+      // requested adjustment was used as-is, which is the normal case.
+      // `clampedBy` names the bound that actually applied, because "we asked
+      // for 400 and gave you 400-something" is not the same message as "we gave
+      // you 300 because 0.75 kg/week is your absolute ceiling" and a user
+      // reading one when the other applied has been told something false.
       ...(adjustment.value !== adjustment.requested
         ? {
             clampedFromKcal: adjustment.requested,
-            clampedBy: 'max_weekly_loss_0.75kg',
+            clampedBy: adjustment.clampedBy,
           }
         : {}),
       ...(floored

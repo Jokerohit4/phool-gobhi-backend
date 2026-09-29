@@ -197,11 +197,50 @@ async function gatherDayInputs(prisma, { userId, localDate, today }) {
     }
   }
 
+  // Whether a workout was actually LOGGED that day, as opposed to merely being
+  // scheduled. The engine needs this to decide if an extra workout was
+  // unplanned, and "scheduled" is the wrong signal for that question: someone
+  // who skipped the plan and trained anyway has an unplanned workout, and
+  // someone who trained on a rest day has an unplanned workout too. Only
+  // `hasPlannedWorkoutDone` distinguishes either of those from a user who
+  // completed their plan.
+  const completedItemIds = new Set(completions.map((c) => c.planItemId));
+  const scheduledWorkout = planItems.some((i) => i.kind === 'workout');
+  const hasPlannedWorkoutDone = planItems.some(
+    (i) => i.kind === 'workout' && completedItemIds.has(i.id),
+  );
+
+  // A logged session on this localDate. Filtered in the query rather than in JS
+  // because a user with years of sessions should not have all of them loaded to
+  // find one day's worth.
+  //
+  // `endedAt` and `type` both matter. A draft that was started and abandoned is
+  // not a workout — it is a row that would otherwise score points for a session
+  // the user did not finish. And `type = 'rest'` is the schema's own way of
+  // recording a deliberate rest day, which is the opposite of an extra workout;
+  // scoring it as one would pay points for resting, in a system whose entire
+  // premise is that the score never punishes rest.
+  const sessions = await prisma.workoutSession.findMany({
+    where: { userId, localDate, endedAt: { not: null } },
+    select: { id: true, type: true, endedAt: true },
+  });
+  const loggedWorkout = sessions.some((s) => s.type !== 'rest');
+
   return {
     planItems,
     completions,
     totals,
-    hasPlannedWorkout: planItems.some((i) => i.kind === 'workout'),
+    // Kept as "is one scheduled", because that is what the engine's
+    // planned-vs-unplanned split is about. Both are passed: the engine needs to
+    // know whether a plan existed to compare an extra session against, and
+    // whether the plan's workout was actually done.
+    hasPlannedWorkout: scheduledWorkout,
+    hasPlannedWorkoutDone,
+    // Now derived rather than defaulting to false. Before this, the "extra
+    // workout" line in the engine was unreachable: nothing ever passed the
+    // flag, so POINTS.unplannedWorkout was dead code and a user who trained on
+    // a rest day got nothing for it.
+    unplannedWorkout: loggedWorkout && !hasPlannedWorkoutDone,
     bySlot,
   };
 }

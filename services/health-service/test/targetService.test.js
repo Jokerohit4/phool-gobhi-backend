@@ -6,11 +6,29 @@ import {
   resolveInputs,
   recomputeTargets,
   resolveActivity,
+  gatherMeasuredActivity,
+  describeActivity,
   MISSING_REASONS,
 } from '../services/ledger/targetService.js';
 import { MEASURED_ACTIVITY_THRESHOLD_DAYS } from '../services/ledger/constants.js';
 
 const TODAY = '2026-09-28';
+
+/** Offsets a 'YYYY-MM-DD' string by whole days, staying in that format. */
+function shift(date, deltaDays) {
+  const [y, m, d] = date.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + deltaDays);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Applies the gte/lte range a Prisma string filter would apply. */
+function inRange(value, filter) {
+  if (!filter) return true;
+  if (filter.gte && value < filter.gte) return false;
+  if (filter.lte && value > filter.lte) return false;
+  return true;
+}
 
 // A hand-rolled Prisma double rather than a mocking library: the queries this
 // service makes are three findUnique/findFirst calls, and a stub that returns
@@ -20,6 +38,8 @@ function fakePrisma({
   profile = null,
   weight = null,
   targets = [],
+  activityRows = [],
+  sessions = [],
 } = {}) {
   const calls = { created: [] };
   return {
@@ -32,6 +52,24 @@ function fakePrisma({
     },
     biometricEntry: {
       findFirst: async () => weight,
+    },
+    // Modelled because recomputeTargets now gathers measurements itself when the
+    // caller does not supply them. Defaulting to empty is the honest default: it
+    // is what a user with no watch paired looks like, and it keeps the existing
+    // tests exercising the stated-activity path.
+    //
+    // These honour the `date`/`localDate` range the service asks for. An earlier
+    // version ignored it, and a 14-day window silently consumed 28 rows of
+    // fixture — which made sessionsPerWeek come out double and hid the very bug
+    // these tests exist to catch. A double that ignores the query under test is
+    // worse than no double.
+    dailyActivityMetric: {
+      findMany: async ({ where }) =>
+        activityRows.filter((r) => inRange(r.date, where.date)),
+    },
+    workoutSession: {
+      findMany: async ({ where }) =>
+        sessions.filter((s) => inRange(s.localDate, where.localDate)),
     },
     nutritionTarget: {
       findFirst: async () => targets[0] ?? null,
@@ -273,4 +311,368 @@ test('a workout day is reflected in the water target that gets stored', async ()
   assert.equal(r.written, true);
   assert.equal(r.targets.waterMl, 2450 + 500);
   assert.equal(prisma.calls.created[0].inputs.waterAddend, 500);
+});
+
+// --- measured activity: coverage is not frequency --------------------------
+//
+// These exist because of a real bug. resolveActivity used to pass the day count
+// into bandForMeasuredBurn's `avgSessionsPerWeek` slot, so a longer measurement
+// window scored as more intense training. At a moderate 450 kcal/day every
+// window of 14 days or more returned "very_active", raising the activity factor
+// — and so the calorie target — on the strength of a calendar artefact.
+
+test('a long window does not make a moderate burn look very active', () => {
+  // 450 kcal/day sits in the "moderate, or very active with >= 5 sessions/week"
+  // band. The tiebreaker has to be told the truth about frequency, which for
+  // someone with no logged sessions is zero.
+  for (const days of [14, 20, 30, 60, 90, 365]) {
+    const r = resolveActivity({
+      goal: { activity: 'sedentary' },
+      measuredBurnKcal: 450,
+      measuredDays: days,
+      sessionsPerWeek: 0,
+    });
+    assert.equal(
+      r.band,
+      'moderate',
+      `a ${days}-day window with no sessions must not read as very active`,
+    );
+  }
+});
+
+test('the 14-day threshold is about coverage, not window length', () => {
+  // Genuinely few days of data in a long window still falls short, because the
+  // evidence for the measured switch is days of readings.
+  const few = resolveActivity({
+    goal: { activity: 'sedentary' },
+    measuredBurnKcal: 800,
+    measuredDays: 9,
+    sessionsPerWeek: 6,
+  });
+  assert.equal(few.isMeasured, false);
+  assert.equal(few.activity, 'sedentary');
+
+  // And enough days in a SHORT window clears it, because 14 days of readings is
+  // 14 days of readings however they were captured.
+  const enough = resolveActivity({
+    goal: { activity: 'sedentary' },
+    measuredBurnKcal: 800,
+    measuredDays: MEASURED_ACTIVITY_THRESHOLD_DAYS,
+    sessionsPerWeek: 2,
+  });
+  assert.equal(enough.isMeasured, true);
+});
+
+test('session frequency still decides the moderate/very-active tie', () => {
+  // The tiebreaker has to keep working, or the fix above would have removed a
+  // real signal along with the false one.
+  const frequent = resolveActivity({
+    goal: { activity: 'sedentary' },
+    measuredBurnKcal: 450,
+    measuredDays: 30,
+    sessionsPerWeek: 5,
+  });
+  assert.equal(frequent.band, 'very_active');
+
+  const occasional = resolveActivity({
+    goal: { activity: 'sedentary' },
+    measuredBurnKcal: 450,
+    measuredDays: 30,
+    sessionsPerWeek: 2,
+  });
+  assert.equal(occasional.band, 'moderate');
+});
+
+test('band boundaries do not depend on how long the user has been measured', () => {
+  // Same routine, three different windows, one band. Anything else and the
+  // target would drift upward on its own as the days accumulated.
+  const bands = new Set(
+    [14, 45, 90].map((days) =>
+      resolveActivity({
+        goal: { activity: 'light' },
+        measuredBurnKcal: 450,
+        measuredDays: days,
+        sessionsPerWeek: 3,
+      }).band,
+    ),
+  );
+  assert.equal(bands.size, 1, 'the same routine must not change band with window length');
+});
+
+// --- the gatherer itself ---------------------------------------------------
+
+test('coverage counts days with a reading, not the length of the window', async () => {
+  // 28-day window, 20 days of readings. Coverage is 20, window is 28.
+  // windowDays is passed explicitly because the default is the 14-day threshold,
+  // and a test that assumed 28 would quietly measure the wrong window.
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    date: shift(TODAY, -(19 - i)),
+    activeCalories: 400,
+  }));
+  const m = await gatherMeasuredActivity({
+    prisma: fakePrisma({ activityRows: rows }),
+    userId: 1,
+    localDate: TODAY,
+    windowDays: 28,
+  });
+  assert.equal(m.windowDays, 28);
+  assert.equal(m.days, 20);
+  assert.equal(m.dailyBurnKcal, 400);
+});
+
+test('frequency is normalised to a week regardless of window length', async () => {
+  // 2 sessions in 28 days and 1 session in 14 days are the same routine, and
+  // must be reported identically. The window length is what used to leak into
+  // this number.
+  const mk = (n, span) => ({
+    activityRows: Array.from({ length: span }, (_, i) => ({
+      date: shift(TODAY, -(span - 1 - i)),
+      activeCalories: 450,
+    })),
+    sessions: Array.from({ length: n }, (_, i) => ({ localDate: shift(TODAY, -i) })),
+  });
+
+  const a = await gatherMeasuredActivity({
+    prisma: fakePrisma(mk(2, 28)),
+    userId: 1,
+    localDate: TODAY,
+    windowDays: 28,
+  });
+  const b = await gatherMeasuredActivity({
+    prisma: fakePrisma(mk(1, 14)),
+    userId: 1,
+    localDate: TODAY,
+    windowDays: 14,
+  });
+  assert.equal(a.sessionsPerWeek, 0.5);
+  assert.equal(b.sessionsPerWeek, 0.5);
+});
+
+test('today burn comes from today, and today\'s session is read from the session', async () => {
+  // Today's reading is deliberately much higher than the fortnight average, so
+  // an implementation that averaged before checking "today" would answer wrong
+  // and the water addend would be applied to the wrong day.
+  const rows = Array.from({ length: 14 }, (_, i) => ({
+    date: shift(TODAY, -(13 - i)),
+    activeCalories: i === 13 ? 1200 : 300,
+  }));
+  const m = await gatherMeasuredActivity({
+    prisma: fakePrisma({
+      activityRows: rows,
+      // A session yesterday and none today.
+      sessions: [{ localDate: shift(TODAY, -1) }],
+    }),
+    userId: 1,
+    localDate: TODAY,
+  });
+  assert.equal(m.todayBurnKcal, 1200);
+  // (13 x 300 + 1200) / 14. Deliberately asserted exactly: the point is that
+  // today's spike is included in the window average but does not become it.
+  assert.equal(m.dailyBurnKcal, 5100 / 14);
+  // Trained yesterday, not today: no addend.
+  assert.equal(m.hasWorkoutToday, false);
+
+  const trained = await gatherMeasuredActivity({
+    prisma: fakePrisma({ activityRows: rows, sessions: [{ localDate: TODAY }] }),
+    userId: 1,
+    localDate: TODAY,
+  });
+  assert.equal(trained.hasWorkoutToday, true);
+});
+
+test('an empty window gathers as no data rather than as zero burn', async () => {
+  const m = await gatherMeasuredActivity({ prisma: fakePrisma(), userId: 1, localDate: TODAY });
+  assert.equal(m.days, 0);
+  assert.equal(m.dailyBurnKcal, null);
+  assert.equal(m.sessionsPerWeek, 0);
+  assert.equal(m.hasWorkoutToday, false);
+});
+
+// --- recompute gathers when the caller does not pass measurements ----------
+
+test('recompute gathers measurements when the caller passes none', async () => {
+  // The controller never had a way to supply `measured`, so before this every
+  // production recompute ran with days: 0 and could never reach the measured
+  // switch. This test fails if the gather is ever removed or made opt-in again.
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    date: shift(TODAY, -(19 - i)),
+    activeCalories: 800,
+  }));
+  const prisma = fakePrisma({
+    goal: FULL_GOAL,
+    weight: WEIGHT_READING,
+    activityRows: rows,
+  });
+
+  const r = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(r.written, true);
+  assert.equal(r.activityIsMeasured, true);
+  assert.equal(r.activityDetail.isMeasured, true);
+  // 14, not 20: the default window is the 14-day threshold, so the extra six
+  // days of fixture fall outside it. The number that matters is that coverage
+  // was gathered at all — before this it was 0.
+  assert.equal(r.activityDetail.daysObserved, MEASURED_ACTIVITY_THRESHOLD_DAYS);
+  // And the band came from the gather, not the day count.
+  assert.equal(r.activityDetail.band, 'very_active');
+  assert.equal(r.inputs.activity, 'very_active');
+  // The stored explanation records the resolved activity, so a later retune of
+  // the formula cannot silently change which activity level produced this number.
+  assert.equal(prisma.calls.created[0].inputs.activity, 'very_active');
+});
+
+// --- describeActivity: the read the app was faking with a write -------------
+
+test('describeActivity writes nothing', async () => {
+  // This is the whole reason it exists. The app used to POST the recompute
+  // endpoint to fetch the explanation, so every visit to the targets screen
+  // created a NutritionTarget row. The test asserts on the absence of writes
+  // rather than on the return value, because that is the property at risk.
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+  const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.ok(detail);
+  assert.equal(prisma.calls.created.length, 0);
+});
+
+test('describeActivity reports the stated activity when there is no watch', async () => {
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+  const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(detail.isMeasured, false);
+  assert.equal(detail.usedStatedActivity, 'moderate');
+  assert.equal(detail.daysObserved, 0);
+  assert.equal(detail.ignoredBecause, null);
+});
+
+test('describeActivity explains a user_edited target, which recompute cannot', async () => {
+  // The case that motivated the split. recomputeTargets returns early for a
+  // hand-edited target and never reaches the detail block, so this user got no
+  // explanation at all - backwards, because they are the one who least knows
+  // where the number came from.
+  const prisma = fakePrisma({
+    goal: FULL_GOAL,
+    weight: WEIGHT_READING,
+    targets: [{ id: 1, source: 'user_edited', kcal: 1800 }],
+  });
+
+  const recompute = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(recompute.written, false);
+  assert.equal(recompute.skipped, 'user_edited');
+  assert.equal(recompute.activityDetail, undefined, 'recompute cannot explain this case');
+
+  // The read can, and does not touch the target.
+  const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(detail.usedStatedActivity, 'moderate');
+  assert.equal(prisma.calls.created.length, 0);
+});
+
+test('describeActivity answers with no goal on file at all', async () => {
+  // Not a 404 and not a null. The activity half is still a true statement, and
+  // the wizard shows this screen before any goal exists.
+  const prisma = fakePrisma({ goal: null });
+  const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(detail.isMeasured, false);
+  assert.equal(detail.usedStatedActivity, null);
+  assert.equal(detail.daysObserved, 0);
+});
+
+test('describeActivity reports the measured band once coverage clears', async () => {
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    date: shift(TODAY, -(19 - i)),
+    activeCalories: 800,
+  }));
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING, activityRows: rows });
+  const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(detail.isMeasured, true);
+  assert.equal(detail.band, 'very_active');
+  assert.equal(detail.daysObserved, MEASURED_ACTIVITY_THRESHOLD_DAYS);
+});
+
+test('describeActivity names a near-silent watch rather than calling it sedentary', async () => {
+  // The distinction the payload exists to preserve: a device that was not worn
+  // is not a sedentary life, and the two need different words on screen.
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    date: shift(TODAY, -(19 - i)),
+    activeCalories: 5,
+  }));
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING, activityRows: rows });
+  const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(detail.isMeasured, false);
+  assert.equal(detail.ignoredBecause, 'measured_burn_below_floor');
+  assert.equal(detail.usedStatedActivity, 'moderate');
+});
+
+test('describeActivity and recompute agree when the app is fully set up', async () => {
+  // Two code paths producing the same explanation would eventually drift, and
+  // the drift would show up as the targets screen contradicting itself
+  // depending on which call it happened to use.
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    date: shift(TODAY, -(19 - i)),
+    activeCalories: 800,
+  }));
+  const sessions = [{ localDate: shift(TODAY, -2) }, { localDate: shift(TODAY, -9) }];
+  const prisma = fakePrisma({
+    goal: FULL_GOAL,
+    weight: WEIGHT_READING,
+    activityRows: rows,
+    sessions,
+  });
+
+  const written = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+  const read = await describeActivity({ prisma, userId: 1, localDate: TODAY });
+  assert.deepEqual(read, written.activityDetail);
+});
+
+test('describeActivity honours a caller-supplied measurement without querying', async () => {
+  // Lets the test double drive the band without 20 rows of fixture, and mirrors
+  // how a caller that already has the data may pass it in.
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+  const detail = await describeActivity({
+    prisma,
+    userId: 1,
+    localDate: TODAY,
+    measured: { days: 20, dailyBurnKcal: 800, sessionsPerWeek: 2, sessionsInWindow: 4, windowDays: 28 },
+  });
+  assert.equal(detail.isMeasured, true);
+  assert.equal(detail.windowDays, 28);
+  assert.equal(detail.sessionsPerWeek, 2);
+});
+
+test('recompute reports why measured activity was ignored', async () => {
+  // No data at all: the screen needs "still gathering" rather than a silent
+  // fallback that looks identical to "we used what you told us".
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+  const r = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+  assert.equal(r.activityIsMeasured, false);
+  assert.equal(r.activityDetail.usedStatedActivity, 'moderate');
+  assert.equal(r.activityDetail.daysObserved, 0);
+
+  // A watch that recorded almost nothing is a different case, and is named.
+  const broken = fakePrisma({
+    goal: FULL_GOAL,
+    weight: WEIGHT_READING,
+    activityRows: Array.from({ length: 20 }, (_, i) => ({
+      date: shift(TODAY, -(19 - i)),
+      activeCalories: 5,
+    })),
+  });
+  const r2 = await recomputeTargets({ prisma: broken, userId: 1, localDate: TODAY });
+  assert.equal(r2.activityIsMeasured, false);
+  assert.equal(r2.activityDetail.ignoredBecause, 'measured_burn_below_floor');
+  assert.equal(r2.activityDetail.usedStatedActivity, 'moderate');
+});
+
+test('a partial measured object does not crash the detail block', async () => {
+  // Callers and tests pass measured objects that predate activityDetail, and the
+  // detail block must report "unknown" for fields it was not given rather than
+  // throwing on a missing number.
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+  const r = await recomputeTargets({
+    prisma,
+    userId: 1,
+    localDate: TODAY,
+    measured: { hasWorkoutToday: true, days: 20, dailyBurnKcal: 600 },
+  });
+  assert.equal(r.written, true);
+  assert.equal(r.activityDetail.sessionsPerWeek, null);
+  assert.equal(r.activityDetail.windowDays, null);
+  assert.equal(r.targets.waterMl, 2450 + 500);
 });

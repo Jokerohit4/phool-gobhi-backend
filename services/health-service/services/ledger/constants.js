@@ -93,8 +93,18 @@ export const SAFETY = {
   kcalFloorMale: 1500,
   kcalFloorOther: 1200,
   // Nobody loses faster than this. The plan's own guard, and the one the
-  // intake screen states up front so the limit is not a surprise later.
+  // intake screen states out loud ("we'll never set a target faster than 0.75
+  // kg/week"), so it is an ABSOLUTE limit that does not scale with body
+  // weight.
   maxWeeklyLossKg: 0.75,
+  // The second, independent bound: about 1% of body weight a week. This is what
+  // makes a fixed deficit reckless for a 45 kg person and conservative for a
+  // 130 kg one, and it is the tighter of the two for anyone below ~143 kg.
+  //
+  // Kept separate from maxWeeklyLossKg on purpose. goalAdjustmentKcal enforces
+  // whichever is smaller, and collapsing them into one expression is what let
+  // a 200 kg user be told 1.05 kg/week by a screen promising 0.75.
+  maxWeeklyLossFractionOfBodyWeight: 0.01,
   // A run of very-low-intake days gets a gentle check-in rather than a red
   // candle. Not a diagnosis, not a block — a card.
   lowIntakeRunDays: 5,

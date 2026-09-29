@@ -46,6 +46,22 @@ model HealthConsent {
   // toggle for a scope that can change something. Offering "share with
   // your coach" today would imply a data flow that cannot happen.
   scopes        String[]  @default(["logs"])
+  // Which privacy-policy wording each scope was granted under, keyed by scope
+  // name ('nutrition', 'medical_records').
+  //
+  // HealthConsent.policyVersion above is the DEVICE-level grant and is not
+  // enough on its own: the ledger surfaces were added later, after people had
+  // already consented to device access, and those two consent prompts describe
+  // different data. Without this column there is no way to answer "which text
+  // did this person actually agree to when they turned on medical records?" —
+  // the scope array records THAT they agreed, and to nothing about what.
+  //
+  // This is the ledger equivalent of assistantPolicy.CURRENT_POLICY_VERSION,
+  // which already stores its version per grant. The difference is that the
+  // assistant's is server-stamped; this one has to be comparable against the
+  // version the client says it displayed, or a stale app could record consent
+  // to wording that was never on its screen.
+  scopeVersions Json       @default("{}")
 
   @@schema("health")
 }

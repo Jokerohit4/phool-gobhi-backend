@@ -1,6 +1,8 @@
 import {
   hasNutritionConsentService,
   hasMedicalRecordsConsentService,
+  getNutritionConsentService,
+  getMedicalRecordsConsentService,
   NUTRITION_SCOPE,
   MEDICAL_RECORDS_SCOPE,
 } from '../services/ledger/ledgerConsentService.js';
@@ -16,10 +18,28 @@ import {
 /// ledgerConsentService.js for why bundling them produces a consent screen
 /// people click through without reading.
 
-function check(hasConsent) {
+function check(hasConsent, readScope, scope) {
   return async (req, res, next) => {
     try {
       if (await hasConsent(req.userId)) return next();
+
+      // The scope check above can fail for two quite different reasons, and they
+      // need different messages. "You have never agreed to this" is an opt-in
+      // prompt. "You agreed, but the wording has changed since" is a review
+      // prompt for something the person already turned on. Collapsing them into
+      // one CONSENT_REQUIRED tells someone who deliberately enabled medical
+      // records that they never did, and invites them to press a button that is
+      // already on.
+      const state = await readScope(req.userId);
+      if (state.granted) {
+        return res.status(403).json({
+          error:
+            'The wording for this has been updated. Please review it to continue.',
+          code: 'LEDGER_POLICY_VERSION_MISMATCH',
+          currentVersion: state.currentVersion,
+        });
+      }
+
       return res.status(403).json({
         error: 'This is off for your account.',
         code: 'CONSENT_REQUIRED',
@@ -39,8 +59,18 @@ function check(hasConsent) {
   };
 }
 
-export const requireNutritionConsent = check(hasNutritionConsentService);
-export const requireMedicalRecordsConsent = check(hasMedicalRecordsConsentService);
+// Each gate gets the matching reader so it can tell "never agreed" from
+// "agreed to wording that has since been revised".
+export const requireNutritionConsent = check(
+  hasNutritionConsentService,
+  getNutritionConsentService,
+  NUTRITION_SCOPE,
+);
+export const requireMedicalRecordsConsent = check(
+  hasMedicalRecordsConsentService,
+  getMedicalRecordsConsentService,
+  MEDICAL_RECORDS_SCOPE,
+);
 
 /// GET on the consent status endpoints themselves must NOT be gated by these -
 /// you cannot ask someone whether they consented only once they have. The

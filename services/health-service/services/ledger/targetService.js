@@ -74,13 +74,122 @@ export async function latestWeightKg({ prisma, userId, localDate }) {
 }
 
 /**
+ * Counts real training sessions in a window, for the frequency tiebreaker.
+ *
+ * Only finished, non-rest sessions count. An open session is a session someone
+ * started and may have abandoned, and a rest day is a deliberate absence of
+ * training — neither is evidence of activity.
+ */
+async function countSessions({ prisma, userId, from, to }) {
+  const sessions = await prisma.workoutSession.findMany({
+    where: {
+      userId,
+      localDate: { gte: from, lte: to },
+      endedAt: { not: null },
+      type: { not: 'rest' },
+    },
+    select: { localDate: true },
+  });
+  return sessions;
+}
+
+/**
+ * Gathers the measured-activity inputs a target recompute needs.
+ *
+ * Two different questions are answered here and they are deliberately kept
+ * apart, because conflating them is what previously made every long-observed
+ * user look "very active":
+ *
+ *   - `days`  — how many days of the window actually carry a reading. This is
+ *               coverage, and it is the only thing the 14-day threshold should
+ *               be about. A user who syncs every day for a year and a user who
+ *               syncs every day for a fortnight have the same evidence.
+ *   - `sessionsPerWeek` — how often they train, normalised to a week regardless
+ *               of how long the window is. This is frequency, and it belongs
+ *               only in the band tiebreaker.
+ *
+ * Before this existed, `resolveActivity` passed the day count into
+ * `bandForMeasuredBurn`'s `avgSessionsPerWeek` slot, so the longer somebody
+ * measured the more intense they were scored. At a moderate 450 kcal/day, every
+ * window of 14 days or more returned "very_active", and the activity factor —
+ * and therefore the calorie target — was raised on the strength of a calendar
+ * artefact.
+ *
+ * `dailyBurnKcal` averages only over days that carry a reading, matching how
+ * the rest of the service treats this table: a day with no row is missing
+ * data, not a day of zero activity. Zero-filling would drag the average down
+ * and cut someone's target because their watch was off, which the
+ * `MIN_USABLE_MEASURED_BURN_KCAL` floor exists to prevent for the opposite
+ * reason.
+ */
+export async function gatherMeasuredActivity({ prisma, userId, localDate, windowDays }) {
+  const days = Number.isFinite(windowDays) && windowDays > 0
+    ? Math.floor(windowDays)
+    : MEASURED_ACTIVITY_THRESHOLD_DAYS;
+  const to = localDate;
+  const from = shiftLocalDate(localDate, -(days - 1));
+
+  const [rows, sessions] = await Promise.all([
+    prisma.dailyActivityMetric.findMany({
+      where: { userId, date: { gte: from, lte: to } },
+      select: { date: true, activeCalories: true },
+    }),
+    countSessions({ prisma, userId, from, to }),
+  ]);
+
+  const withBurn = rows.filter((r) => Number.isFinite(Number(r.activeCalories)));
+  const dailyBurnKcal = withBurn.length
+    ? withBurn.reduce((sum, r) => sum + Number(r.activeCalories), 0) / withBurn.length
+    : null;
+
+  const today = rows.find((r) => r.date === localDate);
+
+  return {
+    // Coverage, not the window length. A 30-day window in which the user
+    // connected their watch on 16 days reports 16, and 16 clears the threshold
+    // only because 16 days of reading really is 16 days of reading.
+    days: rows.length,
+    dailyBurnKcal,
+    // Frequency, normalised so a 28-day window and a 14-day window describing
+    // the same routine produce the same number.
+    sessionsPerWeek: days > 0 ? (sessions.length / days) * 7 : 0,
+    sessionsInWindow: sessions.length,
+    windowDays: days,
+    todayBurnKcal: today?.activeCalories != null ? Number(today.activeCalories) : null,
+    // Today's own session, not the window average: the water addend asks whether
+    // they are training right now, and averaging over a fortnight would answer
+    // "probably" on the wrong day.
+    hasWorkoutToday: sessions.some((s) => s.localDate === localDate),
+  };
+}
+
+/** Subtracts whole days from a 'YYYY-MM-DD' string, staying in that format. */
+function shiftLocalDate(localDate, deltaDays) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate)) return localDate;
+  const [y, m, d] = localDate.split('-').map(Number);
+  const shifted = new Date(Date.UTC(y, m - 1, d));
+  shifted.setUTCDate(shifted.getUTCDate() + deltaDays);
+  return shifted.toISOString().slice(0, 10);
+}
+
+/**
  * Decides whether measured activity may supersede the user's own guess.
  *
  * The plan's rule is 14 days of data. Before that the user's stated activity
  * stands, because a week of three logged walks is not evidence that someone
  * is "very active" and telling them to stop would be the service guessing.
+ *
+ * [sessionsPerWeek] is passed through separately from [measuredDays] on
+ * purpose: the threshold is about coverage, the band tiebreaker is about
+ * frequency, and they are different numbers.
  */
-export function resolveActivity({ goal, measuredBurnKcal, measuredDays, todayBurnKcal }) {
+export function resolveActivity({
+  goal,
+  measuredBurnKcal,
+  measuredDays,
+  sessionsPerWeek,
+  todayBurnKcal,
+}) {
   if (measuredDays < MEASURED_ACTIVITY_THRESHOLD_DAYS) {
     return { activity: goal?.activity ?? null, isMeasured: false, band: null };
   }
@@ -100,7 +209,7 @@ export function resolveActivity({ goal, measuredBurnKcal, measuredDays, todayBur
     };
   }
 
-  const band = bandForMeasuredBurn(measuredBurnKcal, measuredDays);
+  const band = bandForMeasuredBurn(measuredBurnKcal, sessionsPerWeek);
   return {
     activity: band ?? goal?.activity ?? null,
     isMeasured: Boolean(band),
@@ -144,6 +253,7 @@ export async function resolveInputs({ prisma, userId, localDate, measured }) {
     goal,
     measuredBurnKcal: measured?.dailyBurnKcal ?? null,
     measuredDays: measured?.days ?? 0,
+    sessionsPerWeek: measured?.sessionsPerWeek ?? 0,
     todayBurnKcal: measured?.todayBurnKcal ?? null,
   });
 
@@ -183,7 +293,16 @@ export async function resolveInputs({ prisma, userId, localDate, measured }) {
  * clobbering a number the user chose and is currently following.
  */
 export async function recomputeTargets({ prisma, userId, localDate, measured, rulesVersion }) {
-  const resolved = await resolveInputs({ prisma, userId, localDate, measured });
+  // Gathered here rather than in the controller. The controller never had the
+  // data to gather it from, so it passed nothing, `measured` was always
+  // undefined, and every recompute silently fell back to the user's own guess
+  // with `days: 0` — meaning the measured-activity switch the plan promises
+  // after 14 days could never actually fire. A caller that already has the
+  // measurements may still pass them, which is what keeps this testable.
+  const measuredActivity =
+    measured ?? (await gatherMeasuredActivity({ prisma, userId, localDate }));
+
+  const resolved = await resolveInputs({ prisma, userId, localDate, measured: measuredActivity });
   if (!resolved.ok) {
     return { written: false, skipped: 'missing_inputs', missing: resolved.missing, reasons: resolved.reasons };
   }
@@ -234,7 +353,93 @@ export async function recomputeTargets({ prisma, userId, localDate, measured, ru
     // Whether measured activity or the user's own guess produced the numbers,
     // so the targets screen can say which.
     activityIsMeasured: resolved.activity.isMeasured,
+    // Why measured activity did not take over, when it didn't. Without this the
+    // app cannot distinguish "still gathering data" from "your watch recorded
+    // nothing usable", and the two need different words: the first is a
+    // countdown, the second is a suggestion to check the device.
+    activityDetail: buildActivityDetail({
+      activity: resolved.activity,
+      statedActivity: resolved.goal.activity,
+      measured: measuredActivity,
+    }),
   };
+}
+
+/**
+ * Builds the "why these numbers?" payload, and nothing else.
+ *
+ * Extracted from recomputeTargets so a read can produce the same shape. The app
+ * used to call the recompute endpoint to obtain this, which made a screen load
+ * into a write: opening the targets page created a new NutritionTarget row
+ * every time, and did it even for a user whose target is hand-edited and must
+ * never be overwritten. An explanation is not a side effect, so it gets its own
+ * reader.
+ *
+ * Every field read defensively. `measured` is optional and tests pass
+ * deliberately partial objects, so a missing field is reported as unknown
+ * rather than treated as zero.
+ */
+function buildActivityDetail({ activity, statedActivity, measured }) {
+  return {
+    isMeasured: activity.isMeasured,
+    band: activity.band ?? null,
+    ignoredBecause: activity.ignoredBecause ?? null,
+    // The user's own answer, which is what was actually used. Reported so the
+    // screen can say "using what you told us" rather than implying the estimate
+    // came from data.
+    usedStatedActivity: statedActivity ?? null,
+    daysObserved: measured.days ?? null,
+    windowDays: measured.windowDays ?? null,
+    sessionsPerWeek: Number.isFinite(measured.sessionsPerWeek)
+      ? Number(measured.sessionsPerWeek.toFixed(2))
+      : null,
+    sessionsInWindow: measured.sessionsInWindow ?? null,
+    avgDailyActiveKcal: Number.isFinite(measured.dailyBurnKcal)
+      ? Math.round(measured.dailyBurnKcal)
+      : null,
+  };
+}
+
+/**
+ * Explains what activity the current numbers were built on, without writing
+ * anything.
+ *
+ * Deliberately answers for *any* state, including the two that return early from
+ * recomputeTargets:
+ *
+ *   - `user_edited` — the user typed their own numbers, so nothing will ever be
+ *     recomputed for them. Before this existed they got no explanation at all,
+ *     which is precisely backwards: the person with the least idea where a
+ *     number came from is the one who set it by hand.
+ *   - `missing_inputs` — no target exists yet, so "why these numbers?" has no
+ *     numbers, but the activity half still says whether a watch is being used.
+ *
+ * The stated activity is read straight from HealthGoal rather than via
+ * resolveInputs, because resolveInputs is a report on whether a target *can* be
+ * computed and this is a report on what is known regardless of that answer.
+ */
+export async function describeActivity({ prisma, userId, localDate, measured, windowDays }) {
+  const measuredActivity =
+    measured ?? (await gatherMeasuredActivity({ prisma, userId, localDate, windowDays }));
+
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { activity: true },
+  });
+
+  const activity = resolveActivity({
+    goal: { activity: goal?.activity ?? null },
+    measuredBurnKcal: measuredActivity.dailyBurnKcal ?? null,
+    measuredDays: measuredActivity.days ?? 0,
+    sessionsPerWeek: measuredActivity.sessionsPerWeek ?? 0,
+    todayBurnKcal: measuredActivity.todayBurnKcal ?? null,
+  });
+
+  return buildActivityDetail({
+    activity,
+    statedActivity: goal?.activity ?? null,
+    measured: measuredActivity,
+  });
 }
 
 export { SAFETY };

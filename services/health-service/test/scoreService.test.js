@@ -13,7 +13,7 @@ import {
 const TODAY = '2026-09-28';
 const USER = 7;
 
-function mockPrisma({ snapshots = [], goal = null, target = null, planItems = [], logs = [] } = {}) {
+function mockPrisma({ snapshots = [], goal = null, target = null, planItems = [], logs = [], sessions = [] } = {}) {
   const state = { created: [], updated: [] };
   const prisma = {
     state,
@@ -53,11 +53,134 @@ function mockPrisma({ snapshots = [], goal = null, target = null, planItems = []
     },
     planItem: { findMany: async () => planItems },
     foodLog: { findMany: async () => logs },
+    // where/select are honoured rather than ignored: gatherDayInputs relies on
+    // the `localDate` + `endedAt: { not: null }` filter to keep a user's whole
+    // session history from being loaded, and a fake that ignored the filter
+    // would let a regression in the query itself pass.
+    workoutSession: {
+      findMany: async ({ where, select }) => {
+        let rows = sessions.filter((s) => s.userId === (where?.userId ?? USER));
+        if (where?.localDate) rows = rows.filter((s) => s.localDate === where.localDate);
+        if (where?.endedAt?.not === null) rows = rows.filter((s) => s.endedAt != null);
+        return select ? rows.map((s) => ({ id: s.id, type: s.type, endedAt: s.endedAt })) : rows;
+      },
+    },
   };
   return prisma;
 }
 
 const TARGET = { kcal: 2000, proteinG: 120, carbsG: 220, fatG: 65, fibreG: 28, waterMl: 2800, micros: {} };
+
+// `schedule: 'daily'` is load-bearing: gatherDayInputs filters items through
+// isDueOn, and an item with no schedule falls through to the every-other-day
+// branch, which needs a createdAt anchor it does not have — so it would be
+// dropped before the engine ever saw it, and these tests would pass for the
+// wrong reason.
+function workoutItem(id, completions = []) {
+  return { id, kind: 'workout', title: 'Leg day', schedule: 'daily', active: true, endsOn: null, completions };
+}
+function doneOn(date) {
+  return [{ localDate: date, how: 'manual', late: false }];
+}
+function session(localDate, type = 'strength', endedAt = `${localDate}T10:00:00Z`) {
+  return { id: 99, userId: USER, localDate, type, endedAt };
+}
+const lineFor = (day, key) => day.breakdown.find((l) => l.key === key);
+
+// --- unplanned workouts --------------------------------------------------
+//
+// The engine has always had a POINTS.unplannedWorkout line, and it was
+// unreachable: nothing ever passed `unplannedWorkout`, so it defaulted to false
+// and the points were dead code. A user who trained on a rest day, or who
+// skipped the plan and trained anyway, got nothing for the session they did.
+
+test('a session on a rest day scores as an extra workout', async () => {
+  const prisma = mockPrisma({ target: TARGET, sessions: [session(TODAY)] });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.ok(lineFor(day, 'workout_unplanned'), 'the extra session is worth points');
+});
+
+test('an abandoned session scores nothing', async () => {
+  // endedAt is null on a draft the user started and walked away from. Paying for
+  // it would reward opening the app.
+  const prisma = mockPrisma({
+    target: TARGET,
+    sessions: [session(TODAY, 'strength', null)],
+  });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.equal(lineFor(day, 'workout_unplanned'), undefined);
+});
+
+test('a logged rest day is not an extra workout', async () => {
+  // type='rest' is the schema's own record of a deliberate rest day. Scoring it
+  // as extra effort would pay points for resting, in a system built so the
+  // score never punishes rest.
+  const prisma = mockPrisma({ target: TARGET, sessions: [session(TODAY, 'rest')] });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.equal(lineFor(day, 'workout_unplanned'), undefined);
+});
+
+test('a session on another day does not leak into this one', async () => {
+  const prisma = mockPrisma({
+    target: TARGET,
+    sessions: [session('2026-09-20'), session('2026-09-27')],
+  });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.equal(lineFor(day, 'workout_unplanned'), undefined);
+});
+
+test('completing the planned workout pays the planned rate, not the extra rate', async () => {
+  // Both lines are never on the same day, and this asserts the higher-value one
+  // wins — paying 8 for an "extra" workout the user already got 15 for would
+  // be double-paying for one session.
+  const prisma = mockPrisma({
+    target: TARGET,
+    planItems: [workoutItem(1, doneOn(TODAY))],
+    sessions: [session(TODAY)],
+  });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.ok(lineFor(day, 'item_done_1'), 'the planned item is paid');
+  assert.equal(lineFor(day, 'workout_unplanned'), undefined);
+});
+
+test('training when the plan said to train but it was never ticked off still pays', async () => {
+  // The distinction that was being lost. A scheduled workout that was never
+  // completed is not a workout done, so the session is genuinely extra — and
+  // this is the user the line exists for. Guarding on "was a workout scheduled"
+  // instead of "was one done" meant anyone with a workout item in their plan
+  // could never earn it, however they actually trained.
+  const prisma = mockPrisma({
+    target: TARGET,
+    planItems: [workoutItem(1)],          // scheduled, no completions
+    sessions: [session('2026-09-27')],
+  });
+  // closeDay, not previewDay: misses are only computed for a closed day
+  // (`closed: localDate < today`), so previewing today would show the extra
+  // workout with no miss against it and the assertion below would fail for a
+  // reason that has nothing to do with this feature.
+  const day = await closeDay(prisma, { userId: USER, localDate: '2026-09-27', today: TODAY });
+  assert.ok(lineFor(day, 'workout_unplanned'));
+  assert.equal(lineFor(day, 'item_done_1'), undefined, 'the unticked item is not paid');
+  // The missed item still costs points. An extra session does not buy off a
+  // missed plan item, or "just train instead" becomes the optimal strategy.
+  assert.ok(lineFor(day, 'workout_missed').points < 0);
+});
+
+test('an extra workout is worth less than the plan, always', async () => {
+  // The stated reason the rate is lower: the score must not reward ignoring the
+  // plan in favour of improvising.
+  const done = await previewDay(
+    mockPrisma({ target: TARGET, planItems: [workoutItem(1, doneOn(TODAY))], sessions: [session(TODAY)] }),
+    { userId: USER, localDate: TODAY, today: TODAY },
+  );
+  const extra = await previewDay(
+    mockPrisma({ target: TARGET, sessions: [session(TODAY)] }),
+    { userId: USER, localDate: TODAY, today: TODAY },
+  );
+  assert.ok(
+    lineFor(extra, 'workout_unplanned').points < lineFor(done, 'item_done_1').points,
+  );
+});
 
 // --- freezing --------------------------------------------------------------
 

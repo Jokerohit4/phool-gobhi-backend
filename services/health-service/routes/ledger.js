@@ -39,15 +39,35 @@ const consentGated = [...ledgerGated];
 // ---- Consent --------------------------------------------------------------
 
 router.get('/ledger/consent', ...consentGated, ledgerConsentCtrl.getConsent);
+// Current policy wording version on its own, so the app can render the prompt
+// before it has any consent state to show. Public within the ledger gate —
+// there is nothing user-specific in it.
+router.get('/ledger/consent/policy', ...consentGated, ledgerConsentCtrl.getPolicy);
 router.post('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.grantNutrition);
 router.delete('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.revokeNutrition);
 router.post('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.grantMedicalRecords);
 router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.revokeMedicalRecords);
 
+// ---- Intake ----------------------------------------------------------------
+
+// Gated on `nutrition` like the target routes, because intake exists to produce
+// a nutrition target. This is a deliberate consequence of that: answering "what
+// are you working towards, how old are you" is itself health data, and the
+// nutrition consent is what the user agreed to when they turned the food log on.
+router.get('/ledger/setup', ...nutrition, ledgerCtrl.getSetup);
+router.put('/ledger/setup', ...nutrition, ledgerCtrl.saveSetup);
+
 // ---- Targets --------------------------------------------------------------
 
 router.get('/ledger/targets', ...nutrition, ledgerCtrl.getTargets);
 router.post('/ledger/targets/recompute', ...nutrition, ledgerCtrl.recomputeTargets);
+// GET, and not a second POST, because this reads. It was previously served by
+// calling the recompute endpoint, which turned a screen load into a write.
+router.get(
+  '/ledger/targets/activity-detail',
+  ...nutrition,
+  ledgerCtrl.getTargetActivityDetail
+);
 
 // ---- Food -----------------------------------------------------------------
 

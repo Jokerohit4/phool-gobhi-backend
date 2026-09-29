@@ -20,6 +20,52 @@ const prisma = new PrismaClient();
 export const NUTRITION_SCOPE = 'nutrition';
 export const MEDICAL_RECORDS_SCOPE = 'medical_records';
 
+// The wording currently on the consent screens, and the only value a grant may
+// be recorded against.
+//
+// Bump this whenever the prompt text changes enough that agreeing to the new
+// version is a different decision from agreeing to the old one. A pure typo fix
+// does not need a bump; describing a new category of data does.
+//
+// Matches the app's kLedgerPolicyVersion. These are the same fact stated twice
+// and they have to agree: the app's copy of the constant describes the text it
+// renders, this one decides what may be recorded, and if they drift every grant
+// from the newer build is refused with no way for the user to proceed. The date
+// is when the copy was written, not when this check was added — the copy has
+// not changed, so neither has the version. Adding the check does not retroactively
+// make the old wording a new one.
+export const LEDGER_POLICY_VERSION = '2026-09-27';
+
+// Reads the per-scope version map, tolerating both shapes Prisma can hand back
+// for a Json column and the empty default on rows written before the column
+// existed.
+function scopeVersionsOf(consent) {
+  const raw = consent?.scopeVersions;
+  if (!raw) return {};
+  // Prisma returns parsed JSON for Json columns on Postgres, but a string is
+  // what a raw query or a future driver change would produce, and a
+  // JSON.parse crash in a consent check would be a very bad place to find out.
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+}
+
+// True when a scope was granted under wording that is no longer current.
+//
+// A scope with no recorded version is ALSO stale. Rows predating the column are
+// exactly the ones where we cannot prove what the user saw, so the honest
+// answer is that they need to agree again — the opposite inference, treating
+// them as current, is what lets an unprovable grant stand forever.
+export function isScopeStale(consent, scope) {
+  return scopeVersionsOf(consent)[scope] !== LEDGER_POLICY_VERSION;
+}
+
 async function readConsent(userId) {
   const consent = await prisma.healthConsent.findUnique({ where: { userId } });
   if (!consent || consent.revokedAt) return null;
@@ -30,6 +76,22 @@ async function hasScope(userId, scope) {
   const consent = await readConsent(userId);
   if (!consent) return false;
   return (consent.scopes || []).includes(scope);
+}
+
+/// Whether [scope] is granted AND was agreed to under the wording that is
+/// current today.
+///
+/// The gate uses this rather than hasScope. A grant under superseded wording is
+/// not consent to what the surface now does, and continuing to collect on the
+/// strength of it is the exact failure the version field exists to prevent — so
+/// a stale grant has to stop the data, not merely annotate the settings screen.
+/// The settings screen can still show it, because telling someone "you agreed
+/// to this in March" is informative; writing more rows on that basis is not.
+async function hasCurrentScope(userId, scope) {
+  const consent = await readConsent(userId);
+  if (!consent) return false;
+  if (!(consent.scopes || []).includes(scope)) return false;
+  return !isScopeStale(consent, scope);
 }
 
 async function addScope(userId, scope, { privacyVersion } = {}) {
@@ -46,20 +108,38 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
     };
   }
 
+  // The client sends the version it rendered. Refusing a mismatch is the whole
+  // reason the column exists: it stops a stale app from recording agreement to
+  // copy that was never on its screen.
+  if (privacyVersion !== LEDGER_POLICY_VERSION) {
+    throw {
+      status: 409,
+      error:
+        privacyVersion
+          ? `This consent copy has been updated. Please reopen the screen to see the current version (${LEDGER_POLICY_VERSION}).`
+          : 'The consent screen did not report which version it displayed. Please reopen it and try again.',
+      code: 'LEDGER_POLICY_VERSION_MISMATCH',
+      currentVersion: LEDGER_POLICY_VERSION,
+    };
+  }
+
   const scopes = new Set(consent.scopes || []);
   scopes.add(scope);
+  // Written together with the scope, in one update. Recording the scope without
+  // the version is what left this unauditable in the first place: the grant
+  // exists, and nothing says which wording it was given under.
+  const scopeVersions = { ...scopeVersionsOf(consent), [scope]: privacyVersion };
   await prisma.healthConsent.update({
     where: { userId },
-    data: { scopes: [...scopes] },
+    data: { scopes: [...scopes], scopeVersions },
   });
 
   return {
     granted: true,
     grantedAt: consent.grantedAt,
-    // The wording the client showed. Falls back to the standing health policy
-    // version so the response always carries something auditable, matching
-    // how the cycle and location-routes services record their grant.
-    privacyVersion: privacyVersion || consent.policyVersion || null,
+    // Echoed from the value now on the row, not from the request, so the
+    // response cannot describe a grant that was not written.
+    privacyVersion,
   };
 }
 
@@ -96,10 +176,17 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
 async function removeScope(userId, scope, { purge = false } = {}) {
   const consent = await prisma.healthConsent.findUnique({ where: { userId } });
   if (consent) {
+    // The recorded version goes with the scope. Leaving it behind would make a
+    // later re-grant look like it had never needed consent, because the stale
+    // check reads this map and would find a current version sitting there for a
+    // scope the user had already withdrawn.
+    const scopeVersions = { ...scopeVersionsOf(consent) };
+    delete scopeVersions[scope];
     await prisma.healthConsent.update({
       where: { userId },
       data: {
         scopes: (consent.scopes || []).filter((s) => s !== scope),
+        scopeVersions,
       },
     });
   }
@@ -146,19 +233,42 @@ async function removeScope(userId, scope, { purge = false } = {}) {
   return { granted: false, purged: Boolean(purge) };
 }
 
-async function readScope(userId, scope, privacyVersion) {
+async function readScope(userId, scope) {
   const consent = await readConsent(userId);
   if (!consent) return { granted: false };
+  const recorded = scopeVersionsOf(consent)[scope] ?? null;
   return {
     granted: (consent.scopes || []).includes(scope),
     grantedAt: consent.grantedAt,
-    privacyVersion: privacyVersion || consent.policyVersion || null,
+    // The version recorded for THIS scope, not the device-level
+    // HealthConsent.policyVersion. Those describe different prompts, and
+    // reporting the device one here would tell a user their medical-records
+    // grant was made under a version from before the medical-records screen
+    // existed.
+    privacyVersion: recorded,
+    // Lets the app re-prompt without a second round trip: a scope can be
+    // granted and still need asking again if the wording changed since.
+    needsReconsent: isScopeStale(consent, scope),
+    // What the gate tells an app whose data request was refused for this scope,
+    // so it can offer "update and review" rather than a bare refusal. Distinct
+    // from privacyVersion, which describes the wording actually on record.
+    currentVersion: LEDGER_POLICY_VERSION,
   };
 }
 
+// These two are what the data routes are gated on, and they require the
+// wording to be current as well as the scope to be present. Renamed apart from
+// hasScope so a future caller asking "has this person ever agreed to this?" gets
+// the literal answer rather than the stricter one by accident.
 export const hasNutritionConsentService = (userId) =>
-  hasScope(userId, NUTRITION_SCOPE);
+  hasCurrentScope(userId, NUTRITION_SCOPE);
 export const hasMedicalRecordsConsentService = (userId) =>
+  hasCurrentScope(userId, MEDICAL_RECORDS_SCOPE);
+
+// The unqualified question, for callers that want presence alone.
+export const hasNutritionScopeService = (userId) =>
+  hasScope(userId, NUTRITION_SCOPE);
+export const hasMedicalRecordsScopeService = (userId) =>
   hasScope(userId, MEDICAL_RECORDS_SCOPE);
 
 export const grantNutritionConsentService = (userId, opts) =>
@@ -171,7 +281,8 @@ export const revokeNutritionConsentService = (userId, opts) =>
 export const revokeMedicalRecordsConsentService = (userId, opts) =>
   removeScope(userId, MEDICAL_RECORDS_SCOPE, opts);
 
-export const getNutritionConsentService = (userId, privacyVersion) =>
-  readScope(userId, NUTRITION_SCOPE, privacyVersion);
-export const getMedicalRecordsConsentService = (userId, privacyVersion) =>
-  readScope(userId, MEDICAL_RECORDS_SCOPE, privacyVersion);
+export const getNutritionConsentService = (userId) =>
+  readScope(userId, NUTRITION_SCOPE);
+export const getMedicalRecordsConsentService = (userId) =>
+  readScope(userId, MEDICAL_RECORDS_SCOPE);
+export { LEDGER_POLICY_VERSION as CURRENT_LEDGER_POLICY_VERSION };

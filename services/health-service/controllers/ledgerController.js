@@ -2,6 +2,7 @@ import * as nutritionService from '../services/ledger/nutritionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as targetService from '../services/ledger/targetService.js';
+import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
@@ -35,6 +36,80 @@ function handle(fn) {
 
 const isNum = (v) => v != null && v !== '' && Number.isFinite(Number(v));
 
+// ---- Intake ----------------------------------------------------------------
+
+// The setup wizard's read side. Answers "what do you still need from me?", which
+// is what lets the screen ask only for what is missing instead of re-asking for
+// a height, weight and age the user has already given.
+export const getSetup = handle(async (req) => {
+  return intakeService.getSetupState({
+    prisma,
+    userId: req.userId,
+    localDate: req.query?.localDate,
+  });
+});
+
+export const saveSetup = async (req, res) => {
+  try {
+    const out = await intakeService.saveIntake({
+      prisma,
+      userId: req.userId,
+      input: req.body || {},
+      localDate: req.body?.localDate || req.query?.localDate,
+    });
+
+    // A 422 with per-field messages, so the form can mark the offending inputs
+    // rather than showing one generic failure and losing what was typed. A 200
+    // here would let a client treat a rejected save as a success.
+    if (out.skipped === 'invalid') {
+      return res.status(422).json({
+        error: 'Please check the highlighted answers.',
+        code: 'INTAKE_INVALID',
+        errors: out.errors,
+      });
+    }
+
+    // Also a refusal, and also not a 200. The request was well-formed and
+    // individually valid — the target and the date just cannot both be honoured
+    // — so the screen needs its own copy and the `earliestDate` to offer, which
+    // the generic validation branch would throw away.
+    if (out.skipped === 'target_too_aggressive') {
+      // Recorded before the early return, because health_intake_saved never fires
+      // for a refused submission. Without this, a user our own safety cap turns
+      // away is indistinguishable from one who abandoned the wizard — the two
+      // need opposite responses. limitedBy says which bound actually applied, so
+      // a cap that is too tight for most users is visible rather than inferred.
+      track('health_targets_pace_rejected', req.userId, {
+        code: out.pace?.code || null,
+        limited_by: out.pace?.limitedBy || null,
+        weeks_needed: out.pace?.weeksNeeded ?? null,
+        max_weekly_loss_kg: out.pace?.maxWeeklyLossKg ?? null,
+      });
+      return res.status(422).json({
+        error: out.pace.error,
+        code: out.pace.code,
+        pace: out.pace,
+      });
+    }
+
+    // Shape only: which fields were answered, whether a weight became a
+    // reading. Never the values themselves — a body weight has no business in
+    // analytics.
+    track('health_intake_saved', req.userId, {
+      skipped: out.skipped || null,
+      hasGoal: out.written === true,
+      weightWritten: out.weightWritten === true,
+    });
+    return res.json({ data: out });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error('[ledger-intake]', err);
+    return res
+      .status(status)
+      .json({ error: err.error || err.message || 'Server error', code: err.code });
+  }
+};
+
 // ---- Targets --------------------------------------------------------------
 
 // Recomputes from the weight/height/activity actually on file, so a user who
@@ -54,6 +129,23 @@ export const recomputeTargets = handle(async (req) => {
     skipped: out?.skipped || null,
   });
   return out;
+});
+
+// A pure read of "where did these numbers come from", and the reason the app
+// does not POST to /targets/recompute to get it: doing that made opening the
+// targets screen create a NutritionTarget row on every visit, and it could never
+// work for a user whose target is `user_edited`, because the recompute is
+// refused precisely in that case - leaving the one user who set their own
+// numbers with no explanation of them.
+//
+// Returns the detail even when no target exists at all. The activity half is
+// still true and worth showing, and a 404 here would force the client to guess.
+export const getTargetActivityDetail = handle(async (req) => {
+  return targetService.describeActivity({
+    prisma,
+    userId: req.userId,
+    localDate: req.query?.localDate,
+  });
 });
 
 export const getTargets = handle(async (req) => {
@@ -153,22 +245,46 @@ export const deleteFoodLog = handle(async (req) =>
   nutritionService.deleteLog(prisma, req.userId, req.params.id),
 );
 
-export const saveMeal = handle(async (req) =>
-  nutritionService.saveMeal(prisma, { userId: req.userId, ...(req.body || {}) }),
-);
+export const saveMeal = handle(async (req) => {
+  const b = req.body || {};
+  const out = await nutritionService.saveMeal(prisma, { userId: req.userId, ...b });
+  // Snapshotting a day as reusable is a distinct decision from logging a food,
+  // and it is the one that predicts repeat use. Without this event the saved-meal
+  // feature was entirely invisible, so "saved a meal" and "re-logged one" could
+  // not be separated from users who simply never opened the sheet.
+  track('health_saved_meal_created', req.userId, {
+    slot: b.slot || null,
+    line_count: Array.isArray(out?.lines) ? out.lines.length : null,
+  });
+  return out;
+});
 
 export const listSavedMeals = handle(async (req) =>
   nutritionService.listSavedMeals(prisma, req.userId),
 );
 
-export const logSavedMeal = handle(async (req) =>
-  nutritionService.logSavedMeal(prisma, {
+export const logSavedMeal = handle(async (req) => {
+  const b = req.body || {};
+  const out = await nutritionService.logSavedMeal(prisma, {
     userId: req.userId,
     savedMealId: req.params.id,
-    localDate: req.body?.localDate,
-    slot: req.body?.slot,
-  }),
-);
+    localDate: b.localDate,
+    slot: b.slot,
+  });
+  // Same event as the search path, tagged by origin, so foods logged is one
+  // funnel with a source split rather than two events that have to be summed
+  // correctly by hand. The counts matter because a repeat is many foods in one
+  // request: counting it as one food would understate the feature, and
+  // skipped_count > 0 means foods left the catalogue after the meal was saved,
+  // which the client surfaces as a partial-write warning.
+  track('health_food_logged', req.userId, {
+    slot: b.slot || null,
+    source: 'saved_meal',
+    logged_count: out?.logged ?? null,
+    skipped_count: Array.isArray(out?.skipped) ? out.skipped.length : null,
+  });
+  return out;
+});
 
 // ---- Plan ----------------------------------------------------------------
 

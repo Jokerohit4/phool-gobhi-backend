@@ -30,6 +30,11 @@ const PLAN_ITEMS = [
 
 // A Tuesday, ISO weekday 2.
 const TUE = '2026-09-29';
+// A Wednesday, ISO weekday 3. The workout item is scheduled '1,3,5', so a
+// Tuesday is NOT a day it is due — which is easy to miss when picking a date
+// for a workout test, and silently turns an assertion about a completed
+// workout into one about a day with no workout scheduled.
+const WED = '2026-09-30';
 // A Sunday, ISO weekday 7 — the rest day.
 const SUN = '2026-10-04';
 
@@ -460,4 +465,78 @@ test('a workout IS charged on a day it was scheduled and missed', () => {
   assert.ok(miss, 'expected a missed workout on a scheduled day');
   assert.equal(miss.points, POINTS.plannedWorkoutMissed);
   assert.ok(miss.points < 0);
+});
+
+// --- planned vs unplanned workouts (engine level) ---------------------------
+//
+// scoreService.test.js covers this from the service side, where `unplannedWorkout`
+// is derived and so is only ever true when no planned workout was completed. That
+// leaves the engine's own guard untested: nothing anywhere can currently hand the
+// engine `unplannedWorkout: true` together with `hasPlannedWorkoutDone: true`.
+// So the pair is asserted here directly, where both flags are inputs.
+//
+// The engine guard is worth keeping even so. scoreService computing the flag
+// correctly today is not a promise that the two can never disagree, and a
+// double-paid day is exactly the kind of number a user would screenshot.
+
+test('an extra workout is paid when the plan had no workout done', () => {
+  const r = computeEarns({
+    planItems: [],
+    completions: [],
+    targets: null,
+    totals: null,
+    localDate: TUE,
+    hasPlannedWorkout: false,
+    hasPlannedWorkoutDone: false,
+    unplannedWorkout: true,
+  });
+  const extra = r.find((l) => l.key === 'workout_unplanned');
+  assert.ok(extra, 'a session on a day with no planned workout is extra');
+  assert.equal(extra.points, POINTS.unplannedWorkout);
+});
+
+test('an extra workout is NOT paid on top of a completed planned one', () => {
+  // The double-pay case. Both flags true must yield one workout line, not two:
+  // 15 for the plan item and 8 for "extra" would be 23 points for one session.
+  const workout = PLAN_ITEMS.find((i) => i.kind === 'workout');
+  const r = computeEarns({
+    planItems: [workout],
+    completions: [{ planItemId: workout.id }],
+    targets: null,
+    totals: null,
+    localDate: WED,
+    hasPlannedWorkout: true,
+    hasPlannedWorkoutDone: true,
+    unplannedWorkout: true,
+  });
+  const workoutLines = r.filter((l) => l.kind === 'workout');
+  assert.equal(workoutLines.length, 1, 'exactly one workout line, never two');
+  assert.equal(workoutLines[0].key, `item_done_${workout.id}`);
+  assert.equal(r.find((l) => l.key === 'workout_unplanned'), undefined);
+});
+
+test('an extra workout is paid when a workout was scheduled but never completed', () => {
+  // The distinction the two flags exist for. "Scheduled" and "done" are
+  // different questions, and guarding on the wrong one is what made the extra
+  // workout unreachable for anyone with a workout item in their plan.
+  const workout = PLAN_ITEMS.find((i) => i.kind === 'workout');
+  const r = computeEarns({
+    planItems: [workout],
+    completions: [],
+    targets: null,
+    totals: null,
+    localDate: WED,
+    hasPlannedWorkout: true,
+    hasPlannedWorkoutDone: false,
+    unplannedWorkout: true,
+  });
+  assert.ok(r.find((l) => l.key === 'workout_unplanned'));
+  assert.equal(r.find((l) => l.key === `item_done_${workout.id}`), undefined);
+});
+
+test('the extra workout rate stays below the planned rate', () => {
+  // The stated design reason: the score must never pay more for improvising
+  // than for following the plan. If someone retunes these constants, this fails
+  // rather than quietly making skipping the plan the better strategy.
+  assert.ok(POINTS.unplannedWorkout < POINTS.plannedWorkoutDone);
 });

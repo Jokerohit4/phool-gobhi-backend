@@ -17,14 +17,29 @@ function handle(fn) {
     } catch (err) {
       const status = err.status || 500;
       if (status >= 500) console.error('[ledger-consent]', err);
-      return res
-        .status(status)
-        .json({ error: err.error || err.message || 'Server error', code: err.code });
+      return res.status(status).json({
+        error: err.error || err.message || 'Server error',
+        code: err.code,
+        // A version mismatch is only actionable if the app learns which version
+        // it needs. Without this the 409 is a dead end: the user is told the
+        // copy changed and given no way to get the new copy.
+        ...(err.currentVersion ? { currentVersion: err.currentVersion } : {}),
+      });
     }
   };
 }
 
+// The current policy version, served alongside the state. The app needs it to
+// render the prompt and to send the matching version back on grant, so it
+// cannot be a value the app hardcodes and hopes stays in step — that
+// arrangement is what let a stale app record consent to wording that was never
+// on its screen. One server-owned value, read by everyone.
+export const getPolicy = handle(async () => ({
+  version: ledgerConsent.CURRENT_LEDGER_POLICY_VERSION,
+}));
+
 export const getConsent = handle(async (req) => ({
+  version: ledgerConsent.CURRENT_LEDGER_POLICY_VERSION,
   nutrition: await ledgerConsent.getNutritionConsentService(req.userId),
   medicalRecords: await ledgerConsent.getMedicalRecordsConsentService(req.userId),
 }));
@@ -33,7 +48,8 @@ export const grantNutrition = handle(async (req) => {
   const out = await ledgerConsent.grantNutritionConsentService(req.userId, {
     // The client sends the version it displayed, so a stale app showing an old
     // copy cannot record consent to wording the person never saw. The service
-    // rejects a mismatch.
+    // rejects a mismatch with a 409 — it did not used to, despite this comment
+    // saying so, and the version was never persisted at all.
     privacyVersion: req.body?.privacyVersion,
   });
   track('health_nutrition_consent_granted', req.userId, { version: req.body?.privacyVersion || null });

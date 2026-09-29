@@ -4,8 +4,10 @@ import { serializeDecimals } from '../utils/serializeDecimals.js';
 const METRICS = Object.keys(biometricService.METRIC_UNITS);
 const SOURCES = ['manual', 'healthkit', 'health_connect'];
 
+// Delegates to the service so the edge and the service agree on one rule.
+// A second, looser copy of this check here is how the two drift apart.
 function badDate(value) {
-  return value !== undefined && value !== null && !/^\d{4}-\d{2}-\d{2}$/.test(value);
+  return biometricService.validateLocalDate(value) !== null;
 }
 
 // Accepts either a single {metric, value} or {entries: [...]} — the Fitness+
@@ -13,15 +15,15 @@ function badDate(value) {
 // sends several in one round trip.
 export const upsertEntries = async (req, res) => {
   try {
-    const { metric, value, localDate, source, entries } = req.body || {};
-    if (badDate(localDate)) return res.status(400).json({ error: 'localDate must be YYYY-MM-DD' });
+    const { metric, value, localDate, source, unit, entries } = req.body || {};
+    if (badDate(localDate)) return res.status(400).json({ error: biometricService.validateLocalDate(localDate) });
     if (source !== undefined && !SOURCES.includes(source)) {
       return res.status(400).json({ error: `source must be one of: ${SOURCES.join(', ')}` });
     }
 
     const list = Array.isArray(entries) && entries.length > 0
       ? entries
-      : (metric !== undefined ? [{ metric, value, localDate, source }] : []);
+      : (metric !== undefined ? [{ metric, value, localDate, source, unit }] : []);
     if (list.length === 0) {
       return res.status(400).json({ error: 'Provide a metric + value, or a non-empty entries array' });
     }
@@ -31,13 +33,17 @@ export const upsertEntries = async (req, res) => {
         return res.status(400).json({ error: `metric must be one of: ${METRICS.join(', ')}` });
       }
       if (badDate(entry.localDate)) {
-        return res.status(400).json({ error: 'localDate must be YYYY-MM-DD' });
+        return res.status(400).json({ error: biometricService.validateLocalDate(entry.localDate) });
       }
       if (entry.source !== undefined && !SOURCES.includes(entry.source)) {
         return res.status(400).json({ error: `source must be one of: ${SOURCES.join(', ')}` });
       }
       const problem = biometricService.validateMetricValue(entry.metric, entry.value);
       if (problem) return res.status(400).json({ error: problem });
+      // Unit is checked after the value, so a client that sent both gets told
+      // about the number first if both are wrong.
+      const unitProblem = biometricService.validateUnit(entry.metric, entry.unit);
+      if (unitProblem) return res.status(400).json({ error: unitProblem });
     }
 
     const saved = await biometricService.upsertManyService(req.userId, list, { localDate, source });
@@ -78,7 +84,7 @@ export const deleteEntry = async (req, res) => {
     if (!METRICS.includes(metric)) {
       return res.status(400).json({ error: `metric must be one of: ${METRICS.join(', ')}` });
     }
-    if (badDate(localDate)) return res.status(400).json({ error: 'localDate must be YYYY-MM-DD' });
+    if (badDate(localDate)) return res.status(400).json({ error: biometricService.validateLocalDate(localDate) });
     await biometricService.deleteEntryService(req.userId, metric, localDate);
     res.json({ data: { deleted: true } });
   } catch (err) {
