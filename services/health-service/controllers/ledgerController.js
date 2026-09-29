@@ -399,6 +399,47 @@ export const setCalmMode = handle(async (req) =>
   scoreService.setCalmMode(prisma, { userId: req.userId, calmMode: req.body?.calmMode === true }),
 );
 
+// Pause: the score's off-ramp. Today comes from the query for the same reason
+// every other ledger route takes it that way - the user's day is their own, and
+// the server's calendar is not theirs.
+//
+// `today` is validated here, which the other ledger routes do not do, and the
+// reason is specific rather than general. Everywhere else a malformed localDate
+// produces a harmless odd result. Here it is written to the goal: a pause
+// starting on "2026-13-45" would never match a real day, so the user would press
+// pause, be told it worked, and find their score still falling. That is a lie
+// from the API, so it is refused at the boundary. The service checks again,
+// because it is the thing that actually writes the column and it is also called
+// directly by tests.
+//
+// The validator is the service's, imported rather than reimplemented: a regex
+// here and a stricter check there is exactly how a boundary ends up accepting
+// what the thing it guards rejects.
+function requireToday(value) {
+  if (!scoreService.isIsoDay(value)) {
+    const err = new Error('today must be YYYY-MM-DD');
+    err.status = 400;
+    throw err;
+  }
+  return String(value);
+}
+
+export const getPause = handle(async (req) =>
+  scoreService.getPauseState(prisma, { userId: req.userId, today: requireToday(req.query?.today) }),
+);
+
+export const setPause = handle(async (req) =>
+  scoreService.setPause(prisma, {
+    userId: req.userId,
+    days: num(req.body?.days),
+    today: requireToday(req.body?.today || req.query?.today),
+  }),
+);
+
+export const clearPause = handle(async (req) =>
+  scoreService.clearPause(prisma, { userId: req.userId }),
+);
+
 // Previewing today writes nothing, so this is safe to call on every screen
 // render. Closing a day is the only thing that freezes one, and it is
 // idempotent.

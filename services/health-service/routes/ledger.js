@@ -129,6 +129,9 @@ router.get('/ledger/score', ...nutrition, ledgerCtrl.getScoreSeries);
 router.get('/ledger/score/calm', ...nutrition, ledgerCtrl.getCalmSeries);
 router.get('/ledger/score/safety', ...nutrition, ledgerCtrl.getSafetyFlag);
 router.put('/ledger/score/calm-mode', ...nutrition, ledgerCtrl.setCalmMode);
+router.get('/ledger/score/pause', ...nutrition, ledgerCtrl.getPause);
+router.put('/ledger/score/pause', ...nutrition, ledgerCtrl.setPause);
+router.delete('/ledger/score/pause', ...nutrition, ledgerCtrl.clearPause);
 router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewScore);
 router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScoreDay);
 

@@ -25,6 +25,19 @@ export const DAILY_MAX_LOSS = 40;
 // the plan, and a backfilled tick did not.
 export const LATE_LOGGING_WINDOW_DAYS = 2;
 
+// The longest a pause may run, in days, inclusive of the day it starts.
+//
+// Capped, not unlimited, and the cap is the point. An uncapped pause is a way
+// to stop the score from ever going down again, which is exactly the thing the
+// score exists to do - a user could pause the day after every bad week and the
+// line would stop being a record of anything while still looking like one.
+// Fourteen covers a genuine illness, an injury, a holiday and a slow patch,
+// which is the range this is for.
+//
+// Enforced in scoreService.setPause rather than only in the client, so calling
+// the endpoint directly cannot buy a longer pause than the app offers.
+export const MAX_PAUSE_DAYS = 14;
+
 export const POINTS = {
   // Weighted highest, and deliberately so. Of everything in a plan, "did I
   // take the thing my doctor told me to take" is the one with a consequence

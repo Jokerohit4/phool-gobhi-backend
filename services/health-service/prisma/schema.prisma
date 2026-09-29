@@ -1190,6 +1190,25 @@ model HealthGoal {
   // the same numbers; calm mode only changes how they are painted, so toggling
   // it can never rewrite a stored snapshot or change a user's total.
   calmMode           Boolean        @default(false)
+  // A pause is the score's off-ramp, and it exists because a cumulative line
+  // that only ever moves down has no exit for the exact people who most need
+  // to come back: someone ill, injured, travelling, or simply in a bad stretch.
+  // Without it the comeback nudge is asking a user who is already being
+  // punished every day to also respond to a notification.
+  //
+  // A paused day is NEUTRAL, not skipped: it earns nothing, is charged no
+  // misses, and the chain passes through it unchanged, so a flat snapshot row is
+  // still written and the next day resumes from the same close. The pause stays
+  // visible in the series rather than being hidden, so a flat stretch is
+  // explained by the pause instead of looking like the app lost the user's data.
+  //
+  // Inclusive on both ends, and both are the user's local day string, the same
+  // convention as BiometricEntry.localDate. PausedUntil is capped at start +
+  // MAX_PAUSE_DAYS by scoreService.setPause - the cap lives in the service, not
+  // only in the client, so the score cannot be paused indefinitely by calling
+  // the API directly.
+  pausedFrom         String?
+  pausedUntil        String?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
@@ -1567,7 +1586,13 @@ model ScoreDaySnapshot {
   // [{ key, label, kind, points, detail }] — every line, earned and lost.
   breakdown    Json
   rulesVersion String
-  closedAt     DateTime @default(now())
+  // A day inside a pause. The OHLC are all equal on such a day and the breakdown
+  // is empty, so this flag is what separates "paused" from "a day where nothing
+  // happened" - the second is a real 0, the first is an absence. The two must
+  // never be confused: a user who paused through illness and a user who did
+  // nothing produce the same chart shape unless this column is read.
+  paused Boolean @default(false)
+  closedAt DateTime @default(now())
 
   @@unique([userId, localDate])
   @@index([userId, localDate])

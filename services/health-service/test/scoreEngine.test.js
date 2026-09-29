@@ -540,3 +540,119 @@ test('the extra workout rate stays below the planned rate', () => {
   // rather than quietly making skipping the plan the better strategy.
   assert.ok(POINTS.unplannedWorkout < POINTS.plannedWorkoutDone);
 });
+
+// --- Pause ------------------------------------------------------------------
+//
+// A paused day must be neutral, and "neutral" has a specific meaning that is
+// easy to get wrong in a way no assertion about the total would catch. It is
+// not a day worth zero: it is a day that was never scored. The difference shows
+// up in the breakdown, which for a paused day is empty rather than full of
+// zero-point lines, and in the `paused` flag, which is the only thing that tells
+// a reader this flat candle is not a user who did nothing.
+
+const PAUSED = { paused: true };
+const FULL_PLAN = [
+  { id: 1, kind: 'workout', title: 'Leg day', schedule: 'daily', active: true, endsOn: null, completions: [] },
+  { id: 2, kind: 'habit', title: '8k steps', schedule: 'daily', active: true, endsOn: null, completions: [] },
+];
+const NO_TARGETS = null;
+
+test('a paused day earns nothing even with a plan and nothing done', () => {
+  // The plan is fully scheduled and fully incomplete, which on a normal day is
+  // the most negative day the engine can produce. Paused, it must produce
+  // nothing at all.
+  const day = computeDay({
+    localDate: '2026-09-29',
+    previousClose: 120,
+    planItems: FULL_PLAN,
+    completions: [],
+    targets: NO_TARGETS,
+    totals: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fibreG: 0, waterMl: 0 },
+    closed: true,
+    ...PAUSED,
+  });
+  assert.equal(day.grossGain, 0);
+  assert.equal(day.grossLoss, 0);
+});
+
+test('a paused day is not a day worth zero - it has no breakdown at all', () => {
+  // This is the assertion that distinguishes a pause from a bad day. A zero
+  // earned day would carry the plan's misses at 0 points, which reads as "you
+  // were charged nothing" rather than "you were not scored", and would still
+  // list every workout you did not do.
+  const day = computeDay({
+    localDate: '2026-09-29',
+    previousClose: 120,
+    planItems: FULL_PLAN,
+    completions: [],
+    targets: NO_TARGETS,
+    totals: { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fibreG: 0, waterMl: 0 },
+    closed: true,
+    ...PAUSED,
+  });
+  assert.deepEqual(day.breakdown, []);
+  assert.equal(day.paused, true);
+});
+
+test('a paused day passes the chain through unchanged', () => {
+  // open == high == low == close, so the next real day resumes from the close
+  // the user last earned instead of from a stale value. A pause that lowered
+  // the high/low band would draw a candle and imply a dip that never happened.
+  const day = computeDay({
+    localDate: '2026-09-29',
+    previousClose: 314,
+    closed: true,
+    ...PAUSED,
+  });
+  assert.equal(day.open, 314);
+  assert.equal(day.high, 314);
+  assert.equal(day.low, 314);
+  assert.equal(day.close, 314);
+});
+
+test('a paused day ignores the caps rather than being clamped by them', () => {
+  // A paused day is not subject to DAILY_MAX_GAIN/LOSS at all, because it never
+  // accumulates a gain or a loss to cap. Asserted indirectly: a paused day
+  // reports capped=false even though gain and loss are both trivially inside
+  // the caps, which is the only honest value for a day that was not scored.
+  const day = computeDay({ localDate: '2026-09-29', previousClose: 0, closed: true, ...PAUSED });
+  assert.equal(day.capped, false);
+});
+
+test('a day that is not paused says so, rather than leaving it undefined', () => {
+  // `paused` is definite on both paths on purpose. A reader that has to treat
+  // missing as false is one edit away from treating missing as true, and the
+  // failure that causes is a chart that claims every ordinary day was paused.
+  const day = computeDay({
+    localDate: '2026-09-29',
+    previousClose: 0,
+    planItems: [],
+    completions: [],
+    targets: NO_TARGETS,
+    totals: null,
+    closed: true,
+  });
+  assert.equal(day.paused, false);
+});
+
+test('the day after a pause resumes from the paused day close', () => {
+  // The end-to-end shape: pause for a week, come back, and the first real day
+  // scores from where the user left off. If the pause were skipped rather than
+  // written flat, this would still pass on the total, so the assertion is on
+  // the close the paused day produced.
+  const paused = computeDay({ localDate: '2026-09-30', previousClose: 500, closed: true, ...PAUSED });
+  const resumed = computeDay({
+    localDate: '2026-10-01',
+    previousClose: paused.close,
+    planItems: [FULL_PLAN[0]],
+    completions: [{ planItemId: 1 }],
+    targets: NO_TARGETS,
+    totals: null,
+    closed: true,
+    hasPlannedWorkout: true,
+    hasPlannedWorkoutDone: true,
+  });
+  assert.equal(resumed.open, 500);
+  assert.ok(resumed.close > 500, 'the resumed day should earn from the paused close');
+  assert.equal(resumed.paused, false);
+});

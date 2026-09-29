@@ -318,7 +318,36 @@ export function computeDay({
   hasPlannedWorkout = false,
   hasPlannedWorkoutDone = false,
   unplannedWorkout = false,
+  paused = false,
 }) {
+  // A paused day is neutral, and it is neutral in a specific way: not scored,
+  // not merely scored as zero.
+  //
+  // Running the normal path and then zeroing the result would be wrong twice
+  // over. It would write an empty breakdown that reads exactly like a day the
+  // user skipped every item on, and it would leave the caps and the earn rules
+  // free to move a number the user never earned. So the day returns before any
+  // of that: no earn, no miss, and open == high == low == close, which keeps
+  // the chain contiguous so the next real day resumes from the same close.
+  //
+  // `paused` is returned on the day object and carried into the snapshot, which
+  // is the only way a reader can tell this apart from a genuine zero day.
+  if (paused) {
+    return {
+      localDate,
+      open: previousClose,
+      high: previousClose,
+      low: previousClose,
+      close: previousClose,
+      grossGain: 0,
+      grossLoss: 0,
+      capped: false,
+      breakdown: [],
+      paused: true,
+      rulesVersion: RULES_VERSION,
+    };
+  }
+
   const earns = computeEarns({
     planItems,
     completions,
@@ -369,6 +398,11 @@ export function computeDay({
       // rather than re-deriving intent from the label text.
       ...(l.direction ? { direction: l.direction } : {}),
     })),
+    // Definite on both paths. A reader must never have to treat a missing
+    // `paused` as false, for the same reason getSafetyFlag normalises null to a
+    // definite shape: absent and false are the same answer here, and should not
+    // look different on the wire.
+    paused: false,
     rulesVersion: RULES_VERSION,
   };
 }

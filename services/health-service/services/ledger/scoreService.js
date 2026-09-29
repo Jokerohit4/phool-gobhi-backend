@@ -16,7 +16,7 @@
 //   - the low-intake guard. checkForLowIntakeRun reads recent snapshots at
 //     read time, because it is a safety check about the user's current state,
 //     not a property of any one day.
-import { RULES_VERSION, DECIMAL_PLACES, roundTo } from './constants.js';
+import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS } from './constants.js';
 import { computeDay, checkForLowIntakeRun } from './scoreEngine.js';
 import { getDayTotals } from './nutritionService.js';
 import { isDueOn } from './ledgerPlanService.js';
@@ -31,6 +31,10 @@ export async function previewDay(prisma, { userId, localDate, today }) {
   const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
   const target = await prisma.nutritionTarget.findUnique({ where: { userId } });
   const previous = await previousClose(prisma, { userId, localDate });
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
   // `targets`, plural, because that is what computeDay destructures. Passing
   // `target` left it null inside the engine, so every nutrition line was
   // silently skipped and a day could only ever be scored on plan completions.
@@ -43,6 +47,7 @@ export async function previewDay(prisma, { userId, localDate, today }) {
     ...inputs,
     targets: target,
     closed: localDate < today,
+    paused: isPausedOn(goal, localDate),
   });
 }
 
@@ -64,6 +69,10 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
   const target = await prisma.nutritionTarget.findUnique({ where: { userId } });
   const previous = await previousClose(prisma, { userId, localDate });
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
 
   const day = computeDay({
     localDate,
@@ -71,6 +80,7 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     ...inputs,
     targets: target,
     closed: true,
+    paused: isPausedOn(goal, localDate),
   });
 
   return prisma.scoreDaySnapshot.create({
@@ -82,6 +92,7 @@ export async function closeDay(prisma, { userId, localDate, today }) {
       low: day.low,
       close: day.close,
       breakdown: day.breakdown,
+      paused: day.paused === true,
       rulesVersion: day.rulesVersion || RULES_VERSION,
     },
   });
@@ -126,6 +137,12 @@ export async function getCalmSeries(prisma, { userId, limit = 90 }) {
       open: start,
       high: start,
       low: start,
+      // Carried through deliberately. Calm mode flattens the value, and a flat
+      // pause day would be indistinguishable from a flat ordinary day, so the
+      // client would lose the one piece of information that explains why
+      // nothing moved. Flattening a number is not the same as erasing the
+      // reason it was flat.
+      paused: row.paused === true,
       rulesVersion: row.rulesVersion,
     })),
   };
@@ -166,7 +183,166 @@ export async function setCalmMode(prisma, { userId, calmMode }) {
   });
 }
 
+// --- Pause ------------------------------------------------------------------
+
+/**
+ * Is `localDate` inside this user's pause? Inclusive at both ends.
+ *
+ * BOTH bounds are required. A row with only one of them set is treated as not
+ * paused at all, rather than as a pause with no end.
+ *
+ * This is the defensive direction, and it is deliberate. The two columns are
+ * always written together by setPause, so a half-written pause should not
+ * exist - but if one ever did, "paused from this date onward, forever" is the
+ * worst possible reading of it, because an unbounded pause is precisely what
+ * MAX_PAUSE_DAYS exists to prevent. Scoring a paused user normally is a
+ * recoverable annoyance; pausing them indefinitely is not. They can press
+ * pause again.
+ *
+ * An expired pause stops being paused on its own, with nothing to clear it: the
+ * comparison is against the day being scored, so a user who abandoned the app
+ * mid-pause is scored normally again the moment the window passes.
+ */
+export function isPausedOn(goal, localDate) {
+  if (!goal?.pausedFrom || !goal?.pausedUntil) return false;
+  if (localDate < goal.pausedFrom) return false;
+  if (localDate > goal.pausedUntil) return false;
+  return true;
+}
+
+/**
+ * The pause, plus what the client needs to render and validate against.
+ *
+ * `active` is computed against `today` rather than stored, so a pause that has
+ * run out reports itself as inactive without anything having to expire it.
+ * `daysLeft` is inclusive of today, so a pause ending today reads as 1, not 0 -
+ * telling someone they have "0 days left" on the day they can still use it is
+ * the kind of off-by-one that makes people think the app is broken.
+ */
+export async function getPauseState(prisma, { userId, today }) {
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
+  const active = isPausedOn(goal, today);
+  return {
+    active,
+    pausedFrom: goal?.pausedFrom ?? null,
+    pausedUntil: goal?.pausedUntil ?? null,
+    daysLeft: active ? daysInclusive(goal.pausedUntil, today) : 0,
+    maxDays: MAX_PAUSE_DAYS,
+  };
+}
+
+/**
+ * Start a pause, capped at MAX_PAUSE_DAYS from the start date.
+ *
+ * `days` is clamped rather than rejected. Asking for 30 and silently getting 14
+ * is the right failure here: the user wanted a pause and got one, whereas a 422
+ * would leave them with a screen that refuses to help at the exact moment they
+ * asked for it. The response reports the real bounds and the cap, so the client
+ * can say what actually happened instead of showing 30 and being wrong.
+ *
+ * A pause cannot start in the past. Every day before today is already frozen
+ * into a snapshot, so a backdated pause could not take effect even if it were
+ * accepted - and accepting it would suggest otherwise. That is refused outright
+ * so the API never returns a pause that is quietly not doing anything.
+ */
+export async function setPause(prisma, { userId, days, today }) {
+  // Checked here as well as in the controller, because this function writes the
+  // column. A malformed `today` would produce a window that never matches a real
+  // day - a pause that reports itself as active and does nothing, which is worse
+  // than no pause at all.
+  if (!isIsoDay(today)) {
+    throw new Error('today must be YYYY-MM-DD');
+  }
+
+  const requested = Math.max(1, Math.min(Number(days) || MAX_PAUSE_DAYS, MAX_PAUSE_DAYS));
+  const until = addDaysLocal(today, requested - 1);
+
+  const goal = await prisma.healthGoal.findUnique({ where: { userId } });
+  if (!goal) throw new Error('No goal set');
+  // Only a pause that is still IN PROGRESS is protected. An expired pause has
+  // already lapsed, and locking a user out of the feature because a fortnight
+  // ago they used it would be absurd - the check is isPausedOn(today), not
+  // merely "pausedFrom is in the past".
+  if (isPausedOn(goal, today)) {
+    throw new Error('A pause already in progress cannot be backdated');
+  }
+
+  const updated = await prisma.healthGoal.update({
+    where: { userId },
+    data: { pausedFrom: today, pausedUntil: until },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
+
+  return {
+    active: true,
+    pausedFrom: updated.pausedFrom,
+    pausedUntil: updated.pausedUntil,
+    daysLeft: daysInclusive(updated.pausedUntil, today),
+    maxDays: MAX_PAUSE_DAYS,
+    // True when the request was longer than the cap, so the client can say so.
+    capped: requested < (Number(days) || 0),
+  };
+}
+
+/** Resume now. Clears both bounds, so the next day scores normally. */
+export async function clearPause(prisma, { userId }) {
+  await prisma.healthGoal.update({
+    where: { userId },
+    data: { pausedFrom: null, pausedUntil: null },
+  });
+  return { active: false, pausedFrom: null, pausedUntil: null, daysLeft: 0, maxDays: MAX_PAUSE_DAYS };
+}
+
 // --- internals -------------------------------------------------------------
+
+/**
+ * A real calendar day in 'YYYY-MM-DD'.
+ *
+ * Not a regex alone. `/^\d{4}-\d{2}-\d{2}$/` happily accepts '2026-13-45',
+ * which Date.UTC then silently rolls forward into a valid date in the next
+ * year - so a pause written from garbage input would land on a real day in the
+ * wrong month, and report itself as active. The round-trip check is what makes
+ * "is this a day" mean a day the user could actually be living through.
+ *
+ * Exported because the controller needs the same notion of valid, and two
+ * different definitions of a valid date in one feature is how the boundary ends
+ * up accepting what the service rejects.
+ */
+export function isIsoDay(value) {
+  const s = String(value ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+// Local-date string arithmetic, in and out as 'YYYY-MM-DD'.
+//
+// Not reusing the addDays/daysBetween in goalService and ledgerIntakeService:
+// those are private to their modules and exchange `Date` objects, while a day
+// boundary here is a user's local day, and the value that goes into pausedFrom
+// and pausedUntil has to be the same string the rest of the ledger stores. A
+// Date that round-trips through a timezone is exactly the bug that makes a
+// pause start a day early.
+function addDaysLocal(localDate, days) {
+  const [y, m, d] = localDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Days from `from` to `to` inclusive of both ends, so one day reads as 1. */
+function daysInclusive(until, from) {
+  if (!until) return 0;
+  const [y1, m1, d1] = from.split('-').map(Number);
+  const [y2, m2, d2] = until.split('-').map(Number);
+  const ms = Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1);
+  return Math.floor(ms / 86400000) + 1;
+}
 
 async function previousClose(prisma, { userId, localDate }) {
   const prev = await prisma.scoreDaySnapshot.findFirst({

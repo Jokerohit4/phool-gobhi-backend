@@ -8,6 +8,10 @@ import {
   getScoreSeries,
   previewDay,
   setCalmMode,
+  isPausedOn,
+  getPauseState,
+  setPause,
+  clearPause,
 } from '../services/ledger/scoreService.js';
 
 const TODAY = '2026-09-28';
@@ -348,4 +352,187 @@ test('the safety flag is evaluated even with no nutrition target', async () => {
   const out = await getSafetyFlag(prisma, { userId: USER });
   assert.equal(out.active, false);
   assert.equal(out.calmMode, false);
+});
+
+// --- Pause ------------------------------------------------------------------
+//
+// The engine tests prove a paused day is neutral. These prove the pause is
+// bounded, cannot be backdated, and lands on the right calendar dates - the
+// failure modes that are invisible in the score and obvious to the user.
+
+test('isPausedOn is inclusive at both ends', async () => {
+  const goal = { pausedFrom: '2026-09-29', pausedUntil: '2026-10-05' };
+  assert.equal(isPausedOn(goal, '2026-09-28'), false, 'the day before is not paused');
+  assert.equal(isPausedOn(goal, '2026-09-29'), true, 'the first day is paused');
+  assert.equal(isPausedOn(goal, '2026-10-05'), true, 'the last day is paused');
+  assert.equal(isPausedOn(goal, '2026-10-06'), false, 'the day after is not');
+});
+
+test('isPausedOn treats a half-written pause as no pause, not as open-ended', async () => {
+  // A goal row with only one bound set must not pause the user indefinitely. An
+  // unbounded pause is the exact thing MAX_PAUSE_DAYS exists to prevent, and a
+  // missing column reading as "no end" would hand it out for free.
+  assert.equal(isPausedOn({ pausedFrom: '2026-09-29' }, '2027-06-01'), false);
+  assert.equal(isPausedOn({ pausedUntil: '2026-10-05' }, '2026-09-01'), false);
+  assert.equal(isPausedOn({}, '2026-09-29'), false);
+  assert.equal(isPausedOn(null, '2026-09-29'), false);
+});
+
+test('an expired pause stops being paused on its own, with nothing to clear it', async () => {
+  // Deliberately not requiring a cron or a lazy expiry write. The pause lapses
+  // because the comparison is against today, so a user who abandoned the app
+  // mid-pause is scored normally again the moment the window passes.
+  const goal = { pausedFrom: '2026-09-01', pausedUntil: '2026-09-10' };
+  assert.equal(isPausedOn(goal, '2026-09-09'), true);
+  assert.equal(isPausedOn(goal, '2026-09-11'), false);
+});
+
+test('a pause longer than the cap is clamped, and says it was clamped', async () => {
+  const prisma = mockPrisma({ goal: { calmMode: false } });
+  const out = await setPause(prisma, { userId: USER, days: 30, today: '2026-09-29' });
+  assert.equal(out.pausedFrom, '2026-09-29');
+  // 14 inclusive days from 29 Sep is 12 Oct, so this also pins the off-by-one:
+  // days=14 must not produce a 15th day.
+  assert.equal(out.pausedUntil, '2026-10-12');
+  assert.equal(out.maxDays, 14);
+  assert.equal(out.capped, true, 'the client needs to know it got less than it asked for');
+});
+
+test('a pause of exactly the cap is not reported as clamped', async () => {
+  const prisma = mockPrisma({ goal: { calmMode: false } });
+  const out = await setPause(prisma, { userId: USER, days: 14, today: '2026-09-29' });
+  assert.equal(out.capped, false);
+  assert.equal(out.pausedUntil, '2026-10-12');
+});
+
+test('a pause crossing a month boundary lands on the right date', async () => {
+  // The reason the pause arithmetic exists in the service instead of being done
+  // as a Date. 30 Sep + 3 days is 3 Oct, and a naive local-midnight calculation
+  // can land on 2 Oct or 4 Oct depending on the timezone it was written in.
+  const prisma = mockPrisma({ goal: { calmMode: false } });
+  const out = await setPause(prisma, { userId: USER, days: 3, today: '2026-09-30' });
+  assert.equal(out.pausedUntil, '2026-10-02', 'three inclusive days from 30 Sep ends 2 Oct');
+});
+
+test('a single-day pause ends today, not tomorrow', async () => {
+  // daysLeft is inclusive, so a one-day pause is 1 and ends on the day it
+  // started. A pause that silently lasted an extra day would be the kind of
+  // thing that reads as the app having opinions about your holiday.
+  const prisma = mockPrisma({ goal: { calmMode: false } });
+  const out = await setPause(prisma, { userId: USER, days: 1, today: '2026-09-29' });
+  assert.equal(out.pausedUntil, '2026-09-29');
+  assert.equal(out.daysLeft, 1);
+});
+
+test('a pause cannot be started with a malformed date', async () => {
+  // This is the one that would have shipped as a silent lie: a window starting
+  // on a date no day ever matches, reported to the user as an active pause,
+  // while their score kept falling.
+  const prisma = mockPrisma({ goal: { calmMode: false } });
+  await assert.rejects(
+    () => setPause(prisma, { userId: USER, days: 7, today: '2026-13-45' }),
+    /YYYY-MM-DD/,
+  );
+  await assert.rejects(
+    () => setPause(prisma, { userId: USER, days: 7, today: undefined }),
+    /YYYY-MM-DD/,
+  );
+  assert.equal(prisma.state.updated.length, 0, 'a rejected pause must not write');
+});
+
+test('a pause in progress cannot be backdated', async () => {
+  // Every day before today is already frozen into a snapshot, so a backdated
+  // pause could not take effect even if accepted - and accepting it would
+  // promise something the score cannot deliver.
+  const prisma = mockPrisma({ goal: { calmMode: false, pausedFrom: '2026-09-20', pausedUntil: '2026-10-01' } });
+  await assert.rejects(
+    () => setPause(prisma, { userId: USER, days: 7, today: '2026-09-29' }),
+    /backdated/,
+  );
+});
+
+test('an expired pause can be replaced with a fresh one', async () => {
+  // Only an IN PROGRESS pause is protected. Someone whose pause ran out and
+  // wants to start another must not be locked out of the feature.
+  const prisma = mockPrisma({ goal: { calmMode: false, pausedFrom: '2026-09-01', pausedUntil: '2026-09-10' } });
+  const out = await setPause(prisma, { userId: USER, days: 7, today: '2026-09-29' });
+  assert.equal(out.pausedFrom, '2026-09-29');
+});
+
+test('closing a paused day freezes a flat snapshot marked paused', async () => {
+  // Flat in the stored row, not just in the computed object: this is what the
+  // chart reads, and a flat row without the flag would be indistinguishable from
+  // a user who genuinely did nothing that day.
+  const prisma = mockPrisma({
+    goal: { calmMode: false, pausedFrom: '2026-09-28', pausedUntil: '2026-10-05' },
+    snapshots: [{ userId: USER, localDate: '2026-09-27', close: 210, open: 200, high: 220, low: 190 }],
+    planItems: [workoutItem(1)],
+    target: TARGET,
+  });
+  const row = await closeDay(prisma, { userId: USER, localDate: '2026-09-28', today: TODAY });
+  assert.equal(row.paused, true);
+  assert.equal(row.close, 210, 'the close carries the previous day forward');
+  assert.equal(row.open, 210);
+  assert.equal(row.high, 210);
+  assert.equal(row.low, 210);
+  assert.deepEqual(row.breakdown, []);
+});
+
+test('closing an ordinary day is not marked paused', async () => {
+  const prisma = mockPrisma({
+    goal: { calmMode: false },
+    snapshots: [{ userId: USER, localDate: '2026-09-27', close: 210, open: 200, high: 220, low: 190 }],
+    planItems: [workoutItem(1, doneOn('2026-09-28'))],
+    target: TARGET,
+  });
+  const row = await closeDay(prisma, { userId: USER, localDate: '2026-09-28', today: TODAY });
+  assert.equal(row.paused, false);
+  // Not 'the close went up'. This mock returns no food logs against a 2000 kcal
+  // target, so an ordinary day here is legitimately NEGATIVE - the aggregate
+  // rules charge calories-off-target and protein-short. The claim worth pinning
+  // is the contrast with the paused test above: an ordinary day was actually
+  // scored, so it has a breakdown and is not a flat pass-through.
+  assert.ok(row.breakdown.length > 0, 'an ordinary day is scored, not passed through');
+  assert.notEqual(row.close, row.open, 'an ordinary day is not flat');
+});
+
+test('getPauseState reports an active pause with days left', async () => {
+  const prisma = mockPrisma({ goal: { calmMode: false, pausedFrom: '2026-09-29', pausedUntil: '2026-10-05' } });
+  const out = await getPauseState(prisma, { userId: USER, today: '2026-09-29' });
+  assert.equal(out.active, true);
+  assert.equal(out.daysLeft, 7, 'inclusive: 29 Sep to 5 Oct is seven days');
+  assert.equal(out.maxDays, 14);
+});
+
+test('getPauseState reports an expired pause as inactive and not as days left', async () => {
+  const prisma = mockPrisma({ goal: { calmMode: false, pausedFrom: '2026-09-01', pausedUntil: '2026-09-10' } });
+  const out = await getPauseState(prisma, { userId: USER, today: '2026-09-20' });
+  assert.equal(out.active, false);
+  assert.equal(out.daysLeft, 0, 'an expired pause must not show a countdown');
+});
+
+test('clearing the pause ends it immediately', async () => {
+  const prisma = mockPrisma({ goal: { calmMode: false, pausedFrom: '2026-09-29', pausedUntil: '2026-10-05' } });
+  const out = await clearPause(prisma, { userId: USER });
+  assert.equal(out.active, false);
+  assert.deepEqual(
+    { from: prisma.state.updated.at(-1).pausedFrom, until: prisma.state.updated.at(-1).pausedUntil },
+    { from: null, until: null },
+  );
+});
+
+test('calm mode carries the paused flag through the flattened series', async () => {
+  // Calm mode flattens every value, which would erase the one thing that
+  // explains why nothing moved. The flag is not a value, so it survives.
+  const prisma = mockPrisma({
+    goal: { calmMode: true },
+    snapshots: [
+      { userId: USER, localDate: '2026-09-28', close: 210, open: 200, high: 220, low: 190, paused: false },
+      { userId: USER, localDate: '2026-09-29', close: 210, open: 210, high: 210, low: 210, paused: true },
+    ],
+  });
+  const out = await getCalmSeries(prisma, { userId: USER });
+  assert.equal(out.calmMode, true);
+  assert.equal(out.series[0].paused, false);
+  assert.equal(out.series[1].paused, true, 'a paused day must still be identifiable in calm mode');
 });

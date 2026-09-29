@@ -261,3 +261,35 @@ test('the preview route cannot write - close is a separate POST', () => {
   const close = all.find((r) => r.line.includes('/close'));
   assert.match(close.line, /^router\.post\(/);
 });
+
+// The pause endpoints mutate the goal, which is nutrition data. They are gated
+// like every other ledger route, and asserted explicitly rather than left to the
+// "all ledger routes are gated" sweep above - because that sweep checks the GATE
+// and not the ROUTE, and a pause route that dropped ...nutrition would still pass
+// it while letting a user who revoked nutrition consent keep managing their
+// scoring state.
+test('the pause routes are on the nutrition gate, like the rest of the score surface', () => {
+  const pauseRoutes = all.filter((r) => r.line.includes('/ledger/score/pause'));
+  assert.equal(pauseRoutes.length, 3, 'expected GET, PUT and DELETE pause');
+
+  for (const r of pauseRoutes) {
+    assert.match(
+      r.line,
+      /\.\.\.nutrition\b/,
+      `${r.n}: ${r.line} is not on the nutrition gate`,
+    );
+  }
+});
+
+test('the pause routes are registered before the parameterized score date route', () => {
+  // Ordering, not cosmetics. `/:localDate/preview` is a path parameter, so a
+  // pause route registered after it would be captured as a localDate of
+  // "pause" - a 400 that looks like a client bug and is really a routing one.
+  const pauseLine = all.findIndex((r) => r.line.includes('/ledger/score/pause'));
+  const paramLine = all.findIndex((r) => r.line.includes('/:localDate/preview'));
+  assert.ok(pauseLine > -1 && paramLine > -1, 'expected both routes to exist');
+  assert.ok(
+    pauseLine < paramLine,
+    'the pause routes must be declared before /:localDate/preview or "pause" is read as a date',
+  );
+});
