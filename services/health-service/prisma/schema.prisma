@@ -1209,6 +1209,39 @@ model HealthGoal {
   // the API directly.
   pausedFrom         String?
   pausedUntil        String?
+  // The score the user is aiming at, and the window they gave themselves to
+  // reach it in. This is the answer to "what number am I trying to hit", which
+  // is a question the score engine cannot ask itself: it produces a number every
+  // day but has no opinion about what any of them are for.
+  //
+  // A threshold on the RUNNING TOTAL, not on points earned within the window.
+  // The distinction matters and is easy to get backwards. The score is cumulative
+  // and can fall - a missed doctor item is -10, a missed workout -15, a day can
+  // lose 40 - so progress toward this target can go backwards too. That is the
+  // honest reading of a running total, and it is why the card reports pace
+  // against the user's own target rather than a streak the app could keep on
+  // their behalf.
+  //
+  // `scoreTargetPoints` is absolute rather than relative, so "get to 400" means
+  // 400 on the chain and not 400 more than wherever the user happened to be. The
+  // two readings differ by the whole history, and the absolute one is what a
+  // person means when they look at a number on a chart.
+  //
+  // The window is stored as two local day strings rather than a day count,
+  // because a count has no end: it would have to be re-derived against today's
+  // date on every read and would silently change meaning. ScoreTargetFrom is the
+  // day the clock started, so the baseline is knowable after the fact.
+  //
+  // Pause interaction: paused days do NOT extend this window. A pause freezes the
+  // score, and the target is measured on the score, so extending the deadline
+  // would be extending a deadline because the thing being measured stopped
+  // moving. What a pause does do is stop the days counting as lost - see
+  // scoreTargetService, which subtracts paused days from the elapsed count rather
+  // than from the deadline, so the pace maths stays honest and the user is never
+  // shown as behind for a fortnight they were explicitly told to stop.
+  scoreTargetPoints   Int?
+  scoreTargetFrom     String?
+  scoreTargetUntil    String?
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 

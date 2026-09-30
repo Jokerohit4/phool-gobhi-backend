@@ -4,6 +4,7 @@ import * as scoreService from '../services/ledger/scoreService.js';
 import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
+import * as scoreTargetService from '../services/ledger/scoreTargetService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
 import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import { PrismaClient } from '@prisma/client';
@@ -452,6 +453,39 @@ export const clearPause = handle(async (req) =>
       localDate: requireToday(req.query?.today),
     }),
   );
+
+// ---- Score target --------------------------------------------------------
+//
+// The number the user is aiming at, and the window they gave themselves. `today`
+// is required and validated on all three, for the same reason pause requires it:
+// every one of them reads a day boundary to decide what "elapsed" and "left"
+// mean, and it is written to the goal on set. A malformed date here does not
+// produce a cosmetic oddity, it produces a target whose progress is computed
+// against a day that does not exist.
+//
+// `num` is used for both fields rather than being passed raw, so a non-numeric
+// body reaches the service as null and the service's own bounds check produces
+// the 400 with a message that says what the range is. A regex here would accept a
+// shape and reject it in a different shape in the service.
+export const getScoreTarget = handle(async (req) =>
+  scoreTargetService.getScoreTargetState(prisma, {
+    userId: req.userId,
+    today: requireToday(req.query?.today),
+  }),
+);
+
+export const setScoreTarget = handle(async (req) =>
+  scoreTargetService.setScoreTarget(prisma, {
+    userId: req.userId,
+    points: num(req.body?.points),
+    days: num(req.body?.days),
+    today: requireToday(req.body?.today || req.query?.today),
+  }),
+);
+
+export const clearScoreTarget = handle(async (req) =>
+  scoreTargetService.clearScoreTarget(prisma, { userId: req.userId }),
+);
 
 
 // Previewing today writes nothing, so this is safe to call on every screen

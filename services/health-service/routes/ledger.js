@@ -138,6 +138,15 @@ router.delete('/ledger/score/pause', ...nutrition, ledgerCtrl.clearPause);
 // snapshots, this reads the weight series. A client that could conflate them by
 // accident is a client we would rather not ship.
 router.get('/ledger/attainment', ...nutrition, ledgerCtrl.getAttainment);
+// The score's target: the number the user is aiming at and the window they gave
+// themselves. Separate from /ledger/attainment on purpose - attainment reads the
+// weight series and answers "is the goal being met", this reads the score chain
+// and answers "am I getting to the number I set". Different evidence, different
+// question, and a client that could conflate them by accident is a client we
+// would rather not ship.
+router.get('/ledger/score/target', ...nutrition, ledgerCtrl.getScoreTarget);
+router.put('/ledger/score/target', ...nutrition, ledgerCtrl.setScoreTarget);
+router.delete('/ledger/score/target', ...nutrition, ledgerCtrl.clearScoreTarget);
 router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewScore);
 router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScoreDay);
 

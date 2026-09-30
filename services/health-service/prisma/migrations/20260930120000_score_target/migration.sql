@@ -1,0 +1,42 @@
+-- Gives the score a target: the number the user is aiming at, and the window
+-- they gave themselves to reach it in.
+--
+-- Why this exists: the score engine produces a number every day but has no
+-- opinion about what any of those numbers are for. It answers "where am I",
+-- never "where am I going". A running total with no destination is a chart
+-- rather than a goal, and the two are read completely differently - one is
+-- observed, the other is chosen. The weight ledger already has this split
+-- (targetWeightKg / targetDate, plus the derived GoalAttainment), and this adds
+-- the same thing on the score side, deliberately as a separate concept rather
+-- than as a second weight target.
+--
+-- The columns are on HealthGoal rather than in their own table for the same
+-- reason pausedFrom/pausedUntil are: a target is a window on the goal, not a
+-- record with a life of its own. There is exactly one live target, it is deleted
+-- with the goal, and nothing in the product needs a history of past targets - a
+-- user who wants a new number sets a new one. The one thing that needs to
+-- survive is already on the row.
+--
+-- scoreTargetPoints is ABSOLUTE, not relative to where the user is now. "Get to
+-- 400" means 400 on the chain, not 400 more than wherever the chain currently
+-- sits. The two readings differ by the entire history, and the absolute one is
+-- what a person means when they point at a number on a chart.
+--
+-- The window is stored as two local day strings (scoreTargetFrom, scoreTargetUntil)
+-- rather than as a day count. A count has no end: it would have to be re-derived
+-- against the current date on every read, so "30 days" would silently mean a
+-- different range of days depending on when it was asked. Both strings follow
+-- the same convention as pausedFrom and BiometricEntry.localDate.
+--
+-- Deliberately NOT constrained here: the caps on target points, window length and
+-- "is this target already met" all live in scoreTargetService, in application
+-- code, because they are product rules expected to change. A CHECK constraint
+-- would be permanent, and the service is the single enforcement point, so
+-- calling the endpoint directly cannot buy a longer window than the app offers.
+--
+-- IF NOT EXISTS on all three, matching the pause and consent-scope migrations, so
+-- this is re-runnable against a database that was partially applied.
+ALTER TABLE "health"."HealthGoal"
+  ADD COLUMN IF NOT EXISTS "scoreTargetPoints" INTEGER,
+  ADD COLUMN IF NOT EXISTS "scoreTargetFrom" TEXT,
+  ADD COLUMN IF NOT EXISTS "scoreTargetUntil" TEXT;

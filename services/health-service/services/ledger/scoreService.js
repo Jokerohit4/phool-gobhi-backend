@@ -394,7 +394,18 @@ function daysInclusive(until, from) {
   return Math.floor(ms / 86400000) + 1;
 }
 
-async function previousClose(prisma, { userId, localDate }) {
+/**
+ * The close the chain carried into `localDate` - i.e. the score as it stood
+ * before that day earned anything.
+ *
+ * Exported (it was private) for the score target, which needs "the score when
+ * this window started" and should get it from the same single definition rather
+ * than re-querying the last snapshot with subtly different ordering or
+ * bounds. Returns 0 for a user's first ever day: the score starts at 0
+ * deliberately, not at a baseline invented to make the first chart look
+ * encouraging.
+ */
+export async function previousClose(prisma, { userId, localDate }) {
   const prev = await prisma.scoreDaySnapshot.findFirst({
     where: { userId, localDate: { lt: localDate } },
     orderBy: { localDate: 'desc' },
