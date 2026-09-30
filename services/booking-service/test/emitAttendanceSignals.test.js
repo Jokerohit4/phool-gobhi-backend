@@ -100,3 +100,25 @@ test('emitMemberAttendanceSignals: badge check throwing is swallowed, notify sti
   );
   assert.equal(notifyCalls.length, 1);
 });
+
+// Insurer-grade provenance. health-service stores HOW a visit was proven next to
+// the session it drafts, so the method must travel with the event - and the
+// attendedAt sent must be the booking's own instant, not a fresh clock read.
+test('emitAttendanceSignals: forwards attendanceMethod + the booking attendedAt to health-service', async () => {
+  resetFakes();
+  const attendedAt = new Date('2026-09-30T04:15:00.000Z');
+  await emitAttendanceSignals({
+    customerId: 1, bookingId: 101, gymId: 9, city: 'Gurugram', source: 'partner_verified',
+    attendanceMethod: 'qr_scan', attendedAt,
+  });
+  assert.equal(healthNotifyCalls.length, 1);
+  assert.equal(healthNotifyCalls[0].attendanceMethod, 'qr_scan');
+  assert.equal(healthNotifyCalls[0].attendedAt, attendedAt.toISOString());
+});
+
+test('emitAttendanceSignals: an older caller without provenance sends null, never a guessed method', async () => {
+  resetFakes();
+  await emitAttendanceSignals({ customerId: 1, bookingId: 102, gymId: 9, city: 'Gurugram', source: 'self_checkin' });
+  assert.equal(healthNotifyCalls[0].attendanceMethod, null);
+  assert.ok(healthNotifyCalls[0].attendedAt, 'attendedAt still falls back to now so the draft keys to a day');
+});

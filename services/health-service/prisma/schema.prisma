@@ -317,6 +317,23 @@ model WorkoutSession {
   // for any session started with no known booking context at all.
   bookingId    Int?
   gymId        Int?
+  // Attendance provenance, snapshotted from booking-service at event time
+  // (the /internal/attendance-events payload) - HOW this visit was proven and
+  // WHEN the gym recorded it. Only the internal route writes these; the
+  // client can set bookingId at session start, which is exactly why bookingId
+  // alone must never be read as "attended". Values mirror booking-service's
+  // AttendanceMethod enum (qr_scan / qr_geofence_self / manual_verify /
+  // manual_override) but are stored as text, not a health-side enum: a second
+  // copy of another service's enum drifts the day a value is added there, and
+  // an unknown incoming value is dropped to null (unknown provenance) by the
+  // service rather than rejected by Postgres mid-event.
+  //
+  // Null on every row written before this existed. That is deliberate and must
+  // stay that way - there is no backfill. A null here means "we cannot prove
+  // how this visit was verified", and the insurer-grade score reports it as
+  // unknown provenance, never as verified.
+  attendedAt       DateTime?
+  attendanceMethod String?
   // 'YYYY-MM-DD' in the user's tz at entry — NOT derived from startedAt at
   // read time, so a session logged just after midnight (or backfilled while
   // travelling) keys to the day the user experienced, not the server's UTC
