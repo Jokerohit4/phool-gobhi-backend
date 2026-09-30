@@ -11,6 +11,7 @@ import * as biometricCtrl from '../controllers/biometricController.js';
 import * as personalisationCtrl from '../controllers/personalisationController.js';
 import * as suggestionFeedbackCtrl from '../controllers/suggestionFeedbackController.js';
 import * as exportCtrl from '../controllers/exportController.js';
+import * as insurerGradeCtrl from '../controllers/insurerGradeController.js';
 import * as goalCtrl from '../controllers/goalController.js';
 import * as consistencyStreakCtrl from '../controllers/consistencyStreakController.js';
 import * as planCtrl from '../controllers/planController.js';
@@ -264,6 +265,12 @@ router.get('/recap', ...recapGated, recapCtrl.getWeeklyRecap);
 
 // ---- Data export (FR-16) ------------------------------------------------
 router.get('/export', ...gated, exportCtrl.exportMyData);
+// The user's own insurer-grade adherence summary (ig-v1) for a date range: the
+// preview of exactly what a future insurer share would contain. Gym attendance
+// and manual logs only - never device health data. Read-only; nothing is sent
+// anywhere. Gated like /export (auth + healthMetrics), plus the ledger checks
+// inside the controller for the plan-tick part.
+router.get('/insurer-grade', ...gated, insurerGradeCtrl.getMyInsurerGrade);
 
 // Internal — booking-service fires this on every verified check-in
 // (self-checkin, partner-verify, manual-override, member-checkin), same
@@ -367,5 +374,9 @@ router.post('/internal/retention/sweep', requireInternal, retentionCtrl.runReten
 // feature is off, and a 403 here would make a broken cron look like a quiet
 // one in the CI log.
 router.post('/internal/nudges/sweep', requireInternal, nudgeCtrl.runNudgeSweepInternal);
+// Nightly ledger day close (ledger/dayCloseService.runDayCloseSweep). Checks the
+// healthMetrics + healthLedger flags itself and is idempotent per user-day, so a
+// double run, or a run with the ledger switched off, writes nothing.
+router.post('/internal/ledger/close-days', requireInternal, ledgerCtrl.runDayCloseSweepInternal);
 
 export default router;

@@ -132,19 +132,36 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   // A day being closed is by definition closed, so the open list is empty.
   // Spelled out rather than left to the reader, because "why is this always
   // empty?" is the obvious question and the answer is not obvious.
-  const row = await prisma.scoreDaySnapshot.create({
-    data: {
-      userId,
-      localDate,
-      open: day.open,
-      high: day.high,
-      low: day.low,
-      close: day.close,
-      breakdown: day.breakdown,
-      paused: day.paused === true,
-      rulesVersion: day.rulesVersion || RULES_VERSION,
-    },
-  });
+  let row;
+  try {
+    row = await prisma.scoreDaySnapshot.create({
+      data: {
+        userId,
+        localDate,
+        open: day.open,
+        high: day.high,
+        low: day.low,
+        close: day.close,
+        breakdown: day.breakdown,
+        paused: day.paused === true,
+        rulesVersion: day.rulesVersion || RULES_VERSION,
+      },
+    });
+  } catch (err) {
+    // Lost a race to another closer. Since the server started closing
+    // yesterday on a schedule (dayCloseService), "two closers for the same day"
+    // is no longer only a double-tap: the nightly sweep and a user pressing
+    // close just after midnight can both pass the findUnique above. The
+    // (userId, localDate) unique rejects the second insert, and the right
+    // answer is the row that won - exactly what a plain retry gets. Never an
+    // overwrite, and never a 500 for a day that is in fact closed.
+    if (err?.code !== 'P2002') throw err;
+    const winner = await prisma.scoreDaySnapshot.findUnique({
+      where: { userId_localDate: { userId, localDate } },
+    });
+    if (!winner) throw err;
+    return { ...winner, alreadyClosed: true, openActions: [] };
+  }
   return { ...row, openActions: [] };
 }
 

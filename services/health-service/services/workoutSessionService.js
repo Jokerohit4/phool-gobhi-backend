@@ -164,16 +164,37 @@ async function createSessionRow(createData, templateId, userId) {
 // visit to the same gym on the same day is the one case that dedupes away,
 // judged an acceptable v0 tradeoff over a separate idempotency table for a
 // still-unlaunched path.
-export async function getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt }) {
+//
+// Attendance provenance (attendanceMethod + attendedAt) is stamped here and
+// nowhere else. Two rules:
+//   - An unrecognised method is stored as null, not as whatever string came
+//     in. The insurer-grade score maps each known value to an evidence level,
+//     and a value it has never seen must land in "unknown", not be guessed at.
+//   - On an EXISTING session provenance is only filled in when still null,
+//     never overwritten. The client may have started the session with this
+//     bookingId before the check-in event arrived (that is the first branch of
+//     the lookup), and a retried event must not be able to change how a visit
+//     was proven after the fact. First proof wins.
+export const ATTENDANCE_METHODS = new Set(['qr_scan', 'qr_geofence_self', 'manual_verify', 'manual_override']);
+
+export async function getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt, attendanceMethod = null }) {
   const localDate = localDateIST(attendedAt);
+  const method = ATTENDANCE_METHODS.has(attendanceMethod) ? attendanceMethod : null;
+  const at = attendedAt ? new Date(attendedAt) : null;
+  const provenance = method ? { attendanceMethod: method, attendedAt: at } : {};
   const existing = await prisma.workoutSession.findFirst({
     where: bookingId
       ? { userId, bookingId }
       : { userId, gymId, localDate, bookingId: null },
   });
-  if (existing) return existing;
+  if (existing) {
+    if (method && existing.attendanceMethod == null) {
+      return prisma.workoutSession.update({ where: { id: existing.id }, data: provenance });
+    }
+    return existing;
+  }
   return prisma.workoutSession.create({
-    data: { userId, bookingId: bookingId ?? null, gymId: gymId ?? null, localDate },
+    data: { userId, bookingId: bookingId ?? null, gymId: gymId ?? null, localDate, ...provenance },
   });
 }
 

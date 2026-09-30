@@ -14,11 +14,15 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // delta). The receiving route checks the healthMetrics flag itself, so this
 // call is a harmless no-op until an admin turns that phase on — same
 // posture as notifyChallengeService against streaksCoins.
-export async function recordAttendanceForWorkout({ userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey }) {
+//
+// attendanceMethod is Booking.attendanceMethod verbatim (qr_scan /
+// qr_geofence_self / manual_verify / manual_override). health-service stores
+// it on the session as provenance; see emitAttendanceSignals for why.
+export async function recordAttendanceForWorkout({ userId, bookingId, memberAttendanceId, gymId, attendedAt, source, attendanceMethod = null, idempotencyKey }) {
   try {
     await axios.post(
       `${HEALTH_SERVICE_URL}/internal/attendance-events`,
-      { userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey },
+      { userId, bookingId, memberAttendanceId, gymId, attendedAt, source, attendanceMethod, idempotencyKey },
       { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(HEALTH_SERVICE_URL)) } },
     );
   } catch (err) {

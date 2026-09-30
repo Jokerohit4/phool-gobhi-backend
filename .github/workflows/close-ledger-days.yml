@@ -1,0 +1,106 @@
+name: Close ledger days
+
+# Fires health-service's nightly day close (dayCloseService.runDayCloseSweep,
+# via POST /internal/ledger/close-days): freezes YESTERDAY (IST) into a
+# ScoreDaySnapshot for every ledger user who has not closed it themselves.
+#
+# Why the server does this at all: the ledger's claim is "one frozen, auditable
+# row per day". While closing was client-only, a day nobody closed never got a
+# row, and the phone's clock decided which day "today" was. See the header of
+# services/health-service/services/ledger/dayCloseService.js and
+# docs/ABHA-FHIR-INTEGRATION.md §F.5.
+#
+# Scheduled from GitHub Actions rather than an in-process timer for the same
+# reason as send-health-nudges.yml and reconcile-razorpay-orders.yml: Cloud Run
+# throttles CPU to near-zero between requests, so a setInterval callback never
+# gets enough CPU to open a Postgres connection.
+#
+# WHY 01:30 IST: "yesterday" is unambiguously over, and a GitHub scheduler
+# delay (routinely 10-30 min, occasionally hours) still lands well inside the
+# same IST day. The service computes "yesterday" from its own clock at run time,
+# so a late run closes the right day as long as it runs before the next IST
+# midnight; a run that misses that window skips one day, which the next run does
+# not backfill - the user's own close, or a manual dispatch, still can.
+#
+# Every run is idempotent: an existing snapshot is returned, never rewritten,
+# and a race with a user's own close resolves to whichever insert won.
+#
+# READ THIS BEFORE ASSUMING IT RUNS
+#
+# `schedule` fires ONLY from the default branch (`main`), which lags `dev`, so
+# until this reaches `main` the only way to run it is workflow_dispatch. The
+# matrix is dev-only on purpose: prod is added by hand, in a reviewed change,
+# once health-service is promoted and the healthLedger flag is on there. The
+# service also no-ops while either healthMetrics or healthLedger is off.
+
+on:
+  schedule:
+    # 20:00 UTC = 01:30 IST.
+    - cron: '0 20 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  close-days:
+    strategy:
+      matrix:
+        env: [dev]   # prod deliberately absent until health-service is promoted AND the flag is on
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # health-service-secrets-<env> JSON payload (the standalone
+      # internal-api-key-<env> secrets were retired in the 2026-08-26
+      # consolidation).
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/health-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "health-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required: x-internal-key satisfies the app's
+      # requireInternal check, the Google-signed ID token satisfies Cloud
+      # Run's IAM invoker check. Omitting the token yields a Google 403 HTML
+      # page rather than an app error - how process-subscription-lifecycle.yml
+      # failed silently every day until 2026-09-09.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      # The response reports closed / alreadyClosed / skipped / failed, so the
+      # run log shows an idempotent re-run as zeros-with-reasons, not silence.
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/ledger/close-days"

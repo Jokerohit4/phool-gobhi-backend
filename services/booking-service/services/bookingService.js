@@ -55,7 +55,18 @@ export async function hasPriorVisitAtGym({ customerId, gymId, excludeBookingId, 
 // branch — so all three verification methods count equally. Originally only
 // selfCheckIn emitted badge_earned (Wave 1's known undercounting gap); this
 // closes it for all three at once.
-export async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
+//
+// `attendanceMethod` and `attendedAt` are the values just persisted on the
+// Booking row, passed through to health-service so it can snapshot HOW the
+// visit was proven next to the session it drafts. That provenance is what the
+// insurer-grade score labels each visit with (qr_scan = gym staff scanned a
+// signed QR, qr_geofence_self = poster QR + location, manual_override = the
+// partner completed without any scan). The attendedAt sent is the booking's
+// own, not a fresh `new Date()`: the two differ by however long the badge
+// check above took, and the booking row is the record of truth. Both are
+// optional so an older caller degrades to the previous behaviour (null
+// provenance, which health-service treats as "unknown", never as verified).
+export async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source, attendanceMethod = null, attendedAt = null }) {
   try {
     const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeBookingId: bookingId });
     if (!hadPriorVisit) {
@@ -69,7 +80,9 @@ export async function emitAttendanceSignals({ customerId, bookingId, gymId, city
     idempotencyKey: `booking:${bookingId}`,
   });
   recordAttendanceForWorkout({
-    userId: customerId, bookingId, gymId, attendedAt: new Date().toISOString(), source,
+    userId: customerId, bookingId, gymId,
+    attendedAt: attendedAt ? new Date(attendedAt).toISOString() : new Date().toISOString(),
+    source, attendanceMethod,
     idempotencyKey: `booking:${bookingId}`,
   });
 }
@@ -1019,7 +1032,10 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // earlier), that scan already emitted this exact signal once; firing
     // again here would double-count the attendance event and the badge check.
     if (!booking.attendedAt) {
-      await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override' });
+      await emitAttendanceSignals({
+        customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override',
+        attendanceMethod: updatedBooking.attendanceMethod, attendedAt: updatedBooking.attendedAt,
+      });
     }
 
     // 7. Credit partner wallet — best-effort, never blocks completion.
@@ -1279,7 +1295,10 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
     });
-    await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym.city, source: 'partner_verified' });
+    await emitAttendanceSignals({
+      customerId: booking.customerId, bookingId: booking.id, gymId, city: gym.city, source: 'partner_verified',
+      attendanceMethod: updated.attendanceMethod, attendedAt: updated.attendedAt,
+    });
 
     return {
       bookingId: updated.id,
@@ -1464,7 +1483,10 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
-    await emitAttendanceSignals({ customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin' });
+    await emitAttendanceSignals({
+      customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin',
+      attendanceMethod: updated.attendanceMethod, attendedAt: updated.attendedAt,
+    });
 
     return {
       bookingId: updated.id,

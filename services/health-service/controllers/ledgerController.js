@@ -1,6 +1,8 @@
 import * as nutritionService from '../services/ledger/nutritionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
+import * as dayCloseService from '../services/ledger/dayCloseService.js';
+import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
@@ -499,11 +501,16 @@ export const previewScore = handle(async (req) =>
   }),
 );
 
+// The server decides what "today" is. `?today=` from older app builds is
+// accepted and ignored rather than rejected, so those builds keep working - but
+// it no longer reaches the engine, and a future day is refused outright. See
+// dayCloseService.js for why the client's clock stopped being trusted here.
 export const closeScoreDay = handle(async (req) => {
+  const { today } = dayCloseService.resolveClientClose({ localDate: req.params.localDate });
   const out = await scoreService.closeDay(prisma, {
     userId: req.userId,
     localDate: req.params.localDate,
-    today: req.query.today || req.params.localDate,
+    today,
   });
   track('health_day_closed', req.userId, { frozen: out?.alreadyClosed !== true });
   return out;
@@ -683,4 +690,12 @@ export const getFoodPhotoLink = handle(async (req) => {
 // endpoint is deliberately not part of the customer app's routes.
 export const sweepFoodPhotos = handle(async () =>
   foodPhotoService.sweepUnconfirmedPhotos(prisma, { olderThanHours: 24 }),
+);
+
+// Nightly: freeze yesterday for every ledger user who has not. Internal only,
+// fired by .github/workflows/close-ledger-days.yml. Returns counts so the run
+// log shows what happened, including how many were skipped and why that is not
+// an error.
+export const runDayCloseSweepInternal = handle(async () =>
+  dayCloseService.runDayCloseSweep(prisma, { isEnabled: isFeatureEnabled }),
 );

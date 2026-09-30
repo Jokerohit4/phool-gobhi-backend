@@ -42,6 +42,11 @@ test('setup: mock dependencies once, import workoutSessionService once', async (
               workoutSessions.push(session);
               return session;
             },
+            update: async ({ where, data }) => {
+              const session = workoutSessions.find((s) => s.id === where.id);
+              Object.assign(session, data);
+              return session;
+            },
           };
         }
       },
@@ -101,4 +106,45 @@ test('getTodaySessionService: a session exists for today -> returns it', async (
   const session = await getTodaySessionService(1);
   assert.ok(session);
   assert.equal(session.bookingId, 100);
+});
+
+// ---- Attendance provenance (insurer-grade score prerequisite) -------------
+
+test('provenance: a known attendanceMethod is stamped on the new draft with the gym attendedAt', async () => {
+  resetFakes();
+  const session = await getOrCreateDraftForAttendanceService({
+    userId: 1, bookingId: 300, gymId: 9, attendedAt: '2026-09-30T04:00:00.000Z', attendanceMethod: 'qr_scan',
+  });
+  assert.equal(session.attendanceMethod, 'qr_scan');
+  assert.equal(session.attendedAt.toISOString(), '2026-09-30T04:00:00.000Z');
+});
+
+test('provenance: an unknown method is dropped to null (unknown provenance), never stored as-is', async () => {
+  resetFakes();
+  const session = await getOrCreateDraftForAttendanceService({
+    userId: 1, bookingId: 301, gymId: 9, attendedAt: '2026-09-30T04:00:00.000Z', attendanceMethod: 'teleported',
+  });
+  assert.equal(session.attendanceMethod ?? null, null);
+  assert.equal(session.attendedAt ?? null, null, 'no method means no provenance at all, not a half-stamp');
+});
+
+test('provenance: a client-started session with the bookingId gets provenance filled in by the later event', async () => {
+  resetFakes();
+  workoutSessions.push({ id: nextId++, userId: 1, bookingId: 302, gymId: 9, localDate: '2026-09-30', attendanceMethod: null });
+  const session = await getOrCreateDraftForAttendanceService({
+    userId: 1, bookingId: 302, gymId: 9, attendedAt: '2026-09-30T04:00:00.000Z', attendanceMethod: 'qr_geofence_self',
+  });
+  assert.equal(workoutSessions.length, 1);
+  assert.equal(session.attendanceMethod, 'qr_geofence_self');
+});
+
+test('provenance: first proof wins - a retried event cannot change how a visit was proven', async () => {
+  resetFakes();
+  await getOrCreateDraftForAttendanceService({
+    userId: 1, bookingId: 303, gymId: 9, attendedAt: '2026-09-30T04:00:00.000Z', attendanceMethod: 'manual_override',
+  });
+  const again = await getOrCreateDraftForAttendanceService({
+    userId: 1, bookingId: 303, gymId: 9, attendedAt: '2026-09-30T05:00:00.000Z', attendanceMethod: 'qr_scan',
+  });
+  assert.equal(again.attendanceMethod, 'manual_override', 'an override must never be upgraded to a scan by a replay');
 });

@@ -117,14 +117,14 @@ export const finishSession = async (req, res) => {
 // healthMetrics on.
 export const recordAttendanceForWorkoutInternal = async (req, res) => {
   try {
-    const { userId, bookingId, gymId, attendedAt, idempotencyKey } = req.body || {};
+    const { userId, bookingId, gymId, attendedAt, attendanceMethod, idempotencyKey } = req.body || {};
     if (!userId || !gymId || !attendedAt || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, gymId, attendedAt and idempotencyKey are required' });
     }
     if (!(await isFeatureEnabled('healthMetrics'))) {
       return res.json({ data: { attached: false } });
     }
-    const session = await workoutSessionService.getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt });
+    const session = await workoutSessionService.getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt, attendanceMethod });
     res.json({ data: { attached: true, sessionId: session.id } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
