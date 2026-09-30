@@ -648,6 +648,15 @@ const getUserInternal = async (req, res) => {
       // fitnessGoals directly above.
       experienceLevel: user.experienceLevel,
       weeklyFrequencyIntent: user.weeklyFrequencyIntent,
+      // The rest of the onboarding branch, for health-service: the AI coach
+      // is told how this person trains (a home trainee asked "what should I
+      // do today" must not be sent to a gym), and comeback nudges are timed
+      // to freeTimeWindow. Same class as the preferences above — how someone
+      // likes to train, not anything about their health.
+      currentlyWorksOut: user.currentlyWorksOut ?? null,
+      trainingLocationPref: user.trainingLocationPref || null,
+      appMode: user.appMode || null,
+      freeTimeWindow: user.freeTimeWindow || null,
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,

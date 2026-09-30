@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
+import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { tierOf, orderMemories } from './memoryService.js';
 
 const prisma = new PrismaClient();
@@ -13,7 +14,9 @@ const prisma = new PrismaClient();
 // workouts. Truncation below is a backstop now, not something the design leans
 // on to stay inside budget — which matters because the thing it would cut is a
 // user's own remembered facts.
-const MAX_CONTEXT_CHARS = 3400;
+// +200 over the memory-only worst case for the "How they train" line below,
+// which is bounded (fixed phrases, no free text) at well under that.
+const MAX_CONTEXT_CHARS = 3600;
 const ATTENDANCE_WINDOW_HOURS = 24 * 30;
 const RECENT_SESSION_LIMIT = 10;
 
@@ -135,6 +138,69 @@ export function summariseAttendance(events) {
   return sentences.join(' ');
 }
 
+const LOCATION_PHRASES = {
+  home: 'at home',
+  gym: 'at a gym',
+  fitness_centre: 'at a gym',
+  other: 'somewhere other than a gym or home',
+};
+const FREQUENCY_PHRASES = {
+  one_two: '1-2 times a week',
+  three_four: '3-4 times a week',
+  five_plus: '5-6 times a week',
+};
+const FREE_TIME_PHRASES = {
+  morning: 'mornings',
+  afternoon: 'afternoons',
+  evening: 'evenings',
+  late_night: 'late nights',
+  flexible: 'it varies',
+};
+const GOAL_PHRASES = {
+  weight_loss: 'weight loss',
+  muscle_gain: 'muscle gain',
+  general_fitness: 'general fitness',
+  flexibility_yoga: 'flexibility and yoga',
+  sports_training: 'sports training',
+  rehabilitation: 'getting back into fitness after a break',
+};
+
+/// What onboarding told us about how this person trains, as one line.
+///
+/// Before this, the coach knew nothing onboarding asked: a user who said "I
+/// train at home" and then asked what to do today could be sent to a squat
+/// rack they don't have. It's a stable fact, so it sits right after the safety
+/// block — near the top, inside the part of the prompt that is byte-identical
+/// between turns and therefore stays in the provider's prefix cache.
+///
+/// Enum answers only, mapped to fixed phrases. trainingLocationOther is free
+/// text typed at signup and deliberately NOT passed through: it was collected
+/// for a human to read, not to be sent to a model provider.
+/// Exported for the tests.
+export function summariseTrainingProfile(profile) {
+  if (!profile) return null;
+  const bits = [];
+  const where = LOCATION_PHRASES[profile.trainingLocationPref];
+  if (profile.currentlyWorksOut === false) {
+    bits.push(where ? `Not training yet; would rather train ${where}.` : 'Not training yet.');
+  } else if (profile.currentlyWorksOut === true) {
+    if (where) bits.push(`Trains ${where}.`);
+    if (profile.trainingLocationPref === 'home') {
+      // The one that changes the answer most: no gym, so no machines, and
+      // any plan must work with what is at home unless they say otherwise.
+      bits.push('Suggest workouts that need no gym equipment unless they mention having some.');
+    }
+  }
+  const freq = FREQUENCY_PHRASES[profile.weeklyFrequencyIntent];
+  if (freq) bits.push(`Usually trains ${freq}.`);
+  const free = FREE_TIME_PHRASES[profile.freeTimeWindow];
+  if (free) bits.push(`Usually free: ${free}.`);
+  const goals = (profile.fitnessGoals || []).map((g) => GOAL_PHRASES[g]).filter(Boolean);
+  if (goals.length) bits.push(`Goals: ${goals.join(', ')}.`);
+  if (!bits.length) return null;
+  return `How they train (from onboarding): ${bits.join(' ')}`;
+}
+
 /// Reduced by a deterministic formatter rather than a second model call.
 /// Summarising with the model would double the cost and latency of every
 /// message, and make the context non-reproducible for anyone debugging an
@@ -162,7 +228,7 @@ function summariseSessions(sessions) {
 /// already exists and already has a consent gate — rather than being collected
 /// a second time in chat. One place to revoke, one place to erase.
 export async function buildUserContextService(userId) {
-  const [events, sessions, personalisation, memories, weeklyGoal] = await Promise.all([
+  const [events, sessions, personalisation, memories, weeklyGoal, authProfile] = await Promise.all([
     fetchAttendanceSince(ATTENDANCE_WINDOW_HOURS, { userId }),
     prisma.workoutSession.findMany({
       where: { userId, endedAt: { not: null } },
@@ -176,6 +242,9 @@ export async function buildUserContextService(userId) {
     // block every time a fact was restated — breaking the cached prefix.
     prisma.assistantMemory.findMany({ where: { userId } }),
     prisma.weeklyGoal.findUnique({ where: { userId } }).catch(() => null),
+    // Best-effort (returns null on failure): an unreachable auth-service costs
+    // the coach one line of context, never the answer.
+    fetchUserProfileInternal(userId),
   ]);
 
   // Every memory, every turn — no retrieval step.
@@ -200,6 +269,8 @@ export async function buildUserContextService(userId) {
   if (safety.length) {
     parts.push(`Important — they have told the assistant:\n${renderMemories(safety)}`);
   }
+  const training = summariseTrainingProfile(authProfile);
+  if (training) parts.push(training);
   parts.push(summariseAttendance(events), summariseSessions(sessions));
 
   if (weeklyGoal?.sessionsPerWeek) {
@@ -237,6 +308,7 @@ export async function buildUserContextService(userId) {
       workoutSessions: sessions.length,
       injuryZones: personalisation?.injuryZones?.length ?? 0,
       memories: memories.length,
+      onboardingProfile: training ? 1 : 0,
       contextChars: text.length,
     },
   };

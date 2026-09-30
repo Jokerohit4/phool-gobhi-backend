@@ -14,7 +14,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 let buildUserContextService;
-const state = { memories: [], sessions: [], personalisation: null, weeklyGoal: null };
+const state = { memories: [], sessions: [], personalisation: null, weeklyGoal: null, authProfile: null };
 
 test('setup: stub Prisma and the attendance hop, import once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -33,6 +33,10 @@ test('setup: stub Prisma and the attendance hop, import once', async (t) => {
   // Attendance is a cross-service HTTP call; nothing here is about that.
   t.mock.module('../utils/fetchAttendance.js', {
     exports: { fetchAttendanceSince: async () => [] },
+  });
+  // The onboarding answers come from auth-service over HTTP too.
+  t.mock.module('../utils/fetchUserProfile.js', {
+    exports: { fetchUserProfileInternal: async () => state.authProfile },
   });
   ({ buildUserContextService } = await import('../services/assistant/contextService.js'));
 });
@@ -95,9 +99,17 @@ test('a user at every cap still fits without truncation at all', async () => {
     })),
   }));
 
+  // ...and the longest onboarding line the fixed phrases can produce.
+  state.authProfile = {
+    currentlyWorksOut: true, trainingLocationPref: 'home', weeklyFrequencyIntent: 'three_four',
+    freeTimeWindow: 'late_night',
+    fitnessGoals: ['weight_loss', 'muscle_gain', 'general_fitness', 'flexibility_yoga', 'sports_training', 'rehabilitation'],
+  };
+
   const { text } = await buildUserContextService(1);
 
   assert.ok(!text.endsWith('…'), `truncation fired at ${text.length} chars`);
+  assert.ok(text.includes('How they train'), 'onboarding line present');
   // Every category present, first and last entry of each — nothing dropped.
   assert.ok(text.includes('allergen 0'), 'first allergy present');
   assert.ok(text.includes('allergen 5'), 'last allergy present');
@@ -107,6 +119,32 @@ test('a user at every cap still fits without truncation at all', async () => {
 
   state.sessions = [];
   state.memories = [];
+  state.authProfile = null;
+});
+
+test('the onboarding line sits after safety and before attendance', async () => {
+  // Stable facts first: it belongs in the cached prefix, and after the safety
+  // block so a truncation (if one ever fires) can't reach allergies first.
+  state.memories = [mem('allergy', 'peanuts')];
+  state.authProfile = { currentlyWorksOut: true, trainingLocationPref: 'home' };
+  const { text, audit } = await buildUserContextService(1);
+
+  const allergyAt = text.indexOf('peanuts');
+  const trainingAt = text.indexOf('How they train');
+  const attendanceAt = text.indexOf('No gym check-ins');
+  assert.ok(allergyAt < trainingAt && trainingAt < attendanceAt);
+  assert.equal(audit.onboardingProfile, 1);
+
+  state.memories = [];
+  state.authProfile = null;
+});
+
+test('an unreachable auth-service costs one line, not the context', async () => {
+  state.authProfile = null;
+  const { text, audit } = await buildUserContextService(1);
+  assert.ok(!text.includes('How they train'));
+  assert.ok(text.includes('No gym check-ins'));
+  assert.equal(audit.onboardingProfile, 0);
 });
 
 test('the memory block is byte-identical when nothing about it changed', async () => {

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_EXPERIENCE_LEVELS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES } from '../constants/userEnums.js';
+import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
@@ -15,6 +15,7 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // tracking is behavioural monitoring, which DPDP s.9(3) forbids for children;
 // the customer app's DOB pickers and the privacy policy say 18 too.
 const MIN_AGE_YEARS = 18;
+const MAX_TRAINING_LOCATION_OTHER_CHARS = 80;
 
 // Latest allowed DOB as a UTC-midnight Date (both sides of the comparison in
 // updateProfile parse date-only strings, so no timezone drift).
@@ -323,6 +324,14 @@ export const updateProfile = async (req, res) => {
         && typeof currentlyWorksOut !== 'boolean') {
       return res.status(400).json({ error: 'currentlyWorksOut must be a boolean' });
     }
+    // Free text behind "Somewhere else". It's read by a human deciding the
+    // next enum value, so it only needs to be a phrase — the cap stops it
+    // becoming a place to paste paragraphs (or anything we'd rather not hold).
+    if (trainingLocationOther !== undefined && trainingLocationOther !== null
+        && (typeof trainingLocationOther !== 'string'
+          || trainingLocationOther.trim().length > MAX_TRAINING_LOCATION_OTHER_CHARS)) {
+      return res.status(400).json({ error: `trainingLocationOther must be text of at most ${MAX_TRAINING_LOCATION_OTHER_CHARS} characters` });
+    }
 
     if (gender !== undefined && gender !== null && !VALID_GENDERS.includes(gender)) {
       return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
@@ -353,19 +362,58 @@ export const updateProfile = async (req, res) => {
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
     if (currentlyWorksOut !== undefined) updates.currentlyWorksOut = currentlyWorksOut;
     if (trainingLocationPref !== undefined) updates.trainingLocationPref = trainingLocationPref;
-    if (trainingLocationOther !== undefined) updates.trainingLocationOther = trainingLocationOther;
+    if (trainingLocationOther !== undefined) {
+      updates.trainingLocationOther = trainingLocationOther ? trainingLocationOther.trim() : null;
+    }
+    // The free text only means something next to "other". Kept after the user
+    // moves to "home" or "gym", it would describe an answer they no longer
+    // hold — and accepted alongside one, it's text nobody asked them for.
+    const mergedPref = trainingLocationPref !== undefined ? trainingLocationPref : before.trainingLocationPref;
+    if (mergedPref !== TRAINING_LOCATION_PREFS.OTHER
+        && (updates.trainingLocationOther || (trainingLocationPref !== undefined && before.trainingLocationOther))) {
+      updates.trainingLocationOther = null;
+    }
     if (freeTimeWindow !== undefined) updates.freeTimeWindow = freeTimeWindow;
     if (weeklyFrequencyIntent !== undefined) updates.weeklyFrequencyIntent = weeklyFrequencyIntent;
 
-    // Re-derive appMode whenever an input to it changes, from the merged
-    // (before + updates) view rather than the request alone — onboarding sends
-    // these answers across more than one PATCH, and deriving from a partial
-    // body would flip mode on the first call and flip it back on the second.
-    if (currentlyWorksOut !== undefined || trainingLocationPref !== undefined) {
+    // Re-derive appMode whenever an input to it actually changes, from the
+    // merged (before + updates) view rather than the request alone —
+    // onboarding sends these answers across more than one PATCH, and deriving
+    // from a partial body would flip mode on the first call and flip it back
+    // on the second.
+    //
+    // "Actually changes", not "was sent": the Profile "How you train" editor
+    // resends every answer on each save. Someone who switched mode from the
+    // floating chip and then only edited their free time would otherwise have
+    // that deliberate override silently undone by a re-derivation from
+    // answers they didn't touch.
+    const answerChanged =
+      (currentlyWorksOut !== undefined && currentlyWorksOut !== before.currentlyWorksOut)
+      || (trainingLocationPref !== undefined && trainingLocationPref !== before.trainingLocationPref);
+    if (answerChanged) {
       updates.appMode = deriveAppMode({ ...before, ...updates });
     }
 
-    const user = await prisma.user.update({ where: { id: targetUserId }, data: updates });
+    // A derived mode change is logged exactly like a chip override, so the
+    // history answers "how did this account end up in this mode" without
+    // gaps. The first derivation is 'onboarding' (fromMode null); a later one
+    // can only come from the user editing their answers, i.e. 'settings'.
+    // Both writes in one transaction: a mode with no history row is the gap
+    // this log exists to close.
+    const modeChanged = answerChanged && updates.appMode && updates.appMode !== before.appMode;
+    const user = modeChanged
+      ? (await prisma.$transaction([
+        prisma.user.update({ where: { id: targetUserId }, data: updates }),
+        prisma.appModeHistory.create({
+          data: {
+            userId: targetUserId,
+            fromMode: before.appMode,
+            toMode: updates.appMode,
+            source: before.appMode ? 'settings' : 'onboarding',
+          },
+        }),
+      ]))[0]
+      : await prisma.user.update({ where: { id: targetUserId }, data: updates });
 
     if (gender !== undefined || dateOfBirth !== undefined || fitnessGoals !== undefined) {
       syncBuddyProfile(targetUserId);

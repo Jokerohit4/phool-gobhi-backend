@@ -351,8 +351,34 @@
   "onboarding_step_completed": {
     "source": "client",
     "apps": [
+      "phool_gobhi",
       "phool_gobhi_partner"
-    ]
+    ],
+    "notes": "partner app: wizard page done. Customer app (since 2026-10-01): step done — props step (details|training|permissions), surface (signup|resume|profile_edit), plus the step's enum answers only (currently_works_out, training_location, weekly_frequency, free_time_window); never DOB, gender or free text"
+  },
+  "onboarding_step_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-01",
+    "notes": "customer onboarding step shown — props step, surface. Viewed minus completed per step is the drop-off"
+  },
+  "onboarding_permission_result": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-01",
+    "notes": "customer onboarding permission step resolved — props permission (location|notifications), granted (bool)"
+  },
+  "onboarding_completed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-01",
+    "notes": "customer onboarding finished (signup wizard done, or the training branch saved from the resume prompt / Profile) — props surface, currently_works_out, training_location"
   },
   "onboarding_gym_photo_added": {
     "source": "client",

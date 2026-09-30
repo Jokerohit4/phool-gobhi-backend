@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 
 import { notifyUser } from '../utils/notifyUser.js';
+import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { findUnloggedUsersService } from './unloggedService.js';
 
 const prisma = new PrismaClient();
@@ -52,6 +53,35 @@ export function localHour(now = new Date()) {
 export function isQuietHours(now = new Date()) {
   const hour = localHour(now);
   return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR;
+}
+
+/// IST hours [from, to) each onboarding "when are you usually free" answer
+/// allows a comeback nudge in. Onboarding promised these answers time
+/// reminders; this is what makes that true.
+///
+/// Every window lies inside the 09:00-22:00 sending day, so quiet hours still
+/// win outright. "Late nights" can't be honoured literally without breaking
+/// them, so it maps to the last two hours before quiet hours start — the
+/// nearest time we're willing to send — and the onboarding copy says so.
+///
+/// The sweep runs at 09, 11, 13, 15, 17, 19 and 21 IST (send-health-nudges.yml),
+/// so every window contains at least one run. A window with no run in it would
+/// silently mean "never".
+export const FREE_TIME_HOURS = {
+  morning: [9, 12],
+  afternoon: [12, 17],
+  evening: [17, 22],
+  late_night: [20, 22],
+};
+
+/// Whether now falls in this user's free-time window. No answer, "it varies",
+/// or a value we don't know all mean "any time in the sending day": not
+/// knowing when someone is free is no reason to never remind them.
+export function isWithinFreeTime(freeTimeWindow, now = new Date()) {
+  const hours = FREE_TIME_HOURS[freeTimeWindow];
+  if (!hours) return true;
+  const hour = localHour(now);
+  return hour >= hours[0] && hour < hours[1];
 }
 
 /// Whether this user may be sent this nudge right now. Checks the opt-out
@@ -125,7 +155,7 @@ export async function runNudgeSweepService(now = new Date()) {
     return { skipped: 'quiet_hours', localHour: localHour(now), sent: 0 };
   }
 
-  const results = { log: 0, comeback: 0, suppressed: 0, sent: 0 };
+  const results = { log: 0, comeback: 0, suppressed: 0, deferred: 0, sent: 0 };
 
   const unlogged = await findUnloggedUsersService({
     minMinutesSince: LOG_NUDGE_AFTER_MINUTES,
@@ -141,6 +171,18 @@ export async function runNudgeSweepService(now = new Date()) {
   }
 
   for (const userId of await findComebackCandidatesService(now)) {
+    // Only the comeback nudge is timed to free time. The log nudge is a
+    // reaction to a check-in 90 minutes ago — delaying it to the evening
+    // would ask about a session the user has half forgotten. A comeback has
+    // no such clock, so it waits for a run inside their window; skipping here
+    // costs nothing from the weekly budget, and the next in-window run picks
+    // them up. Best-effort read: an unreachable auth-service means "no
+    // preference", not "no nudge".
+    const profile = await fetchUserProfileInternal(userId);
+    if (!isWithinFreeTime(profile?.freeTimeWindow, now)) {
+      results.deferred += 1;
+      continue;
+    }
     const result = await sendService(userId, 'comeback', now);
     if (result.sent) {
       results.comeback += 1;

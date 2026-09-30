@@ -26,6 +26,8 @@ let groupedSessions = [];
 let sent = [];
 let sendResult = true;
 let unloggedUsers = [];
+// auth-service profiles by userId, for comeback free-time timing.
+let profiles = {};
 
 let nudge;
 
@@ -102,6 +104,10 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
     },
   });
 
+  t.mock.module('../utils/fetchUserProfile.js', {
+    exports: { fetchUserProfileInternal: async (userId) => profiles[userId] ?? null },
+  });
+
   nudge = await import('../services/nudgeService.js');
 });
 
@@ -113,6 +119,7 @@ function reset() {
   sent = [];
   sendResult = true;
   unloggedUsers = [];
+  profiles = {};
 }
 
 const middayIST = FIXED_NOW;
@@ -230,6 +237,53 @@ test('the comeback nudge targets people who logged before and went quiet', async
   const candidates = await nudge.findComebackCandidatesService(middayIST);
 
   assert.deepEqual(candidates, [1]);
+});
+
+test('free-time windows map to IST hours, and "late nights" stops at quiet hours', () => {
+  // 12:00 IST.
+  assert.equal(nudge.isWithinFreeTime('afternoon', middayIST), true);
+  assert.equal(nudge.isWithinFreeTime('morning', middayIST), false);
+  assert.equal(nudge.isWithinFreeTime('evening', middayIST), false);
+  // No answer / "it varies" / unknown: any time in the sending day.
+  assert.equal(nudge.isWithinFreeTime(null, middayIST), true);
+  assert.equal(nudge.isWithinFreeTime('flexible', middayIST), true);
+  assert.equal(nudge.isWithinFreeTime('whenever', middayIST), true);
+  // 21:00 IST is the last sweep before quiet hours: late nights lands there.
+  const ninePmIST = new Date('2026-09-10T15:30:00Z');
+  assert.equal(nudge.isWithinFreeTime('late_night', ninePmIST), true);
+  assert.equal(nudge.isWithinFreeTime('late_night', middayIST), false);
+  // Every window stays inside the sending day, so quiet hours always win.
+  for (const [from, to] of Object.values(nudge.FREE_TIME_HOURS)) {
+    assert.ok(from >= nudge.QUIET_END_HOUR && to <= nudge.QUIET_START_HOUR);
+  }
+});
+
+test('a comeback nudge waits for the user\'s free time without spending budget', async () => {
+  reset();
+  groupedSessions = [
+    { userId: 1, _max: { startedAt: daysAgo(10) } },
+    { userId: 2, _max: { startedAt: daysAgo(10) } },
+  ];
+  profiles = { 1: { freeTimeWindow: 'evening' }, 2: { freeTimeWindow: 'afternoon' } };
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  // User 2 is free at midday and gets it; user 1 is deferred to the evening.
+  assert.equal(result.comeback, 1);
+  assert.equal(result.deferred, 1);
+  assert.deepEqual(sent.map((s) => s.userId), [2]);
+  assert.deepEqual(created.map((c) => c.userId), [2]);
+});
+
+test('an unreachable auth-service means no preference, not no nudge', async () => {
+  reset();
+  groupedSessions = [{ userId: 1, _max: { startedAt: daysAgo(10) } }];
+  profiles = {};
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.comeback, 1);
+  assert.equal(result.deferred, 0);
 });
 
 test('opting out and back in round-trips', async () => {

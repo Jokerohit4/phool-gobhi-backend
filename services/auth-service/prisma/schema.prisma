@@ -22,10 +22,13 @@ model User {
   gender        Gender?
   dateOfBirth   DateTime?     @db.Date
   fitnessGoals  FitnessGoal[]
-  // Collected at onboarding alongside gender/dateOfBirth/fitnessGoals — feeds
-  // the customer app's client-side gym recommendation scorer (experienceLevel
-  // is the highest-weighted, required field there) and gates the trainer
-  // WhatsApp-handoff CTA to new/restarting users only.
+  // DEPRECATED — no writer and no reader as of 2026-09-30. The onboarding step
+  // that collected it and the client-side gym scorer that read it are both
+  // gone; the one live experience concept is health-service's
+  // PersonalisationProfile.experienceLevel (Training preferences screen),
+  // which is what the AI coach reads. Left in place rather than dropped so
+  // old values stay in the DPDP export; do not start writing it again —
+  // wire PersonalisationProfile instead, or drop this column.
   experienceLevel       ExperienceLevel?
   weeklyFrequencyIntent FrequencyIntent?
   // --- Onboarding branch (2026-09-18) -------------------------------------

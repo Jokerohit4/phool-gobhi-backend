@@ -60,6 +60,26 @@ test('getUserInternal returns linkedGymId: null for a user who is not linked to 
   assert.equal(res.body.linkedGymId, null);
 });
 
+test('getUserInternal carries the onboarding answers health-service reads', async () => {
+  // The coach context and comeback-nudge timing both read these; without them
+  // a home trainee gets gym advice and "late nights" means nothing.
+  findUniqueImpl = async ({ where: { id } }) => ({
+    id, name: 'Test User', phone: '9990001111', dateOfBirth: null, gender: null,
+    fitnessGoals: [], profileImageUrl: null, fcmToken: null, referredByUserId: null,
+    linkedGymId: null, currentlyWorksOut: false, trainingLocationPref: 'home',
+    appMode: 'gym_seeker', freeTimeWindow: 'evening',
+  });
+  const res = fakeRes();
+
+  await getUserInternal({ params: { id: '42' } }, res);
+
+  // false survives: "doesn't work out yet" is an answer, not "never asked".
+  assert.equal(res.body.currentlyWorksOut, false);
+  assert.equal(res.body.trainingLocationPref, 'home');
+  assert.equal(res.body.appMode, 'gym_seeker');
+  assert.equal(res.body.freeTimeWindow, 'evening');
+});
+
 test('getUserInternal returns 404 when the user does not exist', async () => {
   findUniqueImpl = async () => null;
   const req = { params: { id: '999' } };

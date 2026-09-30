@@ -496,3 +496,16 @@ point of the facade.
   Indian data residency becomes mandatory.
 - A consent gate can wrap `AnalyticsService` (return the no-op sink until the user
   accepts) without touching call sites.
+
+## Customer signup onboarding funnel (2026-10-01)
+
+Customer app events (`app = phool_gobhi`), enum properties only — never DOB, gender or free text:
+
+| Event | When | Properties |
+|---|---|---|
+| `onboarding_step_viewed` | a step comes on screen (once per step per run) | `step` (details / training / permissions), `surface` (signup / resume / profile_edit) |
+| `onboarding_step_completed` | a step is saved | `step`, `surface`, and for `training`: `currently_works_out`, `training_location`, `weekly_frequency`, `free_time_window` |
+| `onboarding_permission_result` | the OS answered a permission prompt | `permission` (location / notifications), `granted` |
+| `onboarding_completed` | wizard finished, or training answers saved from the resume prompt / Profile | `surface`, `currently_works_out`, `training_location` |
+
+`onboarding_step_completed` is shared with the partner app's gym wizard, so the partner funnel (`GET /admin/analytics/onboarding-funnel`) now excludes `properties->>'app' = 'phool_gobhi'`. The customer funnel is `GET /admin/analytics/customer-onboarding-funnel?days=30` (booking-service, gobhi-only): per step and surface, distinct users who viewed vs completed (drop-off = viewed − completed), permission grant rates, and completions by training location. No admin-portal view renders it yet.

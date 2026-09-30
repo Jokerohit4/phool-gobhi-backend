@@ -86,6 +86,9 @@ router.get('/admin/gym/:gymId/trainers/:trainerId/sessions', requireRole('gobhi'
 // from analytics_events via a separate pool (see analyticsQueryService.js),
 // not this service's own Prisma-backed operational DB.
 router.get('/admin/analytics/onboarding-funnel', requireRole('gobhi'), analyticsCtrl.getOnboardingFunnel);
+// Customer signup funnel (per-step viewed vs completed) — the partner funnel
+// above is gym supply; this is demand.
+router.get('/admin/analytics/customer-onboarding-funnel', requireRole('gobhi'), analyticsCtrl.getCustomerOnboardingFunnel);
 router.get('/admin/analytics/approval-sla', requireRole('gobhi'), analyticsCtrl.getApprovalSla);
 router.get('/admin/analytics/conversion-funnel', requireRole('gobhi'), analyticsCtrl.getConversionFunnel);
 router.get('/admin/analytics/fulfillment-funnel', requireRole('gobhi'), analyticsCtrl.getFulfillmentFunnel);
