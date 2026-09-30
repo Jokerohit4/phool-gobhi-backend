@@ -134,7 +134,7 @@ test('free text is trimmed and kept next to "other"', async () => {
   assert.equal(stored.trainingLocationOther, 'office gym');
 });
 
-test('moving away from "other" clears the stale free text', async () => {
+test('switching off the "other" answer clears the stale free text', async () => {
   reset({ currentlyWorksOut: true, trainingLocationPref: 'other', trainingLocationOther: 'park', appMode: 'gym_seeker' });
   const res = fakeRes();
 
