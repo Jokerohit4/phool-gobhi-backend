@@ -648,6 +648,10 @@ export async function buildFullExportService(userId) {
           energyPattern: personalisation.energyPattern,
           preferredRestDay: personalisation.preferredRestDay,
           programmingMode: personalisation.programmingMode,
+          // Home setup (onboarding audit P2): theirs, so exported like the rest.
+          homeEquipment: personalisation.homeEquipment ?? [],
+          trainingSpace: personalisation.trainingSpace ?? null,
+          homeSetupAt: personalisation.homeSetupAt ?? null,
           // Records THAT consent was given and under which policy version.
           // There is deliberately nothing here about what was disclosed to
           // arrive at the mode, because that was never transmitted.

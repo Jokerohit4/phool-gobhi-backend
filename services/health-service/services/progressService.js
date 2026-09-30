@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { equipmentFit } from './homeSetup.js';
 const prisma = new PrismaClient();
 
 const RANGE_DAYS = { '4w': 28, '3m': 90, '1y': 365 };
@@ -174,7 +175,7 @@ export async function getMuscleReadinessService(userId) {
     return { muscleGroup, daysSinceTrained: last ? Math.round(daysSince) : null, status };
   });
 
-  const suggestedTemplate = await pickSuggestedTemplate(userId, readiness, mode);
+  const suggestedTemplate = await pickSuggestedTemplate(userId, readiness, mode, profile);
   return {
     readiness,
     suggestedTemplate,
@@ -197,14 +198,23 @@ export async function getMuscleReadinessService(userId) {
 // that exercise, so a routine built entirely around a limited group loses to
 // one that isn't — but it's still returned rather than hidden if it's all
 // the user has.
-async function pickSuggestedTemplate(userId, readiness, mode = 'neutral') {
+//
+// Home setup (onboarding audit P2): a routine needing equipment the user said
+// they don't have is only a candidate when NOTHING they own fits — the same
+// "still returned rather than hidden if it's all the user has" rule as limited
+// groups above. Unknown setup (never answered) changes nothing.
+async function pickSuggestedTemplate(userId, readiness, mode = 'neutral', profile = null) {
   const statusByGroup = Object.fromEntries(readiness.map((r) => [r.muscleGroup, r.status]));
   const weights = MODE_GROUP_WEIGHTS[mode] ?? {};
-  const templates = await prisma.workoutTemplate.findMany({
+  const all = await prisma.workoutTemplate.findMany({
     where: { userId },
-    include: { exercises: { include: { exercise: { select: { muscleGroup: true } } } } },
+    include: {
+      exercises: { include: { exercise: { select: { muscleGroup: true, equipment: true } } } },
+    },
   });
-  if (templates.length === 0) return null;
+  if (all.length === 0) return null;
+  const fitting = all.filter((t) => equipmentFit(t, profile)?.fits !== false);
+  const templates = fitting.length ? fitting : all;
 
   let best = null;
   let bestScore = -1;

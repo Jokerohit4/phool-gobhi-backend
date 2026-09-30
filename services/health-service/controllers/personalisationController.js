@@ -1,6 +1,9 @@
 import * as personalisationService from '../services/personalisationService.js';
 import { recordAudit } from '../services/auditService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
+import {
+  HOME_EQUIPMENT, TRAINING_SPACES, validateHomeEquipment, validateTrainingSpace,
+} from '../services/homeSetup.js';
 
 const EXPERIENCE_LEVELS = ['none', 'lt_1_year', 'one_to_three_years', 'over_three_years'];
 const ENERGY_PATTERNS = ['morning', 'afternoon', 'evening'];
@@ -27,6 +30,8 @@ export const getProfile = async (req, res) => {
           energyPatterns: ENERGY_PATTERNS,
           injuryZones: INJURY_ZONES,
           programmingModes: PROGRAMMING_MODES,
+          homeEquipment: HOME_EQUIPMENT,
+          trainingSpaces: TRAINING_SPACES,
         },
       },
     });
@@ -37,8 +42,10 @@ export const getProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay } =
-      req.body || {};
+    const {
+      heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay,
+      homeEquipment, trainingSpace, homeSetupAnswered,
+    } = req.body || {};
 
     if (heightCm !== undefined && heightCm !== null) {
       const h = Number(heightCm);
@@ -72,8 +79,21 @@ export const updateProfile = async (req, res) => {
       }
     }
 
+    const equipmentError = validateHomeEquipment(homeEquipment);
+    if (equipmentError) return res.status(400).json({ error: equipmentError });
+    const spaceError = validateTrainingSpace(trainingSpace);
+    if (spaceError) return res.status(400).json({ error: spaceError });
+
     const profile = await personalisationService.upsertProfileService(req.userId, {
       heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay,
+      // An explicit null clears (the same "I'd rather not say" rule as every
+      // other field here); arrays are stored de-duplicated.
+      // String[] can't hold null in Postgres/Prisma, so "clear" is [].
+      homeEquipment: homeEquipment === null
+        ? []
+        : Array.isArray(homeEquipment) ? [...new Set(homeEquipment)] : homeEquipment,
+      trainingSpace,
+      homeSetupAnswered: homeSetupAnswered === true,
     });
     res.json({ data: serializeDecimals(profile) });
   } catch (err) {

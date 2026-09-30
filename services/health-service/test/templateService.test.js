@@ -16,10 +16,12 @@ import assert from 'node:assert/strict';
 
 let templates = [];
 let sessions = [];
+let homeProfile = null;
 
 function reset() {
   templates = [];
   sessions = [];
+  homeProfile = null;
 }
 
 function seedUserTemplate(userId, name) {
@@ -50,6 +52,7 @@ test('setup: mock prisma once, import templateService once', async (t) => {
               return rows;
             },
           };
+          this.personalisationProfile = { findUnique: async () => homeProfile };
           this.workoutSession = {
             findFirst: async ({ where }) => {
               const matches = sessions
@@ -100,4 +103,44 @@ test('a system template no user has ever logged has lastDoneAt: null', async () 
   seedSystemTemplate('Mobility & stretch');
   const list = await listTemplatesService(1);
   assert.equal(list[0].lastDoneAt, null);
+});
+
+// Home setup (onboarding audit P2).
+function seedSystemWith(name, equipment) {
+  templates.push({
+    id: templates.length + 1, userId: null, isSystem: true, name, updatedAt: new Date(),
+    exercises: [{ exercise: { equipment } }],
+  });
+}
+
+test('before the home setup is answered: no fit badge, alphabetical order', async () => {
+  reset();
+  seedSystemWith('A dumbbell day', 'dumbbell');
+  seedSystemWith('B bodyweight', 'bodyweight');
+  const list = await listTemplatesService(1);
+  assert.deepEqual(list.map((t) => t.name), ['A dumbbell day', 'B bodyweight']);
+  assert.ok(list.every((t) => t.equipmentFit === null), 'unknown must not read as "fits"');
+});
+
+test('after it: system routines that fit come first, each carries its fit', async () => {
+  reset();
+  seedUserTemplate(1, 'My own barbell day'); // own routines keep their place
+  templates[0].exercises = [{ exercise: { equipment: 'barbell' } }];
+  seedSystemWith('A dumbbell day', 'dumbbell');
+  seedSystemWith('B bodyweight', 'bodyweight');
+  homeProfile = { homeSetupAt: new Date(), homeEquipment: ['none'] };
+
+  const list = await listTemplatesService(1);
+  assert.deepEqual(list.map((t) => t.name), ['My own barbell day', 'B bodyweight', 'A dumbbell day']);
+  assert.deepEqual(list[0].equipmentFit, { fits: false, missing: ['full_home_gym'] },
+    'own routines still get the badge, just not re-ordered');
+  assert.deepEqual(list[2].equipmentFit, { fits: false, missing: ['dumbbells'] });
+});
+
+test('a failed profile read costs the badge, never the list', async () => {
+  reset();
+  seedSystemWith('B bodyweight', 'bodyweight');
+  homeProfile = undefined;
+  const list = await listTemplatesService(1);
+  assert.equal(list.length, 1);
 });

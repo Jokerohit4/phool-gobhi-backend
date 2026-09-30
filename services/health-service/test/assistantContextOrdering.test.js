@@ -105,11 +105,23 @@ test('a user at every cap still fits without truncation at all', async () => {
     freeTimeWindow: 'late_night',
     fitnessGoals: ['weight_loss', 'muscle_gain', 'general_fitness', 'flexibility_yoga', 'sports_training', 'rehabilitation'],
   };
+  // ...plus the longest home-setup line (every equipment chip but the
+  // exclusive 'none', and the longest space phrase), and the personalisation
+  // lines with every injury chip.
+  state.personalisation = {
+    homeSetupAt: new Date('2026-09-30T00:00:00Z'),
+    homeEquipment: ['dumbbells', 'kettlebell', 'resistance_bands', 'pull_up_bar', 'full_home_gym'],
+    trainingSpace: 'small',
+    experienceLevel: 'one_to_three_years',
+    injuryZones: ['knee', 'shoulder', 'lower_back', 'wrist', 'neck'],
+  };
 
   const { text } = await buildUserContextService(1);
+  state.personalisation = null;
 
   assert.ok(!text.endsWith('…'), `truncation fired at ${text.length} chars`);
   assert.ok(text.includes('How they train'), 'onboarding line present');
+  assert.ok(text.includes('Home setup'), 'home setup line present');
   // Every category present, first and last entry of each — nothing dropped.
   assert.ok(text.includes('allergen 0'), 'first allergy present');
   assert.ok(text.includes('allergen 5'), 'last allergy present');

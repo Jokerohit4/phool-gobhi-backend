@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
 import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { tierOf, orderMemories } from './memoryService.js';
+import { summariseHomeSetup } from '../homeSetup.js';
 
 const prisma = new PrismaClient();
 
@@ -15,8 +16,10 @@ const prisma = new PrismaClient();
 // on to stay inside budget — which matters because the thing it would cut is a
 // user's own remembered facts.
 // +200 over the memory-only worst case for the "How they train" line below,
-// which is bounded (fixed phrases, no free text) at well under that.
-const MAX_CONTEXT_CHARS = 3600;
+// which is bounded (fixed phrases, no free text) at well under that; +250 for
+// the "Home setup" line (onboarding audit P2), bounded the same way — every
+// equipment chip plus the longest space phrase is ~230 characters.
+const MAX_CONTEXT_CHARS = 3850;
 const ATTENDANCE_WINDOW_HOURS = 24 * 30;
 const RECENT_SESSION_LIMIT = 10;
 
@@ -127,10 +130,12 @@ export function summariseAttendance(events) {
   const lastVisit = new Date(
     Math.max(...events.map((e) => new Date(e.attendedAt).getTime()))
   );
-  const daysAgo = Math.max(
-    0,
-    Math.floor((Date.now() - lastVisit.getTime()) / 86400000)
-  );
+  // IST calendar days, not elapsed 24h blocks — the same wall-clock rule as
+  // the pattern above. Elapsed hours told the coach a 7am-yesterday session
+  // was "today" for anyone asking between midnight and 7am IST (found
+  // 2026-10-01 at 00:12 IST, when the recency test failed on the clock).
+  const istDay = (ms) => Math.floor((ms + IST_OFFSET_MS) / 86400000);
+  const daysAgo = Math.max(0, istDay(Date.now()) - istDay(lastVisit.getTime()));
   const when =
     daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;
   sentences.push(`Last session ${when}.`);
@@ -271,6 +276,10 @@ export async function buildUserContextService(userId) {
   }
   const training = summariseTrainingProfile(authProfile);
   if (training) parts.push(training);
+  // Right after "how they train": both are stable facts, so both stay in the
+  // byte-identical (cached) front of the prompt. Fixed phrases only.
+  const homeSetup = summariseHomeSetup(personalisation);
+  if (homeSetup) parts.push(homeSetup);
   parts.push(summariseAttendance(events), summariseSessions(sessions));
 
   if (weeklyGoal?.sessionsPerWeek) {
@@ -309,6 +318,7 @@ export async function buildUserContextService(userId) {
       injuryZones: personalisation?.injuryZones?.length ?? 0,
       memories: memories.length,
       onboardingProfile: training ? 1 : 0,
+      homeSetup: homeSetup ? 1 : 0,
       contextChars: text.length,
     },
   };

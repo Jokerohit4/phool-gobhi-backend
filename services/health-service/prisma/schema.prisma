@@ -699,6 +699,18 @@ model PersonalisationProfile {
   // what was disclosed to arrive at the mode.
   consentAt        DateTime?
   privacyVersion   String?
+  // Home setup (onboarding audit P2, 2026-10-01): asked once at the first
+  // "Start workout" on the home track. Values are the fixed sets in
+  // services/homeSetup.js — what a person HAS, which is not the same list as
+  // Exercise.equipment (what a move USES). Read by the routine list (fit
+  // badge + ordering), the suggestion engine and the coach, so nothing here
+  // is collected without a reader.
+  homeEquipment    String[]         @default([])
+  trainingSpace    String?
+  // When the home-setup sheet was answered. Separate from the two fields
+  // because "I have nothing" is an answer ([] / 'none'), and without this the
+  // app could not tell it from "never asked" — it would ask again forever.
+  homeSetupAt      DateTime?
   updatedAt        DateTime         @updatedAt
 
   @@schema("health")

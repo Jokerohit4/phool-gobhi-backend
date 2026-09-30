@@ -11,6 +11,9 @@ const EMPTY_PROFILE = {
   programmingMode: 'neutral',
   consentAt: null,
   privacyVersion: null,
+  homeEquipment: [],
+  trainingSpace: null,
+  homeSetupAt: null,
 };
 
 // Never 404s on "no profile yet" — a user who has skipped the whole setup is
@@ -31,12 +34,22 @@ export async function upsertProfileService(userId, patch) {
   for (const field of [
     'heightCm', 'setupWeightKg', 'experienceLevel',
     'injuryZones', 'energyPattern', 'preferredRestDay',
+    'homeEquipment', 'trainingSpace',
   ]) {
     if (patch[field] !== undefined) data[field] = patch[field];
   }
+  // Stamped by the server, never sent by the client: the home-setup sheet
+  // counts as answered the moment either of its fields arrives — including
+  // "no equipment" ([] or ['none']), which is an answer, not an absence.
+  // `homeSetupAnswered` lets the sheet's "Skip" record the same fact
+  // without inventing equipment, so a user who skips isn't asked again.
+  if (patch.homeEquipment !== undefined || patch.trainingSpace !== undefined
+      || patch.homeSetupAnswered === true) {
+    data.homeSetupAt = new Date();
+  }
   return prisma.personalisationProfile.upsert({
     where: { userId },
-    create: { userId, injuryZones: [], ...data },
+    create: { userId, injuryZones: [], homeEquipment: [], ...data },
     update: data,
   });
 }

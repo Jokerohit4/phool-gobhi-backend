@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { equipmentFit, rankByFit } from './homeSetup.js';
 const prisma = new PrismaClient();
 
 const includeExercises = {
@@ -35,8 +36,15 @@ async function attachLastDone(templates, userId) {
 // with no per-user copy. System templates sort after the user's own (most
 // recently updated first, then system templates by name) so a user's
 // personal routines stay at the top of their own list.
+//
+// Home setup (onboarding audit P2): once a user has said what they train with,
+// every template carries `equipmentFit` ({ fits, missing }) for the badge, and
+// the SYSTEM routines are stably partitioned fits-first. The user's own
+// routines keep their order — they built those for themselves, and re-ranking
+// someone's own list by our guess would be presumptuous. Before the setup is
+// answered, equipmentFit is null and nothing moves.
 export async function listTemplatesService(userId) {
-  const [own, system] = await Promise.all([
+  const [own, system, profile] = await Promise.all([
     prisma.workoutTemplate.findMany({
       where: { userId },
       include: includeExercises,
@@ -47,8 +55,16 @@ export async function listTemplatesService(userId) {
       include: includeExercises,
       orderBy: { name: 'asc' },
     }),
+    // Best-effort: a failed read costs the fit badge, never the list.
+    (async () => prisma.personalisationProfile.findUnique({
+      where: { userId }, select: { homeEquipment: true, homeSetupAt: true },
+    }))().catch(() => null),
   ]);
-  return attachLastDone([...own, ...system], userId);
+  const withFit = (t) => ({ ...t, equipmentFit: equipmentFit(t, profile) });
+  return attachLastDone(
+    [...own.map(withFit), ...rankByFit(system, profile).map(withFit)],
+    userId,
+  );
 }
 
 export async function createTemplateService(userId, body) {

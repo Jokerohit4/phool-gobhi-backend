@@ -169,3 +169,49 @@ test('Step A and Step B save independently without wiping each other', async () 
   assert.equal(profile.heightCm, 175, 'Step B must not wipe Step A');
   assert.deepEqual(profile.injuryZones, ['shoulder']);
 });
+
+// Home setup (onboarding audit P2): the suggestion engine must actually use
+// it, not just store it.
+test('a routine needing kit the user lacks is passed over for one that fits', async () => {
+  sessionExercises = [];
+  templates = [
+    { id: 7, name: 'Dumbbell Upper', exercises: [
+      { exercise: { muscleGroup: 'chest', equipment: 'dumbbell' } },
+    ] },
+    { id: 8, name: 'Bodyweight Upper', exercises: [
+      { exercise: { muscleGroup: 'chest', equipment: 'bodyweight' } },
+    ] },
+  ];
+  profile = { programmingMode: 'neutral', injuryZones: [], homeSetupAt: new Date(), homeEquipment: ['none'] };
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.suggestedTemplate.id, 8, 'no dumbbells at home, so not the dumbbell routine');
+
+  // Unknown setup: the original tie-break (first wins) is untouched.
+  profile = { programmingMode: 'neutral', injuryZones: [] };
+  assert.equal((await getMuscleReadinessService(1)).suggestedTemplate.id, 7);
+});
+
+test('if nothing fits, the routine is still suggested rather than hidden', async () => {
+  sessionExercises = [];
+  templates = [
+    { id: 9, name: 'Dumbbell Upper', exercises: [
+      { exercise: { muscleGroup: 'chest', equipment: 'dumbbell' } },
+    ] },
+  ];
+  profile = { programmingMode: 'neutral', injuryZones: [], homeSetupAt: new Date(), homeEquipment: ['none'] };
+  assert.equal((await getMuscleReadinessService(1)).suggestedTemplate.id, 9);
+});
+
+test('saving any home-setup answer (or skipping) stamps homeSetupAt', async () => {
+  profile = null;
+  const saved = await upsertProfileService(1, { homeEquipment: [] });
+  assert.ok(saved.homeSetupAt instanceof Date, '"I have nothing" is an answer');
+
+  profile = null;
+  const skipped = await upsertProfileService(1, { homeSetupAnswered: true });
+  assert.ok(skipped.homeSetupAt instanceof Date, 'a skip is remembered, so it is not asked again');
+
+  profile = null;
+  const other = await upsertProfileService(1, { heightCm: 170 });
+  assert.equal(other.homeSetupAt, undefined, 'unrelated saves never mark it answered');
+});
