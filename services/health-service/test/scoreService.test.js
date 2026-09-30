@@ -536,3 +536,69 @@ test('calm mode carries the paused flag through the flattened series', async () 
   assert.equal(out.series[0].paused, false);
   assert.equal(out.series[1].paused, true, 'a paused day must still be identifiable in calm mode');
 });
+
+
+// --- open actions on the day payload -----------------------------------------
+//
+// The shaping and ordering are tested in remediation.test.js, including the
+// guarantee that every actionable kind has copy. What is asserted here is the
+// wiring: that the day the app already fetches carries its own list, and that a
+// frozen day does not.
+
+test('an open day carries what is still open, with the user\'s own wording', async () => {
+  const prisma = mockPrisma({
+    planItems: [workoutItem(1)],
+    target: TARGET,
+  });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+
+  assert.equal(day.openActions.length, 1);
+  // The label is the plan item's title, not a restatement of the kind. "Leg day"
+  // is the thing the user wrote and the thing they recognise.
+  assert.equal(day.openActions[0].label, 'Leg day');
+  assert.equal(day.openActions[0].kind, 'workout');
+  assert.equal(day.openActions[0].itemId, 1);
+});
+
+test('a ticked item drops out of the open list', async () => {
+  const prisma = mockPrisma({
+    planItems: [workoutItem(1, [doneOn(TODAY)])],
+    target: TARGET,
+  });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.deepEqual(day.openActions, []);
+});
+
+test('a day with nothing left open carries an empty list, not a missing field', async () => {
+  const prisma = mockPrisma({
+    planItems: [workoutItem(1, [doneOn(TODAY)])],
+    target: TARGET,
+  });
+  const day = await previewDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.ok(Array.isArray(day.openActions), 'the field must always be present');
+  assert.deepEqual(day.openActions, []);
+});
+
+test('a day in the past previews with no open items, because it is already frozen', async () => {
+  // A preview of yesterday is a historical read. Offering work on it would be
+  // an action against a day that will never be recomputed, which is the same
+  // dead end this whole module was rebuilt to avoid.
+  const prisma = mockPrisma({ planItems: [workoutItem(1)], target: TARGET });
+  const day = await previewDay(prisma, { userId: USER, localDate: '2026-09-27', today: TODAY });
+  assert.deepEqual(day.openActions, []);
+});
+
+test('closing a day returns no open items, on both the fresh and the retry path', async () => {
+  const prisma = mockPrisma({ planItems: [workoutItem(1)], target: TARGET });
+  const first = await closeDay(prisma, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.deepEqual(first.openActions, [], 'closing a day must not return open items');
+
+  // The retry path returns the stored row rather than recomputing. Without an
+  // explicit empty list the field would be absent here, and a client could not
+  // tell "nothing open" apart from "response from before the field existed".
+  const snapshot = { userId: USER, localDate: TODAY, open: 0, high: 0, low: 0, close: 0, breakdown: [] };
+  const prisma2 = mockPrisma({ snapshots: [snapshot] });
+  const second = await closeDay(prisma2, { userId: USER, localDate: TODAY, today: TODAY });
+  assert.equal(second.alreadyClosed, true);
+  assert.deepEqual(second.openActions, []);
+});

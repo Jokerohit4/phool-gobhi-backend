@@ -20,6 +20,8 @@ import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS } from './consta
 import { computeDay, checkForLowIntakeRun } from './scoreEngine.js';
 import { getDayTotals } from './nutritionService.js';
 import { isDueOn } from './ledgerPlanService.js';
+import { isScheduledFor } from './scoreEngine.js';
+import { openActions } from './remediation.js';
 
 /**
  * Compute (but do not store) what a day is worth.
@@ -41,14 +43,51 @@ export async function previewDay(prisma, { userId, localDate, today }) {
   // The engine tolerates a null target on purpose - someone who has set a plan
   // but not a nutrition target should still get a score - which is precisely
   // why this went unnoticed: it degraded to a working-looking number.
-  return computeDay({
-    localDate,
-    previousClose: previous,
-    ...inputs,
-    targets: target,
-    closed: localDate < today,
-    paused: isPausedOn(goal, localDate),
-  });
+  //
+  // A day is closed when it is before today. Hoisted because two things now
+  // depend on it: the engine's own miss pass, and whether this day may carry an
+  // action list at all.
+  const closed = localDate < today;
+  return {
+    ...computeDay({
+      localDate,
+      previousClose: previous,
+      ...inputs,
+      targets: target,
+      closed,
+      paused: isPausedOn(goal, localDate),
+    }),
+    // What is still open today, attached to the day itself rather than served
+    // separately. Two reasons it rides along here: the app already fetches the
+    // preview on every hub render, so a second endpoint would be a round trip to
+    // show something this response already knows; and actions computed from a
+    // *different* read of the plan could describe work the user has already done.
+    openActions: previewActions({ ...inputs, localDate, closed }),
+  };
+}
+
+/**
+ * What is still open on `localDate`, for the day payload.
+ *
+ * The inputs have already been through `gatherDayInputs`, which drops inactive
+ * items, items past their `endsOn`, and anything `isDueOn` says is not due. So
+ * there is nothing left for this to re-check, and it deliberately does not: a
+ * second copy of those rules here would be a place for them to drift away from
+ * the ones the day is actually scored with, and the drift would show up as the
+ * app telling somebody to do something the engine never asked for.
+ *
+ * `isScheduledFor` is passed anyway, so this stays correct if a caller ever
+ * hands it unfiltered items - and so the predicate under test is the engine's
+ * rather than a stand-in.
+ */
+function previewActions({ planItems = [], completions = [], localDate, closed }) {
+  // A frozen day gets nothing, and this is the one rule the module cannot infer
+  // for itself. A preview of a past date is a historical read: the snapshot will
+  // never be recomputed, so every action on it would be a tap that cannot work.
+  // The check lives here rather than in the caller because the caller is the
+  // only place that knows, and forgetting it there is exactly the bug.
+  if (closed) return [];
+  return openActions({ planItems, completions, localDate }, { isScheduledFor });
 }
 
 /**
@@ -64,7 +103,14 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   const existing = await prisma.scoreDaySnapshot.findUnique({
     where: { userId_localDate: { userId, localDate } },
   });
-  if (existing) return { ...existing, alreadyClosed: true };
+  if (existing) {
+    // `openActions: []` is not decoration. A closed day has no open work - the
+    // plan moved on and the snapshot will never be recomputed - but the field
+    // has to be present so a client can tell "nothing is open" apart from
+    // "this response predates the field", which would otherwise read as a
+    // payload the app failed to understand.
+    return { ...existing, alreadyClosed: true, openActions: [] };
+  }
 
   const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
   const target = await prisma.nutritionTarget.findUnique({ where: { userId } });
@@ -83,7 +129,10 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     paused: isPausedOn(goal, localDate),
   });
 
-  return prisma.scoreDaySnapshot.create({
+  // A day being closed is by definition closed, so the open list is empty.
+  // Spelled out rather than left to the reader, because "why is this always
+  // empty?" is the obvious question and the answer is not obvious.
+  const row = await prisma.scoreDaySnapshot.create({
     data: {
       userId,
       localDate,
@@ -96,6 +145,7 @@ export async function closeDay(prisma, { userId, localDate, today }) {
       rulesVersion: day.rulesVersion || RULES_VERSION,
     },
   });
+  return { ...row, openActions: [] };
 }
 
 /**
