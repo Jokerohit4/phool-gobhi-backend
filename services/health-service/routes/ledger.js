@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
+import { requireAdult } from '../middleware/requireAdult.js';
 import { requireNutritionConsent, requireMedicalRecordsConsent } from '../middleware/requireLedgerConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
@@ -44,9 +45,9 @@ router.get('/ledger/consent', ...consentGated, ledgerConsentCtrl.getConsent);
 // before it has any consent state to show. Public within the ledger gate —
 // there is nothing user-specific in it.
 router.get('/ledger/consent/policy', ...consentGated, ledgerConsentCtrl.getPolicy);
-router.post('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.grantNutrition);
+router.post('/ledger/consent/nutrition', ...consentGated, requireAdult, ledgerConsentCtrl.grantNutrition);
 router.delete('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.revokeNutrition);
-router.post('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.grantMedicalRecords);
+router.post('/ledger/consent/medical-records', ...consentGated, requireAdult, ledgerConsentCtrl.grantMedicalRecords);
 router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.revokeMedicalRecords);
 
 // ---- Intake ----------------------------------------------------------------
