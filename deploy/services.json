@@ -331,7 +331,7 @@
             "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
             "ASSISTANT_PROVIDER": "hosted",
             "ASSISTANT_MAX_OUTPUT_TOKENS": "600",
-            "ASSISTANT_STRICTNESS": "full"
+            "ASSISTANT_STRICTNESS": "general_wellness"
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"
