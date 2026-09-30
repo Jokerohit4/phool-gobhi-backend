@@ -347,5 +347,9 @@ router.post('/internal/retention/sweep', requireInternal, retentionCtrl.runReten
 // feature is off, and a 403 here would make a broken cron look like a quiet
 // one in the CI log.
 router.post('/internal/nudges/sweep', requireInternal, nudgeCtrl.runNudgeSweepInternal);
+// Nightly ledger day close (ledger/dayCloseService.runDayCloseSweep). Checks the
+// healthMetrics + healthLedger flags itself and is idempotent per user-day, so a
+// double run, or a run with the ledger switched off, writes nothing.
+router.post('/internal/ledger/close-days', requireInternal, ledgerCtrl.runDayCloseSweepInternal);
 
 export default router;
