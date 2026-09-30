@@ -11,8 +11,10 @@ const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-serv
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // Someone at least this old must hold an account — mirrors the client-side
 // check (phool-gobhi-website lib/age.ts) so the API rejects under-age DOBs
-// even when a crafted request bypasses the UI.
-const MIN_AGE_YEARS = 11;
+// even when a crafted request bypasses the UI. 18+ because attendance/streak
+// tracking is behavioural monitoring, which DPDP s.9(3) forbids for children;
+// the customer app's DOB pickers and the privacy policy say 18 too.
+const MIN_AGE_YEARS = 18;
 
 // Latest allowed DOB as a UTC-midnight Date (both sides of the comparison in
 // updateProfile parse date-only strings, so no timezone drift).
