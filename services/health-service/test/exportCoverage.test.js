@@ -169,3 +169,62 @@ test('export and erasure cover the same ledger models', () => {
     );
   }
 });
+
+// ---- FHIR export (ABHA-FHIR-INTEGRATION.md Stage 0) ----------------------
+// The FHIR bundle is built from buildRangeSeriesService's opt-in slices, so the
+// contract to check is: every column those slices read exists on its model,
+// and is actually read by the builder. Same two-sided check as the ledger
+// block above, scoped to the range builder so an unrelated `field:` elsewhere
+// in the file can't satisfy it.
+const FHIR_PROJECTIONS = {
+  WorkoutSession: ['id', 'localDate', 'startedAt', 'endedAt', 'type', 'rpe', 'gymId', 'bookingId'],
+  BiometricEntry: ['localDate', 'metric', 'value', 'unit', 'source', 'createdAt'],
+  ExerciseRecord: ['id', 'source', 'type', 'startedAt', 'endedAt', 'durationSeconds', 'caloriesBurned',
+    'distanceMeters', 'avgHeartRateBpm', 'createdAt'],
+  DailyActivityMetric: ['date', 'steps', 'activeCalories', 'distanceMeters', 'restingHeartRateBpm', 'source', 'syncedAt'],
+  PlanItemCompletion: ['localDate', 'how', 'points', 'createdAt'],
+  // kind only - never title (a doctor item's title names a medicine).
+  PlanItem: ['kind'],
+  ScoreDaySnapshot: ['localDate', 'open', 'high', 'low', 'close', 'paused', 'rulesVersion', 'closedAt'],
+  FoodLog: ['localDate', 'nutrients', 'createdAt'],
+  CyclePhaseEntry: ['startDate', 'endDate', 'phase', 'source', 'createdAt'],
+};
+const FHIR_ROW_ALIAS = {
+  WorkoutSession: '(?:s|sessions\\[i\\])', BiometricEntry: '(?:b|biometrics\\[i\\])', ExerciseRecord: 'r',
+  DailyActivityMetric: 'a', PlanItemCompletion: 'c', PlanItem: 'planItem\\??', ScoreDaySnapshot: 's',
+  FoodLog: 'f', CyclePhaseEntry: 'e',
+};
+const rangeBuilderSource = exportSource.slice(
+  exportSource.indexOf('export async function buildRangeSeriesService'),
+  exportSource.indexOf('export async function countFhirWithheldService'),
+);
+
+test('every field the FHIR range slices read exists on its model', () => {
+  const problems = [];
+  for (const [model, fields] of Object.entries(FHIR_PROJECTIONS)) {
+    const real = fieldsOf(model);
+    for (const f of fields) if (!real.has(f)) problems.push(`${model}.${f}`);
+  }
+  assert.deepEqual(problems, [], `FHIR slices name fields the schema does not have: ${problems.join(', ')}`);
+});
+
+test('the range builder actually reads every field the FHIR contract lists', () => {
+  const problems = [];
+  for (const [model, fields] of Object.entries(FHIR_PROJECTIONS)) {
+    for (const f of fields) {
+      const pattern = new RegExp(`\\b${FHIR_ROW_ALIAS[model]}\\.${f}\\b|\\b${f}:`);
+      if (!pattern.test(rangeBuilderSource)) problems.push(`${model}.${f}`);
+    }
+  }
+  assert.deepEqual(problems, [], `listed in FHIR_PROJECTIONS but never read by the builder: ${problems.join(', ')}`);
+});
+
+test('the FHIR slices never read a plan title, a score breakdown or a predicted cycle phase', () => {
+  // The three things the design doc says must not leave through this path.
+  const slices = rangeBuilderSource.slice(rangeBuilderSource.indexOf('async function withIncludes'));
+  assert.doesNotMatch(slices, /title:\s*true|\.title\b/, 'plan item titles must not be projected');
+  assert.doesNotMatch(slices, /\.breakdown\b|breakdown:\s*\w/, 'score breakdown labels are free text');
+  assert.match(slices, /source:\s*'user_logged'/, 'cycle reads must be filtered to user_logged');
+  const serializer = readFileSync(join(here, '..', 'services', 'fhir', 'wellnessBundle.js'), 'utf8');
+  assert.doesNotMatch(serializer, /resourceType:\s*'Condition'/, 'HealthCondition is never a FHIR Condition');
+});
