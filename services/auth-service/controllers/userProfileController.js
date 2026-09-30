@@ -295,6 +295,7 @@ export const updateProfile = async (req, res) => {
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
+      weeklyFrequencyIntent,
     } = req.body;
 
     // appMode is deliberately NOT accepted here. It is derived server-side
@@ -308,6 +309,15 @@ export const updateProfile = async (req, res) => {
     if (freeTimeWindow !== undefined && freeTimeWindow !== null
         && !VALID_FREE_TIME_WINDOWS.includes(freeTimeWindow)) {
       return res.status(400).json({ error: `Invalid freeTimeWindow. Must be one of: ${VALID_FREE_TIME_WINDOWS.join(', ')}` });
+    }
+    // The onboarding "how often" answer. It was always sent by the app and
+    // read by health-service (goalService derives the first weekly target
+    // from it) but this handler never wrote it, so every user's target fell
+    // back to the neutral default. Validated against the same enum the
+    // Prisma column uses so a bad value is a 400, not a Prisma 500.
+    if (weeklyFrequencyIntent !== undefined && weeklyFrequencyIntent !== null
+        && !VALID_FREQUENCY_INTENTS.includes(weeklyFrequencyIntent)) {
+      return res.status(400).json({ error: `Invalid weeklyFrequencyIntent. Must be one of: ${VALID_FREQUENCY_INTENTS.join(', ')}` });
     }
     if (currentlyWorksOut !== undefined && currentlyWorksOut !== null
         && typeof currentlyWorksOut !== 'boolean') {
@@ -345,6 +355,7 @@ export const updateProfile = async (req, res) => {
     if (trainingLocationPref !== undefined) updates.trainingLocationPref = trainingLocationPref;
     if (trainingLocationOther !== undefined) updates.trainingLocationOther = trainingLocationOther;
     if (freeTimeWindow !== undefined) updates.freeTimeWindow = freeTimeWindow;
+    if (weeklyFrequencyIntent !== undefined) updates.weeklyFrequencyIntent = weeklyFrequencyIntent;
 
     // Re-derive appMode whenever an input to it changes, from the merged
     // (before + updates) view rather than the request alone — onboarding sends

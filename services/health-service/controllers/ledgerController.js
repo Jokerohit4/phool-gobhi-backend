@@ -11,6 +11,7 @@ import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStora
 import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
+import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 
 const prisma = new PrismaClient();
 
@@ -51,6 +52,9 @@ export const getSetup = handle(async (req) => {
     prisma,
     userId: req.userId,
     localDate: req.query?.localDate,
+    // So age and sex prefill from the signup DOB/gender instead of being asked
+    // twice. Prefill only — see getSetupState.
+    fetchProfile: fetchUserProfileInternal,
   });
 });
 

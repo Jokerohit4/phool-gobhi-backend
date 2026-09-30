@@ -5,7 +5,8 @@ import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 // behavioural health data we hold (device sync, food log, medical documents,
 // cycle history, run routes, coach transcripts).
 //
-// Why 18 here when an account only needs 11 (auth-service MIN_AGE_YEARS):
+// Why 18 (auth-service MIN_AGE_YEARS is now 18 too, but this gate predates
+// that and stays as the Health+ line in its own right):
 // DPDP s.9(3) says a data fiduciary "shall not undertake tracking or
 // behavioural monitoring of children", and the Fourth Schedule exemptions
 // cover clinical establishments and educational institutions — not us. An

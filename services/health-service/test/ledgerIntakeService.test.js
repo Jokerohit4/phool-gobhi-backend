@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  ageFromDob,
   getSetupState,
   saveIntake,
   checkTargetPace,
@@ -149,6 +150,9 @@ test('an existing user can update without resending the goal', async () => {
 
 test('implausible values are refused with a sentence the form can show', () => {
   assert.ok(validateIntake({ age: 8 }).age);
+  // Health+ is 18+: a typed 13–17 must not slip past the consent gate's line.
+  assert.ok(validateIntake({ age: 13 }).age);
+  assert.ok(validateIntake({ age: 17 }).age);
   assert.ok(validateIntake({ age: 130 }).age);
   assert.ok(validateIntake({ heightCm: 20 }).heightCm);
   assert.ok(validateIntake({ heightCm: 400 }).heightCm);
@@ -162,7 +166,7 @@ test('implausible values are refused with a sentence the form can show', () => {
   assert.ok(validateIntake({ targetDate: '28/09/2026' }).targetDate);
 
   // Plausible values pass, including the boundaries.
-  assert.deepEqual(validateIntake({ age: 13, heightCm: 90, weightKg: 25, sex: 'other', activity: 'sedentary', diet: 'vegan' }), {});
+  assert.deepEqual(validateIntake({ age: 18, heightCm: 90, weightKg: 25, sex: 'other', activity: 'sedentary', diet: 'vegan' }), {});
   assert.deepEqual(validateIntake({ age: 100, heightCm: 250, weightKg: 400 }), {});
 });
 
@@ -428,4 +432,55 @@ test('the setup state reports a Decimal target weight as a number', async () => 
   });
   assert.equal(r.prefill.targetWeightKg, 70.5);
   assert.equal(typeof r.prefill.targetWeightKg, 'number');
+});
+
+// --- prefill from the auth profile (onboarding audit P0-4) --------------------
+
+test('age and sex prefill from the signup DOB and gender when no goal exists', async () => {
+  const r = await getSetupState({
+    prisma: fakePrisma(),
+    userId: 1,
+    localDate: TODAY,
+    fetchProfile: async () => ({ dateOfBirth: '1995-10-15T00:00:00.000Z', gender: 'female' }),
+  });
+  // 2026-09-28 is before the 15 Oct birthday, so 30, not 31.
+  assert.equal(r.prefill.age, 30);
+  assert.equal(r.prefill.sex, 'female');
+});
+
+test('a saved HealthGoal snapshot wins over the auth profile', async () => {
+  const r = await getSetupState({
+    prisma: fakePrisma({ goal: { userId: 1, goal: 'recomp', age: 29, sex: 'male' } }),
+    userId: 1,
+    localDate: TODAY,
+    fetchProfile: async () => ({ dateOfBirth: '1980-01-01', gender: 'female' }),
+  });
+  assert.equal(r.prefill.age, 29);
+  assert.equal(r.prefill.sex, 'male');
+});
+
+test('prefill never offers an under-18 age, an unmapped gender, or survives a failed fetch', async () => {
+  const young = await getSetupState({
+    prisma: fakePrisma(),
+    userId: 1,
+    localDate: TODAY,
+    fetchProfile: async () => ({ dateOfBirth: '2010-01-01', gender: 'prefer_not_to_say' }),
+  });
+  assert.equal(young.prefill.age, null);
+  assert.equal(young.prefill.sex, null);
+
+  const failed = await getSetupState({
+    prisma: fakePrisma(),
+    userId: 1,
+    localDate: TODAY,
+    fetchProfile: async () => { throw new Error('auth down'); },
+  });
+  assert.equal(failed.prefill.age, null);
+});
+
+test('ageFromDob counts whole years and handles the birthday itself', () => {
+  assert.equal(ageFromDob('2000-09-28', '2026-09-28'), 26);
+  assert.equal(ageFromDob('2000-09-29', '2026-09-28'), 25);
+  assert.equal(ageFromDob(null, '2026-09-28'), null);
+  assert.equal(ageFromDob('not a date', '2026-09-28'), null);
 });

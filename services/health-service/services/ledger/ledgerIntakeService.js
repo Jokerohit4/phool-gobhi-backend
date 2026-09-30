@@ -57,6 +57,26 @@ export const DIET_PATTERNS = ['veg', 'egg', 'non_veg', 'vegan', 'jain'];
 // body. The engine independently range-checks what it consumes, so these are the
 // outer gate, not the only one.
 export const HEIGHT_CM_RANGE = { min: 90, max: 250 };
+// Same floor as requireAdult and auth-service's MIN_AGE_YEARS.
+export const MIN_INTAKE_AGE = 18;
+
+/**
+ * Whole years between a date of birth and a calendar day (both read as UTC
+ * dates, so no timezone drift). Null for anything unparseable or out of the
+ * intake range — a prefill we can't trust is worse than asking.
+ */
+export function ageFromDob(dateOfBirth, localDate) {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  const day = new Date(`${localDate}T00:00:00Z`);
+  if (Number.isNaN(dob.getTime()) || Number.isNaN(day.getTime())) return null;
+  let age = day.getUTCFullYear() - dob.getUTCFullYear();
+  const beforeBirthday =
+    day.getUTCMonth() < dob.getUTCMonth() ||
+    (day.getUTCMonth() === dob.getUTCMonth() && day.getUTCDate() < dob.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age >= MIN_INTAKE_AGE && age <= 100 ? age : null;
+}
 export const WEIGHT_KG_RANGE = { min: 25, max: 400 };
 
 /** The plain-language goal labels the plan specifies for the picker. */
@@ -101,11 +121,13 @@ function validate(field, value) {
     }
     case 'age': {
       const age = Number(value);
-      // The engine refuses below 13 and above 100 (targetEngine.resolveInputs),
-      // and this service refuses the same range so the user is told here rather
-      // than receiving a silently dropped field.
-      if (!Number.isInteger(age) || age < 13 || age > 100) {
-        return 'Enter an age between 13 and 100.';
+      // Health+ is 18+ (requireAdult gates every consent grant, and DPDP
+      // s.9(3) bars behavioural monitoring of children). The engine itself
+      // tolerates 13+ for its formula, but a typed age here is a second door
+      // into the ledger, so it must hold the same line as the consent gate —
+      // otherwise a 16 typed at intake quietly contradicts an 18+ DOB.
+      if (!Number.isInteger(age) || age < MIN_INTAKE_AGE || age > 100) {
+        return `Enter an age between ${MIN_INTAKE_AGE} and 100.`;
       }
       return null;
     }
@@ -254,16 +276,16 @@ function addDays(date, delta) {
  * that "only what's missing is asked" is kept by the server rather than left to
  * the client to guess.
  */
-export async function getSetupState({ prisma, userId, localDate }) {
+export async function getSetupState({ prisma, userId, localDate, fetchProfile = null }) {
   const day = localDate || todayLocalDate();
-  const [goal, profile, weightKg, resolved] = await Promise.all([
+  const [goal, profile, weightKg, resolved, authUser] = await Promise.all([
     prisma.healthGoal.findUnique({ where: { userId } }),
     prisma.personalisationProfile.findUnique({
       where: { userId },
-      // Only height lives here. Age and sex live on the auth-service user, which
-      // this service does not read — asking for fields the table does not have
-      // would throw rather than prefill, and HealthGoal is the only place this
-      // service may cache them anyway (see the snapshot note at the top).
+      // Only height lives here. Age and sex live on the auth-service user —
+      // read below through the injected fetchProfile, never from this table
+      // (asking for columns it does not have would throw), and HealthGoal is
+      // the only place this service may cache them (snapshot note at the top).
       select: { heightCm: true },
     }),
     latestWeightKg({ prisma, userId, localDate: day }),
@@ -271,7 +293,20 @@ export async function getSetupState({ prisma, userId, localDate }) {
     // still be missing if the user answered nothing today", which is exactly
     // the list the wizard should ask about.
     resolveInputs({ prisma, userId, localDate: day, measured: null }),
+    // The auth profile, for PREFILL ONLY — the DOB the user gave at signup and
+    // their gender. Injected (the controller passes fetchUserProfileInternal)
+    // so this service stays testable without a network, and best-effort: a
+    // null here just means the screen asks, exactly as before.
+    fetchProfile ? fetchProfile(userId).catch(() => null) : Promise.resolve(null),
   ]);
+
+  // Prefill is not a write. The HealthGoal snapshot contract (header, rule 2)
+  // still holds: nothing is copied into HealthGoal until the user confirms the
+  // form, so a later DOB/gender edit never rewrites a historical calculation.
+  // It only stops the wizard re-asking for an age the user already gave as a
+  // date of birth, which is what this function's doc comment always promised.
+  const prefillAge = goal?.age ?? ageFromDob(authUser?.dateOfBirth, day);
+  const prefillSex = goal?.sex ?? (SEXES.includes(authUser?.gender) ? authUser.gender : null);
 
   const missing = resolved.ok ? [] : resolved.missing;
 
@@ -304,8 +339,8 @@ export async function getSetupState({ prisma, userId, localDate }) {
       // From HealthGoal only, per the snapshot contract. There is no fallback
       // to read, so a user who has never answered has no prefill here and the
       // screen asks rather than assuming.
-      age: goal?.age ?? null,
-      sex: goal?.sex ?? null,
+      age: prefillAge,
+      sex: prefillSex,
       activity: goal?.activity ?? null,
       diet: goal?.diet ?? null,
       allergies: goal?.allergies ?? [],
