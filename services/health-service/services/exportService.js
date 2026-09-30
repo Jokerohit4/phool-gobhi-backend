@@ -6,7 +6,26 @@ const prisma = new PrismaClient();
 // Hood rule" (Tech §8.3) is that an export and the on-screen numbers for the
 // same range must never disagree, which only holds if there's a single
 // implementation of "what happened in this range".
-export async function buildRangeSeriesService(userId, { from, to } = {}) {
+//
+// `include` (ABHA-FHIR-INTEGRATION.md §D.1) is opt-in and additive. With the
+// default `[]` the function makes exactly the two reads it always made and
+// returns exactly `{ sessions, biometrics }` with the same row shapes — the
+// FR-16 JSON/CSV download and buildFullExportService must not notice FHIR
+// exists. The FHIR serializer asks for more slices through the SAME builder
+// instead of querying tables itself: a second "what happened in this range"
+// query path is precisely how an export and the screen start to disagree.
+export const RANGE_INCLUDES = Object.freeze([
+  'provenance', 'exerciseRecords', 'dailyActivity', 'planCompletions',
+  'scoreSnapshots', 'foodDayTotals', 'cycleLogged',
+]);
+
+export async function buildRangeSeriesService(userId, { from, to } = {}, { include = [] } = {}) {
+  const unknown = include.filter((k) => !RANGE_INCLUDES.includes(k));
+  if (unknown.length) {
+    // A typo'd slice name would silently produce an export missing a whole
+    // table, which reads as "the user had no data" — fail loudly instead.
+    throw Object.assign(new Error(`unknown include: ${unknown.join(', ')}`), { status: 400 });
+  }
   const dateFilter = from || to
     ? { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) }
     : undefined;
@@ -32,7 +51,7 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
     }),
   ]);
 
-  return {
+  const base = {
     sessions: sessions.map((s) => {
       let volumeKg = 0;
       let completedSets = 0;
@@ -72,6 +91,203 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
       source: b.source,
     })),
   };
+  if (include.length === 0) return base;
+  return withIncludes(userId, { from, to, dateFilter }, include, { base, sessions, biometrics });
+}
+
+// Day bounds in IST for tables that key on an instant rather than a
+// 'YYYY-MM-DD' localDate. The server already treats Asia/Kolkata as "the
+// user's day" (biometricService/ledgerIntakeService), so a range means the
+// same calendar days here as it does for the localDate-keyed tables.
+function istDayBounds({ from, to }) {
+  if (!from && !to) return undefined;
+  return {
+    ...(from ? { gte: new Date(`${from}T00:00:00.000+05:30`) } : {}),
+    ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}),
+  };
+}
+
+function isoDay(date) {
+  // @db.Date columns come back as UTC-midnight Dates; the calendar day is the
+  // UTC date part, never a local conversion (which would shift it a day west).
+  return date ? date.toISOString().slice(0, 10) : null;
+}
+
+// The opt-in slices. Each is a read of a table buildFullExportService already
+// exports, projected once here so every consumer of "this range" (today: the
+// FHIR bundle) sees identical numbers. Provenance travels with every row:
+// where the value came from (`source`) and when we were told (`recordedAt`),
+// because a day-precision localDate on its own says nothing about whether a
+// Tuesday was logged on Tuesday.
+async function withIncludes(userId, { from, to, dateFilter }, include, { base, sessions, biometrics }) {
+  const has = (k) => include.includes(k);
+  const instantFilter = istDayBounds({ from, to });
+  const [records, activity, completions, snapshots, foodLogs, cyclePhases] = await Promise.all([
+    has('exerciseRecords')
+      ? prisma.exerciseRecord.findMany({
+          where: { userId, ...(instantFilter ? { startedAt: instantFilter } : {}) },
+          orderBy: { startedAt: 'asc' },
+        })
+      : [],
+    has('dailyActivity')
+      ? prisma.dailyActivityMetric.findMany({
+          where: { userId, ...(dateFilter ? { date: dateFilter } : {}) },
+          orderBy: { date: 'asc' },
+        })
+      : [],
+    has('planCompletions')
+      ? prisma.planItemCompletion.findMany({
+          where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
+          // kind only, never the title: a doctor item's title is the name of a
+          // medicine or a test, and a completion row must not smuggle it out.
+          include: { planItem: { select: { kind: true } } },
+          orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [],
+    has('scoreSnapshots')
+      ? prisma.scoreDaySnapshot.findMany({
+          where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
+          orderBy: { localDate: 'asc' },
+        })
+      : [],
+    has('foodDayTotals')
+      ? prisma.foodLog.findMany({
+          where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
+          orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [],
+    has('cycleLogged')
+      ? prisma.cyclePhaseEntry.findMany({
+          // user_logged only. A prediction is our arithmetic, not something
+          // she told us, and must never leave the app looking like a fact.
+          where: {
+            userId,
+            source: 'user_logged',
+            ...(from || to
+              ? { startDate: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
+              : {}),
+          },
+          orderBy: { startDate: 'asc' },
+        })
+      : [],
+  ]);
+
+  const out = { ...base };
+  if (has('provenance')) {
+    // Same rows, same order as base.sessions/base.biometrics - only a field is
+    // added, so JSON-vs-FHIR comparisons can zip them index for index.
+    out.sessions = base.sessions.map((row, i) => ({ ...row, recordedAt: sessions[i].endedAt }));
+    out.biometrics = base.biometrics.map((row, i) => ({ ...row, recordedAt: biometrics[i].createdAt }));
+  }
+  if (has('exerciseRecords')) {
+    out.exerciseRecords = records.map((r) => ({
+      recordId: r.id,
+      source: r.source,
+      type: r.type,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      durationSeconds: r.durationSeconds,
+      caloriesBurned: r.caloriesBurned,
+      distanceMeters: r.distanceMeters == null ? null : Number(r.distanceMeters),
+      avgHeartRateBpm: r.avgHeartRateBpm,
+      recordedAt: r.createdAt,
+    }));
+  }
+  if (has('dailyActivity')) {
+    out.dailyActivity = activity.map((a) => ({
+      localDate: a.date,
+      steps: a.steps,
+      activeCalories: a.activeCalories,
+      distanceMeters: a.distanceMeters == null ? null : Number(a.distanceMeters),
+      restingHeartRateBpm: a.restingHeartRateBpm,
+      source: a.source,
+      recordedAt: a.syncedAt,
+    }));
+  }
+  if (has('planCompletions')) {
+    out.planCompletions = completions.map((c) => ({
+      localDate: c.localDate,
+      kind: c.planItem?.kind ?? null,
+      how: c.how,
+      points: c.points,
+      recordedAt: c.createdAt,
+    }));
+  }
+  if (has('scoreSnapshots')) {
+    // breakdown is deliberately not projected: its line labels are free text
+    // (plan titles, food names) and the point of this slice is the number.
+    out.scoreSnapshots = snapshots.map((s) => ({
+      localDate: s.localDate,
+      open: s.open,
+      high: s.high,
+      low: s.low,
+      close: s.close,
+      paused: s.paused,
+      rulesVersion: s.rulesVersion,
+      recordedAt: s.closedAt,
+    }));
+  }
+  if (has('foodDayTotals')) {
+    // Day totals, not individual meals: what a wellness record needs is "how
+    // much did I eat that day". Values are the snapshots taken at log time
+    // (nutritionService.computePortion), so a later catalogue edit can't
+    // rewrite history. They are app estimates, and the serializer says so.
+    const byDay = new Map();
+    for (const f of foodLogs) {
+      const day = byDay.get(f.localDate) || { localDate: f.localDate, kcal: 0, proteinG: 0, entries: 0, recordedAt: f.createdAt };
+      day.kcal += Number(f.nutrients?.kcal) || 0;
+      day.proteinG += Number(f.nutrients?.proteinG) || 0;
+      day.entries += 1;
+      if (f.createdAt > day.recordedAt) day.recordedAt = f.createdAt;
+      byDay.set(f.localDate, day);
+    }
+    out.foodDayTotals = [...byDay.values()].map((d) => ({
+      ...d,
+      kcal: Math.round(d.kcal),
+      proteinG: Math.round(d.proteinG * 10) / 10,
+    }));
+  }
+  if (has('cycleLogged')) {
+    out.cycleLogged = cyclePhases.map((e) => ({
+      startDate: isoDay(e.startDate),
+      endDate: isoDay(e.endDate),
+      phase: e.phase,
+      recordedAt: e.createdAt,
+    }));
+  }
+  return out;
+}
+
+// What a FHIR export leaves out, counted so the file can say so. Same spirit as
+// buildFullExportService's medicalRecords block: an export may be incomplete,
+// but never silently. Counts are account-wide, not ranged - "you have 2
+// conditions we never put in this file" is true whatever range was picked.
+export async function countFhirWithheldService(userId, { cycleIncluded = false, cycleReason } = {}) {
+  const [conditions, documents, cycle] = await Promise.all([
+    prisma.healthCondition.count({ where: { userId } }),
+    prisma.medicalDocument.count({ where: { userId } }),
+    cycleIncluded ? 0 : prisma.cyclePhaseEntry.count({ where: { userId, source: 'user_logged' } }),
+  ]);
+  const withheld = [
+    {
+      kind: 'HealthCondition',
+      count: conditions,
+      reason: 'conditions you told us about are kept in your own words and are never coded or emitted as a FHIR Condition; they are in your full data export',
+    },
+    {
+      kind: 'MedicalDocument',
+      count: documents,
+      reason: 'documents are not embedded in this file; download each one from the medical-documents screen',
+    },
+  ];
+  if (!cycleIncluded) {
+    withheld.push({
+      kind: 'CyclePhaseEntry',
+      count: cycle,
+      reason: cycleReason || 'cycle logs are included only when you choose them for this export',
+    });
+  }
+  return withheld;
 }
 
 // Minimal, dependency-free CSV writer. Quotes only when a value actually
