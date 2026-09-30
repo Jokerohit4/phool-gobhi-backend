@@ -1,12 +1,15 @@
 // Our own FHIR code systems, for the things no standard terminology names.
 //
-// The WellnessRecord Observation profiles bind `code` EXTENSIBLY
-// (ABHA-FHIR-INTEGRATION.md §C.1): use a value-set code when one fits, and
-// only when none does, a code from a system of your own. So this file is the
-// list of places where the IG (v6.5.0) genuinely has no concept - an
-// adherence score, a plan tick, a workout type, a self-rated stress level - not
-// a place to re-invent codes LOINC already has. If you add an entry here,
-// first check it isn't in codeMaps.js's LOINC table under another name.
+// WHERE these may appear is narrower than it first looked. The NRCeS
+// Observation profiles close Observation.code.coding to LOINC and SNOMED CT
+// (validator, IG 6.5.0 - see codeMaps.js), so NONE of these codes is ever an
+// Observation's main code. They are used only where FHIR leaves the coding
+// open: Observation.component.code (sets, volume, RPE, protein...),
+// meta.tag (data source), and identifier systems. Everything that has no
+// standard concept at all - the adherence score, plan ticks, self-rated
+// stress - leaves in the ledger DocumentReference instead (wellnessBundle.js).
+// If you add an entry here, first check it isn't in codeMaps.js's LOINC table
+// under another name.
 //
 // The URIs live under phoolgobhi.com so they are ours to define and never
 // collide with anyone else's; they do not need to resolve to be valid FHIR.
@@ -42,6 +45,8 @@ export const PG_OBSERVATION = Object.freeze({
   dailyDistance: { code: 'daily-distance', display: 'Distance moved in the day' },
   cyclePhaseLogged: { code: 'cycle-phase-logged', display: 'Menstrual cycle phase, as logged by the user' },
   // component codes
+  workoutType: { code: 'workout-type', display: 'Workout type' },
+  exerciseType: { code: 'exercise-type', display: 'Exercise type' },
   durationMinutes: { code: 'duration-minutes', display: 'Duration' },
   completedSets: { code: 'completed-sets', display: 'Completed sets' },
   volumeKg: { code: 'volume-kg', display: 'Training volume (weight x reps)' },

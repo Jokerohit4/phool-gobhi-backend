@@ -9,6 +9,9 @@
 //   3. The refusals: no Condition, no predicted cycle phase, no cycle at all
 //      unless included, no rest day as activity.
 //   4. Every quantity is UCUM-coded or reported as a warning.
+//   5. Every Observation.code.coding is LOINC or SNOMED. The NRCeS profiles
+//      close that slice (HAPI validator, IG 6.5.0); anything of ours rides in
+//      components or in the ledger DocumentReference.
 // Run with: node --experimental-test-module-mocks --test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,7 +23,7 @@ const track = (name, rows) => async (args) => {
   return typeof rows === 'function' ? rows(args) : rows;
 };
 
-let exportService, seriesToWellnessBundle, FHIR_DEFAULT_INCLUDES;
+let exportService, seriesToWellnessBundle, FHIR_DEFAULT_INCLUDES, readLedgerAttachment;
 
 test('setup: mock prisma once, import once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -46,7 +49,7 @@ test('setup: mock prisma once, import once', async (t) => {
     },
   });
   exportService = await import('../services/exportService.js');
-  ({ seriesToWellnessBundle, FHIR_DEFAULT_INCLUDES } = await import('../services/fhir/wellnessBundle.js'));
+  ({ seriesToWellnessBundle, FHIR_DEFAULT_INCLUDES, readLedgerAttachment } = await import('../services/fhir/wellnessBundle.js'));
 });
 
 function fixture() {
@@ -157,8 +160,12 @@ test('cycle: predictions are never read; logged phases only when included', asyn
   const withCycle = await exportService.buildRangeSeriesService(1, {}, { include: [...FHIR_DEFAULT_INCLUDES, 'cycleLogged'] });
   assert.deepEqual(withCycle.cycleLogged.map((e) => e.startDate), ['2026-09-02']);
   const { bundle } = seriesToWellnessBundle(withCycle, { userId: 1, generatedAt: new Date('2026-09-30T10:00:00Z'), newId: ids() });
-  const text = JSON.stringify(bundle);
+  // The ledger attachment is base64, so check its decoded content too.
+  const text = JSON.stringify(bundle) + JSON.stringify(readLedgerAttachment(bundle));
   assert.doesNotMatch(text, /2026-09-30T00|predicted/);
+  assert.deepEqual(readLedgerAttachment(bundle).cycleLogged.map((e) => e.startDate), ['2026-09-02']);
+  const [lmp] = obsByCode(bundle, '8665-2');
+  assert.equal(lmp.valueString, '2026-09-02');
   const noCycle = seriesToWellnessBundle(without, { userId: 1, generatedAt: new Date('2026-09-30T10:00:00Z'), newId: ids() });
   assert.ok(!noCycle.bundle.entry[0].resource.section.some((s) => s.title === 'Women Health'));
 });
@@ -179,10 +186,19 @@ function parseCsvTables(csv) {
   return tables;
 }
 
-const obsByCode = (bundle, code) => bundle.entry
-  .map((e) => e.resource)
-  .filter((r) => r.resourceType === 'Observation' && r.code.coding.some((c) => c.code === code));
-const componentValue = (obs, code) => obs.component.find((c) => c.code.coding.some((x) => x.code === code))?.valueQuantity?.value;
+function obsByCode(bundle, code) {
+  return bundle.entry
+    .map((e) => e.resource)
+    .filter((r) => r.resourceType === 'Observation' && r.code.coding.some((c) => c.code === code));
+}
+function componentValue(obs, code) {
+  return obs.component.find((c) => c.code.coding.some((x) => x.code === code))?.valueQuantity?.value;
+}
+// Workout sessions and exercise records share LOINC 55411-3 (exercise
+// duration); a session is the one carrying a training-volume component.
+function workoutSessions(bundle) {
+  return obsByCode(bundle, '55411-3').filter((o) => o.component?.some((c) => c.code.coding.some((x) => x.code === 'volume-kg')));
+}
 
 test('invariant: JSON, CSV and FHIR carry the same numbers for the same range', async () => {
   fx = fixture();
@@ -192,7 +208,7 @@ test('invariant: JSON, CSV and FHIR carry the same numbers for the same range', 
   const { bundle } = seriesToWellnessBundle(series, { userId: 1, generatedAt: '2026-09-30T10:00:00Z', newId: ids() });
 
   // Biometrics: value per metric, identical in all three.
-  const loincFor = { weight: '29463-7', body_fat: '41982-0', resting_hr: 'resting-heart-rate' };
+  const loincFor = { weight: '29463-7', body_fat: '41982-0', resting_hr: '8867-4' };
   for (const row of json.biometrics) {
     const csvRow = csv.biometrics.find((r) => r.metric === row.metric && r.localDate === row.localDate);
     const [obs] = obsByCode(bundle, loincFor[row.metric]).filter((o) => o.effectiveDateTime === row.localDate && o.meta.tag?.[0].code === row.source);
@@ -204,12 +220,15 @@ test('invariant: JSON, CSV and FHIR carry the same numbers for the same range', 
   // Sessions: volume, sets, minutes. The rest day is in JSON/CSV, not in FHIR.
   const strength = json.sessions.find((s) => s.type === 'strength');
   const csvStrength = csv.sessions.find((r) => r.sessionId === String(strength.sessionId));
-  const [obs] = obsByCode(bundle, 'workout-session');
-  assert.equal(obsByCode(bundle, 'workout-session').length, 1, 'rest session must not become an activity');
-  for (const [field, code] of [['volumeKg', 'volume-kg'], ['completedSets', 'completed-sets'], ['durationMinutes', 'duration-minutes'], ['rpe', 'rpe']]) {
+  const [obs] = workoutSessions(bundle);
+  assert.equal(workoutSessions(bundle).length, 1, 'rest session must not become an activity');
+  for (const [field, code] of [['volumeKg', 'volume-kg'], ['completedSets', 'completed-sets'], ['rpe', 'rpe']]) {
     assert.equal(Number(csvStrength[field]), strength[field]);
     assert.equal(componentValue(obs, code), strength[field], `${field} differs between JSON and FHIR`);
   }
+  // Duration is the observation's own value now (it IS the LOINC concept).
+  assert.equal(Number(csvStrength.durationMinutes), strength.durationMinutes);
+  assert.equal(obs.valueQuantity.value, strength.durationMinutes, 'durationMinutes differs between JSON and FHIR');
   assert.equal(obs.effectivePeriod.start, strength.startedAt.toISOString());
 });
 
@@ -231,19 +250,25 @@ test('the bundle is a WellnessRecord document whose references all resolve', asy
   }
   const patient = bundle.entry.find((e) => e.resource.resourceType === 'Patient').resource;
   assert.equal(patient.identifier[0].value, '7');
-  // The score keeps its rules version and never ships the free-text breakdown.
-  const [score] = obsByCode(bundle, 'adherence-score-daily');
-  assert.equal(score.valueQuantity.value, 72);
-  assert.match(score.method.text, /score-v3/);
-  assert.doesNotMatch(JSON.stringify(bundle), /Paneer tikka/);
-  // Food totals are summed per day and flagged as estimates.
-  const [kcal] = obsByCode(bundle, 'daily-energy-intake');
+  // The score has no standard concept: it travels in the ledger attachment,
+  // with its rules version, and never with the free-text breakdown.
+  const ledger = readLedgerAttachment(bundle);
+  assert.equal(ledger.format, 'phoolgobhi.adherence-ledger');
+  assert.equal(ledger.formatVersion, 1);
+  const [score] = ledger.scoreSnapshots;
+  assert.deepEqual([score.open, score.high, score.low, score.close], [40, 81, 38, 72]);
+  assert.equal(score.rulesVersion, 'score-v3');
+  assert.doesNotMatch(JSON.stringify(bundle) + JSON.stringify(ledger), /Paneer tikka/);
+  const docSection = first.resource.section.find((s) => s.title === 'Document Reference');
+  assert.equal(docSection.entry.length, 1, 'one ledger attachment per bundle');
+  // Food totals are summed per day (LOINC 9052-2) and flagged as estimates.
+  const [kcal] = obsByCode(bundle, '9052-2');
   assert.equal(kcal.valueQuantity.value, 1101);
   assert.match(kcal.note[0].text, /estimates/);
   // A late tick is visible as late.
-  const [tick] = obsByCode(bundle, 'plan-item-completed');
-  assert.equal(tick.effectiveDateTime, '2026-09-08');
-  assert.equal(tick.issued, '2026-09-10T05:00:00.000Z');
+  const [tick] = ledger.planCompletions;
+  assert.equal(tick.localDate, '2026-09-08');
+  assert.equal(tick.recordedAt, '2026-09-10T05:00:00.000Z');
 });
 
 test('never a Condition, and every quantity is UCUM or a reported warning', async () => {
@@ -280,4 +305,27 @@ test('withheld items are counted with a reason, cycle only when not included', a
   assert.ok(!included.some((w) => w.kind === 'CyclePhaseEntry'));
   const refused = await exportService.countFhirWithheldService(1, { cycleReason: 'consent not granted' });
   assert.equal(refused.find((w) => w.kind === 'CyclePhaseEntry').reason, 'consent not granted');
+});
+
+test('every Observation code is LOINC or SNOMED (NRCeS closes that slice)', async () => {
+  fx = fixture();
+  const series = await exportService.buildRangeSeriesService(1, {}, { include: [...FHIR_DEFAULT_INCLUDES, 'cycleLogged'] });
+  // Every metric the map knows, so a new custom main code can't slip in.
+  for (const metric of ['hrv', 'sleep_minutes', 'steps', 'stress']) {
+    series.biometrics.push({ localDate: '2026-09-08', metric, value: 5, unit: metric === 'hrv' ? 'ms' : 'score', source: 'manual' });
+  }
+  const { bundle } = seriesToWellnessBundle(series, { userId: 1, generatedAt: '2026-09-30T10:00:00Z', newId: ids() });
+  const allowed = new Set(['http://loinc.org', 'http://snomed.info/sct']);
+  const observations = bundle.entry.map((e) => e.resource).filter((r) => r.resourceType === 'Observation');
+  assert.ok(observations.length > 5);
+  for (const o of observations) {
+    for (const c of o.code.coding) assert.ok(allowed.has(c.system), `${o.code.text}: ${c.system}#${c.code} is not LOINC/SNOMED`);
+    assert.ok(o.code.coding.every((c) => c.display), `${o.code.text}: LOINC slice requires display`);
+    assert.ok(o.text?.div, 'every resource carries a narrative (dom-6)');
+  }
+  // Stress has no standard concept: it is in the ledger, not an Observation.
+  assert.equal(readLedgerAttachment(bundle).stress.length, 1);
+  // Weight triggers the core bodyweight profile, which requires vital-signs.
+  const [weight] = observations.filter((o) => o.code.coding[0].code === '29463-7');
+  assert.equal(weight.category[0].coding[0].code, 'vital-signs');
 });
