@@ -552,6 +552,32 @@ model BiometricEntry {
   @@schema("health")
 }
 
+// Consent to store the body numbers a person TYPES IN (weight, body fat, and
+// the Health+ quick-add metrics), kept apart from HealthConsent on purpose.
+//
+// HealthConsent is the device-access grant: it has a required `platform` and
+// describes reading HealthKit / Health Connect. Someone logging their weight by
+// hand has never been asked about device access, and may never want it, so
+// hanging this off HealthConsent (as the ledger scopes do) would force a
+// person to connect Apple Health before they could type "72 kg". That is the
+// wrong consent answering the wrong question.
+//
+// Same shape as AssistantConsent, and for the same reason: the version is
+// stamped by the server from biometricConsentService.BIOMETRIC_POLICY_VERSION,
+// never accepted from the client, which is what makes "ask again when the
+// wording changes" enforceable. Revoke is soft (revokedAt), so "did this person
+// ever agree, and when" survives a withdrawal.
+model BiometricConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  policyVersion String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@schema("health")
+}
+
 // DPDPA purpose-limitation config, singleton row (id always 1),
 // admin-editable from day one so a retention period can change on legal
 // advice without a redeploy — same convention as challenge-service's

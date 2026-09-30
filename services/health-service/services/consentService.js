@@ -94,6 +94,10 @@ export async function deleteAllDataService(userId) {
     // records in wallet/booking-service already rely on; see the
     // three-bucket note in retentionService.js.
     prisma.healthConsent.deleteMany({ where: { userId } }),
+    // The body-numbers consent row goes with the account like the device one.
+    // It carries no values - only that consent was given and when - but it is
+    // a per-person record and has no purpose once the person is gone.
+    prisma.biometricConsent.deleteMany({ where: { userId } }),
     // Fitness assistant. Conversations cascade to their messages via the FK,
     // but messages are deleted explicitly first anyway: the delete is ordered
     // for a reader, not just for the database, and "the transcript goes" is
