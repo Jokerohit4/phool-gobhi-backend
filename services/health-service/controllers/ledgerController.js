@@ -3,6 +3,7 @@ import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
+import * as attainmentService from '../services/ledger/attainmentService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
 import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import { PrismaClient } from '@prisma/client';
@@ -437,8 +438,21 @@ export const setPause = handle(async (req) =>
 );
 
 export const clearPause = handle(async (req) =>
-  scoreService.clearPause(prisma, { userId: req.userId }),
-);
+    scoreService.clearPause(prisma, { userId: req.userId }),
+  );
+
+  // Attainment reads the weight series up to a day boundary, so `today` is
+  // required and validated the same way pause requires it. A missing or malformed
+  // date here would not be a cosmetic oddity: it decides which readings are
+  // visible at all, so a bad one would let a future-dated weigh-in into the
+  // series and could report the goal as met.
+  export const getAttainment = handle(async (req) =>
+    attainmentService.getAttainment(prisma, {
+      userId: req.userId,
+      localDate: requireToday(req.query?.today),
+    }),
+  );
+
 
 // Previewing today writes nothing, so this is safe to call on every screen
 // render. Closing a day is the only thing that freezes one, and it is

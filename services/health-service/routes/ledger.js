@@ -132,6 +132,12 @@ router.put('/ledger/score/calm-mode', ...nutrition, ledgerCtrl.setCalmMode);
 router.get('/ledger/score/pause', ...nutrition, ledgerCtrl.getPause);
 router.put('/ledger/score/pause', ...nutrition, ledgerCtrl.setPause);
 router.delete('/ledger/score/pause', ...nutrition, ledgerCtrl.clearPause);
+// Attainment - whether the goal is being met, as distinct from what the day was
+// worth. A separate route rather than a field on the score series because it
+// answers a different question from different evidence: the score reads
+// snapshots, this reads the weight series. A client that could conflate them by
+// accident is a client we would rather not ship.
+router.get('/ledger/attainment', ...nutrition, ledgerCtrl.getAttainment);
 router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewScore);
 router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScoreDay);
 
