@@ -37,7 +37,16 @@ export const CURRENT_POLICY_VERSION = 'assistant-full-scope-2026-09-18';
 /// useful for. Bumping CURRENT_POLICY_VERSION would make every existing
 /// AssistantConsent stale and re-prompt the whole user base to agree again to
 /// terms they have already seen — for a change to nothing they were told.
-export const CURRENT_PROMPT_VERSION = 'v4';
+/// v5 — explicit refusals for disease-management plans, medicine/insulin
+/// timing and dosing, and contraception/fertility advice, in BOTH strictness
+/// modes. These sit in SHARED_RULES, not the strictness switch: CDSCO's final
+/// Medical Device Software guidance (2026, CDSCO/MD/GD/MDSW/01/2026) names a
+/// "behaviour-change platform intended to mitigate the progression of chronic
+/// diseases" as a regulated device (Ex.10) and lists "control of conception"
+/// as a medical purpose, and neither is the injury/pain question the 2026-09-18
+/// full-scope decision was about. Policy version deliberately not bumped: the
+/// disclosure the user agreed to ("not a doctor") did not change.
+export const CURRENT_PROMPT_VERSION = 'v5';
 
 /// How strict the assistant is about medical questions.
 ///
@@ -88,6 +97,17 @@ Ground rules:
 - You are not a doctor and must say so whenever a question edges toward
   medical territory. Never diagnose, never prescribe medication or supplement
   doses, never interpret a lab or blood result.
+- Never build, adjust or describe a plan as treating, managing, controlling or
+  reversing a disease or condition — diabetes, PCOS, hypertension, thyroid,
+  heart disease or any other. Healthy-lifestyle guidance that suits anyone is
+  fine; a plan for a condition belongs to their doctor, so say that and point
+  them there.
+- Never advise on the timing or amount of any medicine, insulin or supplement,
+  including around workouts or meals.
+- Never give advice about contraception, fertility, or the best or safest days
+  to get pregnant or avoid pregnancy. Period logging in this app is for
+  planning training only; for anything about conception, point them to a
+  doctor.
 - Use the user context below when it makes the answer more concrete. Do not
   invent facts about the user that the context does not contain — if you do not
   know how often they train, ask rather than assume.

@@ -121,7 +121,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments] =
+  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
@@ -188,6 +188,9 @@ export async function buildFullExportService(userId) {
       // are dropped from the output below when consent is absent - they are
       // never written anywhere, and a fetch is not a disclosure.
       prisma.medicalDocument.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      // The body-numbers consent record - that it was given, when, and under
+      // which wording. Erased with the account, so exported with it.
+      prisma.biometricConsent.findUnique({ where: { userId } }),
     ]);
 
   // Reuses the range builder with no range, so the session shape in a
@@ -474,6 +477,17 @@ export async function buildFullExportService(userId) {
     biometrics: biometrics.map((b) => ({
       localDate: b.localDate, metric: b.metric, value: Number(b.value), unit: b.unit, source: b.source,
     })),
+    // Consent for the hand-typed numbers above, kept separate from the device
+    // `consent` block because they are separate grants. Numbers logged before
+    // this consent existed are still exported in full: withdrawing or never
+    // granting it stops new entries, never access to your own history.
+    biometricConsent: biometricConsent
+      ? {
+          grantedAt: biometricConsent.grantedAt,
+          revokedAt: biometricConsent.revokedAt,
+          policyVersion: biometricConsent.policyVersion,
+        }
+      : null,
     // Included because it is per-user behavioural data we hold, even though
     // it exists only to be aggregated away - see retentionService bucket 1.
     // It is the one slice here that expires on a clock rather than with the

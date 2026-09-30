@@ -22,6 +22,11 @@ import { requireCycleConsent } from '../middleware/requireCycleConsent.js';
 import * as locationRoutesCtrl from '../controllers/locationRoutesController.js';
 import { requireLocationRoutesConsent } from '../middleware/requireLocationRoutesConsent.js';
 import { requireAssistantConsent } from '../middleware/requireAssistantConsent.js';
+import { requireDeviceHealthConsent } from '../middleware/requireDeviceHealthConsent.js';
+import { requireBiometricWriteConsent } from '../middleware/requireBiometricConsent.js';
+import * as biometricConsentCtrl from '../controllers/biometricConsentController.js';
+// Adults-only on every consent GRANT (never on revoke/delete) — see requireAdult.
+import { requireAdult } from '../middleware/requireAdult.js';
 import * as recapCtrl from '../controllers/recapController.js';
 import * as retentionCtrl from '../controllers/retentionController.js';
 import * as adminCtrl from '../controllers/adminController.js';
@@ -110,7 +115,7 @@ const cycleGated = [
   requireFeatureFlag('cycleTracking'),
 ];
 router.get('/cycle', ...cycleGated, cycleCtrl.getProfile);
-router.post('/cycle/consent', ...cycleGated, cycleCtrl.grantConsent);
+router.post('/cycle/consent', ...cycleGated, requireAdult, cycleCtrl.grantConsent);
 router.delete('/cycle/consent', ...cycleGated, cycleCtrl.revokeConsent);
 router.put('/cycle', ...cycleGated, requireCycleConsent, cycleCtrl.updateProfile);
 router.get('/cycle/phases', ...cycleGated, requireCycleConsent, cycleCtrl.listPhases);
@@ -121,7 +126,7 @@ router.delete('/cycle', requireAuth, cycleCtrl.deleteAllData);
 
 // ---- Fitness assistant ---------------------------------------------------
 router.get('/assistant/consent', ...assistantGated, assistantCtrl.getConsent);
-router.post('/assistant/consent', ...assistantGated, assistantCtrl.grantConsent);
+router.post('/assistant/consent', ...assistantGated, requireAdult, assistantCtrl.grantConsent);
 router.delete('/assistant/consent', ...assistantGated, assistantCtrl.revokeConsent);
 router.get('/assistant/conversations', ...assistantGated, requireAssistantConsent, assistantCtrl.listConversations);
 router.post('/assistant/messages', ...assistantGated, requireAssistantConsent, assistantCtrl.sendMessage);
@@ -140,7 +145,7 @@ router.put('/assistant/memories', ...assistantGated, requireAssistantConsent, as
 router.delete('/assistant/memories/:id', ...assistantGated, assistantCtrl.forgetMemory);
 
 // ---- Consent -------------------------------------------------------------
-router.post('/consent', ...gated, consentCtrl.grantConsent);
+router.post('/consent', ...gated, requireAdult, consentCtrl.grantConsent);
 router.delete('/consent', ...gated, consentCtrl.revokeConsent);
 router.get('/consent/status', ...gated, consentCtrl.getConsentStatus);
 
@@ -176,7 +181,12 @@ router.patch('/sessions/:id', ...gated, sessionCtrl.finishSession);
 // ---- Cardio/yoga/other quick logging + device-synced activity ---------
 router.post('/exercise-records', ...gated, activityCtrl.createExerciseRecord);
 router.get('/exercise-records', ...gated, activityCtrl.listExerciseRecords);
-router.post('/daily-activity/sync', ...gated, activityCtrl.syncDailyActivity);
+// Device sync alone is consent-gated server-side: it is the one write whose
+// data comes from HealthKit/Health Connect rather than from the person typing
+// it, and the OS permission can outlive a revoked in-app consent. See
+// requireDeviceHealthConsent for why exercise-records (manual + device mixed)
+// is not gated the same way.
+router.post('/daily-activity/sync', ...gated, requireDeviceHealthConsent, activityCtrl.syncDailyActivity);
 router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
 
 // ---- GPS run tracker (run-tracker-spec.html §10) -------------------------
@@ -190,7 +200,7 @@ router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
 // would be no way to opt in. Everything that touches recorded route data
 // requires it.
 router.get('/runs/consent', ...runTrackerGated, locationRoutesCtrl.getConsent);
-router.post('/runs/consent', ...runTrackerGated, locationRoutesCtrl.grantConsent);
+router.post('/runs/consent', ...runTrackerGated, requireAdult, locationRoutesCtrl.grantConsent);
 router.delete('/runs/consent', requireAuth, locationRoutesCtrl.revokeConsent);
 
 // Order matters: /runs/summary must be registered before /runs/:id, or
@@ -214,7 +224,17 @@ router.get('/progress/muscle-readiness', ...gated, progressCtrl.getMuscleReadine
 // body_fat ("Track body"), Health+ Phase 1 adds resting HR / sleep / steps /
 // HRV / stress on the same schema, wearable-ready. POST accepts either a
 // single {metric,value} or {entries:[...]} for the multi-metric quick-add.
-router.post('/biometrics', ...gated, biometricCtrl.upsertEntries);
+// Typed body numbers need their own consent (body_numbers), separate from the
+// device-access HealthConsent - see biometricConsentService.js. Only the WRITE
+// is gated: reading, exporting and deleting what is already logged never
+// depends on agreeing to log more. The consent routes are registered first and
+// are themselves ungated by the scope, or there would be no way to opt in.
+// Revoke is requireAuth only, like /runs/consent: withdrawing must keep working
+// even if the healthMetrics flag is switched off.
+router.get('/biometrics/consent', ...gated, biometricConsentCtrl.getConsent);
+router.post('/biometrics/consent', ...gated, requireAdult, biometricConsentCtrl.grantConsent);
+router.delete('/biometrics/consent', requireAuth, biometricConsentCtrl.revokeConsent);
+router.post('/biometrics', ...gated, requireBiometricWriteConsent, biometricCtrl.upsertEntries);
 router.get('/biometrics', ...gated, biometricCtrl.listEntries);
 // Must precede the :metric route below so "latest" isn't parsed as a metric.
 router.get('/biometrics/latest', ...gated, biometricCtrl.getLatest);

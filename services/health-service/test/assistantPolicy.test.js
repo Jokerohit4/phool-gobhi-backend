@@ -140,3 +140,20 @@ test('classifyMessage is a no-op seam, not a filter that silently passes', async
   assert.equal(mod.classifyMessage('my knee hurts'), null);
   assert.equal(mod.classifyMessage(''), null);
 });
+
+test('both modes refuse disease management, dosing and conception advice', async () => {
+  // These sit outside the strictness switch on purpose: full scope was a
+  // decision about injury and pain, not about managing a disease. CDSCO's
+  // final MDSW guidance (2026) treats a coaching platform aimed at slowing a
+  // chronic disease, and anything for "control of conception", as a device.
+  for (const scope of ['full', 'general_wellness']) {
+    if (scope === 'general_wellness') process.env.ASSISTANT_STRICTNESS = 'general_wellness';
+    const mod = await import(`../services/assistant/assistantPolicy.js?scope=disease-${scope}`);
+    const prompt = flat(mod.getSystemPrompt());
+    assert.match(prompt, /Never build, adjust or describe a plan as treating, managing, controlling or reversing a disease/i, scope);
+    assert.match(prompt, /diabetes, PCOS, hypertension/i, scope);
+    assert.match(prompt, /Never advise on the timing or amount of any medicine, insulin or supplement/i, scope);
+    assert.match(prompt, /Never give advice about contraception, fertility/i, scope);
+    delete process.env.ASSISTANT_STRICTNESS;
+  }
+});

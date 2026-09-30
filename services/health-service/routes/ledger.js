@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
+import { requireAdult } from '../middleware/requireAdult.js';
 import { requireNutritionConsent, requireMedicalRecordsConsent } from '../middleware/requireLedgerConsent.js';
+import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
 import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js';
@@ -44,9 +46,9 @@ router.get('/ledger/consent', ...consentGated, ledgerConsentCtrl.getConsent);
 // before it has any consent state to show. Public within the ledger gate —
 // there is nothing user-specific in it.
 router.get('/ledger/consent/policy', ...consentGated, ledgerConsentCtrl.getPolicy);
-router.post('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.grantNutrition);
+router.post('/ledger/consent/nutrition', ...consentGated, requireAdult, ledgerConsentCtrl.grantNutrition);
 router.delete('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.revokeNutrition);
-router.post('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.grantMedicalRecords);
+router.post('/ledger/consent/medical-records', ...consentGated, requireAdult, ledgerConsentCtrl.grantMedicalRecords);
 router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.revokeMedicalRecords);
 
 // ---- Intake ----------------------------------------------------------------
@@ -56,7 +58,10 @@ router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentC
 // are you working towards, how old are you" is itself health data, and the
 // nutrition consent is what the user agreed to when they turned the food log on.
 router.get('/ledger/setup', ...nutrition, ledgerCtrl.getSetup);
-router.put('/ledger/setup', ...nutrition, ledgerCtrl.saveSetup);
+// A weight in the body is written to the BiometricEntry series (source
+// 'manual'), so it also needs body-numbers consent - nutrition consent describes
+// the food log, not body measurements. A save without a weight is unaffected.
+router.put('/ledger/setup', ...nutrition, requireBiometricConsentForIntakeWeight, ledgerCtrl.saveSetup);
 
 // ---- Targets --------------------------------------------------------------
 
