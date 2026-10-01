@@ -28,6 +28,10 @@ let sendResult = true;
 let unloggedUsers = [];
 // auth-service profiles by userId, for comeback free-time timing.
 let profiles = {};
+// HealthGoal rows the target-candidate query sees, and the band the (mocked)
+// target engine would compute for each user.
+let healthTargets = [];
+let scoreBands = {};
 
 let nudge;
 
@@ -83,6 +87,17 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
             groupBy: async () => groupedSessions,
             findMany: async () => [],
           };
+          // Mirrors the real where clause: a target must exist, still be open
+          // and not be under calm mode to be a candidate at all.
+          this.healthGoal = {
+            findMany: async ({ where }) =>
+              healthTargets.filter(
+                (g) =>
+                  g.scoreTargetPoints != null &&
+                  g.scoreTargetUntil >= where.scoreTargetUntil.gte &&
+                  g.calmMode === false,
+              ),
+          };
         }
       },
     },
@@ -108,6 +123,17 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
     exports: { fetchUserProfileInternal: async (userId) => profiles[userId] ?? null },
   });
 
+  // The band the user's own card would show. Mocked so the sweep's DECISION to
+  // nudge is what is under test, not the score engine's already-tested pace
+  // maths.
+  t.mock.module('../services/ledger/scoreTargetService.js', {
+    exports: {
+      getScoreTargetState: async (_prisma, { userId }) => ({
+        band: scoreBands[userId] ?? 'on_track',
+      }),
+    },
+  });
+
   nudge = await import('../services/nudgeService.js');
 });
 
@@ -120,6 +146,30 @@ function reset() {
   sendResult = true;
   unloggedUsers = [];
   profiles = {};
+  healthTargets = [];
+  scoreBands = {};
+}
+
+// An IST day `offset` days from the fixed clock, 'YYYY-MM-DD'. Positive is the
+// future; the target window is stored in these strings.
+function isoDay(offset, from = FIXED_NOW) {
+  return new Date(from.getTime() + offset * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  });
+}
+
+// A HealthGoal row with a live target, overridable per test.
+function targetGoal(userId, overrides = {}) {
+  return {
+    userId,
+    scoreTargetPoints: 400,
+    scoreTargetFrom: isoDay(-5),
+    scoreTargetUntil: isoDay(10),
+    calmMode: false,
+    pausedFrom: null,
+    pausedUntil: null,
+    ...overrides,
+  };
 }
 
 const middayIST = FIXED_NOW;
@@ -286,11 +336,89 @@ test('an unreachable auth-service means no preference, not no nudge', async () =
   assert.equal(result.deferred, 0);
 });
 
+test('the target nudge asks for the band, and only "behind" earns a send', async () => {
+  reset();
+  healthTargets = [
+    targetGoal(1), // behind below - the one candidate
+    targetGoal(2, { calmMode: true }), // calm mode: excluded before scoring
+    targetGoal(3, { pausedFrom: isoDay(-2), pausedUntil: isoDay(2) }), // mid-pause
+    targetGoal(4, { scoreTargetFrom: isoDay(3) }), // window not open yet
+    targetGoal(5), // on track
+    targetGoal(6), // window already closed
+  ];
+  // The closed window is filtered by the SQL mock; give it a past `until`.
+  healthTargets[5].scoreTargetUntil = isoDay(-1);
+  scoreBands = { 1: 'behind', 5: 'on_track' };
+
+  const candidates = await nudge.findTargetCandidatesService(middayIST);
+
+  // Calm mode and a paused goal never reach the engine; a target that has not
+  // opened is not behind; on_track is not behind. only user 1 is left.
+  assert.deepEqual(candidates, [1]);
+});
+
+test('a sweep sends the target nudge, records it, and routes to the score', async () => {
+  reset();
+  healthTargets = [targetGoal(7)];
+  scoreBands = { 7: 'behind' };
+  profiles = { 7: { freeTimeWindow: 'afternoon' } };
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.target, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(created.length, 1);
+  assert.equal(created[0].type, 'target');
+  assert.equal(sent[0].payload.data.route, 'score');
+});
+
+test('the target nudge waits for free time without spending budget', async () => {
+  reset();
+  healthTargets = [targetGoal(7)];
+  scoreBands = { 7: 'behind' };
+  profiles = { 7: { freeTimeWindow: 'evening' } };
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.target, 0);
+  assert.equal(result.deferred, 1);
+  assert.equal(sent.length, 0);
+  assert.equal(created.length, 0);
+});
+
+test('a repeated target nudge is held back longer than other nudges', async () => {
+  reset();
+  // 48h after a target nudge: past the global 24h gap, inside the 72h floor.
+  nudgeLogs = [{ userId: 1, type: 'target', sentAt: hoursAgo(48) }];
+
+  const held = await nudge.canSendService(1, 'target', middayIST);
+  assert.equal(held.allowed, false);
+  assert.equal(held.reason, 'target_cooldown');
+
+  // The longer floor is per type: another type at 48h is only bound by the
+  // 24h gap.
+  assert.equal((await nudge.canSendService(1, 'comeback', middayIST)).allowed, true);
+
+  // And the target nudge is allowed again once its own floor has passed.
+  reset();
+  nudgeLogs = [{ userId: 1, type: 'target', sentAt: hoursAgo(80) }];
+  assert.equal((await nudge.canSendService(1, 'target', middayIST)).allowed, true);
+});
+
 test('opting out and back in round-trips', async () => {
   reset();
 
   assert.deepEqual(await nudge.setOptOutService(5, 'log', true), ['log']);
   assert.deepEqual(await nudge.setOptOutService(5, 'log', false), []);
+});
+
+test('the target nudge is independently switchable', async () => {
+  reset();
+
+  // A user who wants the pace reminder off must not have to also silence
+  // comeback, and vice versa.
+  assert.deepEqual(await nudge.setOptOutService(5, 'target', true), ['target']);
+  assert.equal(nudge.NUDGE_TYPES.includes('target'), true);
 });
 
 test('an unknown nudge type is rejected rather than silently stored', async () => {

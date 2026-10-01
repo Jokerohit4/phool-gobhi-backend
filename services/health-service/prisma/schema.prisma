@@ -769,6 +769,10 @@ model WeeklyGoal {
 enum NudgeType {
   log
   comeback
+  // "You are behind the score target you set." Added last; the opt-out join
+  // keys on (userId, type) and stores the value by name, so order is
+  // irrelevant.
+  target
 
   @@schema("health")
 }
