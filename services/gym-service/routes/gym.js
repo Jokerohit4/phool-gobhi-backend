@@ -44,6 +44,9 @@ router.get('/edit-requests', requireRole('gobhi'), ctrl.listEditRequestsAdmin);
 // internal staff reporting over data already collected, and switching the
 // customer-facing feature off should not also blind sales to what it gathered.
 router.post('/unclaimed', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.resolvePlace);
+// Manual pin for a gym Google doesn't know. Same flag: it writes a row and
+// feeds the same GPS check-in.
+router.post('/unclaimed/manual', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.addManualGym);
 router.get('/unclaimed', requireRole('gobhi'), unclaimedCtrl.listUnclaimedGymsAdmin);
 router.put('/unclaimed/:id/claim-status', requireRole('gobhi'), unclaimedCtrl.updateClaimStatusAdmin);
 router.get('/edit-requests/:id', requireRole('gobhi'), ctrl.getEditRequestAdmin);
@@ -80,6 +83,9 @@ router.get('/:id/subscription-plans', ctrl.getSubscriptionPlans);
 // generic need. Key lives only server-side; see services/placesService.js.
 router.get('/places/autocomplete', requireAuth, ctrl.placesAutocomplete);
 router.get('/places/details', requireAuth, ctrl.placesDetails);
+// Gym-only search for the own-gym picker. Gated with the feature it serves —
+// it's billable (Text/Nearby Search) and has no other caller.
+router.get('/places/gyms', requireAuth, requireFeatureFlag('nonPartnerAttendance'), ctrl.placesGymSearch);
 
 // Partner routes
 router.get('/partner/mine', requireRole('partner'), ctrl.getPartnerGyms);

@@ -897,6 +897,27 @@ export const placesAutocomplete = async (req, res) => {
   }
 };
 
+// GET /places/gyms?q=&lat=&lng= — gyms only, nearest first. `q` empty means
+// "gyms near me" (needs lat/lng). Separate from placesAutocomplete on purpose:
+// that one predicts addresses and must keep doing so for address entry.
+export const placesGymSearch = async (req, res) => {
+  try {
+    const { q, lat, lng } = req.query;
+    const query = typeof q === 'string' ? q.trim() : '';
+    if (query.length > 80) return res.status(400).json({ error: 'q is too long' });
+    const latN = Number(lat);
+    const lngN = Number(lng);
+    const location =
+      lat !== undefined && lng !== undefined && Number.isFinite(latN) && Number.isFinite(lngN)
+        ? { lat: latN, lng: lngN }
+        : null;
+    const results = await placesService.searchGyms({ query, location });
+    res.json({ data: results });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const placesDetails = async (req, res) => {
   try {
     const { placeId, sessiontoken } = req.query;

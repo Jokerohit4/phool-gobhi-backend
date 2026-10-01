@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import * as placesService from './placesService.js';
 
@@ -124,6 +125,76 @@ export async function resolvePlaceService(placeId, userId, sessionToken) {
     },
   });
 
+  return { matchedGymId: null, unclaimedGym };
+}
+
+// Manually added gyms carry a synthetic googlePlaceId so the existing unique
+// column (and every consumer keyed on it) keeps working with no migration.
+// The prefix is the marker: anything starting with it was pinned by a
+// customer standing somewhere, not verified against Google's index — so a
+// check-in there proves "the phone was where the user said their gym is",
+// which is weaker evidence than a Places-backed gym. Anything that grades
+// attendance (e.g. an insurer-grade score) must treat these as self-reported.
+export const MANUAL_PLACE_PREFIX = 'manual:';
+
+// Rough India bounding box. A manual pin outside it is a spoofed or broken
+// location, not a gym we can geofence.
+const INDIA_BOUNDS = { minLat: 6, maxLat: 37.5, minLng: 68, maxLng: 97.5 };
+
+export function isManualPlaceId(placeId) {
+  return typeof placeId === 'string' && placeId.startsWith(MANUAL_PLACE_PREFIX);
+}
+
+/// "Can't find your gym? Add it" — the user names the gym and we pin it where
+/// their phone is right now (they are expected to be at it). Partner matching
+/// still runs first: a user who types "Iron House" while standing in our
+/// partner Iron House should be sent to booking, not filed as independent.
+export async function addManualGymService({ name, lat, lng }, userId) {
+  const cleanName = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
+  if (cleanName.length < 2 || cleanName.length > 80) {
+    throw { status: 400, error: 'Gym name must be 2–80 characters' };
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw { status: 400, error: 'Your current location is needed to add a gym' };
+  }
+  if (
+    lat < INDIA_BOUNDS.minLat || lat > INDIA_BOUNDS.maxLat ||
+    lng < INDIA_BOUNDS.minLng || lng > INDIA_BOUNDS.maxLng
+  ) {
+    throw { status: 422, error: 'That location is outside India' };
+  }
+
+  const matchedGymId = await matchPartnerGymService({ name: cleanName, lat, lng });
+  if (matchedGymId) return { matchedGymId, unclaimedGym: null };
+
+  // Reuse this user's own earlier manual pin of the same name close by, so
+  // re-adding (e.g. after reinstalling) doesn't litter the table with
+  // duplicates of one gym.
+  const delta = 0.002;
+  const mine = await prisma.unclaimedGym.findMany({
+    where: {
+      addedByUserId: userId,
+      googlePlaceId: { startsWith: MANUAL_PLACE_PREFIX },
+      lat: { gte: lat - delta, lte: lat + delta },
+      lng: { gte: lng - delta, lte: lng + delta },
+    },
+  });
+  const existing = mine.find(
+    (g) => distanceMeters(lat, lng, g.lat, g.lng) <= MATCH_RADIUS_M && namesLookAlike(cleanName, g.name)
+  );
+  if (existing) return { matchedGymId: null, unclaimedGym: existing };
+
+  const unclaimedGym = await prisma.unclaimedGym.create({
+    data: {
+      googlePlaceId: `${MANUAL_PLACE_PREFIX}${randomUUID()}`,
+      name: cleanName,
+      address: '',
+      city: '',
+      lat,
+      lng,
+      addedByUserId: userId,
+    },
+  });
   return { matchedGymId: null, unclaimedGym };
 }
 

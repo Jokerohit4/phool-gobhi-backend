@@ -17,6 +17,22 @@ export const resolvePlace = async (req, res) => {
   }
 };
 
+// POST /unclaimed/manual — "Can't find your gym? Add it". Body: { name, lat,
+// lng } where lat/lng are the phone's position right now. Same response shape
+// as POST /unclaimed so the app's resolution handling is shared.
+export const addManualGym = async (req, res) => {
+  try {
+    const { name, lat, lng } = req.body || {};
+    const result = await unclaimedGymService.addManualGymService(
+      { name, lat: Number(lat), lng: Number(lng) },
+      req.userId
+    );
+    res.status(201).json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 // Internal: booking-service needs the coordinates to run its geofence check.
 export const getUnclaimedGymInternal = async (req, res) => {
   try {
