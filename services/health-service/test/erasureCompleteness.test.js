@@ -32,6 +32,9 @@ const MUST_ERASE = [
   'DoctorAppointment',
   'ScoreDaySnapshot',
   'FoodPhotoRequestLog',
+  'HealthProfile',
+  'HealthProfileConsent',
+  'MedicationReminder',
 ];
 
 // Models whose rows cascade from a parent that IS in the list, so an explicit

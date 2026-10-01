@@ -337,7 +337,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent] =
+  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
@@ -407,6 +407,12 @@ export async function buildFullExportService(userId) {
       // The body-numbers consent record - that it was given, when, and under
       // which wording. Erased with the account, so exported with it.
       prisma.biometricConsent.findUnique({ where: { userId } }),
+      // Health profile (gamified onboarding v2). Every answer, including the
+      // substance ones: this is the person's OWN copy (DPDP s.11), and those
+      // answers are excluded from every other outward path, not from this.
+      prisma.healthProfile.findUnique({ where: { userId } }),
+      prisma.medicationReminder.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+      prisma.healthProfileConsent.findUnique({ where: { userId } }),
     ]);
 
   // Reuses the range builder with no range, so the session shape in a
@@ -706,6 +712,44 @@ export async function buildFullExportService(userId) {
           grantedAt: biometricConsent.grantedAt,
           revokedAt: biometricConsent.revokedAt,
           policyVersion: biometricConsent.policyVersion,
+        }
+      : null,
+    healthProfile: healthProfile
+      ? {
+          allergyStatus: healthProfile.allergyStatus,
+          allergies: healthProfile.allergies,
+          weightDeclined: healthProfile.weightDeclined,
+          heightDeclined: healthProfile.heightDeclined,
+          drinking: healthProfile.drinking,
+          smoking: healthProfile.smoking,
+          greens: healthProfile.greens,
+          otherSubstances: healthProfile.otherSubstances,
+          broughtHere: healthProfile.broughtHere,
+          mealsPerDay: healthProfile.mealsPerDay,
+          followsDiet: healthProfile.followsDiet,
+          dietType: healthProfile.dietType,
+          whoCooks: healthProfile.whoCooks,
+          occupation: healthProfile.occupation,
+          workingHours: healthProfile.workingHours,
+          healthSpend: healthProfile.healthSpend,
+          wearsSpectacles: healthProfile.wearsSpectacles,
+          spectaclesType: healthProfile.spectaclesType,
+          hometown: healthProfile.hometown,
+          medicationsStatus: healthProfile.medicationsStatus,
+          coinKeys: healthProfile.coinKeys,
+          basicsAnsweredAt: healthProfile.basicsAnsweredAt,
+          createdAt: healthProfile.createdAt,
+          updatedAt: healthProfile.updatedAt,
+        }
+      : null,
+    medicationReminders: medicationReminders.map((m) => ({
+      name: m.name, times: m.times, active: m.active, createdAt: m.createdAt,
+    })),
+    healthProfileConsent: healthProfileConsent
+      ? {
+          grantedAt: healthProfileConsent.grantedAt,
+          revokedAt: healthProfileConsent.revokedAt,
+          policyVersion: healthProfileConsent.policyVersion,
         }
       : null,
     // Included because it is per-user behavioural data we hold, even though

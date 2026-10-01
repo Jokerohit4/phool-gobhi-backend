@@ -1725,3 +1725,104 @@ model FoodPhotoRequestLog {
   @@index([userId, requestedAt])
   @@schema("health")
 }
+
+// ---------------------------------------------------------------------------
+// Health profile (gamified onboarding v2, 2026-10-01).
+//
+// The "get to know you" answers: five asked at signup (allergies, weight,
+// height, drinking, smoking — each with "prefer not to say" as a first-class
+// answer), the rest filled in over time from the Profile tab for a coin each.
+//
+// One row per person rather than spreading these across HealthGoal and
+// PersonalisationProfile. HealthGoal only exists after Health+ intake, and
+// PersonalisationProfile is the training-programming record; neither is the
+// home for "who cooks your food" or "where are you from". Weight and height
+// are deliberately NOT columns here — weight is a BiometricEntry time series
+// and height lives on PersonalisationProfile.heightCm (the fallback ledger
+// targetService already reads), so there is still exactly one place each
+// number lives. The two *Declined booleans record only that the person chose
+// not to say, so the mandatory step can tell "declined" from "never asked".
+//
+// Every value is from a fixed set in services/healthProfile.js except
+// allergies (the user's own words, capped) and hometown (capped free text).
+// Each field has a named reader there (FIELD_CONSUMERS) — nothing here is
+// collected without one.
+//
+// greens / otherSubstances are the most sensitive columns in this service.
+// They reach the coach (the user's explicit choice) and the user's own DPDP
+// export, and nothing else: not analytics, not admin, not insurer-grade, not
+// FHIR. Enforced by tests, not just by this comment.
+model HealthProfile {
+  userId           Int       @id
+  // 'none' | 'has' | 'prefer_not'. 'has' requires at least one allergy.
+  allergyStatus    String?
+  allergies        String[]  @default([])
+  weightDeclined   Boolean   @default(false)
+  heightDeclined   Boolean   @default(false)
+  // never | occasionally | weekly | daily | prefer_not
+  drinking         String?
+  smoking          String?
+  greens           String?
+  otherSubstances  String?
+  broughtHere      String[]  @default([])
+  mealsPerDay      Int?
+  followsDiet      Boolean?
+  dietType         String?
+  whoCooks         String?
+  occupation       String?
+  workingHours     String?
+  healthSpend      String?
+  wearsSpectacles  Boolean?
+  spectaclesType   String?
+  hometown         String?
+  // 'none' | 'has' | 'prefer_not'. The reminders themselves are rows in
+  // MedicationReminder; this records the answer so "I take nothing" is
+  // distinguishable from "never asked".
+  medicationsStatus String?
+  // Question keys whose one-time coin has been credited. The coin ledger's
+  // idempotency key already makes a second credit impossible; this copy is so
+  // the app can show "already earned" without a cross-service call.
+  coinKeys         String[]  @default([])
+  // When the five signup questions were last fully answered (any answer,
+  // including "prefer not to say").
+  basicsAnsweredAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// Consent to hold the sensitive health-profile answers (allergies, drinking,
+// smoking, substances, medications). Shaped exactly like BiometricConsent and
+// AssistantConsent: server-stamped policy version, revoke sets revokedAt.
+// Non-sensitive answers (hometown, who cooks, occupation…) and every
+// "prefer not to say" need no consent — declining to disclose is not health
+// data.
+model HealthProfileConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  policyVersion String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// A medicine the user wants reminding about. Used ONLY to schedule the
+// user's own reminders (on-device notifications) and to let the coach
+// acknowledge that reminders exist. It never changes a plan, a target or a
+// score — see healthProfile.js MEDICATION_NOTE for the one fixed line shown
+// alongside it. Free-text name, capped; times are 'HH:MM' local.
+model MedicationReminder {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  times     String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@schema("health")
+}

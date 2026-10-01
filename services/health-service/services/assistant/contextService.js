@@ -3,6 +3,7 @@ import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
 import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { tierOf, orderMemories } from './memoryService.js';
 import { summariseHomeSetup } from '../homeSetup.js';
+import { summariseForCoach } from '../healthProfile.js';
 
 const prisma = new PrismaClient();
 
@@ -19,7 +20,10 @@ const prisma = new PrismaClient();
 // which is bounded (fixed phrases, no free text) at well under that; +250 for
 // the "Home setup" line (onboarding audit P2), bounded the same way — every
 // equipment chip plus the longest space phrase is ~230 characters.
-const MAX_CONTEXT_CHARS = 3850;
+// +1,500 for the health profile (gamified onboarding v2, 2026-10-01): the
+// allergy safety line at its cap (12 x 40 chars + phrasing, ~560) and the
+// lifestyle line at its worst (every phrase plus a 60-char hometown, ~900).
+const MAX_CONTEXT_CHARS = 5350;
 const ATTENDANCE_WINDOW_HOURS = 24 * 30;
 const RECENT_SESSION_LIMIT = 10;
 
@@ -251,6 +255,15 @@ export async function buildUserContextService(userId) {
     // the coach one line of context, never the answer.
     fetchUserProfileInternal(userId),
   ]);
+  // The health profile and the medication COUNT (never the names). Read
+  // defensively: these tables are newer than every other read here, and a
+  // missing row or a failed read costs the coach a line, never the answer.
+  const optional = (q) => (q ? q.catch(() => null) : Promise.resolve(null));
+  const [healthProfile, medicationCount] = await Promise.all([
+    optional(prisma.healthProfile?.findUnique({ where: { userId } })),
+    optional(prisma.medicationReminder?.count({ where: { userId, active: true } })),
+  ]);
+  const profileLines = summariseForCoach(healthProfile, { medicationCount: medicationCount || 0 });
 
   // Every memory, every turn — no retrieval step.
   //
@@ -274,12 +287,21 @@ export async function buildUserContextService(userId) {
   if (safety.length) {
     parts.push(`Important — they have told the assistant:\n${renderMemories(safety)}`);
   }
+  // Allergies the user declared on their health profile sit with the safety
+  // memories, at the very front: a missed allergy is the one mistake here
+  // that can hurt someone.
+  if (profileLines.safety) parts.push(profileLines.safety);
   const training = summariseTrainingProfile(authProfile);
   if (training) parts.push(training);
   // Right after "how they train": both are stable facts, so both stay in the
   // byte-identical (cached) front of the prompt. Fixed phrases only.
   const homeSetup = summariseHomeSetup(personalisation);
   if (homeSetup) parts.push(homeSetup);
+  // Stable facts too, so they stay in the cached front of the prompt. This
+  // includes the substance answers — the user's explicit choice, so the coach
+  // can give advice that fits their actual life. "Prefer not to say" renders
+  // nothing (see summariseForCoach).
+  if (profileLines.lifestyle) parts.push(profileLines.lifestyle);
   parts.push(summariseAttendance(events), summariseSessions(sessions));
 
   if (weeklyGoal?.sessionsPerWeek) {
@@ -319,6 +341,7 @@ export async function buildUserContextService(userId) {
       memories: memories.length,
       onboardingProfile: training ? 1 : 0,
       homeSetup: homeSetup ? 1 : 0,
+      healthProfile: (profileLines.safety ? 1 : 0) + (profileLines.lifestyle ? 1 : 0),
       contextChars: text.length,
     },
   };

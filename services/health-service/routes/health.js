@@ -26,6 +26,7 @@ import { requireAssistantConsent } from '../middleware/requireAssistantConsent.j
 import { requireDeviceHealthConsent } from '../middleware/requireDeviceHealthConsent.js';
 import { requireBiometricWriteConsent } from '../middleware/requireBiometricConsent.js';
 import * as biometricConsentCtrl from '../controllers/biometricConsentController.js';
+import * as healthProfileCtrl from '../controllers/healthProfileController.js';
 // Adults-only on every consent GRANT (never on revoke/delete) — see requireAdult.
 import { requireAdult } from '../middleware/requireAdult.js';
 import * as recapCtrl from '../controllers/recapController.js';
@@ -262,6 +263,25 @@ router.put('/personalisation/programming-mode', ...personalisationGated, persona
 // the payload at all, so the "no PII on the card" guarantee holds no matter
 // which client renders it.
 router.get('/recap', ...recapGated, recapCtrl.getWeeklyRecap);
+
+// ---- Health profile (gamified onboarding v2, 2026-10-01) ------------------
+//
+// Gated on brandedOnboarding, NOT healthMetrics: these questions are asked at
+// signup, which runs for every new user, and prod has healthMetrics off. The
+// flag gates WRITES only. Reading, deleting and withdrawing consent stay open
+// to anyone signed in, whatever the flags say — seeing and erasing your own
+// answers can never depend on a feature switch.
+const profileWrite = [requireAuth, requireFeatureFlag('brandedOnboarding')];
+router.get('/health-profile', requireAuth, healthProfileCtrl.getProfile);
+router.patch('/health-profile', ...profileWrite, healthProfileCtrl.updateProfile);
+router.delete('/health-profile', requireAuth, healthProfileCtrl.deleteProfile);
+router.get('/health-profile/consent', requireAuth, healthProfileCtrl.getConsent);
+router.post('/health-profile/consent', ...profileWrite, requireAdult, healthProfileCtrl.grantConsent);
+router.delete('/health-profile/consent', requireAuth, healthProfileCtrl.revokeConsent);
+router.get('/health-profile/medications', requireAuth, healthProfileCtrl.listMedications);
+router.post('/health-profile/medications', ...profileWrite, healthProfileCtrl.createMedication);
+router.patch('/health-profile/medications/:id', ...profileWrite, healthProfileCtrl.updateMedication);
+router.delete('/health-profile/medications/:id', requireAuth, healthProfileCtrl.deleteMedication);
 
 // ---- Data export (FR-16) ------------------------------------------------
 router.get('/export', ...gated, exportCtrl.exportMyData);

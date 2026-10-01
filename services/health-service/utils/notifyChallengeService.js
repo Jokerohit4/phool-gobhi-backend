@@ -37,3 +37,39 @@ export async function notifyWorkoutFinished({ userId, sessionId, description, id
     return { verified: false, credited: false };
   }
 }
+
+// One coin per health-profile question, once ever (gamified onboarding v2).
+//
+// The idempotency key is the whole guarantee: challenge-service's coin ledger
+// refuses a second credit with the same key, so re-answering, editing, a retry
+// after a timeout or two devices saving at once can never pay twice. It is
+// keyed on the QUESTION, not the answer, for exactly that reason.
+//
+// Same posture as notifyWorkoutFinished: best-effort, never throws. The route
+// is behind streaksCoins, so with coins switched off this is a 403 that
+// resolves to false — and because the caller only records the key as paid on
+// true, a question answered while coins were off still pays once they're on.
+export async function creditProfileQuestionCoin({ userId, questionKey }) {
+  try {
+    await axios.post(
+      `${CHALLENGE_SERVICE_URL}/internal/coins/${userId}/credit`,
+      {
+        amount: 1,
+        description: `Health profile: ${questionKey}`,
+        idempotencyKey: `health-profile:${userId}:${questionKey}`,
+      },
+      {
+        headers: {
+          'x-internal-key': INTERNAL_API_KEY,
+          ...(await googleIdTokenHeader(CHALLENGE_SERVICE_URL)),
+        },
+      },
+    );
+    return true;
+  } catch (err) {
+    if (err.response?.status !== 403) {
+      console.error('[challenge-service] profile coin failed for', userId, questionKey, err.message);
+    }
+    return false;
+  }
+}

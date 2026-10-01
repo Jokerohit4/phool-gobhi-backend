@@ -299,6 +299,15 @@ export async function getSetupState({ prisma, userId, localDate, fetchProfile = 
     // null here just means the screen asks, exactly as before.
     fetchProfile ? fetchProfile(userId).catch(() => null) : Promise.resolve(null),
   ]);
+  // Allergies told at signup (health profile, 2026-10-01) prefill the intake
+  // when the goal has none of its own — the "only what's missing is asked"
+  // promise again. Optional-chained because the profile table is newer than
+  // most callers' test doubles, and a prefill must never fail the screen.
+  const healthProfile = goal?.allergies?.length
+    ? null
+    : await prisma.healthProfile?.findUnique({ where: { userId }, select: { allergyStatus: true, allergies: true } })
+        .catch(() => null);
+  const profileAllergies = healthProfile?.allergyStatus === 'has' ? healthProfile.allergies || [] : [];
 
   // Prefill is not a write. The HealthGoal snapshot contract (header, rule 2)
   // still holds: nothing is copied into HealthGoal until the user confirms the
@@ -343,7 +352,7 @@ export async function getSetupState({ prisma, userId, localDate, fetchProfile = 
       sex: prefillSex,
       activity: goal?.activity ?? null,
       diet: goal?.diet ?? null,
-      allergies: goal?.allergies ?? [],
+      allergies: goal?.allergies?.length ? goal.allergies : profileAllergies,
       targetWeightKg:
         goal?.targetWeightKg == null ? null : Number(goal.targetWeightKg),
       targetDate: goal?.targetDate ?? null,
