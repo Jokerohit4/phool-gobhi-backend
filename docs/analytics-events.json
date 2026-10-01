@@ -354,7 +354,7 @@
       "phool_gobhi",
       "phool_gobhi_partner"
     ],
-    "notes": "partner app: wizard page done. Customer app (since 2026-10-01): step done — props step (details|training|permissions), surface (signup|resume|profile_edit), plus the step's enum answers only (currently_works_out, training_location, weekly_frequency, free_time_window); never DOB, gender or free text"
+    "notes": "partner app: wizard page done. Customer app (since 2026-10-01): step done — props step (details|training|health_basics|why_here|medical_docs|permissions), surface (signup|resume|profile_edit), plus the step's enum answers only (currently_works_out, training_location, weekly_frequency, free_time_window); never DOB, gender or free text; the health-profile steps (since 2026-10-01) carry only step, surface and skipped (bool), never any health answer"
   },
   "onboarding_step_viewed": {
     "source": "client",
