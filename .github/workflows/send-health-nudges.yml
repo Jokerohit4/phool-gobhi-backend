@@ -2,8 +2,13 @@ name: Send health nudges (FR-08)
 
 # Fires health-service's nudge sweep (runNudgeSweepService, via POST
 # /internal/nudges/sweep): the log reminder for someone who checked in and
-# never said what they did, and the comeback nudge for someone who used to
-# log and has gone quiet for a week.
+# never said what they did, the comeback nudge for someone who used to log
+# and has gone quiet for a week, and the target nudge for someone who set a
+# score target and has fallen behind pace on it.
+#
+# The sweep's response reports a per-type count, so the `target` key appearing
+# here is the thing to look for after adding a nudge type: it is 0 until a
+# real user has a live target and is behind on it.
 #
 # Scheduled from GitHub Actions rather than an in-process timer for the same
 # reason as sweep-health-retention.yml and reconcile-razorpay-orders.yml:
