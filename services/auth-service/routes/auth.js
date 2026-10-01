@@ -33,6 +33,13 @@ router.post('/login', login);
 router.post('/refresh-token', refreshToken);
 router.post('/logout', logout);
 router.delete('/delete', verifyToken, deleteUser);
+// The path both mobile apps actually call. The customer app (since 2026-08-15)
+// and the partner app both send DELETE /api/auth/account, and this route never
+// existed — every in-app "Delete account" got a 404, and the customer app
+// then logged the user out as though it had worked. Installed builds can't be
+// patched, so the backend answers the path they already use; /delete stays
+// for anything that calls it. Same handler, same auth.
+router.delete('/account', verifyToken, deleteUser);
 // DPDPA access right (s.11) — the read counterpart of /delete above. Fans out
 // to every service holding this user's data and returns one document. Add
 // ?format=download to get it as a saved file.

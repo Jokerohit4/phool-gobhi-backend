@@ -338,7 +338,24 @@ export async function deleteUserService(userId) {
       };
     }
 
-    await prisma.user.delete({ where: { id: userId } });
+    // Auth-service's own rows go in ONE transaction with the User row.
+    // Four of these tables hold a foreign key to User with no ON DELETE
+    // CASCADE, so a bare user.delete threw a FK violation for anyone who had
+    // ever logged in (every account has RefreshToken rows) — deletion could
+    // never succeed for a real user. AppModeHistory has no FK at all, so it
+    // would otherwise have outlived the account as orphaned personal data.
+    // People this user referred keep their accounts; only the back-link to a
+    // now-deleted person is cleared. All-or-nothing: if any step fails the
+    // account is untouched and the user can simply try again.
+    await prisma.$transaction([
+      prisma.refreshToken.deleteMany({ where: { userId } }),
+      prisma.collectibleFind.deleteMany({ where: { userId } }),
+      prisma.savedAddress.deleteMany({ where: { userId } }),
+      prisma.partnerBankAccount.deleteMany({ where: { userId } }),
+      prisma.appModeHistory.deleteMany({ where: { userId } }),
+      prisma.user.updateMany({ where: { referredByUserId: userId }, data: { referredByUserId: null } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
     return { message: 'User deleted', erased: erasure.results };
   } catch (err) {
     if (err?.errorCode === 'ERASURE_INCOMPLETE') throw err;
