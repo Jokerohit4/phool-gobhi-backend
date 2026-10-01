@@ -4,6 +4,12 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:50
 const FLAG_CACHE_TTL_MS = 30_000;
 let cachedFlags = null;
 let cachedAt = 0;
+// The refresh already on the wire, if any. A cold start (or a TTL expiry)
+// meets a BURST of requests — one app launch fans out into a dozen-plus routes
+// that each check a flag — and without this every one of them missed the
+// cache at once and fetched /app-config itself: ~17 identical calls in under
+// 100ms in auth-service-dev logs, 2026-10-01. Everyone now awaits one fetch.
+let inFlight = null;
 
 // Server-side enforcement of the admin-controlled feature flags served at
 // GET /app-config (auth-service). Client-side hiding (customer app's
@@ -14,6 +20,11 @@ let cachedAt = 0;
 // round trip to auth-service on every request.
 async function getFeatureFlags() {
   if (cachedFlags && Date.now() - cachedAt < FLAG_CACHE_TTL_MS) return cachedFlags;
+  if (!inFlight) inFlight = refreshFlags().finally(() => { inFlight = null; });
+  return inFlight;
+}
+
+async function refreshFlags() {
   try {
     const res = await fetch(`${AUTH_SERVICE_URL}/app-config`, {
       headers: await googleIdTokenHeader(AUTH_SERVICE_URL),
