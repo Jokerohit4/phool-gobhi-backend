@@ -22,6 +22,7 @@ import { getDayTotals } from './nutritionService.js';
 import { isDueOn } from './ledgerPlanService.js';
 import { isScheduledFor } from './scoreEngine.js';
 import { openActions } from './remediation.js';
+import { assertGoal } from './goalGuard.js';
 
 /**
  * Compute (but do not store) what a day is worth.
@@ -242,12 +243,42 @@ export async function getSafetyFlag(prisma, { userId }) {
   };
 }
 
-/** Toggle the eating-disorder guard. Never touches existing snapshots. */
+/**
+ * Toggle the eating-disorder guard. Never touches existing snapshots.
+ *
+ * `updateMany` rather than `update`, so this cannot throw P2025 on a user with no
+ * goal row - a user with no goal has no days being scored, so the setting has
+ * nothing to apply to, and a toggle that 500s is worse than one that quietly has
+ * no effect until there is a goal for it to apply to. Deliberately NOT a 409 like
+ * the window-creating writes: calm mode is a protection, and refusing to record
+ * that somebody asked for it because their setup is incomplete would be protecting
+ * them from the wrong thing.
+ */
 export async function setCalmMode(prisma, { userId, calmMode }) {
-  return prisma.healthGoal.update({
+  const wanted = calmMode === true;
+  const res = await prisma.healthGoal.updateMany({
     where: { userId },
-    data: { calmMode: calmMode === true },
+    data: { calmMode: wanted },
   });
+  // The response echoes what is STORED, not what was asked for. Those are the
+  // same thing whenever a goal row exists and different whenever it does not,
+  // and the difference is the whole problem: a user with no goal has nowhere to
+  // keep a display preference, so the write cannot be honoured, and returning
+  // `wanted` would tell the client to render a preference that does not exist.
+  //
+  // That is not hypothetical. The app reads this flag and deliberately renders
+  // the echo rather than the tap ("so a toggle cannot render a preference the
+  // server did not actually accept"), so echoing the request here would let a
+  // user switch calm mode on, see it stay on, and have it silently gone by the
+  // next launch. A toggle that lies is worse than one that refuses.
+  //
+  // `false` is the honest value rather than a second read, and not as a
+  // shortcut: `count === 0` means no row matched `{ userId }`, so a lookup by
+  // that same key would return null, and no row means no stored preference.
+  // `applied` is returned so a caller that wants to distinguish "you turned it
+  // off" from "there was nothing to turn it off on" can, without the client
+  // having to infer it from a false that might mean either.
+  return { calmMode: res?.count > 0 ? wanted : false, applied: res?.count > 0 };
 }
 
 // --- Pause ------------------------------------------------------------------
@@ -294,6 +325,10 @@ export async function getPauseState(prisma, { userId, today }) {
   const active = isPausedOn(goal, today);
   return {
     active,
+    // Present on the read for the same reason it is on the target read: "no goal"
+    // and "not paused" are different answers, and a client told only that a user
+    // is not paused cannot know whether pausing them would work.
+    hasGoal: goal != null,
     pausedFrom: goal?.pausedFrom ?? null,
     pausedUntil: goal?.pausedUntil ?? null,
     daysLeft: active ? daysInclusive(goal.pausedUntil, today) : 0,
@@ -328,7 +363,10 @@ export async function setPause(prisma, { userId, days, today }) {
   const until = addDaysLocal(today, requested - 1);
 
   const goal = await prisma.healthGoal.findUnique({ where: { userId } });
-  if (!goal) throw new Error('No goal set');
+  // A 409 with a code, not a bare 500. See goalGuard: a pause needs the goal row
+  // the intake wizard creates, and the user is told to go and finish it rather
+  // than shown "Server error".
+  assertGoal(goal);
   // Only a pause that is still IN PROGRESS is protected. An expired pause has
   // already lapsed, and locking a user out of the feature because a fortnight
   // ago they used it would be absurd - the check is isPausedOn(today), not
@@ -354,13 +392,33 @@ export async function setPause(prisma, { userId, days, today }) {
   };
 }
 
-/** Resume now. Clears both bounds, so the next day scores normally. */
+/**
+ * Resume now. Clears both bounds, so the next day scores normally.
+ *
+ * `updateMany`, for the reason in goalGuard: `update` throws Prisma P2025 on a
+ * user with no goal row, and that error was reaching the client as a 500 whose
+ * body was the Prisma invocation. Resuming when there is nothing paused is not an
+ * error - it is the state the caller asked for - so it succeeds and says so.
+ *
+ * The row is read as well as written so the response can state `hasGoal` rather
+ * than assume it.
+ */
 export async function clearPause(prisma, { userId }) {
-  await prisma.healthGoal.update({
+  const goal = await prisma.healthGoal.findUnique({ where: { userId }, select: { userId: true } });
+
+  await prisma.healthGoal.updateMany({
     where: { userId },
     data: { pausedFrom: null, pausedUntil: null },
   });
-  return { active: false, pausedFrom: null, pausedUntil: null, daysLeft: 0, maxDays: MAX_PAUSE_DAYS };
+
+  return {
+    active: false,
+    pausedFrom: null,
+    pausedUntil: null,
+    daysLeft: 0,
+    maxDays: MAX_PAUSE_DAYS,
+    hasGoal: goal != null,
+  };
 }
 
 // --- internals -------------------------------------------------------------

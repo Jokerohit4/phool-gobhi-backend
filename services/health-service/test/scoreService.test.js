@@ -54,6 +54,13 @@ function mockPrisma({ snapshots = [], goal = null, target = null, planItems = []
     healthGoal: {
       findUnique: async () => goal,
       update: async (a) => ((state.updated.push(a.data), { userId: USER, ...a.data })),
+      // clearPause and setCalmMode use this so a missing row is a count of zero
+      // rather than a Prisma P2025. Without it in the mock, the suite passed while
+      // the real endpoint threw that error at a client.
+      updateMany: async (a) => {
+        state.updated.push(a.data);
+        return { count: goal ? 1 : 0 };
+      },
     },
     planItem: { findMany: async () => planItems },
     foodLog: { findMany: async () => logs },
@@ -602,3 +609,72 @@ test('closing a day returns no open items, on both the fresh and the retry path'
   assert.equal(second.alreadyClosed, true);
   assert.deepEqual(second.openActions, []);
 });
+
+// --- no goal row ---------------------------------------------------------------
+//
+// Same cause as the score target's: these columns live on HealthGoal, which the
+// intake wizard creates, and the ledger is reachable without intake. All of this
+// was live on the deployed endpoint and found by calling it rather than reading it.
+
+test('starting a pause with no goal is a 409 with a code, not a 500', async () => {
+  // A bare Error reaches the client as "Server error". The request was
+  // well-formed; the state cannot hold it yet.
+  await assert.rejects(
+    () => setPause(mockPrisma({ goal: null }), { userId: USER, days: 3, today: TODAY }),
+    (err) => {
+      assert.equal(err.name, 'NoGoalError');
+      assert.equal(err.status, 409);
+      assert.equal(err.code, 'NO_GOAL');
+      return true;
+    },
+  );
+});
+
+test('resuming with no goal succeeds instead of leaking Prisma P2025', async () => {
+  const out = await clearPause(mockPrisma({ goal: null }), { userId: USER });
+  assert.equal(out.active, false);
+  assert.equal(out.hasGoal, false);
+});
+
+test('resuming is idempotent', async () => {
+  const prisma = mockPrisma({ goal: { userId: USER, pausedFrom: '2026-09-20', pausedUntil: '2026-09-22' } });
+  const first = await clearPause(prisma, { userId: USER });
+  const second = await clearPause(prisma, { userId: USER });
+  assert.deepEqual(second, first);
+});
+
+test('the pause read tells "no goal" apart from "not paused"', async () => {
+  const noGoal = await getPauseState(mockPrisma({ goal: null }), { userId: USER, today: TODAY });
+  const notPaused = await getPauseState(mockPrisma({ goal: { userId: USER } }), { userId: USER, today: TODAY });
+  assert.equal(noGoal.hasGoal, false);
+  assert.equal(noGoal.active, false);
+  assert.equal(notPaused.hasGoal, true);
+  assert.equal(notPaused.active, false);
+});
+
+test('calm mode on a user with no goal records nothing and does not throw', async () => {
+  // Deliberately NOT a 409, unlike the window-creating writes. Calm mode is a
+  // protection; refusing to record that somebody asked for it because their setup
+  // is incomplete would be protecting them from the wrong thing. A user with no
+  // goal has no days being scored, so there is nothing for it to apply to.
+  const out = await setCalmMode(mockPrisma({ goal: null }), { userId: USER, calmMode: true });
+  // Off, not on. The client renders this echo rather than the tap, on purpose, so
+  // a user with no goal row would see calm mode switch on, stay on, and be gone
+  // again by the next launch. The write is allowed to be a no-op; the response is
+  // not allowed to pretend otherwise.
+  assert.equal(out.calmMode, false, 'reports what is stored, not what was asked for');
+  assert.equal(out.applied, false, 'honest about having had nowhere to write it');
+
+  const applied = await setCalmMode(mockPrisma({ goal: { userId: USER } }), { userId: USER, calmMode: true });
+  assert.equal(applied.applied, true);
+  assert.equal(applied.calmMode, true, 'a stored preference is echoed back');
+});
+
+test('calm mode echoes the stored value when a goal row exists', async () => {
+  // The other direction of the same rule, and the one a regression here would
+  // most likely break: a user who turns it OFF must be told off, not on.
+  const off = await setCalmMode(mockPrisma({ goal: { userId: USER } }), { userId: USER, calmMode: false });
+  assert.equal(off.calmMode, false);
+  assert.equal(off.applied, true);
+});
+

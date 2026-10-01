@@ -46,6 +46,36 @@
 //
 // These are paint, not verdicts. Nothing here changes a stored number, and
 // `band` is the only thing the client is asked to colour with.
+//
+// ── A target needs a goal row, and saying so is the whole job of the guard ───
+//
+// The score target lives on HealthGoal, and HealthGoal is created by the intake
+// wizard and by nothing else. The ledger itself is reachable without it - it is
+// behind a feature flag, not behind intake - so "no goal row" is an ordinary
+// state a real user can be in, not a corrupt one.
+//
+// That made three separate mistakes easy, and all three were live before this
+// was found by calling the endpoint rather than by reading it:
+//
+//   A bare `throw new Error('No goal set')` is a 500. The controller maps
+//   `err.status` when there is one and 500 when there is not, so a user who
+//   tapped a button got "Server error" for a condition the app could have
+//   explained and could have routed around. It is a 409 with a code, because
+//   the request was well-formed and the answer is "not yet, go and finish
+//   setup".
+//
+//   `healthGoal.update()` on a missing row throws Prisma P2025, and that error
+//   was being returned to the client verbatim - a Prisma invocation dump,
+//   table and column names included, as the body of a 500. So "clear my target"
+//   on a user with no goal produced a response that leaked the schema. Every
+//   clear is `updateMany` instead, which is the right primitive anyway: clearing
+//   something that is not there is the same outcome as clearing something that
+//   is, and a clear that can fail is not idempotent.
+//
+//   And the read said `none` for a user with no goal, which is the same answer
+//   it gives a user who has a goal and has not set a target. The client cannot
+//   tell those apart, so it offered a "set a target" button that could only fail.
+//   `hasGoal` is on the wire for exactly that reason.
 import { roundTo } from './constants.js';
 // Static, not dynamic. scoreService does not import this module, so there is no
 // cycle for a lazy import to break, and a lazy import here would only hide the
@@ -53,6 +83,7 @@ import { roundTo } from './constants.js';
 // re-queried so "the score at the start of a day" has exactly one definition in
 // the ledger.
 import { isIsoDay, previewDay, previousClose } from './scoreService.js';
+import { assertGoal } from './goalGuard.js';
 
 // Bounds on what a user may set, enforced here rather than in the client so
 // that calling the endpoint directly cannot buy a longer or easier target than
@@ -112,7 +143,7 @@ export async function setScoreTarget(prisma, { userId, points, days, today }) {
       scoreTargetUntil: true,
     },
   });
-  if (!goal) throw new Error('No goal set');
+  assertGoal(goal);
 
   const target = Math.round(Number(points));
   const windowDays = Math.round(Number(days));
@@ -149,13 +180,43 @@ export async function setScoreTarget(prisma, { userId, points, days, today }) {
   });
 }
 
-/** Remove the target. The score is untouched - only the destination goes away. */
+/**
+ * Remove the target. The score is untouched - only the destination goes away.
+ *
+ * `updateMany`, not `update`, and that is the fix rather than a style choice.
+ * `update` throws Prisma P2025 when the row is missing, and that error was being
+ * returned to the client as a 500 with the Prisma invocation as its body - so
+ * clearing a target on a user with no goal leaked the table and column names. It
+ * also made the endpoint non-idempotent, which is the wrong property for a clear.
+ *
+ * `updateMany` reports how many rows it touched and never throws for an empty
+ * match, so this returns the same answer either way: there is no target.
+ *
+ * The goal row is read as well as written, because the response has to say
+ * whether a goal exists and that must not be guessed. It could be read off
+ * `updateMany`'s count - a count of zero means no row matched - but that leans on
+ * whether Prisma counts a row whose columns were already null, which is not a
+ * documented guarantee and would be a silent behaviour change if it ever flipped.
+ * One extra indexed read of a single row is cheaper than being wrong about it.
+ */
 export async function clearScoreTarget(prisma, { userId }) {
-  await prisma.healthGoal.update({
+  const goal = await prisma.healthGoal.findUnique({ where: { userId }, select: { userId: true } });
+
+  await prisma.healthGoal.updateMany({
     where: { userId },
     data: { scoreTargetPoints: null, scoreTargetFrom: null, scoreTargetUntil: null },
   });
-  return { active: false, points: null, from: null, until: null, daysLeft: 0, daysTotal: 0, band: 'none' };
+
+  return {
+    active: false,
+    points: null,
+    from: null,
+    until: null,
+    daysLeft: 0,
+    daysTotal: 0,
+    band: 'none',
+    hasGoal: goal != null,
+  };
 }
 
 /**
@@ -164,6 +225,13 @@ export async function clearScoreTarget(prisma, { userId }) {
  * Read-only, and safe to call on a user with no goal - it reports `none` rather
  * than throwing, so the client can render "no target set" without having to know
  * whether a goal exists yet.
+ *
+ * That reasoning was wrong, and it is worth recording why. Collapsing "no goal"
+ * into "no target" means the client cannot tell a user who has finished intake
+ * and not set a number from a user who has not finished intake at all - and the
+ * only advice it can give either of them is "set a target", which works for the
+ * first and returns a 409 for the second. So `hasGoal` is on the wire, and the
+ * empty state is two different answers rather than one.
  */
 export async function getScoreTargetState(prisma, { userId, today }) {
   if (!isIsoDay(today)) throw new Error('today must be YYYY-MM-DD');
@@ -179,7 +247,16 @@ export async function getScoreTargetState(prisma, { userId, today }) {
     },
   });
   if (!goal || goal.scoreTargetPoints == null) {
-    return { active: false, points: null, from: null, until: null, daysLeft: 0, daysTotal: 0, band: 'none' };
+    return {
+      active: false,
+      points: null,
+      from: null,
+      until: null,
+      daysLeft: 0,
+      daysTotal: 0,
+      band: 'none',
+      hasGoal: goal != null,
+    };
   }
 
   const current = await currentScore(prisma, { userId, today });
@@ -290,6 +367,11 @@ function buildState({ goal, today, current, baseline }) {
 
   return {
     active: true,
+    // True by construction on this path - buildState is only reached with a goal
+    // row in hand - but it is stated so the field means the same thing on every
+    // response, including the empty ones. A field that is sometimes present is a
+    // field the client has to defend against being null.
+    hasGoal: true,
     points,
     from,
     until,

@@ -51,6 +51,16 @@ function mockPrisma({ snapshots = [], goal = null, target = null } = {}) {
         currentGoal = { userId: USER, ...currentGoal, ...data };
         return currentGoal;
       },
+      // Present because clearScoreTarget uses it, and present with the real
+      // semantics: a missing row is a count of zero, never a throw. An earlier
+      // version of this mock had no updateMany at all, so the suite passed while
+      // the endpoint was calling `update` and leaking Prisma P2025 to a client.
+      updateMany: async ({ data }) => {
+        state.updated.push(data);
+        if (!currentGoal) return { count: 0 };
+        currentGoal = { userId: USER, ...currentGoal, ...data };
+        return { count: 1 };
+      },
     },
     planItem: { findMany: async () => [] },
     foodLog: { findMany: async () => [] },
@@ -425,4 +435,84 @@ test('clearing removes the target, touches nothing else, and leaves the score al
     'scoreTargetPoints',
     'scoreTargetUntil',
   ]);
+});
+
+// --- no goal row ---------------------------------------------------------------
+//
+// All three of these were live on the deployed endpoint and were found by calling
+// it, not by reading it. They are grouped because they share a cause: the target
+// columns live on HealthGoal, HealthGoal is created only by the intake wizard, and
+// the ledger is reachable without intake.
+
+test('setting a target with no goal is a 409 with a code, not a 500', async () => {
+  // A bare `new Error('No goal set')` reaches the client as "Server error",
+  // because handle() maps err.status when present and 500 when it is not. The
+  // request was well-formed; the state cannot hold it yet.
+  const prisma = mockPrisma({ goal: null });
+  await assert.rejects(
+    () => setScoreTarget(prisma, { userId: USER, points: 400, days: 30, today: '2026-10-01' }),
+    (err) => {
+      assert.equal(err.name, 'NoGoalError');
+      assert.equal(err.status, 409);
+      assert.equal(err.code, 'NO_GOAL');
+      // The body the client shows is err.error, so it has to be set as well.
+      assert.equal(err.error, err.message);
+      assert.match(err.message, /setup/i);
+      return true;
+    },
+  );
+});
+
+test('clearing a target with no goal succeeds instead of leaking Prisma P2025', async () => {
+  // This is the one that was actually leaking. `healthGoal.update()` on a missing
+  // row throws P2025, and the controller returned the error verbatim, so the 500
+  // body was a Prisma invocation dump naming the table and columns.
+  const prisma = mockPrisma({ goal: null });
+  const out = await clearScoreTarget(prisma, { userId: USER });
+  assert.equal(out.active, false);
+  assert.equal(out.band, 'none');
+  assert.equal(out.hasGoal, false);
+});
+
+test('clearing is idempotent, so the second clear is the same answer', async () => {
+  const prisma = mockPrisma({ goal: targetGoal({ points: 100, from: '2026-09-25', until: '2026-10-04' }) });
+  const first = await clearScoreTarget(prisma, { userId: USER });
+  const second = await clearScoreTarget(prisma, { userId: USER });
+  assert.deepEqual(second, first, 'a clear that can fail is not a clear');
+});
+
+test('the read tells "no goal" apart from "a goal with no target"', async () => {
+  // These two used to be the same response, which is how the client ended up
+  // offering a "set a target" button to a user who could only get a 409 from it.
+  const noGoal = await getScoreTargetState(mockPrisma({ goal: null }), { userId: USER, today: '2026-10-01' });
+  const noTarget = await getScoreTargetState(mockPrisma({ goal: targetGoal({ points: null }) }), {
+    userId: USER,
+    today: '2026-10-01',
+  });
+
+  assert.equal(noGoal.hasGoal, false);
+  assert.equal(noTarget.hasGoal, true);
+  // Same band and same shape otherwise, so the only difference the client sees is
+  // the one it needs.
+  assert.equal(noGoal.band, 'none');
+  assert.equal(noTarget.band, 'none');
+});
+
+test('hasGoal is present and true on a live target, not only on the empty states', async () => {
+  const prisma = mockPrisma({
+    goal: targetGoal({ points: 100, from: '2026-09-25', until: '2026-10-04' }),
+    snapshots: [snap('2026-09-30', 50)],
+  });
+  const out = await getScoreTargetState(prisma, { userId: USER, today: '2026-10-01' });
+  assert.equal(out.active, true);
+  assert.equal(out.hasGoal, true);
+});
+
+test('clearing reports hasGoal true for a user who has one', async () => {
+  // The inverse of the no-goal case, and the reason the row is read rather than
+  // inferred from updateMany's count.
+  const prisma = mockPrisma({ goal: targetGoal({ points: 100, from: '2026-09-25', until: '2026-10-04' }) });
+  const out = await clearScoreTarget(prisma, { userId: USER });
+  assert.equal(out.hasGoal, true);
+  assert.equal(out.active, false);
 });
