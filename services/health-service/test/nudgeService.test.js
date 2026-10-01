@@ -14,6 +14,7 @@
 // Run with: node --experimental-test-module-mocks --test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 // 12:00 IST on a Thursday, expressed in UTC (IST = UTC+5:30). Every date in
 // this suite is derived from this instant.
@@ -32,6 +33,10 @@ let profiles = {};
 // target engine would compute for each user.
 let healthTargets = [];
 let scoreBands = {};
+// Which users the target engine was actually asked about. Proves the SQL
+// excluded a user before any scoring happened, rather than scoring them and
+// discarding the answer.
+let scored = [];
 
 let nudge;
 
@@ -128,9 +133,10 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
   // maths.
   t.mock.module('../services/ledger/scoreTargetService.js', {
     exports: {
-      getScoreTargetState: async (_prisma, { userId }) => ({
-        band: scoreBands[userId] ?? 'on_track',
-      }),
+      getScoreTargetState: async (_prisma, { userId }) => {
+        scored.push(userId);
+        return { band: scoreBands[userId] ?? 'on_track' };
+      },
     },
   });
 
@@ -148,6 +154,7 @@ function reset() {
   profiles = {};
   healthTargets = [];
   scoreBands = {};
+  scored = [];
 }
 
 // An IST day `offset` days from the fixed clock, 'YYYY-MM-DD'. Positive is the
@@ -419,6 +426,183 @@ test('the target nudge is independently switchable', async () => {
   // comeback, and vice versa.
   assert.deepEqual(await nudge.setOptOutService(5, 'target', true), ['target']);
   assert.equal(nudge.NUDGE_TYPES.includes('target'), true);
+});
+
+test('calm-mode and paused users are never scored, not scored-then-dropped', async () => {
+  reset();
+  healthTargets = [
+    targetGoal(1),
+    targetGoal(2, { calmMode: true }),
+    targetGoal(3, { pausedFrom: isoDay(-2), pausedUntil: isoDay(2) }),
+    targetGoal(4, { scoreTargetFrom: isoDay(3) }),
+  ];
+  scoreBands = { 1: 'behind', 2: 'behind', 3: 'behind', 4: 'behind' };
+
+  await nudge.findTargetCandidatesService(middayIST);
+
+  // Every one of these rows would have produced a nudge had the band been
+  // read. They never reach the engine at all, so there is no path by which a
+  // future change to the band maths can start nudging someone in calm mode.
+  assert.deepEqual(scored, [1]);
+});
+
+test('only the behind band earns a target nudge', async () => {
+  for (const band of ['at_risk', 'reached', 'expired', 'none', 'on_track']) {
+    reset();
+    healthTargets = [targetGoal(1)];
+    scoreBands = { 1: band };
+
+    const result = await nudge.runNudgeSweepService(middayIST);
+
+    // `at_risk` is the interesting one: a real, honest shortfall the product
+    // chose to keep quiet about. `reached` and `expired` have nothing left to
+    // pace towards at all.
+    assert.equal(result.target, 0, `${band} must not send`);
+    assert.equal(sent.length, 0);
+  }
+});
+
+test('a window closing today is still in play, one that closed yesterday is not', () => {
+  reset();
+  const today = isoDay(0);
+  healthTargets = [
+    targetGoal(1, { scoreTargetUntil: today }), // gte, so today is inside
+    targetGoal(2, { scoreTargetUntil: isoDay(-1) }),
+  ];
+  scoreBands = { 1: 'behind', 2: 'behind' };
+
+  // This is the mock standing in for the SQL `gte`. The real string comparison
+  // is pinned in nudgeDb.test.js against a live database.
+  return nudge.findTargetGoalRowsService(middayIST).then((rows) => {
+    assert.deepEqual(rows.map((r) => r.userId), [1]);
+  });
+});
+
+test('a goal with no scoreTargetFrom is treated as an open window', () => {
+  reset();
+  healthTargets = [
+    targetGoal(1, { scoreTargetFrom: null }),
+    targetGoal(2, { scoreTargetFrom: isoDay(1) }),
+  ];
+  scoreBands = { 1: 'behind', 2: 'behind' };
+
+  return nudge.findTargetGoalRowsService(middayIST).then((rows) => {
+    // Absent is not "not started": only an explicit future date defers.
+    assert.deepEqual(rows.map((r) => r.userId), [1]);
+  });
+});
+
+test('an opt-out on the target nudge suppresses it and is counted as suppressed', async () => {
+  reset();
+  optOuts = [{ userId: 7, type: 'target' }];
+  healthTargets = [targetGoal(7)];
+  scoreBands = { 7: 'behind' };
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.target, 0);
+  assert.equal(result.suppressed, 1);
+  assert.equal(sent.length, 0);
+  assert.equal(created.length, 0);
+});
+
+test('a live cooldown suppresses the target nudge inside a sweep', async () => {
+  reset();
+  nudgeLogs = [{ userId: 7, type: 'target', sentAt: hoursAgo(30) }];
+  healthTargets = [targetGoal(7)];
+  scoreBands = { 7: 'behind' };
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.target, 0);
+  assert.equal(result.suppressed, 1);
+  assert.equal(created.length, 0, 'a suppressed nudge must not be logged');
+});
+
+test('a target nudge spends the same weekly budget as any other', async () => {
+  reset();
+  // Two log nudges and one target nudge this week: the fourth is refused
+  // whichever type it is, because the cap counts notifications, not kinds.
+  nudgeLogs = [
+    { userId: 1, type: 'log', sentAt: daysAgo(1) },
+    { userId: 1, type: 'target', sentAt: daysAgo(3) },
+    { userId: 1, type: 'log', sentAt: daysAgo(5) },
+  ];
+
+  assert.equal((await nudge.canSendService(1, 'log', middayIST)).reason, 'weekly_cap');
+  assert.equal((await nudge.canSendService(1, 'comeback', middayIST)).reason, 'weekly_cap');
+  assert.equal((await nudge.canSendService(1, 'target', middayIST)).reason, 'weekly_cap');
+});
+
+test('every nudge type has copy, and the payload carries nothing but routing keys', async () => {
+  for (const type of nudge.NUDGE_TYPES) {
+    reset();
+    // Only the source for THIS nudge, so it is the only one that can fire:
+    // a user set up for all three would have the first nudge consume the
+    // 24h gap and leave the other two unfindable.
+    unloggedUsers = type === 'log' ? [{ userId: 3, localDate: '2026-09-10' }] : [];
+    groupedSessions = type === 'comeback' ? [{ userId: 3, _max: { startedAt: daysAgo(10) } }] : [];
+    healthTargets = type === 'target' ? [targetGoal(3)] : [];
+    scoreBands = { 3: 'behind' };
+
+    await nudge.runNudgeSweepService(middayIST);
+
+    const mine = sent.find((s) => s.payload.data.nudge === type);
+    assert.ok(mine, `${type} produced no payload`);
+    assert.ok(mine.payload.title?.length > 0, `${type} has no title`);
+    assert.ok(mine.payload.body?.length > 0, `${type} has no body`);
+    assert.ok(mine.payload.data.route?.length > 0, `${type} has no route to open`);
+    // Same rule for all three: nothing about the user goes to Google.
+    assert.deepEqual(Object.keys(mine.payload.data).sort(), ['nudge', 'route', 'type']);
+  }
+});
+
+test('the wire enum and the service type list cannot drift apart', () => {
+  const schema = fs.readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+  const enumBody = schema.match(/enum NudgeType\s*\{([^}]*)\}/)?.[1];
+
+  assert.ok(enumBody, 'NudgeType not found in the schema - rename or the guard is dead');
+
+  const values = enumBody
+    // CRLF-safe: `.` in JS does not match `\r`, so a naive `//.*$` strip
+    // leaves the comment in place on a Windows checkout and the guard then
+    // "fails" on its own comment.
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\/\/.*$/, '').trim())
+    .filter((l) => l && !l.startsWith('@@'));
+
+  // setOptOutService validates against NUDGE_TYPES, and the enum is what
+  // Postgres will accept. A type in one and not the other is a 400 in the
+  // settings screen or an "invalid input value for enum" at write time, and
+  // both only show up once a real user taps the switch.
+  assert.deepEqual(values.sort(), [...nudge.NUDGE_TYPES].sort());
+});
+
+test('localDateIST turns over exactly at IST midnight, not UTC midnight', () => {
+  // 18:29 UTC is 23:59 IST the same day; 18:30 is 00:00 the next. The whole
+  // target window is compared against this string, so an off-by-one here moves
+  // every user's window by a day.
+  assert.equal(nudge.localDateIST(new Date('2026-09-10T18:29:00Z')), '2026-09-10');
+  assert.equal(nudge.localDateIST(new Date('2026-09-10T18:30:00Z')), '2026-09-11');
+});
+
+test('quiet hours is exactly the block the constants describe', () => {
+  // Every hour of the IST day, built from UTC so no test depends on the
+  // machine's own zone. A "quiet hours" rule that is not one contiguous block
+  // is a rule nobody can predict.
+  const at = (istHour) =>
+    // IST is UTC+5:30, so an IST hour maps to UTC at (hour - 5h30). Written
+    // as minute -30 because Date.UTC normalises the borrow; `hour - 5` with
+    // minute 30 would be 09:00 when asked for 08:00.
+    new Date(Date.UTC(2026, 8, 10, istHour - 5, -30));
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    assert.equal(
+      nudge.isQuietHours(at(hour)),
+      hour >= nudge.QUIET_START_HOUR || hour < nudge.QUIET_END_HOUR,
+      `${hour}:00 IST`,
+    );
+  }
 });
 
 test('an unknown nudge type is rejected rather than silently stored', async () => {

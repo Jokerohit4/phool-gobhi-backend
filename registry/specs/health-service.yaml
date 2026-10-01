@@ -1,0 +1,94 @@
+openapi: 3.0.0
+info:
+  title: Phool Gobhi Health Service
+  version: 1.0.0
+  description: API for structured workout logging and biometric tracking.
+
+paths:
+  /sessions:
+    post:
+      summary: Start or log a workout session
+      tags: [Workouts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkoutSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkoutSession'
+
+  /sessions/{id}/exercises:
+    post:
+      summary: Add an exercise to a session
+      tags: [Workouts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionExerciseRequest'
+      responses:
+        '201':
+          description: Exercise added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionExercise'
+
+components:
+  schemas:
+    WorkoutSession:
+      type: object
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        templateId: { type: integer, nullable: true }
+        bookingId: { type: integer, nullable: true }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time, nullable: true }
+        type: { type: string, enum: [strength, cardio, hiit, yoga_mobility, full_body, rest] }
+        rpe: { type: integer, nullable: true, minimum: 1, maximum: 10 }
+
+    WorkoutSessionRequest:
+      type: object
+      required: [userId, type]
+      properties:
+        userId: { type: integer }
+        templateId: { type: integer, nullable: true }
+        bookingId: { type: integer, nullable: true }
+        type: { type: string, enum: [strength, cardio, hiit, yoga_mobility, full_body, rest] }
+
+    SessionExercise:
+      type: object
+      properties:
+        id: { type: integer }
+        sessionId: { type: integer }
+        exerciseId: { type: integer }
+        order: { type: integer }
+
+    SessionExerciseRequest:
+      type: object
+      required: [exerciseId]
+      properties:
+        exerciseId: { type: integer }
+        order: { type: integer }
+
+    Exercise:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        muscleGroup: { type: string, enum: [chest, back, legs, shoulders, arms, core, cardio, fullBody] }
+        loggingType: { type: string, enum: [sets_reps_weight, duration, duration_distance] }

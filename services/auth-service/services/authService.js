@@ -10,9 +10,11 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyUser } from '../utils/notifyUser.js';
 import { eraseUserAcrossServices } from '../utils/eraseAcrossServices.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
+import redis from '../utils/redisClient.js';
 
 const SKIP_OTP_CODE = '123456';
 const OTP_MAX_ATTEMPTS = 5;
+const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 
 const prisma = new PrismaClient();
 
@@ -206,12 +208,12 @@ export async function signupService({ name, email, password, role, type, gobhiTy
   try {
     const hashed = await hash(password, 10);
     const user = await prisma.user.create({
-      data: { 
-        name, 
-        email, 
-        password: hashed, 
-        role, 
-        type, 
+      data: {
+        name,
+        email,
+        password: hashed,
+        role,
+        type,
         gobhiType: role === ROLES.GOBHI ? gobhiType : null,
         updatedAt: new Date(), // Explicitly set updatedAt
       },
@@ -238,39 +240,39 @@ export async function signupService({ name, email, password, role, type, gobhiTy
       name: err.name,
       stack: err.stack?.substring(0, 500),
     }, null, 2));
-    
+
     if (err.name === 'PrismaClientInitializationError') {
       console.error('Database connection error:', err);
       throw { status: 500, error: ERROR_MESSAGES.SERVER_ERROR.message, errorCode: ERROR_MESSAGES.SERVER_ERROR.code };
     }
-    
+
     // Prisma unique constraint violation error code is 'P2002'
     if (err.code === 'P2002') {
       const targetFields = err.meta?.target || [];
       const isEmailError = Array.isArray(targetFields) && (
-        targetFields.includes('email') || 
+        targetFields.includes('email') ||
         targetFields.some(field => String(field).toLowerCase().includes('email'))
       );
-      
+
       if (isEmailError) {
         console.error('Signup error: Email already exists');
         throw { status: 400, error: ERROR_MESSAGES.EMAIL_EXISTS.message, errorCode: ERROR_MESSAGES.EMAIL_EXISTS.code };
       }
-      
+
       // Any unique constraint violation
       console.error('Signup error: Unique constraint violation');
       throw { status: 400, error: ERROR_MESSAGES.EMAIL_EXISTS.message, errorCode: ERROR_MESSAGES.EMAIL_EXISTS.code };
     }
-    
+
     // For any other Prisma error, include original error for debugging
     console.error('Signup error - Unhandled Prisma error:', {
       code: err.code,
       message: err.message,
       name: err.name,
     });
-    throw { 
-      status: 400, 
-      error: ERROR_MESSAGES.USER_EXISTS_OR_INVALID.message, 
+    throw {
+      status: 400,
+      error: ERROR_MESSAGES.USER_EXISTS_OR_INVALID.message,
       errorCode: ERROR_MESSAGES.USER_EXISTS_OR_INVALID.code,
       originalError: {
         code: err.code,
@@ -402,10 +404,8 @@ export async function logoutService(token) {
   return { ok: true };
 }
 
-// OTP store lives in Postgres (OtpCode model, one row per phone) rather than
-// an in-memory Map — a Cloud Run cold start or scale-out to multiple
-// instances would otherwise silently invalidate in-flight OTPs, since each
-// instance would have its own empty Map.
+// OTP store lives in Redis for high performance and native TTL, preventing
+// database bloat and ensuring consistent verification across Cloud Run pods.
 
 // Canonical phone key for everything in this service — OTP-store lookups,
 // User.phone storage/matching, and both the OTP-store and Firebase verify
@@ -491,7 +491,7 @@ export async function sendOtpService(rawPhone) {
   // Firebase, and skip (see GET /otp-config, admin-editable via
   // /otp-config/admin) — but the switch previously only advised clients
   // which path to take; this function itself would still attempt a real
-  // WhatsApp/Fast2SMS send regardless. That let Fast2SMS fire (and silently
+  // WhatsApp/Fast2Sms send regardless. That let Fast2SMS fire (and silently
   // "succeed" per the 200 below even when delivery failed) for any caller of
   // this endpoint even while the platform is on Firebase.
   // Guard it here so "provider=firebase" is an actual guarantee, not just a
@@ -500,31 +500,28 @@ export async function sendOtpService(rawPhone) {
   if (provider === 'firebase') {
     throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
-  const existing = await prisma.otpCode.findUnique({ where: { phone } });
-  if (existing && Date.now() - existing.sentAt.getTime() < 60 * 1000) {
+
+  // Rate limit check using Redis
+  const lastSent = await redis.get(`otp_sent_at:${phone}`);
+  if (lastSent && Date.now() - parseInt(lastSent) < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
   }
-  // Skip mode only bypasses the real send for phones on the allowlist. No
-  // OtpCode row is written for a bypassed number since verifyOtpService
-  // short-circuits before ever reading one.
+
+  // Skip mode only bypasses the real send for phones on the allowlist.
   if (provider === 'skip' && await isSkipAllowlisted(phone)) {
     return { message: 'OTP sent successfully' };
   }
   // Anyone else while provider is "skip" (i.e. not on the allowlist) must
-  // NOT get a real WhatsApp/Fast2SMS send — only an explicit provider of
-  // "fast2sms" is allowed to reach that below. Same error/code the
-  // "firebase" branch above throws, so callers handle both identically:
-  // fall back to the Firebase client-side phone-auth flow instead.
+  // NOT get a real WhatsApp/Fast2Sms send.
   if (provider === 'skip') {
     throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  const now = new Date();
-  await prisma.otpCode.upsert({
-    where: { phone },
-    create: { phone, code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
-    update: { code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
-  });
+  
+  // Store OTP and sent timestamp in Redis with TTL
+  await redis.setex(`otp_code:${phone}`, OTP_EXPIRY_SECONDS, code);
+  await redis.setex(`otp_sent_at:${phone}`, 60, Date.now().toString());
+  
   const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
   if (!sent) console.log(`OTP for ${phone}: ${code}`);
   return { message: 'OTP sent successfully' };
@@ -534,8 +531,8 @@ export async function sendOtpService(rawPhone) {
 // the account's EXISTING role (not the role the requesting app sent), since
 // that's the account the phone number actually belongs to.
 // Shared by both the OTP-store path (verifyOtpService) and the Firebase
-// ID-token path (verifyFirebaseTokenService) — everything that happens once a
-// phone number is confirmed verified, regardless of how it got verified.
+// ID-token path (verifyFirebaseTokenService) — everything that happens once
+// a phone number is confirmed verified, regardless of how it got verified.
 // Deterministic own-code derivation — see the referralCode field's schema
 // comment. Called only after the row exists (needs a real id).
 function referralCodeFor(userId) {
@@ -696,24 +693,21 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
   const provider = await loadOtpProvider();
   const skipBypass = provider === 'skip' && otp === SKIP_OTP_CODE && await isSkipAllowlisted(phone);
   if (!skipBypass) {
-    const entry = await prisma.otpCode.findUnique({ where: { phone } });
-    if (!entry || Date.now() > entry.expiresAt.getTime()) {
-      if (entry) await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+    const cachedOtp = await redis.get(`otp_code:${phone}`);
+    if (!cachedOtp) {
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
-    if (entry.attempts >= OTP_MAX_ATTEMPTS) {
-      // Too many wrong guesses against this exact code — force a fresh
-      // resend rather than continuing to allow guesses for the rest of its
-      // 5-minute window. Previously the only ceiling here was the gateway's
-      // per-IP rate limit, which a distributed-IP attacker isn't bound by.
-      await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+    
+    const attempts = await redis.incr(`otp_attempts:${phone}`);
+    if (attempts > OTP_MAX_ATTEMPTS) {
+      await redis.del(`otp_code:${phone}`, `otp_attempts:${phone}`);
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
-    if (!safeCompareStrings(entry.code, otp)) {
-      await prisma.otpCode.update({ where: { phone }, data: { attempts: { increment: 1 } } }).catch(() => {});
+    
+    if (!safeCompareStrings(cachedOtp, otp)) {
       throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
     }
-    await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+    await redis.del(`otp_code:${phone}`, `otp_attempts:${phone}`);
   }
 
   return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode, linkedGymId });
@@ -919,8 +913,8 @@ export async function updateTrainerStatusService(trainerId, isActive, gymId, par
   const updated = await prisma.user.update({
     where: { id: trainerId },
     data: { isActive },
-    select: { id: true, name: true, phone: true, isActive: true, createdAt: true },
+    select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
   });
-  track(isActive ? 'trainer_account_reactivated' : 'trainer_account_deactivated', partnerId, { trainerId, gymId });
+  track('trainer_account_reactivated' : 'trainer_account_deactivated', partnerId, { trainerId, gymId });
   return updated;
 }

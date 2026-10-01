@@ -87,8 +87,65 @@ jobs:
             npm test
           fi
 
+  # Real-database tests, against a real Postgres.
+  #
+  # The unit suite mocks Prisma, which is correct for logic and wrong for the
+  # things only Postgres can answer: a TEXT column holding 'YYYY-MM-DD' compared
+  # with `gte`, and an enum value that is accepted by the service and refused by
+  # the database. A mock agrees with both by construction, so those failures
+  # would otherwise ship and only show up as a 500 on the settings screen.
+  #
+  # Deliberately NOT gated on the changed-service matrix. A skipped job skips
+  # everything downstream in `needs`, so making this conditional would mean
+  # either never gating the deploy (advisory only) or rewriting the deploy
+  # job's condition. It costs one container, so it always runs and the gate is
+  # real. Only health-service has such tests today; the suite skips itself for
+  # anything else.
+  integration-tests:
+    needs: changes
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # 16 matches what Neon serves in production, which is the point: the
+        # text-comparison and enum behaviour under test is version-specific.
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: health_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/health_test
+      # Prisma reads DATABASE_URL from the schema; the tests read
+      # TEST_DATABASE_URL and set DATABASE_URL from it before importing the
+      # service, which builds its client at import time.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/health_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'services/health-service/package-lock.json'
+      - name: Install, generate client, apply migrations
+        working-directory: services/health-service
+        run: |
+          npm ci
+          npx prisma generate
+          # Without this every query fails on a missing relation rather than on
+          # the thing being tested.
+          npx prisma migrate deploy
+      - name: Run the real-database tests
+        working-directory: services/health-service
+        run: node --test test/nudgeDb.test.js
+
   preflight:
-    needs: [changes, unit-tests]
+    needs: [changes, unit-tests, integration-tests]
     if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     steps:

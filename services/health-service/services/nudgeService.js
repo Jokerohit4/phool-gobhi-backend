@@ -284,22 +284,14 @@ function isPausedToday(goal, today) {
   );
 }
 
-/// Users with a live score target who are behind pace on it.
+/// Users holding a live score target, before any judgement about their pace.
 ///
-/// This is the one nudge the user opted into by setting a target at all - the
-/// reminder is of a number they chose, not one the app invented. It is
-/// deliberately silent for `at_risk`: that band exists so the card can be
-/// honestly amber, not so a phone can buzz on the first slightly-off day.
-/// Waiting for `behind` (the narrower band) means the message arrives when
-/// there is something real to catch up on, which is what makes it worth
-/// sending at all.
-///
-/// `calmMode` is excluded in SQL, not filtered afterwards: calm mode is the
-/// thing that flattens the card to one line with no red, and a push that says
-/// "behind" would undo exactly what the user asked for. A query that never
-/// retrieves them cannot nudge them. `reached`/`expired` fall out of the band
-/// check below.
-export async function findTargetCandidatesService(now = new Date()) {
+/// Split from [findTargetCandidatesService] so the half that is SQL can be
+/// tested against a real database: the interesting part of this query is that
+/// `scoreTargetUntil` is TEXT holding 'YYYY-MM-DD' and is compared with `gte`,
+/// which is exactly the kind of thing a hand-written mock agrees with by
+/// construction. Being behind is a band, and bands are the engine's business.
+export async function findTargetGoalRowsService(now = new Date()) {
   const today = localDateIST(now);
 
   const goals = await prisma.healthGoal.findMany({
@@ -316,11 +308,31 @@ export async function findTargetCandidatesService(now = new Date()) {
     },
   });
 
+  return goals.filter(
+    (goal) => !(goal.scoreTargetFrom && goal.scoreTargetFrom > today) && !isPausedToday(goal, today),
+  );
+}
+
+/// Users with a live score target who are behind pace on it.
+///
+/// This is the one nudge the user opted into by setting a target at all - the
+/// reminder is of a number they chose, not one the app invented. It is
+/// deliberately silent for `at_risk`: that band exists so the card can be
+/// honestly amber, not so a phone can buzz on the first slightly-off day.
+/// Waiting for `behind` (the narrower band) means the message arrives when
+/// there is something real to catch up on, which is what makes it worth
+/// sending at all.
+///
+/// `calmMode` is excluded in SQL, not filtered afterwards: calm mode is the
+/// thing that flattens the card to one line with no red, and a push that says
+/// "behind" would undo exactly what the user asked for. A query that never
+/// retrieves them cannot nudge them. `reached`/`expired` fall out of the band
+/// check.
+export async function findTargetCandidatesService(now = new Date()) {
+  const today = localDateIST(now);
+
   const out = [];
-  for (const goal of goals) {
-    // A target whose window has not opened yet has nothing to be behind on.
-    if (goal.scoreTargetFrom && goal.scoreTargetFrom > today) continue;
-    if (isPausedToday(goal, today)) continue;
+  for (const goal of await findTargetGoalRowsService(now)) {
     // The same computation the card runs, so "behind" here cannot disagree
     // with the band the user sees when they tap through.
     const state = await getScoreTargetState(prisma, { userId: goal.userId, today });
