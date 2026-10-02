@@ -16,8 +16,8 @@
 //   - the low-intake guard. checkForLowIntakeRun reads recent snapshots at
 //     read time, because it is a safety check about the user's current state,
 //     not a property of any one day.
-import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS } from './constants.js';
-import { computeDay, checkForLowIntakeRun } from './scoreEngine.js';
+import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS } from './constants.js';
+import { computeDay, checkForLowIntakeRun, computeBiologicalScore, computeBlendedHealthScore } from './scoreEngine.js';
 import { getDayTotals } from './nutritionService.js';
 import { isDueOn } from './ledgerPlanService.js';
 import { isScheduledFor } from './scoreEngine.js';
@@ -164,6 +164,50 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     return { ...winner, alreadyClosed: true, openActions: [] };
   }
   return { ...row, openActions: [] };
+}
+
+export async function getBlendedScore(prisma, { userId }) {
+  // 1. Behavioral baseline: the latest closed day's value
+  const latestSnapshot = await prisma.scoreDaySnapshot.findFirst({
+    where: { userId },
+    orderBy: { localDate: 'desc' },
+  });
+  const ledgerClose = latestSnapshot ? Number(latestSnapshot.close) : 0;
+
+  // 2. Biological state: latest verified markers
+  const markers = Object.keys(BIOLOGICAL_TARGETS);
+  const bioEntries = await prisma.biometricEntry.findMany({
+    where: {
+      userId,
+      metric: { in: markers },
+      // Only verified entries are used for the Health Score
+      verified: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // Group by marker to get only the latest for each
+  const latestBiomarkers = [];
+  const seen = new Set();
+  for (const entry of bioEntries) {
+    if (!seen.has(entry.metric)) {
+      latestBiomarkers.push({
+        marker: entry.metric,
+        value: Number(entry.value),
+      });
+      seen.add(entry.metric);
+    }
+  }
+
+  const bioScore = computeBiologicalScore(latestBiomarkers);
+  const blendedScore = computeBlendedHealthScore(ledgerClose, bioScore);
+
+  return {
+    blendedScore,
+    behavioralScore: ledgerClose,
+    biologicalScore: bioScore,
+    markers: latestBiomarkers,
+  };
 }
 
 /**

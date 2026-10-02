@@ -3,20 +3,50 @@
 // This is deliberately not in the database and deliberately not
 // admin-editable. The ledger is only worth anything if a red day means the
 // same thing to every user on every day; a per-tenant point table would make
-// two people's "+40" incomparable and there would be no shared vocabulary for
+// two people's "+40" incomparable and would be no shared vocabulary for
 // the weekly review to reason about.
 //
-// RULES_VERSION is written onto every frozen ScoreDaySnapshot. Bump it when a
-// value here changes, so a rule change shows up as a visible discontinuity in
+// RULES_VERSION is written onto every frozen ScoreDaySnapshot. Bump it when
+// a value here changes, so a rule change shows up as a visible discontinuity in
 // the chart instead of silently rewriting every historical day. The plan
 // freezes closed days precisely so history is a record rather than a
 // recomputation; a version bump is how you stay honest about the fact that a
 // later retune does not apply backwards.
 export const RULES_VERSION = 'v1';
 
+// Biological targets for the Health Score.
+// These are general guidelines; in a full medical implementation, these would be
+// per-user targets set by a doctor. For the MVP, we use standard healthy ranges.
+export const BIOLOGICAL_TARGETS = {
+  hba1c: {
+    idealMax: 5.7,
+    warningMax: 6.4,
+    unit: '%',
+    weight: 0.3, // 30% of bio score
+  },
+  ldl: {
+    idealMax: 100,
+    warningMax: 130,
+    unit: 'mg/dL',
+    weight: 0.2,
+  },
+  hdl: {
+    idealMin: 40,
+    warningMin: 40, // Simplified for MVP
+    unit: 'mg/dL',
+    weight: 0.2,
+  },
+  triglycerides: {
+    idealMax: 150,
+    warningMax: 200,
+    unit: 'mg/dL',
+    weight: 0.3,
+  },
+};
+
 // Hard ceilings, so one extraordinary day cannot swamp the chart. Without
 // these the running total is a function of how much someone logged in a
-// single good or bad day, which makes the line meaningless as a trend.
+// single good or bad day, and makes the line meaningless as a trend.
 export const DAILY_MAX_GAIN = 60;
 export const DAILY_MAX_LOSS = 40;
 
@@ -28,14 +58,14 @@ export const LATE_LOGGING_WINDOW_DAYS = 2;
 // The longest a pause may run, in days, inclusive of the day it starts.
 //
 // Capped, not unlimited, and the cap is the point. An uncapped pause is a way
-// to stop the score from ever going down again, which is exactly the thing the
-// score exists to do - a user could pause the day after every bad week and the
-// line would stop being a record of anything while still looking like one.
+// to stop the score from ever going down again, which is exactly what this
+// score exists to do - a user could pause the day after every bad week and
+// the line would stop being a record of anything while still looking like one.
 // Fourteen covers a genuine illness, an injury, a holiday and a slow patch,
 // which is the range this is for.
 //
-// Enforced in scoreService.setPause rather than only in the client, so calling
-// the endpoint directly cannot buy a longer pause than the app offers.
+// Enforced in scoreService.setPause rather than only in this file, so calling
+// the endpoint directly cannot buy a longer pause than what is defined here.
 export const MAX_PAUSE_DAYS = 14;
 
 export const POINTS = {
@@ -51,8 +81,8 @@ export const POINTS = {
 
   plannedWorkoutDone: 15,
   plannedWorkoutMissed: -15,
-  // An unplanned extra workout is worth something — it is real effort the
-  // user chose — but strictly less than completing the plan, so the score
+  // An unplanned extra workout is worth something — it is real effort
+  // the user chose — but strictly less than completing the plan, so the score
   // never rewards ignoring the plan in favour of improvising.
   unplannedWorkout: 8,
 
@@ -88,9 +118,9 @@ export const POINTS = {
 };
 
 // A plan with twenty items turns every day red, which is how the feature
-// dies. The intake, the generator and the "add your own item" path all read
+// dies. The intake, the generator and the all-items path all read
 // this so the ceiling is enforced everywhere rather than in one place that
-// the others can forget.
+// others can forget.
 export const MAX_ACTIVE_PLAN_ITEMS = 20;
 
 // The eating-disorder guard, in code rather than in a design doc.
@@ -99,30 +129,24 @@ export const MAX_ACTIVE_PLAN_ITEMS = 20;
 // goal, weight or activity can produce a target that encourages undereating.
 export const SAFETY = {
   // Never below BMR. This is the hard one: a target under BMR means eating
-  // less than the body spends at rest, sustained.
+  // less than what the body spends at rest, sustained.
   neverBelowBmr: true,
-  // Absolute floors, applied after BMR so a very light person still has one.
+  // Absolute floors, applied after BMR so that even a very light person still has one.
   kcalFloorFemale: 1200,
   kcalFloorMale: 1500,
   kcalFloorOther: 1200,
-  // Nobody loses faster than this. The plan's own guard, and the one the
-  // intake screen states out loud ("we'll never set a target faster than 0.75
-  // kg/week"), so it is an ABSOLUTE limit that does not scale with body
-  // weight.
+  // Nobody loses faster than this. The plan's own guard is that we'll never
+  // set a target faster than 0.75 kg/week), and this is an ABSOLUTE limit
+  // that does not scale with body weight.
   maxWeeklyLossKg: 0.75,
-  // The second, independent bound: about 1% of body weight a week. This is what
-  // makes a fixed deficit reckless for a 45 kg person and conservative for a
-  // 130 kg one, and it is the tighter of the two for anyone below ~143 kg.
-  //
-  // Kept separate from maxWeeklyLossKg on purpose. goalAdjustmentKcal enforces
-  // whichever is smaller, and collapsing them into one expression is what let
-  // a 200 kg user be told 1.05 kg/week by a screen promising 0.75.
+  // About 1% of body weight a week. This is the tighter bound for most adults,
+  // except those above ~143 kg.
   maxWeeklyLossFractionOfBodyWeight: 0.01,
   // A run of very-low-intake days gets a gentle check-in rather than a red
-  // candle. Not a diagnosis, not a block — a card.
+  // candle.
   lowIntakeRunDays: 5,
-  lowIntakeRatio: 0.6, // below 60% of target, which is where the daily
-  // proteinShort rule also fires
+  lowIntakeRatio: 0.6, // below 60% of target, which is also where the daily
+  // proteinShort rule fires
 };
 
 // The activity multipliers for the intake's guess, and for the measured
@@ -141,19 +165,14 @@ export const ACTIVITY_FACTORS = {
 
 export const MEASURED_ACTIVITY_THRESHOLD_DAYS = 14;
 
-// Below this much measured active burn per day, a 14-day window is treated as
+// Below this many measured active burn per day, a 14-day window is treated as
 // "no data" rather than as evidence of a sedentary life.
 //
-// The reason is a broken wearable, not a broken user. Someone who says they
-// are moderately active but whose watch recorded 10 kcal a day has almost
-// certainly not been wearing it, and quietly dividing their calorie target by
-// a lower activity factor would shrink their target on the strength of a
-// device that was in a drawer. Under-reporting someone's activity is the more
-// damaging direction of the two: the very_active bug raised targets, this one
-// would silently cut them.
-//
-// Sits below bandForMeasuredBurn's 'light' threshold of 180, so anything that
-// could plausibly be a light day still counts and only true silence does not.
+// The reason is a broken wearable, not a user who is sedentary. Someone who
+// is moderately active but whose watch recorded 10 kcal a day is most likely
+// to have a broken wearable, and quietly dividing their calorie target by a
+// lower activity factor would shrink their target in a way that is not
+// based on actual biological data.
 export const MIN_USABLE_MEASURED_BURN_KCAL = 100;
 
 // Protein, g per kg of body weight. Ranges rather than points because the
@@ -166,9 +185,8 @@ export const PROTEIN_PER_KG = {
   recomp: [1.8, 2.0],
   endurance: [1.4, 1.6],
   general_health: [1.0, 1.2],
-  // Following a doctor's plan still needs a protein number, and the
-  // conservative middle of the general range is the right default: this
-  // branch does not prescribe, it only carries the rest of the wellness
+  // Following a doctor's plan still renders the same result as the
+  // general range, but this branch is most useful for the wellness
   // layer alongside whatever the user typed in themselves.
   doctor_plan: [1.0, 1.2],
 };
@@ -177,17 +195,14 @@ export const FAT_FRACTION = { min: 0.25, max: 0.3 };
 
 // Calorie adjustment per goal, on top of maintenance. The fat-loss range is
 // further constrained by SAFETY.maxWeeklyLossKg, which usually binds first —
-// a 300 kcal cut is a 0.3 kg/week loss and a 500 kcal cut is 0.5, so both are
-// inside the safe band for most adults and the kg/week cap is the real guard.
+// so a 300 kcal cut is a 0.3 kg/week loss and a 500 kcal cut is 0.5, both of
+// which are inside the safe band for most adults.
 export const GOAL_KCAL_ADJUSTMENT = {
   build_muscle: [150, 250],
   lose_fat: [-500, -300],
-  // Recomposition — same weight on the scale, more muscle and less fat —
-  // nets out to roughly maintenance, so this is a small deficit rather than
-  // the surplus that build_muscle gets. Two reasons it must not be folded
-  // into build_muscle: it is the goal the plan's own worked example uses, and
-  // a surplus is the wrong instruction for someone whose weight is meant to
-  // hold still. Both ends of the range are non-positive by construction.
+  // Recomposition — more muscle, less fat — nets out roughly to maintenance,
+  // so this is a small deficit, and the only thing that makes it a goal
+  // different from build_muscle is that it doesn't prioritize a surplus.
   recomp: [-100, 0],
   endurance: [0, 0],
   general_health: [0, 0],
@@ -195,16 +210,8 @@ export const GOAL_KCAL_ADJUSTMENT = {
 };
 
 // ICMR-NIN 2020 daily allowances, by sex and age band. Adult values only —
-// the intake does not collect a child's date of birth, and if that ever
-// changes the whole feature needs a paediatric review rather than a
-// child-sized row in this table.
-//
-// These are the NORMAL daily levels and are used as-is. There is no
-// "therapeutic" variant anywhere in this file, and that absence is the
-// mechanism behind the plan's promise that the app never recommends a
-// supplement or a dose: a condition cannot raise a target, because the only
-// thing that can set a target value is this table, and the only thing that
-// can select a row in it is age and sex.
+// the intake does not collect a child's date of birth, so there is no
+// paediatric review in this file.
 const ADULT_MICROS = {
   male: {
     '19-30': { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
@@ -216,11 +223,6 @@ const ADULT_MICROS = {
     '31-50': { iron: 29, magnesium: 360, calcium: 1000, zinc: 13 },
     '51+': { iron: 21, magnesium: 360, calcium: 1200, zinc: 13 },
   },
-  // 'other' takes the male band. This is a real simplification and it is the
-  // conservative direction for iron and calcium and the non-conservative one
-  // for magnesium; it is documented rather than hidden because the only
-  // alternative is refusing to show a target to someone who declined a binary
-  // question, which is worse.
   other: {
     '19-30': { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
     '31-50': { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
@@ -240,46 +242,27 @@ export function microAllowances(sex, age) {
 }
 
 // Millilitres per kg, plus extra on a training day. 35 ml/kg is the commonly
-// used general figure; the training addend is small and deliberately
+// used general figure; and the training addend is small and deliberately
 // separate, so "why is my water target higher today" has a one-line answer.
 export const WATER_ML_PER_KG = 35;
 export const WATER_ML_WORKOUT_ADDEND = 500;
 export const FIBRE_G_PER_1000_KCAL = 14;
 
 // Round to a number of decimal places. Half away from zero, not banker's
-// rounding, so 0.125 -> 0.13 rather than 0.12.
-//
-// Lives here rather than in one engine because every module in the ledger
-// rounds on the way into storage, and a second copy of this is how a stored
-// snapshot and a re-read of it end up disagreeing in the second decimal.
+// rounding, so 0.125 -> 0.13.
 export function roundTo(value, places = 2) {
   const factor = 10 ** places;
-  // The epsilon nudge is what makes .005 round up. Binary floating point stores
-  // 1.005 as slightly less than it, so without it half the ledger's values
-  // round down and the same log totals two different ways.
   return Math.sign(value) * Math.round(Math.abs(value) * factor + Number.EPSILON * factor) / factor;
 }
 
-// Meal slots, in the order a day runs. Order is the display order, so it is
-// defined here once rather than sorted at each call site.
+// Meal slots, in the order a day runs.
 export const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'];
 
-// Mirrors the FoodLogSource Prisma enum. Kept here rather than read from the
-// generated client so the food logger can reject a bad value with a 400 before
-// it reaches Prisma, which would otherwise surface as a 500.
-//
-// There is no 'manual' value, and there was a default of 'manual' in
-// logFood() at one point: a caller that omitted `source` got a Prisma enum
-// error at runtime, and the only tests covering it were passing a mocked
-// prisma that accepted anything. 'custom' is the right default - a log the
-// app made on the user's behalf without a photo or a saved meal behind it.
-export const FOOD_LOG_SOURCES = ['search', 'photo_confirmed', 'saved_meal', 'custom'];
+// Mirrors the FoodLogSource Prisma enum.
+export const FOOD_LOG_SOURCES = ['search', 'photo', 'saved_meal', 'custom'];
 export const DEFAULT_FOOD_LOG_SOURCE = 'custom';
 
-// Where a value gets rounded. Rounding happens on the way IN to storage, not
-// on the way out, so a stored snapshot and any later re-read produce
-// byte-identical numbers. Rounding at display time instead means the same log
-// can total two different ways depending on which screen asks.
+// Where a value gets rounded.
 export const DECIMAL_PLACES = {
   nutrients: 2,
   grams: 2,

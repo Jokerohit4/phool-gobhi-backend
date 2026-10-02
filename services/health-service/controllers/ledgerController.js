@@ -480,6 +480,10 @@ export const getScoreTarget = handle(async (req) =>
   }),
 );
 
+export const getBlendedScore = handle(async (req) =>
+  scoreService.getBlendedScore(prisma, { userId: req.userId }),
+);
+
 export const setScoreTarget = handle(async (req) =>
   scoreTargetService.setScoreTarget(prisma, {
     userId: req.userId,

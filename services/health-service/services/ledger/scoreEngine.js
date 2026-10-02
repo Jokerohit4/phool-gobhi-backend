@@ -5,6 +5,7 @@ import {
   POINTS,
   RULES_VERSION,
   SAFETY,
+  BIOLOGICAL_TARGETS,
 } from './constants.js';
 
 // The score engine.
@@ -512,3 +513,60 @@ function line(key, label, kind, points, item, late = false) {
 }
 
 export { LATE_LOGGING_WINDOW_DAYS, MICROS_TRACKED };
+
+// --- Biological Scoring ----------------------------------------------------
+
+/**
+ * Computes a biological score (0-100) based on verified biomarkers.
+ * @param {Array} biomarkers - List of { marker: string, value: number }
+ */
+export function computeBiologicalScore(biomarkers = []) {
+  if (!biomarkers || biomarkers.length === 0) return null;
+
+  let totalWeightedScore = 0;
+  let totalWeightUsed = 0;
+
+  for (const { marker, value } of biomarkers) {
+    const target = BIOLOGICAL_TARGETS[marker.toLowerCase()];
+    if (!target) continue;
+
+    let markerScore = 0;
+    if (target.idealMax !== undefined) {
+      // Lower is better (e.g., HbA1c, LDL)
+      if (value <= target.idealMax) markerScore = 100;
+      else if (value <= target.warningMax) markerScore = 50;
+      else markerScore = 0;
+    } else if (target.idealMin !== undefined) {
+      // Higher is better (e.g., HDL)
+      if (value >= target.idealMin) markerScore = 100;
+      else if (value >= target.warningMin) markerScore = 50;
+      else markerScore = 0;
+    }
+
+    totalWeightedScore += markerScore * target.weight;
+    totalWeightUsed += target.weight;
+  }
+
+  if (totalWeightUsed === 0) return null;
+  return Math.round(totalWeightedScore / totalWeightUsed);
+}
+
+/**
+ * Blends the behavioral ledger score with the biological state score.
+ * @param {number} ledgerClose - The latest close from computeDay.
+ * @param {number} bioScore - The result of computeBiologicalScore.
+ */
+export function computeBlendedHealthScore(ledgerClose, bioScore) {
+  // The ledgerClose is a running total. We need to normalize it.
+  // For the MVP, we assume a "Healthy behavioral trend" is around 500 points.
+  // This is a heuristic and should be tuned based on real data.
+  const behavioralNormalized = Math.min(100, Math.max(0, (ledgerClose / 500) * 100));
+  
+  if (bioScore === null) return behavioralNormalized;
+
+  // Blend: 40% Behavioral, 60% Biological
+  const weightBeh = 0.4;
+  const weightBio = 0.6;
+
+  return Math.round((behavioralNormalized * weightBeh) + (bioScore * weightBio));
+}

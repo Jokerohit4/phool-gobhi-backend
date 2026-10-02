@@ -150,6 +150,7 @@ router.get('/ledger/attainment', ...nutrition, ledgerCtrl.getAttainment);
 // question, and a client that could conflate them by accident is a client we
 // would rather not ship.
 router.get('/ledger/score/target', ...nutrition, ledgerCtrl.getScoreTarget);
+router.get('/ledger/score/blended', ...nutrition, ledgerCtrl.getBlendedScore);
 router.put('/ledger/score/target', ...nutrition, ledgerCtrl.setScoreTarget);
 router.delete('/ledger/score/target', ...nutrition, ledgerCtrl.clearScoreTarget);
 router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewScore);
