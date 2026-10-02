@@ -160,6 +160,9 @@ router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScor
 router.post('/ledger/rewards/evaluate', ...nutrition, ledgerCtrl.evaluateRewards);
 router.post('/internal/rewards/evaluate', requireInternal, ledgerCtrl.evaluateRewards);
 
+// AI Plans
+router.post('/ledger/ai/prescribe', ...nutrition, ledgerCtrl.prescribeAiPlan);
+
 // ---- Medical documents ----------------------------------------------------
 //
 // The only place in this service that stores a medical record. The multer

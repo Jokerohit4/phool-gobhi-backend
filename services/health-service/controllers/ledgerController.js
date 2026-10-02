@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { evaluateWeeklyRewards } from '../services/rewardService.js';
+import { injectAiPrescription } from '../services/aiPrescriptionService.js';
 
 const prisma = new PrismaClient();
 
@@ -624,6 +625,10 @@ export const deleteMedicalDocument = handle(async (req) => {
 
 export const evaluateRewards = handle(async (req) => {
   return await evaluateWeeklyRewards();
+});
+
+export const prescribeAiPlan = handle(async (req) => {
+  return await injectAiPrescription(req.userId, req.body);
 });
 
 // The one surface in this service that sends an image to a third party, and the
