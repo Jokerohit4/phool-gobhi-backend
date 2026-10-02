@@ -156,6 +156,9 @@ router.delete('/ledger/score/target', ...nutrition, ledgerCtrl.clearScoreTarget)
 router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewScore);
 router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScoreDay);
 
+// Rewards
+router.post('/ledger/rewards/evaluate', ...nutrition, ledgerCtrl.evaluateRewards);
+
 // ---- Medical documents ----------------------------------------------------
 //
 // The only place in this service that stores a medical record. The multer

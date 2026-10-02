@@ -12,6 +12,7 @@ import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
+import { evaluateWeeklyRewards } from '../services/rewardService.js';
 
 const prisma = new PrismaClient();
 
@@ -620,6 +621,10 @@ export const deleteMedicalDocument = handle(async (req) => {
 });
 
 // ---- Photo food logging ----------------------------------------------------
+
+export const evaluateRewards = handle(async (req) => {
+  return await evaluateWeeklyRewards();
+});
 
 // The one surface in this service that sends an image to a third party, and the
 // one that stores an image the user chose to keep. Everything else about a
