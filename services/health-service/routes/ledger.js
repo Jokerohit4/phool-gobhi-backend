@@ -158,6 +158,7 @@ router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScor
 
 // Rewards
 router.post('/ledger/rewards/evaluate', ...nutrition, ledgerCtrl.evaluateRewards);
+router.post('/internal/rewards/evaluate', requireInternal, ledgerCtrl.evaluateRewards);
 
 // ---- Medical documents ----------------------------------------------------
 //
