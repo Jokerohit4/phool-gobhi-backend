@@ -1988,7 +1988,7 @@ async function computeMemberActivity(gymId, days) {
 
   const byCustomer = new Map();
   const accountFor = (customerId) => {
-    const entry = byCustomer.get(customerId) ?? { customerId, visitCount: 0, totalMinutes: 0, visitTimes: [] };
+    const entry = byCustomer.get(customerId) ?? { customerId, visitCount: 0, totalMinutes: 0, visitTimes: [], lastVisitAt: null };
     byCustomer.set(customerId, entry);
     return entry;
   };
@@ -1997,11 +1997,15 @@ async function computeMemberActivity(gymId, days) {
     entry.visitCount += 1;
     entry.totalMinutes += minutesBetweenTimes(b.startTime, b.endTime);
     entry.visitTimes.push(minutesOfDayIST(b.attendedAt));
+    // Churn-radar input: the latest verified visit, across both wedges,
+    // so the partner app can flag "hasn't been in for N days" members.
+    if (!entry.lastVisitAt || b.attendedAt > entry.lastVisitAt) entry.lastVisitAt = b.attendedAt;
   }
   for (const m of memberCheckins) {
     const entry = accountFor(m.customerId);
     entry.visitCount += 1;
     entry.visitTimes.push(minutesOfDayIST(m.checkedInAt));
+    if (!entry.lastVisitAt || m.checkedInAt > entry.lastVisitAt) entry.lastVisitAt = m.checkedInAt;
   }
 
   const rows = [...byCustomer.values()].map((e) => {
@@ -2012,6 +2016,7 @@ async function computeMemberActivity(gymId, days) {
       totalMinutes: e.totalMinutes,
       mostCommonHour,
       consistencyRatio,
+      lastVisitAt: e.lastVisitAt instanceof Date ? e.lastVisitAt.toISOString() : e.lastVisitAt,
     };
   });
 

@@ -172,6 +172,30 @@ test('a booking + a QR check-in from the same customer combine into one row', as
   assert.equal(m.mostCommonHour, 7);
 });
 
+test('lastVisitAt is the latest verified visit across both wedges', async () => {
+  resetFakes();
+  users = { 8: { id: 8, name: 'Slipping' } };
+  // Two SaaS bookings (arrived 6:55, then 7:05) plus a bare QR check-in at
+  // 7:30 — the churn radar in the partner app needs the LATEST of these.
+  bookingRows = [
+    { customerId: 8, gymId: GYM, date: TODAY, startTime: '06:00', endTime: '07:00', isAttendanceSaas: true, attendedAt: new Date(utcForIST(6, 55)) },
+    { customerId: 8, gymId: GYM, date: TODAY, startTime: '07:00', endTime: '08:00', isAttendanceSaas: true, attendedAt: new Date(utcForIST(7, 5)) },
+  ];
+  memberRows = [
+    { customerId: 8, gymId: GYM, date: TODAY, checkedInAt: new Date(utcForIST(7, 30)) },
+  ];
+
+  const result = await getMemberActivityForGym(GYM, PARTNER, 7);
+  const m = result.members.find((r) => r.customerId === 8);
+
+  assert.equal(m.visitCount, 3);
+  assert.equal(
+    m.lastVisitAt,
+    new Date(utcForIST(7, 30)).toISOString(),
+    'the 7:30 QR check-in is the latest of the three visits',
+  );
+});
+
 test('activity outside the requested window is excluded', async () => {
   resetFakes();
   users = { 6: { id: 6, name: 'Old Timer' } };
