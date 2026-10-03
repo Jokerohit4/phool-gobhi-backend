@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
+import { track } from '../utils/analytics.js';
 const prisma = new PrismaClient();
 
 // Wave 2 — wild Sprout spawns for a challenge's live map (see
@@ -58,7 +59,7 @@ function serialize(spawn) {
 // that proves the mechanic" posture Wave 1 used for badges. Anchors new
 // spawns around the challenge's checkpoint spots (city-quest challenges) or
 // the caller's own location (gym-native challenges, which have none).
-export async function getNearbySproutsService(challengeId, { lat, lng } = {}) {
+export async function getNearbySproutsService(challengeId, { lat, lng, userId } = {}) {
   const challenge = await prisma.challenge.findUnique({
     where: { id: Number(challengeId) },
     include: { checkpointSpots: true },
@@ -69,12 +70,12 @@ export async function getNearbySproutsService(challengeId, { lat, lng } = {}) {
   const live = await prisma.sproutSpawn.findMany({
     where: { challengeId: challenge.id, expiresAt: { gt: now }, caughtByUserId: null },
   });
-  if (live.length >= MIN_LIVE_SPAWNS) return live.map(serialize);
+  if (live.length >= MIN_LIVE_SPAWNS) return trackedSprouts(userId, challenge.id, live);
 
   const anchors = challenge.checkpointSpots.length > 0
     ? challenge.checkpointSpots.map((s) => ({ lat: s.lat, lng: s.lng }))
     : (typeof lat === 'number' && typeof lng === 'number' ? [{ lat, lng }] : []);
-  if (anchors.length === 0) return live.map(serialize);
+  if (anchors.length === 0) return trackedSprouts(userId, challenge.id, live);
 
   const toCreate = MAX_LIVE_SPAWNS - live.length;
   const created = [];
@@ -95,7 +96,17 @@ export async function getNearbySproutsService(challengeId, { lat, lng } = {}) {
     });
     created.push(spawn);
   }
-  return [...live, ...created].map(serialize);
+  return trackedSprouts(userId, challenge.id, [...live, ...created], created.length);
+}
+
+// One read, three return paths, so the event is emitted from a single helper
+// and spawn_count always equals what the caller actually received.
+function trackedSprouts(userId, challengeId, spawns, seededCount = 0) {
+  const serialized = spawns.map(serialize);
+  track('sprouts_nearby_viewed', userId ?? null, {
+    challenge_id: challengeId, spawn_count: serialized.length, seeded_count: seededCount,
+  });
+  return serialized;
 }
 
 // Server-authoritative catch: re-validates proximity and spawn state before
@@ -113,11 +124,18 @@ export async function catchSproutService(userId, challengeId, spawnId, { lat, ln
     throw { status: 404, error: 'Unknown Sprout spawn for this challenge' };
   }
   if (spawn.caughtByUserId || spawn.expiresAt <= new Date()) {
+    track('sprout_caught', userId, {
+      challenge_id: Number(challengeId), spawn_id: spawn.id, caught: false, reason: 'already_gone',
+    });
     return { caught: false };
   }
 
   const distance = distanceMeters(lat, lng, spawn.lat, spawn.lng);
   if (distance > CATCH_RADIUS_METERS) {
+    track('sprout_caught', userId, {
+      challenge_id: Number(challengeId), spawn_id: spawn.id, caught: false, reason: 'too_far',
+      distance_bucket: Math.min(Math.round(distance / 100), 50),
+    });
     throw {
       status: 400,
       error: "You're too far from this Sprout to catch it",
@@ -133,7 +151,12 @@ export async function catchSproutService(userId, challengeId, spawnId, { lat, ln
     where: { id: spawn.id, caughtByUserId: null },
     data: { caughtByUserId: userId, caughtAt: new Date() },
   });
-  if (count === 0) return { caught: false };
+  if (count === 0) {
+    track('sprout_caught', userId, {
+      challenge_id: Number(challengeId), spawn_id: spawn.id, caught: false, reason: 'lost_race',
+    });
+    return { caught: false };
+  }
 
   const species = SPROUT_SPECIES.find((s) => s.key === spawn.speciesKey);
   const balance = await creditCoinsService(
@@ -142,6 +165,11 @@ export async function catchSproutService(userId, challengeId, spawnId, { lat, ln
     `Caught a wild Sprout (${spawn.speciesKey})`,
     `sprout-catch:${spawn.id}`,
   );
+
+  track('sprout_caught', userId, {
+    challenge_id: Number(challengeId), spawn_id: spawn.id, caught: true, reason: null,
+    species_key: spawn.speciesKey, rarity: spawn.rarity, coins_awarded: spawn.coinValue,
+  });
 
   return {
     caught: true,

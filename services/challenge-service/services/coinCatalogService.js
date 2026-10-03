@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { creditCoinsService, debitCoinsService, debitCoinsInTx } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
+import { track } from '../utils/analytics.js';
 const prisma = new PrismaClient();
 
 // Seeded once, only if the catalog is completely empty, so the feature isn't
@@ -97,7 +98,9 @@ async function annotateGymTrials(items, userId) {
 export async function listActiveCatalogService(userId) {
   await ensureSeeded();
   const items = await prisma.coinCatalogItem.findMany({ where: { isActive: true }, orderBy: { coinCost: 'asc' } });
-  return annotateGymTrials(items, userId);
+  const annotated = await annotateGymTrials(items, userId);
+  track('coins_catalog_viewed', userId, { item_count: annotated.length });
+  return annotated;
 }
 
 export async function listCatalogAdminService() {
@@ -205,10 +208,20 @@ export async function redeemCatalogItemService({ userId, catalogItemKey, idempot
       idempotencyKey,
     },
   });
+  track('coins_redeemed', userId, {
+    path: 'wallet', redemption_id: redemption.id, category: item.category,
+    coin_cost: item.coinCost, discount_amount: item.discountAmount,
+  });
   return serializeRedemption(redemption, item);
 }
 
 const MAX_SERIALIZATION_RETRIES = 3;
+
+const REDEMPTION_REJECTIONS = new Set([
+  'GYM_TRIAL_CAP_REACHED',
+  'GYM_TRIAL_ALREADY_CLAIMED',
+  'INSUFFICIENT_COINS',
+]);
 
 // The customer-initiated redemption path (H-16, D-06) — what a user hits
 // directly from the marketplace, as opposed to redeemCatalogItemService
@@ -297,7 +310,12 @@ export async function redeemCatalogItemByUserService({ userId, catalogItemKey, i
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
 
-      return serializeRedemption(redemption, redemption.catalogItem);
+      const serialized = serializeRedemption(redemption, redemption.catalogItem);
+      track('coins_redeemed', userId, {
+        path: 'customer', redemption_id: serialized.redemptionId, category: serialized.category,
+        coin_cost: serialized.coinCost, discount_amount: serialized.discountAmount,
+      });
+      return serialized;
     } catch (err) {
       // A concurrent redemption raced this one for the same cap slot.
       // Retry with a fresh count rather than surfacing a transient DB
@@ -312,7 +330,24 @@ export async function redeemCatalogItemByUserService({ userId, catalogItemKey, i
           where: { idempotencyKey },
           include: { catalogItem: true },
         });
-        if (raced) return serializeRedemption(raced, raced.catalogItem);
+        if (raced) {
+          const replayed = serializeRedemption(raced, raced.catalogItem);
+          track('coins_redeemed', userId, {
+            path: 'customer', redemption_id: replayed.redemptionId, category: replayed.category,
+            coin_cost: replayed.coinCost, discount_amount: replayed.discountAmount, replayed: true,
+          });
+          return replayed;
+        }
+      }
+      // Tracked here rather than at the throw sites inside the transaction:
+      // those can roll back (the P2034 retry just above may yet succeed), so
+      // an event emitted from in there could report a rejection for a
+      // redemption that then went through. catalogItemKey is client-supplied,
+      // so only the server's own reason code is recorded.
+      if (REDEMPTION_REJECTIONS.has(err.code)) {
+        track('coins_redemption_rejected', userId, {
+          path: 'customer', reason: err.code.toLowerCase(),
+        });
       }
       throw err;
     }
@@ -326,10 +361,19 @@ export async function redeemCatalogItemByUserService({ userId, catalogItemKey, i
 export async function refundRedemptionService(redemptionId, idempotencyKey) {
   const redemption = await prisma.coinRedemption.findUnique({ where: { id: Number(redemptionId) } });
   if (!redemption) throw { status: 404, error: 'Redemption not found' };
-  if (redemption.status === 'refunded') return redemption;
+  if (redemption.status === 'refunded') {
+    track('coins_refunded', redemption.userId, {
+      redemption_id: redemption.id, coin_cost: redemption.coinCost, already_refunded: true,
+    });
+    return redemption;
+  }
 
   await creditCoinsService(redemption.userId, redemption.coinCost, 'Refund: purchase did not complete', idempotencyKey);
-  return prisma.coinRedemption.update({ where: { id: redemption.id }, data: { status: 'refunded' } });
+  const updated = await prisma.coinRedemption.update({ where: { id: redemption.id }, data: { status: 'refunded' } });
+  track('coins_refunded', redemption.userId, {
+    redemption_id: redemption.id, coin_cost: redemption.coinCost, already_refunded: false,
+  });
+  return updated;
 }
 
 function serializeRedemption(redemption, item) {

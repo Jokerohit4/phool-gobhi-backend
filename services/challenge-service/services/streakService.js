@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
+import { track } from '../utils/analytics.js';
 const prisma = new PrismaClient();
 
 function startOfIsoWeek(date) {
@@ -18,7 +19,14 @@ function startOfIsoWeek(date) {
 // since a booking-free attendance-SaaS check-in has no bookingId.
 export async function recordAttendanceEvent({ userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey }) {
   const existing = await prisma.attendanceEventLog.findUnique({ where: { idempotencyKey } });
-  if (existing) return { alreadyRecorded: true };
+  if (existing) {
+    track('attendance_recorded', userId, {
+      checkin_source: source, gym_id: gymId ?? null, booking_id: bookingId ?? null,
+      member_attendance_id: memberAttendanceId ?? null,
+      already_recorded: true, coins_awarded: 0,
+    });
+    return { alreadyRecorded: true };
+  }
 
   await prisma.attendanceEventLog.create({
     data: { userId, bookingId: bookingId ?? null, memberAttendanceId: memberAttendanceId ?? null, gymId, attendedAt: new Date(attendedAt), source, idempotencyKey },
@@ -35,9 +43,17 @@ export async function recordAttendanceEvent({ userId, bookingId, memberAttendanc
   // real check-in. Same rate regardless of source today (booking or
   // member_checkin) — a source-aware rate is deferred, see coinEconomyConfigService.
   const { coinsPerCheckin } = await loadEconomyConfig();
+  let coinsAwarded = 0;
   if (coinsPerCheckin > 0) {
     await creditCoinsService(userId, coinsPerCheckin, 'Check-in reward', `checkin-coins:${idempotencyKey}`);
+    coinsAwarded = coinsPerCheckin;
   }
+
+  track('attendance_recorded', userId, {
+    checkin_source: source, gym_id: gymId ?? null, booking_id: bookingId ?? null,
+    member_attendance_id: memberAttendanceId ?? null,
+    already_recorded: false, coins_awarded: coinsAwarded,
+  });
 
   return { alreadyRecorded: false };
 }
@@ -92,13 +108,32 @@ export async function closeWeek(weekStartDate) {
     }
 
     results.push({ userId: week.userId, qualified, currentStreak: updated.currentStreak });
+    track('streak_week_resulted', week.userId, {
+      week_start: weekStartKey,
+      qualified,
+      current_streak: updated.currentStreak,
+      checkin_count: week.checkinCount,
+    });
   }
+  // One anonymous row per cron run, so a missed or partial close-week is
+  // visible as a gap in the series instead of looking like a quiet week.
+  track('streak_week_closed', null, {
+    week_start: weekStartKey,
+    weeks_closed: results.length,
+    qualified: results.filter((r) => r.qualified).length,
+    broken: results.filter((r) => !r.qualified).length,
+  });
   return results;
 }
 
 export async function getStreakService(userId) {
   const streak = await prisma.userStreak.findUnique({ where: { userId } });
-  return streak || { userId, currentStreak: 0, longestStreak: 0, lastQualifiedWeekStart: null };
+  const resolved = streak || { userId, currentStreak: 0, longestStreak: 0, lastQualifiedWeekStart: null };
+  track('streak_viewed', userId, {
+    current_streak: resolved.currentStreak,
+    longest_streak: resolved.longestStreak,
+  });
+  return resolved;
 }
 
 // Read side of the attendance log, for health-service's "you attended but

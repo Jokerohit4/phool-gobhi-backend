@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
+import { track } from '../utils/analytics.js';
 const prisma = new PrismaClient();
 
 function startOfDay(date) {
@@ -32,13 +33,16 @@ export async function verifyAndCreditWorkout({ userId, sessionId, description, i
     select: { id: true },
   });
   if (!hasAttendanceToday) {
+    track('workout_credited', userId, { verified: false, credited: false, amount: 0 });
     return { verified: false, credited: false, amount: 0 };
   }
 
   const { coinsPerVerifiedWorkout } = await loadEconomyConfig();
   if (coinsPerVerifiedWorkout <= 0) {
+    track('workout_credited', userId, { verified: true, credited: false, amount: 0, economy_disabled: true });
     return { verified: true, credited: false, amount: 0 };
   }
   await creditCoinsService(userId, coinsPerVerifiedWorkout, description || 'Verified workout', idempotencyKey);
+  track('workout_credited', userId, { verified: true, credited: true, amount: coinsPerVerifiedWorkout });
   return { verified: true, credited: true, amount: coinsPerVerifiedWorkout };
 }

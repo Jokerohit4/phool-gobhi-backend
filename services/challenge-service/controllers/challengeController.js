@@ -160,6 +160,7 @@ export const getNearbySprouts = async (req, res) => {
     const spawns = await sproutSpawnService.getNearbySproutsService(req.params.id, {
       lat: Number.isNaN(lat) ? undefined : lat,
       lng: Number.isNaN(lng) ? undefined : lng,
+      userId: req.userId,
     });
     res.json({ data: spawns });
   } catch (err) {

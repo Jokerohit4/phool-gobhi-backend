@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { track } from '../utils/analytics.js';
 const prisma = new PrismaClient();
 
 // Mirrors wallet-service's credit/debit ledger pattern exactly (same
@@ -37,6 +38,12 @@ async function alreadyApplied(userId, idempotencyKey) {
 // instead of a clean early return — which is fine, because a caller with
 // its own transaction also has its own idempotency check upstream (see
 // redeemCatalogItemByUserService).
+//
+// Deliberately NOT tracked here: this runs inside the caller's transaction,
+// which may still roll back, so an event emitted from in here could describe
+// a debit that never committed. debitCoinsService tracks the same movement
+// once its own transaction commits, and the redemption path is covered by
+// coins_redeemed.
 export async function debitCoinsInTx(tx, userId, amount, description, idempotencyKey = null) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('amount must be a positive finite number');
@@ -61,7 +68,10 @@ export async function creditCoinsService(userId, amount, description, idempotenc
     throw new Error('amount must be a positive finite number');
   }
   const already = await alreadyApplied(userId, idempotencyKey);
-  if (already) return already;
+  if (already) {
+    track('coins_credited', userId, { amount, balance_after: already.balance, replayed: true });
+    return already;
+  }
   try {
     const updated = await prisma.$transaction(async (tx) => {
       await tx.coinBalance.upsert({ where: { userId }, update: {}, create: { userId, balance: 0 } });
@@ -74,21 +84,36 @@ export async function creditCoinsService(userId, amount, description, idempotenc
       });
       return updated;
     });
-    return serializeBalance(updated);
+    const serialized = serializeBalance(updated);
+    track('coins_credited', userId, { amount, balance_after: serialized.balance, replayed: false });
+    return serialized;
   } catch (err) {
-    if (idempotencyKey && err.code === 'P2002') return alreadyApplied(userId, idempotencyKey);
+    if (idempotencyKey && err.code === 'P2002') {
+      const raced = await alreadyApplied(userId, idempotencyKey);
+      if (raced) track('coins_credited', userId, { amount, balance_after: raced.balance, replayed: true });
+      return raced;
+    }
     throw err;
   }
 }
 
 export async function debitCoinsService(userId, amount, description, idempotencyKey = null) {
   const already = await alreadyApplied(userId, idempotencyKey);
-  if (already) return already;
+  if (already) {
+    track('coins_debited', userId, { amount, balance_after: already.balance, replayed: true });
+    return already;
+  }
   try {
     const updated = await prisma.$transaction((tx) => debitCoinsInTx(tx, userId, amount, description, idempotencyKey));
-    return serializeBalance(updated);
+    const serialized = serializeBalance(updated);
+    track('coins_debited', userId, { amount, balance_after: serialized.balance, replayed: false });
+    return serialized;
   } catch (err) {
-    if (idempotencyKey && err.code === 'P2002') return alreadyApplied(userId, idempotencyKey);
+    if (idempotencyKey && err.code === 'P2002') {
+      const raced = await alreadyApplied(userId, idempotencyKey);
+      if (raced) track('coins_debited', userId, { amount, balance_after: raced.balance, replayed: true });
+      return raced;
+    }
     throw err;
   }
 }

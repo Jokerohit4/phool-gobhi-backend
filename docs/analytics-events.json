@@ -711,5 +711,131 @@
     "service": "health-service",
     "since": "2026-09-29",
     "notes": "a medical document was stored. props kind only \u2014 never the filename, storage path, or contents; a path is a capability and the document is the user's private data"
-}
+  },
+  "attendance_recorded": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "a check-in was folded into the unified AttendanceEventLog that drives weekly streaks. props checkin_source (booking | member_checkin | self_checkin), gym_id, booking_id, member_attendance_id, already_recorded, coins_awarded. Named checkin_source rather than source because a prop called source shadows the envelope's own source field in the console sink's log line. The most important row in the gamification layer: qualifyingCheckinsPerWeek is tuned against distinct_ids per week here, and already_recorded=true rows are retries of booking-service's fire-and-forget call rather than new visits, so counting them as visits would overstate the funnel"
+  },
+  "challenge_enrolled": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, already_enrolled, target_count, reward_coins. Top of the challenge funnel. already_enrolled=true is the app re-opening a challenge the user already joined, including an abandoned one (enrollService returns any existing row as-is), so it must never be counted as a new join"
+  },
+  "challenge_left": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, prior_status, abandoned, progress_count. abandoned=false means the enrollment was already completed or left, a deliberate non-action. Abandon rate read together with progress_count is the honest signal for whether a challenge was too hard rather than boring"
+  },
+  "challenge_checkpoint_visited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "a checkpoint scan attempt on an outside_gym_city quest. props challenge_id, replayed, accepted, reason (enrollment_not_active | already_visited | null), progress_after, target_count, completed. Both non-accept paths are recorded on purpose: they are the anti-replay defence working, and a high already_visited share means users are re-scanning banked spots instead of finding new ones"
+  },
+  "challenge_completed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, progress_count, target_count, reward_coins, via (checkpoint | off_peak). via separates a completion the user drove from one the off-peak rule granted on their behalf, which is a much weaker engagement signal"
+  },
+  "challenge_off_peak_advanced": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_count, completed_count. Emitted only when at least one off-peak challenge actually advanced, since the common case is a no-op and logging those would bury the signal. Moving visits into quiet hours is the entire point of the mechanic, so challenge_count per check-in is the number to watch"
+  },
+  "streak_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props current_streak, longest_streak. Streak length is an engagement metric, deliberately carrying no attendance timestamps or body measurements, consistent with the health-service entries"
+  },
+  "streak_week_resulted": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "one row per user per closed week. props week_start, qualified, current_streak, checkin_count. This is the retention series: consecutive qualified weeks is the product's core promise, and checkin_count is what separates a user who missed the week from one who came once"
+  },
+  "streak_week_closed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "one anonymous row per close-week cron run (distinct_id null by design, the run is the subject and not any user). props week_start, weeks_closed, qualified, broken. A missing or short row means the cron did not fire, which would otherwise be indistinguishable from a genuinely quiet week in the per-user rows"
+  },
+  "coins_credited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "any CoinLedgerEntry credit. props amount, balance_after, replayed. Emitted per ledger movement with the description deliberately NOT logged: descriptions are free text assembled from catalog titles and species names, and the business reason is already carried by the event that triggered the credit (attendance_recorded, streak_week_resulted, sprout_caught, coins_refunded). replayed=true is an idempotent re-run, not new currency"
+  },
+  "coins_debited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props amount, balance_after, replayed. See coins_credited for why the description is excluded"
+  },
+  "coins_catalog_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props item_count. The marketplace impression; the gap between this and coins_redeemed is the catalog drop-off"
+  },
+  "coins_redeemed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props path (wallet | customer), redemption_id, category, coin_cost, discount_amount, replayed. path separates wallet-service's redemption inside a subscription purchase from the customer's own marketplace redemption, which have entirely different economics: one discounts a purchase already being made, the other spends coins for something on its own"
+  },
+  "coins_redemption_rejected": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props path, reason (gym_trial_cap_reached | gym_trial_already_claimed | insufficient_coins). Recorded from the catch rather than the throw site, because a serializable-transaction retry can roll a rejection back and then succeed. The most actionable event in the coin layer: an insufficient_coins spike means the earn rate is too tight for the catalog's prices, and gym_trial_cap_reached means the month's supply is gone"
+  },
+  "coins_refunded": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props redemption_id, coin_cost, already_refunded. Coins clawed back because the downstream subscription purchase failed after the debit. A rising count means that purchase flow is breaking, and it is the signal that coins are not being burned for nothing"
+  },
+  "workout_credited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "health-service asked whether a finished workout session earns coins. props verified, credited, amount, economy_disabled. verified=false means no AttendanceEventLog row for that user today, so the workout and check-in surfaces have drifted apart. This is the most useful diagnostic in the file because it fires for every workout logged without a check-in"
+  },
+  "paired_streak_opted_in": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props match_id, already. This build auto-enrolls both members rather than having an invite/accept sub-flow, so a single event is emitted for whoever tapped"
+  },
+  "paired_streak_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props pair_count, active_count, longest_streak"
+  },
+  "paired_streak_week_closed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "one anonymous row per cron run, alongside streak_week_closed. props week_start, pairs, survived, broken. A pair survives only if both members independently qualified, so this measures whether the mechanic holds up or just punishes the weaker half of every pair"
+  },
+  "sprouts_nearby_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, spawn_count, seeded_count. seeded_count > 0 means this read had to mint spawns to reach the live minimum, so ordinary reads are also what keep the map populated"
+  },
+  "sprout_caught": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, spawn_id, caught, reason (already_gone | too_far | lost_race | null), species_key, rarity, coins_awarded, distance_bucket. Every non-catch is recorded with its cause: too_far means the spawn was visible but out of reach (a spawn-radius or client-GPS problem), already_gone and lost_race are other users winning it. distance_bucket is rounded to 100m and capped at 50 so it can never become a location log"
+  }
 }
