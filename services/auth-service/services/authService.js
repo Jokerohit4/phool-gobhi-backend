@@ -501,20 +501,29 @@ export async function sendOtpService(rawPhone) {
     throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
 
+  // Skip mode resolves entirely in Postgres (the allowlist lookup below) and
+  // never stores or delivers an OTP — so it must be answered BEFORE the Redis
+  // rate-limit check. That check used to run first, which made a provider that
+  // by design needs no OTP store hard-depend on REDIS_URL: with the env unset
+  // (auth-service dev/prod secrets carry only DATABASE_URL) the lazy Redis
+  // client threw and the caller got an opaque 500 "Server error" instead of
+  // the skip answer — while verify-otp, whose equivalent skipBypass check runs
+  // first, worked fine. Same ordering rationale as skipBypass in
+  // verifyOtpService below.
+  // Skip mode only bypasses the real send for phones on the allowlist.
+  if (provider === 'skip') {
+    if (await isSkipAllowlisted(phone)) {
+      return { message: 'OTP sent successfully' };
+    }
+    // Anyone else while provider is "skip" (i.e. not on the allowlist) must
+    // NOT get a real WhatsApp/Fast2Sms send.
+    throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
+  }
+
   // Rate limit check using Redis
   const lastSent = await redis.get(`otp_sent_at:${phone}`);
   if (lastSent && Date.now() - parseInt(lastSent) < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
-  }
-
-  // Skip mode only bypasses the real send for phones on the allowlist.
-  if (provider === 'skip' && await isSkipAllowlisted(phone)) {
-    return { message: 'OTP sent successfully' };
-  }
-  // Anyone else while provider is "skip" (i.e. not on the allowlist) must
-  // NOT get a real WhatsApp/Fast2Sms send.
-  if (provider === 'skip') {
-    throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
   const code = String(Math.floor(100000 + Math.random() * 900000));
   
