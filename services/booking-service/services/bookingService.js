@@ -1,6 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import axios from 'axios';
-import { notifyPartner } from '../utils/notifyPartner.js';
+import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek } from '../utils/slotTiming.js';
@@ -3200,4 +3200,90 @@ export async function listIndependentCheckIns(customerId, { limit = 60 } = {}) {
     orderBy: { checkedInAt: 'desc' },
     take: Math.min(Math.max(limit, 1), 200),
   });
+}
+
+// ---- Daily partner briefing (9am IST push) -------------------------------
+//
+// The product principle behind this: deeper insight isn't more charts, it's
+// computed conclusions that arrive without being asked. A gym owner who
+// never opens the app still hears "yesterday: ₹1,240 · 14 check-ins" every
+// morning. The message is intentionally two short facts + one optional
+// pattern — never three sentences, never a metric without a word.
+
+const BRIEFING_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function briefingHourLabel(hour) {
+  return hour === 0 ? '12am' : hour < 12 ? `${hour}am` : hour === 12 ? '12pm' : `${hour - 12}pm`;
+}
+
+/// Pure: compose the briefing body from the facts. Exported for tests.
+/// revenue = gross bookings completed yesterday (₹, what members paid);
+/// checkins = verified attendance events yesterday (bookings attended +
+/// bare QR/link member check-ins); peak = { weekday, hour, count } | null
+/// from the last-30-day weekday-hour pattern.
+export function composeDailyBriefing({ revenue, checkins, peak }) {
+  const facts = [];
+  if (revenue > 0) facts.push(`₹${Math.round(revenue)} in bookings`);
+  if (checkins > 0) facts.push(`${checkins} check-in${checkins === 1 ? '' : 's'}`);
+  if (!facts.length) {
+    return 'No check-ins yesterday — share your gym to fill today.';
+  }
+  let body = `Yesterday: ${facts.join(' · ')}`;
+  if (peak && peak.count > 0) {
+    body += `. Busiest: ${BRIEFING_WEEKDAYS[peak.weekday]} ${briefingHourLabel(peak.hour)}`;
+  }
+  return body;
+}
+
+/// Send the daily briefing to every gym with any booking activity in the
+/// last 30 days (a truly dead gym doesn't want a daily reminder of that).
+/// Called by POST /internal/daily-briefing (Cloud Scheduler, 9am IST).
+/// Best-effort per gym: one gym's failure never blocks the rest.
+export async function sendDailyBriefings() {
+  const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+  const yesterdayIST = new Date(Date.now() + IST_OFFSET_MS - 24 * 60 * 60 * 1000)
+    .toISOString().split('T')[0];
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const activeGyms = await prisma.booking.groupBy({
+    by: ['gymId'],
+    where: { createdAt: { gte: since } },
+  });
+
+  let sent = 0;
+  const failures = [];
+  for (const { gymId } of activeGyms) {
+    try {
+      const [revAgg, attendedBookings, memberCheckins, heatmap] = await Promise.all([
+        prisma.booking.aggregate({
+          _sum: { amount: true },
+          where: { gymId, date: yesterdayIST, status: 'completed' },
+        }),
+        prisma.booking.count({
+          where: { gymId, date: yesterdayIST, attendedAt: { not: null } },
+        }),
+        prisma.memberAttendance.count({ where: { gymId, date: yesterdayIST } }),
+        computeAttendanceHeatmap({ gymId }, 30),
+      ]);
+
+      let peak = null;
+      for (const cell of heatmap.weekdayHourPattern) {
+        if (!peak || cell.count > peak.count) peak = cell;
+      }
+
+      const body = composeDailyBriefing({
+        revenue: revAgg._sum.amount ?? 0,
+        checkins: attendedBookings + memberCheckins,
+        peak,
+      });
+
+      const ok = await sendPartnerPush(gymId, 'Your gym yesterday', body, {
+        type: 'daily_briefing',
+      });
+      if (ok) sent += 1;
+    } catch (err) {
+      failures.push({ gymId, error: err.message });
+    }
+  }
+  return { sent, gyms: activeGyms.length, failures };
 }

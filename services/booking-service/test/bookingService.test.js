@@ -210,7 +210,11 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
   });
 
   t.mock.module(new URL('../utils/notifyPartner.js', import.meta.url).href, {
-    exports: { notifyPartner: async (...args) => { notifyPartnerCalls.push(args); } },
+    exports: {
+      notifyPartner: async (...args) => { notifyPartnerCalls.push(args); },
+      sendPartnerPush: async () => true,
+      resolvePartnerFcmToken: async () => null,
+    },
   });
 
   t.mock.module(new URL('../utils/notifyCustomer.js', import.meta.url).href, {

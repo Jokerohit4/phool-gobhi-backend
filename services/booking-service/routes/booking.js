@@ -7,6 +7,7 @@ import * as analyticsCtrl from '../controllers/analyticsController.js';
 const router = Router();
 
 // Internal service-to-service endpoint (gym-service calls this to compute slot availability)
+router.post('/internal/daily-briefing', requireInternal, ctrl.sendDailyBriefing);
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
 // DPDPA access right (s.11). Called by auth-service's platform-wide export
 // fan-out; internal only, never reachable through the gateway.

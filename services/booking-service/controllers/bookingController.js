@@ -585,3 +585,14 @@ export const exportUserInternal = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// Daily 9am IST partner briefing fan-out. Called by Cloud Scheduler via
+// POST /internal/daily-briefing (x-internal-key); never gateway-reachable.
+export const sendDailyBriefing = async (req, res) => {
+  try {
+    const result = await bookingService.sendDailyBriefings();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
