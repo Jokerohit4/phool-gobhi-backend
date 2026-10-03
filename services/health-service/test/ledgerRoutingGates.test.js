@@ -47,12 +47,18 @@ assert.ok(all.length > 20, `expected the ledger routes, found ${all.length}`);
 
 test('every ledger route is authenticated', () => {
   // Each of these spreads `...nutrition`, `...medical`, `...consentGated` or
-  // `...photo`, all of which begin with requireAuth.
-  const ungated = all.filter((r) => !/\.\.\.(nutrition|medical|consentGated|photo)\b/.test(r.line));
+  // `...photo`, all of which begin with requireAuth. Internal routes
+  // (service-to-service, e.g. wallet-service's rewards automation) instead
+  // authenticate with `requireInternal` — that is auth too, not a gap.
+  const ungated = all.filter(
+    (r) =>
+        !/\.\.\.(nutrition|medical|consentGated|photo)\b/.test(r.line) &&
+        !/\brequireInternal\b/.test(r.line),
+  );
   assert.deepEqual(
     ungated.map((r) => `${r.n}: ${r.line}`),
     [],
-    'a ledger route does not spread a gate array, so it has no auth',
+    'a ledger route neither spreads a gate array nor requires internal auth',
   );
 });
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
-import { computeBlendedHealthScore } from './scoreEngine.js';
+import { computeBlendedHealthScore } from './ledger/scoreEngine.js';
 
 const prisma = new PrismaClient();
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';

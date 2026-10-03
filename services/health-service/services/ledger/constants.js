@@ -258,8 +258,16 @@ export function roundTo(value, places = 2) {
 // Meal slots, in the order a day runs.
 export const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'];
 
-// Mirrors the FoodLogSource Prisma enum.
-export const FOOD_LOG_SOURCES = ['search', 'photo', 'saved_meal', 'custom'];
+// Mirrors the FoodLogSource Prisma enum. The photo flow writes
+// 'photo_confirmed' (not 'photo') — the enum value is the contract; this
+// list must match it exactly or the validator rejects the service's own
+// writes (exactly what test/foodPhotoService.test.js catches).
+export const FOOD_LOG_SOURCES = [
+  'search',
+  'photo_confirmed',
+  'saved_meal',
+  'custom',
+];
 export const DEFAULT_FOOD_LOG_SOURCE = 'custom';
 
 // Where a value gets rounded.
