@@ -1,9 +1,8 @@
-import { Request, Response } from 'express';
-import { 
-  createReportService, 
-  processReportService, 
-  getPendingExtractionsService, 
-  verifyExtractionService 
+import {
+  createReportService,
+  processReportService,
+  getPendingExtractionsService,
+  verifyExtractionService
 } from '../services/reportService.js';
 
 export const uploadReport = async (req, res) => {
