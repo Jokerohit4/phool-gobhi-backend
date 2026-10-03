@@ -1,0 +1,132 @@
+name: Send daily partner briefings
+
+# Fires booking-service's morning briefing fan-out (sendDailyBriefings, via
+# POST /internal/daily-briefing): every active gym's partner gets one push with
+# yesterday in two facts and one pattern - "Yesterday: Rs 1240 in bookings, 14
+# check-ins. Busiest: Tue 6pm". The insight the partner app cannot show on
+# demand, because it requires yesterday to be over.
+#
+# The service picks its own gyms (any booking activity in the last 30 days),
+# its own day (yesterday as an IST calendar string, matching the booking.date
+# convention) and its own peak (argmax of the 30-day weekday-hour heatmap), so
+# this workflow passes nothing but auth. It also means a late run still reports
+# the correct day: the service resolves "yesterday" from the clock at request
+# time, so a 3-hour-late dispatch says the right thing rather than repeating
+# the day before. (The health nudges cannot claim that - see
+# send-health-nudges.yml for why their copy is deliberately vaguer.)
+#
+# Scheduled from GitHub Actions rather than an in-process timer for the same
+# reason as every other sweep in this repo: Cloud Run throttles CPU to
+# near-zero between requests, so a setInterval callback never gets enough CPU
+# to open a Postgres connection.
+#
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE ASSUMING IT RUNS
+#
+# GitHub Actions `schedule` triggers fire ONLY from the repository's DEFAULT
+# branch. This repo's default is `main`, and `main` still lags `dev` - the
+# briefing endpoint does not exist there yet. Until this file reaches `main`
+# the cron is inert and the only way to run the fan-out is the
+# workflow_dispatch button. That is not hypothetical:
+# close-weekly-streak.yml and attendance-saas-reengagement.yml had both never
+# executed once for exactly this reason as of 2026-09-09.
+#
+# ---------------------------------------------------------------------------
+# NOT IDEMPOTENT - THE ONE REAL CAVEAT
+#
+# Every other sweep here is safe to run twice: the nudge frequency guards
+# (max 3/week, never two within 24h) and the per-user opt-out make a repeat
+# send nothing. This one has no such guard, because a partner who gets the
+# same briefing twice in a morning has been told the same true thing twice.
+# GitHub Actions schedules can double-fire on a delayed or retried run, so a
+# manual dispatch immediately after the cron is the realistic way to send a
+# duplicate. The response body tells you what happened either way:
+#   { "data": { "sent": N, "gyms": M, "failures": [...] } }
+# `sent: 0, gyms: 0` in dev means no gym has had booking activity in 30 days,
+# not that the sweep is broken. A non-empty `failures` array is per-gym and
+# best-effort by design - one gym's bad FCM token does not block the rest.
+#
+# prod is deliberately absent from the matrix until the cadence has been read
+# a few times on dev. A push nobody has proofread yet should not reach a paying
+# partner's phone at 9am.
+#
+# The 03:30 UTC slot overlaps send-health-nudges.yml's first run of the day.
+# That is two independent Cloud Run requests against Neon at the same minute,
+# which is not the compute incident of 2026-08-21 (that was a 5-minute cron,
+# ~288 runs/day). If that budget ever gets tight again, offset this to
+# '40 3 * * *' - a 9:10am briefing still reads as morning.
+
+on:
+  schedule:
+    # 03:30 UTC = 09:00 IST.
+    - cron: '30 3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  briefing:
+    strategy:
+      matrix:
+        env: [dev]   # prod deliberately absent until the copy has been read a few times on dev
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      # The general deploy provider: this step exists to authenticate the gcloud
+      # CLI (secret read + service describe), not to call the endpoint.
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # booking-service-secrets-<env> JSON payload (the standalone
+      # internal-api-key-<env> secrets were retired in the 2026-08-26
+      # consolidation).
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/booking-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      # Called directly on the service, never through the gateway: the route
+      # is /internal/daily-briefing and is not in the gateway's PUBLIC_ROUTES,
+      # so there is no gateway path to reach it by.
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "booking-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required: x-internal-key satisfies the app's
+      # requireInternal check, the Google-signed ID token satisfies Cloud
+      # Run's IAM invoker check. Omitting the token yields a Google 403 HTML
+      # page rather than an app error - how process-subscription-lifecycle.yml
+      # failed silently every day until 2026-09-09.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/daily-briefing"
