@@ -167,9 +167,13 @@ test('the window boundary is inclusive on the day it ends, and closed the day af
 test('the IST day is what decides the window, not the UTC day', { skip: SKIP }, async () => {
   await prisma.healthGoal.deleteMany({ where: { userId: { gte: BASE } } });
 
-  // 19:00 UTC on the 10th is 00:30 IST on the 11th. A window ending on the
-  // 10th is still open at that instant even though the UTC date has not moved
-  // on, and a window ending on the 11th has only just opened.
+  // 19:00 UTC on the 10th is 00:30 IST on the 11th. The IST calendar has
+  // ALREADY moved to the 11th at that instant, even though the UTC date
+  // still says the 10th — so a window ending on the 10th is CLOSED (its
+  // end date has passed, exactly like a window ending yesterday closes at
+  // midnight), while a window ending on the 11th has opened. Asserting the
+  // 10th window "still open" would be asserting the UTC-day behaviour the
+  // title says must NOT happen.
   const lateUtc = new Date('2026-09-10T19:00:00Z');
   await prisma.healthGoal.createMany({
     data: [
@@ -182,7 +186,7 @@ test('the IST day is what decides the window, not the UTC day', { skip: SKIP }, 
   const rows = await nudge.findTargetGoalRowsService(lateUtc);
   const userIds = rows.map((r) => r.userId);
 
-  assert.ok(userIds.includes(CASES.live.userId), 'the 10th window is still open at 00:30 IST');
+  assert.ok(!userIds.includes(CASES.live.userId), 'the 10th window is closed at 00:30 IST on the 11th');
   assert.ok(userIds.includes(BASE + 20), 'the 11th window has opened at 00:30 IST');
   assert.ok(!userIds.includes(BASE + 21), 'the 9th window closed days ago');
 });
