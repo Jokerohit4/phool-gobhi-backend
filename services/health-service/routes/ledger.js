@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/requireAuth.js';
+import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { requireAdult } from '../middleware/requireAdult.js';
 import { requireNutritionConsent, requireMedicalRecordsConsent } from '../middleware/requireLedgerConsent.js';
