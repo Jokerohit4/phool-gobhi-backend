@@ -14,6 +14,7 @@ import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { evaluateWeeklyRewards } from '../services/rewardService.js';
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
+import { correlateMarkerImprovement } from '../services/correlationService.js';
 
 const prisma = new PrismaClient();
 
@@ -629,6 +630,24 @@ export const evaluateRewards = handle(async (req) => {
 
 export const prescribeAiPlan = handle(async (req) => {
   return await injectAiPrescription(req.userId, req.body);
+});
+
+export const getBiomarkerTrajectory = handle(async (req) => {
+  return await scoreService.getBiomarkerTrajectory(prisma, { 
+    userId: req.userId, 
+    marker: req.query.marker, 
+    days: req.query.days 
+  });
+});
+
+export const getMarkerCorrelation = handle(async (req) => {
+  return await correlateMarkerImprovement(req.userId, req.query.marker);
+});
+
+export const getBatchConsistency = handle(async (req) => {
+  return await scoreService.getBatchBehavioralConsistency(prisma, { 
+    userIds: req.body.userIds 
+  });
 });
 
 // The one surface in this service that sends an image to a third party, and the

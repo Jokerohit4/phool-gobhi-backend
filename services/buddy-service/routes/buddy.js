@@ -33,6 +33,7 @@ router.post('/matches/:matchId/messages', requireAuth, ctrl.sendMessage);
 router.post('/blocks', requireAuth, ctrl.blockUser);
 router.delete('/blocks/:userId', requireAuth, ctrl.unblockUser);
 router.get('/blocks', requireAuth, ctrl.listBlocked);
+router.get('/league', requireAuth, ctrl.getConsistencyLeague);
 
 // Internal: auth-service calls this after a profile edit that touches
 // gender/dateOfBirth/fitnessGoals, to keep buddy-service's denormalized

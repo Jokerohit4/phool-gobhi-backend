@@ -1830,3 +1830,45 @@ model MedicationReminder {
   @@index([userId])
   @@schema("health")
 }
+
+model HealthReport {
+  id               Int       @id @default(autoincrement())
+  userId           Int
+  cloudinaryUrl    String
+  fileName         String
+  status           ReportStatus @default(PENDING)
+  processedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  extractions      ReportExtraction[]
+
+  @@index([userId])
+  @@schema("health")
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVIEW_REQUIRED
+
+  @@schema("health")
+}
+
+model ReportExtraction {
+  id               Int      @id @default(autoincrement())
+  reportId         Int
+  report           HealthReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  metric           BiometricMetric
+  rawValue         String   // The exact text found in the PDF (e.g. "5.7%")
+  normalizedValue  Decimal? @db.Decimal(8, 2)
+  unit             String?
+  confidence      Float    @default(0) // 0.0 to 1.0
+  isVerified       Boolean   @default(false) // Verified by user
+  createdAt        DateTime    @default(now())
+
+  @@index([reportId])
+  @@schema("health")
+}

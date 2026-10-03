@@ -162,6 +162,9 @@ router.post('/internal/rewards/evaluate', requireInternal, ledgerCtrl.evaluateRe
 
 // AI Plans
 router.post('/ledger/ai/prescribe', ...nutrition, ledgerCtrl.prescribeAiPlan);
+router.get('/ledger/biometrics/trajectory', ...nutrition, ledgerCtrl.getBiomarkerTrajectory);
+router.get('/ledger/biometrics/correlation', ...nutrition, ledgerCtrl.getMarkerCorrelation);
+router.post('/ledger/biometrics/batch-consistency', ...nutrition, ledgerCtrl.getBatchConsistency);
 
 // ---- Medical documents ----------------------------------------------------
 //

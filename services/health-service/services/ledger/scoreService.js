@@ -23,6 +23,9 @@ import { isDueOn } from './ledgerPlanService.js';
 import { isScheduledFor } from './scoreEngine.js';
 import { openActions } from './remediation.js';
 import { assertGoal } from './goalGuard.js';
+import redis from '../../utils/redisClient.js';
+
+const CACHE_TTL = 3600; // 1 hour
 
 /**
  * Compute (but do not store) what a day is worth.
@@ -167,24 +170,27 @@ export async function closeDay(prisma, { userId, localDate, today }) {
 }
 
 export async function getBlendedScore(prisma, { userId }) {
-  // 1. Behavioral baseline: the latest closed day's value
-  const latestSnapshot = await prisma.scoreDaySnapshot.findFirst({
-    where: { userId },
-    orderBy: { localDate: 'desc' },
-  });
-  const ledgerClose = latestSnapshot ? Number(latestSnapshot.close) : 0;
+  const cacheKey = `health:blended:${userId}`;
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
 
-  // 2. Biological state: latest verified markers
-  const markers = Object.keys(BIOLOGICAL_TARGETS);
-  const bioEntries = await prisma.biometricEntry.findMany({
-    where: {
-      userId,
-      metric: { in: markers },
-      // Only verified entries are used for the Health Score
-      verified: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  // Parallelize the behavioral baseline and biological state fetches
+  const [latestSnapshot, bioEntries] = await Promise.all([
+    prisma.scoreDaySnapshot.findFirst({
+      where: { userId },
+      orderBy: { localDate: 'desc' },
+    }),
+    prisma.biometricEntry.findMany({
+      where: {
+        userId,
+        metric: { in: Object.keys(BIOLOGICAL_TARGETS) },
+        verified: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
+
+  const ledgerClose = latestSnapshot ? Number(latestSnapshot.close) : 0;
 
   // Group by marker to get only the latest for each
   const latestBiomarkers = [];
@@ -202,12 +208,15 @@ export async function getBlendedScore(prisma, { userId }) {
   const bioScore = computeBiologicalScore(latestBiomarkers);
   const blendedScore = computeBlendedHealthScore(ledgerClose, bioScore);
 
-  return {
+  const result = {
     blendedScore,
     behavioralScore: ledgerClose,
     biologicalScore: bioScore,
     markers: latestBiomarkers,
   };
+
+  await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
+  return result;
 }
 
 /**
@@ -226,6 +235,55 @@ export async function getScoreSeries(prisma, { userId, limit = 90 }) {
   // Oldest first is what a chart wants; the query takes newest-first for the
   // limit to be meaningful.
   return rows.reverse();
+}
+
+/**
+ * Fetches behavioral consistency for a list of users.
+ * Used by the buddy-service to build consistency leagues.
+ */
+export async function getBatchBehavioralConsistency(prisma, { userIds }) {
+  const scores = await prisma.dailyScore.findMany({
+    where: {
+      userId: { in: userIds },
+      date: {
+        gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      },
+    },
+  });
+
+  const results = {};
+  for (const s of scores) {
+    if (!results[s.userId]) results[s.userId] = { sum: 0, count: 0 };
+    results[s.userId].sum += s.behavioralScore;
+    results[s.userId].count += 1;
+  }
+
+  return Object.entries(results).map(([userId, data]) => ({
+    userId: parseInt(userId),
+    avgScore: data.count > 0 ? data.sum / data.count : 0,
+  }));
+}
+
+/**
+ * Fetches the verified history of a specific biomarker.
+ */
+export async function getBiomarkerTrajectory(prisma, { userId, marker, days = 90 }) {
+  const dateLimit = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  
+  const entries = await prisma.biometricEntry.findMany({
+    where: {
+      userId,
+      metric: marker,
+      verified: true,
+      createdAt: { gte: new Date(dateLimit) },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return entries.map(e => ({
+    date: e.createdAt.toISOString().split('T')[0],
+    value: Number(e.value),
+  }));
 }
 
 /**

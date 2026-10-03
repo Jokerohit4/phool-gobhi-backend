@@ -27,6 +27,7 @@ import { requireDeviceHealthConsent } from '../middleware/requireDeviceHealthCon
 import { requireBiometricWriteConsent } from '../middleware/requireBiometricConsent.js';
 import * as biometricConsentCtrl from '../controllers/biometricConsentController.js';
 import * as healthProfileCtrl from '../controllers/healthProfileController.js';
+import * as reportCtrl from '../controllers/reportController.js';
 // Adults-only on every consent GRANT (never on revoke/delete) — see requireAdult.
 import { requireAdult } from '../middleware/requireAdult.js';
 import * as recapCtrl from '../controllers/recapController.js';
@@ -51,6 +52,19 @@ router.use(ledgerRouter);
 // streaksCoins, and more important here since this feature collects new
 // personal (and DPDP-sensitive) data.
 const gated = [requireAuth, requireFeatureFlag('healthMetrics')];
+
+// Local Health Vault (PDF Reports) - Gated on healthMetrics
+router.post('/reports/upload', ...gated, reportCtrl.uploadReport);
+router.get('/reports/pending', ...gated, reportCtrl.getPendingExtractions);
+router.post('/reports/verify', ...gated, reportCtrl.verifyExtraction);
+
+// Two features sit behind their OWN flags on top of healthMetrics, because they need legal sign-off that the rest of the health layer does not (see
+// docs/phool-gobhi-counsel-brief-20260908.html):
+//
+//   healthPersonalisation — the only consent-bearing write in this service
+//     (a non-neutral programming mode records a privacyVersion). The consent
+//     wording has to be reviewed before a real user ever agrees to it.
+// ...
 
 // Two features sit behind their OWN flags on top of healthMetrics, because
 // they need legal sign-off that the rest of the health layer does not (see

@@ -1,6 +1,7 @@
 import * as buddyService from '../services/buddyService.js';
 import * as erasureService from '../services/erasureService.js';
 import * as exportService from '../services/exportService.js';
+import * as leagueService from '../services/leagueService.js';
 
 // ---- Profile ----------------------------------------------------------
 
@@ -194,6 +195,15 @@ export const listBlocked = async (req, res) => {
   try {
     const blocked = await buddyService.listBlocked(req.userId);
     res.json({ data: blocked });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getConsistencyLeague = async (req, res) => {
+  try {
+    const league = await leagueService.getConsistencyLeague(req.userId);
+    res.json({ data: league });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

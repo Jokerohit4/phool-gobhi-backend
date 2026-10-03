@@ -31,6 +31,7 @@
 // lands, a per-user zone replaces this constant.
 import { closeDay } from './scoreService.js';
 import { isScopeStale, NUTRITION_SCOPE } from './ledgerConsentService.js';
+import { evaluateUserReward } from '../rewardService.js';
 
 const TZ = 'Asia/Kolkata';
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -121,7 +122,14 @@ export async function runDayCloseSweep(prisma, { now = new Date(), isEnabled } =
     try {
       const out = await closeDay(prisma, { userId, localDate, today });
       if (out?.alreadyClosed) result.alreadyClosed += 1;
-      else result.closed += 1;
+      else {
+        result.closed += 1;
+        // Event: Day was closed successfully.
+        // Trigger immediate reward evaluation for this user.
+        await evaluateUserReward(userId).catch(err => 
+          console.error(`[day-close] reward evaluation failed for ${userId}:`, err)
+        );
+      }
     } catch (err) {
       // One user's bad data must not stop everyone else's day from closing.
       // The next run retries them: yesterday stays "yesterday" for 24 hours,

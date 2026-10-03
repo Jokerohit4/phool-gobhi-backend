@@ -15,56 +15,59 @@ async function internalHeaders() {
 }
 
 /**
- * Evaluates all users with active health ledgers to see if they've
- * maintained a high behavioral score over the last 7 days.
+ * Evaluates a single user to see if they've maintained a high behavioral score 
+ * over the last 7 days. Triggered by Day Close events.
+ */
+export async function evaluateUserReward(userId) {
+  try {
+    // Calculate average Behavioral Score for the last 7 days
+    const scores = await prisma.dailyScore.findMany({
+      where: {
+        userId,
+        date: {
+          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        },
+      },
+      orderBy: { date: 'desc' },
+    });
+
+    if (scores.length === 0) return { userId, status: 'ignored', reason: 'no scores' };
+
+    const avgBehavioral = scores.reduce((sum, s) => sum + s.behavioralScore, 0) / scores.length;
+
+    if (avgBehavioral >= CONSISTENCY_THRESHOLD) {
+      await axios.post(
+        `${WALLET_SERVICE_URL}/internal/${userId}/credit`,
+        { 
+          amount: WEEKLY_REWARD_AMOUNT, 
+          description: `Weekly Consistency Reward: Avg score ${avgBehavioral.toFixed(1)}%` 
+        },
+        await internalHeaders(),
+      );
+      return { userId, status: 'rewarded', score: avgBehavioral };
+    }
+
+    return { userId, status: 'ignored', score: avgBehavioral };
+  } catch (err) {
+    console.error(`Failed to evaluate reward for user ${userId}:`, err.message);
+    return { userId, status: 'failed', error: err.message };
+  }
+}
+
+/**
+ * Global sweep for legacy support or manual triggers.
+ * Now delegates to evaluateUserReward.
  */
 export async function evaluateWeeklyRewards() {
   try {
-    // 1. Get all users who have a ledger setup (active participants)
     const users = await prisma.ledgerSetupSate.findMany({
       select: { userId: true },
     });
 
     const rewardResults = [];
-
     for (const user of users) {
-      const userId = user.userId;
-      
-      // 2. Calculate average Behavioral Score for the last 7 days
-      // We fetch the score series for the last 7 days
-      const scores = await prisma.dailyScore.findMany({
-        where: {
-          userId,
-          date: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          },
-        },
-        orderBy: { date: 'desc' },
-      });
-
-      if (scores.length === 0) continue;
-
-      const avgBehavioral = scores.reduce((sum, s) => sum + s.behavioralScore, 0) / scores.length;
-
-      // 3. Trigger reward if threshold is met
-      if (avgBehavioral >= CONSISTENCY_THRESHOLD) {
-        try {
-          await axios.post(
-            `${WALLET_SERVICE_URL}/internal/${userId}/credit`,
-            { 
-              amount: WEEKLY_REWARD_AMOUNT, 
-              description: `Weekly Consistency Reward: Avg score ${avgBehavioral.toFixed(1)}%` 
-            },
-            await internalHeaders(),
-          );
-          rewardResults.push({ userId, status: 'rewarded', score: avgBehavioral });
-        } catch (err) {
-          console.error(`Failed to credit reward for user ${userId}:`, err.message);
-          rewardResults.push({ userId, status: 'failed', error: err.message });
-        }
-      } else {
-        rewardResults.push({ userId, status: 'ignored', score: avgBehavioral });
-      }
+      const res = await evaluateUserReward(user.userId);
+      rewardResults.push(res);
     }
 
     return {
