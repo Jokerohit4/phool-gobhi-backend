@@ -915,6 +915,9 @@ export async function updateTrainerStatusService(trainerId, isActive, gymId, par
     data: { isActive },
     select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
   });
-  track('trainer_account_reactivated' : 'trainer_account_deactivated', partnerId, { trainerId, gymId });
+  track(
+      isActive ? 'trainer_account_reactivated' : 'trainer_account_deactivated',
+      partnerId,
+      { trainerId, gymId });
   return updated;
 }
