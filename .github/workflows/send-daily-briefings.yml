@@ -57,6 +57,11 @@ name: Send daily partner briefings
 # '40 3 * * *' - a 9:10am briefing still reads as morning.
 
 on:
+  # TEMPORARY (2026-10-03): workflow_dispatch cannot reach this file until it
+  # lands on `main`, so a push trigger on itself is the only way to exercise
+  # the real auth chain before the release merge. Remove with the next commit.
+  push:
+    paths: ['.github/workflows/send-daily-briefings.yml']
   schedule:
     # 03:30 UTC = 09:00 IST.
     - cron: '30 3 * * *'
