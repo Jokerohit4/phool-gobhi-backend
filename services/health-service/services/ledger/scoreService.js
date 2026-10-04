@@ -180,10 +180,20 @@ export async function getBlendedScore(prisma, { userId }) {
       where: { userId },
       orderBy: { localDate: 'desc' },
     }),
+    // No `metric` filter on purpose. This used to pass
+    // Object.keys(BIOLOGICAL_TARGETS) — the blood-panel markers hba1c, ldl,
+    // hdl and triglycerides — but not one of those is a member of the
+    // BiometricMetric enum, and Prisma rejects the entire findMany when any
+    // value in `in` is not an enum member ("Invalid value for argument `in`.
+    // Expected BiometricMetric."), so every blended-score read threw instead
+    // of scoring. Filtering was never load-bearing: scoreEngine already skips
+    // any marker with no target (`if (!target) continue`), so reading the
+    // user's verified entries and letting the engine match them scores the
+    // same set today, and starts including the blood markers unchanged if the
+    // enum ever grows them.
     prisma.biometricEntry.findMany({
       where: {
         userId,
-        metric: { in: Object.keys(BIOLOGICAL_TARGETS) },
         verified: true,
       },
       orderBy: { createdAt: 'desc' },
