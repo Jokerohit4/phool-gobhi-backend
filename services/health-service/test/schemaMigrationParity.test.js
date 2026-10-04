@@ -150,6 +150,49 @@ test('every ledger column is in the migration, not just in the schema', () => {
   );
 });
 
+// The two tests above walk a hand-picked list, which is fine for the models the
+// ledger migration introduced and quietly wrong for everything since. 13 of 48
+// models were covered; the other 35 were unchecked, and that is exactly where the
+// drift was hiding: HealthReport and ReportExtraction were in the schema with no
+// migration at all (so the lab-report path failed on "relation does not exist"),
+// and CyclePhaseEntry had a @updatedAt column its CREATE TABLE never made (so any
+// write to it failed). None of it was a ledger model.
+//
+// Every model, no list to maintain. This is a superset of the two above rather
+// than a replacement: they name the ledger models directly when something moves,
+// which reads better in a failure than "one of 48".
+const ALL_MODELS = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
+
+test('every model in the schema is created by the migrations', () => {
+  const missing = ALL_MODELS.filter((m) => !migrationColumns(m));
+  assert.deepEqual(
+    missing,
+    [],
+    `no migration creates these models: ${missing.join(', ')}. A model that only ` +
+      'exists in schema.prisma is a runtime error waiting for its first caller, not ' +
+      'a table - the generated Client sends queries to a relation that is not there.',
+  );
+});
+
+test('every column of every model in the schema is created by the migrations', () => {
+  const drifted = [];
+  for (const model of ALL_MODELS) {
+    const cols = migrationColumns(model);
+    if (!cols) continue; // reported by the test above
+    for (const field of schemaFields(model)) {
+      if (!cols.has(field)) drifted.push(`${model}.${field}`);
+    }
+  }
+  assert.deepEqual(
+    drifted,
+    [],
+    `schema columns missing from the migrations: ${drifted.join(', ')}. The ` +
+      'generated Prisma Client would send these and Postgres would reject them at ' +
+      'runtime - and for an @updatedAt column that means the first write fails, not ' +
+      'the first read.',
+  );
+});
+
 test('the migration creates no column the schema does not have', () => {
   // The reverse direction. An extra column is usually harmless, but a renamed
   // field leaves one behind here and Prisma will never populate it again.
