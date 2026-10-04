@@ -26,18 +26,50 @@
 -- an operator has deliberately set `workoutTracking` to something other than
 -- `healthMetrics` — it would overwrite that choice. Check step 0's output first.
 --
--- NOT EXECUTION-TESTED. There was no Postgres available on the machine that wrote
--- this (no local server, no psql, Docker daemon down), so it is hand-reviewed
--- only. The flag lists are generated from the registry and therefore exact; the
--- surrounding jsonb is not. Treat step 0 as a dry run, and run the rest inside a
--- transaction you can roll back. Do not point it straight at dev or prod.
+-- EXECUTED ON DEV 2026-10-04. Prod has NOT been run — its blob predates the
+-- registry entirely and its auth-service has not been redeployed yet.
 --
--- AFTER A SUCCESSFUL BACKFILL, two follow-ups become safe and are still pending:
+-- Two defects were found by running step 0 against real dev Postgres, after
+-- this file had been hand-reviewed and left in place unexecuted:
+--   1. `jsonb_object_length()` does not exist in PostgreSQL. Every statement
+--      using it failed; counting object keys needs jsonb_object_keys() in a
+--      subquery. Fixed above. A hand review cannot catch this, and it failed
+--      on the very first statement.
+--   2. Steps 1-2 left `updatedBy` pointing at whoever last saved the blob
+--      through the portal while stamping a fresh `updatedAt`, which filed an
+--      automated change under a real person's name. Both steps now clear it,
+--      and step 2b writes the AppConfigHistory row that the raw SQL skipped.
+--
+-- Dev result, for the record: the blob held 15 of 20 registry flags. The five
+-- missing (workoutTracking, healthVault, fhirExport, referral, runTracker) were
+-- added; `workoutTracking` mirrored `healthMetrics` (true); `healthVault` was
+-- set false; no flag that was true became false. Before the run, `otp` and
+-- `profileCompletionBonus` were confirmed NOT stored in the blob — getAppConfig
+-- overlays them from their own singleton rows — so step 3b's `unknown_in_blob`
+-- list is genuinely empty rather than accidentally empty.
+--
+-- Run steps 1, 2 and 2b in ONE transaction and roll back unless
+-- workout_tracking = health_metrics AND no flag moved true->false.
+--
+-- DO NOT DO THE FOLLOW-UPS YET, even though dev is backfilled.
+--
+-- The original note here said the two cleanups "become safe" after a
+-- successful backfill. That was wrong in a way that would have broken prod.
+-- The backfill is PER ENVIRONMENT; the code it unblocks is ONE codebase
+-- deployed to every environment. Dev being backfilled says nothing about prod,
+-- whose blob still has no `workoutTracking` key at all. Deleting
+-- `requireAnyFeatureFlag` today resolves `workoutTracking` to its fail-closed
+-- default in prod and 403s every workout route there, on the one code path the
+-- backfill was supposed to make unnecessary.
+--
+-- So the shim stays until BOTH environments are backfilled, and the removal
+-- lands as a single change after the prod run:
 --   - narrow health-service `metricsGated` to require `workoutTracking` as well
 --     as `healthMetrics` (docs/FEATURE-FLAG-SPLIT.md §5, §8 step 8);
 --   - delete `requireAnyFeatureFlag` / `isAnyFeatureEnabled` and repoint
 --     `workoutGated` at `requireFeatureFlag('workoutTracking')` alone (§8 step 7).
--- Both must happen in the same change as the backfill, never before it.
+-- Both in the same change, and only once prod's step 0 shows workout_tracking_now
+-- populated. Never before.
 
 -- ============================================================================
 -- PREFERRED: do this through the admin API, not SQL.
@@ -70,7 +102,8 @@ SELECT
   config #>> '{features,healthMetrics,enabled}'    AS health_metrics_now,
   config #>> '{features,workoutTracking,enabled}' AS workout_tracking_now,
   config #>> '{features,healthVault,enabled}'      AS health_vault_now,
-  jsonb_object_length(COALESCE(config -> 'features', '{}'::jsonb)) AS stored_flag_count
+  (SELECT count(*) FROM jsonb_object_keys(COALESCE(config -> 'features', '{}'::jsonb)))
+    AS stored_flag_count
 FROM auth."AppVersionSetting"
 WHERE id = 1;
 
@@ -129,10 +162,14 @@ SET config = jsonb_set(
       ) || c.features,
       true
     ),
-    "updatedAt" = now()
+    "updatedAt" = now(),
+    -- Cleared deliberately. The backfill is not an operator's save, and leaving
+    -- the previous editor's id here while stamping a new updatedAt would file
+    -- this change under their name. Step 4 records it against nobody instead.
+    "updatedBy" = NULL
 FROM current_blob c
 WHERE s.id = 1
-RETURNING jsonb_object_length(s.config -> 'features') AS stored_flag_count;
+RETURNING id AS touched;
 
 
 -- ============================================================================
@@ -168,7 +205,8 @@ SET config = jsonb_set(
         || jsonb_build_object('enabled', false),
       true
     ),
-    "updatedAt" = now()
+    "updatedAt" = now(),
+    "updatedBy" = NULL
 WHERE id = 1
 RETURNING
   config #>> '{features,healthMetrics,enabled}'    AS health_metrics,
@@ -183,6 +221,32 @@ RETURNING
 
 
 -- ============================================================================
+-- STEP 2b — AUDIT ROW. Run inside the same transaction as steps 1 and 2.
+--
+-- Steps 1-2 write the blob without going through updateAppConfigAdmin, so
+-- nothing records that they did. Without this the config table shows a changed
+-- value with no history explaining it — the exact gap the split doc opened in
+-- the first place. changedBy is NULL because no operator made this change.
+--
+-- Bind the three json parameters from the features blob captured BEFORE step 1
+-- and the one read back after step 2. changedFlags should be the names whose
+-- value actually differs, which on a first run is exactly the flags the blob
+-- was missing.
+-- ============================================================================
+
+INSERT INTO auth."AppConfigHistory" ("changedFlags", before, after, note, "changedBy", "createdAt")
+VALUES (
+  $1::text[],   -- changedFlags: e.g. {workoutTracking,healthVault,fhirExport,referral,runTracker}
+  $2::jsonb,    -- before: the features object as it was before step 1
+  $3::jsonb,    -- after:  the features object as it reads after step 2
+  'backfill: mirror workoutTracking from healthMetrics, add missing registry flags at defaults (docs/FEATURE-FLAG-BACKFILL.sql). Automated; not an operator change.',
+  NULL,
+  now()
+)
+RETURNING id, "changedFlags";
+
+
+-- ============================================================================
 -- STEP 3 — VERIFY. Read-only; safe to run any time.
 -- ============================================================================
 
@@ -193,7 +257,9 @@ SELECT
   config #>> '{features,healthVault,enabled}'      AS health_vault,
   (config #>> '{features,workoutTracking,enabled}')
     IS NOT DISTINCT FROM
-  (config #>> '{features,healthMetrics,enabled}')  AS mirror_ok
+  (config #>> '{features,healthMetrics,enabled}')  AS mirror_ok,
+  (SELECT count(*) FROM jsonb_object_keys(COALESCE(config -> 'features', '{}'::jsonb)))
+    AS stored_flag_count
 FROM auth."AppVersionSetting"
 WHERE id = 1;
 

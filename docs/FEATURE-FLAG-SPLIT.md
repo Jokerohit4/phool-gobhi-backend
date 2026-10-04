@@ -627,17 +627,31 @@ Each of these closed a numbered gap from §10 / §7 / §6 / §9 rather than addi
 
 ### Still open
 
-1. **Backfill (§8 step 6).** Blocks prod and step 7. This is the only critical-path item.
-   `docs/FEATURE-FLAG-BACKFILL.sql` is written and hand-reviewed but unexecuted. The migration
-   half is no longer part of this: CI applied `20261004000000_add_app_config_history` to the dev
-   database on 2026-10-04 with the auth-service deploy, so only the data step remains.
-   the server/client asymmetry on `healthMetrics` is documented at both points of use until it lands.
-2. **The seed script's write path is unexercised.** Its CLI surface, validation, guards and profile
-   contents are covered by tests, but the read-modify-write and the audit insert have only ever run
-   against a real Postgres, which this environment does not have. First real run should be a dry run
-   against dev.
-3. **`launch-candidate` is a proposal, not an approved launch posture.** It is defined and tested,
+1. **Prod backfill (§8 step 6).** Dev was backfilled on 2026-10-04; **prod was not**, and prod's
+   auth-service has not been redeployed onto the registry at all. This is now the only
+   critical-path item. Dev's run: the blob held 15 of 20 flags, so `workoutTracking` (mirrored from
+   `healthMetrics`), `healthVault`, `fhirExport`, `referral` and `runTracker` were added, no flag
+   moved true→false, and the change is recorded in `AppConfigHistory` against nobody. The
+   server/client asymmetry on `healthMetrics` is still documented at both points of use, but on dev
+   it is now inert because both flags are true.
+   **The step 7 and step 8 code cleanups are deliberately NOT done.** The backfill is per
+   environment and the code is one codebase deployed to both, so removing `requireAnyFeatureFlag`
+   now would resolve `workoutTracking` to its fail-closed default in prod and 403 every workout
+   route there. They wait on the prod run.
+2. **`launch-candidate` must not be applied to dev as it stands.** Its first dry run against real
+   dev data (2026-10-04) showed it would switch **9 flags off** that dev currently has on —
+   `healthLedger`, `foodPhotoLogging`, `healthPersonalisation`, `recapSharing`, `fitnessAssistant`,
+   `cycleTracking`, `streaksCoins`, `challenges`, `buddyPairedStreaks`. Dev's stored state is far
+   more permissive than the profile. `defaults` would switch 15 off. Both are correct behaviour of
+   the script and the reason the dry run exists; neither is a profile to apply casually.
+3. **The seed script's write path is now exercised** against real dev Postgres (dry runs of
+   `defaults` and `launch-candidate` on 2026-10-04, both verified to write nothing). Its first real
+   `--apply` has still never run.
+4. **`launch-candidate` is a proposal, not an approved launch posture.** It is defined and tested,
    but nobody has signed off on it — see the flag-by-flag reasoning in the script.
-4. **`buddy`'s moderation gap is unchanged.** No reporting, blocking, match expiry or city filter
+5. **`buddy`'s moderation gap is unchanged.** No reporting, blocking, match expiry or city filter
    anywhere, while the flag fails open. Recorded against the registry entry; out of scope here.
+6. **The admin `/settings` page is unverified on dev.** It needs a gobhi session, and the preview
+   deployment's `GATEWAY_URL` has no default in the repo, so whether it reads the dev gateway or
+   prod is not determinable from source.
 
