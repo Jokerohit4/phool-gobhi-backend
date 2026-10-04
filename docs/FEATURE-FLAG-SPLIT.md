@@ -559,8 +559,17 @@ record and should not be read as a description of the current code.
   keys, `blastRadius`, `rationale`, fail-closed defaults (`buddy` + `referral` fail-open only).
 - `GET /api/auth/app-config/registry` (gobhi-only) and `schemaVersion` + `flagsKnown` on the public
   config.
-- `AppConfigHistory` + unapplied migration `20261004000000_add_app_config_history`, with
+- `AppConfigHistory` + migration `20261004000000_add_app_config_history` (applied to the dev
+  database on 2026-10-04 by the deploy pipeline; still unapplied to prod), with
   `GET /api/auth/app-config/history`. Writes are best-effort by design.
+- Dev verified 2026-10-04 after the auth-service, health-service and challenge-service deploy:
+  the public config reports `schemaVersion: 2` and `flagsKnown` of 20. The 16 flags dev had
+  already stored kept their values; `workoutTracking`, `healthVault` and `fhirExport` resolved to
+  their fail-closed defaults and `referral` to true. The admin `/settings` page builds its list
+  from the registry and refuses to render one it could not load.
+- Consequence on dev, by design: the Local Health Vault routes now 403, because `healthVault`
+  defaults off pending legal sign-off. Workout and score routes keep serving through the
+  transitional either-gate.
 - health-service route split into `workoutGated` / `metricsGated` / `vaultGated` /
   `consentGated` / `exportGated`, plus `requireAnyFeatureFlag` + `isAnyFeatureEnabled` as the
   transitional shim.
@@ -618,8 +627,10 @@ Each of these closed a numbered gap from §10 / §7 / §6 / §9 rather than addi
 
 ### Still open
 
-1. **Backfill (§8 step 6).** Blocks deploy and step 7. This is the only critical-path item.
-   `docs/FEATURE-FLAG-BACKFILL.sql` and the migration are written and hand-reviewed but unexecuted;
+1. **Backfill (§8 step 6).** Blocks prod and step 7. This is the only critical-path item.
+   `docs/FEATURE-FLAG-BACKFILL.sql` is written and hand-reviewed but unexecuted. The migration
+   half is no longer part of this: CI applied `20261004000000_add_app_config_history` to the dev
+   database on 2026-10-04 with the auth-service deploy, so only the data step remains.
    the server/client asymmetry on `healthMetrics` is documented at both points of use until it lands.
 2. **The seed script's write path is unexercised.** Its CLI surface, validation, guards and profile
    contents are covered by tests, but the read-modify-write and the audit insert have only ever run
