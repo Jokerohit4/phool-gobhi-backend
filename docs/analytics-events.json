@@ -628,6 +628,18 @@
     "since": "2026-10-02",
     "notes": "a medical report was uploaded to the vault. props fileName (filename only, never contents), status=PENDING at upload time — later processing status changes are NOT re-emitted, this event marks the upload moment only"
   },
+  "health_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-04",
+    "notes": "base Health+ consent granted — the parent of the per-scope grants (health_medical_consent_granted, health_nutrition_consent_granted) and the legal basis for holding anything in the vault. props version = the policy version asserted, platform = ios|android. This row was written to Prisma without ever being emitted, so the funnel showed zero health opt-ins while consents existed"
+  },
+  "health_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-04",
+    "notes": "base Health+ consent withdrawn, which cascades to every ledger scope. The counterpart to health_consent_granted and the event to watch for churn: a revoke here means the whole health surface is off for that user"
+  },
   "health_nutrition_consent_granted": {
     "source": "server",
     "service": "health-service",
