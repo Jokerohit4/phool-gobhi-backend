@@ -17,6 +17,10 @@ export const METRIC_UNITS = {
   steps: 'count',
   hrv: 'ms',
   stress: 'score',
+  hba1c: '%',
+  ldl: 'mg/dL',
+  hdl: 'mg/dL',
+  triglycerides: 'mg/dL',
 };
 
 // Sanity bounds, not medical judgement — these reject typos and unit
@@ -30,6 +34,16 @@ export const METRIC_BOUNDS = {
   steps: [0, 100000],
   hrv: [1, 400],
   stress: [0, 100],
+  // Deliberately wide. A real panel can report an extreme value and the user is
+  // allowed to record it — refusing to store an unusual number is not this
+  // layer's job. The job is catching the unit mix-up, and for these four that
+  // is comfortably separated: HbA1c entered as a fraction (0.058) or in
+  // mmol/mol, and lipids entered in mmol/L (LDL 1.4, HDL 0.9, TG 0.6), all land
+  // far outside these ranges, while every plausible mg/dL reading lands inside.
+  hba1c: [3, 20],
+  ldl: [20, 400],
+  hdl: [10, 200],
+  triglycerides: [10, 1000],
 };
 
 // Metrics that only ever arrive MEASURED (HealthKit / Health Connect, via the

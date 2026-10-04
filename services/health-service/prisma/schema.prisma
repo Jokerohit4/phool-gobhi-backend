@@ -508,6 +508,24 @@ model DailyActivityMetric {
 // Fitness+ FR-12 (weight, body_fat) and Health+ Phase-1 FR-01 (resting HR,
 // sleep, steps, stress, HRV) rather than two separate tables — see the
 // BiometricEntry comment for why.
+//
+// The blood-panel markers are the third limb of that union, and the reason
+// every member here is lowercase snake_case: BIOLOGICAL_TARGETS in
+// services/ledger/constants.js keys the score engine's clinical ranges by
+// exactly these names, and the engine looks a stored marker up in it with
+// `marker.toLowerCase()`. A camelCase member would be writable but unscoreable.
+//
+// These four were absent until 2026-10-04. Because the lookup missed,
+// computeBiologicalScore found no target for any stored row, totalWeightUsed
+// stayed 0, it returned null, and the biological 60% of the blended score
+// (weightBio, scoreEngine.js) contributed nothing for every user — silently,
+// with no error to notice it by.
+//
+// Adding a member here is necessary but NOT sufficient on its own. The HTTP
+// allow-list is METRIC_UNITS in services/biometricService.js, from which
+// biometricController derives METRICS; METRIC_BOUNDS is keyed the same way and
+// rejects any value it has no range for. All three must agree, and
+// test/schemaMigrationParity.test.js asserts that they do.
 enum BiometricMetric {
   weight
   body_fat
@@ -516,6 +534,10 @@ enum BiometricMetric {
   steps
   hrv
   stress
+  hba1c
+  ldl
+  hdl
+  triglycerides
 
   @@schema("health")
 }

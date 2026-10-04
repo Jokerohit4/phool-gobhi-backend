@@ -184,6 +184,7 @@ test('the food sign-off columns are in the migration, not only the schema', () =
 const LEDGER_ENUMS = [
   'Sex', 'HealthGoalType', 'ActivityLevel', 'DietPattern', 'MealSlot',
   'FoodLogSource', 'TargetSource', 'PlanItemKind', 'PlanItemOrigin',
+  'BiometricMetric',
 ];
 
 test('every ledger enum value in the schema reaches the migration', () => {
@@ -239,5 +240,92 @@ test('the FoodLogSource enum has no value the service cannot write', () => {
   assert.ok(
     values.includes(defaultSource),
     `default source '${defaultSource}' is not a FoodLogSource value`,
+  );
+});
+
+// Parses `name: value,` lines out of one of the flat marker maps in
+// biometricService, ignoring comments and blank lines.
+function markerKeys(source, mapName) {
+  const body = source.match(new RegExp(`${mapName} = \\{([\\s\\S]*?)\\n\\}`))[1];
+  return body
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^[\w]+:/.test(l))
+    .map((l) => l.split(':')[0].trim());
+}
+
+test('every BiometricMetric is writable, and writable metrics exist in the enum', () => {
+  // Three lists have to agree, and until 2026-10-04 nobody checked:
+  //
+  //   enum BiometricMetric  what the database will store
+  //   METRIC_UNITS          what the HTTP layer accepts (biometricController
+  //                         derives its METRICS allow-list from this)
+  //   METRIC_BOUNDS         what validateMetricValue will accept a value for,
+  //                         and returns "Unknown metric" for anything missing
+  //
+  // BIOLOGICAL_TARGETS defined clinical ranges for four blood markers that were
+  // in none of the first two. Nothing errored: computeBiologicalScore looked
+  // each stored marker up, missed, and returned null, so the biological 60% of
+  // the blended score contributed nothing for anyone. A null that reads as
+  // "no data yet" is not something a test finds by accident.
+  const body = schema.match(/enum BiometricMetric \{([\s\S]*?)\n\}/)[1];
+  const values = body
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^\w+$/.test(l));
+
+  const service = readFileSync(join(here, '..', 'services', 'biometricService.js'), 'utf8');
+  const units = markerKeys(service, 'METRIC_UNITS');
+  const bounds = markerKeys(service, 'METRIC_BOUNDS');
+
+  assert.deepEqual(
+    [...units].sort(),
+    [...values].sort(),
+    'METRIC_UNITS and the BiometricMetric enum disagree: a metric in one and not ' +
+      'the other is either accepted by the DB and refused by the API, or accepted ' +
+      'by the API and refused by the database',
+  );
+
+  assert.deepEqual(
+    [...bounds].sort(),
+    [...values].sort(),
+    'METRIC_BOUNDS and the BiometricMetric enum disagree: validateMetricValue ' +
+      'returns "Unknown metric" for a metric with no range, so such a metric ' +
+      'would be advertised by the allow-list and reject every write',
+  );
+});
+
+test('every BIOLOGICAL_TARGETS key the score engine can reach is a real metric', () => {
+  // The other direction: a target the engine looks up but no metric can ever be
+  // stored as is dead scoring weight. This is the half that produced the
+  // all-zero biological score - BIOLOGICAL_TARGETS named four markers the schema
+  // could not store.
+  const body = schema.match(/enum BiometricMetric \{([\s\S]*?)\n\}/)[1];
+  const values = body
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^\w+$/.test(l));
+
+  const constants = readFileSync(
+    join(here, '..', 'services', 'ledger', 'constants.js'),
+    'utf8',
+  );
+  const targets = constants.match(/BIOLOGICAL_TARGETS = \{([\s\S]*?)\n\};/)[1];
+  // Indentation-aware on purpose: each marker maps to a nested target object, so
+  // matching `name:` anywhere in the body would pick up idealMax/warningMax/unit
+  // as though they were markers. Top-level keys sit at exactly two spaces.
+  const scored = targets
+    .split('\n')
+    .map((l) => l.match(/^ {2}([\w]+):/))
+    .filter(Boolean)
+    .map((m) => m[1]);
+
+  const unreachable = scored.filter((m) => !values.includes(m));
+  assert.deepEqual(
+    unreachable,
+    [],
+    `BIOLOGICAL_TARGETS names markers the schema cannot store: ${unreachable.join(', ')}. ` +
+      'computeBiologicalScore skips any marker with no target, so these silently ' +
+      'contribute nothing to the blended score.',
   );
 });
