@@ -10,7 +10,8 @@
     "seed:foods": "node prisma/seed/run.js",
     "seed:foods:status": "node prisma/seed/status.js --status",
     "seed:foods:signoff": "node prisma/seed/signoff.js",
-    "db:deploy": "prisma migrate deploy"
+    "db:deploy": "prisma migrate deploy",
+    "check:drift": "node scripts/check-schema-drift.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
