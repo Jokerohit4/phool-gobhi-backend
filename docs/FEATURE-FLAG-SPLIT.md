@@ -455,7 +455,7 @@ job is retention and health:
 | `runTracker` | off | not yet tuned; now at least reachable from the portal |
 | `streaksCoins` | **off until the coin sink exists** | `POST /coins/redeem` (`challenges.js:19`) is never called by the app and the catalog is non-interactive (`coin_wallet_screen.dart:282-329`); cheapest item is 50 coins at a 10-per-check-in earn rate. Enabling it today ships a visible earn loop with no spend loop. |
 | `challenges` | off outside Gurugram/Gorakhpur | `challengeCatalogService.js:28-44` hardcodes 2 cities; everyone else sees an empty list |
-| `buddy` | decision pending | 21,441 lines, zero moderation/report/block in client or service, no match expiry, no city filter |
+| `buddy` | decision pending | ~21k lines client-side. **Correction (2026-10-04): an earlier version of this row claimed "zero moderation/report/block in client or service" — that was wrong.** Blocking has existed since v1: `BlockedUser` model, 3 endpoints, exclusion in both the discovery feed and the swipe path, auto-unmatch, DPDPA erasure + export. Reports, match expiry, and the `getMessages` read hole were the real gaps and are now closed (see "Still open" #5) |
 | `badges`, `homeTrackHome`, `nonPartnerAttendance`, `brandedOnboarding` | on | low risk, no external dependency |
 
 The table above is now executable as `--profile launch-candidate`, and
@@ -465,7 +465,8 @@ reasons the "Launch" column does not convey:
 
 - **`buddy` is on because it is already live in production**, not because its open question is
   settled. It fails open by design, and the profile would ship a visibly broken feature if it did
-  not include it. The moderation gap below is unresolved and is *not* what this profile decides.
+  not include it. Its moderation story is now in reasonable shape (see "Still open" #5 for what was
+  wrong in this document and what is fixed); the unresolved remainder is not what this profile decides.
 - **`challenges` is off**, even though a two-city pilot is the obvious use. Enabling it globally is
   the failure mode described above; a city-scoped rollout is a different mechanism than a flag.
 
@@ -649,8 +650,32 @@ Each of these closed a numbered gap from §10 / §7 / §6 / §9 rather than addi
    `--apply` has still never run.
 4. **`launch-candidate` is a proposal, not an approved launch posture.** It is defined and tested,
    but nobody has signed off on it — see the flag-by-flag reasoning in the script.
-5. **`buddy`'s moderation gap is unchanged.** No reporting, blocking, match expiry or city filter
-   anywhere, while the flag fails open. Recorded against the registry entry; out of scope here.
+5. **`buddy`'s moderation gap is now closed except the city filter.** *Corrected 2026-10-04 — the
+   previous version of this item read "No reporting, blocking, match expiry or city filter anywhere",
+   which was factually wrong about blocking.* Actual state:
+   - **Blocking already existed** and was sound: `BlockedUser`, `POST/DELETE/GET /blocks`, exclusion
+     in the discovery feed (`buddyService.js:281-288`) and the swipe path (`:343-344`), auto-unmatch
+     on block, plus DPDPA erasure and export.
+   - **Real hole, now fixed:** `getMessages` checked only *participation*, while `getMatchedProfile`
+     and `sendMessage` both 410'd a non-active match. Since `blockUser` flips the match to
+     `unmatched`, a blocker could keep paging the entire chat history by `matchId` for as long as
+     they held the id. A block that left read access intact was not a block.
+   - **Reports added** (`Report` + `ReportReason`/`ReportStatus`): user-facing create that severs an
+     active match but does *not* silently block, gobhi-only triage queue, `priorReportsAboutReportedUser`
+     computed in one query rather than N+1.
+   - **Match expiry added** (`MatchStatus.expired` + `Match.lastActivityAt`): 30-day inactivity,
+     applied lazily on read — list queries filter and never write; only the by-id guard persists
+     `expired`. `sendMessage` bumps `lastActivityAt`. `verifyActiveMatchMembership` applies expiry
+     without writing, so a dead match cannot authorise a paired streak.
+   - **DPDP:** erasure is deliberately asymmetric — reports you *filed* are deleted, reports *about*
+     you are kept with `reportedUserId` nulled, so the safety record outlives the account without
+     retaining a pointer to an erased person. Export carries `reportsYouFiled` in full and
+     `reportsFiledAgainstYou` as a bare count.
+   - **Still genuinely open:** the city filter. `BuddyFilter.radiusKm` (default 25) already covers
+     geo discovery; there is no city field anywhere, and a real city filter needs a new column plus
+     client-side filter UI, which is why it is not simply "add a field". Unresolved, and it is *not*
+     what the flag decides.
+   None of this is a flag problem; the `buddy` flag still fails open.
 6. **The admin `/settings` page is unverified on dev.** It needs a gobhi session, and the preview
    deployment's `GATEWAY_URL` has no default in the repo, so whether it reads the dev gateway or
    prod is not determinable from source.
