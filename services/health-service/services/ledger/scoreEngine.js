@@ -517,7 +517,9 @@ export { LATE_LOGGING_WINDOW_DAYS, MICROS_TRACKED };
 // --- Biological Scoring ----------------------------------------------------
 
 /**
- * Computes a biological score (0-100) based on verified biomarkers.
+ * Computes a biological score (0-100) from the caller's biomarkers. Markers
+ * with no entry in BIOLOGICAL_TARGETS are skipped, so a caller may pass every
+ * stored metric and let this decide which ones it can score.
  * @param {Array} biomarkers - List of { marker: string, value: number }
  */
 export function computeBiologicalScore(biomarkers = []) {

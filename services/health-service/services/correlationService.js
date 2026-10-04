@@ -16,11 +16,12 @@ export async function correlateMarkerImprovement(userId, marker) {
   if (!target) return null;
 
   // 1. Fetch trajectory (last 180 days for better trend analysis)
+  // No `verified` filter: BiometricEntry has no such column, so filtering on it
+  // threw "Unknown argument 'verified'". Rows are confirmed by construction.
   const entries = await prisma.biometricEntry.findMany({
     where: {
       userId,
       metric: marker,
-      verified: true,
       createdAt: { gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) },
     },
     orderBy: { createdAt: 'asc' },

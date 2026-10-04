@@ -188,13 +188,20 @@ export async function getBlendedScore(prisma, { userId }) {
     // Expected BiometricMetric."), so every blended-score read threw instead
     // of scoring. Filtering was never load-bearing: scoreEngine already skips
     // any marker with no target (`if (!target) continue`), so reading the
-    // user's verified entries and letting the engine match them scores the
-    // same set today, and starts including the blood markers unchanged if the
-    // enum ever grows them.
+    // user's entries and letting the engine match them scores the same set
+    // today, and starts including the blood markers unchanged if the enum ever
+    // grows them.
+    //
+    // The `verified: true` that used to sit here went for the same class of
+    // reason: BiometricEntry has no such column (only FoodItem.verified and
+    // ReportExtraction.isVerified exist), so Prisma rejected the query with
+    // "Unknown argument 'verified'" on every read. It was never a real filter
+    // either — a row here is either typed by the user, or written by
+    // verifyExtractionService, which only writes once the user has confirmed
+    // the value. So every row is confirmed by construction.
     prisma.biometricEntry.findMany({
       where: {
         userId,
-        verified: true,
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -275,16 +282,17 @@ export async function getBatchBehavioralConsistency(prisma, { userIds }) {
 }
 
 /**
- * Fetches the verified history of a specific biomarker.
+ * Fetches the history of a specific biomarker. Every stored row is confirmed
+ * by construction (typed by the user, or written only after the user confirms
+ * an OCR extraction), so there is nothing to filter on here.
  */
 export async function getBiomarkerTrajectory(prisma, { userId, marker, days = 90 }) {
   const dateLimit = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  
+
   const entries = await prisma.biometricEntry.findMany({
     where: {
       userId,
       metric: marker,
-      verified: true,
       createdAt: { gte: new Date(dateLimit) },
     },
     orderBy: { createdAt: 'asc' },
