@@ -455,7 +455,7 @@ job is retention and health:
 | `runTracker` | off | not yet tuned; now at least reachable from the portal |
 | `streaksCoins` | **off until the coin sink exists** | `POST /coins/redeem` (`challenges.js:19`) is never called by the app and the catalog is non-interactive (`coin_wallet_screen.dart:282-329`); cheapest item is 50 coins at a 10-per-check-in earn rate. Enabling it today ships a visible earn loop with no spend loop. |
 | `challenges` | off outside Gurugram/Gorakhpur | `challengeCatalogService.js:28-44` hardcodes 2 cities; everyone else sees an empty list |
-| `buddy` | decision pending | ~21k lines client-side. **Correction (2026-10-04): an earlier version of this row claimed "zero moderation/report/block in client or service" — that was wrong.** Blocking has existed since v1: `BlockedUser` model, 3 endpoints, exclusion in both the discovery feed and the swipe path, auto-unmatch, DPDPA erasure + export. Reports, match expiry, and the `getMessages` read hole were the real gaps and are now closed (see "Still open" #5) |
+| `buddy` | decision pending | ~21k lines client-side. **Moderation shipped to dev 2026-10-04** (`f015cf8`): blocked-match history leak closed, reporting + gobhi triage added, 30-day match expiry added. See "Still open" #5 |
 | `badges`, `homeTrackHome`, `nonPartnerAttendance`, `brandedOnboarding` | on | low risk, no external dependency |
 
 The table above is now executable as `--profile launch-candidate`, and
@@ -671,10 +671,17 @@ Each of these closed a numbered gap from §10 / §7 / §6 / §9 rather than addi
      you are kept with `reportedUserId` nulled, so the safety record outlives the account without
      retaining a pointer to an erased person. Export carries `reportsYouFiled` in full and
      `reportsFiledAgainstYou` as a bare count.
-   - **Still genuinely open:** the city filter. `BuddyFilter.radiusKm` (default 25) already covers
-     geo discovery; there is no city field anywhere, and a real city filter needs a new column plus
-     client-side filter UI, which is why it is not simply "add a field". Unresolved, and it is *not*
-     what the flag decides.
+   - **City filter: closed by decision, not built** (2026-10-04). `BuddyFilter.radiusKm` (default 25)
+     already covers geo discovery, no city field exists anywhere, and a real city filter needs a new
+     `BuddyProfile` column *plus* filter UI in the Flutter client — which has ~79 uncommitted
+     health/biomarker files deliberately untouched. Server-side alone it would be a field nothing can
+     set, so it was dropped rather than half-built. Revisit only alongside client filter work.
+   - **Shipped to dev 2026-10-04** (`f015cf8`): migration
+     `20261004010000_buddy_reports_and_match_expiry` applied to the dev DB, revision
+     `buddy-service-dev-00039-hqm` at 100%. Verified post-deploy against real data — `Report` table
+     with 10 columns, `MatchStatus` = `active,unmatched,expired`, `ReportReason` 8 values, all four
+     indexes present, and all 3 pre-existing matches backfilled from their actual last message
+     (oldest activity 82 days old) rather than left reading as `now()`. Suite 68 → 93. Prod untouched.
    None of this is a flag problem; the `buddy` flag still fails open.
 6. **The admin `/settings` page is unverified on dev.** It needs a gobhi session, and the preview
    deployment's `GATEWAY_URL` has no default in the repo, so whether it reads the dev gateway or
