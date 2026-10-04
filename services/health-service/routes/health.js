@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
-import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
+import { requireFeatureFlag, requireAnyFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import * as consentCtrl from '../controllers/consentController.js';
 import * as exerciseCtrl from '../controllers/exerciseController.js';
 import * as templateCtrl from '../controllers/templateController.js';
@@ -47,24 +47,71 @@ const router = Router();
 // checks and its own consent middlewares, and they have to run in that order.
 router.use(ledgerRouter);
 
-// Every customer-facing route is server-side gated on the healthMetrics
-// flag, not just client-hidden — same posture challenge-service takes with
-// streaksCoins, and more important here since this feature collects new
-// personal (and DPDP-sensitive) data.
-const gated = [requireAuth, requireFeatureFlag('healthMetrics')];
-
-// Local Health Vault (PDF Reports) - Gated on healthMetrics
-router.post('/reports/upload', ...gated, reportCtrl.uploadReport);
-router.get('/reports/pending', ...gated, reportCtrl.getPendingExtractions);
-router.post('/reports/verify', ...gated, reportCtrl.verifyExtraction);
-
-// Two features sit behind their OWN flags on top of healthMetrics, because they need legal sign-off that the rest of the health layer does not (see
-// docs/phool-gobhi-counsel-brief-20260908.html):
+// Every customer-facing route is server-side gated, not just client-hidden —
+// same posture challenge-service takes with streaksCoins, and more important
+// here since these features collect new personal (and DPDP-sensitive) data.
 //
-//   healthPersonalisation — the only consent-bearing write in this service
-//     (a non-neutral programming mode records a privacyVersion). The consent
-//     wording has to be reviewed before a real user ever agrees to it.
-// ...
+// Three gate shapes, split on 2026-10-04 when the single `healthMetrics`
+// boolean was split into a standalone workout log and a narrowed score layer:
+//
+//   workoutGated  → `workoutTracking`  exercise library, routines, sessions,
+//                   sets, quick logging, progress, readiness, plans, the
+//                   post-check-in prompt. The high-frequency daily loop, and the
+//                   half that had no business being switched off by a health
+//                   feature decision.
+//   metricsGated  → `healthMetrics`    health score, biomarkers, health profile,
+//                   data export. The derived-score half.
+//   vaultGated    → `healthVault`      Local Health Vault (report upload/verify).
+//
+// The transitional `either` gate below is NOT a third permanent shape — see
+// requireAnyFeatureFlag for why it exists and when it goes away.
+const workoutGated = [
+  requireAuth,
+  requireAnyFeatureFlag('workoutTracking', 'healthMetrics'),
+];
+// `metricsGated` requires `healthMetrics` alone, NOT `healthMetrics` AND
+// `workoutTracking` — even though the registry declares healthMetrics as
+// depending on workoutTracking, and even though the Flutter client composes
+// both (AppConfigStore.healthMetricsVisible). This asymmetry is deliberate and
+// temporary, and it is the transitional either-gate argued in
+// requireAnyFeatureFlag: requiring workoutTracking here would resolve false on
+// any config blob written before the split, because a stored blob only contains
+// keys an admin has actually saved. That would 403 every score/biometric route
+// in dev the moment this deploys, before the backfill has run.
+//
+// Read this as "the dependency is not yet enforced server-side", not as "the
+// dependency was dropped". It becomes enforced by tightening this array to
+// [requireAuth, requireFeatureFlag('workoutTracking'), requireFeatureFlag('healthMetrics')]
+// at backfill time — the same commit that removes requireAnyFeatureFlag. The
+// routeSplitGates test below pins the current shape so the tightening is a
+// deliberate diff rather than something nobody notices.
+const metricsGated = [requireAuth, requireFeatureFlag('healthMetrics')];
+
+// Local Health Vault (PDF Reports). Was inherited from `healthMetrics`, which
+// meant the most consent-sensitive surface in the app was switched by a boolean
+// whose name was about health scores and which also turned on the workout log.
+// Standalone now, default off, pending legal sign-off — see the registry.
+//
+// Deliberately NOT dependent on healthMetrics or workoutTracking: a user who
+// uploaded a report while the vault was on must be able to reach it to read,
+// verify or erase it after it is switched off. Same rule as DELETE /me and the
+// /runs/consent delete — a consent record or extracted biomarker may never be
+// stranded behind a feature switch. That is also why this is not gated on
+// `workoutTracking` the way the registry's own dependency note would suggest:
+// the vault collects its own data and depends on nothing.
+const vaultGated = [requireAuth, requireFeatureFlag('healthVault')];
+router.post('/reports/upload', ...vaultGated, reportCtrl.uploadReport);
+router.get('/reports/pending', ...vaultGated, reportCtrl.getPendingExtractions);
+router.post('/reports/verify', ...vaultGated, reportCtrl.verifyExtraction);
+
+// Consent is the one surface BOTH halves legitimately need: the device-health
+// scope backs workout activity sync, the body-numbers scope backs biometrics.
+// Gating it on a single half would have locked one side out of its own consent
+// record, so it takes the transitional either-gate until the backfill.
+const consentGated = [
+  requireAuth,
+  requireAnyFeatureFlag('workoutTracking', 'healthMetrics'),
+];
 
 // Two features sit behind their OWN flags on top of healthMetrics, because
 // they need legal sign-off that the rest of the health layer does not (see
@@ -161,49 +208,49 @@ router.put('/assistant/memories', ...assistantGated, requireAssistantConsent, as
 router.delete('/assistant/memories/:id', ...assistantGated, assistantCtrl.forgetMemory);
 
 // ---- Consent -------------------------------------------------------------
-router.post('/consent', ...gated, requireAdult, consentCtrl.grantConsent);
-router.delete('/consent', ...gated, consentCtrl.revokeConsent);
-router.get('/consent/status', ...gated, consentCtrl.getConsentStatus);
+router.post('/consent', ...consentGated, requireAdult, consentCtrl.grantConsent);
+router.delete('/consent', ...consentGated, consentCtrl.revokeConsent);
+router.get('/consent/status', ...consentGated, consentCtrl.getConsentStatus);
 
 // ---- Exercise library ------------------------------------------------
-router.get('/exercises', ...gated, exerciseCtrl.searchExercises);
-router.post('/exercises', ...gated, exerciseCtrl.createCustomExercise);
-router.get('/exercises/:id', ...gated, exerciseCtrl.getExerciseDetail);
-router.get('/exercises/:id/history', ...gated, exerciseCtrl.getExerciseHistory);
+router.get('/exercises', ...workoutGated, exerciseCtrl.searchExercises);
+router.post('/exercises', ...workoutGated, exerciseCtrl.createCustomExercise);
+router.get('/exercises/:id', ...workoutGated, exerciseCtrl.getExerciseDetail);
+router.get('/exercises/:id/history', ...workoutGated, exerciseCtrl.getExerciseHistory);
 
 // ---- Routines (templates) ---------------------------------------------
-router.get('/templates', ...gated, templateCtrl.listTemplates);
-router.post('/templates', ...gated, templateCtrl.createTemplate);
-router.put('/templates/:id', ...gated, templateCtrl.updateTemplate);
-router.delete('/templates/:id', ...gated, templateCtrl.deleteTemplate);
+router.get('/templates', ...workoutGated, templateCtrl.listTemplates);
+router.post('/templates', ...workoutGated, templateCtrl.createTemplate);
+router.put('/templates/:id', ...workoutGated, templateCtrl.updateTemplate);
+router.delete('/templates/:id', ...workoutGated, templateCtrl.deleteTemplate);
 
 // ---- Workout sessions ---------------------------------------------------
-router.post('/sessions', ...gated, sessionCtrl.startSession);
-router.get('/sessions', ...gated, sessionCtrl.listSessions);
+router.post('/sessions', ...workoutGated, sessionCtrl.startSession);
+router.get('/sessions', ...workoutGated, sessionCtrl.listSessions);
 // Must be registered before /sessions/:id — otherwise "today" is parsed as
 // the :id param (same route-ordering footgun the app.js /health comment
 // already calls out for this service).
-router.get('/sessions/today', ...gated, sessionCtrl.getTodaySession);
-router.get('/sessions/:id', ...gated, sessionCtrl.getSessionDetail);
-router.patch('/sessions/:id/sets/:setId', ...gated, sessionCtrl.updateSet);
-router.post('/sessions/:id/exercises', ...gated, sessionCtrl.addExerciseToSession);
-router.post('/sessions/:id/exercises/:sessionExerciseId/sets', ...gated, sessionCtrl.addSetToExercise);
+router.get('/sessions/today', ...workoutGated, sessionCtrl.getTodaySession);
+router.get('/sessions/:id', ...workoutGated, sessionCtrl.getSessionDetail);
+router.patch('/sessions/:id/sets/:setId', ...workoutGated, sessionCtrl.updateSet);
+router.post('/sessions/:id/exercises', ...workoutGated, sessionCtrl.addExerciseToSession);
+router.post('/sessions/:id/exercises/:sessionExerciseId/sets', ...workoutGated, sessionCtrl.addSetToExercise);
 // Finishing a session is what triggers the gamified-layer coin check (see
 // sessionController.finishSession) — kept as one PATCH rather than a
 // separate /finish route, since "set endedAt" is the only state transition
 // that matters here.
-router.patch('/sessions/:id', ...gated, sessionCtrl.finishSession);
+router.patch('/sessions/:id', ...workoutGated, sessionCtrl.finishSession);
 
 // ---- Cardio/yoga/other quick logging + device-synced activity ---------
-router.post('/exercise-records', ...gated, activityCtrl.createExerciseRecord);
-router.get('/exercise-records', ...gated, activityCtrl.listExerciseRecords);
+router.post('/exercise-records', ...workoutGated, activityCtrl.createExerciseRecord);
+router.get('/exercise-records', ...workoutGated, activityCtrl.listExerciseRecords);
 // Device sync alone is consent-gated server-side: it is the one write whose
 // data comes from HealthKit/Health Connect rather than from the person typing
 // it, and the OS permission can outlive a revoked in-app consent. See
 // requireDeviceHealthConsent for why exercise-records (manual + device mixed)
 // is not gated the same way.
-router.post('/daily-activity/sync', ...gated, requireDeviceHealthConsent, activityCtrl.syncDailyActivity);
-router.get('/daily-activity', ...gated, activityCtrl.getDailyActivity);
+router.post('/daily-activity/sync', ...workoutGated, requireDeviceHealthConsent, activityCtrl.syncDailyActivity);
+router.get('/daily-activity', ...workoutGated, activityCtrl.getDailyActivity);
 
 // ---- GPS run tracker (run-tracker-spec.html §10) -------------------------
 // Two independent gates, mirroring cycle tracking above. The FLAG says whether
@@ -232,8 +279,10 @@ router.get('/runs/:id', ...runTrackerGated, requireLocationRoutesConsent, runCtr
 router.delete('/runs/:id', requireAuth, runCtrl.deleteRun);
 
 // ---- Progress -------------------------------------------------------------
-router.get('/progress/summary', ...gated, progressCtrl.getProgressSummary);
-router.get('/progress/muscle-readiness', ...gated, progressCtrl.getMuscleReadiness);
+// Both endpoints are computed from logged sessions, so both belong to the
+// workout half — muscle readiness in particular is meaningless without them.
+router.get('/progress/summary', ...workoutGated, progressCtrl.getProgressSummary);
+router.get('/progress/muscle-readiness', ...workoutGated, progressCtrl.getMuscleReadiness);
 
 // ---- Biometric entries (Fitness+ FR-12 + Health+ FR-01) -----------------
 // One table, one set of endpoints for both: Fitness+ surfaces weight and
@@ -247,20 +296,22 @@ router.get('/progress/muscle-readiness', ...gated, progressCtrl.getMuscleReadine
 // are themselves ungated by the scope, or there would be no way to opt in.
 // Revoke is requireAuth only, like /runs/consent: withdrawing must keep working
 // even if the healthMetrics flag is switched off.
-router.get('/biometrics/consent', ...gated, biometricConsentCtrl.getConsent);
-router.post('/biometrics/consent', ...gated, requireAdult, biometricConsentCtrl.grantConsent);
+router.get('/biometrics/consent', ...metricsGated, biometricConsentCtrl.getConsent);
+router.post('/biometrics/consent', ...metricsGated, requireAdult, biometricConsentCtrl.grantConsent);
 router.delete('/biometrics/consent', requireAuth, biometricConsentCtrl.revokeConsent);
-router.post('/biometrics', ...gated, requireBiometricWriteConsent, biometricCtrl.upsertEntries);
-router.get('/biometrics', ...gated, biometricCtrl.listEntries);
+router.post('/biometrics', ...metricsGated, requireBiometricWriteConsent, biometricCtrl.upsertEntries);
+router.get('/biometrics', ...metricsGated, biometricCtrl.listEntries);
 // Must precede the :metric route below so "latest" isn't parsed as a metric.
-router.get('/biometrics/latest', ...gated, biometricCtrl.getLatest);
-router.delete('/biometrics/:metric/:localDate', ...gated, biometricCtrl.deleteEntry);
+router.get('/biometrics/latest', ...metricsGated, biometricCtrl.getLatest);
+router.delete('/biometrics/:metric/:localDate', ...metricsGated, biometricCtrl.deleteEntry);
 
 // ---- Suggestion feedback (FR-15) ----------------------------------------
 // The impression POST fires when a suggestion is shown, the vote PATCH when
 // the user reacts to it — both halves are needed for GS-5 to mean anything.
-router.post('/suggestions/impressions', ...gated, suggestionFeedbackCtrl.recordImpression);
-router.patch('/suggestions/impressions/:id/vote', ...gated, suggestionFeedbackCtrl.recordVote);
+// Suggestions are derived from the training log, so this follows the workout
+// half rather than the score layer.
+router.post('/suggestions/impressions', ...workoutGated, suggestionFeedbackCtrl.recordImpression);
+router.patch('/suggestions/impressions/:id/vote', ...workoutGated, suggestionFeedbackCtrl.recordVote);
 
 // ---- Personalisation (FR-25/26/27) --------------------------------------
 // GET never 404s — "skipped the whole setup" is a valid state and returns
@@ -298,20 +349,31 @@ router.patch('/health-profile/medications/:id', ...profileWrite, healthProfileCt
 router.delete('/health-profile/medications/:id', requireAuth, healthProfileCtrl.deleteMedication);
 
 // ---- Data export (FR-16) ------------------------------------------------
-router.get('/export', ...gated, exportCtrl.exportMyData);
+// Takes the transitional either-gate rather than metricsGated on purpose: this
+// is the DPDPA access right over the WHOLE health surface, and after the split
+// a user can have workout sessions logged with healthMetrics off. Gating export
+// on the score layer alone would strand exactly that user's own data behind a
+// switch they cannot reach — an access right that fails closed on a feature
+// flag is not an access right. Narrowing to workoutGated instead would have
+// hidden biomarker rows from a user who still has them.
+const exportGated = [
+  requireAuth,
+  requireAnyFeatureFlag('workoutTracking', 'healthMetrics'),
+];
+router.get('/export', ...exportGated, exportCtrl.exportMyData);
 // The user's own insurer-grade adherence summary (ig-v1) for a date range: the
 // preview of exactly what a future insurer share would contain. Gym attendance
-// and manual logs only - never device health data. Read-only; nothing is sent
-// anywhere. Gated like /export (auth + healthMetrics), plus the ledger checks
+// and manual logs only - never device health data - so it belongs with the
+// workout half. Read-only; nothing is sent anywhere. Plus the ledger checks
 // inside the controller for the plan-tick part.
-router.get('/insurer-grade', ...gated, insurerGradeCtrl.getMyInsurerGrade);
+router.get('/insurer-grade', ...workoutGated, insurerGradeCtrl.getMyInsurerGrade);
 
 // Internal — booking-service fires this on every verified check-in
 // (self-checkin, partner-verify, manual-override, member-checkin), same
 // fan-out that already feeds challenge-service's /internal/attendance-events.
-// Not flag-gated at the route level — the handler checks healthMetrics
+// Not flag-gated at the route level — the handler checks the workout flag
 // itself, so booking-service can call this unconditionally and it's inert
-// until an admin turns the phase on.
+// until an admin turns workout tracking on.
 router.post('/internal/attendance-events', requireInternal, sessionCtrl.recordAttendanceForWorkoutInternal);
 
 // DPDPA erasure — the internal twin of DELETE /me below, called by
@@ -355,22 +417,23 @@ router.post('/admin/food-photos/sweep', requireRole('gobhi'), ledgerCtrl.sweepFo
 
 // ---- Unlogged attendance (FR-03) + nudges (FR-08) -----------------------
 // "You were at the gym and haven't said what you did" - the read that turns
-// the attendance attachment into a prompt.
-router.get('/unlogged', ...gated, nudgeCtrl.getUnlogged);
-router.get('/nudges', ...gated, nudgeCtrl.getNudgeSettings);
-router.put('/nudges', ...gated, nudgeCtrl.updateNudgeSettings);
+// the attendance attachment into a prompt. Workout half by construction: the
+// thing it is prompting for is a logged session.
+router.get('/unlogged', ...workoutGated, nudgeCtrl.getUnlogged);
+router.get('/nudges', ...workoutGated, nudgeCtrl.getNudgeSettings);
+router.put('/nudges', ...workoutGated, nudgeCtrl.updateNudgeSettings);
 
 // ---- Progress stats (FR-06) ---------------------------------------------
 // Everything the Progress screen draws, in one request, computed from the
 // same range builder the export uses so the two can never disagree.
-router.get('/stats', ...gated, statsCtrl.getStats);
+router.get('/stats', ...workoutGated, statsCtrl.getStats);
 
 // ---- Weekly goal (FR-04) -------------------------------------------------
 // Progress comes back with the target: one response backs the whole ring, so
 // the client never derives "this week" itself and can't disagree with the
 // streak week challenge-service keeps.
-router.get('/goal', ...gated, goalCtrl.getGoal);
-router.put('/goal', ...gated, goalCtrl.updateGoal);
+router.get('/goal', ...workoutGated, goalCtrl.getGoal);
+router.put('/goal', ...workoutGated, goalCtrl.updateGoal);
 
 // ---- Consistency streak (home track, D-01) ------------------------------
 // The streak for people who train at home, derived from their own logged
@@ -380,22 +443,22 @@ router.put('/goal', ...gated, goalCtrl.updateGoal);
 // Lives here rather than in challenge-service so there is no import path
 // from this number to the coin ledger. Derived on read, so there's nothing
 // extra to erase or export beyond the sessions it comes from.
-router.get('/consistency-streak', ...gated, consistencyStreakCtrl.getConsistencyStreak);
+router.get('/consistency-streak', ...workoutGated, consistencyStreakCtrl.getConsistencyStreak);
 
 // ---- Multi-week plans (home track, H-21/H-22) ---------------------------
 // Free, not sold — see the WorkoutPlan schema comment (D-02). "today"
 // before "active" isn't a route-ordering concern here (no :id/:key
 // collision), unlike sessions/today above.
-router.get('/plans', ...gated, planCtrl.listPlans);
-router.get('/plans/active', ...gated, planCtrl.getActivePlan);
-router.post('/plans/:key/start', ...gated, planCtrl.startPlan);
-router.delete('/plans/active', ...gated, planCtrl.abandonPlan);
+router.get('/plans', ...workoutGated, planCtrl.listPlans);
+router.get('/plans/active', ...workoutGated, planCtrl.getActivePlan);
+router.post('/plans/:key/start', ...workoutGated, planCtrl.startPlan);
+router.delete('/plans/active', ...workoutGated, planCtrl.abandonPlan);
 
 // ---- Retention policy (DPDPA purpose limitation) ------------------------
 // Customer-readable copy of the policy, for the in-app "what we keep and for
-// how long" screen (Health+ FR-06). Same flag gate as the rest of the health
-// surface — the screen only exists inside that section.
-router.get('/retention-policy', ...gated, retentionCtrl.getMyRetentionPolicy);
+// how long" screen (Health+ FR-06). Gated on the score half, matching where
+// the retention obligations themselves are documented.
+router.get('/retention-policy', ...metricsGated, retentionCtrl.getMyRetentionPolicy);
 // Admin-editable so a period can change on legal advice without a redeploy.
 router.get('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.getRetentionPolicy);
 router.put('/admin/retention-policy', requireRole('gobhi'), retentionCtrl.updateRetentionPolicy);

@@ -1,6 +1,6 @@
 import * as workoutSessionService from '../services/workoutSessionService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
-import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
+import { isAnyFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 
 export const startSession = async (req, res) => {
   try {
@@ -113,15 +113,23 @@ export const finishSession = async (req, res) => {
 // notifyHealthService.recordAttendanceForWorkout there). Checks its own flag
 // rather than gating the whole route, same convention as challenge-service's
 // recordAttendanceEventInternal: booking-service can start calling this
-// immediately and it stays a harmless no-op until an admin turns
-// healthMetrics on.
+// immediately and it stays a harmless no-op until an admin turns workout
+// tracking on.
+//
+// This creates a draft WORKOUT SESSION, so it moved from `healthMetrics` to the
+// new `workoutTracking` flag on 2026-10-04. It keeps accepting either flag
+// during the rollout (isAnyFeatureEnabled) because booking-service fans this
+// out on every check-in from its own release schedule, which is independent of
+// the health-service deploy — flipping the check to the new flag alone would
+// have silently detached every check-in from the workout log until the backfill
+// landed.
 export const recordAttendanceForWorkoutInternal = async (req, res) => {
   try {
     const { userId, bookingId, gymId, attendedAt, attendanceMethod, idempotencyKey } = req.body || {};
     if (!userId || !gymId || !attendedAt || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, gymId, attendedAt and idempotencyKey are required' });
     }
-    if (!(await isFeatureEnabled('healthMetrics'))) {
+    if (!(await isAnyFeatureEnabled('workoutTracking', 'healthMetrics'))) {
       return res.json({ data: { attached: false } });
     }
     const session = await workoutSessionService.getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt, attendanceMethod });
