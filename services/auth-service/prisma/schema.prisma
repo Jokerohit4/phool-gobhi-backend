@@ -378,6 +378,39 @@ model ProfileCompletionBonusSetting {
   @@schema("auth")
 }
 
+// Append-only audit trail of admin feature-flag changes. The current flag values
+// live as a JSON blob inside AppVersionSetting.config, which answers "what is it
+// now" but never "what did it used to be" — and for a kill-switch that decides
+// whether a feature collects personal data, "who switched this on, when, and from
+// what" is the question that actually has to be answerable after something goes
+// wrong.
+//
+// Written from updateAppConfigAdmin (authController.js) on every save that
+// changes at least one flag. A save that changes nothing writes no row, so the
+// table stays small and readable.
+//
+// `changedFlags` is denormalised on purpose: it means a query can ask "what has
+// happened to workoutTracking?" without a JSON diff over before/after, which no
+// index can help with. `before` is nullable because the very first write after
+// this table exists may follow a config blob created before it.
+model AppConfigHistory {
+  id           Int      @id @default(autoincrement())
+  changedFlags String[]
+  before       Json?
+  after        Json
+  note         String?
+  changedBy    Int?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([changedBy, createdAt])
+  // GIN over the text array so "what happened to THIS flag?" stays an index
+  // lookup rather than degrading into a sequential scan once the table has
+  // more than a few hundred rows.
+  @@index([changedFlags(ops: ArrayOps)], type: Gin)
+  @@schema("auth")
+}
+
 enum GobhiType {
   trainer
   cleaner

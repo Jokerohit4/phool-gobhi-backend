@@ -18,6 +18,18 @@ import {
   loadProfileCompletionBonusAdmin,
   updateProfileCompletionBonusAmount,
 } from '../services/profileCompletionBonusService.js';
+import {
+  FLAG_SCHEMA_VERSION,
+  defaultFeatures,
+  flagNames,
+  flagRegistry,
+  // Pure, dependency-free helpers that moved here from this file so the admin
+  // route, the contract tests and scripts/seedFeatureFlags.js cannot disagree
+  // about what a valid flag payload is. Re-exported below: callers that
+  // already import validateFeaturePayload from here keep working.
+  validateFeaturePayload,
+  diffChangedFlags,
+} from '../config/featureFlagRegistry.js';
 
 const prisma = new PrismaClient();
 
@@ -251,128 +263,41 @@ async function loadAppVersionConfig() {
   return row?.config || DEFAULT_APP_VERSION_CONFIG;
 }
 
-// Kill-switch defaults for customer-app features. Buddy is currently live, so
-// the default is enabled (true) — the flag only does something once an admin
-// deliberately turns it off from the admin portal's /settings page. Same
-// inert-by-default convention as DEFAULT_APP_VERSION_CONFIG. otp.provider and
-// profileCompletionBonus.amount are overridden with the live setting-row
-// values in getAppConfig below (their defaults here just keep the shape safe
-// before/without those rows).
+// Kill-switch defaults for customer-app features, derived from the registry —
+// see config/featureFlagRegistry.js for the full rationale on every flag. This
+// used to be a hand-maintained literal duplicating the customer app's
+// AppConfigModel and the admin portal's own copy, and the three drifted (see the
+// registry header). Adding a flag there is now the only step needed to make it
+// reachable from the portal and covered by the contract test.
+//
+// These are only DEFAULTS: a stored app-config blob (written by the admin
+// portal's /settings page) overrides them key by key, so the portal is the live
+// switch and this is what an environment with no blob starts as.
+//
+// The inert-by-default convention is deliberate and load-bearing. Flipped ON then
+// back OFF on 2026-09-10: the owner asked for all flags on; turning the DEFAULTS
+// on turned out to be the wrong mechanism, because prod's blob says nothing about
+// these keys and main was 73 commits behind. Promoting main with true defaults
+// would have switched the entire programme on for real users at deploy —
+// including the cron that sends push notifications — rather than landing it dark.
+// So features land OFF in a new environment and are enabled per environment from
+// the portal, the one place that decision is visible and reversible without a
+// deploy.
+//
+// `buddy` and `referral` fail OPEN (they are live, so a missing/unknown flag must
+// resolve to on rather than hide a shipped feature). Everything else fails CLOSED:
+// it collects or moves state, so a backend hiccup must hide it rather than risk
+// the app calling a route that isn't ready. The two exceptions are marked in the
+// registry and are deliberate.
+//
+// otp.provider and profileCompletionBonus.amount are NOT registry entries — they
+// are served from their own singleton setting rows and overridden on top of this
+// in getAppConfig. Their entries below only keep the response shape safe before
+// (or without) those rows existing.
 const DEFAULT_FEATURES = {
-  buddy: { enabled: true },
+  ...defaultFeatures(),
   otp: { provider: 'firebase' },
   profileCompletionBonus: { amount: 20 },
-  // Gamification suite — each phase ships behind its own kill-switch,
-  // default OFF until an admin deliberately turns it on from /settings.
-  // See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
-  //
-  // These are only DEFAULTS: a stored app-config blob (written by the admin
-  // portal's /settings page) overrides them key by key, so the portal is the
-  // live switch and this is what an environment with no blob starts as.
-  //
-  // Flipped ON then back OFF on 2026-09-10, deliberately. The owner asked
-  // for all flags on; turning the DEFAULTS on turned out to be the wrong
-  // mechanism for it, because prod's blob says nothing about these keys and
-  // main was 73 commits behind. Promoting main with true defaults would have
-  // switched the entire programme on for real users at deploy - including
-  // the cron that sends push notifications - rather than landing it dark.
-  //
-  // So: features land OFF in a new environment and are enabled per
-  // environment from the portal, which is the one place that decision is
-  // visible and reversible without a deploy. Dev is unaffected by this
-  // revert for the four below plus healthMetrics: its blob already has them
-  // explicitly true.
-  badges: { enabled: false },
-  streaksCoins: { enabled: false },
-  challenges: { enabled: false },
-  buddyPairedStreaks: { enabled: false },
-  // Exercise records, routines, workout sessions, watch/HealthKit sync —
-  // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
-  healthMetrics: { enabled: false },
-  // Held separately from healthMetrics because these two needed legal
-  // sign-off the rest of the health layer doesn't (see
-  // docs/phool-gobhi-counsel-brief-20260908.html). Both flipped ON
-  // 2026-09-10 on the owner's instruction - that review is the owner's call
-  // and it has been made. The reasoning below stays so the reason they were
-  // ever separate isn't lost, and because either can still be pulled
-  // independently from /settings, which now carries both toggles (until
-  // 2026-09-10 these were the only two flags the portal could not reach, so
-  // their "off" was a code default rather than a decision).
-  //
-  //   healthPersonalisation — the only consent-bearing write in health-service
-  //     (a non-neutral programming mode records a privacyVersion). The consent
-  //     wording needs review before a real user agrees to it.
-  //   recapSharing — the only feature producing an artifact meant to leave the
-  //     platform. It carries no PII by construction, but that claim is worth
-  //     checking before the card is shareable.
-  healthPersonalisation: { enabled: false },
-  recapSharing: { enabled: false },
-  // Onboarding branch (2026-09-18). Gates the new question graph ("do you work
-  // out / where / how often") and the writes it produces. Off means the
-  // existing two-step onboarding runs untouched, so this can ship dark and be
-  // turned on for a cohort.
-  //
-  // Note this gates COLLECTION only. Whether the answers actually change the
-  // app is a separate flag (homeTrackHome) — deliberately, so the branch split
-  // can be measured on real users before anyone builds on the assumption.
-  brandedOnboarding: { enabled: false },
-  // Whether appMode actually changes what the user sees. Separate from
-  // brandedOnboarding on purpose: collection and consequence are staged
-  // independently, so the real home/partner-gym/non-partner split can be
-  // measured on live users before any home screen is built on the assumption.
-  // Requires healthMetrics to be on as well — the home-track screen leads with
-  // workout/routine widgets that flag gates.
-  homeTrackHome: { enabled: false },
-  // The fitness assistant. Its own flag on top of healthMetrics, like
-  // healthPersonalisation and recapSharing, and for the same reason: an AI
-  // answering questions about someone's body is a bigger claim than logging
-  // their sets, and the disclaimer wording wants sign-off before a real user
-  // agrees to it. Also independently switchable, so the assistant can be
-  // pulled without taking workout logging down with it.
-  fitnessAssistant: { enabled: false },
-  // Cycle tracking. Its own flag AND its own consent scope, because this
-  // reverses FR-27 (2026-09-08), which deliberately kept zero cycle columns
-  // server-side. Off is the correct default until the consent wording has
-  // been reviewed — the same bar healthPersonalisation was held to, and this
-  // is more sensitive than that was.
-  cycleTracking: { enabled: false },
-  // Non-partner gyms: Places-sourced unclaimed gym records + GPS check-in.
-  // Gated because resolving a place calls Google Places (billable) on every
-  // request and writes a row — it needs a real kill switch, not just a hidden
-  // button in the app.
-  nonPartnerAttendance: { enabled: false },
-  // GPS run/walk tracker (run-tracker-spec.html, 2026-09-24). Its own flag
-  // ON TOP of healthMetrics (health-service's requireFeatureFlag chain),
-  // same layering as fitnessAssistant/cycleTracking — independently
-  // switchable, but inert unless healthMetrics is also on.
-  runTracker: { enabled: false },
-  // Health Ledger (phool-gobhi-health-ledger-plan-20260927.html): the
-  // brokerage-style daily health score, its candlestick/line chart, the
-  // nutrition target engine, the food log, and the optional medical-records
-  // vault. Layered on healthMetrics like every other feature above, so it can
-  // be pulled without taking workout logging down.
-  //
-  // Three reasons this one is the highest bar in the file:
-  //
-  //   1. It is the first feature here whose whole premise is a SCORE. Every
-  //      other health feature logs; this one grades. The plan's own
-  //      eating-disorder guard (a calorie target that never drops below BMR,
-  //      under-eating never rewarded, a "calm mode" that removes red
-  //      entirely) is a product requirement, not a nice-to-have.
-  //   2. It stores what is close to a medical record — conditions, the
-  //      doctor's own advice, lab slips — behind its own `medical_records`
-  //      consent scope. CDSCO's "General Wellness Software" carve-out only
-  //      holds while the app tracks the doctor's plan and never writes one,
-  //      so this is the flag to pull if that line is ever questioned.
-  //   3. Photo food logging sends an image to a third-party model provider.
-  //      That has its own sub-flag below and is off until Zero Data Retention
-  //      is confirmed on the provider account.
-  healthLedger: { enabled: false },
-  // Sub-flag of healthLedger, not a peer: the ledger is useless without
-  // search-based food logging, so it must never be gated behind this one.
-  // Only the photo path is separable, because it is the only part that puts a
-  // user's image on someone else's infrastructure.
-  foodPhotoLogging: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
@@ -441,6 +366,15 @@ const getAppConfig = async (req, res) => {
     // OTP provider and profile-completion bonus amount are served from their
     // own singleton setting rows (single source of truth for the admin
     // panel's /settings edits), overriding whatever an old blob carried.
+    //
+    // The merge is key-by-key and additive, so a flag absent from the stored
+    // blob still resolves to its registry default and therefore still appears
+    // in the response. That matters more than it looks: before FLAG_SCHEMA_VERSION
+    // existed, a service deployed from an older revision had a smaller
+    // DEFAULT_FEATURES literal, so its response simply omitted flags the client
+    // knew about — and the client's `?? false` made "deliberately off" and
+    // "this server predates that flag" indistinguishable. flagsKnown below
+    // makes the difference observable in one log line.
     const [otpProvider, bonusAmount] = await Promise.all([
       loadOtpProvider(),
       loadProfileCompletionBonusAmount(),
@@ -460,6 +394,12 @@ const getAppConfig = async (req, res) => {
     console.error('getAppConfig error:', err);
   }
   res.json({
+    schemaVersion: FLAG_SCHEMA_VERSION,
+    // What THIS service build knows about. A client can diff this against its
+    // own flag list to tell "off" apart from "my server is older than this
+    // flag" — which is the failure that silently turned prod's workout logging
+    // into visible-but-403 buttons.
+    flagsKnown: flagNames(),
     forceUpdate,
     updateAvailable,
     minVersion: entry.minVersion,
@@ -469,6 +409,29 @@ const getAppConfig = async (req, res) => {
     features,
     maintenance,
   });
+};
+
+// gobhi-only — the flag registry itself, so the admin portal renders toggles
+// from this list instead of redeclaring it. That redeclaration was the root of
+// every flag drift (see config/featureFlagRegistry.js): a flag added server-side
+// with no portal entry was unreachable, and a flag declared in the portal with
+// no server entry was dead. Deriving the UI from here makes an unreachable flag
+// impossible to create again.
+const getFeatureFlagRegistry = async (req, res) => {
+  try {
+    const config = await loadAppVersionConfig();
+    const stored = config?.features || {};
+    res.json({
+      data: flagRegistry().map((flag) => ({
+        ...flag,
+        // The live value, so the portal does not have to merge two responses.
+        enabled: stored[flag.name]?.enabled ?? flag.defaultEnabled,
+      })),
+      schemaVersion: FLAG_SCHEMA_VERSION,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
 };
 
 // gobhi-only — admin portal's raw view/edit of the full config blob.
@@ -481,18 +444,86 @@ const getAppConfigAdmin = async (req, res) => {
   }
 };
 
+
 const updateAppConfigAdmin = async (req, res) => {
   try {
     const config = req.body?.config;
     if (!config || typeof config !== 'object') {
       return res.status(400).json({ error: 'config is required' });
     }
+    if (config.features !== undefined) {
+      if (config.features === null || typeof config.features !== 'object' || Array.isArray(config.features)) {
+        return res.status(400).json({ error: 'config.features must be an object of flagName -> { enabled }' });
+      }
+      const { unknown, malformed } = validateFeaturePayload(config.features);
+      if (unknown.length) {
+        return res.status(400).json({
+          error: `unknown feature flag(s): ${unknown.join(', ')} - not in the registry, so nothing reads them`,
+          unknown,
+          knownFlags: flagNames(),
+        });
+      }
+      if (malformed.length) {
+        return res.status(400).json({
+          error: `these flags must be { "enabled": true|false }: ${malformed.join(', ')}`,
+          malformed,
+        });
+      }
+    }
+    const previous = await loadAppVersionConfig();
+
     const updated = await prisma.appVersionSetting.upsert({
       where: { id: 1 },
       create: { id: 1, config, updatedBy: req.user.id },
       update: { config, updatedBy: req.user.id },
     });
-    res.json({ data: updated.config });
+    // Audit only the flags that actually moved. A history row is written for
+    // each, in one insert, so "which flag changed at 14:03" is one indexed
+    // lookup rather than a scan over every save ever made.
+    //
+    // Best-effort by design: an audit write that fails must not fail the save
+    // that already succeeded. A toggle switched on with no history row is bad,
+    // but a toggle that cannot be switched on because the audit insert hit a
+    // constraint is worse — the flag is the live control and the history is
+    // bookkeeping.
+    const changedFlags = diffChangedFlags(previous?.features, config.features);
+    if (changedFlags.length) {
+      try {
+        await prisma.appConfigHistory.create({
+          data: {
+            changedFlags,
+            before: previous?.features ?? undefined,
+            after: config.features ?? {},
+            note: req.body?.note || null,
+            changedBy: req.user.id,
+          },
+        });
+      } catch (auditErr) {
+        console.error(
+          `app-config saved but history write failed (flags: ${changedFlags.join(', ')}):`,
+          auditErr.message,
+        );
+      }
+    }
+    res.json({ data: updated.config, changedFlags });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// gobhi-only — who switched which flag, when, from what. The read twin of the
+// write in updateAppConfigAdmin; `flag` narrows to one flag (the incident
+// question), otherwise it is the general log.
+const listAppConfigHistory = async (req, res) => {
+  try {
+    const flag = req.query?.flag;
+    const where = flag ? { changedFlags: { has: flag } } : {};
+    const rows = await prisma.appConfigHistory.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(req.query?.limit) || 100, 500),
+    });
+    res.json({ data: rows });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -934,6 +965,6 @@ const collectCollectible = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, countGymJoinedUsersByMonthInternal };
+export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, validateFeaturePayload, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, countGymJoinedUsersByMonthInternal };
 
 
