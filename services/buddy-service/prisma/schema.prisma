@@ -43,6 +43,11 @@ enum SwipeAction {
 enum MatchStatus {
   active
   unmatched
+  // Set by lazy expiry (see expireStaleMatches). Distinct from `unmatched`,
+  // which means a person ended it. Kept apart so "nobody replied to you" and
+  // "you unmatched them" stay distinguishable in the match list and in
+  // support conversations.
+  expired
 
   @@schema("buddy")
 }
@@ -131,6 +136,12 @@ model Match {
   unmatchedBy Int?
   unmatchedAt DateTime?
   matchedAt   DateTime      @default(now())
+  // Last time this conversation saw activity — a message either way. Expiry is
+  // measured from here, NOT from matchedAt: a year-old match that was active
+  // last week must not be treated as stale, and matchedAt cannot express that.
+  // Defaults to matchedAt so an existing match is never born already expired,
+  // and bumped on sendMessage.
+  lastActivityAt DateTime    @default(now())
   messages    ChatMessage[]
 
   // Canonical min/max ordering + this unique constraint is the concurrency
@@ -138,6 +149,8 @@ model Match {
   @@unique([userLowId, userHighId])
   @@index([userLowId])
   @@index([userHighId])
+  // Supports the lazy-expiry sweep's WHERE status + lastActivityAt range.
+  @@index([status, lastActivityAt])
   @@schema("buddy")
 }
 
@@ -154,9 +167,9 @@ model ChatMessage {
   @@schema("buddy")
 }
 
-// Safety: minimal block support in v1. Full report-with-reason-taxonomy +
-// moderation queue is an explicit fast-follow (no admin console to review
-// reports into yet) — not modeled here.
+// Blocking: model, endpoints, and enforcement in both the discovery feed and
+// the swipe path, plus auto-unmatch so a block severs an existing conversation.
+// See Report below for the reporting side, which was added 2026-10-04.
 model BlockedUser {
   id        Int      @id @default(autoincrement())
   blockerId Int
@@ -166,5 +179,75 @@ model BlockedUser {
 
   @@unique([blockerId, blockedId])
   @@index([blockedId])
+  @@schema("buddy")
+}
+
+// Why someone was reported. A closed taxonomy, not free text: a gobhi triaging
+// a queue needs to filter "how many harassment reports are open", and free-text
+// reasons cannot be counted. `other` carries the user's own words in `details`,
+// which is the only place prose is allowed.
+enum ReportReason {
+  harassment
+  inappropriate_content
+  impersonation
+  spam
+  underage
+  scam
+  threat
+  other
+
+  @@schema("buddy")
+}
+
+enum ReportStatus {
+  open
+  // A gobhi looked and closed it with no action.
+  dismissed
+  // Action was taken against the reported user (typically blocked, possibly
+  // escalated). Kept distinct from `dismissed` so "we looked and did nothing"
+  // is never conflated with "we looked and acted" in a moderation metric.
+  actioned
+
+  @@schema("buddy")
+}
+
+// A safety report about another user.
+//
+// Deliberately NOT a foreign key to either user, and both ids are plain
+// nullable Ints rather than relations. Two reasons:
+//   - buddy-service has no relation to auth-service's User table (separate
+//     services, separate schemas, no cross-service FK is possible), so the
+//     referential integrity is conventional everywhere else in this schema too.
+//   - erasureService nulls `reportedUserId` rather than deleting the row when
+//     the REPORTED user erases. A safety record has to outlive the account it
+//     describes, but so does the obligation to stop retaining a pointer to an
+//     erased person. Dropping the identifier satisfies both; deleting the row
+//     would destroy the record, and keeping it would retain erased personal
+//     data. `reporterId` is deleted outright — that is the reporter's own data,
+//     with no safety claim over it.
+model Report {
+  id Int @id @default(autoincrement())
+  // Set to NULL when the reported user erases their account. See above.
+  reportedUserId Int?
+  reporterId     Int
+  reason         ReportReason
+  // Free text. Only ever the `other` reason's elaboration; capped hard because
+  // this is unreviewed user prose going straight into an admin surface.
+  details String? @db.VarChar(1000)
+  status  ReportStatus @default(open)
+  // Null until a gobhi triages it, then the staff id. Distinct from
+  // `reporterId` so "who reported" and "who reviewed" can't be confused.
+  reviewedBy      Int?
+  reviewedAt      DateTime?
+  resolutionNote  String?     @db.VarChar(500)
+  createdAt       DateTime    @default(now())
+
+  // Triage queue: the only query that matters is "open reports, newest first".
+  @@index([status, createdAt])
+  // "Every report ever filed about this person" — the question you ask when
+  // deciding whether one more report tips into action.
+  @@index([reportedUserId])
+  // A reporter cannot spam the queue about one person.
+  @@unique([reporterId, reportedUserId])
   @@schema("buddy")
 }

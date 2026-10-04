@@ -404,6 +404,11 @@ async function assertParticipant(matchId, userId) {
 export async function verifyActiveMatchMembership(matchId, userId) {
   const match = await prisma.match.findUnique({ where: { id: Number(matchId) } });
   if (!match || match.status !== 'active') return { matched: false };
+  // Expiry applies here too, without the write: this is an internal
+  // authorization check, and a match nobody has touched in 30 days is not a
+  // live pairing. No need to persist `expired` on a read-only verification.
+  const lastActivityAt = match.lastActivityAt ? new Date(match.lastActivityAt) : new Date(match.matchedAt);
+  if (lastActivityAt < matchExpiryCutoff()) return { matched: false };
   if (match.userLowId !== userId && match.userHighId !== userId) return { matched: false };
   const otherUserId = match.userLowId === userId ? match.userHighId : match.userLowId;
   return { matched: true, otherUserId };
@@ -411,7 +416,14 @@ export async function verifyActiveMatchMembership(matchId, userId) {
 
 export async function getMatches(userId) {
   const matches = await prisma.match.findMany({
-    where: { status: 'active', OR: [{ userLowId: userId }, { userHighId: userId }] },
+    where: {
+      status: 'active',
+      OR: [{ userLowId: userId }, { userHighId: userId }],
+      // Lazy expiry, read side. Filtering here rather than writing first keeps
+      // the list cheap and idempotent; assertActiveParticipant is what
+      // eventually persists `expired` when a stale match is opened directly.
+      lastActivityAt: { gte: matchExpiryCutoff() },
+    },
     include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
     orderBy: { matchedAt: 'desc' },
   });
@@ -451,8 +463,7 @@ export async function getMatches(userId) {
 // confirmed match, not a stranger. Same toPublicCandidate DTO as discovery
 // so the bucketed-distance privacy guarantee applies here too.
 export async function getMatchedProfile(userId, matchId) {
-  const match = await assertParticipant(matchId, userId);
-  if (match.status !== 'active') throw { status: 410, error: 'This match is no longer active' };
+  const match = await assertActiveParticipant(matchId, userId);
   const otherUserId = match.userLowId === userId ? match.userHighId : match.userLowId;
 
   const [me, other] = await Promise.all([
@@ -491,7 +502,12 @@ export async function unmatch(userId, matchId) {
 // load / scrolling up into older history. The two are mutually exclusive;
 // `after` wins if both are somehow passed.
 export async function getMessages(userId, matchId, { before, after, limit = 30 } = {}) {
-  await assertParticipant(matchId, userId);
+  // Without this guard, a block does not actually end the conversation:
+  // blockUser flips the match to `unmatched`, which hides it from getMatches and
+  // 410s getMatchedProfile — but this reader only ever checked participation, so
+  // the blocker could keep paging the full history by matchId for as long as they
+  // held the id.
+  await assertActiveParticipant(matchId, userId);
   const take = Math.min(Math.max(1, parseInt(limit) || 30), 100);
   const where = { matchId };
 
@@ -508,11 +524,15 @@ export async function getMessages(userId, matchId, { before, after, limit = 30 }
 export async function sendMessage(userId, matchId, body) {
   if (!body || !body.trim()) throw { status: 400, error: 'Message body is required' };
 
-  const match = await assertParticipant(matchId, userId);
-  if (match.status !== 'active') throw { status: 409, error: 'This match is no longer active' };
+  const match = await assertActiveParticipant(matchId, userId, { inactiveStatus: 409 });
 
   const message = await prisma.chatMessage.create({
     data: { matchId, senderId: userId, body: body.slice(0, 1000) },
+  });
+  // Activity in either direction keeps the match alive; see Match.lastActivityAt.
+  await prisma.match.update({
+    where: { id: matchId },
+    data: { lastActivityAt: new Date() },
   });
   track('buddy_message_sent', userId, { matchId });
 
@@ -559,4 +579,161 @@ export async function unblockUser(userId, targetUserId) {
 export async function listBlocked(userId) {
   const rows = await prisma.blockedUser.findMany({ where: { blockerId: userId } });
   return rows.map((r) => r.blockedId);
+}
+
+// ---- Match expiry ---------------------------------------------------------
+
+// How long a match can sit with no messages before it is considered dead.
+// 30 days: long enough that a holiday or an injury pause does not lose the
+// conversation, short enough that the match list is not a graveyard. Matches
+// that never got a message still age out 30 days after matching, which is the
+// intended behaviour for the "matched and then nothing" case.
+export const MATCH_EXPIRY_DAYS = 30;
+
+const matchExpiryCutoff = () =>
+  new Date(Date.now() - MATCH_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+// Expiry is applied lazily, on read, rather than by a cron.
+//
+// A sweeper would need a schedule, a Cloud Run Job or a new route in three
+// environments, and would still only be as timely as its own interval. Deciding
+// staleness where the data is already being read means an expired match can
+// never be served by the read that would have noticed it, with no new moving
+// part and nothing to keep running.
+//
+// List queries filter on lastActivityAt and never write. Only this by-id guard
+// writes, and only because it is already returning the row.
+//
+// `inactiveStatus` exists because the codebase already disagrees with itself
+// here and the clients depend on that: sendMessage has always answered 409 for
+// a dead match, getMatchedProfile answers 410. Unifying them would be tidier and
+// would be a silent client-facing contract change, so each call site keeps the
+// code its own client already handles.
+async function assertActiveParticipant(matchId, userId, { inactiveStatus = 410 } = {}) {
+  const match = await assertParticipant(matchId, userId);
+  if (match.status !== 'active') {
+    throw { status: inactiveStatus, error: 'This match is no longer active' };
+  }
+  // Defensive: `lastActivityAt` is NOT NULL with a default, but a row written
+  // before the column existed would read back null. Treat that as stale rather
+  // than as infinitely fresh, so the migration cannot leave old matches
+  // un-expirable.
+  const lastActivityAt = match.lastActivityAt ? new Date(match.lastActivityAt) : new Date(match.matchedAt);
+  if (lastActivityAt < matchExpiryCutoff()) {
+    await prisma.match.update({
+      where: { id: match.id },
+      data: { status: 'expired', unmatchedAt: new Date() },
+    });
+    track('buddy_match_expired', userId, { matchId: match.id });
+    throw { status: inactiveStatus, error: `This match expired after ${MATCH_EXPIRY_DAYS} days of inactivity` };
+  }
+  return match;
+}
+
+// ---- Reports --------------------------------------------------------------
+
+// Filing a report severs an active match with the reported user, same as a
+// block. Rationale: a report is filed *because* someone is making the reporter
+// uncomfortable, and "we have logged your report but you are still matched with
+// them" is not relief. It does NOT create a block — that stays the user's own
+// explicit choice, because a block also removes them from the other person's
+// view and they may not want that. So: the conversation is severed for them,
+// and discovery is untouched in both directions unless they also block.
+export async function reportUser(userId, reportedUserId, reason, details) {
+  if (userId === reportedUserId) throw { status: 400, error: 'Cannot report yourself' };
+
+  const report = await prisma.report.create({
+    data: { reporterId: userId, reportedUserId, reason, details: details?.slice(0, 1000) ?? null },
+  });
+  track('buddy_reported', userId, { reportedUserId, reason });
+
+  const userLowId = Math.min(userId, reportedUserId);
+  const userHighId = Math.max(userId, reportedUserId);
+  const match = await prisma.match.findUnique({
+    where: { userLowId_userHighId: { userLowId, userHighId } },
+    select: { id: true, status: true },
+  });
+  let severedMatchId = null;
+  if (match && match.status === 'active') {
+    await prisma.match.update({
+      where: { id: match.id },
+      data: { status: 'unmatched', unmatchedBy: userId, unmatchedAt: new Date() },
+    });
+    severedMatchId = match.id;
+  }
+
+  return { reportId: report.id, status: report.status, severedMatchId };
+}
+
+// Triage queue. Gobhi-only at the route layer; this function does no auth of
+// its own, matching how listBlocked/getMatches are shaped.
+export async function listReports({ status = 'open', limit = 50 } = {}) {
+  const rows = await prisma.report.findMany({
+    where: status === 'all' ? {} : { status },
+    // id as a secondary key, not just cosmetics: createdAt has millisecond
+    // resolution, so two reports can genuinely share a timestamp, and without a
+    // tie-break their relative order is undefined. In a paginated queue that
+    // means a report at a page boundary can be shown twice or skipped entirely.
+    // id is monotonic, so this makes the ordering total and the paging stable.
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: Math.min(Math.max(1, parseInt(limit) || 50), 200),
+  });
+  // Resolve display names best-effort: a report must still be triageable when
+  // auth-service is unreachable, so a failed lookup degrades to the raw id
+  // rather than throwing and losing the queue.
+  const ids = [...new Set(rows.flatMap((r) => [r.reporterId, r.reportedUserId]).filter(Boolean))];
+  const infos = await getUsersBatchInternal(ids).catch(() => []);
+  const nameMap = new Map(infos.map((u) => [u.id, u.name]));
+
+  // "How many reports has this person ever had?" in ONE query, not one per row.
+  // It is the number a triager weighs against the report in front of them, and
+  // a 50-row queue turning into 50 count() round-trips is the kind of thing
+  // that makes a moderation queue too slow to open. Null reportedUserId (an
+  // erased subject) is excluded from the lookup entirely.
+  const reportedIds = [...new Set(rows.map((r) => r.reportedUserId).filter((v) => v !== null && v !== undefined))];
+  const priorCounts = new Map();
+  if (reportedIds.length) {
+    const priorRows = await prisma.report.findMany({
+      where: { reportedUserId: { in: reportedIds } },
+    });
+    for (const r of priorRows) {
+      priorCounts.set(r.reportedUserId, (priorCounts.get(r.reportedUserId) ?? 0) + 1);
+    }
+  }
+
+  return rows.map((r) => {
+    // minus one: the row itself is in priorRows, and "3 prior reports" must not
+    // include the report being triaged.
+    const prior = r.reportedUserId === null
+      ? 0
+      : Math.max(0, (priorCounts.get(r.reportedUserId) ?? 0) - 1);
+    return {
+      id: r.id,
+      reason: r.reason,
+      details: r.details,
+      status: r.status,
+      createdAt: r.createdAt,
+      reviewedAt: r.reviewedAt,
+      resolutionNote: r.resolutionNote,
+      reporter: { userId: r.reporterId, name: nameMap.get(r.reporterId) ?? null },
+      // reportedUserId is nullable by design — it is null once the reported user
+      // has erased their account. The report survives; the pointer does not.
+      reportedUser: r.reportedUserId === null
+        ? { userId: null, name: null, erased: true }
+        : { userId: r.reportedUserId, name: nameMap.get(r.reportedUserId) ?? null, erased: false },
+      priorReportsAboutReportedUser: prior,
+    };
+  });
+}
+
+export async function reviewReport(reportId, { status, resolutionNote }, reviewedBy) {
+  if (!['dismissed', 'actioned'].includes(status)) {
+    throw { status: 400, error: 'status must be dismissed or actioned' };
+  }
+  const existing = await prisma.report.findUnique({ where: { id: Number(reportId) } });
+  if (!existing) throw { status: 404, error: 'Report not found' };
+  return prisma.report.update({
+    where: { id: Number(reportId) },
+    data: { status, resolutionNote: resolutionNote?.slice(0, 500) ?? null, reviewedBy, reviewedAt: new Date() },
+  });
 }

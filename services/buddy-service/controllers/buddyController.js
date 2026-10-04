@@ -200,6 +200,71 @@ export const listBlocked = async (req, res) => {
   }
 };
 
+// ---- Reports -------------------------------------------------------------
+
+// `reason` is validated against the Prisma enum rather than cast blindly: an
+// unknown value would otherwise reach create() as a Postgres enum cast error
+// and surface as a 500. Free-text `details` is only accepted alongside the
+// `other` reason — prose filed under `harassment` is a taxonomy bug, not a
+// richer report, and letting it through would corrupt the queue's counts.
+const REPORT_REASONS = [
+  'harassment', 'inappropriate_content', 'impersonation', 'spam',
+  'underage', 'scam', 'threat', 'other',
+];
+
+export const reportUser = async (req, res) => {
+  try {
+    const { userId, reason, details } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    if (!reason) return res.status(400).json({ error: 'reason is required' });
+    if (!REPORT_REASONS.includes(reason)) {
+      return res.status(400).json({ error: `reason must be one of: ${REPORT_REASONS.join(', ')}` });
+    }
+    if (details && reason !== 'other') {
+      return res.status(400).json({ error: 'details is only allowed when reason is "other"' });
+    }
+    const result = await buddyService.reportUser(
+      req.userId, parseInt(userId), reason, details,
+    );
+    res.status(201).json(result);
+  } catch (err) {
+    // A repeat report from the same person about the same user trips the
+    // [reporterId, reportedUserId] unique constraint. That is a spam guard, not
+    // a server fault, and 409 keeps it from looking like a bug in the client's
+    // eyes — the original report is already in the queue.
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'You have already reported this user' });
+    }
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const listReports = async (req, res) => {
+  try {
+    const { status, limit } = req.query || {};
+    if (status && !['open', 'dismissed', 'actioned', 'all'].includes(status)) {
+      return res.status(400).json({ error: 'status must be open, dismissed, actioned or all' });
+    }
+    const reports = await buddyService.listReports({ status, limit });
+    res.json({ data: reports });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const reviewReport = async (req, res) => {
+  try {
+    const { status, resolutionNote } = req.body || {};
+    if (!status) return res.status(400).json({ error: 'status is required' });
+    const result = await buddyService.reviewReport(
+      req.params.id, { status, resolutionNote }, req.userId,
+    );
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getConsistencyLeague = async (req, res) => {
   try {
     const league = await leagueService.getConsistencyLeague(req.userId);

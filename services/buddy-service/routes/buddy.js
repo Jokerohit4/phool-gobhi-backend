@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
+import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 import { uploadBuddyPhotos, MAX_BUDDY_PHOTOS } from '../utils/upload.js';
 import * as ctrl from '../controllers/buddyController.js';
 
@@ -33,6 +33,16 @@ router.post('/matches/:matchId/messages', requireAuth, ctrl.sendMessage);
 router.post('/blocks', requireAuth, ctrl.blockUser);
 router.delete('/blocks/:userId', requireAuth, ctrl.unblockUser);
 router.get('/blocks', requireAuth, ctrl.listBlocked);
+
+// Reports. Filing one is any authenticated user; triaging them is gobhi-only
+// (the gateway supplies x-user-role, so requireRole is a real server-side gate,
+// not a client-side hint). Without the gate the whole moderation queue would be
+// readable by anyone who signs up, which is why listReports/reviewReport are
+// requireRole('gobhi') and not requireAuth.
+router.post('/reports', requireAuth, ctrl.reportUser);
+router.get('/reports', requireRole('gobhi'), ctrl.listReports);
+router.patch('/reports/:id', requireRole('gobhi'), ctrl.reviewReport);
+
 router.get('/league', requireAuth, ctrl.getConsistencyLeague);
 
 // Internal: auth-service calls this after a profile edit that touches

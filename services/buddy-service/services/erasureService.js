@@ -57,6 +57,23 @@ export async function eraseUserService(userId) {
     prisma.blockedUser.deleteMany({
       where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
     }),
+    // Reports are asymmetric, and deliberately so.
+    //
+    // As REPORTER: delete outright. The report is the user's own assertion
+    // about someone else; there is no safety claim that outranks a person's
+    // right to withdraw it, and a report nobody may retract is a blacklist
+    // with extra steps.
+    prisma.report.deleteMany({ where: { reporterId: userId } }),
+    // As REPORTED: keep the row, drop the pointer. A safety record has to
+    // outlive the account it describes — otherwise erasing an account is a way
+    // to erase accountability, and the moderation history for that person
+    // silently vanishes from the queue. But the identifier must go, because
+    // keeping it retains the personal data we were asked to erase. Net result:
+    // the report stays reviewable, and it no longer points at anyone.
+    prisma.report.updateMany({
+      where: { reportedUserId: userId },
+      data: { reportedUserId: null },
+    }),
     prisma.buddyFilter.deleteMany({ where: { userId } }),
     // Photos cascade from BuddyProfile, but deleted explicitly so the row
     // count returned below is honest about what went.

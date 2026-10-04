@@ -194,6 +194,14 @@
     "source": "server",
     "service": "buddy-service"
   },
+  "buddy_reported": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_match_expired": {
+    "source": "server",
+    "service": "buddy-service"
+  },
   "otp_requested": {
     "source": "client",
     "apps": [

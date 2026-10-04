@@ -25,10 +25,12 @@ export async function buildExportService(userId) {
     orderBy: { matchedAt: 'asc' },
   });
 
-  const [swipesMade, swipesReceived, blocks] = await Promise.all([
+  const [swipesMade, swipesReceived, blocks, reportsMade, reportsAbout] = await Promise.all([
     prisma.swipe.findMany({ where: { swiperId: userId }, orderBy: { createdAt: 'asc' } }),
     prisma.swipe.count({ where: { swipeeId: userId } }),
     prisma.blockedUser.findMany({ where: { blockerId: userId }, orderBy: { createdAt: 'asc' } }),
+    prisma.report.findMany({ where: { reporterId: userId }, orderBy: { createdAt: 'asc' } }),
+    prisma.report.count({ where: { reportedUserId: userId } }),
   ]);
 
   return {
@@ -77,10 +79,30 @@ export async function buildExportService(userId) {
       receivedCount: swipesReceived,
     },
     blocksYouMade: blocks.map((b) => ({ at: b.createdAt, blockedUserId: b.blockedId, reason: b.reason })),
+    // Same asymmetry as messages: full record for what you did, fact-only for
+    // what was done to you.
+    //
+    // Reports you filed are your own account of events, and they carry the
+    // reported user's id on purpose — you told us about a specific person, so
+    // the record is meaningless (and unauditable) without it. Reports filed
+    // *about* you are reduced to a count: you are entitled to know it happened,
+    // but the reporter's identity and their account of the events are theirs,
+    // and handing those over would expose the person who may still be in fear.
+    reportsYouFiled: reportsMade.map((r) => ({
+      at: r.createdAt,
+      reportedUserId: r.reportedUserId,
+      reason: r.reason,
+      details: r.details,
+      status: r.status,
+      reviewedAt: r.reviewedAt,
+    })),
+    reportsFiledAgainstYou: reportsAbout,
     notIncluded: {
       messagesFromOthers:
         'the text of messages other people sent you is their personal data as well as yours, so only the count is included',
       swipesOnYou: 'who swiped on you is other people\'s activity; only the total is included',
+      reportsAgainstYou:
+        'who reported you, and what they said, is the reporter\'s personal data; only the count is included',
     },
   };
 }

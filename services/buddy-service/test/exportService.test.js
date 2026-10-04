@@ -50,6 +50,15 @@ function resetDb() {
     swipesMade: [{ swipeeId: THEM, action: 'like', createdAt: new Date('2026-01-15') }],
     swipesReceivedCount: 12,
     blocks: [{ blockedId: 55, reason: 'spam', createdAt: new Date('2026-03-01') }],
+    reportsFiled: [{
+      reportedUserId: 55,
+      reason: 'harassment',
+      details: 'kept messaging after being asked to stop',
+      status: 'actioned',
+      createdAt: new Date('2026-04-02'),
+      reviewedAt: new Date('2026-04-03'),
+    }],
+    reportsAgainstCount: 2,
   };
 }
 
@@ -67,6 +76,10 @@ test('setup: mock prisma once, import exportService once', async (t) => {
             count: async () => db.swipesReceivedCount,
           };
           this.blockedUser = { findMany: async () => db.blocks };
+          this.report = {
+            findMany: async () => db.reportsFiled,
+            count: async () => db.reportsAgainstCount,
+          };
         }
       },
       Prisma: {},
@@ -152,4 +165,32 @@ test('a user who never opened gym-buddy gets a well-formed empty document', asyn
   assert.equal(out.discoveryFilter, null);
   assert.deepEqual(out.matches, []);
   assert.equal(out.swipes.receivedCount, 0);
+});
+
+// ---- Reports (2026-10-04) -------------------------------------------------
+// Reports are exported with the same asymmetry the file already applies to
+// messages: what you did, in full; what was done to you, as a count.
+
+test('reports you filed come back in full, including who they were about', async () => {
+  resetDb();
+  const out = await buildExportService(ME);
+  assert.equal(out.reportsYouFiled.length, 1);
+  assert.equal(out.reportsYouFiled[0].reportedUserId, 55);
+  assert.equal(out.reportsYouFiled[0].reason, 'harassment');
+  // The reporter chose to name a specific person, so the record is meaningless
+  // (and unauditable) without the id.
+  assert.equal(out.reportsYouFiled[0].details, 'kept messaging after being asked to stop');
+});
+
+test('reports filed against you are a count only - never who or what', async () => {
+  resetDb();
+  const out = await buildExportService(ME);
+  assert.equal(out.reportsFiledAgainstYou, 2);
+
+  // A count, not a list: the reporter's identity and their account of events
+  // are theirs, and handing those over would expose someone who may still be
+  // in fear.
+  assert.equal(typeof out.reportsFiledAgainstYou, 'number');
+  assert.ok(!('reportsAgainstYou' in out));
+  assert.ok(out.notIncluded.reportsAgainstYou.includes('only the count'));
 });
