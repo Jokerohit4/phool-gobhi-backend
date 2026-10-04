@@ -13,8 +13,12 @@
 -- null, and the biological 60% of the blended score contributed nothing to any
 -- user. The failure was silent — a null that reads as "no data yet".
 --
--- Note this enum types a second column, ReportExtraction.metric, so it widens
--- what an OCR lab report can be recorded as as well.
+-- In the schema this enum also types ReportExtraction.metric, so it widens what
+-- an OCR lab report can be recorded as. Do not go looking for that here yet:
+-- health.HealthReport and health.ReportExtraction are declared in schema.prisma
+-- and created by no migration (checked against dev 2026-10-04), so the report
+-- path fails on "relation does not exist" long before it reaches this enum. That
+-- gap is its own fix - the four values above stand on their own.
 --
 -- Applying this on its own changes nothing a user can reach. A marker becomes
 -- writable only once the HTTP allow-list knows it: METRIC_UNITS in
