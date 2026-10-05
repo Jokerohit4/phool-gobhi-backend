@@ -29,6 +29,7 @@
 //     them would make the feature look like it under-performs for no reason.
 import * as nutritionService from './nutritionService.js';
 import * as foodPhotoStorage from './foodPhotoStorage.js';
+import { matchToCatalogue } from './foodMatch.js';
 import { getRecognizer, isRecognizerConfigured } from './providers/index.js';
 import { isProviderError } from '../../utils/providerError.js';
 
@@ -60,54 +61,9 @@ function notFound(message, code) {
   return Object.assign(new Error(message), { status: 404, code });
 }
 
-/**
- * Scores a catalogue row against a proposed name.
- *
- * The model says "rice" and the catalogue has both "Plain rice" and "Vegetable
- * fried rice", so the order the two come back in is the difference between a
- * correct log and a wrong one. Exact beats prefix beats substring, and among
- * substrings the SHORTEST name wins - because a longer name containing the
- * query is a more specific dish, and matching a general name against it is how
- * "rice" becomes a plate of biryani.
- */
-function scoreMatch(food, query) {
-  const name = String(food.name || '').trim().toLowerCase();
-  const aliases = (food.aliases || []).map((a) => String(a).trim().toLowerCase());
-
-  if (name === query) return 1000;
-  if (aliases.includes(query)) return 900;
-  if (name.startsWith(query)) return 700 - Math.min(name.length, 99);
-  if (name.includes(query)) return 500 - Math.min(name.length, 99);
-  if (aliases.some((a) => a.includes(query))) return 300 - Math.min(name.length, 99);
-  return 0;
-}
-
-/**
- * Maps one proposed name onto the catalogue, or null when nothing is close
- * enough.
- *
- * The threshold is a floor on the score, not on similarity: a substring match
- * has to be a meaningful-length name to clear it, so "dal" cannot be satisfied
- * by a food called "Dalia" and "rice" cannot be satisfied by "Fried rice with
- * seasonal vegetables". Below it we return null and let the caller report an
- * unmatched name, which is honest - a wrong food in the ledger is worse than a
- * name the user has to look up themselves.
- */
-function matchToCatalogue(foods, proposedName) {
-  const query = proposedName.trim().toLowerCase();
-  if (!query) return null;
-
-  let best = null;
-  let bestScore = 0;
-  for (const food of foods) {
-    const score = scoreMatch(food, query);
-    if (score > bestScore) {
-      best = food;
-      bestScore = score;
-    }
-  }
-  return bestScore >= 300 ? best : null;
-}
+// matchToCatalogue, and the ranking behind it, live in foodMatch.js - shared
+// with the food picker so a name typed by hand and a name proposed by the
+// vision model resolve to the same row.
 
 async function assertWithinRateLimit(prisma, userId, now) {
   const since = new Date(now.getTime() - 60 * 60 * 1000);
@@ -230,8 +186,12 @@ export async function recognizePhoto(
       // works at all. Refusing to match unverified rows here would mean the
       // photo feature silently recognises nothing on a fresh database.
       includeUnverified: true,
-      limit: 8,
     });
+    // The ranking is now the service's job, not this file's, so the whole
+    // matching candidate set comes back and the best one is chosen from it. The
+    // previous `limit: 8` was a workaround for the unordered `take`, and it
+    // actively lost matches: eight rows in arbitrary order, of which the right
+    // one might not be among them.
     const food = matchToCatalogue(rows, item.name);
     if (!food) {
       unmatched.push({ name: item.name, confidence: item.confidence });

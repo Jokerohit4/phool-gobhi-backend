@@ -17,6 +17,7 @@ let trackCalls = [];
 let saveMealResult = { id: 'm1', lines: [{ id: 'l1' }, { id: 'l2' }, { id: 'l3' }] };
 let logSavedMealResult = { logged: 3, skipped: [], meal: 'Usual breakfast' };
 let saveIntakeResult = { written: true, skipped: null, weightWritten: true };
+let foodRequestResult = { request: { id: 'r1', name: 'Momos, steamed', requestCount: 1, createdAt: 'now' }, created: true };
 
 let nutritionService;
 let intakeService;
@@ -60,6 +61,22 @@ before(async () => {
   };
   mock.module(href('../services/ledger/ledgerIntakeService.js'), {
     exports: intakeService,
+  });
+
+  foodRequestResult = { request: { id: 'r1', name: 'Momos, steamed', requestCount: 1, createdAt: 'now' }, created: true };
+  mock.module(href('../services/ledger/foodRequestService.js'), {
+    exports: {
+      // Echoes the name back rather than returning a fixed one, because the
+      // event carries the row's name and a stub that ignored its input would
+      // make the assertion below pass for the wrong reason.
+      requestFood: async (_prisma, { name }) => ({
+        request: { ...foodRequestResult.request, name },
+        created: foodRequestResult.created,
+      }),
+      listRequests: async () => [],
+      listQueue: async () => [],
+      resolveRequest: async () => ({ id: 'r1', name: 'Momos, steamed', status: 'resolved' }),
+    },
   });
 
   controller = await import('../controllers/ledgerController.js');
@@ -182,6 +199,61 @@ test('a refused pace is recorded even though nothing was saved', async () => {
     weeks_needed: 9,
     max_weekly_loss_kg: 0.75,
   });
+});
+
+// ---- The missing-food request flow -----------------------------------------
+//
+// These rows are the only record of what people searched for and could not find,
+// so they are the catalogue growth backlog. The analytics event is a second,
+// independent copy of that signal, and the two must not be confused.
+
+test('a new food request emits health_food_requested', async () => {
+  trackCalls = [];
+  const r = res();
+  await controller.requestFood(req({ body: { name: 'Momos, steamed' } }), r);
+
+  const ev = lastEvent('health_food_requested');
+  assert.ok(ev, 'expected a health_food_requested event');
+  assert.equal(ev[1], 'u1');
+  assert.deepEqual(ev[2], { name: 'Momos, steamed' });
+});
+
+test('a repeat ask emits nothing - the row count is the demand signal', async () => {
+  // requestCount on the row already counts it. Emitting here too would make one
+  // persistent user look like growing demand, which is the one conclusion this
+  // event is supposed to support.
+  trackCalls = [];
+  foodRequestResult = { request: { id: 'r1', name: 'Momos, steamed', requestCount: 4, createdAt: 'now' }, created: false };
+  const r = res();
+  await controller.requestFood(req({ body: { name: 'Momos, steamed' } }), r);
+
+  assert.equal(eventCount('health_food_requested'), 0, 'a repeat is not a new request');
+  // And the client still needs the count to say something useful, which is why
+  // `created: false` is in the body rather than the event.
+  assert.equal(r.out.body.data.created, false);
+  assert.equal(r.out.body.data.requestCount, 4);
+  foodRequestResult = { request: { id: 'r1', name: 'Momos, steamed', requestCount: 1, createdAt: 'now' }, created: true };
+});
+
+test('reviewing a request emits no analytics event at all', async () => {
+  // The reviewer is staff, not a user, and the decision is already in the row.
+  // Counting it here would mix internal triage into a user-behaviour funnel.
+  trackCalls = [];
+  await controller.resolveFoodRequest(
+    req({ params: { id: 'r1' }, body: { status: 'resolved', reviewNote: 'seeded' } }),
+    res(),
+  );
+  assert.equal(trackCalls.length, 0);
+});
+
+test('the request name is carried, unlike a photo\'s proposed names', async () => {
+  // Deliberate asymmetry, and the event dictionary says so. A photo's proposed
+  // names are a description of somebody's plate; a food name is not. The whole
+  // value of this event is knowing WHICH dish, so dropping the name would leave
+  // a count of requests with nothing to act on.
+  trackCalls = [];
+  await controller.requestFood(req({ body: { name: 'Chole bhature' } }), res());
+  assert.ok(JSON.stringify(lastEvent('health_food_requested')[2]).includes('Chole bhature'));
 });
 
 test('an accepted intake still emits only the success event', async () => {

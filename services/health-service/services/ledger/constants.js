@@ -270,6 +270,11 @@ export const FOOD_LOG_SOURCES = [
 ];
 export const DEFAULT_FOOD_LOG_SOURCE = 'custom';
 
+// Mirrors the FoodRequestStatus Prisma enum. A request is never resolved or
+// declined by a user — only by a reviewer — so there is no default here beyond
+// what the schema already defaults a new row to.
+export const FOOD_REQUEST_STATUSES = ['pending', 'resolved', 'declined'];
+
 // Where a value gets rounded.
 export const DECIMAL_PLACES = {
   nutrients: 2,

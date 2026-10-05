@@ -105,25 +105,44 @@ function schemaColumns(body) {
   return cols;
 }
 
-// `sslmode` is dropped from the connection string because `ssl` is set
-// explicitly below, and leaving both makes pg-connection-string print a
-// SECURITY WARNING about sslmode=require on every single run. The behaviour is
-// unchanged - rejectUnauthorized:false is what sslmode=require meant - but a tool
-// that greets every invocation with a security warning is a tool people learn to
-// scroll past.
-function withoutSslMode(url) {
+// SSL handling.
+//
+// The database this script is normally pointed at is a managed Postgres that
+// requires TLS and presents a certificate this machine does not have, so
+// `rejectUnauthorized: false` is the default and stays that way for any URL that
+// does not say otherwise.
+//
+// What changed is that an EXPLICIT sslmode in the URL is now honoured. Forcing
+// `ssl` unconditionally meant the script could not connect to a local or CI
+// Postgres at all - "The server does not support SSL connections" - so the one
+// place it could be run automatically was the one place it could not run. A
+// caller who wrote sslmode=disable means it, and a read-only audit script has
+// nothing to protect either way.
+//
+// `sslmode` is dropped from the string handed to pg when we are supplying the
+// `ssl` option ourselves, because leaving both makes pg-connection-string print
+// a SECURITY WARNING on every single run. A tool that greets every invocation
+// with a security warning is a tool people learn to scroll past.
+function sslOptionsFor(url) {
+  let mode = null;
   try {
+    mode = new URL(url).searchParams.get('sslmode');
+  } catch {
+    return { ssl: { rejectUnauthorized: false }, connectionString: url };
+  }
+  if (mode === 'disable') {
     const u = new URL(url);
     u.searchParams.delete('sslmode');
-    return u.toString();
-  } catch {
-    return url; // not a parseable URL; hand it to pg unchanged and let it complain
+    return { ssl: false, connectionString: u.toString() };
   }
+  const u = new URL(url);
+  u.searchParams.delete('sslmode');
+  return { ssl: { rejectUnauthorized: false }, connectionString: u.toString() };
 }
 
 const client = new pg.Client({
-  connectionString: withoutSslMode(DEV_DATABASE_URL),
-  ssl: { rejectUnauthorized: false },
+  connectionString: sslOptionsFor(DEV_DATABASE_URL).connectionString,
+  ssl: sslOptionsFor(DEV_DATABASE_URL).ssl,
 });
 
 await client.connect();
@@ -181,6 +200,130 @@ const dbFkCols = new Set((await q(
 
 await client.end();
 
+// --- column defaults ---------------------------------------------------------
+//
+// Why this section exists: the four drift items this script could not see for
+// months were all about defaults and indexes. A default the schema does not
+// declare, and an index the schema declares and the database never got, are
+// both invisible to a column-existence check - the column is present either way.
+// So this script reported "no drift" against a database that disagreed with the
+// schema in four places, for as long as it existed.
+//
+// The direction matters and both are reported. An undeclared default is a
+// column that lies about being written (a write that forgets the field still
+// gets a plausible value). A declared-but-absent index is a query that
+// full-scans. Neither breaks on deploy; both cost something later.
+const dbDefaults = new Map();
+for (const r of await q(
+  `SELECT table_name, column_name, column_default FROM information_schema.columns
+   WHERE table_schema = $1 AND column_default IS NOT NULL`, [SCHEMA],
+)) {
+  dbDefaults.set(`${r.table_name}.${r.column_name}`, r.column_default);
+}
+
+// What Prisma generates for each kind of @default, so a schema default can be
+// recognised without hard-coding the SQL each one produces.
+const PRISMA_DEFAULTS = [
+  [/^nextval\(/i, 'autoincrement()'],
+  [/^CURRENT_TIMESTAMP/i, 'now()'],
+  [/^true$/i, 'true'],
+  [/^false$/i, 'false'],
+];
+
+// Declared column defaults, read off the model body the same way columns are.
+function schemaDefaults(model, body) {
+  const out = new Map();
+  for (const line of body.split('\n')) {
+    const f = line.match(/^ {2}(\w+)\s+[\w]+.*@default\(([^)]*)\)/);
+    if (!f) continue;
+    if (line.includes('@relation')) continue;
+    out.set(`${model}.${f[1]}`, f[2].trim().replace(/^["']|["']$/g, ''));
+  }
+  return out;
+}
+
+// What the database has, normalised to the same vocabulary, so the comparison is
+// on meaning rather than on the exact string Postgres chose to print.
+function normaliseDefault(raw) {
+  for (const [re, name] of PRISMA_DEFAULTS) if (re.test(raw)) return name;
+  // A quoted string literal in either form.
+  const s = raw.replace(/^'(.*)'::.*$/, '$1').replace(/^"(.*)"$/, '$1');
+  return s;
+}
+
+const unexpectedDefaults = [];
+const missingDefaults = [];
+for (const [model, body] of models) {
+  if (!dbTables.has(model)) continue;
+  const declared = schemaDefaults(model, body);
+  for (const [key, want] of declared) {
+    if (!dbDefaults.has(key)) missingDefaults.push(`${key} (@default(${want}))`);
+  }
+}
+for (const [key, raw] of dbDefaults) {
+  const table = key.split('.')[0];
+  if (!models.has(table)) continue;
+  const declared = schemaDefaults(table, models.get(table));
+  if (!declared.has(key)) {
+    // Auto-increment columns are implied by @id and by every autoincrement()
+    // relation, so their sequence defaults are not worth reporting.
+    if (/^nextval\(/i.test(raw)) continue;
+    unexpectedDefaults.push(`${key} (${normaliseDefault(raw)})`);
+  }
+}
+
+// --- indexes -----------------------------------------------------------------
+//
+// Index names are derived by Prisma from the model and the column list, so a
+// missing index is named rather than just counted. Declared as
+// @@index([a, b]) / @@unique([a]) and matched against the real definition.
+const dbIndexes = new Map();
+for (const r of await q(
+  `SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = $1`, [SCHEMA],
+)) {
+  if (!dbIndexes.has(r.tablename)) dbIndexes.set(r.tablename, new Map());
+  dbIndexes.get(r.tablename).set(r.indexname, r.indexdef);
+}
+
+// Column list out of an indexdef, e.g. 'CREATE INDEX "x" ON health.t USING btree (a, "b")'
+function indexColumns(def) {
+  const m = def.match(/\(([^)]*)\)\s*$/);
+  if (!m) return [];
+  return m[1].split(',').map((c) => c.trim().replace(/^"(.*)"$/, '$1'));
+}
+
+// Prisma's generated name for an index: <Model>_<col>_<col>_idx / _key.
+function indexNameFor(model, cols, kind) {
+  return `${model}_${cols.join('_')}_${kind === 'unique' ? 'key' : 'idx'}`;
+}
+
+function declaredIndexes(body) {
+  const out = [];
+  for (const m of body.matchAll(/@@(index|unique)\(\[([^\]]+)\]/g)) {
+    const cols = m[2].split(',').map((c) => c.trim().replace(/^"(.*)"$/, '$1')).filter(Boolean);
+    out.push({ kind: m[1], cols });
+  }
+  return out;
+}
+
+const missingIndexes = [];
+for (const [model, body] of models) {
+  if (!dbTables.has(model)) continue;
+  const have = dbIndexes.get(model) || new Map();
+  for (const { kind, cols } of declaredIndexes(body)) {
+    const want = indexNameFor(model, cols, kind);
+    if (have.has(want)) continue;
+    // Fall back to a column-list match, because a hand-authored migration is
+    // free to name its index anything at all and a wrong name is not a missing
+    // index.
+    const wanted = cols.join(',');
+    const found = [...have.entries()].some(
+      ([, def]) => indexColumns(def).join(',') === wanted && /UNIQUE/i.test(def) === (kind === 'unique'),
+    );
+    if (!found) missingIndexes.push(`${model} ${kind} [${cols.join(', ')}]`);
+  }
+}
+
 // --- compare ---------------------------------------------------------------
 const problems = [];
 
@@ -215,6 +358,11 @@ if (mismatchedEnums.length) problems.push(`enum value drift: ${mismatchedEnums.j
 if (missingTables.length) problems.push(`${missingTables.length} table(s) missing: ${missingTables.join(', ')}`);
 if (missingCols.length) problems.push(`${missingCols.length} column(s) missing: ${missingCols.join(', ')}`);
 if (missingFks.length) problems.push(`${missingFks.length} foreign key(s) missing: ${missingFks.join(', ')}`);
+if (missingIndexes.length) problems.push(`${missingIndexes.length} index(es) missing: ${missingIndexes.join('; ')}`);
+if (unexpectedDefaults.length) {
+  problems.push(`${unexpectedDefaults.length} column default(s) the schema does not declare: ${unexpectedDefaults.join('; ')}`);
+}
+if (missingDefaults.length) problems.push(`${missingDefaults.length} column default(s) missing: ${missingDefaults.join('; ')}`);
 
 // --- report ----------------------------------------------------------------
 const line = (label, ok, detail) =>
@@ -235,6 +383,13 @@ line('columns', !missingCols.length,
 line('foreign keys', !missingFks.length,
   `${declaredFkCols.length} declared`
   + (missingFks.length ? `, missing ${missingFks.join(', ')}` : ''));
+line('indexes', !missingIndexes.length,
+  missingIndexes.length ? `missing ${missingIndexes.join('; ')}` : 'all present');
+line('column defaults', !unexpectedDefaults.length && !missingDefaults.length,
+  (unexpectedDefaults.length ? `undeclared ${unexpectedDefaults.join('; ')}` : '')
+  + (unexpectedDefaults.length && missingDefaults.length ? '; ' : '')
+  + (missingDefaults.length ? `missing ${missingDefaults.join('; ')}` : '')
+  || 'as declared');
 
 // A table present in the database and absent from the schema is worth a line of
 // its own. It is not drift this script can fix and not drift that breaks a query,

@@ -14,7 +14,17 @@
 // in the schema, so the lookup-and-update happens here; if two people add the
 // same food by hand the seeder merges them rather than failing.
 //
-// Two rows this seeder will not touch, both deliberate:
+// Re-seeding also BACKFILLS searchText on rows it does not rewrite: a row a
+// nutritionist has signed off keeps its numbers, but its searchText was derived
+// from the name and aliases at the time it was written. If an alias has been
+// added to the seed since, that row needs the new alias searchable, and
+// skipping it would leave signed-off foods quietly harder to find than the
+// unverified ones. Numbers and searchText are updated separately precisely
+// because they have different rules: one is provenance-protected, one is
+// derived state.
+//
+//   createdByUserId set  - a food a user added by hand. Matched on
+//     (name, basis) only, so a user's own entry would be found and rewritten.
 //
 //   createdByUserId set  - a food a user added by hand. Matched on
 //     (name, basis) only, so a user's own entry would be found and rewritten.
@@ -27,6 +37,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { FOODS } from './foods.seed.js';
+import { buildSearchText } from '../../services/ledger/foodMatch.js';
 
 const prisma = new PrismaClient();
 
@@ -40,6 +51,14 @@ async function seed() {
   for (const food of FOODS) {
     const data = {
       aliases: food.aliases || [],
+      // The haystack search runs against. Derived here rather than in the seed
+      // array so there is exactly one definition of what goes into it, shared
+      // with the search path itself - see buildSearchText in foodMatch.js.
+      //
+      // Without this the row exists but is unfindable: Prisma's `has` on a
+      // String[] is exact-element, so "omlet" cannot reach the alias
+      // 'omelette' no matter how the row is spelled.
+      searchText: buildSearchText(food.name, food.aliases || []),
       basis: food.basis,
       kcal: food.kcal,
       proteinG: food.proteinG,
@@ -89,6 +108,15 @@ async function seed() {
         // meaningful if nothing can rewrite the values underneath it - the
         // sign-off script is the only thing allowed to change a verified row.
         skipped += 1;
+        // searchText only, never the numbers. See the header: a verified row's
+        // nutrient values are provenance-protected, but its haystack is derived
+        // state that has to track the seed's aliases.
+        if (existing.searchText !== data.searchText) {
+          await prisma.foodItem.update({
+            where: { id: existing.id },
+            data: { searchText: data.searchText },
+          });
+        }
         continue;
       }
       await prisma.foodItem.update({ where: { id: existing.id }, data });

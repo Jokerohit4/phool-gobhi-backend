@@ -6,6 +6,7 @@ import { requireNutritionConsent, requireMedicalRecordsConsent } from '../middle
 import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
+import * as appointmentCtrl from '../controllers/appointmentController.js';
 import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js';
 import { uploadFoodPhotoMiddleware } from '../middleware/foodPhotoUpload.js';
 
@@ -81,6 +82,11 @@ router.get(
 // catalogue ships unverified pending nutritionist sign-off, and the alternative
 // is a food log with nothing in it.
 router.get('/ledger/foods', ...nutrition, ledgerCtrl.searchFoods);
+// The empty state's escape hatch. Same gate as search itself, for the same
+// reason: it lives inside the picker, so a user who cannot reach the picker
+// cannot reach this.
+router.post('/ledger/food-requests', ...nutrition, ledgerCtrl.requestFood);
+router.get('/ledger/food-requests', ...nutrition, ledgerCtrl.listFoodRequests);
 router.post('/ledger/food-logs', ...nutrition, ledgerCtrl.logFood);
 router.delete('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.deleteFoodLog);
 router.get('/ledger/food-totals/:localDate', ...nutrition, ledgerCtrl.getDayTotals);
@@ -127,6 +133,33 @@ router.post('/ledger/plan/regenerate', ...nutrition, ledgerCtrl.regeneratePlan);
 router.post('/ledger/plan/items', ...nutrition, ledgerCtrl.addPlanItem);
 router.post('/ledger/plan/items/:id/complete', ...nutrition, ledgerCtrl.completePlanItem);
 router.delete('/ledger/plan/items/:id', ...nutrition, ledgerCtrl.deactivatePlanItem);
+
+// ---- Appointments ---------------------------------------------------------
+//
+// Gated on `nutrition`, like the plan routes, because an appointment is a thing
+// the user is being scored on: the ledger holds prescriptions, diagnoses and
+// appointments together, and splitting the consent between them would let
+// somebody read a user's medical schedule by way of the food log's consent
+// scope. That coupling is deliberate and the cost of it is that a person who
+// consents to neither cannot use either.
+//
+// SCORING IS NOT READ FROM HERE. An appointment written through these routes is
+// a record of a booking; the score engine still reads PlanItem kind
+// doctor_appointment. Nothing in appointmentService writes PlanItem, so these
+// routes cannot change a score - deliberately, until the scoring migration has
+// rows on both sides to compare. See the header of appointmentService.js.
+//
+// `:id` is last in each group. Express matches in registration order, so
+// '/appointments/next' has to be declared before a route that would treat
+// 'next' as an id - otherwise the next-appointment lookup 404s forever against
+// an appointment that does not exist.
+router.get('/ledger/appointments', ...nutrition, appointmentCtrl.listAppointments);
+router.post('/ledger/appointments', ...nutrition, appointmentCtrl.createAppointment);
+// Next BEFORE /:id. See above.
+router.get('/ledger/appointments/next', ...nutrition, appointmentCtrl.getNextAppointment);
+router.get('/ledger/appointments/:id', ...nutrition, appointmentCtrl.getAppointment);
+router.patch('/ledger/appointments/:id', ...nutrition, appointmentCtrl.updateAppointment);
+router.delete('/ledger/appointments/:id', ...nutrition, appointmentCtrl.deleteAppointment);
 
 // ---- Score ----------------------------------------------------------------
 

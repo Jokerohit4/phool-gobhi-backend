@@ -1209,7 +1209,24 @@ enum PlanItemOrigin {
 // the rest of the feature can read without special-casing.
 model HealthGoal {
   userId             Int            @id
-  goal               HealthGoalType
+  // Every goal the user is working towards, in the order THEY ranked them.
+  //
+  // This was one scalar and the app forced a single choice, which was a lie:
+  // people routinely want two things at once (build muscle AND run further),
+  // and the only multi-word option, `recomp`, does not cover those pairs. So
+  // the user is not asked to lie-by-category any more.
+  //
+  // Order is meaningful and is the tie-break: when two goals ask for the same
+  // protein-per-kg, the one listed first wins, because that is the one they
+  // said mattered more. Not a primary-goal column, because nothing consumes one
+  // as a driver any more — the engine reads every entry — and a field that
+  // claims to be the main goal while changing no number is worse than none.
+  //
+  // The macro maths is in targetEngine.js: the calorie adjustments SUM and are
+  // then clamped by the same safe-pace bound a single goal is clamped by, and
+  // protein comes from the single most demanding goal rather than from
+  // summing grams of chicken.
+  goals              HealthGoalType[] @default([])
   // Sex and age are cached here rather than read from auth-service on every
   // target recompute. They are copied ONCE, at intake, and never re-synced:
   // they are inputs to a historical calculation, and a target that silently
@@ -1328,7 +1345,12 @@ model HealthGoal {
 
   // Derived entirely from the goal, so it is deleted with it rather than
   // orphaned. See NutritionTarget.goalRow for the back-reference.
-  target NutritionTarget?
+  //
+  // One-to-many, not one-to-one: NutritionTarget is an append-only history, so
+  // one goal set has produced many targets over time and only the newest row is
+  // current. Reading the current target is a findFirst ordered by
+  // effectiveFrom, never this field.
+  targets NutritionTarget[]
 
   @@schema("health")
 }
@@ -1354,11 +1376,35 @@ model HealthCondition {
   @@schema("health")
 }
 
-// One row per user. Replaced wholesale on recompute, not patched, EXCEPT when
-// source = 'user_edited' — see the TargetSource comment.
+// A HISTORY of targets, not a single current row.
+//
+// The primary key used to be userId, which contradicted everything the service
+// does: recomputeTargets() orders by `effectiveFrom` to find the latest row and
+// then CREATES a new one, so a second recompute collided with the primary key.
+// The two never agreed, and the hand-rolled test double hid it by ignoring the
+// `where` clause and inventing an `id` the table did not have.
+//
+// So the table now says what it is. Every recompute appends a row, the app
+// reads the newest, and `inputs` + rulesVersion on that row are why a target
+// can still explain itself months later — which only means anything if the
+// superseded rows are kept rather than overwritten.
+//
+// A user_edited row is never recomputed over (see TargetSource), so it stays
+// the newest row until the user clears it; that is the behaviour the service
+// has always documented.
 model NutritionTarget {
-  userId       Int            @id
-  goal         HealthGoalType
+  id            Int            @id @default(autoincrement())
+  userId        Int
+  // The goal set this row was computed FOR — a snapshot, not a read-through,
+  // so changing your goals later cannot retroactively relabel the targets they
+  // produced. The array, because "why these numbers?" has to be able to say
+  // that two goals moved the calories and one of them set the protein.
+  goals         HealthGoalType[] @default([])
+  // The day this target took effect, 'YYYY-MM-DD' in the user's tz. Same
+  // convention as HealthGoal.startDate and BiometricEntry.localDate, and
+  // deliberately a string rather than a timestamp: the boundary that matters is
+  // the user's midnight, which is not UTC's.
+  effectiveFrom String
   kcal         Int
   proteinG     Int
   carbsG       Int
@@ -1385,13 +1431,25 @@ model NutritionTarget {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  // The back-reference for HealthGoal.target. Named `goalRow` because the
-  // `goal` above is the goal TYPE — a scalar, and the more important of the
-  // two: it is the input the formula ran with, and it is deliberately a
-  // snapshot rather than a read-through, so retitling a goal later cannot
-  // retroactively relabel the targets it produced.
+  // The back-reference for HealthGoal. Named `goalRow` because the `goal` above
+  // is the goal TYPE — the input the formula ran with, and it is a snapshot for
+  // the reason given on that column. The relation is on userId alone, not
+  // (userId, goal): a user has ONE goal set, and every row in this history was
+  // derived from whatever that set was at the time.
   goalRow HealthGoal @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
+  // One target per user per day. This is what makes an append-only history
+  // possible: a second recompute on the same day updates that day's row rather
+  // than adding a duplicate, so re-running the formula after a weight change
+  // does not leave two conflicting targets for the same day.
+  @@unique([userId, effectiveFrom])
+  // No @@index([userId]) here, and its absence is deliberate. It was declared
+  // and never created by any migration, so `prisma migrate diff` reported it as
+  // missing on every run and trained people to ignore that output. It was also
+  // never needed: the unique constraint above is a btree with userId as its
+  // LEADING column, so it already serves every `userId = ?` lookup this table
+  // has. A second index on the same leading column would be a duplicate tree
+  // maintained on every insert and delete in exchange for nothing.
   @@schema("health")
 }
 
@@ -1452,6 +1510,12 @@ model FoodItem {
   verifiedBy      String?
   verifiedAt      DateTime?
   reviewNote      String?
+  // Denormalised haystack: `name` plus every alias, lowercased and
+  // space-joined. Maintained by the seeder and by buildSearchText, never by
+  // hand — a row whose searchText is stale searches wrong, which is the failure
+  // this column exists to remove. See foodMatch.js for why the aliases column
+  // alone cannot do this job.
+  searchText      String   @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1459,6 +1523,68 @@ model FoodItem {
 
   @@index([name])
   @@index([createdByUserId])
+  @@index([searchText])
+  @@schema("health")
+}
+
+// A food a user could not find, submitted from the picker's empty state.
+//
+// This exists because the catalogue is finite and the app is not. A user who
+// searches "omelette" and gets nothing has three bad options: give up on
+// logging, log something adjacent and wrong, or write the same note in the
+// "anything missing?" free-text field nobody reads. The third is what this
+// captures, and it is also the input list for growing the catalogue: these rows
+// are a prioritised, real-demand-ordered backlog rather than a guess at what
+// people eat.
+//
+// It is NOT an entry point into FoodItem. Nothing here writes a catalogue row,
+// and that is the point — a request is a request, and turning one into a nutrient
+// value is a job for somebody who can source it.
+model FoodRequest {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  // What they typed. Trimmed, and capped in length by the service, so this is
+  // never an unbounded free-text store.
+  name            String
+  // The search string that came back empty, when it came from the picker. Kept
+  // because "omelette" and "omlet" and "anda bhurji" are one request with three
+  // spellings, and collapsing them by name is the difference between three
+  // rows in the backlog and one.
+  query           String?
+  // Free-text detail: the dish, the brand, the recipe, or just "no idea, it
+  // was at a wedding". Optional and nullable — a bare dish name is a useful
+  // request on its own.
+  detail          String?
+  status          FoodRequestStatus @default(pending)
+  // Set when the request is resolved. Which way, not only whether: a rejected
+  // request still tells the user something, and the reviewer's note says why.
+  resolvedAt      DateTime?
+  // The reviewer's note on rejection, or on why an item exists already.
+  reviewNote      String?
+  // How many times this dish has been asked for, across every request row for
+  // it. Not a timestamped vote table - a hundred people wanting omelette is one
+  // backlog entry with a hundred on it, and the queue is reviewed by a person
+  // reading names, not by summing rows.
+  requestCount    Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status, createdAt])
+  // The queue read: pending, most-wanted first. requestCount has to be in the
+  // index or every poll on the queue is a sort of the whole table.
+  @@index([status, requestCount])
+  @@schema("health")
+}
+
+enum FoodRequestStatus {
+  pending
+  // A catalogue row now exists for it.
+  resolved
+  // We are not adding it. Either it already exists under another name, or it is
+  // a dish rather than an ingredient and has no single nutrient profile.
+  declined
+
   @@schema("health")
 }
 
@@ -1749,6 +1875,14 @@ model FoodPhotoRequestLog {
   abandonedAt   DateTime?
 
   @@index([userId, requestedAt])
+  // Created by 20260929000000_food_photo_recognition and declared here only
+  // now. The migration built this index on purpose - to answer "which photos did
+  // we fail to recognise, oldest first" without scanning the log - and then the
+  // schema never mentioned it, so `migrate diff` reported the database as having
+  // an index the schema did not know about. That is the mirror image of the
+  // SavedMealLine case and the more dangerous direction: it invites somebody to
+  // "fix" drift by dropping a live index off a table nobody has re-read since.
+  @@index([outcome, requestedAt])
   @@schema("health")
 }
 
@@ -1854,16 +1988,22 @@ model MedicationReminder {
 }
 
 model HealthReport {
-  id               Int       @id @default(autoincrement())
-  userId           Int
-  cloudinaryUrl    String
-  fileName         String
-  status           ReportStatus @default(PENDING)
-  processedAt      DateTime?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id          Int          @id @default(autoincrement())
+  userId      Int
+  storagePath String
+  fileName    String
+  status      ReportStatus @default(PENDING)
+  // The date the blood was drawn, 'YYYY-MM-DD', or null when nobody has said.
+  // Distinct from createdAt (when the file arrived) because a report is a
+  // reading of a past moment, and BiometricEntry is unique per
+  // (userId, metric, localDate) - so dating entries by upload time silently
+  // overwrites earlier reports verified the same day. See the migration.
+  reportDate  String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  extractions      ReportExtraction[]
+  extractions ReportExtraction[]
 
   @@index([userId])
   @@schema("health")

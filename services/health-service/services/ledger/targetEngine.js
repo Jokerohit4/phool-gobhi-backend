@@ -59,23 +59,93 @@ export function maxDeficitKcal(weightKg) {
   };
 }
 
+/**
+ * Normalises whatever the caller has into an ordered, de-duplicated goal list.
+ *
+ * Accepts a bare string because every existing caller, fixture and test passes
+ * one, and a scalar is the single-goal case of a set. Normalising here rather
+ * than at the intake boundary means a caller that reaches the engine with the
+ * wrong shape gets the same defensive treatment instead of the `|| [0, 0]`
+ * silent fallback that used to turn an unrecognised goal into maintenance
+ * calories.
+ */
+export function normaliseGoals(goals) {
+  const list = Array.isArray(goals) ? goals : [goals];
+  const seen = new Set();
+  const out = [];
+  for (const g of list) {
+    if (typeof g !== 'string' || !GOAL_KCAL_ADJUSTMENT[g] || seen.has(g)) continue;
+    seen.add(g);
+    out.push(g);
+  }
+  return out;
+}
+
+/**
+ * Which of several goals sets the protein target, and why that one.
+ *
+ * Protein is NOT summed and NOT maxed across goals. Maxing the bounds would
+ * give `build_muscle` (1.6-2.2) plus `general_health` (1.0-1.2) a target of
+ * 1.6-2.2 g/kg — a range wider than either goal asked for, and one that reads
+ * as though both goals had a say. Summing would be worse: 3.6 g/kg is a
+ * competitive bodybuilder's intake prescribed to someone who asked to "feel
+ * better day to day".
+ *
+ * So the single most DEMANDING goal decides, ranked by the bottom of its range.
+ * That is one goal's actual published range, so the number stays defensible,
+ * and the tie-break is the user's own ordering — which is why the intake
+ * preserves it rather than sorting.
+ */
+export function proteinSourceFor(goals) {
+  let best = null;
+  let bestMin = -Infinity;
+  for (const g of goals) {
+    const range = PROTEIN_PER_KG[g];
+    if (!range) continue;
+    if (range[0] > bestMin) {
+      bestMin = range[0];
+      best = g;
+    }
+  }
+  return best;
+}
+
 // Returns the adjustment to apply, the one the formula asked for, and which
 // bound (if any) reduced it.
-export function goalAdjustmentKcal(goal, weightKg) {
-  const [min, max] = GOAL_KCAL_ADJUSTMENT[goal] || [0, 0];
-  let value = Math.round((min + max) / 2);
+//
+// The adjustment is the SUM of every selected goal's midpoint, then clamped
+// exactly as a single goal's would be. Summing is what makes multiple goals
+// mean something rather than being decorative: `build_muscle` +200 and
+// `lose_fat` -400 nets to -200, which is a recomposition-shaped target the user
+// asked for by naming both halves of it.
+//
+// The clamp is why summing is safe. A set like `lose_fat` + `recomp` +
+// `general_health` asks for -450, and that -450 goes through maxDeficitKcal
+// below exactly as a lone `lose_fat` does — so the number of goals a person
+// ticks cannot buy them a deficit the safe-pace rule would have refused. The
+// requested figure is still reported separately, because "we asked for 450 and
+// gave you 300" and "we gave you 300" are different messages and only one of
+// them is true.
+export function goalAdjustmentKcal(goals, weightKg) {
+  const list = normaliseGoals(goals);
+  const perGoal = list.map((g) => {
+    const [min, max] = GOAL_KCAL_ADJUSTMENT[g] || [0, 0];
+    return { goal: g, kcal: Math.round((min + max) / 2) };
+  });
+
+  const requested = perGoal.reduce((sum, g) => sum + g.kcal, 0);
+  let value = requested;
   let clampedBy = null;
 
-  if (min < 0) {
-    const requested = Math.abs(value);
+  if (requested < 0) {
     const { value: maxDeficit, rule } = maxDeficitKcal(weightKg);
-    if (requested > maxDeficit) {
+    if (Math.abs(requested) > maxDeficit) {
       value = -Math.round(maxDeficit);
       clampedBy = rule;
     }
   }
 
-  return { value, requested: Math.round((min + max) / 2), clampedBy };
+  return { value, requested, clampedBy, perGoal };
 }
 
 // Validates and normalises the inputs, returning null-safe values plus the
@@ -110,7 +180,7 @@ export function resolveInputs({ weightKg, heightCm, age, sex, activity, hasWorko
   };
 }
 
-export function computeTargets(goal, raw) {
+export function computeTargets(goals, raw) {
   const i = resolveInputs(raw);
 
   if (!i.ok) {
@@ -133,7 +203,24 @@ export function computeTargets(goal, raw) {
   });
   const factor = ACTIVITY_FACTORS[i.activity];
   const maintenance = resting * factor;
-  const adjustment = goalAdjustmentKcal(goal, i.weightKg);
+  const goalList = normaliseGoals(goals);
+
+  // No usable goal is a missing input, not a request for maintenance calories.
+  // The single-goal version of this bug was silent: an unrecognised goal fell
+  // through `|| [0, 0]` and produced a perfectly plausible maintenance target
+  // with nothing in `inputs` to say no goal had been chosen. Someone who picked
+  // "lose fat, feel stronger" and got told to eat exactly what they burn today
+  // would have no way to notice.
+  if (goalList.length === 0) {
+    return {
+      ok: false,
+      missing: ['goals', ...i.missing],
+      targets: null,
+      inputs: { missing: ['goals', ...i.missing], goals: [] },
+    };
+  }
+
+  const adjustment = goalAdjustmentKcal(goalList, i.weightKg);
 
   let kcal = Math.round(maintenance + adjustment.value);
 
@@ -159,8 +246,11 @@ export function computeTargets(goal, raw) {
   }
 
   // Protein next, because it is the number that matters most and it should
-  // not be scaled off a kcal figure we just clamped.
-  const [pMin, pMax] = PROTEIN_PER_KG[goal] || PROTEIN_PER_KG.general_health;
+  // not be scaled off a kcal figure we just clamped. One goal decides it —
+  // see proteinSourceFor for why that is a single goal and not a combination.
+  const proteinSource = proteinSourceFor(goalList);
+  const [pMin, pMax] =
+    PROTEIN_PER_KG[proteinSource] || PROTEIN_PER_KG.general_health;
   const proteinPerKg = (pMin + pMax) / 2;
   const proteinG = Math.round(proteinPerKg * i.weightKg);
 
@@ -218,6 +308,14 @@ export function computeTargets(goal, raw) {
       activityFactor: factor,
       bmrKcal: Math.round(resting),
       maintenanceKcal: Math.round(maintenance),
+      // The goal set that produced this row, in the user's own order. Frozen
+      // here as well as on the row because `inputs` is what "Why these numbers?"
+      // reads, and an explanation that has to go back to the live goal row is an
+      // explanation that changes when they change their mind.
+      goals: goalList,
+      // Per-goal contributions, so a target built from three goals can say which
+      // three and what each one did rather than reporting one anonymous total.
+      goalAdjustments: adjustment.perGoal,
       goalAdjustmentKcal: adjustment.value,
       goalAdjustmentRequestedKcal: adjustment.requested,
       // Present only when one of the loss bounds bound. Absent means the
@@ -240,6 +338,11 @@ export function computeTargets(goal, raw) {
         : {}),
       proteinPerKg: round2(proteinPerKg),
       proteinPerKgRange: [pMin, pMax],
+      // Which goal set that range. A user who ticked two goals and is being held
+      // to the higher protein figure is entitled to know it came from one of them
+      // and which — "1.8 g/kg because you are building muscle" is answerable,
+      // "1.8 g/kg" is just an assertion.
+      proteinSourceGoal: proteinSource,
       fatFraction: round2(fatFraction),
       waterBaseMl: Math.round(i.weightKg * WATER_ML_PER_KG),
       waterAddend,

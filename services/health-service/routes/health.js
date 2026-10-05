@@ -28,6 +28,7 @@ import { requireBiometricWriteConsent } from '../middleware/requireBiometricCons
 import * as biometricConsentCtrl from '../controllers/biometricConsentController.js';
 import * as healthProfileCtrl from '../controllers/healthProfileController.js';
 import * as reportCtrl from '../controllers/reportController.js';
+import { uploadHealthReportMiddleware } from '../middleware/medicalUpload.js';
 // Adults-only on every consent GRANT (never on revoke/delete) — see requireAdult.
 import { requireAdult } from '../middleware/requireAdult.js';
 import * as recapCtrl from '../controllers/recapController.js';
@@ -100,9 +101,21 @@ const metricsGated = [requireAuth, requireFeatureFlag('healthMetrics')];
 // `workoutTracking` the way the registry's own dependency note would suggest:
 // the vault collects its own data and depends on nothing.
 const vaultGated = [requireAuth, requireFeatureFlag('healthVault')];
-router.post('/reports/upload', ...vaultGated, reportCtrl.uploadReport);
+router.post(
+  '/reports/upload',
+  ...vaultGated,
+  uploadHealthReportMiddleware,
+  reportCtrl.uploadReport,
+);
+router.get('/reports', ...vaultGated, reportCtrl.listReports);
 router.get('/reports/pending', ...vaultGated, reportCtrl.getPendingExtractions);
 router.post('/reports/verify', ...vaultGated, reportCtrl.verifyExtraction);
+// requireAuth alone, deliberately NOT vaultGated — see the vaultGated comment
+// above, and test/routeSplitGates.test.js which enforces it. A lab report is
+// the most sensitive thing this service holds; being unable to erase one
+// because a feature switch is off would be the worst version of this feature,
+// and the switch is not the user's to control.
+router.delete('/reports/:id', requireAuth, reportCtrl.deleteReport);
 
 // Consent is the one surface BOTH halves legitimately need: the device-health
 // scope backs workout activity sync, the body-numbers scope backs biometrics.
@@ -414,6 +427,17 @@ router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbac
 // place a gobhi account can reach food-photo storage, and it has no reason to be
 // able to name a single photo.
 router.post('/admin/food-photos/sweep', requireRole('gobhi'), ledgerCtrl.sweepFoodPhotos);
+
+// The missing-food queue: what people searched for, could not find, and asked
+// us to add. Ordered by how many people have asked, which makes it the closest
+// thing to a roadmap this service produces on its own.
+//
+// Scoped as narrowly as the photo sweeper above, for the same class of reason:
+// these rows carry free-text names a user typed, so the read returns no userId
+// and there is no route that filters by one. A reviewer can see that twenty
+// people want omelette; a reviewer cannot see who.
+router.get('/admin/food-requests', requireRole('gobhi'), ledgerCtrl.listFoodRequestQueue);
+router.post('/admin/food-requests/:id/resolve', requireRole('gobhi'), ledgerCtrl.resolveFoodRequest);
 
 // ---- Unlogged attendance (FR-03) + nudges (FR-08) -----------------------
 // "You were at the gym and haven't said what you did" - the read that turns

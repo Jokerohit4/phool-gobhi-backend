@@ -35,6 +35,12 @@ const MUST_ERASE = [
   'HealthProfile',
   'HealthProfileConsent',
   'MedicationReminder',
+  'HealthReport',
+  // A free-text list of what this person searched for and could not find. A
+  // record of somebody's diet that outlives their account is exactly the
+  // failure this suite exists to prevent, and it is easier to forget than a log
+  // row because nothing reads it back except a backlog view.
+  'FoodRequest',
 ];
 
 // Models whose rows cascade from a parent that IS in the list, so an explicit
@@ -43,6 +49,9 @@ const MUST_ERASE = [
 const CASCADING = {
   SavedMealLine: 'SavedMeal',
   PlanItemCompletion: 'PlanItem',
+  // Every biomarker OCR proposed from a lab report. Enumerated rather than left
+  // implicit so that promoting it to MUST_ERASE stays a visible edit.
+  ReportExtraction: 'HealthReport',
 };
 
 // Prisma names the client accessor after the model in lowerCamelCase, so
@@ -133,6 +142,10 @@ test('revoking nutrition consent reclaims the photos too, not just the rows', ()
   // And the request ledger goes in the same transaction - a row recording what
   // this user photographed, and what it cost, is itself part of the record.
   assert.match(source, /prisma\.foodPhotoRequestLog\.deleteMany/);
+  // And so do the foods this person could not find. Same table, same
+  // transaction: a revoked nutrition scope must not leave a free-text record of
+  // somebody's diet behind just because nothing renders it in the app.
+  assert.match(source, /prisma\.foodRequest\.deleteMany/);
 });
 
 test('the cascading models are named in the source with their parent', () => {

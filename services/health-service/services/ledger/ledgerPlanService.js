@@ -22,7 +22,59 @@ import {
 } from './constants.js';
 import { generatePlan } from './planGenerator.js';
 
-const PLAN_ITEM_KINDS = ['nutrition', 'workout', 'habit', 'appointment', 'custom'];
+// The kinds a user-entered item may carry. This list is the database enum and
+// nothing else: health.PlanItemKind in the Prisma schema, which is the seven
+// values created by the add_health_ledger migration.
+//
+// It has to be the enum exactly, in BOTH directions, and the reason is a bug
+// this list used to have in both directions at once. It read
+// ['nutrition','workout','habit','appointment','custom'], which:
+//
+//   - Rejected all four doctor and rest kinds. The client's dropdown offers the
+//     Prisma enum, so every 'Medication', 'Test', 'Appointment' and 'Rest'
+//     selection came back 400 — which meant the entire doctor scoring path
+//     (scoreEngine's +/-10 doctor points, remediation ranking a missed
+//     medication above a missed workout) was implemented on both sides and
+//     unreachable from the UI.
+//
+//   - Accepted 'appointment' and 'custom', which are NOT in the enum. Those
+//     passed validation here and then died inside Prisma with a
+//     PrismaClientValidationError, so a bad kind surfaced as an opaque 500
+//     instead of the 400 the caller was told to expect. A value this list
+//     admits but the database does not is worse than a value it rejects: the
+//     rejection is actionable and the crash is not.
+//
+// So this is derived from the schema and pinned by a test against the migration
+// (test/planItemKinds.test.js). If a kind is added to the enum, add it here in
+// the same commit — the test fails otherwise.
+const PLAN_ITEM_KINDS = [
+  'nutrition',
+  'workout',
+  'habit',
+  'doctor_medication',
+  'doctor_test',
+  'doctor_appointment',
+  'rest',
+];
+
+// Exported so a test can pin it against the migration that creates the enum,
+// rather than against a hand-kept copy of the same list.
+export { PLAN_ITEM_KINDS };
+
+// What an item with no stated kind becomes.
+//
+// It has to be a member of the list above, and it is named here rather than
+// inlined in the signature because the previous inline default was 'custom',
+// which is not a kind at all. Every caller that relied on the default — the
+// controller passing an absent body field, the AI injection, and four existing
+// tests — started throwing a kind error the moment the allow-list stopped
+// lying about what the database accepts.
+//
+// 'habit' because that is the kind the client's own "Add to your plan" dialog
+// starts on, so an item with no stated kind lands where the user would have
+// left it.
+const DEFAULT_PLAN_ITEM_KIND = 'habit';
+
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -99,7 +151,7 @@ export function isDueOn(item, localDate, today) {
  * service, not read from the request body), and the title is whatever the user
  * typed.
  */
-export async function addUserEnteredItem(prisma, { userId, title, kind = 'custom', schedule = 'daily', endsOn = null, fromPrescription = false, prescribedBy = null, prescribedNote = null }) {
+export async function addUserEnteredItem(prisma, { userId, title, kind = DEFAULT_PLAN_ITEM_KIND, schedule = 'daily', endsOn = null, fromPrescription = false, prescribedBy = null, prescribedNote = null }) {
   const clean = String(title || '').trim();
   if (!clean) throw badRequest('An item needs a title');
   if (!PLAN_ITEM_KINDS.includes(kind)) {
@@ -142,7 +194,7 @@ export async function addUserEnteredItem(prisma, { userId, title, kind = 'custom
  * the new target had a different protein number, the feature would be
  * dangerous rather than convenient.
  */
-export async function regenerateSuggestions(prisma, { userId, goal, diet, targets, measuredActivity }) {
+export async function regenerateSuggestions(prisma, { userId, goals, diet, targets, measuredActivity }) {
   if (!targets) throw badRequest('Set a nutrition target before generating a plan');
 
   const activeCount = await prisma.planItem.count({ where: { userId, active: true } });
@@ -159,7 +211,7 @@ export async function regenerateSuggestions(prisma, { userId, goal, diet, target
   })) > 0;
 
   const { items: suggestions, trimmedFrom } = generatePlan({
-    goal,
+    goals,
     diet,
     targets,
     measuredActivity,
@@ -246,7 +298,13 @@ export async function getPlanForDate(prisma, { userId, localDate, today }) {
 
   const due = [];
   for (const item of items) {
-    if (item.endsOn && localDate > item.endsOn) continue;
+    // "until the 5th", inclusive. The comparison is a string compare because
+    // both sides are 'YYYY-MM-DD', which sorts as a date — but only if both are
+    // actually that shape. A single malformed endsOn used to expire the item
+    // permanently: '2026-2-1' sorts below '2026-10-05', so every date after it
+    // read as past the end. Wrongly dropping a live item is the worse failure
+    // here, so an unparseable end date is ignored and the item stays due.
+    if (item.endsOn && DATE_RE.test(item.endsOn) && localDate > item.endsOn) continue;
     if (!isDueOn(item, localDate, today)) continue;
     due.push({
       ...item,

@@ -50,6 +50,10 @@ export const GOAL_TYPES = [
   'doctor_plan',
 ];
 export const SEXES = ['male', 'female', 'other'];
+// How many goals one person may hold. Four is a generous ceiling — real people
+// list two or three — and it exists so the engine's SUM over goals cannot be
+// used to stack an unsafe deficit. See validate('goals').
+export const MAX_GOALS = 4;
 export const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'very_active'];
 export const DIET_PATTERNS = ['veg', 'egg', 'non_veg', 'vegan', 'jain'];
 
@@ -103,9 +107,38 @@ function validate(field, value) {
   if (value === undefined || value === null || value === '') return null;
 
   switch (field) {
+    case 'goals': {
+      if (!Array.isArray(value)) {
+        return 'Send your goals as a list.';
+      }
+      // An empty list is "not answered" rather than an error. A multi-select
+      // sends its chip selection with every save, so a form sitting untouched on
+      // this step would otherwise make every weight edit unsavable. The
+      // "you must pick one" case is still covered: saveIntake refuses to create a
+      // row at all without one, so a first-run user cannot end up goalless.
+      if (value.length === 0) return null;
+      // Capped because the engine SUMS the calorie adjustment. Four fat-loss
+      // goals in a row is not four pieces of information, it is one intent typed
+      // four times, and an uncapped list is a way to buy a deficit the safe-pace
+      // rule would otherwise clamp.
+      if (value.length > MAX_GOALS) {
+        return `Pick up to ${MAX_GOALS}. They are combined, not added up twice.`;
+      }
+      const unknown = value.filter((g) => !GOAL_TYPES.includes(g));
+      if (unknown.length) {
+        return 'One of those is not a goal we know about.';
+      }
+      if (new Set(value).size !== value.length) {
+        return 'That is the same goal twice.';
+      }
+      return null;
+    }
+    // Kept so an older client that still sends `goal` as a single value keeps
+    // working. It is the one-goal case of a set, which is exactly what it is,
+    // and the wizard has shipped with a single-select for months.
     case 'goal': {
-      if (GOAL_TYPES.includes(value)) return null;
-      return 'Choose one of the listed goals.';
+      if (!GOAL_TYPES.includes(value)) return 'Choose one of the listed goals.';
+      return null;
     }
     case 'sex': {
       if (SEXES.includes(value)) return null;
@@ -175,6 +208,33 @@ function validate(field, value) {
     default:
       return null;
   }
+}
+
+/**
+ * The goal set a save is asking for, or undefined when the save did not touch
+ * goals at all.
+ *
+ * undefined and [] are deliberately different. `undefined` means "this save is
+ * not about goals", which must leave an existing set alone; [] would be an
+ * instruction to erase it, and a form that submits its empty multi-select on
+ * every other field would wipe a user's goals on a weight change.
+ */
+function normaliseIntakeGoals(input) {
+  if (Array.isArray(input.goals)) {
+    // Order preserved, because it is the user's ranking and it breaks the
+    // protein tie (see targetEngine.proteinSourceFor). Not sorted, not deduped
+    // here — validate() has already refused duplicates and unknown values, and a
+    // silently-deduped list would write a different set than the user chose.
+    const set = input.goals.filter((g) => typeof g === 'string' && g);
+    // An empty array reads as "not answered", not as "replace my goals with
+    // nothing". A multi-select form submits its chip selection with every save,
+    // so treating [] as a real instruction would erase a user's goals every time
+    // they changed something else on the same screen. validate() still refuses a
+    // first save with no goal, so nothing here can create a goalless row.
+    return set.length ? set : undefined;
+  }
+  if (typeof input.goal === 'string' && input.goal) return [input.goal];
+  return undefined;
 }
 
 /** Collects every problem at once, so the form can mark all its fields. */
@@ -329,20 +389,25 @@ export async function getSetupState({ prisma, userId, localDate, fetchProfile = 
   // from MISSING_REASONS so this cannot drift from the engine's vocabulary.
   // The full list for a first-run user; the engine's own list for everyone else.
   // Both come from the same vocabulary, so the screen cannot drift.
-  const ALL_REQUIRED = ['goal', 'weight', 'height', 'age', 'sex', 'activity'];
+  const ALL_REQUIRED = ['goals', 'weight', 'height', 'age', 'sex', 'activity'];
   const reportedMissing = goal ? missing : ALL_REQUIRED.slice();
 
   return {
     hasGoal: Boolean(goal),
-    // `goal` is required by the schema, so a user with no row at all has no goal
-    // yet. Reported explicitly so the screen can tell "never started" from
-    // "started, nothing computed".
-    goal: goal?.goal ?? null,
+    // The full set, in the user's own order. `goal` was a scalar until the
+    // intake stopped forcing a single choice; it is reported as an array
+    // because two goals is the normal case now, and a scalar here is what made
+    // the wizard render one chip row for what is really a set of choices.
+    goals: goal?.goals ?? [],
     prefill: {
       // Restated inside prefill as well, because a form control reads its
-      // initial value from one place. The top-level `goal` is for logic; this
+      // initial value from one place. The top-level `goals` is for logic; this
       // is for the picker.
-      goal: goal?.goal ?? null,
+      goals: goal?.goals ?? [],
+      // What the wizard should light up first when the user has several goals
+      // and adds another: their first-listed goal. Not stored, derived — an
+      // explicit "primary" column would be a field that changes no number.
+      primaryHint: goal?.goals?.[0] ?? null,
       weightKg,
       heightCm: goal?.heightCm ?? profile?.heightCm ?? null,
       // From HealthGoal only, per the snapshot contract. There is no fallback
@@ -401,13 +466,18 @@ export async function saveIntake({ prisma, userId, input = {}, localDate }) {
   }
 
   const existing = await prisma.healthGoal.findUnique({ where: { userId } });
-  if (!existing && !input.goal) {
+  // Accepts either shape: the set, or a single goal from a client that has not
+  // shipped the multi-select yet. `goals` wins when both are present, because a
+  // client that knows about sets has already told us the full answer and a
+  // leftover `goal` from its own form state is not more authoritative.
+  const incomingGoals = normaliseIntakeGoals(input);
+  if (!existing && !incomingGoals) {
     // No row can be created without a goal, and inventing one would be the
     // service picking a clinical objective on the user's behalf.
     return {
       written: false,
       skipped: 'invalid',
-      errors: { goal: 'Choose what you are working towards.' },
+      errors: { goals: 'Choose what you are working towards.' },
     };
   }
 
@@ -505,7 +575,13 @@ export async function saveIntake({ prisma, userId, input = {}, localDate }) {
     if (input[key] !== undefined) data[key] = value;
   };
 
-  set('goal', input.goal);
+  // Only when the save is actually about goals. `incomingGoals` being undefined
+  // covers both "this save said nothing about goals" and "this save sent an empty
+  // set" (see normaliseIntakeGoals), and neither may write the column — an
+  // explicit `data.goals = undefined` would still land as a key in the update
+  // payload, which on a partial save is the difference between "leave it alone"
+  // and "set it to nothing".
+  if (incomingGoals) data.goals = incomingGoals;
   set('sex', input.sex ?? null);
   set('age', input.age == null ? null : Number(input.age));
   set('heightCm', input.heightCm == null ? null : Math.round(Number(input.heightCm)));

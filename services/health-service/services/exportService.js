@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { hasMedicalRecordsConsentService } from './ledger/ledgerConsentService.js';
+import { currentNutritionTarget } from './ledger/currentTarget.js';
 const prisma = new PrismaClient();
 
 // FR-16. One builder feeds both the JSON and CSV shapes — the BRD's "Robin
@@ -337,7 +338,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent] =
+  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
@@ -378,7 +379,7 @@ export async function buildFullExportService(userId) {
       // reason in the comment above this function: we must not delete on
       // request something we never showed on request.
       prisma.healthGoal.findUnique({ where: { userId } }),
-      prisma.nutritionTarget.findUnique({ where: { userId } }),
+      currentNutritionTarget(prisma, userId),
       // The user's own custom foods only. The seeded catalogue is ours, not
       // theirs, and is not their data to take a copy of.
       prisma.foodItem.findMany({ where: { createdByUserId: userId }, orderBy: { name: 'asc' } }),
@@ -394,6 +395,11 @@ export async function buildFullExportService(userId) {
       prisma.healthCondition.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       prisma.doctorAppointment.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       prisma.foodPhotoRequestLog.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      // Foods this person could not find, and what they typed instead. It is
+      // their data and it is erased with the account, so it is exported with it
+      // - the invariant this block is built on, that we never delete on request
+      // something we never showed on request.
+      prisma.foodRequest.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
 
       // Medical documents are the one slice NOT unconditionally exported: they
       // sit behind a second, independent consent scope, and including them in a
@@ -435,7 +441,10 @@ export async function buildFullExportService(userId) {
       // clean up before reading.
       goal: healthGoal
         ? {
-            goal: healthGoal.goal,
+            // The whole set, in the user's order. A GDPR export that carried one
+            // of a user's goals would be both incomplete and misleading about what
+            // their targets were derived from.
+            goals: healthGoal.goals ?? [],
             sex: healthGoal.sex,
             age: healthGoal.age,
             heightCm: healthGoal.heightCm,
@@ -558,6 +567,17 @@ export async function buildFullExportService(userId) {
       // table is so thin and is worth showing in an export so the absence is
       // explicable rather than looking like a gap.
       photoRequests: photoLogs.map((p) => ({ requestedAt: p.requestedAt })),
+      // The foods this person searched for and could not find. `status` and
+      // `requestCount` are included because a pending request with a count of
+      // 9 is a fact about the state of our catalogue that their own copy should
+      // carry - it is why their suggestion has not turned into a searchable food
+      // yet.
+      foodRequests: foodRequests.map((r) => ({
+        name: r.name,
+        status: r.status,
+        requestCount: r.requestCount,
+        createdAt: r.createdAt,
+      })),
     },
     // Medical documents, behind their own consent.
     //

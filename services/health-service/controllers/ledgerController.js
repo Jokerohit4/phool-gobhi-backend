@@ -4,11 +4,13 @@ import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import * as targetService from '../services/ledger/targetService.js';
+import { currentNutritionTarget } from '../services/ledger/currentTarget.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
 import * as scoreTargetService from '../services/ledger/scoreTargetService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
 import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
+import * as foodRequestService from '../services/ledger/foodRequestService.js';
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
@@ -36,9 +38,18 @@ function handle(fn) {
     } catch (err) {
       const status = err.status || 500;
       if (status >= 500) console.error('[ledger]', err);
-      return res
-        .status(status)
-        .json({ error: err.error || err.message || 'Server error', code: err.code });
+      return res.status(status).json({
+        error: err.error || err.message || 'Server error',
+        code: err.code,
+        // `foods` is the one extra key a service may attach to an error, and it
+        // exists for exactly one case: a 409 from the missing-food request saying
+        // "we already have that". The rows come back in the error body so the
+        // client can show the food the user was one tap from, instead of an
+        // error toast on the screen of somebody trying to log dinner. No other
+        // error carries data, and this is not a general escape hatch - a service
+        // would have to attach it deliberately.
+        ...(err.foods ? { foods: err.foods } : {}),
+      });
     }
   };
 }
@@ -161,7 +172,7 @@ export const getTargetActivityDetail = handle(async (req) => {
 });
 
 export const getTargets = handle(async (req) => {
-  const target = await prisma.nutritionTarget.findUnique({ where: { userId: req.userId } });
+  const target = await currentNutritionTarget(prisma, req.userId);
   if (!target) return null;
   // Decimal columns come back as strings over JSON, which would make the
   // client parse every number. Normalised once, here.
@@ -215,6 +226,94 @@ export const searchFoods = handle(async (req) => {
   }));
 });
 
+// ---- Missing-food requests -------------------------------------------------
+//
+// The picker's empty state. The user searched, got nothing, and this is what
+// they reach next.
+//
+// The response shape carries one thing the client needs and cannot derive: if
+// the request already existed, `created: false`. A user who asks for omelette
+// twice should not be told twice that we have noted it — the second time, the
+// useful message is that it is already on the list and how many people have
+// asked. Whether to say so is the client's call; it needs the fact to decide.
+
+export const requestFood = handle(async (req) => {
+  const b = req.body || {};
+  const { request, created } = await foodRequestService.requestFood(prisma, {
+    userId: req.userId,
+    name: b.name,
+    query: b.query,
+    detail: b.detail,
+  });
+  // Only the creation is tracked. A repeat ask is the same event as the first
+  // one for reporting purposes, and counting both would make this look like
+  // growing demand when it is one person being persistent.
+  if (created) track('health_food_requested', req.userId, { name: request.name });
+  return {
+    id: request.id,
+    name: request.name,
+    status: request.status,
+    requestCount: request.requestCount,
+    createdAt: request.createdAt,
+    created,
+  };
+});
+
+export const listFoodRequests = handle(async (req) => {
+  const rows = await foodRequestService.listRequests(prisma, {
+    userId: req.userId,
+    status: req.query.status,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    status: r.status,
+    // The user's own detail and the reviewer's note are both returned to them:
+    // this is their own request, and "we declined this, because it is a dish not
+    // an ingredient" is the answer they are entitled to.
+    detail: r.detail,
+    reviewNote: r.reviewNote,
+    requestCount: r.requestCount,
+    resolvedAt: r.resolvedAt,
+    createdAt: r.createdAt,
+  }));
+});
+
+// ---- Admin: the request queue ---------------------------------------------
+//
+// Deliberately narrower than the rest of the admin surface. This route reads
+// free-text names a user typed and can resolve a request; it must not be able
+// to read anything else about them, so there is no userId in the response and
+// no way to ask "what did user 7 request".
+
+export const listFoodRequestQueue = handle(async (req) => {
+  const rows = await foodRequestService.listQueue(prisma, {
+    status: req.query.status,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    query: r.query,
+    detail: r.detail,
+    status: r.status,
+    // Demand, not identity: how many times this dish has been asked for.
+    requestCount: r.requestCount,
+    reviewNote: r.reviewNote,
+    resolvedAt: r.resolvedAt,
+    createdAt: r.createdAt,
+  }));
+});
+
+export const resolveFoodRequest = handle(async (req) => {
+  const b = req.body || {};
+  const updated = await foodRequestService.resolveRequest(prisma, {
+    id: req.params.id,
+    status: b.status,
+    reviewNote: b.reviewNote,
+  });
+  return { id: updated.id, name: updated.name, status: updated.status };
+});
+
 export const logFood = handle(async (req) => {
   const b = req.body || {};
   const out = await nutritionService.logFood(prisma, {
@@ -234,7 +333,7 @@ export const logFood = handle(async (req) => {
 export const getDayTotals = handle(async (req) => {
   const { localDate } = req.params;
   const day = await nutritionService.getDayTotals(prisma, req.userId, localDate);
-  const target = await prisma.nutritionTarget.findUnique({ where: { userId: req.userId } });
+  const target = await currentNutritionTarget(prisma, req.userId);
   const targets = target
     ? {
         kcal: Number(target.kcal),
@@ -321,7 +420,7 @@ export const logSavedMeal = handle(async (req) => {
 // words, and it only ever writes origin 'suggested' - see ledgerPlanService.js.
 export const regeneratePlan = handle(async (req) => {
   const goal = await prisma.healthGoal.findUnique({ where: { userId: req.userId } });
-  const target = await prisma.nutritionTarget.findUnique({ where: { userId: req.userId } });
+  const target = await currentNutritionTarget(prisma, req.userId);
   if (!target) {
     const err = new Error('Set a nutrition target before generating a plan');
     err.status = 400;
@@ -329,7 +428,11 @@ export const regeneratePlan = handle(async (req) => {
   }
   const out = await ledgerPlanService.regenerateSuggestions(prisma, {
     userId: req.userId,
-    goal: goal?.goal,
+    // The whole set. The generator is currently goal-agnostic (it keys items off
+    // the nutrient targets rather than the objective), so this is not yet load-
+    // bearing — but passing one of several goals here would bake in a choice this
+    // endpoint has no basis to make.
+    goals: goal?.goals ?? [],
     diet: goal?.diet,
     targets: {
       kcal: Number(target.kcal),

@@ -250,6 +250,13 @@ const MUST_STAY_UNGATED = [
   "router.delete('/health-profile'",
   "router.delete('/health-profile/consent'",
   "router.delete('/health-profile/medications/:id'",
+  // A lab report the user uploaded to the health vault, and the extracted
+  // biomarkers hanging off it. Both directions of the vault's own argument apply
+  // at once: the data is the most sensitive thing this service holds, and the
+  // vault flag is not the user's to control. It is also the flag most likely to
+  // be flipped off — the vault is default-off pending legal sign-off — which is
+  // precisely when a user deleting an unwanted lab report must still be able to.
+  "router.delete('/reports/:id'",
 ];
 
 test('data erasure stays reachable with requireAuth alone, whatever the flags say', () => {

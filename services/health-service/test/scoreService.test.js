@@ -50,7 +50,7 @@ function mockPrisma({ snapshots = [], goal = null, target = null, planItems = []
         return snapshots.find((r) => r.userId === key.userId && r.localDate === key.localDate) || null;
       },
     },
-    nutritionTarget: { findUnique: async () => target },
+    nutritionTarget: { findFirst: async () => target },
     healthGoal: {
       findUnique: async () => goal,
       update: async (a) => ((state.updated.push(a.data), { userId: USER, ...a.data })),

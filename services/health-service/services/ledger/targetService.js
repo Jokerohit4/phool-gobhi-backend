@@ -42,6 +42,15 @@ export const MISSING_REASONS = {
   age: 'age_unknown',
   sex: 'sex_unknown',
   activity: 'activity_unknown',
+  // The vocabulary the screen speaks is the intake's field names, and that field
+  // is now `goals` (a set). `resolveInputs` short-circuits on the same name so
+  // the engine, the reason map and the wizard all use one word — the previous
+  // split, engine saying `goal` and intake saying `goals`, meant a first-run
+  // user was reported missing `goals` with no reason code attached to it.
+  goals: 'goal_not_set',
+  // Retained because the reason code on any target row written before the
+  // multi-goal change is still the singular one, and "Why these numbers?" reads
+  // it rather than the live intake.
   goal: 'goal_not_set',
 };
 
@@ -227,8 +236,13 @@ export function resolveActivity({
 export async function resolveInputs({ prisma, userId, localDate, measured }) {
   const goal = await prisma.healthGoal.findUnique({ where: { userId } });
 
-  if (!goal || !goal.goal) {
-    return { ok: false, goal: null, missing: ['goal'], reasons: { goal: MISSING_REASONS.goal } };
+  // An empty array is a missing goal, not a goal set that happens to sum to zero.
+  // Checked on length rather than truthiness for the same reason the engine
+  // normalises rather than indexing: `[]` is truthy in JavaScript, so a
+  // truthiness check here would let a user with no goals through to a target
+  // computed from the `|| [0, 0]` fallback.
+  if (!goal || !Array.isArray(goal.goals) || goal.goals.length === 0) {
+    return { ok: false, goal: null, missing: ['goals'], reasons: { goals: MISSING_REASONS.goals } };
   }
 
   // Height: the cached intake value on HealthGoal, falling back to the older
@@ -308,7 +322,11 @@ export async function recomputeTargets({ prisma, userId, localDate, measured, ru
   }
 
   const existing = await prisma.nutritionTarget.findFirst({
-    where: { userId, goal: resolved.goal.goal },
+    // The newest row for this user, whatever goal produced it. Keyed on userId
+    // alone rather than (userId, goal) on purpose: the guard below is "do not
+    // overwrite a number this person chose", and a number they chose stays
+    // chosen even after they change their mind about their goals.
+    where: { userId },
     orderBy: { effectiveFrom: 'desc' },
   });
 
@@ -316,7 +334,7 @@ export async function recomputeTargets({ prisma, userId, localDate, measured, ru
     return { written: false, skipped: 'user_edited', targetId: existing.id };
   }
 
-  const computed = computeTargets(resolved.goal.goal, resolved.inputs);
+  const computed = computeTargets(resolved.goal.goals, resolved.inputs);
   if (!computed.ok) {
     // Belt and braces: resolveInputs already checked, but the engine also
     // range-checks (an age of 8 is present but not usable) and its list is the
@@ -324,25 +342,38 @@ export async function recomputeTargets({ prisma, userId, localDate, measured, ru
     return { written: false, skipped: 'invalid_inputs', missing: computed.missing };
   }
 
-  const target = await prisma.nutritionTarget.create({
-    data: {
-      userId,
-      goal: resolved.goal.goal,
-      effectiveFrom: localDate,
-      source: 'formula',
-      rulesVersion: rulesVersion || 'v1',
-      kcal: computed.targets.kcal,
-      proteinG: computed.targets.proteinG,
-      carbsG: computed.targets.carbsG,
-      fatG: computed.targets.fatG,
-      fibreG: computed.targets.fibreG,
-      waterMl: computed.targets.waterMl,
-      // The whole point of the inputs column: "Why these numbers?" reads this
-      // and never re-derives, so a retune of the formula cannot retroactively
-      // change the explanation a user was given last month.
-      inputs: computed.inputs,
-      micros: computed.targets.micros,
-    },
+  const data = {
+    // The whole set, not one of them: this row is the record of what the numbers
+    // were derived from, and a two-goal target filed under a single goal cannot
+    // explain itself later.
+    goals: resolved.goal.goals,
+    source: 'formula',
+    rulesVersion: rulesVersion || 'v1',
+    kcal: computed.targets.kcal,
+    proteinG: computed.targets.proteinG,
+    carbsG: computed.targets.carbsG,
+    fatG: computed.targets.fatG,
+    fibreG: computed.targets.fibreG,
+    waterMl: computed.targets.waterMl,
+    // The whole point of the inputs column: "Why these numbers?" reads this
+    // and never re-derives, so a retune of the formula cannot retroactively
+    // change the explanation a user was given last month.
+    inputs: computed.inputs,
+    micros: computed.targets.micros,
+  };
+
+  // An upsert keyed on (userId, effectiveFrom), not an insert.
+  //
+  // The table is an append-only history — one row per day per user — but two
+  // recomputes on the SAME day must not leave two rows both claiming to be
+  // today's target. The unique constraint makes the second one collide on
+  // purpose and this updates that day's row instead. A plain create() here
+  // threw a primary-key violation on every recompute after the first, which is
+  // why the schema carried PRIMARY KEY (userId) while this code created rows.
+  const target = await prisma.nutritionTarget.upsert({
+    where: { userId_effectiveFrom: { userId, effectiveFrom: localDate } },
+    create: { userId, effectiveFrom: localDate, ...data },
+    update: data,
   });
 
   return {

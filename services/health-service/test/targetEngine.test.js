@@ -7,6 +7,7 @@ import {
   POINTS,
   DAILY_MAX_GAIN,
   DAILY_MAX_LOSS,
+  GOAL_KCAL_ADJUSTMENT,
   microAllowances,
 } from '../services/ledger/constants.js';
 
@@ -23,14 +24,27 @@ test('a goal type cannot raise a nutrient above the RDA table', () => {
   // Every goal, every sex, every age band: the micronutrient targets must be
   // byte-identical for a given (sex, age). If a condition or a goal could
   // influence them, this is where it would show up.
-  const goals = ['build_muscle', 'lose_fat', 'gain_weight', 'endurance', 'general_health', 'doctor_plan'];
+  //
+  // Driven by the goal table, and including multi-goal SETS. A set is the case
+  // most likely to leak: the calorie adjustment is a sum and protein comes from
+  // one goal, so a future change could plausibly let a combination scale a
+  // micronutrient when no single goal ever could. The list this replaces was
+  // hand-written and had drifted — it still contained `gain_weight`, which is
+  // not a goal at all, and that stale entry was quietly comparing maintenance
+  // calories against a real target rather than testing anything.
+  const allGoals = Object.keys(GOAL_KCAL_ADJUSTMENT);
+  const goals = [
+    ...allGoals,
+    ['build_muscle', 'lose_fat'],
+    ['general_health', 'endurance', 'doctor_plan'],
+  ];
   const bySexAndAge = new Map();
 
   for (const sex of ['male', 'female', 'other']) {
     for (const age of [22, 40, 60]) {
       for (const goal of goals) {
         const r = computeTargets(goal, { ...MALE_29, sex, age });
-        assert.ok(r.ok);
+        assert.ok(r.ok, `${sex}/${age}/${JSON.stringify(goal)} produced no target`);
         const key = `${sex}/${age}`;
         const micros = JSON.stringify(r.targets.micros);
         if (bySexAndAge.has(key)) {
@@ -212,12 +226,162 @@ test('a large person asking for a fat loss is NOT clamped', () => {
   assert.equal(r.inputs.goalAdjustmentKcal, -400);
 });
 
+// --- More than one goal ------------------------------------------------------
+//
+// These are the tests that justify summing at all. Without them the multi-goal
+// change is unfalsifiable: a build_muscle + lose_fat pair netting to a deficit
+// looks identical to a bug in the arithmetic unless you state what the sum is
+// supposed to be and check the per-goal breakdown came back.
+
+test('two goals sum, and each one is reported separately', () => {
+  // The motivating case: a user who wants to build muscle and lose fat has named
+  // both halves of a recomp, and the only honest reading is that the targets move
+  // in opposite directions at once rather than one silently winning.
+  const both = computeTargets(['build_muscle', 'lose_fat'], { ...MALE_29 });
+  const muscle = computeTargets('build_muscle', { ...MALE_29 });
+  const fat = computeTargets('lose_fat', { ...MALE_29 });
+
+  assert.ok(both.ok);
+  assert.equal(both.inputs.goalAdjustmentKcal, muscle.inputs.goalAdjustmentKcal + fat.inputs.goalAdjustmentKcal);
+  // The two adjustments, still visible as two adjustments. A single total with no
+  // breakdown cannot explain a number to the person who set it.
+  assert.deepEqual(both.inputs.goals, ['build_muscle', 'lose_fat']);
+  assert.deepEqual(
+    both.inputs.goalAdjustments,
+    [
+      { goal: 'build_muscle', kcal: muscle.inputs.goalAdjustmentKcal },
+      { goal: 'lose_fat', kcal: fat.inputs.goalAdjustmentKcal },
+    ],
+  );
+  // And the user's own order is preserved, because it is the documented
+  // tie-break for protein and this row is what "Why these numbers?" reads later.
+  const reversed = computeTargets(['lose_fat', 'build_muscle'], { ...MALE_29 });
+  assert.deepEqual(reversed.inputs.goals, ['lose_fat', 'build_muscle']);
+});
+
+test('a set of goals cannot buy a deficit the safe-pace rule refuses', () => {
+  // This is the safety test for the whole feature. Three fat-loss-shaped goals
+  // request -450; the clamp must bind exactly as it would for one -400 goal, and
+  // the difference must be REPORTED rather than quietly absorbed.
+  //
+  // A 30 kg adult: 1% of body weight caps the loss at 330 kcal/day, so the
+  // requested -450 (lose_fat -400, recomp -50, endurance 0) has to come back at
+  // the clamp. The bound is named, not guessed: the fact that it is
+  // proportional rather than the absolute 0.75 kg/week ceiling is exactly the
+  // kind of thing a reader of "why these numbers?" needs to be told.
+  const r = computeTargets(['lose_fat', 'recomp', 'endurance'], {
+    weightKg: 30, heightCm: 140, age: 22, sex: 'female', activity: 'light',
+  });
+
+  assert.ok(r.ok);
+  assert.equal(r.inputs.goalAdjustmentRequestedKcal, -450);
+  assert.equal(r.inputs.clampedBy, 'max_weekly_loss_pct_body_weight');
+  assert.ok(
+    r.inputs.goalAdjustmentRequestedKcal < r.inputs.goalAdjustmentKcal,
+    `requested ${r.inputs.goalAdjustmentRequestedKcal} must exceed the clamp`,
+  );
+  assert.ok(r.inputs.clampedBy, 'the clamp must name its bound');
+  assert.ok(r.inputs.clampedFromKcal < r.inputs.goalAdjustmentKcal);
+
+  // The realised rate is inside the cap regardless of how many goals were named.
+  const kgPerWeek = ((r.inputs.maintenanceKcal - r.targets.kcal) * 7) / 7700;
+  assert.ok(kgPerWeek <= SAFETY.maxWeeklyLossKg + 0.01, `${kgPerWeek.toFixed(2)} kg/week`);
+  // And every goal is still attributed, so the clamp does not erase the record of
+  // what was asked for.
+  assert.equal(r.inputs.goalAdjustments.length, 3);
+});
+
+test('protein comes from the single most demanding goal, never a sum', () => {
+  // build_muscle is 1.6-2.2 g/kg and general_health 1.0-1.2. Summing gives 3.6
+  // g/kg, which is a competitive bodybuilder's intake prescribed to someone who
+  // also asked to "feel better day to day". Maxing the bounds gives a range wider
+  // than either goal asked for. So the number must be exactly one goal's range.
+  const r = computeTargets(['general_health', 'build_muscle'], { ...MALE_29 });
+  const muscleOnly = computeTargets('build_muscle', { ...MALE_29 });
+
+  assert.equal(r.inputs.proteinSourceGoal, 'build_muscle');
+  assert.deepEqual(r.inputs.proteinPerKgRange, muscleOnly.inputs.proteinPerKgRange);
+  assert.equal(r.targets.proteinG, muscleOnly.targets.proteinG);
+  assert.ok(r.targets.proteinG / MALE_29.weightKg < 2.5, 'and well short of a sum');
+});
+
+test('order breaks a protein tie, because the user ranked it', () => {
+  // lose_fat and recomp both carry a 1.8 g/kg floor, so nothing in the formula
+  // decides between them. The user's own ordering is what makes the answer
+  // non-arbitrary, and it is only load-bearing if it is actually honoured.
+  const fatFirst = computeTargets(['lose_fat', 'recomp'], { ...MALE_29 });
+  const recompFirst = computeTargets(['recomp', 'lose_fat'], { ...MALE_29 });
+
+  assert.equal(fatFirst.inputs.proteinSourceGoal, 'lose_fat');
+  assert.equal(recompFirst.inputs.proteinSourceGoal, 'recomp');
+  // The floors are what tie (both 1.8), so the ranking decides; the ceilings then
+  // differ because each goal's own range is still used in full — 2.2 for the fat
+  // loss, 2.0 for the recomposition. The attribution changes even though the
+  // ranking was never asked to change the arithmetic.
+  assert.deepEqual(fatFirst.inputs.proteinPerKgRange, [1.8, 2.2]);
+  assert.deepEqual(recompFirst.inputs.proteinPerKgRange, [1.8, 2.0]);
+});
+
+test('one goal and a one-element set are the same target', () => {
+  // The scalar form is the single-goal case, and every existing fixture and
+  // older client still sends it. If these ever diverge, a stale app would quietly
+  // start producing different numbers from the web for the same person.
+  for (const goal of ['lose_fat', 'build_muscle', 'recomp', 'general_health', 'doctor_plan']) {
+    const scalar = computeTargets(goal, { ...MALE_29 });
+    const set = computeTargets([goal], { ...MALE_29 });
+    assert.deepEqual(set.targets, scalar.targets, `${goal}: set differs from scalar`);
+  }
+});
+
+test('a set with a repeated goal counts it once', () => {
+  // Defensive rather than aspirational: the intake rejects duplicates, so this
+  // only fires for a caller that skipped validation. Counting twice would buy a
+  // double deficit out of one intention.
+  const once = computeTargets('lose_fat', { ...MALE_29 });
+  const twice = computeTargets(['lose_fat', 'lose_fat', 'lose_fat'], { ...MALE_29 });
+  assert.equal(twice.inputs.goalAdjustmentKcal, once.inputs.goalAdjustmentKcal);
+  assert.deepEqual(twice.inputs.goals, ['lose_fat']);
+});
+
+test('an unrecognised goal is dropped rather than counted as zero', () => {
+  // The old behaviour was `PROTEIN_PER_KG[goal] || GENERAL_HEALTH`, which turned
+  // a typo into "maintenance calories" with no complaint. Dropping it means an
+  // unknown goal alongside a real one leaves the real one in charge.
+  const r = computeTargets(['lose_fat', 'not_a_goal'], { ...MALE_29 });
+  const alone = computeTargets('lose_fat', { ...MALE_29 });
+  assert.deepEqual(r.inputs.goals, ['lose_fat']);
+  assert.equal(r.inputs.goalAdjustmentKcal, alone.inputs.goalAdjustmentKcal);
+});
+
+test('a set of goals with nothing recognisable in it yields no target', () => {
+  // The one case where being lenient is unsafe. An empty set is a missing input,
+  // not a request for maintenance calories - the user asked for nothing at all
+  // and the honest answer is "go and pick one".
+  const r = computeTargets(['not_a_goal', 'also_not'], { ...MALE_29 });
+  assert.equal(r.ok, false);
+  assert.ok(r.missing.includes('goals'), `missing was ${JSON.stringify(r.missing)}`);
+});
+
+test('macros sum back to the calorie target for a multi-goal set', () => {
+  // The same lie-check as the single-goal version, run on a combination - this is
+  // where a summed calorie change would leave protein and fat disagreeing with
+  // the headline number.
+  const r = computeTargets(['build_muscle', 'lose_fat'], { ...MALE_29 });
+  const sum = r.targets.proteinG * 4 + r.targets.carbsG * 4 + r.targets.fatG * 9;
+  assert.ok(Math.abs(sum - r.targets.kcal) <= 15, `macros sum to ${sum} vs kcal ${r.targets.kcal}`);
+});
+
 test('macros always sum back to the calorie target', () => {
   // A target whose macros do not add up to its own headline number is a lie
   // the user can check in five seconds.
-  for (const goal of ['build_muscle', 'lose_fat', 'gain_weight', 'endurance', 'general_health', 'doctor_plan']) {
+// Driven by the goal table rather than hand-listed, because a hand-list is a
+  // stale list: `gain_weight` was here and is not in GOAL_KCAL_ADJUSTMENT, so it
+  // normalised away, returned no target, and took the whole loop down on
+  // `r.targets.proteinG`. The null-target check below is what caught it.
+  for (const goal of Object.keys(GOAL_KCAL_ADJUSTMENT)) {
     for (const sex of ['male', 'female']) {
       const r = computeTargets(goal, { ...MALE_29, sex });
+      assert.ok(r.ok, `${goal}/${sex} produced no target`);
       const sum = r.targets.proteinG * 4 + r.targets.carbsG * 4 + r.targets.fatG * 9;
       assert.ok(
         Math.abs(sum - r.targets.kcal) <= 15,

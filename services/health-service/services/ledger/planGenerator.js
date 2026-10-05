@@ -26,7 +26,13 @@ import { MAX_ACTIVE_PLAN_ITEMS } from './constants.js';
 const TARGET_MIN_ITEMS = 4;
 const TARGET_MAX_ITEMS = 8;
 
-export function generatePlan({ goal, diet, targets, measuredActivity, hasDoctorItems = false }) {
+// `goals` is the user's whole set. It is not read for anything today — plan items
+// key off the nutrient targets, so retargeting the numbers retargets the plan
+// regardless of which goals produced them — but it is accepted so the generator
+// can answer "is this suggestion right for someone building muscle AND losing
+// fat?" without a signature change. Named `goals` rather than `goal` because the
+// one-goal reading is the thing that was wrong.
+export function generatePlan({ goals = [], diet, targets, measuredActivity, hasDoctorItems = false }) {
   const items = [];
 
   // --- Nutrition ---------------------------------------------------------

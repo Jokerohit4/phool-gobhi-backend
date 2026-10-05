@@ -696,6 +696,12 @@
     "since": "2026-09-29",
     "notes": "food(s) added to a day. Three shapes on one event so foods-logged is a single funnel with an origin split, not three events that have to be summed correctly by hand. Search path: props slot, source='search' (one food). Saved-meal repeat path: props slot, source='saved_meal', logged_count, skipped_count \u2014 a repeat writes many foods in one request, so counting it as a single food would understate the feature, and skipped_count > 0 means foods left the catalogue after the meal was saved and the user was shown a partial-write warning. Photo path: props slot, source='photo_confirmed', logged_count \u2014 one photo can produce several foods, for the same reason as the repeat path"
   },
+  "health_food_requested": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-10",
+    "notes": "a user could not find a food in the picker and submitted it. props name. Fires only on CREATION, not on a repeat ask for a dish already requested \u2014 requestCount on the row is the demand signal, and counting both would make one persistent user look like growing demand. The volume and the shape of these names are the catalogue growth backlog: this is the only place that records what people actually searched for and did not find, as opposed to a guess about what they eat. Note the name IS carried \u2014 unlike a food photo's proposed names, a food name is not a description of somebody's diet, and the whole value of the event is knowing which dish"
+  },
   "health_food_photo_recognized": {
     "source": "server",
     "service": "health-service",
@@ -731,6 +737,12 @@
     "service": "health-service",
     "since": "2026-09-29",
     "notes": "a medical document was stored. props kind only \u2014 never the filename, storage path, or contents; a path is a capability and the document is the user's private data"
+  },
+  "health_doctor_appointment_recorded": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-10",
+    "notes": "an appointment was added to the plan. props NONE, deliberately: a doctor, a speciality, a date and a note are all health data, and the analytics util's no-PII rule applies with nothing to trade against. Fires on create only \u2014 editing an appointment is a correction, not a new booking, and re-emitting it would inflate the count of appointments a user has. Renamed from doctor_appointment_recorded at registration: this was the only health-service event without the health_ prefix, and it was renamed rather than registered as-is because it had never shipped, so no historical rows change meaning. A bare doctor_appointment prefix would also have read as the AI prescription kind of the same name, which is a different thing entirely and is explicitly rejected as a plan item kind"
   },
   "attendance_recorded": {
     "source": "server",

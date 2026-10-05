@@ -215,6 +215,11 @@ async function removeScope(userId, scope, { purge = false } = {}) {
       // sent a photo, this model read it, this is what it cost" is itself a
       // record of the user's food logging habits.
       prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+      // And the foods this person could not find. Same reason: the request is
+      // a list of what they eat and what the catalogue lacked, and it is in
+      // this transaction because a revoked scope must not leave a free-text
+      // record of somebody's diet behind.
+      prisma.foodRequest.deleteMany({ where: { userId } }),
     ]);
 
     if (photos.length) {

@@ -41,7 +41,7 @@ function fakePrisma({
   activityRows = [],
   sessions = [],
 } = {}) {
-  const calls = { created: [] };
+  const calls = { written: [] };
   return {
     calls,
     healthGoal: {
@@ -71,11 +71,49 @@ function fakePrisma({
       findMany: async ({ where }) =>
         sessions.filter((s) => inRange(s.localDate, where.localDate)),
     },
+    // Stateful, and that is the whole point of the rewrite.
+    //
+    // The previous double was `findFirst: async () => targets[0]` plus
+    // `create: async ({data}) => ({ id: 1, ...data })`. It ignored the `where`
+    // clause, ignored the fact that `create` cannot insert a second row under
+    // PRIMARY KEY (userId), and returned an `id` the table does not have. So
+    // the tests passed against queries production could not execute: the
+    // service ordered by an `effectiveFrom` column that was not in the schema,
+    // and every recompute after the first would have failed on the primary key.
+    //
+    // This one honours userId, honours effectiveFrom ordering, assigns real
+    // incrementing ids, and enforces the (userId, effectiveFrom) uniqueness the
+    // migration added. A double that is easier to fool than the database is
+    // worse than no double at all.
     nutritionTarget: {
-      findFirst: async () => targets[0] ?? null,
-      create: async ({ data }) => {
-        calls.created.push(data);
-        return { id: 1, ...data };
+      rows: targets.map((t, i) => ({ id: i + 1, ...t })),
+      nextId: targets.length + 1,
+      async findFirst({ where = {}, orderBy = {} } = {}) {
+        const matches = this.rows.filter(
+          (r) => Object.entries(where).every(([k, v]) => r[k] === v),
+        );
+        // Newest-first. Only effectiveFrom is ever ordered on, and the sort is
+        // lexicographic on purpose: 'YYYY-MM-DD' sorts as a date, which is the
+        // same reason the column is a string in the first place.
+        if (orderBy.effectiveFrom) {
+          matches.sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1));
+        }
+        return matches[0] ?? null;
+      },
+      async upsert({ where, create, update }) {
+        const { userId, effectiveFrom } = where.userId_effectiveFrom;
+        const i = this.rows.findIndex(
+          (r) => r.userId === userId && r.effectiveFrom === effectiveFrom,
+        );
+        if (i >= 0) {
+          this.rows[i] = { ...this.rows[i], ...update };
+          calls.written.push({ ...update, userId, effectiveFrom, id: this.rows[i].id });
+          return this.rows[i];
+        }
+        const row = { id: this.nextId++, ...create };
+        this.rows.push(row);
+        calls.written.push(row);
+        return row;
       },
     },
   };
@@ -83,7 +121,7 @@ function fakePrisma({
 
 const FULL_GOAL = {
   userId: 1,
-  goal: 'recomp',
+  goals: ['recomp'],
   sex: 'male',
   age: 29,
   heightCm: 175,
@@ -174,7 +212,7 @@ test('height is reported missing when neither source has it', async () => {
 test('every missing input is reported at once, with a reason each', async () => {
   // The intake screen asks for all of it in one pass. A service that returned
   // one field at a time would walk the user back through setup repeatedly.
-  const prisma = fakePrisma({ goal: { userId: 1, goal: 'recomp' }, profile: null, weight: null });
+  const prisma = fakePrisma({ goal: { userId: 1, goals: ['recomp'] }, profile: null, weight: null });
   const r = await resolveInputs({ prisma, userId: 1, localDate: TODAY });
 
   assert.equal(r.ok, false);
@@ -189,7 +227,7 @@ test('a user with no goal at all is told exactly that', async () => {
   const prisma = fakePrisma({ goal: null });
   const r = await resolveInputs({ prisma, userId: 1, localDate: TODAY });
   assert.equal(r.ok, false);
-  assert.deepEqual(r.missing, ['goal']);
+  assert.deepEqual(r.missing, ['goals']);
 });
 
 // --- Activity measurement --------------------------------------------------
@@ -256,7 +294,7 @@ test('a recompute with missing inputs writes nothing', async () => {
 
   assert.equal(r.written, false);
   assert.equal(r.skipped, 'missing_inputs');
-  assert.equal(prisma.calls.created.length, 0, 'nothing may be written without inputs');
+  assert.equal(prisma.calls.written.length, 0, 'nothing may be written without inputs');
 });
 
 test('a user-edited target is never overwritten by a recompute', async () => {
@@ -265,30 +303,107 @@ test('a user-edited target is never overwritten by a recompute', async () => {
   const prisma = fakePrisma({
     goal: FULL_GOAL,
     weight: WEIGHT_READING,
-    targets: [{ id: 7, source: 'user_edited' }],
+    // userId and effectiveFrom are on every real row, and the double now filters
+    // and orders on them — so a fixture without them is not a row this table
+    // can hold. That is the point: the previous double ignored `where`, which
+    // is how this guard came to be "tested" against an impossible row.
+    targets: [{ id: 7, userId: 1, effectiveFrom: '2026-09-20', source: 'user_edited' }],
   });
   const r = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
 
   assert.equal(r.written, false);
   assert.equal(r.skipped, 'user_edited');
   assert.equal(r.targetId, 7);
-  assert.equal(prisma.calls.created.length, 0);
+  assert.equal(prisma.calls.written.length, 0);
+});
+
+// The three failures these pin down all shipped once, so each one gets a test
+// that fails against the old code rather than a comment saying it matters.
+
+test('the newest row is the one consulted, whatever day the older rows are from', async () => {
+  // Guards the ORDER BY. The old query ordered by `effectiveFrom`, a column the
+  // schema did not have, so in production this threw before it could return
+  // anything at all.
+  const prisma = fakePrisma({
+    goal: FULL_GOAL,
+    weight: WEIGHT_READING,
+    targets: [
+      { id: 1, userId: 1, effectiveFrom: '2026-08-01', source: 'formula' },
+      { id: 2, userId: 1, effectiveFrom: '2026-09-27', source: 'user_edited' },
+      { id: 3, userId: 1, effectiveFrom: '2026-09-10', source: 'formula' },
+    ],
+  });
+  const r = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+
+  // 2026-09-27 is the newest, and it is the user's own number, so it wins.
+  assert.equal(r.written, false);
+  assert.equal(r.skipped, 'user_edited');
+  assert.equal(r.targetId, 2, 'must consult the newest row, not the first or the last id');
+});
+
+test('changing goal does not let a recompute walk past a user-edited target', async () => {
+  // The old lookup was where: { userId, goal }. Change your goal and the
+  // user_edited row for the old goal stopped matching, so the guard silently
+  // stopped guarding and the number the user had chosen got overwritten.
+  const prisma = fakePrisma({
+    goal: { ...FULL_GOAL, goal: 'build_muscle' },
+    weight: WEIGHT_READING,
+    targets: [{ id: 9, userId: 1, effectiveFrom: '2026-09-20', goal: 'lose_fat', source: 'user_edited' }],
+  });
+  const r = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+
+  assert.equal(r.written, false);
+  assert.equal(r.skipped, 'user_edited');
+  assert.equal(prisma.calls.written.length, 0, 'a goal change must not license a clobber');
+});
+
+test('recomputing twice in one day leaves one row for that day', async () => {
+  // The reason the write is an upsert. The table is keyed PRIMARY KEY (userId)
+  // and a plain create() therefore failed on every recompute after the first —
+  // which is why 20261009000000_nutrition_target_history moved the key to a
+  // surrogate id and added UNIQUE (userId, effectiveFrom).
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+
+  const first = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+  const second = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+
+  assert.equal(first.written, true);
+  assert.equal(second.written, true);
+  assert.equal(prisma.nutritionTarget.rows.length, 1, 'one day must not accumulate two targets');
+  assert.equal(prisma.nutritionTarget.rows[0].effectiveFrom, TODAY);
+});
+
+test('a recompute on a later day appends rather than overwrites', async () => {
+  // The other half of being a history: superseding a target must not destroy
+  // it, or `inputs` stops being able to explain what the user was told.
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+
+  // Both days are AFTER the weight reading (2026-09-27), because a day before it
+  // resolves no weight and correctly reports missing_inputs instead.
+  await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
+  await recomputeTargets({ prisma, userId: 1, localDate: '2026-10-02' });
+
+  assert.equal(prisma.nutritionTarget.rows.length, 2);
+  const days = prisma.nutritionTarget.rows.map((r) => r.effectiveFrom).sort();
+  assert.deepEqual(days, ['2026-09-28', '2026-10-02']);
 });
 
 test('a formula target is replaced by a fresh formula target', async () => {
   const prisma = fakePrisma({
     goal: FULL_GOAL,
     weight: WEIGHT_READING,
-    targets: [{ id: 3, source: 'formula' }],
+    targets: [{ id: 3, userId: 1, effectiveFrom: '2026-09-20', source: 'formula' }],
   });
   const r = await recomputeTargets({ prisma, userId: 1, localDate: TODAY, rulesVersion: 'v1' });
 
   assert.equal(r.written, true);
-  assert.equal(prisma.calls.created.length, 1);
+  assert.equal(prisma.calls.written.length, 1);
 
-  const row = prisma.calls.created[0];
+  const row = prisma.calls.written[0];
   assert.equal(row.userId, 1);
-  assert.equal(row.goal, 'recomp');
+  // The whole set is stored on the row, not one of them. A target derived from
+  // two goals filed under a single goal cannot explain itself later.
+  assert.deepEqual(row.goals, ['recomp']);
   assert.equal(row.source, 'formula');
   assert.equal(row.effectiveFrom, TODAY);
   assert.equal(row.rulesVersion, 'v1');
@@ -310,7 +425,7 @@ test('a workout day is reflected in the water target that gets stored', async ()
   });
   assert.equal(r.written, true);
   assert.equal(r.targets.waterMl, 2450 + 500);
-  assert.equal(prisma.calls.created[0].inputs.waterAddend, 500);
+  assert.equal(prisma.calls.written[0].inputs.waterAddend, 500);
 });
 
 // --- measured activity: coverage is not frequency --------------------------
@@ -517,7 +632,7 @@ test('recompute gathers measurements when the caller passes none', async () => {
   assert.equal(r.inputs.activity, 'very_active');
   // The stored explanation records the resolved activity, so a later retune of
   // the formula cannot silently change which activity level produced this number.
-  assert.equal(prisma.calls.created[0].inputs.activity, 'very_active');
+  assert.equal(prisma.calls.written[0].inputs.activity, 'very_active');
 });
 
 // --- describeActivity: the read the app was faking with a write -------------
@@ -530,7 +645,7 @@ test('describeActivity writes nothing', async () => {
   const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
   const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
   assert.ok(detail);
-  assert.equal(prisma.calls.created.length, 0);
+  assert.equal(prisma.calls.written.length, 0);
 });
 
 test('describeActivity reports the stated activity when there is no watch', async () => {
@@ -550,7 +665,7 @@ test('describeActivity explains a user_edited target, which recompute cannot', a
   const prisma = fakePrisma({
     goal: FULL_GOAL,
     weight: WEIGHT_READING,
-    targets: [{ id: 1, source: 'user_edited', kcal: 1800 }],
+    targets: [{ id: 1, userId: 1, effectiveFrom: '2026-09-20', source: 'user_edited', kcal: 1800 }],
   });
 
   const recompute = await recomputeTargets({ prisma, userId: 1, localDate: TODAY });
@@ -561,7 +676,7 @@ test('describeActivity explains a user_edited target, which recompute cannot', a
   // The read can, and does not touch the target.
   const detail = await describeActivity({ prisma, userId: 1, localDate: TODAY });
   assert.equal(detail.usedStatedActivity, 'moderate');
-  assert.equal(prisma.calls.created.length, 0);
+  assert.equal(prisma.calls.written.length, 0);
 });
 
 test('describeActivity answers with no goal on file at all', async () => {

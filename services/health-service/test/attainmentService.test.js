@@ -295,7 +295,7 @@ test('past a cut target is reached, not short of it', () => {
     targetWeightKg: 75,
     targetDate: '2026-11-01',
     today: TODAY,
-    goal: 'lose_fat',
+    goals: ['lose_fat'],
     readings: readings(['2026-08-01', 82], ['2026-10-01', 72]),
   });
 
@@ -308,7 +308,7 @@ test('past a bulk target is reached, by the same reasoning', () => {
     targetWeightKg: 80,
     targetDate: '2026-11-01',
     today: TODAY,
-    goal: 'build_muscle',
+    goals: ['build_muscle'],
     readings: readings(['2026-08-01', 72], ['2026-10-01', 84]),
   });
 
@@ -323,7 +323,7 @@ test('under a bulk target is not "past" it', () => {
     targetWeightKg: 80,
     targetDate: '2026-11-01',
     today: TODAY,
-    goal: 'build_muscle',
+    goals: ['build_muscle'],
     readings: readings(['2026-08-01', 75], ['2026-10-01', 78]),
   });
 
@@ -338,7 +338,7 @@ test('a recomp goal gets no verdict from the scale alone', () => {
     targetWeightKg: 75,
     targetDate: '2026-11-01',
     today: TODAY,
-    goal: 'recomp',
+    goals: ['recomp'],
     readings: readings(['2026-08-01', 80], ['2026-10-01', 71]),
   });
 
@@ -369,7 +369,7 @@ test('gaining past a cut target is not having reached it', () => {
     targetWeightKg: 75,
     targetDate: '2026-11-01',
     today: TODAY,
-    goal: 'lose_fat',
+    goals: ['lose_fat'],
     readings: readings(['2026-09-01', 80], ['2026-10-01', 82]),
   });
 
@@ -383,7 +383,7 @@ test('a single reading cannot establish that the target was passed', () => {
     targetWeightKg: 75,
     targetDate: '2026-11-01',
     today: TODAY,
-    goal: 'lose_fat',
+    goals: ['lose_fat'],
     readings: readings(['2026-09-25', 72]),
   });
 
@@ -426,7 +426,7 @@ test('a reading below the plausible body range is dropped', () => {
   const result = computeAttainment({
     targetWeightKg: 75,
     today: TODAY,
-    goal: 'lose_fat',
+    goals: ['lose_fat'],
     readings: readings(['2026-09-20', 80], ['2026-09-25', 3]),
   });
 
@@ -618,7 +618,7 @@ test('a user with no target never has their weight series read', async () => {
   // their weight read off the database for a screen that will not show it.
   let readWeight = false;
   const prisma = {
-    healthGoal: { findUnique: async () => ({ targetWeightKg: null, targetDate: null, goal: 'general_health' }) },
+    healthGoal: { findUnique: async () => ({ targetWeightKg: null, targetDate: null, goals: ['general_health'] }) },
     biometricEntry: {
       findMany: async () => {
         readWeight = true;
@@ -641,7 +641,7 @@ test('the recorded goal reaches the calculation, not just the response', async (
       findUnique: async () => ({
         targetWeightKg: 75,
         targetDate: '2026-11-01',
-        goal: 'recomp',
+        goals: ['recomp'],
       }),
     },
     biometricEntry: {
@@ -655,14 +655,14 @@ test('the recorded goal reaches the calculation, not just the response', async (
   const result = await getAttainment(prisma, { userId: 1, localDate: '2026-10-01' });
 
   assert.notEqual(result.status, ATTAINMENT_STATUS.REACHED);
-  assert.equal(result.goal, 'recomp');
+  assert.deepEqual(result.goals, ['recomp']);
 });
 
 test('the goal comes back with the answer, so the screen can name it', async () => {
   // A number labelled "goal" with no goal attached is a question the user has to
   // answer about their own life.
   const prisma = fakePrisma({
-    goal: { targetWeightKg: 75, targetDate: '2026-11-01', goal: 'lose_fat' },
+    goal: { targetWeightKg: 75, targetDate: '2026-11-01', goals: ['lose_fat'] },
     entries: [
       { value: 80, localDate: '2026-09-01' },
       { value: 77, localDate: '2026-10-01' },
@@ -670,15 +670,65 @@ test('the goal comes back with the answer, so the screen can name it', async () 
   });
 
   const result = await getAttainment(prisma, { userId: 1, localDate: TODAY });
-  assert.equal(result.goal, 'lose_fat');
+  assert.deepEqual(result.goals, ['lose_fat']);
   assert.equal(result.status, ATTAINMENT_STATUS.ON_TRACK);
+});
+
+test('a set where only one goal abstains still gets a verdict from the scale', async () => {
+  // `recomp` + `lose_fat` is the case the "every goal abstains" rule exists for.
+  // The series has crossed the target, and one of the two goals is a weight goal,
+  // so calling it REACHED is a statement the service can actually support.
+  // Requiring ALL goals to abstain is what stops this being discarded because the
+  // user also ticked a non-weight objective.
+  const prisma = {
+    healthGoal: {
+      findUnique: async () => ({
+        targetWeightKg: 75,
+        targetDate: '2026-11-01',
+        goals: ['recomp', 'lose_fat'],
+      }),
+    },
+    biometricEntry: {
+      findMany: async () => [
+        { value: 80, localDate: '2026-08-01' },
+        { value: 71, localDate: '2026-10-01' },
+      ],
+    },
+  };
+
+  const result = await getAttainment(prisma, { userId: 1, localDate: '2026-10-01' });
+  assert.equal(result.status, ATTAINMENT_STATUS.REACHED, 'a weight goal in the set must count');
+});
+
+test('a set of only non-weight goals gets no verdict from the scale alone', async () => {
+  // The other half of the rule, and the case a naive `goals.length > 0` check
+  // would get backwards.
+  const prisma = {
+    healthGoal: {
+      findUnique: async () => ({
+        targetWeightKg: 75,
+        targetDate: '2026-11-01',
+        goals: ['recomp', 'general_health'],
+      }),
+    },
+    biometricEntry: {
+      findMany: async () => [
+        { value: 80, localDate: '2026-08-01' },
+        { value: 71, localDate: '2026-10-01' },
+      ],
+    },
+  };
+
+  const result = await getAttainment(prisma, { userId: 1, localDate: '2026-10-01' });
+  assert.notEqual(result.status, ATTAINMENT_STATUS.REACHED);
+  assert.deepEqual(result.goals, ['recomp', 'general_health']);
 });
 
 test('prisma decimals arrive as numbers, not strings', async () => {
   // Decimal(5,1) comes back as a Prisma Decimal object or a string depending on
   // the client, and a string target compared with arithmetic is a silent NaN.
   const prisma = fakePrisma({
-    goal: { targetWeightKg: 75, targetDate: '2026-11-01', goal: 'lose_fat' },
+    goal: { targetWeightKg: 75, targetDate: '2026-11-01', goals: ['lose_fat'] },
     entries: [{ value: 77, localDate: '2026-10-01' }],
   });
 
@@ -692,7 +742,7 @@ test('the weight query is filtered to the weight metric', async () => {
   // an answer about a number nobody entered.
   let where = null;
   const prisma = {
-    healthGoal: { findUnique: async () => ({ targetWeightKg: 75, targetDate: null, goal: 'lose_fat' }) },
+    healthGoal: { findUnique: async () => ({ targetWeightKg: 75, targetDate: null, goals: ['lose_fat'] }) },
     biometricEntry: {
       findMany: async (args) => {
         where = args.where;

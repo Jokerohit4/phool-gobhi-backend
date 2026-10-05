@@ -13,6 +13,9 @@
     "db:deploy": "prisma migrate deploy",
     "check:drift": "node scripts/check-schema-drift.mjs"
   },
+  "prisma": {
+    "seed": "node prisma/seed/run.js"
+  },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
     "@prisma/client": "^6.8.2",

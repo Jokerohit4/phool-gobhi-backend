@@ -20,6 +20,8 @@ import {
   roundTo,
 } from './constants.js';
 
+import { rankFoods } from './foodMatch.js';
+
 const GRAMS_MAX = 5000;
 const SERVINGS_MAX = 50;
 
@@ -89,31 +91,67 @@ function addInto(target, source) {
 /**
  * Search foods for the picker.
  *
+ * Two stages, and the split is deliberate.
+ *
+ * SQL narrows, JS ranks. The database does what only it can do cheaply -
+ * substring matching over a few hundred rows - and the ranking happens in Node
+ * because the ordering is a judgement about which name is more likely to be the
+ * one that was typed. That judgement cannot be expressed as an `orderBy`.
+ *
+ * There is no `take`. The previous `take: 25` was truncating an ALPHABETICAL
+ * list, which is the worst possible way to lose a result: search "chicken" and
+ * the intended row is simply absent if it sorts past position 25, with nothing
+ * in the response to say so. Ranking first means any cut happens on relevance.
+ * The candidate set is bounded by the substring prefilter, so an unbounded
+ * `findMany` is not an unbounded result - a 2-character query still matches a
+ * slice of the catalogue, which is why scoreMatch refuses to rank substrings
+ * that short.
+ *
  * Unverified rows are excluded unless the caller explicitly asks. The seeded
  * catalogue is all `verified: false` (see prisma/seed/foods.seed.js), so the
  * default would otherwise return an empty list — which is exactly the state we
  * want to be visible rather than papered over with numbers nobody has checked.
  * The Flutter app sets includeUnverified so the food log still works.
  */
-export async function searchFoods(prisma, userId, { query, includeUnverified = false, limit = 25 } = {}) {
+export async function searchFoods(prisma, userId, { query, includeUnverified = false } = {}) {
   const q = (query || '').trim();
   if (!q) return [];
 
+  // Three branches, and the reason for each:
+  //
+  //   searchText - the haystack of name + every alias. This is the branch that
+  //                makes an alias match PARTIALLY: `has` on a String[] is exact
+  //                element only, so without this "omlet" and "dosa with" cannot
+  //                find rows however they are spelled or aliased.
+  //   name       - a user-created food written before searchText existed has
+  //                nothing in that column, and this branch still finds it. Also
+  //                the branch the name index can serve.
+  //   aliases    - exact element match, kept as a cheap third net rather than
+  //                for correctness. It is redundant against searchText on any
+  //                row written by the current seeder, and deliberately so: it
+  //                catches an alias that somehow is not in the haystack, which
+  //                is cheaper to leave in than to prove cannot happen.
+  //
+  // q is lowercased once for searchText and aliases because the seeder writes
+  // them lowercased; `mode: 'insensitive'` makes that redundant on searchText but
+  // not on the array, which has no mode. Both together so a hand-inserted
+  // capitalised alias still matches.
+  const needle = q.toLowerCase();
   const rows = await prisma.foodItem.findMany({
     where: {
       OR: [
         { name: { contains: q, mode: 'insensitive' } },
-        { aliases: { has: q.toLowerCase() } },
+        { searchText: { contains: needle, mode: 'insensitive' } },
+        { aliases: { has: needle } },
       ],
-  // A user's own foods are always available to them regardless of the
-  // verification flag; the flag is about our catalogue, not their data.
+      // A user's own foods are always available to them regardless of the
+      // verification flag; the flag is about our catalogue, not their data.
       AND: includeUnverified ? [] : [{ OR: [{ verified: true }, { createdByUserId: userId }] }],
     },
     orderBy: [{ name: 'asc' }],
-    take: Math.min(Number(limit) || 25, 100),
   });
 
-  return rows;
+  return rankFoods(rows, q);
 }
 
 /**

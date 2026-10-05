@@ -38,7 +38,7 @@ function fieldsOf(model) {
 // derived, because the point is to state the intended contract - a list derived
 // from the source would only ever agree with itself.
 const LEDGER_PROJECTIONS = {
-  HealthGoal: ['goal', 'sex', 'age', 'heightCm', 'startDate', 'targetWeightKg', 'targetDate',
+  HealthGoal: ['goals', 'sex', 'age', 'heightCm', 'startDate', 'targetWeightKg', 'targetDate',
     'activity', 'diet', 'allergies', 'activityIsMeasured', 'calmMode'],
   NutritionTarget: ['kcal', 'proteinG', 'carbsG', 'fatG', 'fibreG', 'waterMl', 'source',
     'rulesVersion', 'inputs', 'updatedAt'],
@@ -54,6 +54,7 @@ const LEDGER_PROJECTIONS = {
   DoctorAppointment: ['doctorName', 'speciality', 'localDate', 'localTime', 'followUpDate',
     'notes', 'createdAt'],
   FoodPhotoRequestLog: ['requestedAt'],
+  FoodRequest: ['name', 'status', 'requestCount', 'createdAt'],
   MedicalDocument: ['title', 'kind', 'docDate', 'mimeType', 'sizeBytes', 'notes', 'createdAt'],
 };
 
@@ -63,7 +64,7 @@ const ROW_ALIAS = {
   HealthGoal: 'healthGoal', NutritionTarget: 'nutritionTarget', FoodLog: 'f',
   FoodItem: 'f', SavedMeal: 'm', PlanItem: 'p', PlanItemCompletion: 'c',
   ScoreDaySnapshot: 's', HealthCondition: 'c', DoctorAppointment: 'a',
-  FoodPhotoRequestLog: 'p', MedicalDocument: 'd',
+  FoodPhotoRequestLog: 'p', MedicalDocument: 'd', FoodRequest: 'r',
 };
 
 // Deleted implicitly by a cascading parent, so it has no deleteMany of its own
@@ -143,9 +144,28 @@ test('export and erasure cover the same ledger models', () => {
   const erasure = readFileSync(join(here, '..', 'services', 'consentService.js'), 'utf8');
   const MODELS = Object.keys(LEDGER_PROJECTIONS);
 
-  const missingFromExport = MODELS.filter(
-    (m) => !new RegExp(`prisma\\.${m[0].toLowerCase()}${m.slice(1)}\\.(findMany|findUnique)`).test(exportSource),
-  );
+  // A model may be read through a named helper instead of a literal
+  // `prisma.<model>.findX(...)` call, and this check scans source text, so the
+  // helper has to be declared here or the model reads as "erased but never
+  // exported" while it is exported perfectly well.
+  //
+  // NutritionTarget is the one that needs it: it became an append-only history
+  // (migration 20261009000000_nutrition_target_history), so "the user's target"
+  // is a findFirst ordered by effectiveFrom rather than a findUnique on the
+  // primary key, and that query lives in services/ledger/currentTarget.js. The
+  // per-field test above still checks that every projected column is actually
+  // read, so naming the helper here cannot hide a field that stopped being
+  // exported.
+  const READ_VIA = { NutritionTarget: 'currentNutritionTarget' };
+
+  const missingFromExport = MODELS.filter((m) => {
+    const direct = new RegExp(
+      `prisma\\.${m[0].toLowerCase()}${m.slice(1)}\\.(findMany|findUnique|findFirst)`,
+    ).test(exportSource);
+    if (direct) return false;
+    const helper = READ_VIA[m];
+    return !helper || !new RegExp(`\\b${helper}\\s*\\(`).test(exportSource);
+  });
   assert.deepEqual(
     missingFromExport,
     [],

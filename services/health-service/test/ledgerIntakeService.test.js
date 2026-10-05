@@ -99,7 +99,7 @@ test('a repeated intake save does not duplicate the weight history', async () =>
   // The goal from the first save now exists, so the second send is an update
   // rather than a create — and its weight belongs to a new day, not to the
   // 27th. "Today's reading" is relative to the day being written.
-  const day2 = fakePrisma({ goal: { userId: 1, goal: 'recomp' }, todayWeight: null });
+  const day2 = fakePrisma({ goal: { userId: 1, goals: ['recomp'] }, todayWeight: null });
   const r2 = await saveIntake({ prisma: day2, userId: 1, localDate: TODAY, input: { weightKg: 72 } });
   assert.equal(r2.written, true);
   assert.equal(day2.calls.entryCreate.length, 1);
@@ -119,7 +119,7 @@ test('an intake save without a weight leaves the time series alone', async () =>
 
 test('a save touches only the fields the user actually answered', async () => {
   const prisma = fakePrisma({
-    goal: { userId: 1, goal: 'recomp', age: 29, sex: 'male', heightCm: 175, activity: 'moderate' },
+    goal: { userId: 1, goals: ['recomp'], age: 29, sex: 'male', heightCm: 175, activity: 'moderate' },
   });
   await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { age: 30 } });
 
@@ -130,17 +130,64 @@ test('a save touches only the fields the user actually answered', async () => {
   assert.equal(prisma.calls.goalUpdate[0].age, 30);
 });
 
+test('a set of goals is saved whole, in order', async () => {
+  const prisma = fakePrisma();
+  const r = await saveIntake({
+    prisma,
+    userId: 1,
+    localDate: TODAY,
+    input: { goals: ['recomp', 'lose_fat'], age: 30 },
+  });
+
+  assert.equal(r.written, true);
+  // Stored as given. The order is the user's ranking and the documented
+  // tie-break for the protein target, so the write must not sort it, dedupe it
+  // or reduce it to the first element.
+  assert.deepEqual(prisma.calls.goalCreate[0].goals, ['recomp', 'lose_fat']);
+  assert.equal(prisma.calls.goalCreate[0].goal, undefined, 'the singular column is gone from the write');
+});
+
+test('a save that does not mention goals leaves the existing set alone', async () => {
+  // The bug this guards against is subtle: a multi-select form submits its
+  // (possibly empty) chip selection on every save, so a user changing only their
+  // weight would have their goals erased by an unrelated edit.
+  const prisma = fakePrisma({
+    goal: { userId: 1, goals: ['build_muscle', 'lose_fat'], age: 29, sex: 'male', heightCm: 175, activity: 'moderate' },
+  });
+  await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { weightKg: 74 } });
+
+  assert.equal(prisma.calls.goalUpdate.length, 1);
+  assert.equal('goals' in prisma.calls.goalUpdate[0], false, 'goals must not appear in an unrelated update');
+});
+
+test('a save that sends an empty set does not erase the existing one', async () => {
+  // A genuinely empty list is not "replace my goals with nothing". If a client
+  // does send one alongside a real change, the goals are left alone rather than
+  // silently cleared — wiping them would leave the user with a target they could
+  // no longer explain, and the next recompute would find no goal at all.
+  const prisma = fakePrisma({
+    goal: { userId: 1, goals: ['build_muscle'], age: 29, sex: 'male', heightCm: 175, activity: 'moderate' },
+  });
+  await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { goals: [], weightKg: 74 } });
+
+  // The weight still saved. Refusing the whole payload would mean a user cannot
+  // record a weigh-in until they have picked a goal, which is the wrong trade:
+  // an unrelated control on a screen is not allowed to block a different one.
+  assert.equal(prisma.calls.goalUpdate.length, 1);
+  assert.equal('goals' in prisma.calls.goalUpdate[0], false, 'and the set is untouched');
+});
+
 test('saving a goal for the first time requires a goal', async () => {
   const prisma = fakePrisma();
   const r = await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { age: 30, heightCm: 175 } });
   assert.equal(r.written, false);
   assert.equal(r.skipped, 'invalid');
-  assert.match(r.errors.goal, /working towards/);
+  assert.match(r.errors.goals, /working towards/);
   assert.equal(prisma.calls.goalCreate.length, 0);
 });
 
 test('an existing user can update without resending the goal', async () => {
-  const prisma = fakePrisma({ goal: { userId: 1, goal: 'lose_fat' } });
+  const prisma = fakePrisma({ goal: { userId: 1, goals: ['lose_fat'] } });
   const r = await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { activity: 'light' } });
   assert.equal(r.written, true);
   assert.equal(prisma.calls.goalUpdate[0].activity, 'light');
@@ -157,7 +204,8 @@ test('implausible values are refused with a sentence the form can show', () => {
   assert.ok(validateIntake({ heightCm: 20 }).heightCm);
   assert.ok(validateIntake({ heightCm: 400 }).heightCm);
   assert.ok(validateIntake({ weightKg: 10 }).weightKg);
-  assert.ok(validateIntake({ goal: 'get_ripped' }).goal);
+  assert.ok(validateIntake({ goals: ['get_ripped'] }).goals);
+  assert.ok(validateIntake({ goals: 'lose_fat' }).goals, 'a bare string is not a list');
   assert.ok(validateIntake({ sex: 'x' }).sex);
   assert.ok(validateIntake({ activity: 'superhuman' }).activity);
   assert.ok(validateIntake({ diet: 'carnivore' }).diet);
@@ -168,6 +216,28 @@ test('implausible values are refused with a sentence the form can show', () => {
   // Plausible values pass, including the boundaries.
   assert.deepEqual(validateIntake({ age: 18, heightCm: 90, weightKg: 25, sex: 'other', activity: 'sedentary', diet: 'vegan' }), {});
   assert.deepEqual(validateIntake({ age: 100, heightCm: 250, weightKg: 400 }), {});
+
+  // Sets. The whole point of the feature, so the boundaries are pinned rather
+  // than assumed: one goal, several, the cap, and the duplicate that would
+  // otherwise buy a double calorie adjustment.
+  assert.deepEqual(validateIntake({ goals: ['lose_fat'] }), {});
+  assert.deepEqual(validateIntake({ goals: ['lose_fat', 'build_muscle', 'recomp'] }), {});
+  assert.deepEqual(
+    validateIntake({ goals: ['lose_fat', 'build_muscle', 'recomp', 'endurance'] }),
+    {},
+    'four goals is the cap and must pass',
+  );
+  assert.ok(validateIntake({ goals: ['lose_fat', 'build_muscle', 'recomp', 'endurance', 'general_health'] }).goals);
+  assert.ok(validateIntake({ goals: ['lose_fat', 'lose_fat'] }).goals);
+  assert.ok(validateIntake({ goals: ['lose_fat', 'not_a_goal'] }).goals);
+  // An empty list is not an error here - it reads as an untouched multi-select -
+  // but it must not be the way a user ends up with no goals at all. saveIntake
+  // refuses to create a row without one; see "saving a goal for the first time
+  // requires a goal" and the save tests below.
+  assert.deepEqual(validateIntake({ goals: [] }), {});
+  // The legacy scalar stays valid so an app that has not shipped the
+  // multi-select yet is not locked out of its own form.
+  assert.deepEqual(validateIntake({ goal: 'lose_fat' }), {});
 });
 
 test('an invalid answer writes nothing at all', async () => {
@@ -337,25 +407,25 @@ test('the setup state asks only for what is missing', async () => {
   // weightKg/heightCm) so the screen's keys cannot drift from the engine.
   const fresh = await getSetupState({ prisma: fakePrisma(), userId: 1, localDate: TODAY });
   assert.equal(fresh.hasGoal, false);
-  assert.equal(fresh.goal, null);
-  for (const field of ['goal', 'weight', 'height', 'age', 'sex', 'activity']) {
+  assert.deepEqual(fresh.goals, [], 'never started is an empty set, not a null and not a guess');
+  for (const field of ['goals', 'weight', 'height', 'age', 'sex', 'activity']) {
     assert.ok(fresh.missing.includes(field), `a first-run user is missing ${field}`);
   }
   // Reasons are plain sentences, for the screen to show.
-  assert.ok(typeof fresh.reasons.goal === 'string' && fresh.reasons.goal.length > 0);
+  assert.deepEqual(fresh.reasons.goals, 'goal_not_set');
   assert.ok(typeof fresh.reasons.weight === 'string' && fresh.reasons.weight.length > 0);
 
   // A complete user: nothing missing, and their values are prefilled.
   const done = await getSetupState({
     prisma: fakePrisma({
-      goal: { userId: 1, goal: 'recomp', age: 29, sex: 'male', heightCm: 175, activity: 'moderate', diet: 'veg', allergies: [] },
+      goal: { userId: 1, goals: ['recomp'], age: 29, sex: 'male', heightCm: 175, activity: 'moderate', diet: 'veg', allergies: [] },
       weight: { metric: 'weight', value: 72, unit: 'kg', localDate: '2026-09-27' },
     }),
     userId: 1,
     localDate: TODAY,
   });
   assert.equal(done.hasGoal, true);
-  assert.equal(done.goal, 'recomp');
+  assert.deepEqual(done.goals, ['recomp']);
   assert.deepEqual(done.missing, []);
   assert.deepEqual(done.reasons, {});
   assert.equal(done.prefill.weightKg, 72);
@@ -368,7 +438,7 @@ test('a user with a goal is asked only about the gaps', async () => {
   // not the full six and not the single short-circuit value.
   const r = await getSetupState({
     prisma: fakePrisma({
-      goal: { userId: 1, goal: 'lose_fat', age: 31 },
+      goal: { userId: 1, goals: ['lose_fat'], age: 31 },
       weight: null,
     }),
     userId: 1,
@@ -377,7 +447,7 @@ test('a user with a goal is asked only about the gaps', async () => {
   assert.deepEqual(r.missing.sort(), ['activity', 'height', 'sex', 'weight']);
   // The one they already answered is prefilled, not asked for.
   assert.equal(r.prefill.age, 31);
-  assert.equal(r.prefill.goal, 'lose_fat');
+  assert.deepEqual(r.prefill.goals, ['lose_fat']);
 });
 
 test('the setup state falls back to the legacy profile for height only', async () => {
@@ -386,7 +456,7 @@ test('the setup state falls back to the legacy profile for height only', async (
   const r = await getSetupState({
     prisma: fakePrisma({
       profile: { heightCm: 180 },
-      goal: { userId: 1, goal: 'recomp', age: 29, sex: 'male' },
+      goal: { userId: 1, goals: ['recomp'], age: 29, sex: 'male' },
       weight: { metric: 'weight', value: 70, unit: 'kg', localDate: TODAY },
     }),
     userId: 1,
@@ -397,7 +467,7 @@ test('the setup state falls back to the legacy profile for height only', async (
   const both = await getSetupState({
     prisma: fakePrisma({
       profile: { heightCm: 180 },
-      goal: { userId: 1, goal: 'recomp', age: 29, sex: 'male', heightCm: 175 },
+      goal: { userId: 1, goals: ['recomp'], age: 29, sex: 'male', heightCm: 175 },
       weight: { metric: 'weight', value: 70, unit: 'kg', localDate: TODAY },
     }),
     userId: 1,
@@ -424,7 +494,7 @@ test('the setup state reports a Decimal target weight as a number', async () => 
   // throw or become a string, and a text field cannot compare against a number.
   const r = await getSetupState({
     prisma: fakePrisma({
-      goal: { userId: 1, goal: 'lose_fat', age: 29, sex: 'male', heightCm: 175, targetWeightKg: { toString: () => '70.5' } },
+      goal: { userId: 1, goals: ['lose_fat'], age: 29, sex: 'male', heightCm: 175, targetWeightKg: { toString: () => '70.5' } },
       weight: { metric: 'weight', value: 80, unit: 'kg', localDate: TODAY },
     }),
     userId: 1,
@@ -450,7 +520,7 @@ test('age and sex prefill from the signup DOB and gender when no goal exists', a
 
 test('a saved HealthGoal snapshot wins over the auth profile', async () => {
   const r = await getSetupState({
-    prisma: fakePrisma({ goal: { userId: 1, goal: 'recomp', age: 29, sex: 'male' } }),
+    prisma: fakePrisma({ goal: { userId: 1, goals: ['recomp'], age: 29, sex: 'male' } }),
     userId: 1,
     localDate: TODAY,
     fetchProfile: async () => ({ dateOfBirth: '1980-01-01', gender: 'female' }),

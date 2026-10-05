@@ -80,13 +80,23 @@ function schemaFields(name) {
 
 function migrationColumns(name) {
   const cols = new Set();
+  // Whether each name most recently came into existence or was taken away. This
+  // is a map rather than a set of dropped names because "last statement wins" is
+  // the rule the database actually applies: PersonalisationProfile.setupWeightKg
+  // was dropped by the biometrics migration and then re-added by a later one, so
+  // a set of ever-dropped names reported it as missing when the column is very
+  // much there. Order of application is the whole question.
+  const lastEvent = new Map();
   const table = migrationCreateTable(name);
   if (table) {
     // The column type varies - `INTEGER`, `DECIMAL(8,2)`, and for enums the
     // schema-qualified `"health"."MealSlot"` - so the match only anchors on the
     // quoted column name at the start of a line. Requiring a bare type token here
     // silently skipped every enum-typed column, which is most of this schema.
-    for (const m of table.matchAll(/^\s+"(\w+)"\s+\S/gm)) cols.add(m[1]);
+    for (const m of table.matchAll(/^\s+"(\w+)"\s+\S/gm)) {
+      cols.add(m[1]);
+      lastEvent.set(m[1], 'created');
+    }
   }
 
   // Columns added after the fact, via ALTER TABLE.
@@ -102,7 +112,37 @@ function migrationColumns(name) {
   // unsatisfiable, which made this silently match nothing.
   for (const stmt of migration.split(';')) {
     if (!new RegExp(`^\\s*ALTER TABLE (?:IF EXISTS )?"?\\w*"\\."${name}"(?!\\w)`, 'i').test(stmt)) continue;
-    for (const m of stmt.matchAll(/ADD COLUMN (?:IF NOT EXISTS )?"(\w+)"/gi)) cols.add(m[1]);
+    for (const m of stmt.matchAll(/ADD COLUMN (?:IF NOT EXISTS )?"(\w+)"/gi)) {
+      cols.add(m[1]);
+      lastEvent.set(m[1], 'created');
+    }
+    // A rename creates a column just as surely as an ADD COLUMN does, so it
+    // belongs in the same question. HealthReport had `cloudinaryUrl` renamed to
+    // `storagePath` and the test reported the new name as missing from the
+    // migrations, which pointed a reader at the wrong file: the column the
+    // schema declared genuinely existed, spelled the way the schema spelled it.
+    for (const m of stmt.matchAll(/RENAME COLUMN "?(\w+)"? TO "?(\w+)"?/gi)) {
+      lastEvent.set(m[1], 'gone');
+      cols.add(m[2]);
+      lastEvent.set(m[2], 'created');
+    }
+    // A dropped column is gone for the same reason a renamed-away one is, and
+    // needs the same treatment. This was missing, and it failed the moment a
+    // column was replaced by a new one instead of renamed: the reverse check
+    // reported the dropped name as an orphan and pointed the reader at a
+    // migration that was already correct. HealthGoal.goal and
+    // NutritionTarget.goal were replaced by `goals` exactly that way.
+    for (const m of stmt.matchAll(/DROP COLUMN (?:IF EXISTS )?"(\w+)"/gi)) {
+      lastEvent.set(m[1], 'gone');
+    }
+  }
+
+  // Anything whose LAST statement was a removal is not in the database. The
+  // forward check needs the destination to exist (a rename's new name), the
+  // reverse check must not see the source (it is genuinely gone, and reporting
+  // it would send a reader to fix a migration that is already correct).
+  for (const [col, event] of lastEvent) {
+    if (event === 'gone') cols.delete(col);
   }
 
   return cols.size ? cols : null;

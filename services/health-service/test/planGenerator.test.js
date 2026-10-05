@@ -19,7 +19,7 @@ const TARGETS = {
 // not ship in that state.
 test('the generator cannot emit a doctor-sourced item, even for a user full of medical data', () => {
   const r = generatePlan({
-    goal: 'doctor_plan',
+    goals: ['doctor_plan'],
     targets: TARGETS,
     measuredActivity: 'light',
     hasDoctorItems: true,
@@ -45,12 +45,25 @@ test('the generator cannot emit a doctor-sourced item, even for a user full of m
 });
 
 test('no goal type produces a doctor item', () => {
-  for (const goal of ['build_muscle', 'lose_fat', 'recomp', 'endurance', 'general_health', 'doctor_plan']) {
-    const r = generatePlan({ goal, targets: TARGETS, measuredActivity: 'moderate' });
-    assert.ok(r.items.length > 0, `${goal} produced an empty plan`);
+  for (const goals of [
+    ['build_muscle'],
+    ['lose_fat'],
+    ['recomp'],
+    ['endurance'],
+    ['general_health'],
+    ['doctor_plan'],
+    // A set, and specifically one containing doctor_plan: the medical line is a
+    // property of the PLAN GENERATOR, so it has to hold when the goal set carries
+    // a clinical objective alongside an ordinary one.
+    ['doctor_plan', 'build_muscle'],
+    ['build_muscle', 'lose_fat', 'general_health'],
+  ]) {
+    const r = generatePlan({ goals, targets: TARGETS, measuredActivity: 'moderate' });
+    const label = goals.join('+');
+    assert.ok(r.items.length > 0, `${label} produced an empty plan`);
     assert.ok(
       r.items.every((i) => i.origin === 'suggested'),
-      `${goal} produced a non-suggested item`,
+      `${label} produced a non-suggested item`,
     );
   }
 });
@@ -59,7 +72,7 @@ test('a plan stays inside the size band', () => {
   // A 20-item plan turns every day red, which kills the feature faster than
   // any scoring bug.
   for (const measured of [null, 'sedentary', 'light', 'moderate', 'very_active']) {
-    const r = generatePlan({ goal: 'recomp', targets: TARGETS, measuredActivity: measured });
+    const r = generatePlan({ goals: ['recomp'], targets: TARGETS, measuredActivity: measured });
     assert.ok(r.items.length <= TARGET_MAX_ITEMS, `${measured}: ${r.items.length} items exceeds the band`);
     assert.ok(r.items.length >= 4, `${measured}: ${r.items.length} items is too thin to be a plan`);
     assert.ok(r.items.length <= MAX_ACTIVE_PLAN_ITEMS);
@@ -70,7 +83,7 @@ test('the doc\'s worked example is reproduced: protein, 4 sessions, sleep, water
   // phool-gobhi-health-ledger-plan-20260927.html §8 for the 70 kg recomposing
   // man: "Plan: protein target, 4× strength sessions, sleep 7 h, water 3.2 L".
   const r = generatePlan({
-    goal: 'recomp',
+    goals: ['recomp'],
     targets: TARGETS,
     measuredActivity: 'moderate', // 4 logged workouts a week
   });
@@ -101,7 +114,7 @@ test('a rest day is always scheduled, on a day the plan asks for no workout', ()
   // Without this, the generator schedules its own rest day and the scorer
   // marks it as a missed workout — the engine punishing its own plan.
   for (const measured of [null, 'sedentary', 'light', 'moderate', 'very_active']) {
-    const r = generatePlan({ goal: 'general_health', targets: TARGETS, measuredActivity: measured });
+    const r = generatePlan({ goals: ['general_health'], targets: TARGETS, measuredActivity: measured });
     const rest = r.items.find((i) => i.kind === 'rest');
     assert.ok(rest, `${measured}: no rest day`);
 
@@ -126,7 +139,7 @@ test('iron foods respect the diet pattern', () => {
     ['non_veg', /^$/],
   ]) {
     const r = generatePlan({
-      goal: 'general_health',
+      goals: ['general_health'],
       diet,
       targets: TARGETS,
       measuredActivity: null,
@@ -148,7 +161,7 @@ test('the workout split matches the frequency it claims', () => {
     very_active: 5,
   };
   for (const [measured, days] of Object.entries(expected)) {
-    const r = generatePlan({ goal: 'recomp', targets: TARGETS, measuredActivity: measured });
+    const r = generatePlan({ goals: ['recomp'], targets: TARGETS, measuredActivity: measured });
     const workout = r.items.find((i) => i.kind === 'workout');
     const actual = workout.schedule.split(',');
     assert.equal(actual.length, days, `${measured}: scheduled ${actual.length} days, expected ${days}`);
@@ -164,7 +177,7 @@ test('the workout split matches the frequency it claims', () => {
 test('a user-supplied supplement is never added by the generator', () => {
   // The doc: "No supplements in the plan unless he adds one". The generator
   // has no supplement vocabulary at all, and this asserts it.
-  const r = generatePlan({ goal: 'build_muscle', targets: TARGETS, measuredActivity: 'very_active' });
+  const r = generatePlan({ goals: ['build_muscle'], targets: TARGETS, measuredActivity: 'very_active' });
   const supplementish = /whey|creatine|multivitamin|supplement|protein powder|bcAA/i;
   for (const item of r.items) {
     assert.ok(!supplementish.test(item.title), `generator proposed a supplement: "${item.title}"`);

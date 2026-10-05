@@ -66,7 +66,7 @@ function fakePrisma({ consents = [], goals = [], snapshots = [], raceOnCreate = 
         return data;
       },
     },
-    nutritionTarget: { findUnique: async () => null },
+    nutritionTarget: { findFirst: async () => null },
     planItem: { findMany: async () => [] },
     planItemCompletion: { findMany: async () => [] },
     foodLog: { findMany: async () => [] },

@@ -1,5 +1,9 @@
 import multer from 'multer';
-import { MAX_UPLOAD_BYTES, isAllowedMimeType } from '../services/ledger/medicalDocumentStorage.js';
+import {
+  MAX_UPLOAD_BYTES,
+  isAllowedMimeType,
+  isAllowedReportMimeType,
+} from '../services/ledger/medicalDocumentStorage.js';
 
 // Files are buffered in memory, never written to the service's filesystem.
 //
@@ -46,3 +50,53 @@ function handleUpload(req, res, next) {
 }
 
 export const uploadMedicalDocumentMiddleware = handleUpload;
+
+// --- Lab reports (health vault) --------------------------------------------
+//
+// Same shape as the medical-document upload and for the same reasons: memory
+// storage, one file, the shared size cap, and a MIME filter that is a filter and
+// not a guarantee.
+//
+// The one difference is the accepted type. A lab report is fed to Document AI,
+// which reads PDFs, so this rejects images at the door. They are accepted for
+// medical documents, where nothing reads the content and a photo of a
+// prescription is a normal thing to attach — but here a rejected JPEG is a
+// clear message instead of a parsing failure the user will read as "your lab
+// report is broken".
+const reportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_UPLOAD_BYTES,
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedReportMimeType(file.mimetype)) return cb(null, true);
+    cb(
+      Object.assign(new Error('Upload the lab report as a PDF'), {
+        status: 400,
+        code: 'UNSUPPORTED_TYPE',
+      }),
+    );
+  },
+});
+
+function handleReportUpload(req, res, next) {
+  reportUpload.single('file')(req, res, (err) => {
+    if (!err) return next();
+
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: `That file is larger than ${Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB`,
+        code: 'FILE_TOO_LARGE',
+      });
+    }
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message, code: err.code || 'FILE_REJECTED' });
+    }
+
+    console.error('[reports] upload failed:', err.message);
+    return res.status(500).json({ error: 'Upload failed', code: 'UPLOAD_FAILED' });
+  });
+}
+
+export const uploadHealthReportMiddleware = handleReportUpload;

@@ -142,6 +142,10 @@ export async function deleteAllDataService(userId) {
     prisma.foodItem.deleteMany({ where: { createdByUserId: userId } }),
     prisma.scoreDaySnapshot.deleteMany({ where: { userId } }),
     prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+    // Which foods this person could not find, and what they typed instead. A
+    // record of what somebody eats is health data like any other, and the
+    // backlog view has no userId precisely because this delete exists.
+    prisma.foodRequest.deleteMany({ where: { userId } }),
     prisma.planItem.deleteMany({ where: { userId } }),
     prisma.nutritionTarget.deleteMany({ where: { userId } }),
     prisma.healthCondition.deleteMany({ where: { userId } }),
@@ -158,6 +162,16 @@ export async function deleteAllDataService(userId) {
     // list: both are onDelete: Cascade from a parent deleted above, so an
     // explicit delete would be redundant.
     prisma.medicalDocument.deleteMany({ where: { userId } }),
+    // Lab reports uploaded to the health vault. Added when the upload path
+    // became reachable, because until then this table could not hold a row and
+    // its absence from this list was not a miss — now it is one.
+    //
+    // ReportExtraction is onDelete: Cascade from the schema, so every extracted
+    // biomarker this report proposed goes with it and none is enumerated here.
+    // The PDF itself needs no handling either: it was written under the same
+    // `medical/{userId}/` prefix as every other medical blob, so the sweep below
+    // reclaims it.
+    prisma.healthReport.deleteMany({ where: { userId } }),
   ]);
 
   // The medical BLOBS are swept here, after the transaction has committed.

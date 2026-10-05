@@ -268,6 +268,65 @@ test('the preview route cannot write - close is a separate POST', () => {
   assert.match(close.line, /^router\.post\(/);
 });
 
+// The missing-food request endpoints live inside the food picker, so they carry
+// exactly the gate `/ledger/foods` carries and no other. Asserted as their own
+// pair rather than added to the prefix list above because that sweep matches by
+// prefix and `/ledger/food-requests` is not a sub-path of `/ledger/foods` - a
+// route added there would have passed every other test in this file while being
+// reachable without nutrition consent, which is exactly the gap this file exists
+// to close.
+test('the missing-food request routes are on the nutrition gate', () => {
+  const requestRoutes = all.filter((r) => r.line.includes('/ledger/food-requests'));
+  assert.equal(requestRoutes.length, 2, 'expected create and list');
+
+  for (const r of requestRoutes) {
+    assert.match(
+      r.line,
+      /\.\.\.nutrition\b/,
+      `${r.n}: ${r.line} is not on the nutrition gate`,
+    );
+    assert.doesNotMatch(
+      r.line,
+      /\.\.\.medical\b|\.\.\.photo\b/,
+      `${r.n}: ${r.line} must not be on the medical or photo gate`,
+    );
+  }
+});
+
+test('the request routes sit next to the picker they extend, not on the photo gate', () => {
+  // A request is text typed into the food search box. There is no image in it,
+  // so the photo flag must not govern it - and if it did, the empty state would
+  // disappear for everyone while food photo logging was off, which is when the
+  // picker is the only way to log anything.
+  const list = all.find((r) => r.line.includes("/ledger/food-requests'"));
+  assert.ok(list, 'no list route found');
+  assert.doesNotMatch(list.line, /\.\.\.photo\b/);
+  // And it must not be declared after a parameterized food route that could
+  // capture it. `/ledger/food-requests` shares a prefix with nothing in this
+  // router, but the ordering is pinned anyway so a future `:something` sibling
+  // cannot swallow it without a test noticing.
+  const requestAt = all.findIndex((r) => r.line.includes('/ledger/food-requests'));
+  const paramFoodAt = all.findIndex((r) => /\/ledger\/food-(logs|saved-meals)\/:/i.test(r.line));
+  if (paramFoodAt > -1) {
+    assert.ok(requestAt < paramFoodAt, 'the collection route must precede any parameterized sibling');
+  }
+});
+
+test('the admin request queue is on the main router and is gobhi-gated', () => {
+  // Cross-file, and worth its own assertion: this route is the one place that
+  // reads free-text names a user typed, so it is also the one place where a
+  // missing role check would be a real disclosure rather than a missing feature.
+  const healthRoutes = readFileSync(join(here, '..', 'routes', 'health.js'), 'utf8');
+  const adminQueue = healthRoutes.match(/router\.get\('\/admin\/food-requests'[^;]*;/);
+  assert.ok(adminQueue, 'no admin food-requests route found');
+  assert.match(adminQueue[0], /requireRole\('gobhi'\)/);
+  assert.doesNotMatch(adminQueue[0], /userId/, 'the queue must not be filterable or readable by user');
+
+  const resolve = healthRoutes.match(/router\.post\('\/admin\/food-requests\/:id\/resolve'[^;]*;/);
+  assert.ok(resolve, 'no admin resolve route found');
+  assert.match(resolve[0], /requireRole\('gobhi'\)/);
+});
+
 // The pause endpoints mutate the goal, which is nutrition data. They are gated
 // like every other ledger route, and asserted explicitly rather than left to the
 // "all ledger routes are gated" sweep above - because that sweep checks the GATE

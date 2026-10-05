@@ -69,6 +69,22 @@ export function isAllowedMimeType(mimeType) {
   return ALLOWED_MIME_TYPES.has(mimeType);
 }
 
+/**
+ * Whether this module may store a file as a health-vault lab report.
+ *
+ * Stricter than isAllowedMimeType, and the difference is the OCR step: only a
+ * PDF reaches Document AI. A JPEG of a lab report is a real thing people have,
+ * and rejecting it is the honest answer for now, because the alternative is
+ * uploading it, labelling a JPEG as application/pdf, and reporting a parsing
+ * failure for a file that was perfectly readable to a human.
+ *
+ * Images remain accepted by isAllowedMimeType for the medical-document path,
+ * where nothing reads them and a photo of a prescription is a normal upload.
+ */
+export function isAllowedReportMimeType(mimeType) {
+  return mimeType === 'application/pdf';
+}
+
 function extensionFor(mimeType) {
   return EXT_BY_MIME[mimeType] || 'bin';
 }

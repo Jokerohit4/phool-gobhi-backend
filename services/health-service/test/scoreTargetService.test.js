@@ -43,7 +43,7 @@ function mockPrisma({ snapshots = [], goal = null, target = null } = {}) {
       },
       findUnique: async () => null,
     },
-    nutritionTarget: { findUnique: async () => target },
+    nutritionTarget: { findFirst: async () => target },
     healthGoal: {
       findUnique: async () => currentGoal,
       update: async ({ data }) => {

@@ -1,0 +1,41 @@
+-- The date a lab report's VALUES belong to, as distinct from when it was uploaded.
+--
+-- Why this column exists, given that createdAt is already a date.
+--
+-- HealthReport.createdAt answers "when did this file arrive". That is not the same
+-- question as "when was this blood drawn", and for a biomarker series the second
+-- one is the only one that matters. Somebody uploads a lipid panel from March in
+-- August; the values are a March measurement, and an August trend line drawn
+-- through them shows a cliff that never happened.
+--
+-- It is also a correctness issue, not just a display one. BiometricEntry is
+-- unique on (userId, metric, localDate), so confirm a March report today and
+-- an August report today and the second upsert OVERWRITES the first. Two real
+-- measurements, one row, and no error anywhere. Keyed on the report's own date
+-- they are two different days and both survive - which is the entire purpose of
+-- keeping a history.
+--
+-- Nullable and defaulted to NULL rather than backfilled from createdAt, because
+-- a backfill would encode "upload date == test date" as if it were known. NULL
+-- means the honest thing: this report has no recorded date yet. The service
+-- falls back to createdAt for the biomarker entry it writes, and will prefer
+-- this column as soon as anything populates it.
+--
+-- Nothing populates it yet. Document AI returns biomarker values without a
+-- collection date in the response this service parses, so the date on the
+-- report is not currently available to us from OCR. Where this will be filled:
+--   - OCR: parse the printed collection date and pass it to createReportService.
+--   - Fallback until then: let the user confirm or correct it on the upload
+--     screen, which is the honest source - they can read their own paperwork
+--     even when OCR cannot.
+ALTER TABLE "health"."HealthReport"
+    ADD COLUMN IF NOT EXISTS "reportDate" TEXT;
+
+-- No index. Every read that would use this column already filters on userId,
+-- which "HealthReport_userId_idx" serves, and an index on a mostly-NULL text
+-- column across the whole table would cost more than it saves at this row count.
+--
+-- No CHECK on the YYYY-MM-DD shape either, matching HealthReport.storagePath and
+-- PlanItem.localDate: the format is validated in the service rather than the
+-- database, so an invalid value is a 400 naming the field rather than an
+-- opaque constraint violation from whichever service happens to write first.

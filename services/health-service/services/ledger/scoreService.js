@@ -23,6 +23,7 @@ import { isDueOn } from './ledgerPlanService.js';
 import { isScheduledFor } from './scoreEngine.js';
 import { openActions } from './remediation.js';
 import { assertGoal } from './goalGuard.js';
+import { currentNutritionTarget } from './currentTarget.js';
 import redis from '../../utils/redisClient.js';
 
 const CACHE_TTL = 3600; // 1 hour
@@ -35,7 +36,7 @@ const CACHE_TTL = 3600; // 1 hour
  */
 export async function previewDay(prisma, { userId, localDate, today }) {
   const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
-  const target = await prisma.nutritionTarget.findUnique({ where: { userId } });
+  const target = await currentNutritionTarget(prisma, userId);
   const previous = await previousClose(prisma, { userId, localDate });
   const goal = await prisma.healthGoal.findUnique({
     where: { userId },
@@ -117,7 +118,7 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   }
 
   const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
-  const target = await prisma.nutritionTarget.findUnique({ where: { userId } });
+  const target = await currentNutritionTarget(prisma, userId);
   const previous = await previousClose(prisma, { userId, localDate });
   const goal = await prisma.healthGoal.findUnique({
     where: { userId },

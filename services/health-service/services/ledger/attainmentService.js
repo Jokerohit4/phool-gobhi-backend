@@ -286,8 +286,14 @@ const CROSSING_PROVES_NOTHING = new Set([
   'endurance',
 ]);
 
-function isPastTarget({ target, current, start, goal }) {
-  if (goal && CROSSING_PROVES_NOTHING.has(goal)) return false;
+function isPastTarget({ target, current, start, goals }) {
+  // Abstains only when EVERY goal abstains. `recomp` + `lose_fat` is a set where
+  // one half is about the scale and the other is not, and the honest reading is
+  // that a crossing is evidence — it is `general_health` alone, or
+  // `general_health` + `doctor_plan`, where it proves nothing. Requiring all of
+  // them rather than any keeps this from discarding real evidence because the
+  // user also ticked a non-weight objective.
+  if (goals.length > 0 && goals.every((g) => CROSSING_PROVES_NOTHING.has(g))) return false;
   if (!start) return false;
   // Inside the band on both sides is the caller's "reached", and needs no help
   // from here.
@@ -312,7 +318,8 @@ function isPastTarget({ target, current, start, goal }) {
  * @param {string|null} input.targetDate - 'YYYY-MM-DD', nullable
  * @param {Array<{kg:number, localDate:string}>} input.readings - any order
  * @param {string} input.today - the user's local date, passed in not read here
- * @param {string|null} [input.goal] - HealthGoal.goal, to read direction from
+ * @param {string[]} [input.goals] - HealthGoal.goals, to read direction from.
+ *   A set rather than one goal: see the note on CROSSING_PROVES_NOTHING.
  * @returns {object}
  */
 export function computeAttainment({
@@ -320,8 +327,13 @@ export function computeAttainment({
   targetDate,
   readings,
   today,
-  goal = null,
+  goals = [],
 }) {
+  // A caller passing the pre-multi-goal `goal: 'lose_fat'` still works. Accepting
+  // it here rather than only at the service boundary keeps the pure function
+  // honest for its own unit tests, which is where the direction rules are
+  // actually pinned down.
+  const goalSet = Array.isArray(goals) ? goals.filter(Boolean) : goals ? [goals] : [];
   const target =
     targetWeightKg === null || targetWeightKg === undefined
       ? null
@@ -388,7 +400,7 @@ export function computeAttainment({
   // 3 kg the other side of a cut target is not told their deadline slipped.
   if (
     Math.abs(gap) <= REACHED_TOLERANCE_KG ||
-    isPastTarget({ target, current, start, goal })
+isPastTarget({ target, current, start, goals: goalSet })
   ) {
     return { ...withStart, status: ATTAINMENT_STATUS.REACHED, gapKg: gap };
   }
@@ -467,8 +479,12 @@ export function computeAttainment({
 export async function getAttainment(prisma, { userId, localDate }) {
   const goal = await prisma.healthGoal.findUnique({
     where: { userId },
-    select: { targetWeightKg: true, targetDate: true, goal: true },
+    select: { targetWeightKg: true, targetDate: true, goals: true },
   });
+  // Normalised at the edge rather than trusted: a row written before the column
+  // changed, or a set that is somehow empty, must not make `every()` vacuously
+  // true and abstain from every weight judgement the user is owed.
+  const goals = goal?.goals?.length ? [...goal.goals] : [];
 
   // Nothing to attain toward, so nothing is read. Returning early is not just
   // cheaper: it keeps the weight series out of a response for a user who has not
@@ -495,11 +511,13 @@ export async function getAttainment(prisma, { userId, localDate }) {
       targetDate: goal.targetDate,
       readings: entries.map((e) => ({ kg: Number(e.value), localDate: e.localDate })),
       today: localDate,
-      goal: goal.goal ?? null,
+      goals,
     }),
-    // The goal itself, because the screen has to name what is being attained.
-    // A number labelled "goal" with no goal attached is a question the user has
-    // to answer about their own life.
-    goal: goal.goal ?? null,
+    // The goals themselves, because the screen has to name what is being
+    // attained. A number labelled "goal" with no goal attached is a question the
+    // user has to answer about their own life. The whole set, because two goals
+    // is the normal case and picking one to display would be a claim the service
+    // has not earned.
+    goals,
   };
 }

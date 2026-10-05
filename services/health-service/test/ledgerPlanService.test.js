@@ -81,7 +81,7 @@ test('regenerating only ever writes origin suggested', async () => {
       create: async (a) => (created.push(a.data), { id: created.length, ...a.data }),
     },
   });
-  await regenerateSuggestions(prisma, { userId: 7, goal: 'build_muscle', targets: TARGETS });
+  await regenerateSuggestions(prisma, { userId: 7, goals: ['build_muscle'], targets: TARGETS });
   assert.ok(created.length > 0);
   for (const item of created) {
     assert.equal(item.origin, 'suggested');
@@ -98,7 +98,7 @@ test('regenerate soft-deletes suggested items and never touches user or doctor o
       create: async (a) => ({ id: 1, ...a.data }),
     },
   });
-  await regenerateSuggestions(prisma, { userId: 7, goal: 'lose_fat', targets: TARGETS });
+  await regenerateSuggestions(prisma, { userId: 7, goals: ['lose_fat'], targets: TARGETS });
   // Scoped to origin: 'suggested'. If this ever widened, "regenerate" would
   // delete a doctor's course of tablets, which would make the feature dangerous
   // rather than convenient.
@@ -129,7 +129,7 @@ test("a user's own items do not shrink the room available to suggestions", async
       create: async (a) => (created += 1, { id: created, ...a.data }),
     },
   });
-  const out = await regenerateSuggestions(prisma, { userId: 7, goal: 'build_muscle', targets: TARGETS });
+  const out = await regenerateSuggestions(prisma, { userId: 7, goals: ['build_muscle'], targets: TARGETS });
   // Room is 20 - 2 = 18, not 20 - 2 total, because the suggested items being
   // replaced were already counted in the 2.
   assert.equal(out.room, 18);
@@ -144,7 +144,7 @@ test('when there is no room, nothing is created and the drop is reported', async
       create: async () => ({ id: 1 }),
     },
   });
-  const out = await regenerateSuggestions(prisma, { userId: 7, goal: 'build_muscle', targets: TARGETS });
+  const out = await regenerateSuggestions(prisma, { userId: 7, goals: ['build_muscle'], targets: TARGETS });
   assert.equal(out.created, 0);
   assert.equal(out.room, 0);
   assert.ok(out.dropped > 0);
@@ -176,7 +176,7 @@ test('an over-long title is rejected rather than truncated silently', async () =
 test('generating without a target is rejected', async () => {
   const prisma = mockPrisma();
   await assert.rejects(
-    () => regenerateSuggestions(prisma, { userId: 7, goal: 'build_muscle' }),
+    () => regenerateSuggestions(prisma, { userId: 7, goals: ['build_muscle'] }),
     /before generating a plan/,
   );
 });
@@ -317,6 +317,52 @@ test('only due, active items are returned, with completion state', async () => {
   assert.equal(out.total, 1);
   assert.equal(out.items[0].id, 1);
   assert.equal(out.items[0].completed, true);
+});
+
+test('an end date is inclusive, so the last day still counts', async () => {
+  // "take the tablets until the 30th" includes the 30th. Using `<` here would
+  // silently drop the final day of every course, which is the one day a user
+  // most needs to be reminded about and the one they are most likely to notice
+  // going missing.
+  const prisma = mockPrisma({
+    planItem: {
+      findMany: async () => [
+        { id: 1, kind: 'doctor_medication', schedule: 'daily', endsOn: TODAY, completions: [] },
+      ],
+    },
+  });
+  const out = await getPlanForDate(prisma, { userId: 7, localDate: TODAY, today: TODAY });
+  assert.equal(out.total, 1, 'the end date itself must still be due');
+  assert.equal(out.items[0].id, 1);
+});
+
+test('a day past the end date is not due', async () => {
+  const prisma = mockPrisma({
+    planItem: {
+      findMany: async () => [
+        { id: 1, kind: 'doctor_medication', schedule: 'daily', endsOn: '2026-09-27', completions: [] },
+      ],
+    },
+  });
+  const out = await getPlanForDate(prisma, { userId: 7, localDate: TODAY, today: TODAY });
+  assert.equal(out.total, 0);
+});
+
+test('a malformed end date does not expire the item forever', async () => {
+  // The comparison is a string compare, which is only correct while both sides
+  // are 'YYYY-MM-DD'. An unpadded '2026-9-1' sorts below '2026-10-05', so before
+  // this was guarded, one badly formatted date made every doctor's item vanish
+  // with no error from anywhere. Wrongly keeping an item alive is the cheaper
+  // failure than wrongly deleting it, so the bad value is ignored.
+  const prisma = mockPrisma({
+    planItem: {
+      findMany: async () => [
+        { id: 1, kind: 'doctor_medication', schedule: 'daily', endsOn: '2026-9-1', completions: [] },
+      ],
+    },
+  });
+  const out = await getPlanForDate(prisma, { userId: 7, localDate: TODAY, today: TODAY });
+  assert.equal(out.total, 1, 'a bad endsOn must not hide a live item');
 });
 
 test('deactivating keeps the row, it does not delete it', async () => {
