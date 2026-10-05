@@ -28,6 +28,11 @@
 --   - Fallback until then: let the user confirm or correct it on the upload
 --     screen, which is the honest source - they can read their own paperwork
 --     even when OCR cannot.
+--
+-- Updated by 20261013000000_health_report_detected_date: the OCR path above was
+-- built, but it writes to "detectedReportDate" instead of this column, so that a
+-- machine reading stays distinguishable from something the user said. This
+-- column is still only ever written by the user.
 ALTER TABLE "health"."HealthReport"
     ADD COLUMN IF NOT EXISTS "reportDate" TEXT;
 

@@ -1999,6 +1999,16 @@ model HealthReport {
   // (userId, metric, localDate) - so dating entries by upload time silently
   // overwrites earlier reports verified the same day. See the migration.
   reportDate  String?
+  // A date read off the report's own text by OCR, 'YYYY-MM-DD', kept separate
+  // from reportDate on purpose. reportDate means a person said it; this means a
+  // parser read it off a page and is only confident about a labelled,
+  // unambiguous format. Merging the two would make a guess indistinguishable
+  // from a statement in every surface downstream, including the wording the app
+  // uses to tell the user which one they are looking at.
+  //
+  // Never written when reportDate is set. The user's word is the source of truth
+  // and OCR only fills a gap the user left.
+  detectedReportDate String?
   processedAt DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

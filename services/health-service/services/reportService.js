@@ -163,7 +163,7 @@ export async function processReportService(reportId) {
     }
 
     // Use the real OCR service to extract markers from the PDF
-    const extractions = await extractBiomarkersFromPDF(signedUrl);
+    const { extractions, detectedDate } = await extractBiomarkersFromPDF(signedUrl);
 
     if (!extractions || extractions.length === 0) {
       await prisma.healthReport.update({
@@ -171,6 +171,27 @@ export async function processReportService(reportId) {
         data: { status: 'FAILED' },
       });
       return { status: 'FAILED', message: 'No biomarkers extracted' };
+    }
+
+    // The printed collection date, read off the same page as the values.
+    //
+    // Only written when the user gave no date of their own. reportDate is what
+    // the app calls "you said this"; detectedReportDate is what it calls "read
+    // off your report". Overwriting the former with the latter would be an
+    // unannounced downgrade of a user's own statement to a machine's guess, and
+    // the two would be indistinguishable afterwards - which matters because a
+    // wrong date here silently misdates their health history.
+    //
+    // Best-effort by design: a missing date costs a question at upload time, a
+    // date write that fails would cost the whole report. Caught and logged so a
+    // detection problem is visible without turning it into a processing failure.
+    if (detectedDate?.date && !report.reportDate) {
+      await prisma.healthReport.update({
+        where: { id: reportId },
+        data: { detectedReportDate: detectedDate.date },
+      }).catch((err) => {
+        console.error('[report] detected date write failed:', err?.message);
+      });
     }
 
     // Save extractions to the database
@@ -237,19 +258,37 @@ export async function getPendingExtractionsService(userId) {
 /**
  * The date a report's values belong to, as 'YYYY-MM-DD'.
  *
- * Prefers a date recorded ON the report, falling back to the upload timestamp.
- * Both are strings in the app's local-calendar convention, and neither is
- * derived from `new Date()` at read time - which is the bug this replaces,
- * where confirming a report dated in March wrote an entry dated today.
+ * Three sources, in order of how much they can be trusted:
+ *   1. reportDate          - the user said this.
+ *   2. detectedReportDate  - read off the report's own text by OCR.
+ *   3. createdAt           - the upload day, the last resort.
+ *
+ * (2) sits above (3) and below (1) deliberately. Above (3) because a date
+ * printed on the document is a real reading and the upload day is a guess that
+ * happens to be true only when somebody uploads a report on the day it was
+ * taken. Below (1) because the user can read their own paperwork and the parser
+ * cannot see the whole page.
+ *
+ * All three are strings in the app's local-calendar convention, and none is
+ * derived from `new Date()` at read time - which is the bug this replaces, where
+ * confirming a report dated in March wrote an entry dated today.
  *
  * UTC on purpose, matching `toISOString().slice(0, 10)` everywhere else in
  * this service. A report's own date is a calendar day that was already decided
  * somewhere; reinterpreting it in the server's zone would move it.
  */
-function reportDate(report) {
+export function reportDate(report) {
   const recorded = report?.reportDate;
-  if (typeof recorded === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(recorded)) {
+  if (isIsoDay(recorded)) {
     return recorded;
+  }
+
+  // Shape-checked, not trusted, even though only ocrService.js writes it: a
+  // regex on the stored value costs nothing and a malformed day reaching the
+  // upsert key would write a health entry under a date nothing else can parse.
+  const detected = report?.detectedReportDate;
+  if (isIsoDay(detected)) {
+    return detected;
   }
 
   const created = report?.createdAt;
@@ -262,6 +301,10 @@ function reportDate(report) {
   // misdated biomarker is a smaller harm than a 500 on the confirm button -
   // and the date is visible and correctable either way.
   return new Date().toISOString().slice(0, 10);
+}
+
+function isIsoDay(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 export async function verifyExtractionService({ extractionId, userId, confirmedValue }) {

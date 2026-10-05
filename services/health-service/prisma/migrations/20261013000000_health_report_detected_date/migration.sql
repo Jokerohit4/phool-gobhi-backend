@@ -1,0 +1,45 @@
+-- A date READ OFF the report by OCR, kept apart from the date the user SAID.
+--
+-- Why a second column instead of filling "reportDate" from OCR.
+--
+-- The obvious implementation is to have OCR write into "reportDate" when the
+-- user did not supply one. It is one line, and it is wrong in a way that is
+-- invisible afterwards.
+--
+-- "reportDate" means a person asserted something. The app words it that way: it
+-- says "Report dated 4 Mar 2026" when the column is set and "Dated by upload
+-- date - you did not say" when it is not. That distinction is the whole reason
+-- the column exists separately from createdAt, and it is what lets a user tell
+-- a real date from a fallback. An OCR date is not an assertion by a person. Put
+-- it in the same column and the screen starts telling users they told us
+-- something they never said, and the day the parser is wrong about an ambiguous
+-- date there is nothing left in the data to reveal it.
+--
+-- So: two columns, two meanings.
+--   reportDate          - a person said this. Authoritative, never overwritten.
+--   detectedReportDate  - a parser read this off the page. Used only when the
+--                         user said nothing, and shown to them as a reading
+--                         rather than a statement.
+--
+-- The detector that fills this is deliberately unwilling. It requires a
+-- collection-ish label next to the date, refuses formats that are not
+-- self-disambiguating (03/04/2026 is 3 April in most of the world and 4 March
+-- in the US), skips dates of birth, appointment dates and expiry dates on the
+-- same line, and enforces the same 1900..today bounds the app's own date picker
+-- does. When it is unsure it writes nothing and the user is asked, which is the
+-- behaviour that existed before OCR did.
+--
+-- Additive and nullable. No backfill: every existing row keeps its current
+-- meaning, and a report uploaded before this migration has no detected date,
+-- which is true rather than a thing to invent.
+--
+-- No index, same reasoning as HealthReport.reportDate - every read filters on
+-- userId first, which "HealthReport_userId_idx" already serves.
+--
+-- No CHECK on the YYYY-MM-DD shape, again matching reportDate: the format is
+-- validated in the service (isoFrom() refuses impossible days such as 31 Feb
+-- rather than rolling them forward) so a bad value is a 400 naming the field
+-- instead of an opaque constraint violation from whichever writer arrives
+-- first.
+ALTER TABLE "health"."HealthReport"
+    ADD COLUMN IF NOT EXISTS "detectedReportDate" TEXT;
