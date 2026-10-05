@@ -32,13 +32,13 @@ export function deriveAppMode(user) {
     return APP_MODES.HOME_TRACK;
   }
 
-  // Already trains at a gym/fitness centre/elsewhere. gym_seeker, even when
-  // that gym isn't a partner: this user has already demonstrated they'll walk
-  // into a gym, which makes them far likelier to book a session than a
-  // home-only user, and their Home should keep gym discovery in reach. What
-  // changes for the non-partner case is attendance (GPS, no QR, no booking),
-  // not which Home they see.
-  if (trainingLocationPref) return APP_MODES.GYM_SEEKER;
+  // Already trains at a gym/fitness centre/elsewhere: they already have a gym
+  // habit, so the app should be a workout/helping tool first (log visits,
+  // track progress, routines), not a marketplace. Discovery remains available
+  // (demoted to the bottom of home_track) for when/if they want to try partner
+  // gyms; the attendance case for their own gym is handled via "Check in at
+  // your gym" (non-partner attendance).
+  if (trainingLocationPref) return APP_MODES.HOME_TRACK;
 
   // Said yes but hasn't answered where yet — mid-onboarding. Leave it null
   // rather than guessing; the next PATCH re-derives with the full picture.

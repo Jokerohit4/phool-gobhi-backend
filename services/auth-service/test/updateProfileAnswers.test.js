@@ -83,15 +83,58 @@ test('the first derived mode is logged as onboarding, in one transaction', async
 });
 
 test('changing the answer later logs the switch as settings', async () => {
+  // The edit that actually moves the mode is flipping currentlyWorksOut, not
+  // the training location. Any location now derives home_track (see
+  // appModeService): someone already training wants a workout and progress
+  // tool first, with partner-gym discovery demoted to the bottom of it.
+  //
+  // An earlier version of this test changed home -> gym and expected
+  // gym_seeker. That expectation encoded the old rule and has outlived it, so
+  // it failed against correct code. The switch being asserted here is the
+  // answer edit that still changes the mode, which keeps the point of the test
+  // intact: a later derivation is logged 'settings', not 'onboarding'.
   reset({ currentlyWorksOut: true, trainingLocationPref: 'home', appMode: 'home_track' });
   const res = fakeRes();
 
-  await updateProfile(reqWith({ currentlyWorksOut: true, trainingLocationPref: 'gym' }), res);
+  await updateProfile(reqWith({ currentlyWorksOut: false }), res);
 
+  assert.equal(res.statusCode, 200);
   assert.equal(stored.appMode, 'gym_seeker');
+  assert.equal(transactions, 1);
   assert.deepEqual(historyRows, [
     { userId: 42, fromMode: 'home_track', toMode: 'gym_seeker', source: 'settings' },
   ]);
+});
+
+test('switching training location is no longer a mode change, and logs nothing', async () => {
+  // The pair of halves to the test above, and the case that used to break.
+  //
+  // home -> gym derives home_track either way, so there is no switch to record.
+  // Logging one would put a fabricated home_track -> home_track row in the
+  // audit trail, and this log exists to answer "how did this account end up in
+  // this mode" - a row that changes nothing is a worse answer than no row.
+  reset({ currentlyWorksOut: true, trainingLocationPref: 'home', appMode: 'home_track' });
+  const res = fakeRes();
+
+  await updateProfile(reqWith({ trainingLocationPref: 'gym' }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(stored.appMode, 'home_track');
+  assert.equal(transactions, 0);
+  assert.equal(historyRows.length, 0);
+});
+
+test('moving gym -> home is not a mode change either', async () => {
+  // Same invariant from the other direction, so the rule is pinned at both ends
+  // rather than by one example that could pass for the wrong reason.
+  reset({ currentlyWorksOut: true, trainingLocationPref: 'gym', appMode: 'home_track' });
+  const res = fakeRes();
+
+  await updateProfile(reqWith({ trainingLocationPref: 'home' }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(stored.appMode, 'home_track');
+  assert.equal(historyRows.length, 0);
 });
 
 test('resending unchanged answers keeps a chip override and logs nothing', async () => {

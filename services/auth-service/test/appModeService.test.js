@@ -37,7 +37,7 @@ test('trains at home -> home_track', () => {
   );
 });
 
-test('trains at a gym/centre/elsewhere -> gym_seeker', () => {
+test('trains at a gym/centre/elsewhere -> home_track', () => {
   for (const pref of [
     TRAINING_LOCATION_PREFS.GYM,
     TRAINING_LOCATION_PREFS.FITNESS_CENTRE,
@@ -45,7 +45,7 @@ test('trains at a gym/centre/elsewhere -> gym_seeker', () => {
   ]) {
     assert.equal(
       deriveAppMode({ currentlyWorksOut: true, trainingLocationPref: pref }),
-      APP_MODES.GYM_SEEKER,
+      APP_MODES.HOME_TRACK,
       `pref=${pref}`,
     );
   }

@@ -78,7 +78,12 @@ test('own-gym answers PUT then GET round-trip, and appMode is derived', async ()
   assert.equal(u.trainingLocationPref, 'gym');
   assert.equal(u.weeklyFrequencyIntent, 'three_four');
   assert.equal(u.freeTimeWindow, 'evening');
-  assert.equal(u.appMode, 'gym_seeker');
+  // Own gym derives home_track, not gym_seeker. This asserted gym_seeker for as
+  // long as anyone who trains anywhere got the marketplace; the rule now gives
+  // that surface only to people who do not train yet, and demotes partner-gym
+  // discovery to the bottom of home_track for everyone already training. The
+  // answers above round-trip unchanged either way - only the derived mode moved.
+  assert.equal(u.appMode, 'home_track');
   assert.equal(historyRows.length, 1);
   assert.equal(historyRows[0].source, 'onboarding');
 });
