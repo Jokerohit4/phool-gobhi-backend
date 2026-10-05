@@ -19,14 +19,30 @@
 ALTER TABLE "health"."HealthGoal"
   ADD COLUMN IF NOT EXISTS "goals" "health"."HealthGoalType"[] NOT NULL DEFAULT ARRAY[]::"health"."HealthGoalType"[];
 
--- No users have completed intake, so there is no row whose single `goal` needs
--- folding into the array. Had there been one it would be:
---   UPDATE "health"."HealthGoal" SET "goals" = ARRAY["goal"] WHERE "goals" = ARRAY[]::...;
+-- Fold any surviving scalar into the array BEFORE dropping it. This was
+-- originally written as a comment claiming no user had completed intake, which
+-- was an assumption nobody had checked against the dev database - and this
+-- migration drops a column, so being wrong about it is irreversible. The
+-- backfill is a no-op on an empty table, so it costs nothing and removes the
+-- assumption as a failure mode.
+UPDATE "health"."HealthGoal"
+  SET "goals" = ARRAY["goal"]
+  WHERE "goal" IS NOT NULL
+    AND "goals" = ARRAY[]::"health"."HealthGoalType"[];
+
 ALTER TABLE "health"."HealthGoal"
   DROP COLUMN IF EXISTS "goal";
 
 ALTER TABLE "health"."NutritionTarget"
   ADD COLUMN IF NOT EXISTS "goals" "health"."HealthGoalType"[] NOT NULL DEFAULT ARRAY[]::"health"."HealthGoalType"[];
+
+-- Targets are append-only history, so an old row records the goal it was
+-- computed for and must not lose it just because it predates the array. Same
+-- reason as above: this is history, not a value to discard.
+UPDATE "health"."NutritionTarget"
+  SET "goals" = ARRAY["goal"]
+  WHERE "goal" IS NOT NULL
+    AND "goals" = ARRAY[]::"health"."HealthGoalType"[];
 
 ALTER TABLE "health"."NutritionTarget"
   DROP COLUMN IF EXISTS "goal";
