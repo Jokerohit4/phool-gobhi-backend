@@ -53,7 +53,14 @@ const day = (offset) => {
 function row(id, overrides = {}) {
   return {
     userId: BASE + id,
-    goal: 'build_muscle',
+    // `goals`, an array - not the scalar `goal` this fixture used to set. The
+    // field became a ranked list in the multi-goal migration and this fixture was
+    // never updated, so every createMany in this file threw
+    // "Unknown argument `goal`. Did you mean `goals`?" against a real database.
+    // The mock-based nudge tests cannot catch that, because a mock accepts any
+    // shape it is handed - which is why this file exists at all, and why it had
+    // rotted unnoticed in the one place that could have shown it.
+    goals: ['build_muscle'],
     startDate: day(-30),
     scoreTargetPoints: 400,
     scoreTargetFrom: day(-10),
