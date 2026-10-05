@@ -88,16 +88,27 @@ export const uploadReport = async (req, res) => {
     // storagePath never leaves the service. Neither does the raw OCR output —
     // the client gets the id and the status, and comes back for the pending
     // extractions via GET /reports/pending once processing finishes.
+    //
+    // reportDate is echoed because the user's date picker and the stored value
+    // can disagree, and a silent disagreement is only discovered weeks later
+    // when a trend looks wrong with no way to see why.
     res.status(201).json({
       data: {
         id: report.id,
         fileName: report.fileName,
         status: report.status,
         createdAt: report.createdAt,
+        reportDate: report.reportDate ?? null,
       },
     });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || 'Internal server error' });
+    // code is passed through so the app can say "that date isn't real" rather
+    // than "upload failed" - the two are very different things to a user who
+    // just watched their file upload successfully.
+    res.status(err.status || 500).json({
+      error: err.error || 'Internal server error',
+      ...(err.code ? { code: err.code } : {}),
+    });
   }
 };
 
