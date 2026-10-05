@@ -140,10 +140,8 @@ function sslOptionsFor(url) {
   return { ssl: { rejectUnauthorized: false }, connectionString: u.toString() };
 }
 
-const client = new pg.Client({
-  connectionString: sslOptionsFor(DEV_DATABASE_URL).connectionString,
-  ssl: sslOptionsFor(DEV_DATABASE_URL).ssl,
-});
+const { connectionString, ssl } = sslOptionsFor(DEV_DATABASE_URL);
+const client = new pg.Client({ connectionString, ssl });
 
 await client.connect();
 
@@ -197,8 +195,6 @@ const dbFkCols = new Set((await q(
    JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
    WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1`, [SCHEMA],
 )).map((r) => r.column_name));
-
-await client.end();
 
 // --- column defaults ---------------------------------------------------------
 //
@@ -299,7 +295,15 @@ function indexNameFor(model, cols, kind) {
 
 function declaredIndexes(body) {
   const out = [];
-  for (const m of body.matchAll(/@@(index|unique)\(\[([^\]]+)\]/g)) {
+  // Line by line, and anchored at the start of the line, because a comment that
+  // NAMES an index is not a declaration of one. The schema comment on
+  // NutritionTarget explains why `@@index([userId])` is deliberately absent, and
+  // that sentence matched a whole-body regex and reported the index as missing -
+  // the exact inverse of the drift being looked for. A parser that reads prose
+  // as configuration is worse than one that reads nothing.
+  for (const line of body.split('\n')) {
+    const m = line.match(/^\s*@@(index|unique)\(\[([^\]]+)\]/);
+    if (!m) continue;
     const cols = m[2].split(',').map((c) => c.trim().replace(/^"(.*)"$/, '$1')).filter(Boolean);
     out.push({ kind: m[1], cols });
   }
@@ -325,6 +329,11 @@ for (const [model, body] of models) {
 }
 
 // --- compare ---------------------------------------------------------------
+//
+// Disconnected here rather than straight after the first batch of queries, so
+// that every read below happens on an open client. The connection is released
+// before anything is printed, and this script never writes either way.
+await client.end();
 const problems = [];
 
 const missingEnums = [];

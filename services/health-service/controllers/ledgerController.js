@@ -248,6 +248,17 @@ export const requestFood = handle(async (req) => {
   // Only the creation is tracked. A repeat ask is the same event as the first
   // one for reporting purposes, and counting both would make this look like
   // growing demand when it is one person being persistent.
+  //
+  // `name` is the one food-derived property anywhere in this dictionary, and it
+  // is deliberate: "which foods are people failing to find" is the entire
+  // reason this endpoint exists, and an event with no name in it cannot answer
+  // that question at all. So this one carries the food name, and everything
+  // else here carries shape only — compare health_food_photo_recognized below,
+  // which stays nameless because a photo has no name to begin with and its
+  // contents are nobody else's business. The difference is not carelessness: a
+  // requested food is a thing the user wants the catalogue to have, which is
+  // also a thing every other user of the catalogue should get, while the
+  // contents of somebody's plate is only ever theirs.
   if (created) track('health_food_requested', req.userId, { name: request.name });
   return {
     id: request.id,

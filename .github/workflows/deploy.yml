@@ -140,9 +140,29 @@ jobs:
           # Without this every query fails on a missing relation rather than on
           # the thing being tested.
           npx prisma migrate deploy
+          # The food tests assert against the seeded catalogue, and the search
+          # bugs they exist to catch were only ever visible against real data:
+          # "tea" matched "Momos, steamed" because plain `includes` cannot tell a
+          # word from the middle of a longer one, and no mocked fixture contained
+          # the word "steamed". Idempotent, so re-running it on a warm database
+          # updates rather than duplicating.
+          npx prisma db seed
       - name: Run the real-database tests
         working-directory: services/health-service
-        run: node --test test/nudgeDb.test.js
+        run: node --test test/nudgeDb.test.js test/foodDb.test.js
+      # The drift audit normally needs a real environment and so cannot gate a
+      # pull request. Against the database this job just built it can, and that is
+      # the only place the index and column-default checks ever run - the four
+      # items it now reports were invisible to the previous version of the script
+      # for as long as it existed.
+      - name: Audit the schema against the database just migrated
+        working-directory: services/health-service
+        run: node scripts/check-schema-drift.mjs
+        env:
+          # Named DEV_ on purpose: a script reading DATABASE_URL picks up whatever
+          # the shell happens to have. The CI Postgres has no TLS, hence
+          # sslmode=disable.
+          DEV_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}?sslmode=disable
 
   preflight:
     needs: [changes, unit-tests, integration-tests]
