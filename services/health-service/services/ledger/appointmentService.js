@@ -98,16 +98,26 @@ export async function listAppointments(
   prisma,
   { userId, from, to, limit = 100 } = {},
 ) {
+  // Validated here rather than in the controller, despite the comment below
+  // having once claimed they already were. The bounds reach a Prisma where
+  // clause as literals, so an unvalidated string is arbitrary input in a query:
+  // `from=zzz` returns a whole history the user did not ask for, and a reversed
+  // range silently returns nothing at all - which looks identical to "you have
+  // no appointments", the answer a reminder screen must never give wrongly.
+  const lowerBound = optionalDate(from, 'FROM_INVALID', 'That is not a date');
+  const upperBound = optionalDate(to, 'TO_INVALID', 'That is not a date');
+  if (lowerBound && upperBound && lowerBound > upperBound) {
+    throw badRequest('The end date is before the start date', 'RANGE_INVERTED');
+  }
+
   return prisma.doctorAppointment.findMany({
     where: {
       userId,
-      // Both bounds are validated before they get here, so these are strings
-      // that match DATE_RE rather than arbitrary user input in a query.
-      ...(from ? { localDate: { gte: from } } : {}),
-      ...(to ? { localDate: { lte: to } } : {}),
+      ...(lowerBound ? { localDate: { gte: lowerBound } } : {}),
+      ...(upperBound ? { localDate: { lte: upperBound } } : {}),
     },
     orderBy: [{ localDate: 'asc' }, { localTime: 'asc' }, { createdAt: 'asc' }],
-    take: Math.min(Number(limit) || 100, 200),
+    take: pageSize(limit),
   });
 }
 
@@ -250,15 +260,36 @@ export async function deleteAppointment(prisma, { userId, id }) {
 }
 
 /**
- * The next appointment on or after `from`, or null.
+ * The next appointment on or after `nowDate`, or null.
  *
- * Exists for reminders, so it deliberately does not filter out past times on the
- * current day: a reminder fired for 10:30 that runs at 10:29 has not missed yet,
- * and one that runs at 10:31 should still say "it's now" rather than nothing.
+ * `nowDate` is the CALLER's idea of today, and it is required, because the
+ * server's is wrong for most of the world. localDate/localTime are stored in the
+ * user's own calendar zone, but the server clock is UTC: at 8pm on the 5th in
+ * California it is already the 6th in UTC, so an appointment at 6pm tonight is
+ * on a localDate the server considers past. `GET /appointments/next` would then
+ * skip an appointment two hours away and answer with tomorrow's - which is the
+ * one case a reminder screen must never get wrong, and the reason this defaults
+ * to nothing rather than to `new Date()`.
+ *
+ * `nowTime` is that same caller's local 'HH:mm' and is optional. Omit it and
+ * every appointment today counts as still ahead, which is a defensible reading of
+ * "what is next" for a list screen; pass it and today's earlier times drop off,
+ * which is what a reminder needs.
+ *
+ * Past times on the current day are deliberately not filtered out when nowTime
+ * is given either way: a reminder fired for 10:30 that runs at 10:29 has not
+ * missed yet, and one that runs at 10:31 should still say "it's now" rather than
+ * nothing.
  */
-export async function nextAppointment(prisma, { userId, from, now = new Date() }) {
-  const today = from || now.toISOString().slice(0, 10);
-  const currentTime = now.toISOString().slice(11, 16);
+export async function nextAppointment(prisma, { userId, nowDate, nowTime = null }) {
+  const today = requireDate(
+    nowDate,
+    'NOW_DATE_REQUIRED',
+    'The caller must say what today is for the user',
+  );
+  const currentTime = nowTime === null || nowTime === undefined
+    ? null
+    : requireTime(nowTime);
 
   const candidates = await prisma.doctorAppointment.findMany({
     where: { userId, localDate: { gte: today } },
@@ -271,8 +302,12 @@ export async function nextAppointment(prisma, { userId, from, now = new Date() }
   // column, and expressing the second in Prisma's DSL costs more than reading
   // 25 rows.
   return (
-    candidates.find((a) => a.localDate > today || !a.localTime || a.localTime >= currentTime) ||
-    null
+    candidates.find((a) => (
+      a.localDate > today ||
+      !a.localTime ||
+      currentTime === null ||
+      a.localTime >= currentTime
+    )) || null
   );
 }
 
@@ -302,6 +337,35 @@ function requireTime(value) {
     throw badRequest('That is not a time', 'TIME_INVALID');
   }
   return time;
+}
+
+/**
+ * A date the caller may legitimately have omitted, validated when present.
+ *
+ * Absence is not an error here - a list with no bounds is the default - but
+ * presence has to be real. An unvalidated bound lands in a Prisma where clause
+ * as a literal, and the difference between "no appointments in that window" and
+ * "you sent nonsense and got an empty list" is invisible to the user.
+ */
+function optionalDate(value, code, message) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  return requireDate(value, code, message);
+}
+
+/**
+ * How many rows to read.
+ *
+ * Negative and non-numeric values are refused rather than coerced. Prisma's
+ * `take: -1` is not "return nothing" - it walks the ordering from the end, so a
+ * caller asking for -1 silently got the *last* appointments in reverse priority,
+ * which on a list screen looks like a correct answer to a question nobody asked.
+ */
+function pageSize(limit) {
+  const n = Number(limit);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw badRequest('That is not a page size', 'LIMIT_INVALID');
+  }
+  return Math.min(Math.floor(n), 200);
 }
 
 function toId(value) {

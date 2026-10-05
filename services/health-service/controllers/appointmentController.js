@@ -94,9 +94,19 @@ export const deleteAppointment = handle(async (req) =>
 // apart from a create by looking at the verb. The alternative - POSTing
 // "what's next?" - would put a read behind a write gate, and would make a screen
 // load look like a mutation in every access log worth reading.
-export const getNextAppointment = handle(async (req) =>
-  appointmentService.nextAppointment(prisma, {
+//
+// nowDate and nowTime are the CALLER's local clock, and there is deliberately no
+// server-side fallback. Appointments are stored in the user's own calendar zone
+// while this server runs on UTC, so at 8pm on the 5th in California the server
+// already thinks it is the 6th - and would then report tomorrow's appointment as
+// next while tonight's, two hours away, went unmentioned. A default here would be
+// wrong for every user east of Greenwich or west of Hawaii, and silently so.
+// Asking is cheap: the app that calls this already knows its own date.
+export const getNextAppointment = handle(async (req) => {
+  const q = req.query || {};
+  return appointmentService.nextAppointment(prisma, {
     userId: req.userId,
-    from: (req.query || {}).from,
-  }),
-);
+    nowDate: q.nowDate ?? q.from,
+    nowTime: q.nowTime,
+  });
+});

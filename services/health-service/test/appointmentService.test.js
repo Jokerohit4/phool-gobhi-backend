@@ -24,6 +24,13 @@ function fakePrisma(rows = []) {
   const store = rows.map((r) => ({ ...r }));
   const written = { planItem: [], create: [], update: [] };
 
+  // Every findMany the service issues is recorded in `queries`, so a test can
+  // assert what was actually sent rather than what the fake chose to do with it.
+  // The fake implements take as slice(0, take), which is how a negative take
+  // would pass here while doing something else entirely in real Prisma - so the
+  // argument has to be inspected, never the fake's behaviour.
+  const queries = [];
+
   const matches = (row, where = {}) =>
     Object.entries(where).every(([k, v]) => {
       if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -39,8 +46,11 @@ function fakePrisma(rows = []) {
   return {
     store,
     written,
+    queries,
     doctorAppointment: {
-      findMany: async ({ where = {}, take }) => {
+      findMany: async (args) => {
+        const { where = {}, take } = args;
+        queries.push(args);
         const out = store.filter((r) => matches(r, where));
         return take ? out.slice(0, take) : out;
       },
@@ -312,7 +322,7 @@ test('next skips appointments already past today', async () => {
     { ...MINE, id: 2, localDate: '2026-11-04', localTime: '10:30' },
   ]);
 
-  const next = await nextAppointment(prisma, { userId: 1, from: '2026-11-01' });
+  const next = await nextAppointment(prisma, { userId: 1, nowDate: '2026-11-01' });
   assert.equal(next.id, 2);
 });
 
@@ -324,8 +334,8 @@ test('next on the same day skips a time that has passed but keeps one ahead', as
 
   const next = await nextAppointment(prisma, {
     userId: 1,
-    from: '2026-11-04',
-    now: new Date('2026-11-04T10:00:00Z'),
+    nowDate: '2026-11-04',
+    nowTime: '10:00',
   });
   assert.equal(next.id, 2);
 });
@@ -337,15 +347,133 @@ test('an appointment with no time today is still next', async () => {
 
   const next = await nextAppointment(prisma, {
     userId: 1,
-    from: '2026-11-04',
-    now: new Date('2026-11-04T23:30:00Z'),
+    nowDate: '2026-11-04',
+    nowTime: '23:30',
   });
   assert.ok(next);
 });
 
 test('next returns null rather than throwing when there is nothing', async () => {
   const prisma = fakePrisma([]);
-  assert.equal(await nextAppointment(prisma, { userId: 1, from: '2026-11-01' }), null);
+  assert.equal(await nextAppointment(prisma, { userId: 1, nowDate: '2026-11-01' }), null);
+});
+
+test('next refuses to guess what today is for the user', async () => {
+  // The failure this prevents is the reason nowDate has no default.
+  //
+  // Appointments live in the user's calendar zone and this server runs on UTC. At
+  // 8pm on the 5th in California the server already thinks it is the 6th, so an
+  // appointment at 6pm tonight - two hours away - falls behind its own date
+  // filter and `next` answers with tomorrow's instead. A reminder screen that
+  // does that has failed at the only job it has.
+  //
+  // So there is no server-side fallback: a caller that does not say what today is
+  // gets a 400 naming the problem instead of a confidently wrong answer.
+  for (const attempt of [{}, { nowDate: '' }, { nowDate: null }, { nowDate: 'today' }]) {
+    await assert.rejects(
+      () => nextAppointment(fakePrisma([]), { userId: 1, ...attempt }),
+      (e) => e.status === 400 && e.code === 'NOW_DATE_REQUIRED',
+      `nowDate=${JSON.stringify(attempt.nowDate)} must not be accepted`,
+    );
+  }
+
+  // And an impossible day is refused by the same validator the rest of the
+  // service uses, rather than being quietly treated as "no date".
+  await assert.rejects(
+    () => nextAppointment(fakePrisma([]), { userId: 1, nowDate: '2026-02-31' }),
+    (e) => e.status === 400 && e.code === 'NOW_DATE_REQUIRED',
+  );
+});
+
+test('next without a time keeps everything still ahead today', async () => {
+  // Omitting nowTime is a documented reading, not a bug: "what is next" for a list
+  // screen means today's next, and only a reminder knows the hour.
+  const prisma = fakePrisma([
+    { ...MINE, id: 1, localDate: '2026-11-04', localTime: '09:00' },
+    { ...MINE, id: 2, localDate: '2026-11-04', localTime: '15:00' },
+  ]);
+
+  const next = await nextAppointment(prisma, { userId: 1, nowDate: '2026-11-04' });
+  assert.equal(next.id, 1, 'without an hour to compare against, the earliest today is next');
+});
+
+test('next refuses a time that is not a time', async () => {
+  await assert.rejects(
+    () => nextAppointment(fakePrisma([]), { userId: 1, nowDate: '2026-11-04', nowTime: '9am' }),
+    (e) => e.status === 400 && e.code === 'TIME_INVALID',
+  );
+  await assert.rejects(
+    () => nextAppointment(fakePrisma([]), { userId: 1, nowDate: '2026-11-04', nowTime: '25:00' }),
+    (e) => e.status === 400 && e.code === 'TIME_INVALID',
+  );
+});
+
+// ---- list bounds ----------------------------------------------------------
+
+test('list refuses bounds that are not dates, rather than returning everything', async () => {
+  // These reach a Prisma where clause as literals. `from=zzz` matches nothing and
+  // `from=2026-99-99` likewise, so without validation both answer "you have no
+  // appointments" - the same answer a user with genuinely none would get, which
+  // is the one response a reminder screen must not invent.
+  for (const bad of ['zzz', '2026-13-01', '2026-02-31', '20261101', '01/11/2026']) {
+    await assert.rejects(
+      () => listAppointments(fakePrisma([]), { userId: 1, from: bad }),
+      (e) => e.status === 400 && e.code === 'FROM_INVALID',
+      `from=${bad} must be refused`,
+    );
+    await assert.rejects(
+      () => listAppointments(fakePrisma([]), { userId: 1, to: bad }),
+      (e) => e.status === 400 && e.code === 'TO_INVALID',
+      `to=${bad} must be refused`,
+    );
+  }
+
+  // Absent is fine - an unbounded list is the default - and a bad value is not
+  // quietly dropped into "no bound", which would return more than was asked for.
+  assert.ok(await listAppointments(fakePrisma([]), { userId: 1 }));
+  assert.ok(await listAppointments(fakePrisma([]), { userId: 1, from: '', to: null }));
+});
+
+test('list refuses an inverted range instead of returning nothing', async () => {
+  // to before from is not an empty result, it is a client mistake, and the empty
+  // result looks exactly like having no appointments.
+  await assert.rejects(
+    () => listAppointments(fakePrisma([]), { userId: 1, from: '2026-11-04', to: '2026-11-01' }),
+    (e) => e.status === 400 && e.code === 'RANGE_INVERTED',
+  );
+
+  // The same day in both bounds is a legitimate single-day query.
+  assert.ok(
+    await listAppointments(fakePrisma([]), { userId: 1, from: '2026-11-04', to: '2026-11-04' }),
+  );
+});
+
+test('list refuses a negative page size instead of walking the ordering backwards', async () => {
+  // Prisma's `take: -1` does not mean "return nothing". It walks from the end of
+  // the ordering, so a caller asking for -1 got the LAST appointments, reversed,
+  // which looks like a valid answer to a question nobody asked.
+  for (const bad of [-1, -100, 'abc', NaN, Infinity, 0]) {
+    const prisma = fakePrisma([]);
+    await assert.rejects(
+      () => listAppointments(prisma, { userId: 1, limit: bad }),
+      (e) => e.status === 400 && e.code === 'LIMIT_INVALID',
+      `limit=${String(bad)} must be refused`,
+    );
+    // A rejected page size must not have issued the query at all.
+    assert.equal(prisma.queries.length, 0, 'a refused limit still ran the query');
+  }
+
+  // A large page is capped rather than refused: the user asked for a lot and
+  // there is no reason to make them choose a smaller number.
+  const capped = fakePrisma([]);
+  await listAppointments(capped, { userId: 1, limit: 5000 });
+  assert.equal(capped.queries.at(-1).take, 200);
+
+  // And a fractional limit is floored, not passed through to Prisma, which
+  // rejects it as an invalid argument and surfaces as a 500.
+  const fractional = fakePrisma([]);
+  await listAppointments(fractional, { userId: 1, limit: 10.9 });
+  assert.equal(fractional.queries.at(-1).take, 10);
 });
 
 // ---- Gates ----------------------------------------------------------------

@@ -9,6 +9,7 @@ import {
   isAllowedMimeType,
   MAX_UPLOAD_BYTES,
 } from '../services/ledger/medicalDocumentStorage.js';
+import { parseReportDate } from '../services/reportService.js';
 
 // The lab-report upload path, which is a different thing from the medical
 // document path that already existed and shares its storage.
@@ -325,6 +326,114 @@ test('the report date column exists and is nullable', () => {
     /ADD COLUMN[^;]*"reportDate"[^;]*DEFAULT(?![\s\S]*NULL)/i,
     'reportDate is defaulted, so a missing date is indistinguishable from today',
   );
+});
+
+// ---- the report date itself ------------------------------------------------
+
+test('the report date the user sends is kept, and absence is a real answer', () => {
+  // Absence is a legitimate answer, not a failure: people upload from their
+  // phone days later and cannot always remember. Storing NULL keeps "nobody said"
+  // distinguishable from "today", which is the distinction the whole column is
+  // for. Defaulting it would put the original bug back with extra steps.
+  assert.equal(parseReportDate(undefined), null);
+  assert.equal(parseReportDate(null), null);
+  assert.equal(parseReportDate(''), null);
+  assert.equal(parseReportDate('   '), null);
+
+  assert.equal(parseReportDate('2026-03-04'), '2026-03-04');
+  // Whitespace trimmed rather than rejected: a multipart field arrives with
+  // whatever the client typed around it, and ' 2026-03-04 ' is not a mistake
+  // worth a 400.
+  assert.equal(parseReportDate('  2026-03-04 '), '2026-03-04');
+});
+
+test('a report date that is not a real day is refused, not rounded', () => {
+  // '2026-02-31' matches a date regex and is not a day. new Date() parses it to
+  // 2 March without complaint, so anything that trusts the parser files a blood
+  // panel under a date the lab never reported - and the user's chart disagrees
+  // with their paperwork with no way to tell why.
+  const impossible = [
+    '2026-02-31',
+    '2026-13-01',
+    '2026-00-10',
+    '2026-04-31',
+    '2025-02-29',
+  ];
+  for (const value of impossible) {
+    assert.throws(
+      () => parseReportDate(value),
+      (e) => e.status === 400 && e.code === 'DATE_INVALID',
+      `${value} must be refused rather than silently moved to another day`,
+    );
+  }
+
+  // 2024 is a leap year; 2026 is not. Both sides of that have to hold or the
+  // check is only ever catching one of them.
+  assert.equal(parseReportDate('2024-02-29'), '2024-02-29');
+
+  for (const shape of ['2026-3-4', '04/03/2026', '20260304', 'yesterday', '']) {
+    if (shape === '') continue;
+    assert.throws(
+      () => parseReportDate(shape),
+      (e) => e.status === 400 && e.code === 'DATE_INVALID',
+      `${shape} is not the wire format and must be named as such`,
+    );
+  }
+});
+
+test('a report cannot be dated in the future, or before medicine was recorded', () => {
+  const twoDaysOut = new Date();
+  twoDaysOut.setUTCDate(twoDaysOut.getUTCDate() + 2);
+
+  const farFuture = new Date(Date.UTC(twoDaysOut.getUTCFullYear(), 0, 1));
+  if (farFuture.getTime() < Date.now()) farFuture.setUTCFullYear(twoDaysOut.getUTCFullYear() + 1);
+  const future = `${farFuture.getUTCFullYear()}-01-01`;
+  assert.throws(
+    () => parseReportDate(future),
+    (e) => e.status === 400 && e.code === 'DATE_INVALID',
+    'a report drawn tomorrow is a typo or a forgery and belongs in no history',
+  );
+
+  assert.throws(
+    () => parseReportDate('1899-12-31'),
+    (e) => e.status === 400 && e.code === 'DATE_INVALID',
+    'a value this old is a typo, and a year-1900 typo would plot off every chart',
+  );
+
+  // Yesterday must work, and so must the user's own timezone being ahead of the
+  // server's: someone in UTC+14 uploading at 8am has a local date that is
+  // already tomorrow in UTC. Rejecting that fails an honest user for nothing.
+  const yesterday = new Date();
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  assert.equal(
+    parseReportDate(yesterday.toISOString().slice(0, 10)),
+    yesterday.toISOString().slice(0, 10),
+  );
+});
+
+test('the upload forwards the date, and a bad one is not a 500', () => {
+  assert.match(
+    controllerSource,
+    /reportDate:\s*req\.body\?\.reportDate/,
+    'the controller drops the date instead of passing it to the service',
+  );
+
+  // createReportService wraps everything in a 500. Validating inside that wrap
+  // would answer "upload failed" for what is a mistyped date, after the user has
+  // already watched a large PDF upload successfully.
+  const createStart = reportServiceSource.indexOf('export async function createReportService');
+  const createBody = reportServiceSource.slice(createStart);
+  const validationAt = createBody.indexOf('parseReportDate(reportDate)');
+  const tryAt = createBody.indexOf('try {');
+  assert.ok(validationAt > -1, 'createReportService never parses the date');
+  assert.ok(
+    validationAt < tryAt,
+    'the date is validated inside the try that turns every error into a 500',
+  );
+
+  // And the stored date comes back to the client, because a date picker and the
+  // stored value that disagree is otherwise only discoverable weeks later.
+  assert.match(controllerSource, /reportDate:\s*report\.reportDate \?\? null/);
 });
 
 test('the upload is a single file with a bounded size', () => {
