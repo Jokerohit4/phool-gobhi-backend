@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
@@ -1720,9 +1720,14 @@ export async function getGymBookings(gymId, partnerId) {
   try {
     await assertPartnerOwnsGym(gymId, partnerId);
 
+    // Latest-first, capped at a bounded window. The partner-web bookings
+    // table renders recent sessions, not an archive — returning every booking
+    // a long-lived gym has no cap on creates an unbounded payload that grows
+    // with age and eventually times out the screen's fetch.
     let bookings = await prisma.booking.findMany({
       where: { gymId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 200,
     });
     bookings = bookings.map(normalizeBookingMoney);
     return enrichBookingsWithCustomerInfo(bookings);
@@ -2447,14 +2452,18 @@ export async function getGymSalesSummary(gymId, partnerId) {
     const gym = await assertPartnerOwnsGym(gymId, partnerId);
     const effectiveCommissionPct = gym.commissionPct ?? BOOKING_COMMISSION_PERCENT;
 
-    const today = new Date();
-    // All buckets key off the session `date` (YYYY-MM-DD string) for consistency.
+    // All buckets key off the session `date` (YYYY-MM-DD string) for consistency,
+    // and that date is ALWAYS an IST calendar date (see slotTiming.js). "Today"
+    // must therefore be today-in-IST, not today-in-UTC — between IST 00:00 and
+    // 05:29 the two differ, and reporting yesterday as "today" (or rolling the
+    // week/month/year windows back a day) shifted the partner-app revenue tiles
+    // by a day every IST night.
     // YYYY-MM-DD sorts lexicographically, so string >= comparisons are valid date ranges.
     const toDateString = (d) => d.toISOString().split('T')[0];
-    const todayString = toDateString(today);
-    const weekAgoString = toDateString(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
-    const monthAgoString = toDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000));
-    const yearAgoString = toDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000));
+    const todayString = todayDateStringIST();
+    const weekAgoString = toDateString(new Date(Date.now() + IST_OFFSET_MS - 7 * 24 * 60 * 60 * 1000));
+    const monthAgoString = toDateString(new Date(Date.now() + IST_OFFSET_MS - 30 * 24 * 60 * 60 * 1000));
+    const yearAgoString = toDateString(new Date(Date.now() + IST_OFFSET_MS - 365 * 24 * 60 * 60 * 1000));
 
     // One fetch, bucketed in JS — cheaper than 5 near-identical aggregate
     // queries, and (more importantly) lets `net` be summed from each

@@ -2,7 +2,10 @@
 //
 // Verifies HMAC signature verification, event routing (payment.authorized,
 // payment.captured, payment.failed), wallet crediting, idempotent claim
-// semantics, and the always-200 policy that prevents Razorpay retry loops.
+// semantics, and the 500-on-error policy. Processing errors return 500 so
+// Razorpay redelivers �?" the per-order idempotent credit (razorpay-topup:<id>)
+// makes a redelivery safe against double-crediting. Signature failures return
+// 400 (Razorpay never retries 4xx), so a spoofed delivery can't force retries.
 //
 // Run:
 //   node --experimental-test-module-mocks --test test/webhook.test.js
@@ -130,7 +133,8 @@ test('payment.authorized: credits wallet and returns 200', async () => {
 
   mockGetOrder = async (id) => id === orderId ? { userId: 10, amount: 500, orderId: id } : null;
   mockClaimOrder = async () => true;
-  mockCredit = async () => {};
+  let creditArgs;
+  mockCredit = async (...args) => { creditArgs = args; };
   mockUpdateStatus = async () => {};
   mockTrack = () => {};
 
@@ -145,6 +149,9 @@ test('payment.authorized: credits wallet and returns 200', async () => {
   assert.equal(mockClaimOrder.mock?.callCount ?? 1, 1);
   assert.equal(mockCredit.mock?.callCount ?? 1, 1);
   assert.equal(mockUpdateStatus.mock?.callCount ?? 1, 1);
+  // The top-up must be idempotent per order so a redelivery or reconcile
+  // sweep can never double-credit it.
+  assert.equal(creditArgs[3], `razorpay-topup:${orderId}`);
 });
 
 // =========================================================================
@@ -266,16 +273,18 @@ test('order already claimed: returns 200 (idempotent)', async () => {
 });
 
 // =========================================================================
-// 7. Exception in handler → returns 200 (never 5xx to Razorpay)
+// 7. Exception in handler → returns 500 so Razorpay retries (never swallow
+//    a half-processed credit: the per-order idempotency key keeps a redelivery
+//    from double-crediting).
 // =========================================================================
 
-test('exception in handler: returns 200 (never 5xx)', async () => {
+test('exception in handler: returns 500 (signals Razorpay to redeliver)', async () => {
   process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec_test';
   throwOnHmac = true;
 
   const r = mkRes();
   await handleRazorpayWebhook(mkReq(), r);
 
-  assert.equal(r.statusCode, 200);
-  assert.deepEqual(r.body, { received: true });
+  assert.equal(r.statusCode, 500);
+  assert.deepEqual(r.body, { received: false, error: 'Webhook processing failed' });
 });

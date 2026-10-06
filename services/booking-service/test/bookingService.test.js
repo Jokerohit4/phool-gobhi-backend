@@ -242,6 +242,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
       isBeforeSessionWindow: () => false,
       isSessionEnded: () => false,
       shiftedSlotForNow: () => ({ newStartTime: '10:00', newEndTime: '11:00' }),
+      IST_OFFSET_MS: (5 * 60 + 30) * 60000,
       getDayOfWeek: (date) => {
         const [y, m, d] = date.split('-').map(Number);
         return new Date(Date.UTC(y, m - 1, d)).getUTCDay();

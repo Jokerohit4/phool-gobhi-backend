@@ -1318,17 +1318,23 @@ function razorpayClient() {
   });
 }
 
-// Settles one stale PENDING order against Razorpay's own payment records:
-//  - a captured/authorized payment => credit the wallet (same claim-then-
-//    credit path the client /verify and the webhook use, so the atomic
-//    PENDING->PROCESSING claim guarantees no double credit no matter which
-//    of the three settles it first);
+// Settles one stale Razorpay order against Razorpay's own payment records:
+//  - a captured/authorized payment => credit the wallet;
 //  - only failed payments => mark the order FAILED;
 //  - no payment at all (checkout abandoned mid-flight) => leave PENDING for
 //    the next sweep, since the user may still complete it.
+//
+// The credit is idempotent on a per-order key (`razorpay-topup:<orderId>`,
+// see creditWalletService), so this function does NOT need the atomic
+// PENDING->PROCESSING claim the client /verify and webhook paths use: no
+// matter how many of them race, at most one credit lands. That idempotency is
+// also what lets the sweep safely pick up PROCESSING orders stranded by a
+// crashed process that claimed but never credited/marked SUCCESS (the old
+// sweep only ever looked at PENDING, so such an order was lost forever --
+// money collected by Razorpay, customer wallet never credited).
 async function settleRazorpayOrder(razorpay, order) {
   // fetchPayments throws if the order is unknown to Razorpay (e.g. created
-  // against a different key set) — the caller treats that as unresolved.
+  // against a different key set) �?" the caller treats that as unresolved.
   const payments = await razorpay.orders.fetchPayments(order.orderId);
   const list = payments?.items ?? [];
 
@@ -1336,11 +1342,8 @@ async function settleRazorpayOrder(razorpay, order) {
   const anyFailed = list.length > 0 && list.every((p) => p.status === 'failed');
   if (!succeeded && !anyFailed) return 'unresolved';
 
-  const claimed = await claimRazorpayOrderService(order.orderId);
-  if (!claimed) return 'unresolved'; // client /verify or webhook settled it first
-
   if (succeeded) {
-    await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`);
+    await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`, `razorpay-topup:${order.orderId}`);
     await updateRazorpayOrderStatusService(order.orderId, 'SUCCESS', succeeded.id);
     track('wallet_topup_succeeded', order.userId, { amount: Number(order.amount), order_id: order.orderId, via: 'reconcile' });
     return 'credited';
@@ -1351,17 +1354,22 @@ async function settleRazorpayOrder(razorpay, order) {
   return 'failed';
 }
 
-// Finds PENDING top-up orders older than the settle window and settles them
+// Finds unsettled top-up orders older than the settle window and settles them
 // against Razorpay. `userId` scopes it to one customer (the lazy on-read
 // path); omitting it reconciles everything (the periodic sweep / internal
-// trigger). Failures are swallowed per-order — a single bad order must never
+// trigger). Failures are swallowed per-order �?" a single bad order must never
 // stall the rest of the sweep.
+//
+// PENDING covers orders that were never claimed; PROCESSING covers orders a
+// crashed process claimed but never finished (see settleRazorpayOrder for why
+// re-processing those is safe). Orders deliberately settled (or marked failed)
+// by the client /verify or webhook are neither, so never re-swept.
 export async function reconcilePendingRazorpayOrdersService({ userId } = {}) {
   const cutoff = new Date(Date.now() - RECONCILE_ORDER_AFTER_MS);
   const candidates = await prisma.razorpayOrder.findMany({
     where: {
       purpose: 'topup',
-      status: 'PENDING',
+      status: { in: ['PENDING', 'PROCESSING'] },
       createdAt: { lt: cutoff },
       ...(userId ? { userId } : {}),
     },

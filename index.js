@@ -138,7 +138,7 @@ const eventsIngestLimiter = rateLimit({
   message: { error: 'Too many events' },
 });
 const RATE_LIMITED_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact)$/, limiter: authAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact|refresh-token|google|verify-firebase-token|forgot-password)$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },
@@ -257,6 +257,16 @@ app.use('/api/health', proxy(HEALTH_SERVICE_URL, {
 }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
+
+// Fail fast at boot if the gateway's own identity trust anchor is missing:
+// every proxied route verifies tokens against JWT_SECRET, and a gateway
+// without it would boot "fine" and then 500 on every single authenticated
+// request (or worse, accept nothing at all — jwt.verify throws on an
+// undefined secret). A clear startup error beats an opaque container crash.
+if (!process.env.JWT_SECRET) {
+  throw new Error('Gateway boot aborted: JWT_SECRET is not set (see .env.dev.example / SECRETS_JSON).');
+}
+
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
 }

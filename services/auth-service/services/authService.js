@@ -446,7 +446,8 @@ async function sendWhatsAppOtp(phone, code) {
         },
       }),
     });
-    if (!res.ok) { console.error('WhatsApp OTP failed:', await res.text()); return false; }
+    // log status only �?" the provider body can echo the recipient phone.
+    if (!res.ok) { console.error('WhatsApp OTP failed:', res.status); return false; }
     return true;
   } catch (err) {
     console.error('WhatsApp OTP error:', err.message);
@@ -466,10 +467,12 @@ async function sendFast2SmsOtp(phone, code) {
       headers: { 'cache-control': 'no-cache' },
     });
     const body = await res.json().catch(() => null);
-    // Fast2SMS sometimes returns HTTP 200 with {return:false} on logical failures
-    // (e.g. account gates) — res.ok alone isn't enough to detect that.
+// Fast2SMS sometimes returns HTTP 200 with {return:false} on logical failures
+    // (e.g. account gates) �?" res.ok alone isn't enough to detect that.
+    // Log the status only: the response body can echo the recipient phone
+    // number, which is PII we should not write to Cloud Logging.
     if (!res.ok || body?.return === false) {
-      console.error('Fast2SMS OTP failed:', res.status, body);
+      console.error('Fast2SMS OTP failed:', res.status);
       return false;
     }
     return true;
@@ -525,14 +528,20 @@ export async function sendOtpService(rawPhone) {
   if (lastSent && Date.now() - parseInt(lastSent) < 60 * 1000) {
     throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
   }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // crypto.randomInt is a CSPRNG �?" an OTP must not come from Math.random
+  // (predictable from enough samples; this is a login credential for ~5 min).
+  const code = String(crypto.randomInt(100000, 1000000));
   
   // Store OTP and sent timestamp in Redis with TTL
   await redis.setex(`otp_code:${phone}`, OTP_EXPIRY_SECONDS, code);
   await redis.setex(`otp_sent_at:${phone}`, 60, Date.now().toString());
   
   const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
-  if (!sent) console.log(`OTP for ${phone}: ${code}`);
+  // NEVER log the code (or the raw phone) if delivery fails �?" the code is a
+  // live login credential and this log is readable by anyone with Cloud
+  // Logging access. A generic error keeps the incident signal without the
+  // account-takeover payload.
+  if (!sent) console.error('OTP delivery failed for every configured provider');
   return { message: 'OTP sent successfully' };
 }
 

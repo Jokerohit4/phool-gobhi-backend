@@ -1,4 +1,4 @@
-const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+export const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
 const MIN_LEAD_MS = 60 * 60000;
 
 // Gym hours ("14:00") are wall-clock IST regardless of the server's own

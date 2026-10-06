@@ -35,7 +35,6 @@ const prisma = new PrismaClient();
 
 const signup = async (req, res) => {
   try {
-    console.log('Signup request body:', req.body);
     // This route is public (no auth) — gobhi/staff accounts must only ever be
     // created via the authenticated POST /admin/staff path (createStaffService),
     // which calls signupService directly and bypasses this check. Without this,
@@ -104,11 +103,9 @@ const exportMyData = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
-    console.log('req.user', req.user);
     const result = await deleteUserService(req.user.id);
     res.json(result);
   } catch (err) {
-    console.log('err', err);
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
   }
 };

@@ -44,12 +44,22 @@ const SUBSCRIPTION_PLANS = [
 // generateTimeSlots loop forever, since its termination check assumes a
 // positive step. Called with the FINAL values that will actually be stored
 // (post-defaulting on create), not the raw request body.
-function validateGymFields({ sessionPrice, quotedPrice, capacity, slotDuration, openTime, closeTime }) {
+function validateGymFields({ sessionPrice, quotedPrice, capacity, slotDuration, openTime, closeTime, weeklyPlanPrice, monthlyPlanPrice, quarterlyPlanPrice, sixMonthlyPlanPrice, yearlyPlanPrice } = {}) {
   if (sessionPrice !== undefined && (typeof sessionPrice !== 'number' || !(sessionPrice > 0))) {
     throw { status: 400, error: 'sessionPrice must be a positive number' };
   }
   if (quotedPrice !== undefined && quotedPrice !== null && (typeof quotedPrice !== 'number' || !(quotedPrice > 0))) {
     throw { status: 400, error: 'quotedPrice must be a positive number' };
+  }
+  // Subscription plan prices are user-facing: a zero-₹ "8 visits for free"
+  // plan is real revenue the platform owes the gym the moment a customer buys
+  // it, so a partner or buggy client must not be able to publish one. null
+  // clears a plan and is allowed.
+  const PLAN_PRICE_FIELDS = { weeklyPlanPrice, monthlyPlanPrice, quarterlyPlanPrice, sixMonthlyPlanPrice, yearlyPlanPrice };
+  for (const [name, value] of Object.entries(PLAN_PRICE_FIELDS)) {
+    if (value !== undefined && value !== null && (typeof value !== 'number' || !(value > 0))) {
+      throw { status: 400, error: `${name} must be a positive number` };
+    }
   }
   if (capacity !== undefined && (!Number.isInteger(capacity) || capacity <= 0)) {
     throw { status: 400, error: 'capacity must be a positive integer' };
@@ -385,6 +395,11 @@ export async function createGym(partnerId, data) {
     slotDuration: finalSlotDuration,
     openTime,
     closeTime,
+    weeklyPlanPrice,
+    monthlyPlanPrice,
+    quarterlyPlanPrice,
+    sixMonthlyPlanPrice,
+    yearlyPlanPrice,
   });
 
   const googleFields = await fetchGoogleRatingFields(googlePlaceId);

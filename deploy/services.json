@@ -18,7 +18,10 @@
         "package.json",
         "package-lock.json",
         "Dockerfile",
-        ".gcloudignore"
+        ".gcloudignore",
+        "bootstrap-secrets.js",
+        "utils/**",
+        "docs/analytics-events.json"
       ],
       "env": {
         "dev": {
@@ -70,10 +73,8 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ALLOW_DEV_OTP": "true",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "auth-service",
-            "OTP_PROVIDER": "firebase",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
@@ -88,10 +89,8 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ALLOW_DEV_OTP": "false",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "auth-service",
-            "OTP_PROVIDER": "firebase",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",

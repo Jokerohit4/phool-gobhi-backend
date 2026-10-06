@@ -437,10 +437,13 @@ export const createTopUpOrder = async (req, res) => {
 export const verifyAndCreditWallet = async (req, res) => {
   try {
     // Defense-in-depth alongside the same guard in createTopUpOrder — a
-    // partner should never be able to credit their own wallet even with a
-    // forged/leaked orderId.
-    if (req.userRole === 'partner') {
-      return res.status(403).json({ error: 'Partner wallets cannot be topped up. Balance is credited automatically from completed bookings.' });
+// Only customers hold top-up wallets. Gobhi accounts get wallet-service
+    // features surfaced to them via the admin portal's internal paths, and
+    // partner balances accrue only from completed bookings �?" refusing any
+    // role other than customer here keeps a forged JWT (or a gobhi/trainer
+    // token pasted from another app) from silently crediting a wallet.
+    if (req.userRole !== 'customer') {
+      return res.status(403).json({ error: 'Only customer wallets can be topped up.' });
     }
     const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
     const userId = req.userId;
@@ -459,11 +462,20 @@ export const verifyAndCreditWallet = async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // An order created for one user must not be settleable by a different
+    // user �?" the signature above only proves the {order, payment} pair is
+    // genuine Razorpay data, not that the caller owns it. Without this check,
+    // anyone holding a leaked orderId+paymentId+signature triplet could credit
+    // their own wallet at another customer's expense.
+    if (order.userId !== userId) {
+      return res.status(403).json({ error: 'Order does not belong to this account' });
+    }
+
     // Atomically claim the order so a concurrent webhook delivery for the
     // same order can't also credit it.
     const claimed = await claimRazorpayOrderService(orderId);
     if (!claimed) {
-      // Lost the race — most likely the webhook already credited this order.
+      // Lost the race �?" most likely the webhook already credited this order.
       // If so, the top-up did succeed, so tell the client that instead of
       // surfacing an "already processed" error for money that did land.
       const latest = await getRazorpayOrderService(orderId);
@@ -476,8 +488,10 @@ export const verifyAndCreditWallet = async (req, res) => {
       return res.status(400).json({ error: 'Order already processed' });
     }
 
-    // Credit wallet (top-up)
-    const result = await creditWalletService(userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+    // Credit wallet (top-up) �?" idempotent on a per-order key, so a webhook
+    // redelivery or a reconcile sweep that also sees "payment succeeded" can
+    // never apply the same top-up twice.
+    const result = await creditWalletService(userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`, `razorpay-topup:${orderId}`);
 
     // Update order status
     await updateRazorpayOrderStatusService(orderId, 'SUCCESS', razorpayPaymentId);
@@ -690,7 +704,11 @@ export const handleRazorpayWebhook = async (req, res) => {
       if (order) {
         const claimed = await claimRazorpayOrderService(orderId);
         if (claimed) {
-          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+          // Per-order idempotency key: if a redelivery or a reconcile sweep
+          // races this (or this request dies right after crediting and the
+          // catch below returns a 500 that makes Razorpay redeliver), the
+          // credit is still applied exactly once.
+          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`, `razorpay-topup:${orderId}`);
           await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
           track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
         }
@@ -710,8 +728,14 @@ export const handleRazorpayWebhook = async (req, res) => {
 
     res.status(200).json({ received: true });
   } catch (err) {
+    // A 200 here used to swallow every failure so Razorpay wouldn't retry.
+    // That turned a transient DB/network error into money permanently in
+    // limbo: Razorpay collected it, the customer never got credited, and no
+    // redelivery would ever come. Return 500 instead and let Razorpay retry
+    // �?" the per-order idempotent credit makes redelivery safe against
+    // double-crediting.
     console.error('Webhook error:', err.message);
-    res.status(200).json({ received: true }); // Return 200 to prevent Razorpay retries
+    res.status(500).json({ received: false, error: 'Webhook processing failed' });
   }
 };
 
