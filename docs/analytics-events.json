@@ -690,6 +690,18 @@
     "since": "2026-09-29",
     "notes": "targets recalculated from current weight. props written, skipped"
   },
+  "health_food_added": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-06",
+    "notes": "a gobhi reviewer added a food to the curated catalogue (the ONLY sanctioned FoodItem write in the service, by design). props source, verified, resolved_requests \u2014 source is the provenance the reviewer chose (estimate unless a real one was in hand), verified is whether they clicked the sourced-numbers box, resolved_requests is how many pending requests the add closed, which is the demand backlog turning into supply. The food's own NAME is deliberately not carried, matching health_food_requested's reasoning in reverse: a request name is what customers could not find (demand), a held catalogue row is not a data point about any one user. See foodRequestService.js's header for why this is the one sanctioned path"
+  },
+  "health_food_embeddings_refreshed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-06",
+    "notes": "a gobhi reviewer regenerated the on-device food matcher's embeddings (POST /admin/food-embeddings/refresh). props computed, model \u2014 how many curated rows were embedded and by which Gemini model, so a bad build (few rows, or the deployment accidentally keyed on a deprecated model) is visible in the admin refresh log rather than surfacing as silent customer-side match misses"
+  },
   "health_food_logged": {
     "source": "server",
     "service": "health-service",
