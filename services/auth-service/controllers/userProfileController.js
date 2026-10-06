@@ -296,7 +296,7 @@ export const updateProfile = async (req, res) => {
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
-      weeklyFrequencyIntent,
+      weeklyFrequencyIntent, linkedGymId,
     } = req.body;
 
     // appMode is deliberately NOT accepted here. It is derived server-side
@@ -360,6 +360,19 @@ export const updateProfile = async (req, res) => {
     if (gender !== undefined) updates.gender = gender;
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
+    // linkedGymId is the gym-join attribution written when a customer follows
+    // a gym's join link (the app PUTs it here, and signup/login backfill it
+    // server-side). This handler read it as a field to return but never as one
+    // to accept, so the app's call succeeded while the value was silently
+    // dropped. Immutable once set - same guard as issueSessionForUser, so a
+    // later save or a repeat scan of a different poster can never reassign
+    // somebody to another gym.
+    if (linkedGymId != null && !before.linkedGymId) {
+      const resolved = Number(linkedGymId);
+      if (Number.isInteger(resolved) && resolved > 0) {
+        updates.linkedGymId = resolved;
+      }
+    }
     if (currentlyWorksOut !== undefined) updates.currentlyWorksOut = currentlyWorksOut;
     if (trainingLocationPref !== undefined) updates.trainingLocationPref = trainingLocationPref;
     if (trainingLocationOther !== undefined) {
