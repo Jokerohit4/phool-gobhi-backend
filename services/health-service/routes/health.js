@@ -439,6 +439,17 @@ router.post('/admin/food-photos/sweep', requireRole('gobhi'), ledgerCtrl.sweepFo
 router.get('/admin/food-requests', requireRole('gobhi'), ledgerCtrl.listFoodRequestQueue);
 router.post('/admin/food-requests/:id/resolve', requireRole('gobhi'), ledgerCtrl.resolveFoodRequest);
 
+// The one place free-text demand becomes reference data: a gobhi reviewer adds
+// a food the queue asked for, with numbers they can source. `createFood`
+// re-serves those values straight into the catalogue and closes the pending
+// requests for that name - see foodAdminService.js for the boundary.
+router.post('/admin/food-items', requireRole('gobhi'), ledgerCtrl.createFoodItem);
+
+// Recompute the embedded catalogue the on-device matcher compares photos
+// against (see foodEmbeddingService.js). Runs a batched provider call, not
+// per-photo spend; call it after any seed change.
+router.post('/admin/food-embeddings/refresh', requireRole('gobhi'), ledgerCtrl.refreshFoodEmbeddings);
+
 // ---- Unlogged attendance (FR-03) + nudges (FR-08) -----------------------
 // "You were at the gym and haven't said what you did" - the read that turns
 // the attendance attachment into a prompt. Workout half by construction: the

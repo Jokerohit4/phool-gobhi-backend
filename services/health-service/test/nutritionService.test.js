@@ -9,7 +9,9 @@ import {
   deltaFromTarget,
   emptyTotals,
   getDayTotals,
+  isUnknownSnapshot,
   logFood,
+  logUnknownFood,
   logSavedMeal,
   progressAgainstTarget,
   saveMeal,
@@ -272,6 +274,78 @@ test('every slot is present even on an empty day', async () => {
     assert.ok(day.bySlot[slot], `${slot} missing from an empty day`);
     assert.equal(day.bySlot[slot].totals.kcal, 0);
   }
+});
+
+// --- known-unknown rows (photo_unmatched) ------------------------------------
+
+test('logUnknownFood writes a sentinel row that totals count but never sum', async () => {
+  // A confirmed-but-unmatched photo line is PRESENT in the meal - it was on the
+  // plate - and must never be re-invented into numbers. The log keeps the name
+  // and the photo; totals keep it countable but out of every sum. Also, an
+  // empty day has no pending rows.
+  const prisma = mockPrisma({ foodLog: { findMany: async () => [] } });
+  const empty = await getDayTotals(prisma, 7, '2026-09-28');
+  assert.equal(empty.pendingCount, 0);
+
+  const unknown = await logUnknownFood(prisma, {
+    userId: 7,
+    localDate: '2026-09-28',
+    slot: 'dinner',
+    grams: 100,
+    name: 'Amla pickle, homemade',
+    photo: { path: 'food/7/abc.jpg', proposedName: 'Amla pickle', confidence: 0.71, model: 'gemini-3.5-flash' },
+  });
+  assert.equal(unknown.source, 'photo_unmatched');
+  assert.deepEqual(unknown.nutrients, { unknown: true });
+  assert.equal(unknown.foodItemId, null);
+  assert.equal(unknown.name, 'Amla pickle, homemade');
+  assert.equal(unknown.photoPath, 'food/7/abc.jpg');
+  assert.equal(isUnknownSnapshot(unknown.nutrients), true);
+});
+
+test('day totals count a pending row and keep it out of the sums', async () => {
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => [
+        { slot: 'lunch', nutrients: { kcal: 530, proteinG: 36, carbsG: 7.2, fatG: 40, fibreG: 0 } },
+        { slot: 'dinner', nutrients: { unknown: true } },
+        { slot: 'dinner', nutrients: { kcal: 130, proteinG: 2.7, carbsG: 28.2, fatG: 0.3, fibreG: 0.4 } },
+      ],
+    },
+  });
+
+  const day = await getDayTotals(prisma, 7, '2026-09-28');
+  // The unknown row is a real entry in the day, so it counts.
+  assert.equal(day.logCount, 3);
+  assert.equal(day.pendingCount, 1);
+  assert.equal(day.bySlot.dinner.count, 2);
+  assert.equal(day.bySlot.dinner.pendingCount, 1);
+  // ...and it contributes nothing to any number, so the day's totals are only
+  // the measured rows. The alternative - a silent 0 kcal - makes the day look
+  // lighter than it was, which is exactly the wrong direction.
+  assert.equal(day.totals.kcal, 660);
+  assert.equal(day.bySlot.dinner.totals.kcal, 130);
+  assert.equal(day.bySlot.dinner.totals.fatG, 0.3);
+});
+
+test('logUnknownFood requires a name and a real slot and sane grams', async () => {
+  const base = { userId: 7, localDate: '2026-09-28', slot: 'dinner', grams: 100, name: 'Unknown thing' };
+  await assert.rejects(
+    () => logUnknownFood(mockPrisma(), { ...base, name: '   ' }),
+    (err) => err.status === 400 && err.code === 'NAME_REQUIRED',
+  );
+  await assert.rejects(
+    () => logUnknownFood(mockPrisma(), { ...base, slot: 'midnight' }),
+    /slot must be one of/,
+  );
+  await assert.rejects(
+    () => logUnknownFood(mockPrisma(), { ...base, grams: 0 }),
+    /Provide grams/,
+  );
+  await assert.rejects(
+    () => logUnknownFood(mockPrisma(), { ...base, grams: 99999 }),
+    /more food than one meal/,
+  );
 });
 
 // --- target comparison -----------------------------------------------------

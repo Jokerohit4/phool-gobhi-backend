@@ -234,10 +234,87 @@ export async function logFood(prisma, { userId, localDate, slot, foodItemId, gra
 }
 
 /**
+ * Log a food that is NOT in the catalogue, as present-but-unknown.
+ *
+ * The one writer for source `photo_unmatched`. It exists for a single,
+ * deliberate case: the user confirms a photo line this catalogue cannot name.
+ * The line stays part of their day - it was on the plate - but it must not be
+ * invented into numbers. The snapshot is a sentinel, `{ "unknown": true }`,
+ * which getDayTotals counts and refuses to sum (a fabricated zero would make
+ * the day's total quietly short in exactly the way this ledger exists to
+ * prevent).
+ *
+ * `picture` is kept even though there is no food to attach it to, because it is
+ * what the reviewer and the user can both see: "that yellow thing, you logged
+ * it on the 14th" is a photo, not a nutrient row.
+ */
+export async function logUnknownFood(
+  prisma,
+  { userId, localDate, slot, grams, name, servingLabel = null, nonVeg = false, photoCorrections = 0, photo = null },
+) {
+  if (!MEAL_SLOTS.includes(slot)) {
+    throw badRequest(`slot must be one of: ${MEAL_SLOTS.join(', ')}`);
+  }
+
+  const cleanName = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  if (!cleanName) {
+    throw badRequest('Name the food that was on the plate', 'NAME_REQUIRED');
+  }
+
+  const resolvedGrams = Number(grams);
+  if (!(resolvedGrams > 0)) {
+    throw badRequest('Provide grams for the item');
+  }
+  if (resolvedGrams > GRAMS_MAX) {
+    throw badRequest(`That is over ${GRAMS_MAX} g, which is more food than one meal`);
+  }
+
+  // Same provenance gating as logFood: the photo fields only belong on rows
+  // that truly came from a photo.
+  const photoFields =
+    photo
+      ? {
+          photoPath: photo?.path || null,
+          photoProposedName: photo?.proposedName || null,
+          photoConfidence: Number.isFinite(Number(photo?.confidence))
+            ? Number(photo.confidence)
+            : null,
+          photoModel: photo?.model || null,
+        }
+      : {};
+
+  return prisma.foodLog.create({
+    data: {
+      userId,
+      localDate,
+      slot,
+      foodItemId: null,
+      grams: roundTo(resolvedGrams, DECIMAL_PLACES.grams),
+      servingLabel: servingLabel || null,
+      servings: null,
+      // The sentinel. Never a null and never a zero-filled object, so a totals
+      // read can tell "on the plate, unmeasured" from "missing data" and from
+      // "ate nothing at all".
+      nutrients: { unknown: true },
+      source: 'photo_unmatched',
+      photoCorrections: Number(photoCorrections) || 0,
+      ...photoFields,
+      name: cleanName,
+      nonVeg: nonVeg === true,
+    },
+  });
+}
+
+export function isUnknownSnapshot(nutrients) {
+  return nutrients != null && nutrients.unknown === true;
+}
+
+/**
  * Totals for one local date, broken down by meal slot.
  *
  * Reads `nutrients` off each log rather than joining FoodItem, for the snapshot
- * reason above.
+ * reason above. A photo_unmatched row is counted (it is a real entry in the
+ * meal) but never added to any sum - see isUnknownSnapshot.
  */
 export async function getDayTotals(prisma, userId, localDate) {
   const logs = await prisma.foodLog.findMany({
@@ -247,18 +324,24 @@ export async function getDayTotals(prisma, userId, localDate) {
 
   const bySlot = {};
   for (const slot of MEAL_SLOTS) {
-    bySlot[slot] = { totals: emptyTotals(), count: 0 };
+    bySlot[slot] = { totals: emptyTotals(), count: 0, pendingCount: 0 };
   }
 
   const day = emptyTotals();
+  let pendingCount = 0;
   for (const log of logs) {
-    const bucket = bySlot[log.slot] || (bySlot[log.slot] = { totals: emptyTotals(), count: 0 });
-    addInto(bucket.totals, log.nutrients);
+    const bucket = bySlot[log.slot] || (bySlot[log.slot] = { totals: emptyTotals(), count: 0, pendingCount: 0 });
     bucket.count += 1;
+    if (isUnknownSnapshot(log.nutrients)) {
+      bucket.pendingCount += 1;
+      pendingCount += 1;
+      continue;
+    }
+    addInto(bucket.totals, log.nutrients);
     addInto(day, log.nutrients);
   }
 
-  return { localDate, totals: day, bySlot, logCount: logs.length };
+  return { localDate, totals: day, bySlot, logCount: logs.length, pendingCount };
 }
 
 /**
@@ -405,9 +488,10 @@ export async function listSavedMeals(prisma, userId) {
   });
 }
 
-function badRequest(message) {
+function badRequest(message, code) {
   const err = new Error(message);
   err.status = 400;
+  if (code) err.code = code;
   return err;
 }
 

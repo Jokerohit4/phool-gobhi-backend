@@ -1160,11 +1160,19 @@ enum MealSlot {
 // a model was involved, and it still means the USER confirmed every row —
 // the model proposes ids from our own FoodItem table, it never invents a
 // food and never writes a nutrient value.
+//
+// `photo_unmatched` is the rows from a confirmed photo that the catalogue did
+// not cover. They carry the name + grams + photo provenance and a `nutrients`
+// snapshot of `{ "unknown": true }` — present but value-less, never a
+// fabricated zero — so a day's totals count them while refusing to sum them.
+// The name also feeds the missing-food queue, which is how an unseen dish
+// becomes a demand signal instead of a dead end.
 enum FoodLogSource {
   search
   photo_confirmed
   saved_meal
   custom
+  photo_unmatched
 
   @@schema("health")
 }
@@ -1527,6 +1535,36 @@ model FoodItem {
   @@schema("health")
 }
 
+// The text half of the on-device photo matcher: a cached vector for each
+// catalogue food, so the app can rank a dish against the catalogue without
+// calling a vision model on every photo.
+//
+// This is deliberately NOT the photo half. Embedding a row of text is a one-off
+// (recomputed only when the catalogue changes); embedding a photograph happens
+// on-device, per photo, using a small clip-style model shipped in the app. The
+// shared embedding space is what lets an on-device vector for "what is on this
+// plate" be compared against these rows locally, and a phrase that clears the
+// confidence bar short-circuits the paid cloud call entirely — which is the
+// closest this loop gets to a photo that costs nothing.
+//
+// Values are computed by foodEmbeddingService.refreshAll, never by hand. The
+// model id is stored with the row so a model change shows up as fresh rows
+// rather than silently re-serving an old space.
+model FoodEmbedding {
+  id         Int      @id @default(autoincrement())
+  foodItemId Int
+  model      String
+  // A float vector in the provider's embedding space, e.g. 768 numbers for
+  // the text-embedding models. Stored as JSON; consumed by the Flutter app.
+  embedding  Json
+  // No DEFAULT — written by the Prisma client, like every @updatedAt here.
+  updatedAt  DateTime @updatedAt
+
+  @@unique([foodItemId, model])
+  @@index([foodItemId])
+  @@schema("health")
+}
+
 // A food a user could not find, submitted from the picker's empty state.
 //
 // This exists because the catalogue is finite and the app is not. A user who
@@ -1555,6 +1593,13 @@ model FoodRequest {
   // was at a wedding". Optional and nullable — a bare dish name is a useful
   // request on its own.
   detail          String?
+  // Where the demand came from: 'picker' is a user who searched and could not
+  // find it, 'photo' is a dish that was on a plate the user confirmed and
+  // logged as photo_unmatched. The queue reviewer sees both, and sorting by
+  // source tells "people keep typing this name" from "people keep eating this
+  // thing" — which is the difference between an alias we are missing and a
+  // food we are missing.
+  source          String    @default("picker")
   status          FoodRequestStatus @default(pending)
   // Set when the request is resolved. Which way, not only whether: a rejected
   // request still tells the user something, and the reviewer's note says why.

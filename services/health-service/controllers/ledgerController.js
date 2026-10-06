@@ -11,6 +11,8 @@ import * as scoreTargetService from '../services/ledger/scoreTargetService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
 import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import * as foodRequestService from '../services/ledger/foodRequestService.js';
+import * as foodAdminService from '../services/ledger/foodAdminService.js';
+import * as foodEmbeddingService from '../services/ledger/foodEmbeddingService.js';
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
@@ -323,6 +325,59 @@ export const resolveFoodRequest = handle(async (req) => {
     reviewNote: b.reviewNote,
   });
   return { id: updated.id, name: updated.name, status: updated.status };
+});
+
+// ----------------------------------------------------------------------
+// Admin better-living: food catalogue ops (gobhi role, see routes/health.js).
+// The gap between "user free text in the queue" and "reference data" is closed
+// exactly once, here, by someone who can source the numbers.
+// ----------------------------------------------------------------------
+
+export const createFoodItem = handle(async (req) => {
+  const b = req.body || {};
+  const out = await foodAdminService.createFood(prisma, {
+    name: b.name,
+    aliases: b.aliases,
+    basis: b.basis,
+    kcal: b.kcal,
+    proteinG: b.proteinG,
+    carbsG: b.carbsG,
+    fatG: b.fatG,
+    fibreG: b.fibreG,
+    ironMg: b.ironMg,
+    magnesiumMg: b.magnesiumMg,
+    calciumMg: b.calciumMg,
+    zincMg: b.zincMg,
+    servings: b.servings,
+    nonVeg: b.nonVeg,
+    veg: b.veg,
+    source: b.source,
+    verified: b.verified,
+    reviewNote: b.reviewNote,
+  });
+  track('health_food_added', req.userId, {
+    source: out.food.source,
+    verified: out.food.verified,
+    resolved_requests: out.resolvedRequests,
+  });
+  return out;
+});
+
+// ----------------------------------------------------------------------
+// On-device matcher: the text half (see foodEmbeddingService.js).
+// ----------------------------------------------------------------------
+
+export const getFoodEmbeddings = handle(async () => {
+  return foodEmbeddingService.getForMatcher(prisma);
+});
+
+export const refreshFoodEmbeddings = handle(async (req) => {
+  const out = await foodEmbeddingService.refreshAll(prisma);
+  track('health_food_embeddings_refreshed', req.userId, {
+    computed: out.computed,
+    model: out.model,
+  });
+  return out;
 });
 
 export const logFood = handle(async (req) => {
@@ -813,6 +868,7 @@ export const confirmFoodPhoto = handle(async (req) => {
     slot: b.slot,
     source: 'photo_confirmed',
     logged_count: out.logged,
+    pending_count: out.pending,
   });
   // The launch metric, as a funnel rather than a dashboard-only number: if
   // corrections stay high, this is the event that says the feature is not
@@ -820,6 +876,7 @@ export const confirmFoodPhoto = handle(async (req) => {
   track('health_food_photo_confirmed', req.userId, {
     slot: b.slot,
     logged_count: out.logged,
+    pending_count: out.pending,
     corrections: out.corrections,
     rejected_count: out.rejected.length,
   });

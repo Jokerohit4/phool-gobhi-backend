@@ -471,3 +471,176 @@ test('the object is only released when the LAST line from that photo goes', asyn
   assert.equal(out.deleted, 1);
   assert.deepEqual(STORAGE.deleted, ['food/7/abc.jpg']);
 });
+
+// --- catalogue grounding ----------------------------------------------------
+
+test('the recogniser is only shown curated rows, never custom user foods', async () => {
+  const wheres = [];
+  const prisma = mockPrisma();
+  prisma.foodItem.findMany = async (args) => {
+    wheres.push(args.where || {});
+    return prisma.catalogue;
+  };
+
+  await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  // The FIRST findMany is the catalogue fetch folded into the prompt; that lane
+  // is curated-only. (The later per-name search is allowed to reach the user's
+  // own customs, exactly like the food picker does.)
+  assert.ok(wheres.length >= 1);
+  assert.equal(wheres[0].createdByUserId, null);
+});
+
+test('the curated catalogue is folded into the prompt so the model names exact rows', async () => {
+  const prisma = mockPrisma();
+  await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+
+  const sent = recognizer.calls[0];
+  assert.ok(sent.catalogueText.length > 0, 'a catalogue must actually be sent');
+  // Both the canonical name and an alias reach the model; the instruction says
+  // whatever it names must be spelled the way it sees it here.
+  assert.ok(sent.catalogueText.includes('Dal, cooked'));
+  assert.ok(sent.catalogueText.includes('daal'));
+});
+
+test('an exact grounded row is trusted, even when free text could never reach it', async () => {
+  // The dialect->canonical case the catalogue field exists for: the model saw
+  // "kuttu ki chilla" and names OUR row "Buckwheat flour chilla". No prefix
+  // matcher will ever connect those two strings, so free text would dump the
+  // item in `unmatched`. The grounded answer is the only path that works.
+  const BUCKWHEAT = { ...DAL, id: 50, name: 'Buckwheat flour chilla', aliases: [] };
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'kuttu ki chilla', catalogue: 'Buckwheat flour chilla', grams: 90, confidence: 0.81, nonVeg: true }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(
+    mockPrisma({ catalogue: [BUCKWHEAT] }),
+    { userId: 7, ...PHOTO_ARGS, deps: deps() },
+  );
+  assert.equal(out.unmatched.length, 0);
+  assert.equal(out.items[0].foodItemId, BUCKWHEAT.id);
+  // The model's own name still comes through for the correction metric.
+  assert.equal(out.items[0].proposedName, 'kuttu ki chilla');
+});
+
+test('a low-confidence grounded row is not trusted and falls through to matching', async () => {
+  // MIN_TRUSTED_CATALOGUE_CONFIDENCE: a model that hedged on an anchor ("maybe
+  // this is dal") must not be taken at that word - the hedge leaks into the
+  // match. It falls to free text, where the normal match still works.
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'dal', catalogue: 'Dal, cooked', grams: 200, confidence: 0.2, nonVeg: false }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.unmatched.length, 0);
+  assert.equal(out.items[0].foodItemId, DAL.id);
+});
+
+test('an invented grounded name is reported as unmatched, never invented into a row', async () => {
+  // The catalogue assertion is only honoured for names WE sent. A model that
+  // invents "Paneer & greens" for a plate must not hand us a row that never
+  // existed - and with an empty catalogue it gets nothing for it.
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'Paneer & greens', catalogue: 'Paneer & greens', grams: 120, confidence: 0.95, nonVeg: false }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(
+    mockPrisma({ catalogue: [] }),
+    { userId: 7, ...PHOTO_ARGS, deps: deps() },
+  );
+  assert.equal(out.items.length, 0);
+  assert.equal(out.unmatched[0].name, 'Paneer & greens');
+});
+
+// --- matched-but-unknown confirm lines ---------------------------------------
+
+test('a confirmed unknown line is logged as pending, not dropped, and raises a request', async () => {
+  let createdRequest = null;
+  const prisma = mockPrisma({
+    claim: { id: 1, model: 'gemini-2.0-flash-001' },
+    rest: {
+      foodRequest: {
+        findFirst: async () => null,
+        count: async () => 0,
+        create: async (a) => ((createdRequest = a.data), { id: 9, ...a.data }),
+      },
+    },
+  });
+
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [
+      { unknown: true, name: 'Amla pickle, homemade', grams: 100, proposedName: 'Amla pickle', confidence: 0.71, corrected: false },
+    ],
+  });
+
+  assert.equal(out.logged, 1);
+  assert.equal(out.pending, 1);
+
+  const row = prisma.created[0];
+  assert.equal(row.source, 'photo_unmatched');
+  assert.deepEqual(row.nutrients, { unknown: true });
+  assert.equal(row.name, 'Amla pickle, homemade');
+  assert.equal(row.foodItemId, null);
+  assert.equal(row.photoPath, 'food/7/abc-123.jpg');
+  assert.equal(row.photoProposedName, 'Amla pickle');
+  // The dish reaches the missing-food queue under the photo lane.
+  assert.equal(createdRequest.source, 'photo');
+  assert.equal(createdRequest.name, 'Amla pickle, homemade');
+});
+
+test('an unknown line with no name falls back to the proposed name', async () => {
+  const prisma = mockPrisma({
+    claim: { id: 1 },
+    rest: { foodRequest: { findFirst: async () => null, count: async () => 0, create: async (a) => ({ id: 9, ...a.data }) } },
+  });
+
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'lunch',
+    lines: [{ unknown: true, proposedName: 'Kadai paneer saag', grams: 120, corrected: false }],
+  });
+
+  assert.equal(out.pending, 1);
+  assert.equal(prisma.created[0].name, 'Kadai paneer saag');
+});
+
+test('a request-queue refusal does not lose the pending log', async () => {
+  // The cap bounds the shared queue, not the diary. logging what you ate must
+  // not depend on the queue accepting a new row.
+  const prisma = mockPrisma({
+    claim: { id: 1 },
+    rest: { foodRequest: { findFirst: async () => null, count: async () => 999, create: async () => { throw new Error('must not create'); } } },
+  });
+
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [{ unknown: true, name: 'Keema kaleji', grams: 90, corrected: false }],
+  });
+
+  assert.equal(out.logged, 1);
+  assert.equal(out.pending, 1);
+  assert.equal(prisma.created[0].source, 'photo_unmatched');
+});

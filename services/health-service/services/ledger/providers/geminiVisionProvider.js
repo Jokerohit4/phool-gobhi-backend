@@ -51,12 +51,19 @@ const RESPONSE_SCHEMA = {
         type: 'OBJECT',
         properties: {
           name: { type: 'STRING' },
+          // The EXACT catalogue name this item is, when the provider is given
+          // the catalogue and decides it is plausibly one of the rows. An empty
+          // string is "not one of these, or not sure". The server resolves this
+          // against the real names it sent — never against a name the model
+          // invents — which is what lets a photo of "kaali dal" land on our
+          // "Dal, cooked" row instead of bobbing through free-text matching.
+          catalogue: { type: 'STRING' },
           grams: { type: 'INTEGER' },
           confidence: { type: 'NUMBER' },
           nonVeg: { type: 'BOOLEAN' },
         },
         required: ['name'],
-        propertyOrdering: ['name', 'grams', 'confidence', 'nonVeg'],
+        propertyOrdering: ['name', 'catalogue', 'grams', 'confidence', 'nonVeg'],
       },
     },
     // One short line for the user when the photo is ambiguous. Not a
@@ -83,6 +90,30 @@ const PROMPT = [
   'nothing; a wrong one puts a food in their health record that they did not eat.',
 ].join('\n');
 
+// The catalogue block is appended when the server provides one. A vision model
+// is good at naming a plate and unreliable at resolving its own dialect to our
+// exact rows; giving it the names once means it answers both halves of the
+// question in the same response. `maxItems` is sent with the catalogue so the
+// model need not infer how many answers to give.
+function buildPrompt(catalogueText) {
+  const text = String(catalogueText || '').trim();
+  if (!text) return PROMPT;
+  return [
+    'We maintain a catalogue of the foods we recognise. The most relevant rows',
+    'are listed below.',
+    '',
+    'For each item you find, if it is plausibly one of these, set `catalogue` to',
+    'the EXACT catalogue name from the list - spelled exactly as given. If you are',
+    'not sufficiently confident it is one of these, set `catalogue` to an empty',
+    'string. Never invent a catalogue name, and never pick the closest-sounding',
+    'row for something that is clearly not it: an unmatched item is fine, a wrongly',
+    'matched one puts the wrong food in somebody\'s health record.',
+    '',
+    'CATALOGUE (first ' + String(catalogueText.length) + ' characters of the curated set):',
+    text,
+  ].join('\n');
+}
+
 export function isConfigured() {
   return Boolean(BASE_URL && API_KEY && MODEL);
 }
@@ -94,7 +125,7 @@ export function isConfigured() {
  * response can rely on `isFood` and `items` both being present, because a
  * response that fails to parse is an error rather than an empty result.
  */
-export async function recognizeFood({ imageBase64, mimeType, timeoutMs = 20000 }) {
+export async function recognizeFood({ imageBase64, mimeType, catalogueText = '', timeoutMs = 20000 }) {
   if (!isConfigured()) {
     throw new ProviderError('Food photo provider is not configured', {
       retryable: false,
@@ -119,7 +150,7 @@ export async function recognizeFood({ imageBase64, mimeType, timeoutMs = 20000 }
         contents: [
           {
             role: 'user',
-            parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: PROMPT }],
+            parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: buildPrompt(catalogueText) }],
           },
         ],
         generationConfig: {
@@ -227,5 +258,5 @@ function normaliseItem(item) {
         ? Math.min(Math.max(Number(rawConfidence), 0), 1)
         : null;
 
-  return { name, grams, confidence, nonVeg: item?.nonVeg === true };
+  return { name, grams, confidence, nonVeg: item?.nonVeg === true, catalogue: typeof item?.catalogue === 'string' ? item.catalogue.trim().slice(0, 120) : '' };
 }

@@ -139,7 +139,13 @@ test('a normal response comes back parsed, with token counts', async () => {
 
   assert.equal(out.isFood, true);
   assert.equal(out.items.length, 2);
-  assert.deepEqual(out.items[0], { name: 'dal', grams: 200, confidence: 0.82, nonVeg: false });
+  assert.deepEqual(out.items[0], {
+    name: 'dal',
+    grams: 200,
+    confidence: 0.82,
+    nonVeg: false,
+    catalogue: '',
+  });
   assert.equal(out.note, 'looks like a thali');
   assert.equal(out.tokensIn, 900, 'token counts are the cost ledger');
   assert.equal(out.tokensOut, 40);

@@ -2,8 +2,10 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  autoRecordPhotoRequest,
   listQueue,
   listRequests,
+  PHOTO_REQUESTS_PER_DAY,
   REQUESTS_PER_DAY,
   requestFood,
   resolveRequest,
@@ -552,4 +554,124 @@ test('a non-numeric id does not reach Prisma', async () => {
   });
   await assert.rejects(() => resolveRequest(prisma, { id: 'abc', status: 'resolved' }));
   assert.equal(typeof seen, 'number');
+});
+
+// --- photo-sourced requests (autoRecordPhotoRequest) ----------------------------
+//
+// requestFood serves the picker; autoRecordPhotoRequest serves confirmPhotoLog.
+// They share the per-user dedup and the cap, and deliberately do NOT share the
+// catalogue re-check: the photo caller has physically seen the item as unmatched
+// (it came off the model's un-stocked list), so a second look costs a query to
+// answer a question already answered. Source stamps the lane - `picker` vs
+// `photo` - so the queue can see which demand signal each row came in on, and
+// the photo cap is a create-only cap pulled from a different counter for the
+// simple reason that a heavy day of photos is not a heavy day of typing.
+
+test('a confirmed photo dish that is new creates a row with source photo', async () => {
+  let data;
+  const prisma = mockPrisma({
+    foodRequest: { create: async (a) => ((data = a.data), { id: 9, ...a.data }) },
+  });
+  const { request, created } = await autoRecordPhotoRequest(prisma, {
+    userId: 7,
+    name: 'Amla pickle, homemade',
+  });
+  assert.equal(created, true);
+  assert.equal(request.source, 'photo');
+  assert.equal(request.status, 'pending');
+  assert.equal(request.requestCount, 1);
+  assert.equal(data.userId, 7);
+});
+
+test('a dish already on the user\'s queue absorbs the photo ask', async () => {
+  // The queue is deduped per dish per user, and a photo line about a dish they
+  // typed yesterday is the same ask - it must inflate the existing row, never
+  // start a second one to collate.
+  let data;
+  const prisma = mockPrisma({
+    foodRequest: {
+      findFirst: async () => ({ id: 4, name: 'Amla pickle, homemade', status: 'pending' }),
+      update: async (a) => ((data = a.data), { id: 4, ...a.data }),
+    },
+  });
+  const { request, created } = await autoRecordPhotoRequest(prisma, { userId: 7, name: 'Amla pickle, homemade' });
+  assert.equal(created, false);
+  assert.equal(request.source, 'photo');
+  assert.deepEqual(data.requestCount, { increment: 1 });
+});
+
+test('the photo duplicate match is scoped to the user', async () => {
+  let seen;
+  const prisma = mockPrisma({
+    foodRequest: { findFirst: async (a) => ((seen = a.where), null) },
+  });
+  await autoRecordPhotoRequest(prisma, { userId: 7, name: 'Amla pickle, homemade' });
+  assert.equal(seen.userId, 7);
+});
+
+test('the photo duplicate match ignores case', async () => {
+  let seen;
+  const prisma = mockPrisma({
+    foodRequest: { findFirst: async (a) => ((seen = a.where), null) },
+  });
+  await autoRecordPhotoRequest(prisma, { userId: 7, name: 'AMLA PICKLE, HOMEMADE' });
+  assert.deepEqual(seen.name, { equals: 'AMLA PICKLE, HOMEMADE', mode: 'insensitive' });
+});
+
+test('the photo cap counts source-photo rows in the last 24h only', async () => {
+  let seen;
+  const prisma = mockPrisma({
+    foodRequest: { count: async (a) => ((seen = a.where), 0) },
+  });
+  await autoRecordPhotoRequest(prisma, { userId: 7, name: 'Fresh row' });
+  assert.equal(seen.userId, 7);
+  assert.equal(seen.source, 'photo');
+  assert.ok(seen.createdAt.gte instanceof Date, 'the window must be a date bound');
+});
+
+test('over the photo cap the ask is skipped, never fatal', async () => {
+  // The cap bounds how many NEW unvetted rows the shared queue takes from one
+  // heavy photo day. An over-cap ask must return a skip, not throw: the caller
+  // logs the pending meal regardless, and a throw would make that throw too.
+  let creates = 0;
+  const prisma = mockPrisma({
+    foodRequest: {
+      findFirst: async () => null,
+      count: async () => PHOTO_REQUESTS_PER_DAY,
+      create: async () => ((creates += 1), {}),
+    },
+  });
+  const out = await autoRecordPhotoRequest(prisma, { userId: 7, name: 'Over cap dish' });
+  assert.deepEqual(out, { request: null, created: false, skipped: true });
+  assert.equal(creates, 0);
+});
+
+test('the photo cap is not consulted when the dish is already queued', async () => {
+  // Same shape as the manual path: an update adds no row, so the counter (rows)
+  // must not be consulted. Otherwise a user at the cap could not touch a request
+  // they already made, which is a cap with a hole in a different wrong place.
+  let counted = false;
+  const prisma = mockPrisma({
+    foodRequest: {
+      findFirst: async () => ({ id: 4, name: 'Amla pickle' }),
+      count: async () => {
+        counted = true;
+        return PHOTO_REQUESTS_PER_DAY;
+      },
+      update: async (a) => ({ id: 4, ...a.data }),
+    },
+  });
+  const { created } = await autoRecordPhotoRequest(prisma, { userId: 7, name: 'Amla pickle' });
+  assert.equal(created, false);
+  assert.equal(counted, false, 'the cap counts rows created, and nothing was created');
+});
+
+test('an empty photo ask is skipped, and nothing is queried', async () => {
+  let queried = 0;
+  const prisma = mockPrisma({
+    foodRequest: { findFirst: async () => ((queried += 1), null), count: async () => ((queried += 1), 0) },
+  });
+  const out = await autoRecordPhotoRequest(prisma, { userId: 7, name: '   ' });
+  assert.deepEqual(out, { request: null, created: false, skipped: true });
+  assert.equal(queried, 0);
 });

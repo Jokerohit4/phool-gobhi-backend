@@ -262,11 +262,18 @@ export const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'];
 // 'photo_confirmed' (not 'photo') — the enum value is the contract; this
 // list must match it exactly or the validator rejects the service's own
 // writes (exactly what test/foodPhotoService.test.js catches).
+//
+// 'photo_unmatched' is written by confirmPhotoLog for a confirmed line the
+// catalogue does not cover. It goes through the same FOOD_LOG_SOURCES
+// validator as everything else, so it must be here for the service's own
+// writes to survive; schemaMigrationParity.test.js pins the two lists to the
+// same set.
 export const FOOD_LOG_SOURCES = [
   'search',
   'photo_confirmed',
   'saved_meal',
   'custom',
+  'photo_unmatched',
 ];
 export const DEFAULT_FOOD_LOG_SOURCE = 'custom';
 
@@ -274,6 +281,14 @@ export const DEFAULT_FOOD_LOG_SOURCE = 'custom';
 // declined by a user — only by a reviewer — so there is no default here beyond
 // what the schema already defaults a new row to.
 export const FOOD_REQUEST_STATUSES = ['pending', 'resolved', 'declined'];
+
+// Where a FoodRequest's `source` column can hold. 'picker' is the manual
+// "could not find this food" ask from the picker's empty state; 'photo' is a
+// dish auto-recorded when the user confirms a photo line that logged as
+// photo_unmatched. Open set with a default, so future demand signals do not
+// need an enum migration.
+export const FOOD_REQUEST_SOURCES = ['picker', 'photo'];
+export const DEFAULT_FOOD_REQUEST_SOURCE = 'picker';
 
 // Where a value gets rounded.
 export const DECIMAL_PLACES = {

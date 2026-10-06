@@ -12,7 +12,7 @@
 //   confirm    the user accepts, corrects or drops each candidate, and only then
 //              are FoodLog rows written, carrying what the model proposed.
 //
-// Two rules run through the whole file:
+// Three rules run through the whole file:
 //
 //  1. THE MODEL NEVER SUPPLIES A NUMBER. It proposes NAMES, and every gram of
 //     nutrition comes from the FoodItem the name matched. If the model said
@@ -27,8 +27,24 @@
 //     what the model saw, and a high unmatched rate is the signal that our
 //     catalogue is the bottleneck rather than the model. Silently discarding
 //     them would make the feature look like it under-performs for no reason.
+//
+//  3. ON CONFIRM, AN UNMATCHED ITEM IS LOGGED AS KNOWN-UNKNOWN, NOT LOST.
+//     The user looked at the photo and said "yes, this was on the plate", so
+//     the row is a real part of their day even though we cannot yet put numbers
+//     on it. It logs with source `photo_unmatched` and a {"unknown": true}
+//     snapshot - counted by the day totals, never summed - and the same name
+//     raises a missing-food request, so a repeatedly photographed dish becomes
+//     a demand signal a reviewer can actually triage. Rule 1 still holds: the
+//     item we cannot name never gets a number invented for it.
+//
+// The matching itself: the catalogue is now GIVEN to the model (a grounded
+// prompt, see providers/geminiVisionProvider.js) and the model answers with the
+// exact row name when it is confident of one. Genre-level candidates still fall
+// back to the shared free-text matcher, because a model that says "kuttu ki
+// chilla" has still told us the food even when it declines to name our row.
 import * as nutritionService from './nutritionService.js';
 import * as foodPhotoStorage from './foodPhotoStorage.js';
+import * as foodRequestService from './foodRequestService.js';
 import { matchToCatalogue } from './foodMatch.js';
 import { getRecognizer, isRecognizerConfigured } from './providers/index.js';
 import { isProviderError } from '../../utils/providerError.js';
@@ -48,6 +64,36 @@ export const UNCONFIRMED_TTL_HOURS = 24;
 // uncapped it becomes an unbounded catalogue search and an unbounded insert on
 // confirm.
 const MAX_ITEMS = 12;
+
+// The model's own confidence floor for trusting its `catalogue` assertion.
+// A grounded-prompt model has an anchor bias: it will pick a row from the list
+// even when it is guessing, and we refuse that by only trusting the assertion
+// when it is not low-confidence. A missing confidence (null) is trusted - the
+// model has not contradicted its own catalogue pick.
+const MIN_TRUSTED_CATALOGUE_CONFIDENCE = 0.5;
+
+// How much of the catalogue is sent to the model. Grounding grows input tokens
+// linearly with catalogue size; a cap keeps a growing catalogue from growing
+// the per-photo bill without limit. Rows past the cap simply stop being named
+// candidates and fall back to free-text matching.
+export const CATALOGUE_TEXT_MAX_CHARS = 8000;
+
+/**
+ * The catalogue, flattened to the one-line-per-name shape the grounded prompt
+ * asks for. Capped in characters, truncated from the front of the list so the
+ * model always sees the same deterministic slice for a given catalogue.
+ */
+export function buildCatalogueText(rows) {
+  const lines = [];
+  let chars = 0;
+  for (const row of rows) {
+    const line = row.name + ((row.aliases || []).length ? ` — ${row.aliases.join(', ')}` : '');
+    if (chars + line.length > CATALOGUE_TEXT_MAX_CHARS) break;
+    lines.push(line);
+    chars += line.length + 1;
+  }
+  return lines.join('\n');
+}
 
 function badRequest(message, code) {
   return Object.assign(new Error(message), { status: 400, code });
@@ -112,11 +158,27 @@ export async function recognizePhoto(
   const photoPath = await storage.savePhoto({ buffer, mimeType, userId });
   const startedAt = Date.now();
 
+  // The curated catalogue is fetched once per photo and folded into the prompt,
+  // so the model can name the EXACT row it means. Only rows the platform owns
+  // are offered - a user's custom food is their data and does not belong in a
+  // prompt that leaves the phone - and the same list is what the catalogue
+  // resolution below trusts.
+  const catalogueRows = await prisma.foodItem.findMany({
+    where: { createdByUserId: null },
+    select: { id: true, name: true, aliases: true },
+    orderBy: { name: 'asc' },
+  });
+  const catalogueText = buildCatalogueText(catalogueRows);
+  const byCatalogueName = new Map(
+    catalogueRows.map((r) => [String(r.name).trim().toLowerCase(), r]),
+  );
+
   let proposal;
   try {
     proposal = await recognizerFor().recognizeFood({
       imageBase64: buffer.toString('base64'),
       mimeType,
+      catalogueText,
     });
   } catch (err) {
     await recordRequest(prisma, {
@@ -179,6 +241,28 @@ export async function recognizePhoto(
   const candidates = [];
   const unmatched = [];
   for (const item of names) {
+    // First: the model's own grounded answer. When it names OUR row (a
+    // `catalogue` value we sent it) with non-trivial confidence, that row is
+    // exactly what it is pointing at, and it has already done the dialect ->
+    // canonical work that free-text matching is worst at ("kuttu ki chilla" is
+    // never going to reach "Buckwheat flour chilla" through prefix tiers).
+    // Only an exact name match is honoured, and only against names we actually
+    // sent - a model that invents "Paneer & greens" gets nothing for it, and
+    // the name falls through to the ordinary matcher below.
+    const grounded = resolveCatalogueRow(item, byCatalogueName);
+    if (grounded) {
+      candidates.push({
+        foodItemId: grounded.id,
+        name: grounded.name,
+        proposedName: item.name,
+        grams: item.grams,
+        confidence: item.confidence,
+        nonVeg: item.nonVeg,
+        servings: grounded.servings ?? null,
+      });
+      continue;
+    }
+
     const rows = await nutritionService.searchFoods(prisma, userId, {
       query: item.name,
       // The seeded catalogue is all `verified: false` (prisma/seed/foods.seed.js),
@@ -275,12 +359,51 @@ export async function confirmPhotoLog(prisma, { userId, photoPath, localDate, sl
   const created = [];
   const rejected = [];
   let corrections = 0;
+  let pending = 0;
 
   for (const line of lines.slice(0, MAX_ITEMS)) {
     // One line failing must not lose the rest: the user corrected a plate, and
     // silently dropping the line they did not touch would be worse than telling
     // them which one went wrong.
     try {
+      // A line the catalogue does not cover is not dropped once the user says
+      // it was on the plate - it is logged as KNOWN-UNKNOWN (rule 3): present
+      // in the day, named, but with no fabricated numbers. The same name raises
+      // a missing-food request so the queue sees the dish. This write is the
+      // user's own decision to log it, so it must not be blocked by the shared
+      // request queue's rate cap - see autoRecordPhotoRequest.
+      if (line.unknown === true || line.foodItemId == null) {
+        const log = await nutritionService.logUnknownFood(prisma, {
+          userId,
+          localDate,
+          slot,
+          grams: line.grams,
+          name: line.name || line.proposedName,
+          servingLabel: line.servingLabel,
+          nonVeg: line.nonVeg,
+          photoCorrections: line.corrected ? 1 : 0,
+          photo: {
+            path: photoPath,
+            proposedName: line.proposedName || null,
+            confidence: line.confidence,
+            model: claim.model,
+          },
+        });
+        if (line.corrected) corrections += 1;
+        pending += 1;
+        created.push(log);
+
+        // The demand signal, best-effort and never fatal: if the request queue
+        // refuses (rate cap), the pending FoodLog above still stands - logging
+        // what you ate must not depend on the queue accepting a new row.
+        if (log.name) {
+          await foodRequestService
+            .autoRecordPhotoRequest(prisma, { userId, name: log.name })
+            .catch((err) => console.error('[foodPhoto] photo request failed:', err.message));
+        }
+        continue;
+      }
+
       const log = await nutritionService.logFood(prisma, {
         userId,
         localDate,
@@ -300,7 +423,7 @@ export async function confirmPhotoLog(prisma, { userId, photoPath, localDate, sl
       if (line.corrected) corrections += 1;
       created.push(log);
     } catch (err) {
-      rejected.push({ name: line.proposedName || null, reason: err.message });
+      rejected.push({ name: line.proposedName || line.name || null, reason: err.message });
     }
   }
 
@@ -314,6 +437,7 @@ export async function confirmPhotoLog(prisma, { userId, photoPath, localDate, sl
 
   return {
     logged: created.length,
+    pending,
     corrections,
     // The launch metric, computed where it is actually knowable. More than half
     // the lines corrected means the model is not earning its per-photo cost, and
@@ -327,6 +451,30 @@ export async function confirmPhotoLog(prisma, { userId, photoPath, localDate, sl
 
 function round4(n) {
   return Math.round(n * 10000) / 10000;
+}
+
+/**
+ * Resolves the model's grounded `catalogue` assertion to a real row, or null.
+ *
+ * Only an exact match against the names we sent is trusted, and only when the
+ * model was not low-confidence about it (see MIN_TRUSTED_CATALOGUE_CONFIDENCE).
+ * An assertion about a name we never sent, or a low-confidence one, is worth
+ * nothing and the caller falls back to free-text matching.
+ */
+function resolveCatalogueRow(item, byCatalogueName) {
+  const name = String(item?.catalogue || '').trim().toLowerCase();
+  if (!name) return null;
+
+  const confidence = item?.confidence;
+  if (
+    confidence != null &&
+    Number.isFinite(Number(confidence)) &&
+    Number(confidence) < MIN_TRUSTED_CATALOGUE_CONFIDENCE
+  ) {
+    return null;
+  }
+
+  return byCatalogueName.get(name) || null;
 }
 
 /**

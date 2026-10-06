@@ -87,6 +87,11 @@ router.get('/ledger/foods', ...nutrition, ledgerCtrl.searchFoods);
 // cannot reach this.
 router.post('/ledger/food-requests', ...nutrition, ledgerCtrl.requestFood);
 router.get('/ledger/food-requests', ...nutrition, ledgerCtrl.listFoodRequests);
+// The embedded catalogue for the on-device matcher. Nutrition-gated like the
+// rest of the ledger: the vectors are derived from catalogue text and carry no
+// user data, but they exist to serve this app's food features, so they share
+// the ledger's consent gate rather than inventing their own surface.
+router.get('/ledger/food-embeddings', ...nutrition, ledgerCtrl.getFoodEmbeddings);
 router.post('/ledger/food-logs', ...nutrition, ledgerCtrl.logFood);
 router.delete('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.deleteFoodLog);
 router.get('/ledger/food-totals/:localDate', ...nutrition, ledgerCtrl.getDayTotals);

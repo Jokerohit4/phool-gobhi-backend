@@ -13,7 +13,10 @@
 //      endpoint that takes a name from a user and turns it into a nutrient
 //      value, and adding one would let anybody create a row that looks like
 //      signed-off reference data and is a guess typed at 11pm. The catalogue
-//      grows by seeding, from someone who can source a number.
+//      grows by seeding, from someone who can source a number. (The sanctioned
+//      exception — a gobhi reviewer adding a food with sourced values — lives in
+//      foodAdminService.js, which is the one place in the service with a
+//      FoodItem write.)
 //
 //   2. THE SEARCH IS RE-CHECKED ON WRITE. If a row appeared since the client
 //      rendered its empty state - a re-seed while the picker was open, or a
@@ -25,6 +28,12 @@
 //      asking for omelette is one request with one hundred votes, not a hundred
 //      rows. `requestCount` carries the signal that makes the backlog useful,
 //      and collapsing duplicates keeps the queue ranked by demand.
+//
+//   4. A DISH ON A PHOTO IS DEMAND TOO. autoRecordPhotoRequest exists because
+//      the picker is not the only place a missing food is discovered - a photo a
+//      user confirms as "on the plate but not in the catalogue" is the same
+//      "please add this" signal, from a plate instead of a keyboard. It goes
+//      through this module so the two share the per-user dedup and the cap.
 import { FOOD_REQUEST_STATUSES } from './constants.js';
 import { rankFoods } from './foodMatch.js';
 
@@ -43,6 +52,15 @@ const QUERY_MAX = 80;
 // Counting asks instead would rate-limit the exact behaviour this file is
 // designed to absorb.
 export const REQUESTS_PER_DAY = 10;
+
+// The photo path's own cap, and it is deliberately a create-only cap. A user
+// who photographs three meals a day can hit 30+ distinct new names a day in
+// theory, but photo lines are deduped against the manual queue (one row per
+// dish per user), so the cap only ever limits NEW rows from one heavy day. The
+// important part is what the cap is NOT: it never blocks confirmPhotoLog.
+// Logging what you ate must not depend on the shared queue's appetite, so an
+// over-cap ask is simply not recorded - the pending FoodLog still stands.
+export const PHOTO_REQUESTS_PER_DAY = 30;
 
 function badRequest(message, code) {
   return Object.assign(new Error(message), { status: 400, code });
@@ -263,4 +281,74 @@ async function assertWithinDailyLimit(prisma, { userId, now }) {
 function clamp(value, max) {
   const trimmed = String(value ?? '').trim().replace(/\s+/g, ' ');
   return trimmed ? trimmed.slice(0, max) : null;
+}
+
+/**
+ * Records a missing food discovered on a confirmed photo (source 'photo').
+ *
+ * Unlike requestFood this deliberately does NOT re-check the catalogue: the
+ * caller (confirmPhotoLog) has already physically seen the item as unmatched
+ * - it came from the model's un-stocked list, not from a client rendering an
+ * empty search. Re-checking would cost a query to answer a question that was
+ * already answered.
+ *
+ * It shares the per-user, per-dish dedup and count semantics with requestFood:
+ * a dish already on a user's queue absorbs the new ask (and is stamped
+ * source 'photo' - the latest origin wins, so the queue can tell what demand
+ * looks like), a declined row is reopened, and only a genuinely new row bumps
+ * the count.
+ *
+ * Never throws and never blocks logging. Over the photo cap it returns
+ * `{ skipped: true }` and the caller's pending FoodLog still stands - the cap
+ * bounds the SHARED queue's growth, it does not control what a user logs.
+ */
+export async function autoRecordPhotoRequest(prisma, { userId, name, now = new Date() }) {
+  const cleanName = clamp(name, NAME_MAX);
+  if (!cleanName) return { request: null, created: false, skipped: true };
+
+  const existing = await prisma.foodRequest.findFirst({
+    where: {
+      userId,
+      name: { equals: cleanName, mode: 'insensitive' },
+    },
+    orderBy: [{ createdAt: 'desc' }],
+  });
+
+  if (existing) {
+    const updated = await prisma.foodRequest.update({
+      where: { id: existing.id },
+      data: {
+        status: 'pending',
+        resolvedAt: null,
+        reviewNote: null,
+        requestCount: { increment: 1 },
+        source: 'photo',
+      },
+    });
+    return { request: updated, created: false };
+  }
+
+  if (!(await canCreatePhotoRequest(prisma, { userId, now }))) {
+    return { request: null, created: false, skipped: true };
+  }
+
+  const created = await prisma.foodRequest.create({
+    data: {
+      userId,
+      name: cleanName,
+      status: 'pending',
+      requestCount: 1,
+      source: 'photo',
+    },
+  });
+  return { request: created, created: true };
+}
+
+async function canCreatePhotoRequest(prisma, { userId, now }) {
+  if (!userId) return true;
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const used = await prisma.foodRequest.count({
+    where: { userId, source: 'photo', createdAt: { gte: since } },
+  });
+  return used < PHOTO_REQUESTS_PER_DAY;
 }
