@@ -69,6 +69,12 @@
     "source": "server",
     "service": "gym-service"
   },
+  "food_photo_on_device": {
+    "source": "client",
+    "service": "health-service",
+    "since": "2026-10-06",
+    "notes": "the on-device matcher was engaged for a photo (customer app). props matched (bool), score, runner_up, catalogue_size, model \u2014 NEVER the matched food's name, because a plate is a description of somebody's diet and the no-PII rule on health_food_photo_recognized applies to this event for the same reason. This is the calibration signal for the mobileclip drop-in: matched=false with a high score means the short-circuit bar is tuned too low (near-misses are topping the index with wrong rows), matched=true with a low runner_up means the win is decisive, and a rising catalogue_size should flatten the correlation between scores and ground truth. Server-side recognizes still fire health_food_photo_recognized; this event exists so an on-device short-circuit is visible in the same funnel without faking a model recognition"
+  },
   "gym_approved": {
     "source": "server",
     "service": "gym-service"

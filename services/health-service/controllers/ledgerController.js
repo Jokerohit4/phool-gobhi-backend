@@ -850,6 +850,23 @@ export const recognizeFoodPhoto = handle(async (req) => {
   return out;
 });
 
+// The on-device matcher's storage half: claim a photo that never reaches the
+// vision model. No health_food_photo_recognized here on purpose - nothing was
+// recognised, the phone did the naming, and firing that funnel port would make
+// on-device matches look like model recognition. The event that decides whether
+// the short-circuit earns its keep is the client's own `food_photo_on_device`.
+export const uploadFoodPhoto = handle(async (req) => {
+  if (!req.file) {
+    throw Object.assign(new Error('No photo received'), { status: 400, code: 'NO_PHOTO' });
+  }
+
+  return foodPhotoService.uploadPhotoOnly(prisma, {
+    userId: req.userId,
+    buffer: req.file.buffer,
+    mimeType: req.file.mimetype,
+  });
+});
+
 export const confirmFoodPhoto = handle(async (req) => {
   const b = req.body || {};
   const out = await foodPhotoService.confirmPhotoLog(prisma, {

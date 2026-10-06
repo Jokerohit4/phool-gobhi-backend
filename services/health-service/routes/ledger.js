@@ -124,6 +124,16 @@ router.post(
   uploadFoodPhotoMiddleware,
   ledgerCtrl.recognizeFoodPhoto,
 );
+// The on-device matcher's storage half (foodEmbeddingService.js): store and
+// claim a photo that never reaches the vision model. Same gates as recognize -
+// the photo still leaves the phone, so the flag and consent that make recognize
+// legal apply to it exactly, and the multer still buffers the bytes after them.
+router.post(
+  '/ledger/food-photos/upload',
+  ...photo,
+  uploadFoodPhotoMiddleware,
+  ledgerCtrl.uploadFoodPhoto,
+);
 // Not flag-gated on `foodPhotoLogging`. A photo that was confirmed while the
 // flag was on has to stay readable after an admin switches it off - and a read
 // mints a signed link for an image this service already holds, so it introduces

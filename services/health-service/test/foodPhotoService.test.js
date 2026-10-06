@@ -644,3 +644,55 @@ test('a request-queue refusal does not lose the pending log', async () => {
   assert.equal(out.pending, 1);
   assert.equal(prisma.created[0].source, 'photo_unmatched');
 });
+
+// ---- on-device upload (no vision) ------------------------------------------
+
+test('the no-vision upload stores and claims the photo without the model', async () => {
+  const prisma = mockPrisma();
+  const claims = [];
+  prisma.foodPhotoRequestLog.create = async (args) => {
+    claims.push(args.data);
+    return { id: 1, ...args.data };
+  };
+
+  // `configured: false` is the load-bearing bit: the whole point of the route
+  // is that an on-device match never reaches the paid vision provider, so an
+  // unconfigured provider must not block it.
+  const out = await svc.uploadPhotoOnly(prisma, {
+    userId: 7,
+    ...PHOTO_ARGS,
+    deps: deps({ configured: false }),
+  });
+
+  assert.equal(out.photoPath, 'food/7/abc-123.jpg');
+  assert.equal(out.photoUrl, 'https://signed.example/photo');
+  assert.equal(STORAGE.saved.length, 1, 'the photo is stored once');
+  assert.equal(recognizer.calls.length, 0, 'the vision model is never called');
+  assert.equal(claims.length, 1, 'a claim row is recorded so confirm can attach');
+  assert.equal(claims[0].outcome, 'on_device_upload');
+  assert.equal(claims[0].photoPath, 'food/7/abc-123.jpg');
+});
+
+test('the no-vision upload validates like recognize and shares its rate cap', async () => {
+  await assert.rejects(
+    () => svc.uploadPhotoOnly(mockPrisma(), { userId: 7, buffer: Buffer.alloc(0), mimeType: 'image/jpeg', deps: deps() }),
+    (err) => err.status === 400 && err.code === 'NO_PHOTO',
+  );
+
+  await assert.rejects(
+    () => svc.uploadPhotoOnly(mockPrisma(), { userId: 7, ...PHOTO_ARGS, mimeType: 'text/plain', deps: deps() }),
+    (err) => err.status === 400 && err.code === 'UNSUPPORTED_IMAGE',
+  );
+
+  // An on-device short-circuit must not be a cheaper way to fill the bucket: it
+  // stores an object the sweeper has to reclaim, so the hourly cap applies.
+  await assert.rejects(
+    () =>
+      svc.uploadPhotoOnly(mockPrisma({ requestCount: 20 }), {
+        userId: 7,
+        ...PHOTO_ARGS,
+        deps: deps(),
+      }),
+    (err) => err.status === 429 && err.code === 'RATE_LIMITED',
+  );
+});

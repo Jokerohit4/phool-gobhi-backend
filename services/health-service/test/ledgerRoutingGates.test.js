@@ -90,7 +90,7 @@ test('every ledger route is behind the healthLedger flag', () => {
 // inferred from a shared array.
 test('the photo routes are on the photo gate, and the photo gate is a fourth flag', () => {
   const photoRoutes = all.filter((r) => r.line.includes('/ledger/food-photos'));
-  assert.equal(photoRoutes.length, 2, 'expected recognise and confirm');
+  assert.equal(photoRoutes.length, 3, 'expected recognise, upload and confirm');
 
   for (const r of photoRoutes) {
     assert.match(r.line, /\.\.\.photo\b/, `${r.n}: ${r.line} is not on the photo gate`);
@@ -117,6 +117,27 @@ test('the photo upload runs after the photo flag, not before it', () => {
   const flagAt = upload.line.indexOf('...photo');
   const multerAt = upload.line.indexOf('uploadFoodPhotoMiddleware');
   assert.ok(flagAt > -1 && multerAt > -1, 'could not find both middlewares on the photo upload route');
+  assert.ok(flagAt < multerAt, 'the photo flag must come before the upload middleware');
+});
+
+test('the no-vision food-photo upload sits on the photo gate like recognize', () => {
+  // The on-device matcher's storage half stores a photograph of a plate that
+  // never reaches the vision model - which must not make it GATE-LIGHTER than
+  // recognize. It is the same collection of bytes, the same consent question,
+  // and the same reason the flag has to be checked before the server holds the
+  // object. Asserted like recognize: on ...photo, nothing lighter, and the flag
+  // before the multer buffer.
+  const upload = photoRoute('/ledger/food-photos/upload');
+  assert.ok(upload, 'no no-vision upload route found');
+  assert.match(upload.line, /\.\.\.photo\b/, 'upload is not on the photo gate');
+  assert.doesNotMatch(
+    upload.line,
+    /\.\.\.consentGated\b/,
+    'a feature route must not be reachable without nutrition consent',
+  );
+  const flagAt = upload.line.indexOf('...photo');
+  const multerAt = upload.line.indexOf('uploadFoodPhotoMiddleware');
+  assert.ok(flagAt > -1 && multerAt > -1, 'could not find both middlewares on the no-vision upload route');
   assert.ok(flagAt < multerAt, 'the photo flag must come before the upload middleware');
 });
 

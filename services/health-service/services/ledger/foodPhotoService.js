@@ -315,6 +315,50 @@ export async function recognizePhoto(
   };
 }
 
+/**
+ * Store and claim a photo WITHOUT calling the vision model.
+ *
+ * The cheaper half of the on-device matcher (see foodEmbeddingService.js): the
+ * phone embeds the plate locally and only reaches the paid cloud call when it
+ * cannot name what it sees. A photo that IS matched on-device still has to be
+ * stored and claimed, because confirm attaches the object the same way it does
+ * for recognize - so this is recognizePhoto minus the provider. The difference
+ * is the whole point: no `configured()` gate and no vision call, which is what
+ * makes an on-device match cost nothing but storage.
+ *
+ * Recorded with outcome `on_device_upload` so the sweeper and the admin counts
+ * can tell an on-device claim from a recognized one - and rule 1 of this file
+ * holds: the model never supplied any number here, because there was no model.
+ * The default grams the app proposes on an on-device line come from the
+ * catalogue row / user, exactly as they would after a recognition.
+ */
+export async function uploadPhotoOnly(
+  prisma,
+  { userId, buffer, mimeType, now = new Date(), deps = {} },
+) {
+  const { storage } = resolve(deps);
+
+  if (!buffer || !buffer.length) throw badRequest('No photo received', 'NO_PHOTO');
+  if (!storage.isAllowedMimeType(mimeType)) {
+    throw badRequest('That image type is not accepted', 'UNSUPPORTED_IMAGE');
+  }
+
+  // The hourly cap applies to uploads as well as recognitions: a short-circuit
+  // must not become a cheaper way to fill the bucket, and the limit is a spend
+  // bound either way (storage is per-photo churn that the sweeper must reclaim).
+  await assertWithinRateLimit(prisma, userId, now);
+
+  const photoPath = await storage.savePhoto({ buffer, mimeType, userId });
+  await recordRequest(prisma, {
+    userId,
+    requestedAt: now,
+    outcome: 'on_device_upload',
+    photoPath,
+  });
+
+  return { photoPath, photoUrl: await storage.signedPhotoUrl(photoPath) };
+}
+
 async function recordRequest(prisma, row) {
   return prisma.foodPhotoRequestLog.create({
     data: {
