@@ -327,6 +327,37 @@ test('the admin request queue is on the main router and is gobhi-gated', () => {
   assert.match(resolve[0], /requireRole\('gobhi'\)/);
 });
 
+test('the catalogue write routes are gobhi-gated, on the main router', () => {
+  // The food loop's two admin ops: adding a curated food (the ONLY sanctioned
+  // FoodItem write in the service) and refreshing the on-device matcher's
+  // embeddings. Both change reference data every customer matches against, so
+  // both are cross-file pins - a route that could be reached without the gobhi
+  // role would let any authenticated user grow the catalogue or burn the
+  // embedding budget.
+  const healthRoutes = readFileSync(join(here, '..', 'routes', 'health.js'), 'utf8');
+
+  const createFood = healthRoutes.match(/router\.post\('\/admin\/food-items'[^;]*;/);
+  assert.ok(createFood, 'no admin food-items route found');
+  assert.match(createFood[0], /requireRole\('gobhi'\)/);
+
+  const refreshEmbeddings = healthRoutes.match(/router\.post\('\/admin\/food-embeddings\/refresh'[^;]*;/);
+  assert.ok(refreshEmbeddings, 'no admin food-embeddings refresh route found');
+  assert.match(refreshEmbeddings[0], /requireRole\('gobhi'\)/);
+});
+
+test('the matcher half is customer-facing on the nutrition gate', () => {
+  // The read side is what the app pulls to match on-device, so it must be
+  // reachable exactly like the picker it extends - nutrition-gated, GET, and
+  // never gobhi-only. It returns embedding vectors for food names, which are
+  // reference data, not a user's diet; the no-PII rule that keeps proposed
+  // names out of analytics has nothing to bleed here.
+  const ledgerRoutes = readFileSync(join(here, '..', 'routes', 'ledger.js'), 'utf8');
+  const matcher = ledgerRoutes.match(/router\.get\('\/ledger\/food-embeddings'[^;]*;/);
+  assert.ok(matcher, 'no ledger food-embeddings route found');
+  assert.match(matcher[0], /\.\.\.nutrition\b/);
+  assert.doesNotMatch(matcher[0], /requireRole\('gobhi'\)/);
+});
+
 // The pause endpoints mutate the goal, which is nutrition data. They are gated
 // like every other ledger route, and asserted explicitly rather than left to the
 // "all ledger routes are gated" sweep above - because that sweep checks the GATE
