@@ -120,6 +120,7 @@ router.get('/admin/analytics/location-reach', requireRole('gobhi'), analyticsCtr
 router.put('/:id/cancel', requireRole('customer'), ctrl.cancelBooking);
 router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn);
 router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
+router.put('/:id/gym-cancel', requireRole('partner'), ctrl.cancelBookingByGym);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
 router.post('/gym/:gymId/self-checkin', requireRole('customer'), ctrl.selfCheckIn);
 // Non-partner gym check-in: GPS only, no booking, no QR. Distinct path prefix

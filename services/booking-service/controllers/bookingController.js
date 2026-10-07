@@ -420,6 +420,21 @@ export const completeBooking = async (req, res) => {
   }
 };
 
+// The gym cancels a customer's session - always a full refund. Body: { gymId, reason? }.
+export const cancelBookingByGym = async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id);
+    const gymId = parseInt(req.query.gymId || req.body?.gymId);
+    if (isNaN(gymId)) return res.status(400).json({ error: 'gymId is required' });
+    const booking = await bookingService.cancelBookingByGym(bookingId, gymId, req.userId, {
+      reason: req.body?.reason,
+    });
+    res.json({ data: booking });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const verifyAttendance = async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);

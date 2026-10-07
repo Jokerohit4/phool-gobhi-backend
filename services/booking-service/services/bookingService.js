@@ -971,6 +971,86 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
   }
 }
 
+// The gym cancels a session - it has to close, a trainer is out, the slot was
+// double-sold offline. Until this existed only the customer could cancel, so
+// the gym's only option was to let the customer turn up to a locked door.
+//
+// Always a full refund (the customer did nothing wrong, so no tier applies),
+// any notice period, and never once attendance has been verified - a session
+// that has started is the gym's to complete, not to cancel. Same claim and
+// refund machinery as the customer path: status flip with refundDueAmount
+// first, then the idempotent credit, retried by the settlement sweep if it
+// fails.
+export async function cancelBookingByGym(bookingId, gymId, partnerId, { reason } = {}) {
+  try {
+    const booking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
+    if (!booking) throw { status: 404, error: 'Booking not found' };
+    if (booking.gymId !== gymId) throw { status: 403, error: 'Forbidden' };
+
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+    if (!['pending', 'confirmed'].includes(booking.status)) {
+      throw {
+        status: 400,
+        error: booking.status === 'cancelled'
+          ? 'This booking is already cancelled'
+          : 'A session that has started or finished cannot be cancelled',
+      };
+    }
+
+    const note = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
+    const refundAmount = booking.subscriptionId ? 0 : booking.amount;
+
+    const { count } = await prisma.booking.updateMany({
+      where: { id: bookingId, gymId, status: { in: ['pending', 'confirmed'] } },
+      data: {
+        status: 'cancelled',
+        cancelledByGymAt: new Date(),
+        gymCancelReason: note || null,
+        ...(refundAmount > 0 ? { refundDueAmount: refundAmount } : {}),
+      },
+    });
+    if (count !== 1) throw { status: 400, error: 'Booking cannot be cancelled' };
+
+    let refundPending = false;
+    if (refundAmount > 0) {
+      refundPending = !(await creditOwedRefund({ id: bookingId, customerId: booking.customerId, refundDueAmount: refundAmount }, 1));
+    }
+
+    track('booking_cancelled', booking.customerId, {
+      booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+      refund_rate: 1, refund_amount: refundAmount, cancelled_by: 'gym', city: gym.city,
+    });
+
+    const when = `${booking.date} at ${formatSlotTime(booking.startTime)}`;
+    notifyCustomer(booking.customerId, {
+      title: `${gym.name || 'Your gym'} cancelled your session`,
+      body: [
+        `Your session on ${when} was cancelled by the gym${note ? `: ${note}` : '.'}`,
+        refundAmount > 0
+          ? (refundPending
+            ? `Your full ₹${refundAmount} refund is on its way to your wallet.`
+            : `₹${refundAmount} has been refunded to your wallet.`)
+          : null,
+      ].filter(Boolean).join(' '),
+      data: { type: 'booking_cancelled', bookingId: booking.id, date: booking.date },
+    }).catch(() => {});
+
+    return { ...booking, status: 'cancelled', refundAmount, refundPending, gymCancelReason: note || null };
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('cancelBookingByGym error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
 // Credits a cancelled booking's owed refund and stamps refundedAt. Keyed on
 // the booking, so the cancel path and every retry by the sweep credit it once.
 // Never throws; returns whether the refund is now settled.

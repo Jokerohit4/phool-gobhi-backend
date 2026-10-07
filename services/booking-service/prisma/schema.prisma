@@ -83,6 +83,11 @@ model Booking {
   // due amount and no refundedAt is retried by the hourly settlement sweep.
   refundDueAmount          Decimal?      @db.Decimal(19, 2)
   refundedAt               DateTime?
+
+  // Set when the gym, not the customer, cancelled. The customer always gets
+  // a full refund then, and is shown gymCancelReason.
+  cancelledByGymAt         DateTime?
+  gymCancelReason          String?
   attendanceMethod         AttendanceMethod?
   attendanceVerifiedBy     Int?
   attendanceOverrideReason String?

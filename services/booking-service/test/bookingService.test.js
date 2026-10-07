@@ -78,7 +78,7 @@ function resetFakes() {
   walletDebitFails = false;
 }
 
-let createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts;
+let createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym;
 
 test('setup: mock dependencies once, import bookingService once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -263,7 +263,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
     },
   });
 
-  ({ createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts } =
+  ({ createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym } =
     await import('../services/bookingService.js'));
   assert.equal(typeof createBooking, 'function');
 });
@@ -723,4 +723,50 @@ test('getSlotCounts: other gym bookings are excluded', async () => {
 
   const counts = await getSlotCounts(GYM.id, TODAY_IST);
   assert.equal(counts['07:00'], 1);
+});
+
+// --- cancelBookingByGym ----------------------------------------------
+
+test('cancelBookingByGym: full refund regardless of notice, reason sent to the customer', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed', amount: 500, subscriptionId: null });
+  bookingRows.set(b.id, b);
+
+  const result = await cancelBookingByGym(b.id, GYM.id, PARTNER, { reason: 'Closed for repairs' });
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.refundAmount, 500);
+  assert.equal(walletCreditCalls[0].amount, 500);
+  assert.equal(walletCreditCalls[0].idempotencyKey, `booking-refund-${b.id}`);
+  const row = bookingRows.get(b.id);
+  assert.ok(row.cancelledByGymAt instanceof Date);
+  assert.equal(row.gymCancelReason, 'Closed for repairs');
+  await new Promise((r) => setImmediate(r));
+  const push = notifyCustomerCalls.at(-1)[1];
+  assert.match(push.body, /Closed for repairs/);
+  assert.match(push.body, /₹500/);
+});
+
+test('cancelBookingByGym: another partner cannot cancel', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed' });
+  bookingRows.set(b.id, b);
+  await assert.rejects(() => cancelBookingByGym(b.id, GYM.id, OTHER_PARTNER), (e) => e.status === 403);
+  assert.equal(bookingRows.get(b.id).status, 'confirmed');
+});
+
+test('cancelBookingByGym: a started session cannot be cancelled', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'started', attendedAt: new Date() });
+  bookingRows.set(b.id, b);
+  await assert.rejects(() => cancelBookingByGym(b.id, GYM.id, PARTNER), (e) => e.status === 400);
+  assert.equal(walletCreditCalls.length, 0);
+});
+
+test('cancelBookingByGym: a plan-covered booking refunds nothing', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed', subscriptionId: 42, amount: 299 });
+  bookingRows.set(b.id, b);
+  const result = await cancelBookingByGym(b.id, GYM.id, PARTNER);
+  assert.equal(result.refundAmount, 0);
+  assert.equal(walletCreditCalls.length, 0);
 });
