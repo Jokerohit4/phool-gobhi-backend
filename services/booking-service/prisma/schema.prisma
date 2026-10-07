@@ -72,6 +72,17 @@ model Booking {
   // the public aggregate stat). attendanceMethod records how it was proven;
   // null means this predates the feature or was never verified.
   attendedAt               DateTime?
+
+  // When the "your session starts soon" push went out. Claimed with a
+  // conditioned updateMany before sending, so an overlapping or retried sweep
+  // run can never remind the same booking twice. Null = not reminded.
+  reminderSentAt           DateTime?
+
+  // What this booking's cancellation owes the customer (null = nothing, e.g.
+  // subscription-covered) and when it was credited. A cancelled row with a
+  // due amount and no refundedAt is retried by the hourly settlement sweep.
+  refundDueAmount          Decimal?      @db.Decimal(19, 2)
+  refundedAt               DateTime?
   attendanceMethod         AttendanceMethod?
   attendanceVerifiedBy     Int?
   attendanceOverrideReason String?

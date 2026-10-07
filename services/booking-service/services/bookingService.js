@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, sessionEndedBefore, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, sessionEndedBefore, msUntilSlot, formatSlotTime, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
@@ -418,7 +418,10 @@ async function notifyOnConfirmation(booking, { customerId, gymId, date, startTim
   notifyPartner(gymId, booking).catch(() => {});
   notifyCustomer(customerId, {
     title: 'Booking confirmed',
-    body: `Your session on ${booking.date} at ${booking.startTime} is confirmed. ₹${booking.amount} debited.`,
+    // A plan-covered session charges nothing; "₹299 debited" there was false.
+    body: subscriptionId
+      ? `Your session on ${booking.date} at ${formatSlotTime(booking.startTime)} is confirmed. Covered by your plan.`
+      : `Your session on ${booking.date} at ${formatSlotTime(booking.startTime)} is confirmed. ₹${booking.amount} paid from your wallet.`,
     data: { type: 'booking_confirmed', bookingId: booking.id, date: booking.date },
   }).catch(() => {});
 }
@@ -601,7 +604,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     if (!classIsAlwaysPaid) {
       try {
         const subRes = await axios.get(
-          `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}`,
+          `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}&date=${encodeURIComponent(date)}`,
           await internalHeadersFor(WALLET_SERVICE_URL)
         );
         if (subRes.data?.data?.active) {
@@ -695,7 +698,12 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         // idempotency key before assuming it didn't: deleting a reservation
         // the customer was actually charged for would be worse than the bug
         // this whole mechanism exists to prevent.
+        // A 4xx is wallet-service answering "no" (insufficient balance, bad
+        // request) - a definite not-charged. Anything else (timeout, dropped
+        // connection, 5xx) means the debit may have committed.
+        const walletRefused = err.response?.status >= 400 && err.response?.status < 500;
         let actuallyCharged = false;
+        let chargeUnknown = false;
         try {
           const check = await axios.get(
             `${WALLET_SERVICE_URL}/internal/transactions/by-key/${debitIdempotencyKey(reservation.id)}`,
@@ -703,9 +711,23 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
           );
           actuallyCharged = !!check.data?.data;
         } catch (_) {
-          // Can't tell right now — fall through and release below. If it
-          // did land, the slot stays reserved (`pending`) and
-          // reconcileStalePendingBooking will handle it if needed.
+          chargeUnknown = !walletRefused;
+        }
+
+        if (chargeUnknown) {
+          // Neither the debit nor the lookup gave an answer. This used to
+          // delete the reservation and say "Insufficient wallet balance" -
+          // so a customer whose debit had landed lost both the money and the
+          // slot, with nothing left to reconcile. Keep it `pending` instead;
+          // reconcileStalePendingBooking settles it by the same idempotency
+          // key once wallet-service answers (confirm if charged, release if
+          // not), and the customer is told to check rather than told no.
+          track('booking_failed', customerId, { gym_id: gymId, class_id: classId || undefined, reason: 'payment_unconfirmed', amount, city: gym.city });
+          throw {
+            status: 503,
+            error: "We couldn't confirm your payment yet. Check My sessions in a minute before booking again.",
+            code: 'PAYMENT_UNCONFIRMED',
+          };
         }
 
         if (!actuallyCharged) {
@@ -856,10 +878,21 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
     // be completed (crediting the partner too) or cancelled again (a second
     // customer credit). `updateMany` + `count === 1` makes a concurrent
     // second cancel attempt no-op instead of double-crediting.
+    // Nothing is owed for a subscription-covered booking: the customer paid
+    // for the plan, not this session, so `amount` is the slot's list price.
+    // Returning amount * rate here used to tell them "₹299 refunded" for a
+    // refund that never happened.
+    const refundAmount = booking.subscriptionId
+      ? 0
+      : Math.round(booking.amount * refundRate * 100) / 100;
+
     const { count } = await prisma.booking.updateMany({
       where: { id: bookingId, customerId, status: { in: ['pending', 'confirmed'] } },
       data: {
         status: 'cancelled',
+        // Recorded with the flip, so the settlement sweep can always find a
+        // refund that is owed even if this process dies before crediting it.
+        ...(refundAmount > 0 ? { refundDueAmount: refundAmount } : {}),
         // Written in the same conditional update as the status flip, so a
         // reason can never be recorded against a booking that wasn't
         // actually cancelled by this call.
@@ -875,28 +908,14 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
     }
 
     // 5. Refund — only reached once the status flip has already committed.
-    // Skipped when this booking was covered by an active subscription: the
-    // customer never spent wallet balance on it (they paid for the
-    // subscription itself, separately, upfront), so crediting them here
-    // would be free money for a session they didn't pay for individually.
-    // If this fails, the booking stays correctly cancelled but unrefunded —
-    // a known reconciliation gap (same class as the best-effort partner
-    // payout in completeBooking below), logged clearly for manual follow-up
-    // rather than building a full saga/outbox for it.
-    const refundAmount = Math.round(booking.amount * refundRate * 100) / 100;
-    if (!booking.subscriptionId) {
-      try {
-        await axios.post(`${WALLET_SERVICE_URL}/${customerId}/credit`, {
-          amount: refundAmount,
-          description: `Booking cancellation refund (${Math.round(refundRate * 100)}%)`
-        }, await internalHeadersFor(WALLET_SERVICE_URL));
-      } catch (err) {
-        console.error('Refund failed for cancelled booking', bookingId, err.message);
-        throw {
-          status: 502,
-          error: 'Booking was cancelled but the refund failed — contact support'
-        };
-      }
+    // A failed credit is no longer a dead end: the booking already carries
+    // refundDueAmount, and retryOwedRefunds (the hourly settlement sweep)
+    // credits it under the same idempotency key. The cancellation itself
+    // succeeded, so the customer is told that - with the refund marked as on
+    // its way - rather than a "could not cancel" for a booking that is gone.
+    let refundPending = false;
+    if (refundAmount > 0) {
+      refundPending = !(await creditOwedRefund({ id: bookingId, customerId, refundDueAmount: refundAmount }, refundRate));
     }
 
     const updatedBooking = {
@@ -904,6 +923,7 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
       status: 'cancelled',
       refundAmount,
       refundRate,
+      refundPending,
       cancellationReason: feedback.cancellationReason ?? null,
       nextVisitIntent: feedback.nextVisitIntent ?? null,
     };
@@ -920,9 +940,11 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
 
     notifyCustomer(customerId, {
       title: 'Booking cancelled',
-      body: booking.subscriptionId
+      body: refundAmount === 0
         ? `Your session on ${booking.date} was cancelled.`
-        : `Your session on ${booking.date} was cancelled. ₹${refundAmount} (${Math.round(refundRate * 100)}%) refunded to your wallet.`,
+        : refundPending
+          ? `Your session on ${booking.date} was cancelled. Your ₹${refundAmount} refund is on its way to your wallet.`
+          : `Your session on ${booking.date} was cancelled. ₹${refundAmount} (${Math.round(refundRate * 100)}%) refunded to your wallet.`,
       data: { type: 'booking_cancelled', bookingId: booking.id, date: booking.date },
     }).catch(() => {});
 
@@ -936,6 +958,45 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
       error: err.message || 'Server error'
     };
   }
+}
+
+// Credits a cancelled booking's owed refund and stamps refundedAt. Keyed on
+// the booking, so the cancel path and every retry by the sweep credit it once.
+// Never throws; returns whether the refund is now settled.
+async function creditOwedRefund(booking, refundRate = null) {
+  const amount = Number(booking.refundDueAmount);
+  try {
+    await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
+      amount,
+      description: refundRate != null
+        ? `Booking cancellation refund (${Math.round(refundRate * 100)}%)`
+        : 'Booking cancellation refund',
+      idempotencyKey: `booking-refund-${booking.id}`,
+    }, await internalHeadersFor(WALLET_SERVICE_URL));
+  } catch (err) {
+    console.error('Refund failed for cancelled booking', booking.id, err.message);
+    return false;
+  }
+  await prisma.booking.update({ where: { id: booking.id }, data: { refundedAt: new Date() } })
+    .catch((err) => console.error('refundedAt stamp failed for booking', booking.id, err.message));
+  return true;
+}
+
+// Retries every cancellation refund that is owed but not yet credited. Run by
+// the hourly settlement sweep (POST /internal/auto-complete) alongside
+// auto-completion. Safe to run any number of times: the credit is keyed on
+// booking-refund-<id>, so a refund whose stamp was lost is not paid twice.
+export async function retryOwedRefunds() {
+  const owed = await prisma.booking.findMany({
+    where: { status: 'cancelled', refundDueAmount: { not: null }, refundedAt: null },
+    orderBy: { id: 'asc' },
+    take: 200,
+  });
+  let refunded = 0;
+  for (const booking of owed) {
+    if (await creditOwedRefund(booking)) refunded++;
+  }
+  return { owed: owed.length, refunded };
 }
 
 // Everything that follows a booking flipping to 'completed': the partner's
@@ -1203,7 +1264,10 @@ export async function autoCompleteEndedSessions({ nowMs = Date.now() } = {}) {
   const today = todayDateStringIST();
   const candidates = (await prisma.booking.findMany({
     where: { status: 'started', attendedAt: { not: null }, date: { lte: today } },
-    orderBy: { id: 'asc' },
+    // Oldest session first ('YYYY-MM-DD' and 'HH:MM' sort as strings), so
+    // still-running sessions sit at the end of the batch and can never crowd
+    // out ones that are due.
+    orderBy: [{ date: 'asc' }, { endTime: 'asc' }],
     take: AUTO_COMPLETE_BATCH,
   })).map(normalizeBookingMoney);
   const due = candidates.filter((b) => isDueForAutoComplete(b, nowMs));
@@ -1240,6 +1304,81 @@ export async function autoCompleteEndedSessions({ nowMs = Date.now() } = {}) {
   }
 
   return { scanned: candidates.length, due: due.length, completed, failures };
+}
+
+// The reminder window: a confirmed session starting between 30 minutes and 2
+// hours from now. The sweep runs hourly, so every session falls inside the
+// window on exactly one run - early enough to leave home, late enough to be
+// remembered. Under 30 minutes a reminder is noise; the customer is either on
+// the way or not coming.
+export const REMINDER_MIN_LEAD_MS = 30 * 60000;
+export const REMINDER_MAX_LEAD_MS = 120 * 60000;
+
+export function isDueForReminder(booking, nowMs = Date.now()) {
+  if (booking.status !== 'confirmed' || booking.reminderSentAt != null) return false;
+  const lead = msUntilSlot(booking.date, booking.startTime, nowMs);
+  return lead >= REMINDER_MIN_LEAD_MS && lead <= REMINDER_MAX_LEAD_MS;
+}
+
+// "Your session at Iron Temple starts at 6:00 PM" - the cheapest no-show
+// reduction there is. Driven hourly by .github/workflows/send-session-reminders.yml
+// via POST /internal/session-reminders.
+//
+// Each booking is claimed (reminderSentAt stamped through a null-conditioned
+// updateMany) BEFORE the push goes out, so overlapping or retried runs can
+// never remind twice. The trade is deliberate: a push that fails after the
+// claim is not retried, and one missed reminder beats a duplicate.
+export async function sendSessionReminders({ nowMs = Date.now() } = {}) {
+  const today = todayDateStringIST();
+  const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  // Today and tomorrow cover every slot up to 2h ahead, including just after
+  // midnight IST.
+  const candidates = await prisma.booking.findMany({
+    where: { status: 'confirmed', reminderSentAt: null, date: { in: [today, tomorrow] } },
+    orderBy: { id: 'asc' },
+    take: 500,
+  });
+  const due = candidates.filter((b) => isDueForReminder(b, nowMs));
+
+  const gymNames = new Map();
+  const failures = [];
+  let sent = 0;
+
+  for (const booking of due) {
+    try {
+      const { count } = await prisma.booking.updateMany({
+        where: { id: booking.id, status: 'confirmed', reminderSentAt: null },
+        data: { reminderSentAt: new Date(nowMs) },
+      });
+      if (count === 0) continue;
+
+      if (!gymNames.has(booking.gymId)) {
+        // The name makes the push; without it the reminder still goes out.
+        let name = null;
+        try {
+          const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+          name = (gymRes.data?.data || gymRes.data)?.name || null;
+        } catch (_) { /* fall through to the nameless copy */ }
+        gymNames.set(booking.gymId, name);
+      }
+      const gymName = gymNames.get(booking.gymId);
+      const at = formatSlotTime(booking.startTime);
+
+      await notifyCustomer(booking.customerId, {
+        title: 'Your session is coming up',
+        body: gymName
+          ? `${gymName} at ${at}. Your QR is ready in My sessions.`
+          : `Your session starts at ${at}. Your QR is ready in My sessions.`,
+        data: { type: 'booking_reminder', bookingId: booking.id, date: booking.date },
+      });
+      sent++;
+    } catch (err) {
+      console.error('session reminder failed for booking', booking.id, err?.message);
+      failures.push({ bookingId: booking.id, error: err?.message || 'unknown' });
+    }
+  }
+
+  return { scanned: candidates.length, due: due.length, sent, failures };
 }
 
 // Partner scans the customer's QR (a signed token, not a bare booking id —
@@ -1541,8 +1680,12 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
     // partner recorded this"; self-check-in has no verifying partner, and
     // attendanceMethod='qr_geofence_self' already says who/how.
     const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.booking.update({
-        where: { id: booking.id },
+      // Conditioned on still being 'confirmed'. The status was read before the
+      // geofence and slot-shift checks; a cancel landing in between used to be
+      // overwritten here, turning a cancelled-and-refunded booking into a
+      // 'started' one that auto-complete would then pay the partner for.
+      const { count } = await tx.booking.updateMany({
+        where: { id: booking.id, status: 'confirmed' },
         data: {
           status: 'started',
           attendedAt: new Date(),
@@ -1552,6 +1695,10 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
             : {}),
         },
       });
+      if (count === 0) {
+        throw { status: 409, error: 'This booking was cancelled or already checked in' };
+      }
+      const result = await tx.booking.findUnique({ where: { id: booking.id } });
       if (slotShift) {
         await tx.attendanceWarning.create({
           data: {

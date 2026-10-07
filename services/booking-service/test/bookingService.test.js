@@ -31,6 +31,7 @@ let gymLookupThrows = false;
 let profileLookupThrows = false;
 let profileIncomplete = false;
 let walletDebitFails = false;
+let walletCreditFails = false;
 
 function makeBooking(overrides) {
   return {
@@ -66,6 +67,7 @@ function resetFakes() {
   bookingRows.clear();
   walletDebitCalls = [];
   walletCreditCalls = [];
+  walletCreditFails = false;
   notifyCustomerCalls = [];
   notifyPartnerCalls = [];
   trackCalls = [];
@@ -196,6 +198,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
             return { data: { success: true } };
           }
           if (url.includes('/credit')) {
+            if (walletCreditFails) throw new Error('wallet-service down');
             walletCreditCalls.push(body);
             return { data: { success: true } };
           }
@@ -242,6 +245,8 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
       isBeforeSessionWindow: () => false,
       isSessionEnded: () => false,
       sessionEndedBefore: () => false,
+      msUntilSlot: () => 0,
+      formatSlotTime: (t) => t,
       shiftedSlotForNow: () => ({ newStartTime: '10:00', newEndTime: '11:00' }),
       IST_OFFSET_MS: (5 * 60 + 30) * 60000,
       getDayOfWeek: (date) => {
@@ -447,6 +452,41 @@ test('cancelBooking: subscription booking skips wallet refund', async () => {
   const result = await cancelBooking(b.id, CUSTOMER);
   assert.equal(result.status, 'cancelled');
   assert.equal(walletCreditCalls.length, 0, 'no wallet refund for subscription booking');
+});
+
+test('cancelBooking: subscription booking reports no refund, not the slot price', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed', subscriptionId: 42, amount: 299 });
+  bookingRows.set(b.id, b);
+
+  const result = await cancelBooking(b.id, CUSTOMER);
+  assert.equal(result.refundAmount, 0);
+  assert.equal(bookingRows.get(b.id).refundDueAmount, undefined);
+});
+
+test('cancelBooking: refund carries a per-booking idempotency key and stamps refundedAt', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed', amount: 500, subscriptionId: null });
+  bookingRows.set(b.id, b);
+
+  const result = await cancelBooking(b.id, CUSTOMER);
+  assert.equal(result.refundPending, false);
+  assert.equal(walletCreditCalls[0].idempotencyKey, `booking-refund-${b.id}`);
+  assert.ok(bookingRows.get(b.id).refundedAt instanceof Date);
+});
+
+test('cancelBooking: a failed refund still cancels, owes the refund, and does not throw', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed', amount: 500, subscriptionId: null });
+  bookingRows.set(b.id, b);
+  walletCreditFails = true;
+
+  const result = await cancelBooking(b.id, CUSTOMER);
+  assert.equal(result.status, 'cancelled');
+  assert.equal(result.refundPending, true);
+  const row = bookingRows.get(b.id);
+  assert.equal(row.refundDueAmount, 500);
+  assert.equal(row.refundedAt, undefined);
 });
 
 test('cancelBooking: records cancellationReason and nextVisitIntent', async () => {

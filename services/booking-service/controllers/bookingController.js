@@ -602,7 +602,21 @@ export const sendDailyBriefing = async (req, res) => {
 // (x-internal-key); never gateway-reachable.
 export const autoCompleteSessions = async (req, res) => {
   try {
+    // The hourly settlement sweep: finish verified sessions, then retry any
+    // cancellation refund that is owed but was never credited.
     const result = await bookingService.autoCompleteEndedSessions();
+    const refunds = await bookingService.retryOwedRefunds();
+    res.json({ data: { ...result, refunds } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Hourly "your session starts soon" push. Called by
+// .github/workflows/send-session-reminders.yml via POST /internal/session-reminders.
+export const sendSessionReminders = async (req, res) => {
+  try {
+    const result = await bookingService.sendSessionReminders();
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
