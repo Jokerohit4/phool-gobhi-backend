@@ -71,6 +71,18 @@ export function sessionEndedBefore(date, endTime, graceMs, nowMs = Date.now()) {
   return nowMs > slotInstantUTC(date, endTime) + graceMs;
 }
 
+// Milliseconds from `nowMs` until the slot starts (negative once it has).
+export function msUntilSlot(date, startTime, nowMs = Date.now()) {
+  return slotInstantUTC(date, startTime) - nowMs;
+}
+
+// "18:00" -> "6:00 PM", "09:30" -> "9:30 AM" - how a reminder says the time.
+export function formatSlotTime(time) {
+  const [h, m] = time.split(':').map(Number);
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 // Computes a replacement startTime/endTime (same duration as the original
 // slot) anchored to the current IST wall-clock time. Only ever called after
 // isBeforeSessionWindow has confirmed `now` is still on the same IST

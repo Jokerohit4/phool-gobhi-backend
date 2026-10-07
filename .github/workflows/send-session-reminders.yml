@@ -1,0 +1,95 @@
+name: Send session reminders
+
+# Fires booking-service's sendSessionReminders (POST /internal/session-reminders):
+# every confirmed booking starting 30 minutes to 2 hours from now gets one push -
+# "Iron Temple at 6:00 PM. Your QR is ready in My sessions." The cheapest
+# no-show reduction there is, and the customer app routes a tap to My sessions.
+#
+# Never sends twice: each booking is claimed (Booking.reminderSentAt) before
+# its push goes out, so overlapping, retried or manually re-run sweeps remind
+# each booking once. The trade is deliberate - a push that fails after the
+# claim is not retried; one missed reminder beats a duplicate.
+#
+# Hourly with a 90-minute-wide window, so every session is due on exactly one
+# run. Scheduled from Actions, not an in-process timer, because Cloud Run gives
+# a setInterval no CPU between requests.
+#
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE ASSUMING IT RUNS
+#
+# `schedule` fires ONLY from the default branch (`main`). Until this file and
+# the endpoint reach `main`, run it with the workflow_dispatch button.
+#
+# prod is deliberately absent from the matrix until the copy has been read on
+# dev: a push nobody has proofread should not reach a customer's phone. Add
+# `prod` once a few dev runs report
+#   { "data": { "scanned": N, "due": M, "sent": M, "failures": [] } }
+
+on:
+  schedule:
+    # Five past every hour; with the 30m-2h window every session is reminded on exactly one run.
+    - cron: '5 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sweep:
+    strategy:
+      matrix:
+        env: [dev]   # prod deliberately absent until the copy has been read on dev - see above
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      # The general deploy provider: this step exists to authenticate the gcloud
+      # CLI (secret read + service describe), not to call the endpoint.
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # booking-service-secrets-<env> JSON payload.
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/booking-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      # Called directly on the service, never through the gateway: the route
+      # is /internal/session-reminders and is not in the gateway's PUBLIC_ROUTES.
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "booking-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required: x-internal-key satisfies requireInternal, the
+      # Google-signed ID token satisfies Cloud Run's IAM invoker check.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/session-reminders"
