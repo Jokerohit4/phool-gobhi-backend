@@ -14,34 +14,63 @@ const TODAY = '2026-09-28';
 // The double records writes instead of performing them, so these tests can assert
 // WHERE a value went. That is the whole point of this file: the single most
 // important behaviour is that a weight does not land in HealthGoal.
-function fakePrisma({ goal = null, profile = null, weight = null, todayWeight = null } = {}) {
-  const calls = { goalCreate: [], goalUpdate: [], entryCreate: [], entryUpdate: [] };
+//
+// `goal` is stateful rather than a constant: saveIntake re-reads the row it has
+// just written to compute the nutrition target, and a double that kept returning
+// the pre-save value would report every first-time setup as "no goal" and never
+// exercise the write this file now has to pin down.
+function fakePrisma({ goal = null, profile = null, weight = null, todayWeight = null, target = null } = {}) {
+  const calls = { goalCreate: [], goalUpdate: [], entryCreate: [], entryUpdate: [], targetUpsert: [] };
+  let goalRow = goal;
+  // Also stateful: the weight written at intake is read straight back by the
+  // target recompute, which is the point — a weight that goes into the series
+  // and does not come out would leave the target uncomputable.
+  let weightRow = weight;
   return {
     calls,
     healthGoal: {
-      findUnique: async () => goal,
+      findUnique: async () => goalRow,
       create: async ({ data }) => {
         calls.goalCreate.push(data);
-        return { userId: 1, ...data };
+        goalRow = { ...data };
+        return goalRow;
       },
       update: async ({ data }) => {
         calls.goalUpdate.push(data);
-        return { userId: 1, ...goal, ...data };
+        goalRow = { ...goalRow, ...data };
+        return goalRow;
       },
     },
     personalisationProfile: {
       findUnique: async () => profile,
     },
     biometricEntry: {
-      findFirst: async () => weight,
+      findFirst: async () => weightRow,
       findUnique: async () => todayWeight,
       create: async ({ data }) => {
         calls.entryCreate.push(data);
+        if (data.metric === 'weight') {
+          weightRow = { metric: 'weight', value: data.value, unit: 'kg', localDate: data.localDate };
+        }
         return { id: 1, ...data };
       },
       update: async ({ data }) => {
         calls.entryUpdate.push(data);
+        // A same-day correction omits `metric` (the row already says which
+        // series it is), so this is not conditional on it.
+        weightRow = { metric: 'weight', unit: 'kg', ...weightRow, ...data };
         return { id: 1, ...data };
+      },
+    },
+    // Read by the target recompute: no measured activity and no training
+    // sessions, so the user's own stated activity is what gets used.
+    dailyActivityMetric: { findMany: async () => [] },
+    workoutSession: { findMany: async () => [] },
+    nutritionTarget: {
+      findFirst: async () => target,
+      upsert: async ({ create, update }) => {
+        calls.targetUpsert.push({ create, update });
+        return { ...create, ...update };
       },
     },
   };
@@ -397,6 +426,64 @@ test('a rejected target writes nothing', async () => {
   // weight reading from a save that was refused.
   assert.equal(prisma.calls.goalCreate.length, 0);
   assert.equal(prisma.calls.entryCreate.length, 0);
+});
+
+// --- the target the wizard promises -----------------------------------------
+
+// The bug these exist for: GET /ledger/targets answers null forever, so the
+// app's score card, its ledger hub and plan generation all read "no plan" and
+// show "Set up your plan" to somebody who has just finished the wizard. The
+// goal row is the input to that calculation, never the output — see rule 3 in
+// the service's header.
+
+test('a completed intake writes the NutritionTarget the readers gate on', async () => {
+  const prisma = fakePrisma();
+  const r = await saveIntake({
+    prisma,
+    userId: 1,
+    localDate: TODAY,
+    input: {
+      goals: ['build_muscle'],
+      weightKg: 80.64,
+      heightCm: 182,
+      age: 26,
+      sex: 'male',
+      activity: 'moderate',
+    },
+  });
+
+  assert.equal(r.written, true);
+  assert.equal(r.targetWritten, true, 'a finished wizard must leave a target behind');
+  assert.equal(prisma.calls.targetUpsert.length, 1);
+  // Dated on the day being saved, and derived rather than hand-entered, so the
+  // target history stays one row per day and still explains itself.
+  assert.equal(prisma.calls.targetUpsert[0].create.effectiveFrom, TODAY);
+  assert.equal(prisma.calls.targetUpsert[0].create.source, 'formula');
+  assert.ok(prisma.calls.targetUpsert[0].create.kcal > 0);
+});
+
+test('an incomplete intake writes no target instead of a half-derived one', async () => {
+  const prisma = fakePrisma({ goal: { userId: 1, goals: ['recomp'], age: 29 } });
+  const r = await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { activity: 'light' } });
+
+  assert.equal(r.written, true, 'the answer itself still saves');
+  assert.equal(r.targetWritten, false);
+  assert.equal(r.targetSkipped, 'missing_inputs');
+  assert.equal(prisma.calls.targetUpsert.length, 0);
+});
+
+test('a target the user set by hand survives the save that follows it', async () => {
+  const prisma = fakePrisma({
+    goal: { userId: 1, goals: ['recomp'], age: 26, sex: 'male', heightCm: 182, activity: 'moderate' },
+    weight: { metric: 'weight', value: 80, unit: 'kg', localDate: TODAY },
+    target: { id: 9, source: 'user_edited' },
+  });
+  const r = await saveIntake({ prisma, userId: 1, localDate: TODAY, input: { diet: 'veg' } });
+
+  assert.equal(r.written, true);
+  assert.equal(r.targetWritten, false);
+  assert.equal(r.targetSkipped, 'user_edited');
+  assert.equal(prisma.calls.targetUpsert.length, 0, 'a number the user chose is never overwritten');
 });
 
 // --- the setup read ---------------------------------------------------------

@@ -7,7 +7,7 @@
 // screen can "ask only for what's missing", and none of it could be completed —
 // a user who had never set a goal was stuck on "no targets" with no route out.
 //
-// Two rules shape everything here:
+// Three rules shape everything here:
 //
 //   1. Weight is NOT written to this table. It is a time series in
 //      BiometricEntry(metric='weight'), and the schema says why in detail: a
@@ -22,10 +22,21 @@
 //      they are inputs to a historical calculation. That is the HealthGoal
 //      schema's own stated contract and this service honours it rather than
 //      quietly refreshing them from the auth profile on every save.
+//
+//   3. A SAVE IS NOT FINISHED UNTIL THE NUTRITION TARGET EXISTS. HealthGoal is
+//      the input to the calculation, not its output, and every reader of
+//      "does this person have a plan?" — the score card, the ledger hub, plan
+//      generation — asks GET /ledger/targets, which only ever reads the
+//      NutritionTarget row. That row had exactly one writer
+//      (POST /ledger/targets/recompute) and no client ever called it, so a
+//      completed wizard still left the app on "Set up your plan". The
+//      recompute therefore happens here, inside the save, where the answers
+//      are fresh and the wizard's own "Saved. Your targets are up to date."
+//      is the claim being made good.
 
 import { validateLocalDate } from '../biometricService.js';
 import { SAFETY } from './constants.js';
-import { latestWeightKg, resolveInputs, MISSING_REASONS } from './targetService.js';
+import { latestWeightKg, resolveInputs, recomputeTargets, MISSING_REASONS } from './targetService.js';
 
 /**
  * The user's own calendar day, used only as a fallback when a caller omits one.
@@ -596,9 +607,25 @@ export async function saveIntake({ prisma, userId, input = {}, localDate }) {
     ? await prisma.healthGoal.update({ where: { userId }, data })
     : await prisma.healthGoal.create({ data: { userId, startDate, ...data } });
 
+  // The half of setup the wizard's last screen claims to have done (rule 3 in
+  // the header). Deliberately a recompute and not a hand-built row: it refuses
+  // to clobber a target the user set by hand, it writes nothing when an input
+  // is still missing rather than half a formula, and it takes the weight from
+  // the time series written above instead of from the answer just sent.
+  //
+  // Errors are allowed to propagate. A save that wrote the goal and then
+  // failed here is retryable — the goal write is an update on the second pass —
+  // whereas swallowing it would return 200 and let the wizard announce targets
+  // that do not exist, which is the exact bug this replaced.
+  const target = await recomputeTargets({ prisma, userId, localDate: day });
+
   return {
     written: true,
     goal,
+    // Reported so the response says whether setup is actually complete, rather
+    // than leaving every caller to infer it from `missing` on a separate read.
+    targetWritten: target.written === true,
+    targetSkipped: target.skipped ?? null,
     // Reported so the screen can confirm what it did, including the fact that a
     // weight typed at intake became a reading rather than a profile field.
     weightWritten,

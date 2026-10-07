@@ -182,6 +182,20 @@ function shiftLocalDate(localDate, deltaDays) {
 }
 
 /**
+ * The server's IST day as 'YYYY-MM-DD', for a caller that omits localDate.
+ *
+ * Duplicated from the other services rather than shared for the reason every
+ * copy states: IST is hardcoded because every user is in India today, and a
+ * shared date module is a refactor this service does not need. What it must
+ * never become is a second notion of "today" — the value here and the value
+ * the caller passes must be the same format, which is why recomputeTargets
+ * defaults once, at the top, rather than at each use.
+ */
+function todayLocalDate() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+/**
  * Decides whether measured activity may supersede the user's own guess.
  *
  * The plan's rule is 14 days of data. Before that the user's stated activity
@@ -307,16 +321,25 @@ export async function resolveInputs({ prisma, userId, localDate, measured }) {
  * clobbering a number the user chose and is currently following.
  */
 export async function recomputeTargets({ prisma, userId, localDate, measured, rulesVersion }) {
+  // Defaulted here, where the day becomes a row key. The upsert below is keyed
+  // on (userId, effectiveFrom) and the measured-activity window runs backwards
+  // from the same day, so an undefined localDate did not degrade quietly: Prisma
+  // refused the upsert with "Argument `effectiveFrom` is missing" and POST
+  // /ledger/targets/recompute with no localDate answered 500. One default, at
+  // the top, so the key and the window can never disagree about which day this
+  // is.
+  const day = localDate || todayLocalDate();
+
   // Gathered here rather than in the controller. The controller never had the
   // data to gather it from, so it passed nothing, `measured` was always
   // undefined, and every recompute silently fell back to the user's own guess
   // with `days: 0` — meaning the measured-activity switch the plan promises
   // after 14 days could never actually fire. A caller that already has the
-  // measurements may still pass them, which is what keeps this testable.
+  // measurements may still pass them, and that is what keeps this testable.
   const measuredActivity =
-    measured ?? (await gatherMeasuredActivity({ prisma, userId, localDate }));
+    measured ?? (await gatherMeasuredActivity({ prisma, userId, localDate: day }));
 
-  const resolved = await resolveInputs({ prisma, userId, localDate, measured: measuredActivity });
+  const resolved = await resolveInputs({ prisma, userId, localDate: day, measured: measuredActivity });
   if (!resolved.ok) {
     return { written: false, skipped: 'missing_inputs', missing: resolved.missing, reasons: resolved.reasons };
   }
@@ -371,8 +394,8 @@ export async function recomputeTargets({ prisma, userId, localDate, measured, ru
   // threw a primary-key violation on every recompute after the first, which is
   // why the schema carried PRIMARY KEY (userId) while this code created rows.
   const target = await prisma.nutritionTarget.upsert({
-    where: { userId_effectiveFrom: { userId, effectiveFrom: localDate } },
-    create: { userId, effectiveFrom: localDate, ...data },
+    where: { userId_effectiveFrom: { userId, effectiveFrom: day } },
+    create: { userId, effectiveFrom: day, ...data },
     update: data,
   });
 

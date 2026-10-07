@@ -297,6 +297,26 @@ test('a recompute with missing inputs writes nothing', async () => {
   assert.equal(prisma.calls.written.length, 0, 'nothing may be written without inputs');
 });
 
+test('a recompute with no localDate keys the row to today, not to undefined', async () => {
+  // The production shape: POST /ledger/targets/recompute with an empty body
+  // leaves localDate undefined, and the upsert is keyed on it. Before the
+  // default, Prisma refused the write outright ("Argument `effectiveFrom` is
+  // missing") — a 500 on an endpoint whose whole job is to heal a user the
+  // card says has no plan. The double here would have accepted undefined
+  // happily, so the assertion is on the key it wrote, not on r.written alone.
+  const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
+  const before = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const r = await recomputeTargets({ prisma, userId: 1 });
+  const after = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+  assert.equal(r.written, true);
+  const written = prisma.calls.written[0];
+  assert.ok(
+    written.effectiveFrom === before || written.effectiveFrom === after,
+    `effectiveFrom must be a real IST day, got ${written.effectiveFrom}`,
+  );
+});
+
 test('a user-edited target is never overwritten by a recompute', async () => {
   // The number moving under the user is the exact failure this feature exists
   // to avoid. If they edited it, the edit wins and the response says so.
