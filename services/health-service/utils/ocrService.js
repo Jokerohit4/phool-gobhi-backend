@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { METRIC_BOUNDS, METRIC_UNITS } from '../services/biometricService.js';
 
 dotenv.config();
 
@@ -61,63 +62,140 @@ async function getGoogleAccessToken() {
   const auth = new GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   });
-  const client = await auth.getKsClient();
   const token = await auth.getAccessToken();
   return token.token;
 }
 
-function parseDocumentAIResponse(data) {
-  const entities = data.document.entities || [];
-  const results = [];
+// Lab-report labels -> BiometricMetric. Only enum members may appear here:
+// ReportExtraction.metric is typed on that enum and the extractions are saved
+// with one createMany, so a single name the enum does not know (this used to
+// emit glucose, hsCRP, tsh, vitamin_d, vitamin_b12 and a camel-cased hbA1c)
+// failed every report that contained it - which was every real one. A marker
+// with no enum member is not extracted; it is not something we can store.
+const MARKER_PATTERNS = [
+  ['hba1c', /\b(?:hb\s*a1c|a1c|glyc(?:at|osyl)ated\s+ha?emoglobin|ha?emoglobin\s+a1c)\b/i],
+  ['hdl', /\b(?:hdl|high[\s-]density\s+lipoprotein)\b/i],
+  ['ldl', /\b(?:ldl|low[\s-]density\s+lipoprotein)\b/i],
+  ['triglycerides', /\btriglycerides?\b/i],
+];
+
+// Lines that name a marker without being its value. "LDL/HDL ratio" would
+// otherwise read as an LDL of 2.8, and non-HDL cholesterol as an HDL of 160.
+// VLDL never matches \bldl\b, but is listed so a line carrying both is skipped.
+const EXCLUDED_LABEL = /\bratio\b|\bnon[\s-]?hdl\b|\bvldl\b/i;
+
+const NUMBER = /(\d+(?:\.\d+)?)/;
+
+function matchMarker(text) {
+  if (!text || EXCLUDED_LABEL.test(text)) return null;
+  for (const [metric, pattern] of MARKER_PATTERNS) {
+    // The LAST mention of the label, so "Glycated Haemoglobin (HbA1c) 6.1 %"
+    // reads on from after "(HbA1c)" rather than finding the 1 inside it.
+    const hits = [...text.matchAll(new RegExp(pattern.source, 'gi'))];
+    const last = hits[hits.length - 1];
+    if (last) return { metric, end: last.index + last[0].length };
+  }
+  return null;
+}
+
+function detectUnit(text) {
+  if (/mg\s*\/\s*dl/i.test(text)) return 'mg/dL';
+  if (/mmol\s*\/\s*mol/i.test(text)) return 'mmol/mol';
+  if (/mmol\s*\/\s*l/i.test(text)) return 'mmol/L';
+  if (/%/.test(text)) return '%';
+  return null;
+}
+
+// Into the unit biometricService stores, because verify writes the value
+// straight to BiometricEntry and the score engine compares it against targets
+// in exactly these units. Indian labs mostly print mg/dL and %, so a value
+// with no printed unit is taken as already canonical - and then has to pass
+// the plausibility bounds below, which is what catches it if it was not.
+function toCanonical(metric, value, unit) {
+  if (unit === null || unit === METRIC_UNITS[metric]) return value;
+  if (metric === 'hba1c' && unit === 'mmol/mol') return 0.09148 * value + 2.152; // IFCC -> NGSP
+  if ((metric === 'ldl' || metric === 'hdl') && unit === 'mmol/L') return value * 38.67;
+  if (metric === 'triglycerides' && unit === 'mmol/L') return value * 88.57;
+  return null; // a unit we cannot convert is not a value we can store
+}
+
+// The number that follows the label, never one inside it: the first number in
+// "HbA1c 5.8 %" is the 1 in "A1c", which is what the old parser stored.
+function readValue(metric, afterLabel, rawValue, confidence) {
+  const m = NUMBER.exec(afterLabel);
+  if (!m) return null;
+  const unit = detectUnit(afterLabel);
+  const converted = toCanonical(metric, parseFloat(m[1]), unit);
+  if (converted === null) return null;
+
+  // Outside these bounds the number is a misread - a reference range, a date
+  // fragment, a page number - rather than a result.
+  const [min, max] = METRIC_BOUNDS[metric];
+  if (converted < min || converted > max) return null;
+
+  return {
+    metric,
+    rawValue: String(rawValue).trim().slice(0, 200),
+    normalizedValue: Math.round(converted * 100) / 100,
+    unit: METRIC_UNITS[metric],
+    confidence,
+  };
+}
+
+function fromEntity(entity) {
+  const mention = entity.mentionText || '';
+  // A custom extractor puts the label in `type` and only the value in
+  // mentionText; a generic one puts both in mentionText. Read either.
+  const inMention = matchMarker(mention);
+  if (inMention) {
+    return readValue(inMention.metric, mention.slice(inMention.end), mention, entity.confidence || 0);
+  }
+  const inType = matchMarker(String(entity.type || '').replace(/_/g, ' '));
+  if (inType) return readValue(inType.metric, mention, mention, entity.confidence || 0);
+  return null;
+}
+
+// Fallback over the page text for markers the entities did not yield - an OCR
+// or form processor returns no entities at all. Tables often put the value on
+// the line after the label, so the next line is read when this one has none.
+// Confidence is 0, which the app shows as no match score rather than a number.
+function fromText(documentText) {
+  const lines = documentText.split(/\r?\n/);
+  const found = [];
+  for (let i = 0; i < lines.length; i++) {
+    const hit = matchMarker(lines[i]);
+    if (!hit) continue;
+    const rest = lines[i].slice(hit.end);
+    const value = NUMBER.test(rest)
+      ? readValue(hit.metric, rest, lines[i], 0)
+      : readValue(hit.metric, lines[i + 1] || '', `${lines[i]} ${lines[i + 1] || ''}`, 0);
+    if (value) found.push(value);
+  }
+  return found;
+}
+
+export function parseDocumentAIResponse(data) {
+  const entities = data?.document?.entities || [];
 
   // The page's own text, not the trained entities. The processor is asked for
   // biomarkers; nothing in its schema is promised to be a date, and a date is
   // the one thing on the page most likely to be mislaid by a layout the
   // processor was not trained on. `document.text` is always present.
-  const documentText = data.document.text || '';
+  const documentText = data?.document?.text || '';
 
-  // Map of common lab report labels to our BiometricMetric enum
-  const METRIC_MAP = {
-    'hemoglobin a1c': 'hbA1c',
-    'hba1c': 'hbA1c',
-    'fasting glucose': 'glucose',
-    'glucose': 'glucose',
-    'low density lipoprotein': 'ldl',
-    'ldl': 'ldl',
-    'high sensitivity c-reactive protein': 'hsCRP',
-    'hscrp': 'hsCRP',
-    'tsh': 'tsh',
-    'vitamin d': 'vitamin_d',
-    'b12': 'vitamin_b12',
+  // One extraction per marker, the most confident one. A panel prints each
+  // marker once; a second hit is a summary table or a repeat, and the verify
+  // step writes one value per marker per day anyway.
+  const best = new Map();
+  const consider = (ex) => {
+    if (!ex) return;
+    const current = best.get(ex.metric);
+    if (!current || ex.confidence > current.confidence) best.set(ex.metric, ex);
   };
+  entities.map(fromEntity).forEach(consider);
+  fromText(documentText).filter((ex) => !best.has(ex.metric)).forEach(consider);
 
-  for (const entity of entities) {
-    const label = entity.mentionText.toLowerCase();
-    const valueMatch = entity.mentionText.match(/(\d+(\.\d+)?)/);
-    
-    if (valueMatch) {
-      const normalizedLabel = Object.keys(METRIC_MAP).find(k => label.includes(k));
-      if (normalizedLabel) {
-        results.push({
-          metric: METRIC_MAP[normalizedLabel],
-          rawValue: entity.mentionText,
-          normalizedValue: parseFloat(valueMatch[0]),
-          unit: extractUnit(entity.mentionText),
-          confidence: entity.confidence || 0,
-        });
-      }
-    }
-  }
-
-  return { extractions: results, detectedDate: detectReportDateFromText(documentText) };
-}
-
-function extractUnit(text) {
-  const units = ['%', 'mg/dL', 'mmol/L', 'bpm', 'kg', 'g/dL'];
-  for (const unit of units) {
-    if (text.includes(unit)) return unit;
-  }
-  return 'unknown';
+  return { extractions: [...best.values()], detectedDate: detectReportDateFromText(documentText) };
 }
 
 /**

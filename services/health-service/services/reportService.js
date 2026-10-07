@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 import { extractBiomarkersFromPDF } from '../utils/ocrService.js';
 import { signedDocumentUrl } from './ledger/medicalDocumentStorage.js';
+import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 
 const prisma = new PrismaClient();
 
@@ -377,6 +378,8 @@ export async function verifyExtractionService({ extractionId, userId, confirmedV
         localDate,
       },
     });
+
+    await invalidateBlendedScore(userId);
 
     return { message: 'Biomarker verified and saved to health history' };
   } catch (err) {

@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { reportDate } from '../services/reportService.js';
+import { parseDocumentAIResponse } from '../utils/ocrService.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRepo = resolve(here, '..', '..', '..', '..', 'phool-gobhi-customer-app');
@@ -159,18 +160,23 @@ describe('detected date storage', () => {
   });
 
   test('the OCR response shape carries the date alongside the readings', () => {
-    const ocrSource = readFileSync(join(here, '..', 'utils', 'ocrService.js'), 'utf8');
-    assert.match(ocrSource, /return \{\s*extractions:\s*results,\s*detectedDate:/);
+    const out = parseDocumentAIResponse({
+      document: { text: 'Collected: 04 Mar 2026\nLDL 118 mg/dL', entities: [] },
+    });
+    assert.deepEqual(Object.keys(out).sort(), ['detectedDate', 'extractions']);
+    assert.equal(out.extractions[0].metric, 'ldl');
     assert.match(reportServiceSource, /const \{ extractions, detectedDate \} = await extractBiomarkersFromPDF/);
   });
 
   test('the detector reads the document text, not the trained entities', () => {
-    const ocrSource = readFileSync(join(here, '..', 'utils', 'ocrService.js'), 'utf8');
-    assert.match(
-      ocrSource,
-      /data\.document\.text/,
-      'nothing in the processor schema is promised to be a date; document.text always is',
-    );
+    // nothing in the processor schema is promised to be a date; document.text always is
+    const out = parseDocumentAIResponse({
+      document: {
+        text: 'Collected: 04 Mar 2026',
+        entities: [{ type: 'collection_date', mentionText: '05 Mar 2026', confidence: 1 }],
+      },
+    });
+    assert.equal(out.detectedDate.date, '2026-03-04');
   });
 });
 

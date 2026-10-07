@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 const prisma = new PrismaClient();
 
 // Fitness+ FR-12 + Health+ FR-01, one implementation. Fitness+ only surfaces
@@ -137,11 +138,13 @@ export async function upsertEntryService(userId, { metric, value, localDate, sou
     throw err;
   }
   const unit = METRIC_UNITS[metric];
-  return prisma.biometricEntry.upsert({
+  const row = await prisma.biometricEntry.upsert({
     where: { userId_metric_localDate: { userId, metric, localDate: day } },
     create: { userId, metric, value, unit, source, localDate: day },
     update: { value, unit, source },
   });
+  await invalidateBlendedScore(userId);
+  return row;
 }
 
 // Several metrics in one call — the Health+ "Add today's numbers" quick-add
@@ -265,4 +268,5 @@ export async function deleteEntryService(userId, metric, localDate) {
     throw err;
   }
   await prisma.biometricEntry.delete({ where: { id: existing.id } });
+  await invalidateBlendedScore(userId);
 }
