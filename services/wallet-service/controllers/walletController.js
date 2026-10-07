@@ -473,7 +473,7 @@ export const verifyAndCreditWallet = async (req, res) => {
 
     // Atomically claim the order so a concurrent webhook delivery for the
     // same order can't also credit it.
-    const claimed = await claimRazorpayOrderService(orderId);
+    const claimed = await claimRazorpayOrderService(orderId, { allowFailed: true });
     if (!claimed) {
       // Lost the race �?" most likely the webhook already credited this order.
       // If so, the top-up did succeed, so tell the client that instead of
@@ -559,7 +559,8 @@ export const getActiveSubscriptionInternal = async (req, res) => {
   try {
     const customerId = parseInt(req.query.customerId);
     const gymId = parseInt(req.query.gymId);
-    let subscription = await getActiveSubscriptionService(customerId, gymId);
+    // The booked day, so coverage is judged for the session rather than today.
+    let subscription = await getActiveSubscriptionService(customerId, gymId, { onDate: req.query.date });
     let viaGiftDay = false;
     if (!subscription) {
       subscription = await getGiftEligibleLapsedSubscription(customerId, gymId);
@@ -702,7 +703,7 @@ export const handleRazorpayWebhook = async (req, res) => {
       // there's no `purpose === 'subscription'` case to branch on here
       // anymore.
       if (order) {
-        const claimed = await claimRazorpayOrderService(orderId);
+        const claimed = await claimRazorpayOrderService(orderId, { allowFailed: true });
         if (claimed) {
           // Per-order idempotency key: if a redelivery or a reconcile sweep
           // races this (or this request dies right after crediting and the

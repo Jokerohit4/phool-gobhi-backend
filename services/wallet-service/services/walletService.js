@@ -820,12 +820,19 @@ export async function getRazorpayOrderService(orderId) {
   }
 }
 
-export async function claimRazorpayOrderService(orderId) {
+export async function claimRazorpayOrderService(orderId, { allowFailed = false } = {}) {
   // Atomic UPDATE...WHERE status='PENDING' — the DB row lock makes this the
   // single point of truth for "who gets to credit this order," so the client
   // /verify call and the webhook can never both credit the same top-up.
+  //
+  // `allowFailed` is for the success paths only. Razorpay Checkout retries
+  // inside one order (retry.max_count), so a first attempt can fire
+  // payment.failed - moving the order to FAILED - and a second attempt then
+  // succeed. FAILED used to be terminal, so that customer was charged and
+  // never credited. A success claims a FAILED order too; the credit is
+  // idempotent on razorpay-topup:<orderId>, so this can never double-credit.
   const result = await prisma.razorpayOrder.updateMany({
-    where: { orderId, status: 'PENDING' },
+    where: { orderId, status: { in: allowFailed ? ['PENDING', 'FAILED'] : ['PENDING'] } },
     data: { status: 'PROCESSING' }
   });
   return result.count === 1;
@@ -911,7 +918,28 @@ export async function fetchGymForSubscription(gymId, planType) {
 // top-up) rather than silently falling back to Razorpay — that's a
 // deliberate client-side decision, not something this function should make
 // on the caller's behalf.
-export async function purchaseSubscriptionWithWallet(customerId, gymId, planType, { coinCatalogItemKey } = {}) {
+// Two purchases for the same customer and gym run one after the other, never
+// together. The existingBefore/existingAfter checks below cannot see each
+// other's subscription - neither exists until gymSubscription.create at the
+// very end - and the synthetic order id differs per request, so the debit's
+// idempotency key did not stop a double-tap either: both debits landed and
+// two subscriptions were created. A transaction-scoped advisory lock on
+// (customerId, gymId) makes the second request wait, then see the first's
+// subscription in existingBefore and get a clean 409 with nothing charged.
+//
+// The transaction exists only to scope the lock - the purchase's own writes
+// go through their usual functions and connections. The timeout covers the
+// gym-service and challenge-service calls made while it is held. This is the
+// only advisory lock in the wallet database; a new one must not reuse the
+// two-int (customerId, gymId) key space.
+export async function purchaseSubscriptionWithWallet(customerId, gymId, planType, options = {}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${Number(customerId)}::int, ${Number(gymId)}::int)`;
+    return purchaseSubscriptionUnderLock(customerId, gymId, planType, options);
+  }, { maxWait: 10000, timeout: 30000 });
+}
+
+async function purchaseSubscriptionUnderLock(customerId, gymId, planType, { coinCatalogItemKey } = {}) {
   const existingBefore = await getActiveSubscriptionService(customerId, gymId);
   if (existingBefore) {
     throw { status: 409, error: 'You already have an active subscription for this gym' };
@@ -1060,10 +1088,25 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
 
 // Used by booking-service (internal, requireInternal) at booking-creation
 // time to decide whether to skip the per-session wallet debit.
-export async function getActiveSubscriptionService(customerId, gymId) {
-  const now = new Date();
+//
+// `onDate` ('YYYY-MM-DD', an IST calendar day) is the day being booked. A plan
+// covers a session on that day when the plan's window overlaps it. Without it
+// the check was against "now", so on a weekly plan's last day a customer could
+// book every day of the next week as covered - free sessions, each paying the
+// partner partnerShare/7 out of revenue the plan never collected. Omitted
+// (purchase-time "do they already have one?") it still means "active now".
+const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function getActiveSubscriptionService(customerId, gymId, { onDate } = {}) {
+  let from = new Date();
+  let to = from;
+  if (onDate && ISO_DAY.test(onDate)) {
+    from = new Date(Date.parse(`${onDate}T00:00:00Z`) - IST_OFFSET_MS); // IST midnight
+    to = new Date(from.getTime() + 24 * 60 * 60 * 1000 - 1);
+  }
   const sub = await prisma.gymSubscription.findFirst({
-    where: { customerId, gymId, status: 'active', startDate: { lte: now }, endDate: { gte: now } },
+    where: { customerId, gymId, status: 'active', startDate: { lte: to }, endDate: { gte: from } },
   });
   return serializeSubscription(sub);
 }
@@ -1341,6 +1384,9 @@ async function settleRazorpayOrder(razorpay, order) {
   const succeeded = list.find((p) => p.status === 'captured' || p.status === 'authorized');
   const anyFailed = list.length > 0 && list.every((p) => p.status === 'failed');
   if (!succeeded && !anyFailed) return 'unresolved';
+  // A FAILED order is re-swept only to catch a later successful retry; still
+  // all-failed, there is nothing to write or report again.
+  if (!succeeded && order.status === 'FAILED') return 'failed';
 
   if (succeeded) {
     await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`, `razorpay-topup:${order.orderId}`);
@@ -1366,11 +1412,19 @@ async function settleRazorpayOrder(razorpay, order) {
 // by the client /verify or webhook are neither, so never re-swept.
 export async function reconcilePendingRazorpayOrdersService({ userId } = {}) {
   const cutoff = new Date(Date.now() - RECONCILE_ORDER_AFTER_MS);
+  // FAILED orders from the last 48h are re-checked too: a checkout retry can
+  // succeed after payment.failed marked the order FAILED, and if both /verify
+  // and the captured webhook were missed this sweep is the only thing left to
+  // credit it. Bounded so the sweep never re-reads every failure ever.
+  const failedSince = new Date(Date.now() - 48 * 60 * 60 * 1000);
   const candidates = await prisma.razorpayOrder.findMany({
     where: {
       purpose: 'topup',
-      status: { in: ['PENDING', 'PROCESSING'] },
       createdAt: { lt: cutoff },
+      OR: [
+        { status: { in: ['PENDING', 'PROCESSING'] } },
+        { status: 'FAILED', createdAt: { gte: failedSince } },
+      ],
       ...(userId ? { userId } : {}),
     },
     orderBy: { createdAt: 'asc' },

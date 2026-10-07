@@ -288,3 +288,34 @@ test('exception in handler: returns 500 (signals Razorpay to redeliver)', async 
   assert.equal(r.statusCode, 500);
   assert.deepEqual(r.body, { received: false, error: 'Webhook processing failed' });
 });
+
+// =========================================================================
+// Checkout retry inside one order: payment.failed then payment.captured
+// =========================================================================
+
+test('a success event may claim an order a failed first attempt marked FAILED', async () => {
+  const orderId = 'order_retry_1';
+  process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec_test';
+  timingSafeEqualResult = true;
+  throwOnHmac = false;
+
+  const claims = [];
+  mockGetOrder = async (id) => id === orderId ? { userId: 40, amount: 500, orderId: id } : null;
+  mockClaimOrder = async (id, opts) => { claims.push(opts ?? {}); return true; };
+  mockCredit = async () => {};
+  mockUpdateStatus = async () => {};
+  mockTrack = () => {};
+
+  await handleRazorpayWebhook(mkReq({
+    body: { event: 'payment.failed', payload: { payment: { entity: { id: 'pay_r1', order_id: orderId } } } },
+  }), mkRes());
+  const r = mkRes();
+  await handleRazorpayWebhook(mkReq({
+    body: { event: 'payment.captured', payload: { payment: { entity: { id: 'pay_r2', order_id: orderId } } } },
+  }), r);
+
+  assert.equal(r.statusCode, 200);
+  // The failure claims PENDING only; the success may also claim FAILED.
+  assert.notEqual(claims[0].allowFailed, true);
+  assert.equal(claims[1].allowFailed, true);
+});
