@@ -241,6 +241,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
       isSessionActiveNow: () => true,
       isBeforeSessionWindow: () => false,
       isSessionEnded: () => false,
+      sessionEndedBefore: () => false,
       shiftedSlotForNow: () => ({ newStartTime: '10:00', newEndTime: '11:00' }),
       IST_OFFSET_MS: (5 * 60 + 30) * 60000,
       getDayOfWeek: (date) => {

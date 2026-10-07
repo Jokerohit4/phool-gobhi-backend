@@ -127,7 +127,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `booking_confirmed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `start_time` |
 | `booking_failed` | booking | customerId | `gym_id`, `reason` (`slot_full`/`insufficient_balance`), `amount` |
 | `booking_cancelled` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
-| `booking_completed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
+| `booking_completed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `completed_by` (`partner` / `auto`) |
 | `referral_credited` | booking | customerId | `booking_id`, `referrer_id` |
 | `checkin_requested` | booking | customerId | `booking_id`, `gym_id`, `location_verified` |
 | `wallet_topup_order_created` | wallet | userId | `amount`, `order_id` |

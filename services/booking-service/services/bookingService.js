@@ -3,7 +3,7 @@ import axios from 'axios';
 import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, sessionEndedBefore, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
@@ -938,6 +938,123 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
   }
 }
 
+// Everything that follows a booking flipping to 'completed': the partner's
+// money, the referral bonus, the funnel event and the customer's push. Shared
+// by the partner's own "complete" tap and the auto-complete sweep, so a session
+// the sweep finishes pays out exactly as one the partner finished by hand.
+// Every step is best-effort and never throws - the status flip has already
+// committed, and a failed side effect is logged for follow-up, not rolled back.
+async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, completedBy = 'partner' }) {
+  const bookingId = booking.id;
+
+  // 7. Credit partner wallet — best-effort, never blocks completion.
+  // partnerShare is null for bookings created before this field existed —
+  // fall back to the full amount for those rather than paying out `null`.
+  // Skipped ONLY for a subscription booking whose commission fields came
+  // back null from bookingCommissionFields — that happens exclusively for
+  // legacy "upfront" subscriptions, where the partner was already paid the
+  // full plan share in one shot at purchase (see purchaseSubscriptionWithWallet's
+  // payoutModel branch); crediting again here would pay them twice for the
+  // same subscription. Current "perVisit" subscriptions DO have a real
+  // (non-null) partnerShare snapshotted at booking-creation time — those
+  // pay out here exactly like a normal paid booking.
+  const payoutAmount = booking.partnerShare ?? booking.amount;
+  const skipPayout = booking.subscriptionId && booking.partnerShare == null;
+  // Attendance-SaaS subscription visit: this partner share is settled
+  // directly to the partner's bank account by admin, never credited to
+  // their in-app wallet (see PartnerBankSettlement in wallet-service).
+  // Everything else — one-off marketplace bookings, and subscriptions at
+  // an opted-out gym — keeps crediting the wallet exactly as before.
+  const isSaasBankSettlement = booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null;
+  if (isSaasBankSettlement) {
+    try {
+      if (gym.partnerId) {
+        await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
+          partnerId: gym.partnerId,
+          gymId,
+          bookingId,
+          subscriptionId: booking.subscriptionId,
+          amount: payoutAmount,
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
+      }
+    } catch (payoutErr) {
+      console.error('Partner bank settlement record failed for booking', bookingId, payoutErr.message);
+    }
+  } else if (!skipPayout) {
+    try {
+      if (gym.partnerId) {
+        await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
+          amount: payoutAmount,
+          description: 'Gym session payout',
+          userType: 'partner',
+          gymId,
+          // One payout per session, whichever path completed it. The status
+          // flip is already race-guarded; this makes a retried credit safe too.
+          idempotencyKey: `booking-payout-${bookingId}`,
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
+      }
+    } catch (payoutErr) {
+      console.error('Partner payout failed for booking', bookingId, payoutErr.message);
+    }
+  }
+
+  // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
+  // very first completed booking (never re-fires on later sessions) and
+  // only if they were referred. Same fire-and-forget, error-logged-not-
+  // thrown pattern as the partner payout above; idempotency keys make a
+  // retried completeBooking call (or a duplicate updateMany race) safe.
+  try {
+    // Identified by "earliest-booked (lowest id) session that is now
+    // completed", not a count — a plain count of completed bookings taken
+    // after this row's own status flip can read as 2 on BOTH sides of a
+    // customer's first two sessions completing at nearly the same instant
+    // (each sees the other's already-committed row too), so neither would
+    // fire. Only one booking can ever be the minimum id among currently-
+    // completed rows, so at most one concurrent completion can match this
+    // check — race-safe without needing a transaction.
+    const firstCompleted = await prisma.booking.findFirst({
+      where: { customerId: booking.customerId, status: 'completed' },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    if (firstCompleted?.id === booking.id) {
+      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+      const referredByUserId = profileRes.data?.referredByUserId;
+      if (referredByUserId) {
+        await axios.post(`${WALLET_SERVICE_URL}/${referredByUserId}/credit`, {
+          amount: REFERRAL_BONUS,
+          description: 'Referral bonus',
+          idempotencyKey: `referral-credit-referrer-${referredByUserId}-for-${booking.customerId}`,
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
+        await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
+          amount: REFERRAL_BONUS,
+          description: 'Referral bonus',
+          idempotencyKey: `referral-credit-referred-${booking.customerId}`,
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
+        track('referral_credited', booking.customerId, {
+          booking_id: booking.id, referrer_id: referredByUserId,
+        });
+      }
+    }
+  } catch (referralErr) {
+    console.error('Referral credit failed for booking', bookingId, referralErr.message);
+  }
+
+  // Fulfillment funnel: the session actually happened (partner verified at the gym).
+  track('booking_completed', booking.customerId, {
+    booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+    commission_pct: booking.commissionPct, partner_share: booking.partnerShare,
+    attendance_method: updatedBooking.attendanceMethod, city: gym.city,
+    completed_by: completedBy,
+  });
+
+  notifyCustomer(booking.customerId, {
+    title: 'Session completed',
+    body: `Your session on ${booking.date} is marked complete. See you next time!`,
+    data: { type: 'booking_completed', bookingId: booking.id, date: booking.date },
+  }).catch(() => {});
+}
+
 export async function completeBooking(bookingId, gymId, partnerId, { override = false, overrideReason } = {}) {
   try {
     // 1. Find booking
@@ -1038,108 +1155,7 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
       });
     }
 
-    // 7. Credit partner wallet — best-effort, never blocks completion.
-    // partnerShare is null for bookings created before this field existed —
-    // fall back to the full amount for those rather than paying out `null`.
-    // Skipped ONLY for a subscription booking whose commission fields came
-    // back null from bookingCommissionFields — that happens exclusively for
-    // legacy "upfront" subscriptions, where the partner was already paid the
-    // full plan share in one shot at purchase (see purchaseSubscriptionWithWallet's
-    // payoutModel branch); crediting again here would pay them twice for the
-    // same subscription. Current "perVisit" subscriptions DO have a real
-    // (non-null) partnerShare snapshotted at booking-creation time — those
-    // pay out here exactly like a normal paid booking.
-    const payoutAmount = booking.partnerShare ?? booking.amount;
-    const skipPayout = booking.subscriptionId && booking.partnerShare == null;
-    // Attendance-SaaS subscription visit: this partner share is settled
-    // directly to the partner's bank account by admin, never credited to
-    // their in-app wallet (see PartnerBankSettlement in wallet-service).
-    // Everything else — one-off marketplace bookings, and subscriptions at
-    // an opted-out gym — keeps crediting the wallet exactly as before.
-    const isSaasBankSettlement = booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null;
-    if (isSaasBankSettlement) {
-      try {
-        if (gym.partnerId) {
-          await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
-            partnerId: gym.partnerId,
-            gymId,
-            bookingId,
-            subscriptionId: booking.subscriptionId,
-            amount: payoutAmount,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-        }
-      } catch (payoutErr) {
-        console.error('Partner bank settlement record failed for booking', bookingId, payoutErr.message);
-      }
-    } else if (!skipPayout) {
-      try {
-        if (gym.partnerId) {
-          await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
-            amount: payoutAmount,
-            description: 'Gym session payout',
-            userType: 'partner',
-            gymId,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-        }
-      } catch (payoutErr) {
-        console.error('Partner payout failed for booking', bookingId, payoutErr.message);
-      }
-    }
-
-    // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
-    // very first completed booking (never re-fires on later sessions) and
-    // only if they were referred. Same fire-and-forget, error-logged-not-
-    // thrown pattern as the partner payout above; idempotency keys make a
-    // retried completeBooking call (or a duplicate updateMany race) safe.
-    try {
-      // Identified by "earliest-booked (lowest id) session that is now
-      // completed", not a count — a plain count of completed bookings taken
-      // after this row's own status flip can read as 2 on BOTH sides of a
-      // customer's first two sessions completing at nearly the same instant
-      // (each sees the other's already-committed row too), so neither would
-      // fire. Only one booking can ever be the minimum id among currently-
-      // completed rows, so at most one concurrent completion can match this
-      // check — race-safe without needing a transaction.
-      const firstCompleted = await prisma.booking.findFirst({
-        where: { customerId: booking.customerId, status: 'completed' },
-        orderBy: { id: 'asc' },
-        select: { id: true },
-      });
-      if (firstCompleted?.id === booking.id) {
-        const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
-        const referredByUserId = profileRes.data?.referredByUserId;
-        if (referredByUserId) {
-          await axios.post(`${WALLET_SERVICE_URL}/${referredByUserId}/credit`, {
-            amount: REFERRAL_BONUS,
-            description: 'Referral bonus',
-            idempotencyKey: `referral-credit-referrer-${referredByUserId}-for-${booking.customerId}`,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-          await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
-            amount: REFERRAL_BONUS,
-            description: 'Referral bonus',
-            idempotencyKey: `referral-credit-referred-${booking.customerId}`,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-          track('referral_credited', booking.customerId, {
-            booking_id: booking.id, referrer_id: referredByUserId,
-          });
-        }
-      }
-    } catch (referralErr) {
-      console.error('Referral credit failed for booking', bookingId, referralErr.message);
-    }
-
-    // Fulfillment funnel: the session actually happened (partner verified at the gym).
-    track('booking_completed', booking.customerId, {
-      booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
-      commission_pct: booking.commissionPct, partner_share: booking.partnerShare,
-      attendance_method: updatedBooking.attendanceMethod, city: gym.city,
-    });
-
-    notifyCustomer(booking.customerId, {
-      title: 'Session completed',
-      body: `Your session on ${booking.date} is marked complete. See you next time!`,
-      data: { type: 'booking_completed', bookingId: booking.id, date: booking.date },
-    }).catch(() => {});
+    await settleCompletedBooking({ booking, updatedBooking, gym, gymId });
 
     return { ...updatedBooking, locationVerified: booking.locationVerified ?? false };
   } catch (err) {
@@ -1150,6 +1166,80 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
       error: err.message || 'Server error'
     };
   }
+}
+
+// How long after a slot ends before the sweep completes it. Gives the partner
+// the first chance to tap "complete" themselves, and absorbs a session that
+// ran over its booked end time.
+export const AUTO_COMPLETE_GRACE_MS = 60 * 60000;
+const AUTO_COMPLETE_BATCH = 200;
+
+// A session the sweep may finish: attendance was verified (a QR scan or a
+// geofenced self check-in moved it to 'started') and the slot ended more than
+// the grace period ago. A still-'confirmed' booking is never auto-completed -
+// nobody proved the customer turned up, so paying the partner for it would be
+// paying for a no-show.
+export function isDueForAutoComplete(booking, nowMs = Date.now(), graceMs = AUTO_COMPLETE_GRACE_MS) {
+  return booking.status === 'started'
+    && booking.attendedAt != null
+    && sessionEndedBefore(booking.date, booking.endTime, graceMs, nowMs);
+}
+
+// Completes every verified session whose slot is over, so a partner who
+// forgets to tap "complete" still gets paid, the customer's first-session
+// referral bonus still fires, and the customer still hears it was logged.
+//
+// Without this a 'started' booking not completed on its own day was stuck for
+// good: completeBooking only accepts today's sessions, so after midnight there
+// was no path to pay it out at all.
+//
+// Driven by .github/workflows/auto-complete-sessions.yml through
+// POST /internal/auto-complete, for the same reason as every other sweep here:
+// Cloud Run gives a setInterval no CPU between requests. Safe to run twice -
+// each row is claimed with a status-conditioned updateMany, so overlapping
+// runs (or a partner tapping at the same moment) complete it once, and the
+// payout carries an idempotency key on top.
+export async function autoCompleteEndedSessions({ nowMs = Date.now() } = {}) {
+  const today = todayDateStringIST();
+  const candidates = (await prisma.booking.findMany({
+    where: { status: 'started', attendedAt: { not: null }, date: { lte: today } },
+    orderBy: { id: 'asc' },
+    take: AUTO_COMPLETE_BATCH,
+  })).map(normalizeBookingMoney);
+  const due = candidates.filter((b) => isDueForAutoComplete(b, nowMs));
+
+  const gyms = new Map();
+  const failures = [];
+  let completed = 0;
+
+  for (const booking of due) {
+    try {
+      if (!gyms.has(booking.gymId)) {
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        gyms.set(booking.gymId, gymRes.data?.data || gymRes.data);
+      }
+      const gym = gyms.get(booking.gymId);
+      if (!gym) throw new Error('gym not found');
+
+      const { count } = await prisma.booking.updateMany({
+        where: { id: booking.id, status: 'started' },
+        data: { status: 'completed' },
+      });
+      if (count === 0) continue; // completed or cancelled by someone else meanwhile
+
+      const updatedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: booking.id } }));
+      await settleCompletedBooking({ booking, updatedBooking, gym, gymId: booking.gymId, completedBy: 'auto' });
+      completed++;
+    } catch (err) {
+      // Per-booking and best-effort: one gym-service hiccup must not strand
+      // every other partner's payout. The row stays 'started', so the next run
+      // picks it up again.
+      console.error('autoComplete failed for booking', booking.id, err?.message);
+      failures.push({ bookingId: booking.id, error: err?.message || 'unknown' });
+    }
+  }
+
+  return { scanned: candidates.length, due: due.length, completed, failures };
 }
 
 // Partner scans the customer's QR (a signed token, not a bare booking id —

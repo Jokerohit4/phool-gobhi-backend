@@ -65,6 +65,12 @@ export function isSessionEnded(date, endTime) {
   return Date.now() > slotInstantUTC(date, endTime);
 }
 
+// True once `graceMs` has passed since the slot ended. `nowMs` is injectable
+// so the auto-complete sweep's cut-off can be tested without moving the clock.
+export function sessionEndedBefore(date, endTime, graceMs, nowMs = Date.now()) {
+  return nowMs > slotInstantUTC(date, endTime) + graceMs;
+}
+
 // Computes a replacement startTime/endTime (same duration as the original
 // slot) anchored to the current IST wall-clock time. Only ever called after
 // isBeforeSessionWindow has confirmed `now` is still on the same IST

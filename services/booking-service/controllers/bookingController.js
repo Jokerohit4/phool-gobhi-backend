@@ -596,3 +596,15 @@ export const sendDailyBriefing = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// Hourly sweep completing verified sessions whose slot is over. Called by
+// .github/workflows/auto-complete-sessions.yml via POST /internal/auto-complete
+// (x-internal-key); never gateway-reachable.
+export const autoCompleteSessions = async (req, res) => {
+  try {
+    const result = await bookingService.autoCompleteEndedSessions();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
