@@ -81,7 +81,11 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
 });
 
 const GYM = 9;
-const TODAY = new Date().toISOString().split('T')[0];
+// IST calendar days, matching attendanceScoreService's window - UTC keys run a
+// day behind IST from 18:30 to 00:00 UTC and failed the steps assertions then.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+const istKey = (ms) => new Date(ms + IST_OFFSET_MS).toISOString().split('T')[0];
+const TODAY = istKey(Date.now());
 
 test('only opted-in users appear, ranked by check-in count descending at equal scores', async () => {
   resetFakes();
@@ -285,7 +289,7 @@ test('per-criterion ranks are resolved within the same opted-in population', asy
   attendanceEvents = [{ userId: 1, gymId: GYM, attendedAt: new Date().toISOString(), source: 'member_checkin' }];
   activityRows = Array.from({ length: 7 }, (_, i) => ({
     userId: 2,
-    date: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
+    date: istKey(Date.now() - i * 86400000),
     steps: 10000,
   }));
 

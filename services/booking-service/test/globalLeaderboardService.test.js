@@ -85,8 +85,14 @@ test('setup: mock dependencies once, import globalLeaderboardService once', asyn
   assert.equal(typeof getGlobalLeaderboard, 'function');
 });
 
-const TODAY = new Date().toISOString().split('T')[0];
-const key = (offset) => new Date(Date.now() - offset * 86400000).toISOString().split('T')[0];
+// IST calendar days, matching attendanceScoreService's window. These were UTC
+// keys, which run one day behind IST from 18:30 to 00:00 UTC - so between
+// midnight and 05:30 IST a "full week" of steps fell partly outside the window
+// and the board scored 17 instead of 20, failing every deploy in that slot.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+const istKey = (ms) => new Date(ms + IST_OFFSET_MS).toISOString().split('T')[0];
+const TODAY = istKey(Date.now());
+const key = (offset) => istKey(Date.now() - offset * 86400000);
 
 test('cross-gym member days are deduped: same day at two gyms = one check-in', async () => {
   resetFakes();
