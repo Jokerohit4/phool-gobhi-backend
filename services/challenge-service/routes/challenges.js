@@ -17,6 +17,7 @@ router.get('/coins/catalog', requireAuth, requireFeatureFlag('streaksCoins'), ct
 // directly by a client and enforces the gym_trial monthly cap + per-user
 // limit inside its own transaction; see coinCatalogService for why.
 router.post('/coins/redeem', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.redeemCoinCatalogItem);
+router.post('/coins/onboarding-reward', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.claimOnboardingReward);
 router.get('/', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallenges);
 router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallengeDetail);
 router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);

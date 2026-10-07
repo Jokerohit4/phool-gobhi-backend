@@ -1,4 +1,5 @@
 import * as coinLedgerService from '../services/coinLedgerService.js';
+import * as onboardingRewardService from '../services/onboardingRewardService.js';
 import * as erasureService from '../services/erasureService.js';
 import * as exportService from '../services/exportService.js';
 import * as streakService from '../services/streakService.js';
@@ -63,6 +64,16 @@ export const getCoinCatalog = async (req, res) => {
 // getCoinCatalog above (read-only, safe to retry freely), this one spends a
 // scarce resource, so Idempotency-Key is required rather than optional; see
 // coinCatalogService.redeemCatalogItemByUserService for why.
+// Onboarding reward ladder - see onboardingRewardService for the rules.
+export const claimOnboardingReward = async (req, res) => {
+  try {
+    const result = await onboardingRewardService.claimOnboardingRewardService(req.userId, req.body?.step);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const redeemCoinCatalogItem = async (req, res) => {
   try {
     const { catalogItemKey } = req.body || {};
