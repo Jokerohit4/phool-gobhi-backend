@@ -836,6 +836,11 @@ export const recognizeFoodPhoto = handle(async (req) => {
     userId: req.userId,
     buffer: req.file.buffer,
     mimeType: req.file.mimetype,
+    // Which candidate in the provider rotation serves this request. Multipart
+    // delivers it as a string (coerced in providers/index.js); app versions
+    // that predate the rotation send nothing and get attempt 1 — the vendor
+    // they always had.
+    attempt: req.body?.attempt,
   });
 
   // Shape only. Never the proposed food names, never a count of what was on the

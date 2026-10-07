@@ -46,7 +46,7 @@ import * as nutritionService from './nutritionService.js';
 import * as foodPhotoStorage from './foodPhotoStorage.js';
 import * as foodRequestService from './foodRequestService.js';
 import { matchToCatalogue } from './foodMatch.js';
-import { getRecognizer, isRecognizerConfigured } from './providers/index.js';
+import { recognizeFood, isRecognizerConfigured } from './providers/index.js';
 import { isProviderError } from '../../utils/providerError.js';
 
 // Per user, per hour. This is a paid API call made from a phone, so the limit
@@ -125,6 +125,23 @@ async function assertWithinRateLimit(prisma, userId, now) {
 }
 
 /**
+ * One provider call per request — no hidden retry here.
+ *
+ * The retry loop for this feature is the person holding the phone: a failed
+ * recognition comes back fast as a 502, the app offers a Retry button, and the
+ * next attempt carries a higher attempt number that providers/index.js rotates
+ * to a different key and model (measured during a demand spike: gemini-3.5-flash
+ * 503'd on roughly half the calls, so re-asking the same vendor is not a retry,
+ * it is the same coin flip). A loop inside this call would defeat that in two
+ * ways: it delays the error screen the rotation depends on, and it turns one
+ * billable attempt into several.
+ *
+ * Non-provider errors and non-retryable ProviderErrors (a bad request, an
+ * unconfigured key) surface on the first call for the same reason: retrying
+ * those spends money to fail identically.
+ */
+
+/**
  * Upload, recognise, match. Writes no FoodLog.
  *
  * The photo is stored before the model is called, and that ordering is not
@@ -135,9 +152,10 @@ async function assertWithinRateLimit(prisma, userId, now) {
  */
 export async function recognizePhoto(
   prisma,
-  { userId, buffer, mimeType, now = new Date(), deps = {} },
+  { userId, buffer, mimeType, attempt = 1, now = new Date(), deps = {} },
 ) {
-  const { storage, getRecognizer: recognizerFor, isRecognizerConfigured: configured } = resolve(deps);
+  const { storage, recognize, isRecognizerConfigured: configured } =
+    resolve(deps);
 
   if (!configured()) {
     // 503, not 400 or 500: the feature flag can be on while no provider key is
@@ -175,11 +193,10 @@ export async function recognizePhoto(
 
   let proposal;
   try {
-    proposal = await recognizerFor().recognizeFood({
-      imageBase64: buffer.toString('base64'),
-      mimeType,
-      catalogueText,
-    });
+    proposal = await recognize(
+      { imageBase64: buffer.toString('base64'), mimeType, catalogueText },
+      { attempt },
+    );
   } catch (err) {
     await recordRequest(prisma, {
       userId,
@@ -534,7 +551,10 @@ function resolveCatalogueRow(item, byCatalogueName) {
 function resolve(deps = {}) {
   return {
     storage: deps.storage ?? foodPhotoStorage,
-    getRecognizer: deps.getRecognizer ?? getRecognizer,
+    // One call, on the candidate the attempt number is owed — see
+    // providers/index.js for the rotation and recognizePhoto for why the
+    // service itself never retries.
+    recognize: deps.recognize ?? recognizeFood,
     isRecognizerConfigured: deps.isRecognizerConfigured ?? isRecognizerConfigured,
   };
 }

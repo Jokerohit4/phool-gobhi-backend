@@ -71,7 +71,7 @@ function deps(overrides = {}) {
       },
       ...overrides.storage,
     },
-    getRecognizer: () => recognizer,
+    recognize: (payload, opts) => recognizer.recognizeFood(payload, opts),
     isRecognizerConfigured: () => overrides.configured !== false,
   };
 }
@@ -290,6 +290,64 @@ test('a provider failure is a 502 and never leaks the provider message', async (
   assert.equal(recorded?.outcome, 'provider_error');
   // And the photo is still tracked, so the sweeper can reclaim it.
   assert.equal(recorded?.photoPath, 'food/7/abc-123.jpg');
+});
+
+// One provider call per request: the retry loop for this feature is the person
+// holding the phone. A failure comes back fast as a 502, and the next attempt
+// carries an attempt number that providers/index.js rotates to a different key
+// and model — a hidden second call inside this service would delay the error
+// screen that rotation depends on and turn one billable attempt into several.
+
+test('a provider that stays down costs exactly one call and one ledger row', async () => {
+  const { ProviderError } = await import('../utils/providerError.js');
+  let attempts = 0;
+  recognizer.recognizeFood = async () => {
+    attempts++;
+    throw new ProviderError('Food photo provider returned 503', {
+      status: 503,
+      retryable: true,
+      code: 'PROVIDER_REJECTED',
+    });
+  };
+
+  let rows = [];
+  const prisma = mockPrisma();
+  prisma.foodPhotoRequestLog.create = async (args) => {
+    rows.push(args.data);
+    return { id: 1, ...args.data };
+  };
+
+  await assert.rejects(
+    () => svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    (err) => err.status === 502 && err.code === 'PROVIDER_FAILED',
+  );
+  assert.equal(attempts, 1, 'one attempt per request - the rotation is the client ladder');
+  // One photo, one row in the cost ledger: the failed call is billed, so it has
+  // to be visible in what spend is reconciled against.
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, 'provider_error');
+});
+
+test('the attempt number reaches the recogniser, defaulting to the first candidate', async () => {
+  const seen = [];
+  recognizer.recognizeFood = async (_payload, opts) => {
+    seen.push(opts?.attempt);
+    return {
+      isFood: true,
+      items: [{ name: 'dal', grams: 200, confidence: 0.8, nonVeg: false }],
+      note: null,
+      model: 'm',
+      tokensIn: 1,
+      tokensOut: 1,
+    };
+  };
+
+  // No attempt given: an app version that predates the rotation must land on
+  // candidate 1, the vendor it always had.
+  await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, attempt: 4, deps: deps() });
+
+  assert.deepEqual(seen, [1, 4]);
 });
 
 test('an unconfigured provider is 503, which the app can explain', async () => {
