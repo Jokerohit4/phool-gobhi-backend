@@ -270,12 +270,12 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
 
 // --- createBooking -----------------------------------------------------
 
-test('createBooking: success creates a pending booking with debit and QR token', async () => {
+test('createBooking: success debits, confirms instantly and returns a QR token', async () => {
   resetFakes();
   const b = await createBooking(CUSTOMER, {
     gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00',
   });
-  assert.equal(b.status, 'pending');
+  assert.equal(b.status, 'confirmed', 'instant confirmation: a paid booking is a booking');
   assert.equal(b.gymId, GYM.id);
   assert.equal(b.customerId, CUSTOMER);
   assert.ok(b.id);
@@ -318,7 +318,7 @@ test('createBooking: cancelled slot does not block a new booking', async () => {
   const b = await createBooking(CUSTOMER, {
     gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00',
   });
-  assert.equal(b.status, 'pending');
+  assert.equal(b.status, 'confirmed');
   assert.notEqual(b.id, old.id);
 });
 

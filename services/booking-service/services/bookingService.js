@@ -744,20 +744,31 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       }
     }
 
-    // 5. Payment succeeded (or wasn't needed) — booking stays pending,
-    // awaiting partner confirmation. Notify customer that payment was taken.
+    // 5. Payment succeeded (or wasn't needed) — the booking is confirmed now.
+    // Instant confirmation (2026-10-08): a paid booking is a booking; the gym
+    // is told, not asked. It used to wait `pending` for a partner tap that the
+    // 2-minute stale-pending self-heal overrode anyway - so customers saw
+    // "pending gym confirmation" for a booking nobody would ever reject, and a
+    // cancel in those two minutes got a different refund than one after.
     track('booking_created', customerId, {
       booking_id: reservation.id, gym_id: gymId, class_id: classId || undefined, amount: reservation.amount, date, start_time: effectiveStartTime,
       via: subscriptionId ? 'subscription' : 'wallet', city: gym.city,
     });
 
-    notifyCustomer(customerId, {
-      title: classId ? 'Class booking request sent' : 'Booking request sent',
-      body: `Your ${classId ? cls.name : 'session'} on ${reservation.date} at ${reservation.startTime} is pending gym confirmation.${subscriptionId ? '' : ` ₹${reservation.amount} debited.`}`,
-      data: { type: 'booking_created', bookingId: reservation.id, date: reservation.date },
-    }).catch(() => {});
+    await prisma.booking.updateMany({
+      where: { id: reservation.id, status: 'pending' },
+      data: { status: 'confirmed' },
+    });
+    const confirmed = normalizeBookingMoney(
+      (await prisma.booking.findUnique({ where: { id: reservation.id } })) ?? reservation,
+    );
 
-    const confirmed = normalizeBookingMoney(reservation);
+    // booking_confirmed event, the partner's push and the customer's
+    // "Booking confirmed" push - the same as a partner confirmation sends.
+    await notifyOnConfirmation(confirmed, {
+      customerId, gymId, date, startTime: confirmed.startTime, subscriptionId, city: gym.city,
+    });
+
     return { ...confirmed, qrToken: signQrToken(confirmed.id, confirmed.gymId) };
   } catch (err) {
     if (err.error) throw err;
