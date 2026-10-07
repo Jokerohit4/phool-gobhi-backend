@@ -1,53 +1,46 @@
-import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
-import { computeBlendedHealthScore } from './ledger/scoreEngine.js';
+import { behavioralAverages, todayIST, shiftDay, CONSISTENCY_WINDOW_DAYS } from './ledger/scoreService.js';
+import { creditWeeklyConsistencyCoins } from '../utils/notifyChallengeService.js';
 
 const prisma = new PrismaClient();
-const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
-const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
-// Reward configuration
-const CONSISTENCY_THRESHOLD = 80; // Average Behavioral Score required for reward
-const WEEKLY_REWARD_AMOUNT = 50;   // Coins granted for meeting threshold
+// The bar the Health Score card draws and the amount it promises. Both are
+// shown to the user verbatim, so changing either here changes a promise.
+export const CONSISTENCY_THRESHOLD = 80; // 7-day behavioural average, 0-100
+export const WEEKLY_REWARD_COINS = 50;
 
-async function internalHeaders() {
-  return { headers: { 'x-internal-key': INTERNAL_API_KEY } };
+/**
+ * Monday of the IST week containing `localDate`, as 'YYYY-MM-DD' - the
+ * once-per-week key for the bonus. Evaluation runs on every nightly close, so
+ * without a weekly key a user above the bar would be paid every night.
+ */
+export function weekStartIST(localDate) {
+  const [y, m, d] = localDate.split('-').map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  return shiftDay(localDate, -((weekday + 6) % 7));
 }
 
 /**
- * Evaluates a single user to see if they've maintained a high behavioral score 
- * over the last 7 days. Triggered by Day Close events.
+ * Pays the weekly consistency bonus if the user's 7-day behavioural average
+ * (scoreService.behavioralAverages - the same figure the card's bar shows) is
+ * at or above the threshold. Triggered by each nightly day close.
+ *
+ * Never throws: a failure here must not affect closing the user's day.
  */
-export async function evaluateUserReward(userId) {
+export async function evaluateUserReward(userId, { today = todayIST() } = {}) {
   try {
-    // Calculate average Behavioral Score for the last 7 days
-    const scores = await prisma.dailyScore.findMany({
-      where: {
-        userId,
-        date: {
-          gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        },
-      },
-      orderBy: { date: 'desc' },
+    const averages = await behavioralAverages(prisma, { userIds: [userId], today });
+    const average = averages.get(userId);
+    if (average === undefined) return { userId, status: 'ignored', reason: 'no scores' };
+    if (average < CONSISTENCY_THRESHOLD) return { userId, status: 'ignored', score: average };
+
+    const weekStart = weekStartIST(today);
+    const paid = await creditWeeklyConsistencyCoins({
+      userId, weekStart, amount: WEEKLY_REWARD_COINS, average,
     });
-
-    if (scores.length === 0) return { userId, status: 'ignored', reason: 'no scores' };
-
-    const avgBehavioral = scores.reduce((sum, s) => sum + s.behavioralScore, 0) / scores.length;
-
-    if (avgBehavioral >= CONSISTENCY_THRESHOLD) {
-      await axios.post(
-        `${WALLET_SERVICE_URL}/internal/${userId}/credit`,
-        { 
-          amount: WEEKLY_REWARD_AMOUNT, 
-          description: `Weekly Consistency Reward: Avg score ${avgBehavioral.toFixed(1)}%` 
-        },
-        await internalHeaders(),
-      );
-      return { userId, status: 'rewarded', score: avgBehavioral };
-    }
-
-    return { userId, status: 'ignored', score: avgBehavioral };
+    return paid
+      ? { userId, status: 'rewarded', score: average, weekStart }
+      : { userId, status: 'failed', score: average, error: 'coin credit failed' };
   } catch (err) {
     console.error(`Failed to evaluate reward for user ${userId}:`, err.message);
     return { userId, status: 'failed', error: err.message };
@@ -55,28 +48,27 @@ export async function evaluateUserReward(userId) {
 }
 
 /**
- * Global sweep for legacy support or manual triggers.
- * Now delegates to evaluateUserReward.
+ * Platform-wide sweep, for a manual trigger. Evaluates everyone with a closed
+ * day in the window - the only users who can have an average at all. (This
+ * used to read a `ledgerSetupSate` model that does not exist, so it threw on
+ * every call.) Safe to re-run: the weekly idempotency key makes a repeat pay
+ * nobody twice.
  */
-export async function evaluateWeeklyRewards() {
-  try {
-    const users = await prisma.ledgerSetupSate.findMany({
-      select: { userId: true },
-    });
+export async function evaluateWeeklyRewards({ today = todayIST() } = {}) {
+  const users = await prisma.scoreDaySnapshot.findMany({
+    where: { localDate: { gte: shiftDay(today, -CONSISTENCY_WINDOW_DAYS), lt: today } },
+    select: { userId: true },
+    distinct: ['userId'],
+  });
 
-    const rewardResults = [];
-    for (const user of users) {
-      const res = await evaluateUserReward(user.userId);
-      rewardResults.push(res);
-    }
-
-    return {
-      totalProcessed: users.length,
-      rewardedCount: rewardResults.filter(r => r.status === 'rewarded').length,
-      results: rewardResults,
-    };
-  } catch (err) {
-    console.error('evaluateWeeklyRewards failed:', err);
-    throw err;
+  const results = [];
+  for (const { userId } of users) {
+    results.push(await evaluateUserReward(userId, { today }));
   }
+
+  return {
+    totalProcessed: users.length,
+    rewardedCount: results.filter((r) => r.status === 'rewarded').length,
+    results,
+  };
 }

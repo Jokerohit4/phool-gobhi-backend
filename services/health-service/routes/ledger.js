@@ -205,7 +205,7 @@ router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewS
 router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScoreDay);
 
 // Rewards
-router.post('/ledger/rewards/evaluate', ...nutrition, ledgerCtrl.evaluateRewards);
+router.post('/ledger/rewards/evaluate', ...nutrition, ledgerCtrl.evaluateMyReward);
 router.post('/internal/rewards/evaluate', requireInternal, ledgerCtrl.evaluateRewards);
 
 // AI Plans

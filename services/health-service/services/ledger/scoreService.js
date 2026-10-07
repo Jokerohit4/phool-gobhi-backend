@@ -25,6 +25,7 @@ import { openActions } from './remediation.js';
 import { assertGoal } from './goalGuard.js';
 import { currentNutritionTarget } from './currentTarget.js';
 import redis from '../../utils/redisClient.js';
+import { blendedScoreCacheKey } from './blendedScoreCache.js';
 
 const CACHE_TTL = 3600; // 1 hour
 
@@ -171,12 +172,12 @@ export async function closeDay(prisma, { userId, localDate, today }) {
 }
 
 export async function getBlendedScore(prisma, { userId }) {
-  const cacheKey = `health:blended:${userId}`;
+  const cacheKey = blendedScoreCacheKey(userId);
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
   // Parallelize the behavioral baseline and biological state fetches
-  const [latestSnapshot, bioEntries] = await Promise.all([
+  const [latestSnapshot, bioEntries, averages] = await Promise.all([
     prisma.scoreDaySnapshot.findFirst({
       where: { userId },
       orderBy: { localDate: 'desc' },
@@ -204,8 +205,12 @@ export async function getBlendedScore(prisma, { userId }) {
       where: {
         userId,
       },
-      orderBy: { createdAt: 'desc' },
+      // By the day the value belongs to, not when it was typed or verified:
+      // confirming a 2024 report after a 2026 one must not make 2024 "latest".
+      // localDate is 'YYYY-MM-DD', so string order is date order.
+      orderBy: [{ localDate: 'desc' }, { createdAt: 'desc' }],
     }),
+    behavioralAverages(prisma, { userIds: [userId] }),
   ]);
 
   const ledgerClose = latestSnapshot ? Number(latestSnapshot.close) : 0;
@@ -229,8 +234,16 @@ export async function getBlendedScore(prisma, { userId }) {
   const result = {
     blendedScore,
     behavioralScore: ledgerClose,
+    // The 0-100 the blend actually used. behavioralScore is the ledger's raw
+    // running close (hundreds of points), which the card was printing as a
+    // percentage beside a biological score that really is 0-100.
+    behavioralPercent: Math.round(computeBlendedHealthScore(ledgerClose, null)),
     biologicalScore: bioScore,
     markers: latestBiomarkers,
+    // What the weekly-bonus bar shows, and the exact figure rewardService pays
+    // on. The app has always read this field; nothing ever sent it, so the bar
+    // sat at 0.0% for everyone.
+    behavioralAvg7Day: averages.get(userId) ?? 0,
   };
 
   await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
@@ -255,31 +268,60 @@ export async function getScoreSeries(prisma, { userId, limit = 90 }) {
   return rows.reverse();
 }
 
+export const CONSISTENCY_WINDOW_DAYS = 7;
+
+export function todayIST(now = new Date()) {
+  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+export function shiftDay(localDate, days) {
+  const [y, m, d] = localDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * The 7-day behavioural average, 0-100, for each user: the mean of the last
+ * seven CLOSED days' behaviour score (the same 0-100 normalisation the blend
+ * uses), with a day that has no snapshot counted as 0.
+ *
+ * One definition for three readers - the weekly-bonus bar on the Health Score
+ * card, the weekly coin reward, and buddy-service's consistency leagues - so
+ * the bar can never say "unlocked" for a number the reward does not pay on.
+ *
+ * Divided by 7, not by the days present, on purpose: "keep it up for 7 days"
+ * has to mean all seven. Averaging only the days that exist would let a single
+ * great day read as a perfect week.
+ *
+ * This replaces reads of a `dailyScore` model that never existed in the
+ * schema, which made every reward evaluation and every league request throw.
+ */
+export async function behavioralAverages(prisma, { userIds, today = todayIST() }) {
+  const from = shiftDay(today, -CONSISTENCY_WINDOW_DAYS);
+  const snapshots = await prisma.scoreDaySnapshot.findMany({
+    where: { userId: { in: userIds }, localDate: { gte: from, lt: today } },
+    select: { userId: true, close: true },
+  });
+
+  const sums = new Map();
+  for (const s of snapshots) {
+    const pct = computeBlendedHealthScore(Number(s.close), null);
+    sums.set(s.userId, (sums.get(s.userId) ?? 0) + pct);
+  }
+
+  const result = new Map();
+  for (const [userId, sum] of sums) {
+    result.set(userId, Math.round((sum / CONSISTENCY_WINDOW_DAYS) * 10) / 10);
+  }
+  return result;
+}
+
 /**
  * Fetches behavioral consistency for a list of users.
  * Used by the buddy-service to build consistency leagues.
  */
 export async function getBatchBehavioralConsistency(prisma, { userIds }) {
-  const scores = await prisma.dailyScore.findMany({
-    where: {
-      userId: { in: userIds },
-      date: {
-        gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      },
-    },
-  });
-
-  const results = {};
-  for (const s of scores) {
-    if (!results[s.userId]) results[s.userId] = { sum: 0, count: 0 };
-    results[s.userId].sum += s.behavioralScore;
-    results[s.userId].count += 1;
-  }
-
-  return Object.entries(results).map(([userId, data]) => ({
-    userId: parseInt(userId),
-    avgScore: data.count > 0 ? data.sum / data.count : 0,
-  }));
+  const averages = await behavioralAverages(prisma, { userIds });
+  return [...averages].map(([userId, avgScore]) => ({ userId, avgScore }));
 }
 
 /**

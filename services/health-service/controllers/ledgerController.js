@@ -16,7 +16,7 @@ import * as foodEmbeddingService from '../services/ledger/foodEmbeddingService.j
 import { PrismaClient } from '@prisma/client';
 import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
-import { evaluateWeeklyRewards } from '../services/rewardService.js';
+import { evaluateWeeklyRewards, evaluateUserReward } from '../services/rewardService.js';
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
 import { correlateMarkerImprovement } from '../services/correlationService.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
@@ -829,8 +829,16 @@ export const deleteMedicalDocument = handle(async (req) => {
 
 // ---- Photo food logging ----------------------------------------------------
 
+// Internal: the platform-wide sweep.
 export const evaluateRewards = handle(async (req) => {
   return await evaluateWeeklyRewards();
+});
+
+// User-facing: the caller's own bonus only. This route used to run the
+// platform-wide sweep above, so any signed-in user could trigger a pass over
+// every user's scores.
+export const evaluateMyReward = handle(async (req) => {
+  return await evaluateUserReward(req.userId);
 });
 
 export const prescribeAiPlan = handle(async (req) => {

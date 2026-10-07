@@ -73,3 +73,36 @@ export async function creditProfileQuestionCoin({ userId, questionKey }) {
     return false;
   }
 }
+
+// The weekly consistency bonus - coins, not rupees. The Health Score card has
+// always promised "50 coins"; the old reward code credited the rupee wallet
+// instead (on a route that did not exist, so it never paid either way).
+//
+// Keyed on the user and the IST week, so evaluating on every nightly close can
+// pay at most once per week however many nights the average stays above the
+// bar. Same never-throws posture as the credits above; a false return leaves
+// the key unspent, so the next night's evaluation tries again.
+export async function creditWeeklyConsistencyCoins({ userId, weekStart, amount, average }) {
+  try {
+    await axios.post(
+      `${CHALLENGE_SERVICE_URL}/internal/coins/${userId}/credit`,
+      {
+        amount,
+        description: `Weekly consistency bonus: ${average.toFixed(1)}% average`,
+        idempotencyKey: `health-weekly-consistency:${userId}:${weekStart}`,
+      },
+      {
+        headers: {
+          'x-internal-key': INTERNAL_API_KEY,
+          ...(await googleIdTokenHeader(CHALLENGE_SERVICE_URL)),
+        },
+      },
+    );
+    return true;
+  } catch (err) {
+    if (err.response?.status !== 403) {
+      console.error('[challenge-service] weekly consistency coins failed for', userId, weekStart, err.message);
+    }
+    return false;
+  }
+}
