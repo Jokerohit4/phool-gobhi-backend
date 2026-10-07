@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 
 let handleRazorpayWebhook;
 let mockGetOrder, mockClaimOrder, mockCredit, mockUpdateStatus, mockTrack;
+let mockCapture = async () => true;
 
 // State-driven crypto mock — avoids read-only ESM reassignment.
 // timingSafeEqualResult controls signature validity; throwOnHmac simulates
@@ -57,6 +58,7 @@ test('setup: mock dependencies and import webhook handler', async (t) => {
     getRazorpayOrderService: (...a) => mockGetOrder(...a),
     updateRazorpayOrderStatusService: (...a) => mockUpdateStatus(...a),
     claimRazorpayOrderService: (...a) => mockClaimOrder(...a),
+    ensurePaymentCapturedService: (...a) => mockCapture(...a),
     purchaseSubscriptionWithWallet: noOp,
     getActiveSubscriptionService: noOp,
     getGiftEligibleLapsedSubscription: noOp,
@@ -318,4 +320,35 @@ test('a success event may claim an order a failed first attempt marked FAILED', 
   // The failure claims PENDING only; the success may also claim FAILED.
   assert.notEqual(claims[0].allowFailed, true);
   assert.equal(claims[1].allowFailed, true);
+});
+
+// =========================================================================
+// Credit only once captured
+// =========================================================================
+
+test('an authorized payment that cannot be captured is not credited', async () => {
+  const orderId = 'order_uncaptured_1';
+  process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec_test';
+  timingSafeEqualResult = true;
+  throwOnHmac = false;
+
+  let credited = false;
+  let claimed = false;
+  mockGetOrder = async (id) => id === orderId ? { userId: 50, amount: 500, orderId: id } : null;
+  mockCapture = async () => false;
+  mockClaimOrder = async () => { claimed = true; return true; };
+  mockCredit = async () => { credited = true; };
+  mockUpdateStatus = async () => {};
+  mockTrack = () => {};
+  try {
+    const r = mkRes();
+    await handleRazorpayWebhook(mkReq({
+      body: { event: 'payment.authorized', payload: { payment: { entity: { id: 'pay_u1', order_id: orderId } } } },
+    }), r);
+    assert.equal(r.statusCode, 200);
+    assert.equal(claimed, false, 'order stays PENDING for a later event or the reconciler');
+    assert.equal(credited, false);
+  } finally {
+    mockCapture = async () => true;
+  }
 });

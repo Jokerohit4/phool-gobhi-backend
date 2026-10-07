@@ -11,6 +11,7 @@ import {
   getRazorpayOrderService,
   updateRazorpayOrderStatusService,
   claimRazorpayOrderService,
+  ensurePaymentCapturedService,
   purchaseSubscriptionWithWallet,
   getActiveSubscriptionService,
   getGiftEligibleLapsedSubscription,
@@ -471,6 +472,16 @@ export const verifyAndCreditWallet = async (req, res) => {
       return res.status(403).json({ error: 'Order does not belong to this account' });
     }
 
+    // Captured before claiming, so a capture that fails leaves the order
+    // PENDING for the webhook or the reconciler rather than stuck PROCESSING.
+    // The signature proves the payment is real, not that the money is held.
+    if (!(await ensurePaymentCapturedService(razorpayPaymentId, order))) {
+      return res.status(409).json({
+        error: "Your payment hasn't completed yet. If money left your account it will be added to your wallet automatically.",
+        code: 'PAYMENT_NOT_CAPTURED',
+      });
+    }
+
     // Atomically claim the order so a concurrent webhook delivery for the
     // same order can't also credit it.
     const claimed = await claimRazorpayOrderService(orderId, { allowFailed: true });
@@ -702,7 +713,11 @@ export const handleRazorpayWebhook = async (req, res) => {
       // purchaseSubscriptionWithWallet), never a direct Razorpay charge, so
       // there's no `purpose === 'subscription'` case to branch on here
       // anymore.
-      if (order) {
+      // Credited only once captured (capturing an authorized payment here if
+      // the account does not auto-capture). Not captured yet => nothing to do;
+      // a later event or the reconciler settles it. A Razorpay error throws to
+      // the 500 below so Razorpay redelivers.
+      if (order && (await ensurePaymentCapturedService(paymentId, order))) {
         const claimed = await claimRazorpayOrderService(orderId, { allowFailed: true });
         if (claimed) {
           // Per-order idempotency key: if a redelivery or a reconcile sweep

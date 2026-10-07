@@ -1361,6 +1361,42 @@ function razorpayClient() {
   });
 }
 
+/**
+ * True once the payment is captured, capturing it here if it is only
+ * authorized. Every credit path calls this first.
+ *
+ * Crediting on "authorized" assumed the Razorpay account auto-captures. If it
+ * does not, an authorized payment is never captured, Razorpay auto-refunds it
+ * after a few days, and the wallet keeps credit for money that went back -
+ * or, credited only on "captured", the customer is never credited at all.
+ * Capturing explicitly makes both settings behave the same.
+ *
+ * Captures only a payment that belongs to this order and is for exactly the
+ * order's amount; anything else is left alone and reported as not captured.
+ * Throws on a Razorpay network error so the caller can retry (webhook 500 /
+ * reconciler leaves the order for next time) rather than treat it as failed.
+ */
+export async function ensurePaymentCapturedService(paymentId, order) {
+  const razorpay = razorpayClient();
+  const payment = await razorpay.payments.fetch(paymentId);
+  if (payment.order_id && payment.order_id !== order.orderId) return false;
+  if (payment.status === 'captured') return true;
+  if (payment.status !== 'authorized') return false;
+
+  const paise = Math.round(Number(order.amount) * 100);
+  if (Number(payment.amount) !== paise) return false;
+  try {
+    const captured = await razorpay.payments.capture(paymentId, paise, payment.currency || 'INR');
+    return captured?.status === 'captured';
+  } catch (err) {
+    // A concurrent path (webhook vs /verify vs reconciler, or a late
+    // auto-capture) may have captured it first, which makes this call fail.
+    const again = await razorpay.payments.fetch(paymentId);
+    if (again.status === 'captured') return true;
+    throw err;
+  }
+}
+
 // Settles one stale Razorpay order against Razorpay's own payment records:
 //  - a captured/authorized payment => credit the wallet;
 //  - only failed payments => mark the order FAILED;
@@ -1389,6 +1425,8 @@ async function settleRazorpayOrder(razorpay, order) {
   if (!succeeded && order.status === 'FAILED') return 'failed';
 
   if (succeeded) {
+    // Credited only once captured - see ensurePaymentCapturedService.
+    if (!(await ensurePaymentCapturedService(succeeded.id, order))) return 'unresolved';
     await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`, `razorpay-topup:${order.orderId}`);
     await updateRazorpayOrderStatusService(order.orderId, 'SUCCESS', succeeded.id);
     track('wallet_topup_succeeded', order.userId, { amount: Number(order.amount), order_id: order.orderId, via: 'reconcile' });
