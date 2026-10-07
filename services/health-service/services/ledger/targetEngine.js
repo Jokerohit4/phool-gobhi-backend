@@ -180,6 +180,55 @@ export function resolveInputs({ weightKg, heightCm, age, sex, activity, hasWorko
   };
 }
 
+// The fat share of the calorie budget: the midpoint of the physiological
+// range, clamped back into it so rounding cannot land outside.
+export function defaultFatFraction() {
+  return Math.min(
+    Math.max((FAT_FRACTION.min + FAT_FRACTION.max) / 2, FAT_FRACTION.min),
+    FAT_FRACTION.max,
+  );
+}
+
+/**
+ * Carbs, fat and fibre for a given calorie budget and protein target.
+ *
+ * Split out of computeTargets so that a caller who already HAS a kcal - the
+ * prescription, which takes it from a slider rather than deriving it - gets the
+ * identical split rather than a second implementation of it. Two rules for
+ * one question is how the targets screen and the plan screen end up showing
+ * different carbs for the same calories.
+ *
+ * Protein is an input and never recomputed here: it comes from body weight and
+ * goals, not from the calorie budget, so dragging the kcal slider must not move
+ * the number that matters most.
+ *
+ * Carbs take what is left, and can go to zero. A high-protein, low-carb target
+ * is a legitimate outcome for someone who asked for recomposition, and the
+ * plan's own worked example lands around 300 g rather than a number derived
+ * from a minimum.
+ */
+export function splitMacrosForKcal({ kcal, proteinG, fatFraction = defaultFatFraction() }) {
+  const energy = Number(kcal);
+  const protein = Number(proteinG);
+  let fatG = Math.round((energy * fatFraction) / 9);
+  let carbsG = Math.round((energy - protein * 4 - fatG * 9) / 4);
+
+  if (carbsG < 0) {
+    // Protein + fat already exceed the calories. Give the surplus back to
+    // carbs rather than printing a negative number or silently dropping
+    // protein, which would make the headline protein target a lie.
+    carbsG = 0;
+    const overshoot = protein * 4 + fatG * 9 - energy;
+    fatG = Math.max(0, Math.round((fatG * 9 - overshoot) / 9));
+  }
+
+  return {
+    fatG,
+    carbsG,
+    fibreG: Math.round((energy / 1000) * FIBRE_G_PER_1000_KCAL),
+  };
+}
+
 export function computeTargets(goals, raw) {
   const i = resolveInputs(raw);
 
@@ -256,31 +305,13 @@ export function computeTargets(goals, raw) {
 
   // Fat as a fraction, clamped so a large protein target cannot push fat
   // below the level hormones need.
-  const fatFraction = Math.min(
-    Math.max((FAT_FRACTION.min + FAT_FRACTION.max) / 2, FAT_FRACTION.min),
-    FAT_FRACTION.max,
-  );
-  let fatG = Math.round((kcal * fatFraction) / 9);
+  const fatFraction = defaultFatFraction();
+  const { fatG, carbsG, fibreG } = splitMacrosForKcal({
+    kcal,
+    proteinG,
+    fatFraction,
+  });
 
-  // Carbs take what is left, and can go to zero. A high-protein, low-carb
-  // target is a legitimate outcome for someone who asked for recomposition,
-  // and the plan's own worked example lands around 300 g rather than a
-  // number derived from a minimum.
-  let carbsG = Math.round((kcal - proteinG * 4 - fatG * 9) / 4);
-  if (carbsG < 0) {
-    // Protein + fat already exceed the calories. Give the surplus back to
-    // carbs rather than printing a negative number or silently dropping
-    // protein, which would make the headline protein target a lie.
-    carbsG = 0;
-    const overshoot = proteinG * 4 + fatG * 9 - kcal;
-    fatG = Math.max(0, Math.round(((fatG * 9 - overshoot) / 9)));
-  }
-
-  const fibreG = Math.round((kcal / 1000) * FIBRE_G_PER_1000_KCAL);
-  // Split out rather than inlined into waterMl, because the addend is the one
-  // part of the water target that changes day to day. "Why is my water target
-  // higher today?" is a question users ask, and it cannot be answered from a
-  // single total.
   const waterAddend = i.hasWorkoutToday ? WATER_ML_WORKOUT_ADDEND : 0;
   const waterMl = i.weightKg * WATER_ML_PER_KG + waterAddend;
 

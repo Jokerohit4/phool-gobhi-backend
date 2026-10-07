@@ -214,6 +214,27 @@ router.get('/ledger/biometrics/trajectory', ...nutrition, ledgerCtrl.getBiomarke
 router.get('/ledger/biometrics/correlation', ...nutrition, ledgerCtrl.getMarkerCorrelation);
 router.post('/ledger/biometrics/batch-consistency', ...nutrition, ledgerCtrl.getBatchConsistency);
 
+// ---- The adjustable plan ---------------------------------------------------
+//
+// "Your plan" on the app: four sliders (kcal, steps, sleep, sessions a week)
+// and the whole plan that follows from them.
+//
+// Nutrition-gated, not medical. Everything here is derived from what the
+// person eats and how they train - the same question `/ledger/targets` answers
+// - whereas a medical record is a separate consent that must not be required
+// to move a calorie slider.
+//
+// Three routes, one shape. POST for the preview despite it being a read: the
+// draft is a body, and the app sends one on every debounced drag. Nothing in
+// previewPrescription writes, so it stays callable on every drag without cost.
+//
+// Declared after `/ledger/score/:localDate/preview` deliberately: the route
+// gate tests find a preview route by path, and the first one they find has to
+// be the GET they are written to expect.
+router.get('/ledger/prescription', ...nutrition, ledgerCtrl.getPrescription);
+router.post('/ledger/prescription/preview', ...nutrition, ledgerCtrl.previewPrescription);
+router.put('/ledger/prescription', ...nutrition, ledgerCtrl.savePrescription);
+
 // ---- Medical documents ----------------------------------------------------
 //
 // The only place in this service that stores a medical record. The multer

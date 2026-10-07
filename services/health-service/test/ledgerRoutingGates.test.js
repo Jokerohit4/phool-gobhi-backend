@@ -222,8 +222,16 @@ test('medical document routes are gated on the medical scope', () => {
 test('food, plan and score routes are gated on the nutrition scope', () => {
   // These are all derived from what someone eats. Medical records are a
   // separate consent and must not be required to log a katori of rice - and
-  // equally, a nutrition consent must not open the prescription drawer.
-  for (const prefix of ['/ledger/foods', '/ledger/food-logs', '/ledger/saved-meals', '/ledger/plan', '/ledger/score', '/ledger/targets', '/ledger/food-totals']) {
+  // equally, a nutrition consent must not open the prescription drawer: the
+  // drawer where a person's OWN uploaded prescription lives is
+  // `/ledger/medical-documents`, on `...medical`, and is asserted below.
+  //
+  // `/ledger/prescription` is a third thing and is deliberately in this list
+  // despite the name: it is the four-slider plan (calories, steps, sleep,
+  // sessions) derived from what the person eats and how they train - the
+  // same question `/ledger/targets` answers - not a medical document. The
+  // name comes from the app's route contract, not from the medical scope.
+  for (const prefix of ['/ledger/foods', '/ledger/food-logs', '/ledger/saved-meals', '/ledger/plan', '/ledger/score', '/ledger/targets', '/ledger/food-totals', '/ledger/prescription']) {
     const matching = all.filter((r) => r.line.includes(prefix));
     assert.ok(matching.length, `no routes found for ${prefix}`);
     for (const r of matching) {

@@ -19,6 +19,7 @@ import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { evaluateWeeklyRewards } from '../services/rewardService.js';
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
 import { correlateMarkerImprovement } from '../services/correlationService.js';
+import * as prescriptionService from '../services/ledger/prescriptionService.js';
 
 const prisma = new PrismaClient();
 
@@ -187,6 +188,41 @@ export const getTargets = handle(async (req) => {
     fibreG: Number(target.fibreG),
     waterMl: Number(target.waterMl),
   };
+});
+
+// ---- The adjustable plan ---------------------------------------------------
+
+export const getPrescription = handle(async (req) => {
+  return prescriptionService.getPlan({ prisma, userId: req.userId });
+});
+
+// Read-only, and the reason there are two of them: a slider drag asks what the
+// rest of the plan becomes, and asking must cost nothing. Nothing in
+// previewPlan writes - see the test that pins it.
+export const previewPrescription = handle(async (req) => {
+  return prescriptionService.previewPlan({
+    prisma,
+    userId: req.userId,
+    draft: req.body || {},
+  });
+});
+
+export const savePrescription = handle(async (req) => {
+  const plan = await prescriptionService.savePlan({
+    prisma,
+    userId: req.userId,
+    draft: req.body || {},
+  });
+  // Shape only. Never the numbers: a calorie target and a sleep window are
+  // health data, and the analytics util's no-PII rule means this dictionary is
+  // read by everyone who can query the analytics database. Whether the server
+  // had to move anything is the funnel fact - a rate that climbs says our
+  // bounds and people's expectations have drifted apart.
+  track('health_prescription_saved', req.userId, {
+    adjusted: plan.adjustedBy.length > 0,
+    had_workout: plan.workout.length > 0,
+  });
+  return plan;
 });
 
 // ---- Food search and logging --------------------------------------------

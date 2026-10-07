@@ -785,6 +785,35 @@ model WeeklyGoal {
   @@schema("health")
 }
 
+// The three adjustable numbers behind the app's "Your plan" screen - the
+// calorie budget, the step target and the sleep window.
+//
+// Deliberately NOT a home for the macros. Protein, carbs, fat, fibre and water
+// are derived from the kcal on this row plus the NutritionTarget's inputs, and
+// are computed on read rather than stored: a second copy of them is a second
+// number that can disagree with the first the moment either is written. The
+// client is forbidden from sending them for the same reason - see
+// prescriptionService.js.
+//
+// sessionsPerWeek is NOT here either. It already has a home (WeeklyGoal, the
+// ring on the home screen) and two sources of truth for one number is how the
+// plan screen and the ring come to disagree. The prescription reads and writes
+// that row.
+model Prescription {
+  userId       Int      @id
+  kcal         Int
+  stepsPerDay  Int
+  sleepMinutes Int
+  // Bumped when the rules that turn these three into a plan change, so a
+  // saved plan stays explicable after a retune - the same contract
+  // NutritionTarget.rulesVersion and ScoreDaySnapshot carry.
+  rulesVersion String   @default("v1")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@schema("health")
+}
+
 // FR-08. Which nudge types a user has switched off. A row means "stop
 // sending me this one" — absence means allowed, so the default is opt-in
 // without needing a row per user per type.

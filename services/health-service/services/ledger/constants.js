@@ -296,3 +296,34 @@ export const DECIMAL_PLACES = {
   grams: 2,
   totals: 2,
 };
+
+// The legal range of every slider on the app's "Your plan" screen, as the
+// server states it.
+//
+// These are RULES, not styling: a kcal floor that differs between this service
+// and the client is a slider the server refuses, and a refusal the user can
+// reproduce by dragging is a bug report the client cannot answer. So they live
+// here rather than in the app, and the bounds travel with every response
+// instead of being fetched separately.
+//
+// kcal's floor and ceiling are NOT in here - they depend on the person (BMR,
+// sex, maintenance) and are computed per request in prescriptionService.js.
+// Only their shape is fixed: the step, and how far above maintenance the cap
+// may sit before it stops being a plan and starts being a number nobody
+// checked.
+export const PRESCRIPTION_BOUNDS = {
+  stepsPerDay: { min: 2000, max: 25000, step: 500 },
+  sleepMinutes: { min: 300, max: 540, step: 15 },
+  kcal: { step: 50, capFactor: 1.4, capFloor: 4500 },
+};
+
+// Bumped when the rules that turn the three saved numbers into a plan change,
+// so a plan written last month is still explicable after a retune. Same
+// contract as NutritionTarget.rulesVersion; see Prescription in the schema.
+export const PRESCRIPTION_RULES_VERSION = 'v1';
+
+// What the plan assumes about sleep for someone who has never said. Seven
+// hours: the middle of the range the sleep literature treats as adequate for
+// an adult, and a number nobody has to be talked into. The slider's own range
+// (300-540) is in PRESCRIPTION_BOUNDS; this is only the starting point.
+export const DEFAULT_SLEEP_MINUTES = 420;

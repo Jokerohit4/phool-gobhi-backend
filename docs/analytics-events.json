@@ -696,6 +696,12 @@
     "since": "2026-09-29",
     "notes": "targets recalculated from current weight. props written, skipped"
   },
+  "health_prescription_saved": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-08",
+    "notes": "the user committed the adjustable plan (calories/steps/sleep/sessions) from the app's Your plan screen. props adjusted, had_workout. Shape only and deliberately so: a calorie target and a sleep window are health data, and this dictionary is read by everyone who can query the analytics database. `adjusted` is whether the server had to move any of the four back into its legal range - a rate that climbs says our bounds and people's expectations have drifted apart, which is the one thing about this feature worth watching. Preview drags emit nothing: they are a question, not a commitment, and counting them would make a slider someone explored look like a plan someone chose."
+  },
   "health_food_added": {
     "source": "server",
     "service": "health-service",
