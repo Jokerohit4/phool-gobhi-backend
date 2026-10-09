@@ -921,5 +921,53 @@
     "service": "challenge-service",
     "since": "2026-10-04",
     "notes": "props challenge_id, spawn_id, caught, reason (already_gone | too_far | lost_race | null), species_key, rarity, coins_awarded, distance_bucket. Every non-catch is recorded with its cause: too_far means the spawn was visible but out of reach (a spawn-radius or client-GPS problem), already_gone and lost_race are other users winning it. distance_bucket is rounded to 100m and capped at 50 so it can never become a location log"
+  },
+  "workout_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "a new workout session was created and the live screen opened \u2014 props has_template (bool). Resuming an in-progress or check-in-drafted session does NOT fire this, so it counts genuinely-new workouts"
+  },
+  "workout_set_completed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "a set's tick landed on the server \u2014 props set_number. Fired only on completing, never on the undo, so it is the count of sets actually logged. No weight/reps: a plate is a diet detail, a weight is a training one, and neither is needed to see whether the workout screen is being used"
+  },
+  "workout_exercise_added": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "an exercise was added to the live session \u2014 props exercise_id. Mid-workout additions are how the empty-start workout is actually built"
+  },
+  "workout_paused": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "props elapsed_s (gym-floor seconds so far)"
+  },
+  "workout_resumed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "props elapsed_s (gym-floor seconds so far). Paired with workout_paused to measure how often a session is interrupted and whether it survives"
+  },
+  "workout_finished": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "the session was saved on the server \u2014 props type, rpe, sets_completed, duration_s. The other half of the funnel: workout_started without workout_finished is the abandonment signal"
   }
 }
