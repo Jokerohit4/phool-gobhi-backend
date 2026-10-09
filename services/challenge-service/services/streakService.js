@@ -2,15 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
+import { startOfIsoWeek } from '../utils/isoWeek.js';
 const prisma = new PrismaClient();
-
-function startOfIsoWeek(date) {
-  const d = new Date(date);
-  const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  d.setUTCDate(d.getUTCDate() - day);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
 
 // Idempotent on idempotencyKey — booking-service's fire-and-forget call to
 // POST /internal/attendance-events can retry freely without double-counting

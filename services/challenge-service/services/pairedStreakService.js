@@ -3,19 +3,13 @@ import { verifyMatchMembership } from './buddyServiceClient.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
+import { startOfIsoWeek } from '../utils/isoWeek.js';
 const prisma = new PrismaClient();
 
-// Same normalization as streakService's startOfIsoWeek — duplicated rather
-// than imported since this needs to match whatever weekStart streakService
-// actually stored on UserStreakWeek for the same close-week run, and the
-// controller passes through the same raw pre-normalization date to both.
-function startOfIsoWeek(date) {
-  const d = new Date(date);
-  const day = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - day);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
+// startOfIsoWeek is shared with streakService (utils/isoWeek.js) so both
+// normalize the close-week target to the same IST Monday — if they ever
+// disagreed, advancePairedStreaksService would query a weekStart that
+// streakService never wrote and silently see every pair as unqualified.
 
 // Either member can opt the pair in — this build auto-enrolls both rather
 // than building a separate invite/accept sub-flow, a deliberate scope cut
