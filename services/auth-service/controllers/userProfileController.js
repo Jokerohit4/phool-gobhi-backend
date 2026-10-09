@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 
 const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
+const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // Someone at least this old must hold an account — mirrors the client-side
 // check (phool-gobhi-website lib/age.ts) so the API rejects under-age DOBs
@@ -197,6 +198,76 @@ export const getProfile = async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ data: formatUser(user) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// GET /users/linked-gym/:gymId — the member-scoped read of the gym this
+// customer joined through (User.linkedGymId).
+//
+// Why this exists instead of GET /api/gyms/:id: the public read is
+// marketplace-gated (gymService.getGymById throws 404 when
+// !marketplaceEnabled || !isActive || !isApproved), and the linked-member home
+// is exactly the screen built for the people those gates exclude — a partner
+// running attendance-SaaS only never flips marketplaceEnabled on, so their
+// members used to land on "Couldn't load your gym" with check-in, score,
+// workouts and everything else on the page unreachable behind it.
+//
+// This path reads gym-service's /internal/:id, which only 404s when the row
+// genuinely does not exist, and it refuses any gym the caller is not linked
+// to — so a member can only ever read their own gym, regardless of what the
+// public list would let them see.
+//
+// Status contract the app's home renders off:
+//   200 {data: gym}  -> pinned hero + the rest of the page
+//   404              -> "no gym to show" (not linked, not yours, or the row is
+//                       gone): banner + the rest of the page, not an error
+//   502              -> gym-service unreachable: a real failure, so the app
+//                       offers a retry instead of silently downgrading to the
+//                       banner
+export const getLinkedGym = async (req, res) => {
+  try {
+    const userId = parseInt(req.headers['x-user-id']);
+    const gymId = parseInt(req.params.gymId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!Number.isInteger(gymId) || gymId <= 0) {
+      return res.status(400).json({ error: 'gymId must be a positive integer' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { linkedGymId: true },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Scoped to the member: anything they aren't linked to is indistinguishable
+    // from a gym that doesn't exist, so the caller can't use this route to
+    // read gyms the marketplace would have hidden from them.
+    if (user.linkedGymId !== gymId) return res.status(404).json({ error: 'Gym not found' });
+
+    let payload;
+    try {
+      const headers = {
+        'x-internal-key': INTERNAL_API_KEY,
+        ...(await googleIdTokenHeader(GYM_SERVICE_URL)),
+      };
+      const resp = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, { headers });
+      if (resp.status === 404) return res.status(404).json({ error: 'Gym not found' });
+      if (!resp.ok) throw new Error(`gym-service responded ${resp.status}`);
+      payload = await resp.json();
+    } catch (err) {
+      // Not a 404: the client must be able to tell "you have no gym" from
+      // "we couldn't reach the gym service", or a transient outage would read
+      // as a permanently missing gym.
+      console.error('[linked-gym] gym-service lookup failed:', err.message);
+      return res.status(502).json({ error: 'Could not load your gym' });
+    }
+
+    const gym = payload?.data ?? payload;
+    if (!gym || gym.id == null) return res.status(404).json({ error: 'Gym not found' });
+    res.json({ data: gym });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }

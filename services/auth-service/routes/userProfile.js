@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getOrCreateProfile,
   getProfile,
+  getLinkedGym,
   updateProfile,
   updateAppMode,
   uploadProfilePicture,
@@ -16,6 +17,10 @@ import { uploadProfilePicture as uploadProfilePictureMiddleware } from '../utils
 const router = Router();
 
 router.post('/', getOrCreateProfile);
+// Declared above the /:userId routes: it is a different, member-scoped read
+// (the linked-member home's gym) and must never be swallowed by
+// router.get('/:userId') treating "linked-gym" as a user id.
+router.get('/linked-gym/:gymId', getLinkedGym);
 router.get('/:userId', getProfile);
 router.put('/:userId', updateProfile);
 // Separate from PUT /:userId on purpose — updateProfile DERIVES appMode from
