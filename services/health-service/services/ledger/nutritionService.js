@@ -21,9 +21,14 @@ import {
 } from './constants.js';
 
 import { rankFoods } from './foodMatch.js';
+import { isIsoDay } from './isoDay.js';
 
 const GRAMS_MAX = 5000;
 const SERVINGS_MAX = 50;
+// A ceiling on a hand-entered calorie figure, same spirit as GRAMS_MAX: a guard
+// against a fat-fingered extra digit, not a judgement about the meal. Well above
+// any single food, so it only ever catches a typo.
+const KCAL_MAX_QUICK = 5000;
 
 // Nutrients that make up a log's snapshot. Kept as one list because the
 // snapshot, the day total, and the delta-from-target all have to agree on
@@ -310,11 +315,89 @@ export function isUnknownSnapshot(nutrients) {
 }
 
 /**
+ * Log a food the user typed themselves, with an approximate calorie figure.
+ *
+ * The third writer, after [logFood] (catalogue) and [logUnknownFood]
+ * (photo_unmatched). It covers the case those two cannot: a food the catalogue
+ * does not carry that the user still knows the energy of - "a plate of mom's
+ * rajma, about 350". [logUnknownFood] is present-but-unmeasured and adds
+ * nothing to the day; this row is a deliberate estimate and DOES count, because
+ * a number the user chose is more honest than a hole in the day.
+ *
+ * The name and the calories are both required and the calories must be
+ * positive: this is an explicit estimate, never an implicit zero. The macro
+ * fields are left at 0 rather than back-filled - the user gave one number, and
+ * splitting it into protein/carbs/fat would be inventing three numbers from
+ * one. Written with source `custom`, so it can be told apart from a catalogue
+ * log when the catalogue catches up.
+ */
+export async function logQuickFood(
+  prisma,
+  { userId, localDate, slot, name, kcal, grams = 100, servingLabel = null },
+) {
+  if (!MEAL_SLOTS.includes(slot)) {
+    throw badRequest(`slot must be one of: ${MEAL_SLOTS.join(', ')}`);
+  }
+
+  const cleanName = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  if (!cleanName) {
+    throw badRequest('Name the food you ate', 'NAME_REQUIRED');
+  }
+
+  const calories = Number(kcal);
+  if (!(calories > 0)) {
+    throw badRequest('Enter the approximate calories', 'KCAL_REQUIRED');
+  }
+  if (calories > KCAL_MAX_QUICK) {
+    throw badRequest(`That is over ${KCAL_MAX_QUICK} kcal for one food`);
+  }
+
+  // Grams is the record of the portion, not the basis of the number: the user
+  // gave the energy for the whole thing, so the snapshot is that figure and not
+  // a per-100 g scaling of it.
+  const resolvedGrams = Number(grams);
+  if (!(resolvedGrams > 0)) {
+    throw badRequest('Provide grams for the item');
+  }
+  if (resolvedGrams > GRAMS_MAX) {
+    throw badRequest(`That is over ${GRAMS_MAX} g, which is more food than one meal`);
+  }
+
+  const nutrients = emptyTotals();
+  nutrients.kcal = roundTo(calories, DECIMAL_PLACES.nutrients);
+
+  return prisma.foodLog.create({
+    data: {
+      userId,
+      localDate,
+      slot,
+      foodItemId: null,
+      grams: roundTo(resolvedGrams, DECIMAL_PLACES.grams),
+      servingLabel: servingLabel || null,
+      servings: null,
+      nutrients,
+      source: 'custom',
+      photoCorrections: 0,
+      name: cleanName,
+      nonVeg: false,
+    },
+  });
+}
+
+/**
  * Totals for one local date, broken down by meal slot.
  *
  * Reads `nutrients` off each log rather than joining FoodItem, for the snapshot
  * reason above. A photo_unmatched row is counted (it is a real entry in the
  * meal) but never added to any sum - see isUnknownSnapshot.
+ *
+ * The rows ride along as `logs`. They were already in memory - the loop below
+ * is standing in them - and the food card needs both halves: a day cannot be
+ * listed under its meals from a count, and a count shown above rows from a
+ * different read can disagree with them by one entry. One read also costs no
+ * extra round trip, which matters because a day load already spends four, and
+ * a response with no `logs` key at all parses as an empty list rather than as
+ * a failure, so an older service degrades to "counts without rows".
  */
 export async function getDayTotals(prisma, userId, localDate) {
   const logs = await prisma.foodLog.findMany({
@@ -341,7 +424,7 @@ export async function getDayTotals(prisma, userId, localDate) {
     addInto(day, log.nutrients);
   }
 
-  return { localDate, totals: day, bySlot, logCount: logs.length, pendingCount };
+  return { localDate, totals: day, bySlot, logCount: logs.length, pendingCount, logs };
 }
 
 /**
@@ -379,6 +462,96 @@ export async function deleteLog(prisma, userId, logId) {
   const existing = await prisma.foodLog.findFirst({ where: { id: Number(logId), userId } });
   if (!existing) throw notFound('No such food log');
   return prisma.foodLog.delete({ where: { id: existing.id } });
+}
+
+/**
+ * Correct one logged food: its size, the label it was filed under, or the meal
+ * it sits in.
+ *
+ * The snapshot rule has exactly one exception and it is worth spelling out,
+ * because this looks like a violation of it. When the PORTION changes the
+ * nutrients are recomputed from the food's own per-100 g numbers - but that is
+ * the user correcting their own entry against numbers that have not moved, not
+ * a catalogue edit reaching back into a past day. What the rule still forbids,
+ * and what no code path here can do, is an admin editing a FoodItem and having
+ * it rewrite what someone ate last Tuesday.
+ *
+ * A row with no food behind it - a photo line this catalogue could not name, or
+ * a food since deleted (FoodItem is onDelete: SetNull) - cannot be re-portioned,
+ * because there is nothing left to scale. Its meal and label can still move, so
+ * the refusal says which part is impossible rather than refusing the whole edit.
+ *
+ * Returns the row, the same shape POST /food-logs and DELETE /food-logs/:id
+ * already return, so a caller has one thing to parse.
+ */
+export async function updateLog(prisma, userId, logId, { grams, servings, servingLabel, slot } = {}) {
+  const existing = await prisma.foodLog.findFirst({
+    where: { id: Number(logId), userId },
+  });
+  if (!existing) throw notFound('No such food log');
+
+  const changes = {};
+
+  if (slot != null) {
+    if (!MEAL_SLOTS.includes(slot)) {
+      throw badRequest(`slot must be one of: ${MEAL_SLOTS.join(', ')}`);
+    }
+    changes.slot = slot;
+  }
+
+  const wantsPortion = grams != null || servings != null;
+  const wantsLabel = servingLabel !== undefined;
+
+  if (wantsPortion) {
+    const food =
+      existing.foodItemId != null
+        ? await prisma.foodItem.findUnique({ where: { id: existing.foodItemId } })
+        : null;
+    if (!food) {
+      throw badRequest(
+        isUnknownSnapshot(existing.nutrients)
+          ? 'That entry has no nutrition attached, so its size cannot be changed - remove it and log it again'
+          : 'That food is no longer in the list, so its size cannot be changed - remove it and log it again',
+        'NO_FOOD_TO_SCALE',
+      );
+    }
+    // A user may resize their own custom food, and never somebody else's -
+    // the same rule logFood applies, checked again here for the same reason:
+    // this is a second path to the catalogue.
+    if (food.createdByUserId != null && food.createdByUserId !== userId) {
+      throw notFound('That food is not in the catalogue');
+    }
+
+    const resolvedGrams = toGrams(grams, servings, food);
+    if (!(resolvedGrams > 0)) {
+      throw badRequest('Provide grams, or a serving count for a food that has servings');
+    }
+    if (resolvedGrams > GRAMS_MAX) {
+      throw badRequest(`That is over ${GRAMS_MAX} g, which is more food than one meal`);
+    }
+
+    changes.grams = roundTo(resolvedGrams, DECIMAL_PLACES.grams);
+    changes.servings = servings != null ? Number(servings) : null;
+    changes.nutrients = computePortion(food, resolvedGrams);
+    // The old label described the old portion - "2 rotis" sitting on top of
+    // 150 g is a lie the moment the number moves. Cleared unless the caller
+    // supplies the one that matches now; an absent label falls back to the
+    // gram weight on the client.
+    if (!wantsLabel) changes.servingLabel = null;
+
+    // The photo feature's launch metric is "how many photo-derived rows did the
+    // user have to correct", and the confirm-time counter cannot see an edit
+    // made afterwards. A resize of a photo row is exactly that correction.
+    if (existing.photoPath != null) {
+      changes.photoCorrections = Number(existing.photoCorrections) + 1;
+    }
+  }
+
+  if (wantsLabel) changes.servingLabel = servingLabel || null;
+
+  if (Object.keys(changes).length === 0) throw badRequest('Nothing to change');
+
+  return prisma.foodLog.update({ where: { id: existing.id }, data: changes });
 }
 
 /**
@@ -430,6 +603,15 @@ export async function saveMeal(prisma, { userId, name, slot, localDate }) {
  * worth logging even if the cheese went.
  */
 export async function logSavedMeal(prisma, { userId, savedMealId, localDate, slot }) {
+  // The day is required and validated, unlike the search path's optional date,
+  // because this write is many rows at once and there is no day for them to be
+  // scoped to otherwise: an empty `localDate` still satisfies the column type,
+  // so the repeat would report success while writing rows that `getDayTotals`
+  // — which queries `where: { localDate }` — could never match again. The
+  // client sends the device date, and this refuses to trust it blindly.
+  if (!isIsoDay(localDate)) {
+    throw badRequest('localDate must be YYYY-MM-DD');
+  }
   // `include: { lines: true }` is load-bearing, not a convenience. Everything
   // below iterates meal.lines; the include was missing, so a real Prisma client
   // returned a meal with no `lines` property at all and this threw on the first

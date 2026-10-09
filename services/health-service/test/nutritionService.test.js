@@ -11,11 +11,13 @@ import {
   getDayTotals,
   isUnknownSnapshot,
   logFood,
+  logQuickFood,
   logUnknownFood,
   logSavedMeal,
   progressAgainstTarget,
   saveMeal,
   searchFoods,
+  updateLog,
 } from '../services/ledger/nutritionService.js';
 
 function mockPrisma(overrides = {}) {
@@ -31,6 +33,7 @@ function mockPrisma(overrides = {}) {
       findMany: async () => [],
       findFirst: async () => null,
       delete: async (args) => ({ id: args.where.id }),
+      update: async (args) => ({ ...args.where, ...args.data }),
       ...overrides.foodLog,
     },
     savedMeal: {
@@ -274,6 +277,174 @@ test('every slot is present even on an empty day', async () => {
     assert.ok(day.bySlot[slot], `${slot} missing from an empty day`);
     assert.equal(day.bySlot[slot].totals.kcal, 0);
   }
+  assert.deepEqual(day.logs, [], 'an empty day lists nothing');
+});
+
+test('day totals carry the rows themselves, not just their sum', async () => {
+  // The food card lists what was eaten under each meal, so the rows have to
+  // arrive with the numbers. They come from the same read the loop above
+  // already did: a count and a list fetched separately can disagree by one
+  // entry, and the count is printed directly over the list.
+  const rows = [
+    { id: 11, slot: 'breakfast', name: 'Poha', nutrients: { kcal: 260 } },
+    { id: 12, slot: 'lunch', name: 'Dal', nutrients: { kcal: 530 } },
+  ];
+  const prisma = mockPrisma({ foodLog: { findMany: async () => rows } });
+  const day = await getDayTotals(prisma, 7, '2026-09-28');
+  assert.equal(day.logs.length, 2);
+  assert.equal(day.logs[0].name, 'Poha');
+  assert.equal(day.logCount, day.logs.length);
+});
+
+// --- correcting one entry --------------------------------------------------
+
+const LOGGED = {
+  id: 42,
+  userId: 7,
+  foodItemId: 1,
+  slot: 'lunch',
+  grams: 150,
+  servingLabel: '150 g',
+  servings: null,
+  nutrients: { kcal: 195 },
+  source: 'search',
+  photoCorrections: 0,
+  photoPath: null,
+};
+
+test('resizing an entry recomputes its snapshot from the food', async () => {
+  let seen;
+  const prisma = mockPrisma({
+    foodItem: { findUnique: async () => RICE },
+    foodLog: {
+      findFirst: async () => ({ ...LOGGED }),
+      update: async (a) => ((seen = a.data), { id: 42, ...a.data }),
+    },
+  });
+  const out = await updateLog(prisma, 7, 42, { grams: 1000 });
+  assert.equal(seen.grams, 1000);
+  assert.equal(seen.nutrients.kcal, 1300, '1000 g of a 130 kcal/100 g food');
+  assert.equal(seen.servings, null);
+  // The old label described the old portion, so it goes with it.
+  assert.equal(seen.servingLabel, null);
+  assert.equal(out.id, 42);
+});
+
+test('a resize into a custom food the user does not own is a 404', async () => {
+  const prisma = mockPrisma({
+    foodItem: { findUnique: async () => ({ ...CUSTOM, createdByUserId: 99 }) },
+    foodLog: { findFirst: async () => ({ ...LOGGED }) },
+  });
+  await assert.rejects(() => updateLog(prisma, 7, 42, { grams: 200 }), (err) => err.status === 404);
+});
+
+test('the meal a log sits in can be moved on its own', async () => {
+  let seen;
+  const prisma = mockPrisma({
+    foodLog: {
+      findFirst: async () => ({ ...LOGGED }),
+      update: async (a) => ((seen = a.data), { id: 42, ...a.data }),
+    },
+  });
+  await updateLog(prisma, 7, 42, { slot: 'dinner' });
+  assert.equal(seen.slot, 'dinner');
+  assert.equal(seen.nutrients, undefined, 'moving a row must not touch its numbers');
+  assert.equal(seen.grams, undefined);
+});
+
+test('a row with no food behind it cannot be re-portioned', async () => {
+  // Two different rows reach this: a photo line the catalogue never matched,
+  // and a food since deleted (onDelete: SetNull). Neither has anything left to
+  // scale, so the size is refused - but the meal can still move, and the
+  // message has to say which half is impossible rather than failing the whole
+  // edit with a bare 400.
+  const unmatched = {
+    ...LOGGED,
+    id: 51,
+    foodItemId: null,
+    nutrients: { unknown: true },
+    photoPath: 'food/7/abc.jpg',
+  };
+  const prisma = mockPrisma({
+    foodLog: { findFirst: async () => ({ ...unmatched }) },
+  });
+  await assert.rejects(
+    () => updateLog(prisma, 7, 51, { grams: 200 }),
+    (err) => err.status === 400 && err.code === 'NO_FOOD_TO_SCALE' && /no nutrition attached/.test(err.message),
+  );
+  // ...and the part that does not need a food still goes through.
+  const moved = mockPrisma({
+    foodLog: {
+      findFirst: async () => ({ ...unmatched }),
+      update: async (a) => ({ id: 51, ...a.data }),
+    },
+  });
+  const out = await updateLog(moved, 7, 51, { slot: 'snack' });
+  assert.equal(out.slot, 'snack');
+});
+
+test('correcting a photo row counts against the photo feature metric', async () => {
+  // The launch metric is "photo-derived rows the user had to correct". The
+  // confirm-time counter cannot see an edit made afterwards, so a resize of a
+  // photo row is exactly the correction it is missing.
+  let seen;
+  const prisma = mockPrisma({
+    foodItem: { findUnique: async () => RICE },
+    foodLog: {
+      findFirst: async () => ({ ...LOGGED, photoPath: 'food/7/abc.jpg', photoCorrections: 1 }),
+      update: async (a) => ((seen = a.data), { id: 42, ...a.data }),
+    },
+  });
+  await updateLog(prisma, 7, 42, { grams: 200 });
+  assert.equal(seen.photoCorrections, 2);
+
+  // A search row is not a photo row, so it never moves the counter.
+  const plain = mockPrisma({
+    foodItem: { findUnique: async () => RICE },
+    foodLog: {
+      findFirst: async () => ({ ...LOGGED }),
+      update: async (a) => ((seen = a.data), { id: 42, ...a.data }),
+    },
+  });
+  await updateLog(plain, 7, 42, { grams: 200 });
+  assert.equal(seen.photoCorrections, undefined);
+});
+
+test('an edit that changes nothing, or reaches for someone else, is refused', async () => {
+  const empty = mockPrisma({ foodLog: { findFirst: async () => ({ ...LOGGED }) } });
+  await assert.rejects(
+    () => updateLog(empty, 7, 42, {}),
+    (err) => err.status === 400 && /Nothing to change/.test(err.message),
+  );
+
+  const missing = mockPrisma({ foodLog: { findFirst: async () => null } });
+  await assert.rejects(
+    () => updateLog(missing, 7, 999, { grams: 100 }),
+    (err) => err.status === 404,
+  );
+
+  const badSlot = mockPrisma({ foodLog: { findFirst: async () => ({ ...LOGGED }) } });
+  await assert.rejects(
+    () => updateLog(badSlot, 7, 42, { slot: 'midnight' }),
+    /slot must be one of/,
+  );
+});
+
+test('a FoodLog update only names columns the model has', async () => {
+  // Same hole as the create test above: the mock accepts any key, so a typo in
+  // an UPDATE passes here and fails against a real database.
+  let data;
+  const prisma = mockPrisma({
+    foodItem: { findUnique: async () => RICE },
+    foodLog: {
+      findFirst: async () => ({ ...LOGGED }),
+      update: async (a) => ((data = a.data), { id: 42, ...a.data }),
+    },
+  });
+  await updateLog(prisma, 7, 42, { grams: 250, slot: 'dinner', servingLabel: 'a bowl' });
+  const fields = modelFields('FoodLog');
+  const unknown = Object.keys(data).filter((k) => !fields.has(k));
+  assert.deepEqual(unknown, [], `FoodLog has no column(s): ${unknown.join(', ')}`);
 });
 
 // --- known-unknown rows (photo_unmatched) ------------------------------------
@@ -345,6 +516,68 @@ test('logUnknownFood requires a name and a real slot and sane grams', async () =
   await assert.rejects(
     () => logUnknownFood(mockPrisma(), { ...base, grams: 99999 }),
     /more food than one meal/,
+  );
+});
+
+test('logQuickFood stores a user-typed food with a calorie it actually counts', async () => {
+  // The third writer. It must WRITE NUMBERS, not a sentinel - a hand-entered
+  // "about 350" is a deliberate estimate and belongs in the day's total, which
+  // is the whole point of choosing it over "log without nutrition".
+  let created;
+  const prisma = mockPrisma({
+    foodLog: { create: async (a) => ((created = a.data), { id: 1, ...a.data }) },
+  });
+  const log = await logQuickFood(prisma, {
+    userId: 7,
+    localDate: '2026-09-28',
+    slot: 'lunch',
+    name: "Mom's rajma",
+    kcal: 350,
+    grams: 250,
+    servingLabel: '1 katori',
+  });
+
+  assert.equal(log.source, 'custom');
+  assert.equal(log.foodItemId, null);
+  assert.equal(log.name, "Mom's rajma");
+  assert.equal(created.nutrients.kcal, 350);
+  // The macros are NOT back-filled from the one number the user gave.
+  assert.equal(created.nutrients.proteinG, 0);
+  assert.equal(created.nutrients.fatG, 0);
+  assert.equal(isUnknownSnapshot(created.nutrients), false);
+  assert.equal(created.grams, 250);
+  // It is a real number, so a day totals read sums it.
+  const day = await getDayTotals(
+    mockPrisma({ foodLog: { findMany: async () => [{ slot: 'lunch', nutrients: created.nutrients }] } }),
+    7,
+    '2026-09-28',
+  );
+  assert.equal(day.totals.kcal, 350);
+  assert.equal(day.pendingCount, 0);
+});
+
+test('logQuickFood requires a name, positive calories and sane grams', async () => {
+  const base = { userId: 7, localDate: '2026-09-28', slot: 'lunch', name: 'Something', kcal: 200, grams: 100 };
+  await assert.rejects(
+    () => logQuickFood(mockPrisma(), { ...base, name: '  ' }),
+    (err) => err.status === 400 && err.code === 'NAME_REQUIRED',
+  );
+  // No calories is not a zero-calorie food; it is an unfinished entry.
+  await assert.rejects(
+    () => logQuickFood(mockPrisma(), { ...base, kcal: 0 }),
+    (err) => err.status === 400 && err.code === 'KCAL_REQUIRED',
+  );
+  await assert.rejects(
+    () => logQuickFood(mockPrisma(), { ...base, kcal: 99999 }),
+    /over 5000 kcal/,
+  );
+  await assert.rejects(
+    () => logQuickFood(mockPrisma(), { ...base, grams: 0 }),
+    /Provide grams/,
+  );
+  await assert.rejects(
+    () => logQuickFood(mockPrisma(), { ...base, slot: 'midnight' }),
+    /slot must be one of/,
   );
 });
 
@@ -486,6 +719,28 @@ test('another user\'s saved meal cannot be repeated', async () => {
   await assert.rejects(
     () => logSavedMeal(prisma, { userId: 7, savedMealId: 5, localDate: '2026-09-29' }),
     /No such saved meal/,
+  );
+});
+
+test('an empty localDate is refused rather than logged to no day', async () => {
+  // The client once sent '' when the day read had not landed. createMany would
+  // have accepted it - the column is a String - so the repeat would have
+  // reported success while writing rows `getDayTotals` (`where: { localDate }`)
+  // could never match again.
+  const prisma = mockPrisma({
+    foodLog: { createMany: async () => { throw new Error('must not write'); } },
+  });
+  await assert.rejects(
+    () => logSavedMeal(prisma, { userId: 7, savedMealId: 5, localDate: '' }),
+    /localDate must be YYYY-MM-DD/,
+  );
+});
+
+test('a malformed localDate is refused', async () => {
+  const prisma = mockPrisma({});
+  await assert.rejects(
+    () => logSavedMeal(prisma, { userId: 7, savedMealId: 5, localDate: '2026-13-45' }),
+    /localDate must be YYYY-MM-DD/,
   );
 });
 

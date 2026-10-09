@@ -729,6 +729,57 @@ export const FOODS = [
     kcal: 310, proteinG: 11.0, carbsG: 52.0, fatG: 6.0, fibreG: 8.0,
     ironMg: 3.5, magnesiumMg: 75, calciumMg: 50, zincMg: 1.8,
     servings: [{ label: '1 chapati', grams: 45 }] },
+
+  // --- Common urban foods, second pass ------------------------------------
+  // The gaps an audit found by searching the app the way a person does: a tapri
+  // coffee, a plate of Maggi, a vada pav on the way home, a sandwich at the
+  // desk. These are logged constantly and their absence pushed every entry into
+  // the request queue instead of the diary. Same rules as above: per 100 g of
+  // the named `basis`, `estimate` provenance, unverified.
+  { name: 'Coffee, with milk', aliases: ['coffee', 'kaapi', 'filter coffee', 'milk coffee'], basis: 'as_served', veg: true,
+    // Per 100 g of the drink as poured; a cup is the serving below.
+    kcal: 30, proteinG: 1.0, carbsG: 3.0, fatG: 1.5, fibreG: 0,
+    ironMg: 0.1, magnesiumMg: 8, calciumMg: 40, zincMg: 0.2,
+    servings: [{ label: '1 cup', grams: 150 }] },
+  { name: 'Coffee, black', aliases: ['black coffee', 'americano'], basis: 'as_served', veg: true,
+    // Almost nothing, but people log it and "no coffee" is worse than 2 kcal.
+    kcal: 2, proteinG: 0.1, carbsG: 0.3, fatG: 0.0, fibreG: 0,
+    ironMg: 0, magnesiumMg: 3, calciumMg: 2, zincMg: 0,
+    servings: [{ label: '1 cup', grams: 150 }] },
+  { name: 'Cold coffee', aliases: ['cold coffee', 'iced coffee', 'frappe'], basis: 'as_served', veg: true,
+    kcal: 90, proteinG: 2.5, carbsG: 14.0, fatG: 2.5, fibreG: 0,
+    ironMg: 0.1, magnesiumMg: 12, calciumMg: 70, zincMg: 0.3,
+    servings: [{ label: '1 glass', grams: 200 }] },
+  { name: 'Maggi / instant noodles, cooked', aliases: ['maggi', 'instant noodles', 'ready noodles', 'cup noodles'], basis: 'cooked', veg: true,
+    // 'noodles' is deliberately NOT an alias here: it already belongs to pasta
+    // (see the Staples section), and sharing it would make one of the two
+    // unreachable by its own word.
+    kcal: 150, proteinG: 3.5, carbsG: 20.0, fatG: 6.5, fibreG: 1.0,
+    ironMg: 1.5, magnesiumMg: 20, calciumMg: 15, zincMg: 0.6,
+    servings: [{ label: '1 packet', grams: 220 }] },
+  { name: 'Vada pav', aliases: ['vada pav', 'vadapav', 'wada pav'], basis: 'as_served', veg: true,
+    kcal: 250, proteinG: 5.0, carbsG: 38.0, fatG: 9.0, fibreG: 2.5,
+    ironMg: 1.8, magnesiumMg: 35, calciumMg: 30, zincMg: 0.9,
+    servings: [{ label: '1 vada pav', grams: 130 }] },
+  { name: 'Sandwich, vegetable', aliases: ['sandwich', 'veg sandwich', 'vegetable sandwich'], basis: 'as_served', veg: true,
+    // Two slices of bread with a vegetable filling and a little chutney. The
+    // grilled/buttered version is heavier; this is the everyday default.
+    kcal: 210, proteinG: 6.0, carbsG: 30.0, fatG: 7.0, fibreG: 2.0,
+    ironMg: 1.8, magnesiumMg: 30, calciumMg: 45, zincMg: 0.8,
+    servings: [{ label: '1 sandwich', grams: 120 }] },
+  { name: 'Pav bhaji', aliases: ['pav bhaji', 'pavbhaji', 'bhaji pav'], basis: 'as_served', veg: true,
+    // Per 100 g of bhaji with its pav; a plate is two pav and a ladle of bhaji.
+    kcal: 130, proteinG: 3.0, carbsG: 16.0, fatG: 6.0, fibreG: 2.5,
+    ironMg: 1.5, magnesiumMg: 25, calciumMg: 30, zincMg: 0.7,
+    servings: [{ label: '1 plate', grams: 250 }] },
+  { name: 'Pani puri', aliases: ['pani puri', 'golgappa', 'puchka', 'gol gappa'], basis: 'as_served', veg: true,
+    kcal: 180, proteinG: 3.0, carbsG: 25.0, fatG: 7.0, fibreG: 1.5,
+    ironMg: 1.4, magnesiumMg: 22, calciumMg: 25, zincMg: 0.6,
+    servings: [{ label: '6 puris', grams: 100 }] },
+  { name: 'Aloo tikki', aliases: ['aloo tikki', 'tikki', 'potato tikki'], basis: 'as_served', veg: true,
+    kcal: 250, proteinG: 4.0, carbsG: 32.0, fatG: 12.0, fibreG: 3.0,
+    ironMg: 1.6, magnesiumMg: 30, calciumMg: 25, zincMg: 0.7,
+    servings: [{ label: '1 tikki', grams: 90 }] },
 ];
 
 // Seed-time validation, so a bad row fails the person adding it rather than

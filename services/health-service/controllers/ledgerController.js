@@ -418,6 +418,24 @@ export const refreshFoodEmbeddings = handle(async (req) => {
 
 export const logFood = handle(async (req) => {
   const b = req.body || {};
+  // Two ways in, one route. A catalogue log carries `foodItemId`; a hand-typed
+  // one carries `name` + `kcal` instead. Branching here rather than adding a
+  // second route keeps the client's one "log a food" call one call, and the
+  // service refuses a body that has neither (or both) by what it validates.
+  if (b.foodItemId == null && (b.name != null || b.kcal != null)) {
+    const out = await nutritionService.logQuickFood(prisma, {
+      userId: req.userId,
+      localDate: b.localDate,
+      slot: b.slot,
+      name: b.name,
+      kcal: isNum(b.kcal) ? Number(b.kcal) : b.kcal,
+      grams: isNum(b.grams) ? Number(b.grams) : 100,
+      servingLabel: b.servingLabel,
+    });
+    track('health_food_logged', req.userId, { slot: b.slot, source: 'custom' });
+    return out;
+  }
+
   const out = await nutritionService.logFood(prisma, {
     userId: req.userId,
     localDate: b.localDate,
@@ -473,6 +491,20 @@ export const deleteFoodLog = handle(async (req) => {
   }
 
   return deleted;
+});
+
+// A correction, not an overwrite: the service decides which parts of the row
+// may move and recomputes the snapshot when the portion does. Every body field
+// is optional and an absent one means "leave it alone", which is why a missing
+// number arrives as null rather than as undefined-or-zero.
+export const updateFoodLog = handle(async (req) => {
+  const b = req.body || {};
+  return nutritionService.updateLog(prisma, req.userId, req.params.id, {
+    grams: isNum(b.grams) ? Number(b.grams) : null,
+    servings: isNum(b.servings) ? Number(b.servings) : null,
+    servingLabel: b.servingLabel,
+    slot: b.slot,
+  });
 });
 
 export const saveMeal = handle(async (req) => {

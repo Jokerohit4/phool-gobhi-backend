@@ -94,6 +94,13 @@ router.get('/ledger/food-requests', ...nutrition, ledgerCtrl.listFoodRequests);
 router.get('/ledger/food-embeddings', ...nutrition, ledgerCtrl.getFoodEmbeddings);
 router.post('/ledger/food-logs', ...nutrition, ledgerCtrl.logFood);
 router.delete('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.deleteFoodLog);
+// A correction to one row - size, label or meal. Separate from POST above for
+// the same reason PUT and POST are separate: POST makes a row and this one
+// moves an existing one, and a client that cannot tell them apart can double
+// the log it meant to fix. Registered with the rest of the food-log routes so
+// ledgerRoutingGates' "collection before parameterized sibling" rule keeps
+// holding.
+router.patch('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.updateFoodLog);
 router.get('/ledger/food-totals/:localDate', ...nutrition, ledgerCtrl.getDayTotals);
 
 router.get('/ledger/saved-meals', ...nutrition, ledgerCtrl.listSavedMeals);
