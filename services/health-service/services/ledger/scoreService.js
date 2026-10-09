@@ -26,7 +26,10 @@ import { assertGoal } from './goalGuard.js';
 import { currentNutritionTarget } from './currentTarget.js';
 import { isIsoDay } from './isoDay.js';
 import redis from '../../utils/redisClient.js';
-import { blendedScoreCacheKey } from './blendedScoreCache.js';
+import {
+  blendedScoreCacheKey,
+  invalidateBlendedScore,
+} from './blendedScoreCache.js';
 
 const CACHE_TTL = 3600; // 1 hour
 
@@ -167,8 +170,15 @@ export async function closeDay(prisma, { userId, localDate, today }) {
       where: { userId_localDate: { userId, localDate } },
     });
     if (!winner) throw err;
+    await invalidateBlendedScore(userId);
     return { ...winner, alreadyClosed: true, openActions: [] };
   }
+  // Closing a day changes the ledger close the blended score is built from
+  // (`ledgerClose` reads the latest snapshot). Without this the card can sit on
+  // an up-to-an-hour-old blended score right at the moment the day's number is
+  // most worth looking at (audit 2026-10-08, P2). Best-effort: a failed delete
+  // must never fail the close that triggered it.
+  await invalidateBlendedScore(userId);
   return { ...row, openActions: [] };
 }
 
