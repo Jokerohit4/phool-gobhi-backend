@@ -245,3 +245,26 @@ test('a down score feed degrades to member-days-only rather than failing the boa
   assert.equal(result.entries[0].checkIns, 1);
   assert.equal(result.entries[0].score, 0, 'no feed data -> zero composite');
 });
+
+test('global board: others as initials with no photo, requester row marked isMe with full name', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Priya Sharma', profileImageUrl: 'priya.jpg', leaderboardOptIn: true },
+    99: { id: 99, name: 'Requester Person', profileImageUrl: 'me.jpg', leaderboardOptIn: true },
+  };
+  rows = [
+    { customerId: 1, gymId: 9, date: TODAY },
+    { customerId: 99, gymId: 9, date: TODAY },
+  ];
+
+  const result = await getGlobalLeaderboard('weekly', 99);
+  const byId = Object.fromEntries(result.entries.map((e) => [e.customerId, e]));
+  assert.equal(byId[1].displayName, 'P.S.');
+  assert.equal(byId[1].photoUrl, null);
+  assert.equal(byId[1].isMe, false);
+  assert.equal(byId[99].isMe, true);
+  assert.equal(byId[99].name, 'Requester Person');
+  assert.equal(byId[99].photoUrl, 'me.jpg');
+  const json = JSON.stringify(result);
+  assert.ok(!json.includes('Priya') && !json.includes('priya.jpg'));
+});

@@ -321,3 +321,39 @@ test('a down score feed degrades to check-in-only rather than failing the board'
   assert.equal(result.entries[0].checkIns, 1);
   assert.equal(result.entries[0].score, 0, 'no feed data -> zero composite');
 });
+
+test('others appear as initials only -- no full name or photo anywhere in the payload; own row keeps both', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Priya Sharma', profileImageUrl: 'priya.jpg', leaderboardOptIn: true },
+    2: { id: 2, name: 'Bob', profileImageUrl: 'bob.jpg', leaderboardOptIn: true },
+    3: { id: 3, name: null, profileImageUrl: 'x.jpg', leaderboardOptIn: true },
+    4: { id: 4, name: 'Carol Danvers', profileImageUrl: 'carol.jpg', leaderboardOptIn: false }, // opted out
+  };
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 3, gymId: GYM, date: TODAY },
+    { customerId: 4, gymId: GYM, date: TODAY },
+  ];
+
+  const result = await getGymLeaderboard(GYM, 'all', 2); // Bob is asking
+  const byId = Object.fromEntries(result.entries.map((e) => [e.customerId, e]));
+
+  assert.equal(byId[4], undefined, 'opt-out still honoured');
+  assert.equal(byId[1].displayName, 'P.S.');
+  assert.equal(byId[1].name, 'P.S.', 'legacy name field carries initials, never the full name');
+  assert.equal(byId[1].photoUrl, null);
+  assert.equal(byId[1].isMe, false);
+  assert.equal(byId[3].displayName, 'Member', 'no name -> Member');
+  assert.equal(byId[3].photoUrl, null);
+  assert.equal(byId[2].isMe, true);
+  assert.equal(byId[2].name, 'Bob');
+  assert.equal(byId[2].photoUrl, 'bob.jpg');
+
+  const json = JSON.stringify(result);
+  for (const leaked of ['Priya', 'Sharma', 'priya.jpg', 'x.jpg', 'Carol', 'carol.jpg']) {
+    assert.ok(!json.includes(leaked), `payload must not contain ${leaked}`);
+  }
+});

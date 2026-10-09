@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
+import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 
 const prisma = new PrismaClient();
 
@@ -133,8 +134,8 @@ export async function getGlobalLeaderboard(window, requestingCustomerId) {
     .map((r, i) => ({
       rank: i + 1,
       customerId: r.customerId,
-      name: userById[r.customerId]?.name || 'Anonymous',
-      photoUrl: userById[r.customerId]?.profileImageUrl || null,
+      // Others as initials only, no photo; own row keeps name + photo.
+      ...leaderboardIdentity(userById[r.customerId], Number(r.customerId) === Number(requestingCustomerId)),
       checkIns: r.checkIns,
       score: r.score,
       attendanceScore: r.attendanceScore,
