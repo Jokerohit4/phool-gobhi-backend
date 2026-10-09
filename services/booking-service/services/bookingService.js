@@ -1420,7 +1420,7 @@ export function isDueForReminder(booking, nowMs = Date.now()) {
 // never remind twice. The trade is deliberate: a push that fails after the
 // claim is not retried, and one missed reminder beats a duplicate.
 export async function sendSessionReminders({ nowMs = Date.now() } = {}) {
-  const today = todayDateStringIST();
+  const today = todayDateStringIST(nowMs);
   const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
   // Today and tomorrow cover every slot up to 2h ahead, including just after
   // midnight IST.
