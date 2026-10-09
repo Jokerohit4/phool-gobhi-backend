@@ -300,6 +300,22 @@
     "since": "2026-08-18",
     "notes": "gamification wave 1 \u2014 badge shelf opened"
   },
+  "health_card_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "health ledger \u2014 a Home/Progress health card rendered with content (props.surface = today_score | health_score | your_plan | ledger_journal)"
+  },
+  "health_card_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "health ledger \u2014 a Home/Progress health card was tapped (props.surface as above)"
+  },
   "session_started": {
     "source": "client",
     "apps": [
