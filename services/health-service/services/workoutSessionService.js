@@ -78,13 +78,17 @@ function localDateIST(date) {
 // P2002. Without the second half, a double-tap on a flaky connection still
 // produces two sessions - the exact failure the column exists to prevent.
 export async function startSessionService(userId, templateId, attendance, clientRef) {
-  const attachData = attendance
-    ? {
-        bookingId: attendance.bookingId ?? null,
-        gymId: attendance.gymId ?? null,
-        localDate: localDateIST(attendance.attendedAt ?? new Date()),
-      }
-    : {};
+  // localDate is stamped on EVERY start, not just attendance-backed ones.
+  // It is the only way getTodaySessionService can ever see a session, and an
+  // abandoned workout (started, never finished) has no finish event to fall
+  // back on — without this the Home "resume" card can never find one and the
+  // leave dialog's "you can resume from Workouts later" is a lie.
+  const attachData = {
+    localDate: localDateIST(attendance?.attendedAt ?? new Date()),
+    ...(attendance
+      ? { bookingId: attendance.bookingId ?? null, gymId: attendance.gymId ?? null }
+      : {}),
+  };
 
   if (clientRef) {
     const existing = await prisma.workoutSession.findUnique({
@@ -336,7 +340,19 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
   });
 
   let gamification = { verified: false, credited: false };
-  if (!session.coinsAwarded) {
+  // Empty sessions never feed the gamified layer (audit 2026-10-08, P1).
+  // Dismissing the quick-log sheet finishes a session with zero completed
+  // sets, and that finish used to verify+credit like a real workout — with
+  // challenge-service's per-day key it would only cost the user that day's
+  // coins, but it would still record a "verified workout" they never did, so
+  // the gate belongs here where the sets live.
+  const completedSets = updated.exercises.reduce(
+    (total, ex) => total + ex.sets.filter((s) => s.completed).length,
+    0,
+  );
+  // Nothing to verify for a session with no completed set: finishing stays
+  // allowed, only the reward is skipped.
+  if (completedSets > 0 && !session.coinsAwarded) {
     const exerciseNames = updated.exercises.map((e) => e.exercise.name).slice(0, 1);
     gamification = await notifyWorkoutFinished({
       userId,

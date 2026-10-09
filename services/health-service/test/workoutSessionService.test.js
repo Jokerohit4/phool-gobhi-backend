@@ -14,9 +14,11 @@ let nextId = 1;
 function resetFakes() {
   workoutSessions = [];
   nextId = 1;
+  notifyCalls = [];
 }
 
-let getOrCreateDraftForAttendanceService, getTodaySessionService;
+let getOrCreateDraftForAttendanceService, getTodaySessionService, startSessionService, finishSessionService;
+let notifyCalls = [];
 
 test('setup: mock dependencies once, import workoutSessionService once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -37,6 +39,8 @@ test('setup: mock dependencies once, import workoutSessionService once', async (
               );
               return matches[matches.length - 1] || null;
             },
+            // assertOwnsSession's lookup (finishSessionService and friends).
+            findUnique: async ({ where }) => workoutSessions.find((s) => s.id === where.id) ?? null,
             create: async ({ data }) => {
               const session = { id: nextId++, exercises: [], ...data };
               workoutSessions.push(session);
@@ -54,13 +58,19 @@ test('setup: mock dependencies once, import workoutSessionService once', async (
     },
   });
   t.mock.module(new URL('../utils/notifyChallengeService.js', import.meta.url).href, {
-    exports: { notifyWorkoutFinished: async () => ({ verified: false, credited: false }) },
+    exports: {
+      notifyWorkoutFinished: async (args) => {
+        notifyCalls.push(args);
+        return { verified: true, credited: true, amount: 15 };
+      },
+    },
   });
 
-  ({ getOrCreateDraftForAttendanceService, getTodaySessionService } = await import(
+  ({ getOrCreateDraftForAttendanceService, getTodaySessionService, startSessionService, finishSessionService } = await import(
     '../services/workoutSessionService.js'
   ));
   assert.equal(typeof getOrCreateDraftForAttendanceService, 'function');
+  assert.equal(typeof finishSessionService, 'function');
 });
 
 test('getOrCreateDraftForAttendanceService: no existing draft -> creates one attached to the booking', async () => {
@@ -147,4 +157,105 @@ test('provenance: first proof wins - a retried event cannot change how a visit w
     userId: 1, bookingId: 303, gymId: 9, attendedAt: '2026-09-30T05:00:00.000Z', attendanceMethod: 'qr_scan',
   });
   assert.equal(again.attendanceMethod, 'manual_override', 'an override must never be upgraded to a scan by a replay');
+});
+
+// ---- W2 (2026-10-08): every start is day-keyed so an abandoned workout can
+// be found again. Without a localDate on start, GET /sessions/today can only
+// ever see attendance-backed or already-finished sessions, and the Home
+// "resume" card has nothing to resume.
+
+const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+test('startSessionService: a session with no attendance still carries today\'s localDate', async () => {
+  resetFakes();
+  const session = await startSessionService(1, null, undefined, undefined);
+  assert.equal(session.localDate, todayIST(), 'localDate is stamped on start, not only on finish/attendance');
+  assert.equal(session.bookingId ?? null, null);
+  assert.equal(session.gymId ?? null, null);
+  assert.equal(session.endedAt ?? null, null, 'the session is still in progress');
+});
+
+test('startSessionService: an attendance-backed start keeps its booking/gym and keys off attendedAt', async () => {
+  resetFakes();
+  const session = await startSessionService(
+    1, null,
+    { bookingId: 100, gymId: 9, attendedAt: '2026-09-08T13:00:00.000Z' },
+    undefined,
+  );
+  assert.equal(session.localDate, '2026-09-08');
+  assert.equal(session.bookingId, 100);
+  assert.equal(session.gymId, 9);
+});
+
+test('getTodaySessionService: an abandoned (unfinished) client-started session is resumable', async () => {
+  resetFakes();
+  const started = await startSessionService(2, null, undefined, undefined);
+  assert.equal(started.endedAt ?? null, null);
+  const today = await getTodaySessionService(2);
+  assert.ok(today, '/sessions/today must return an unfinished session so the client can resume it');
+  assert.equal(today.id, started.id);
+});
+
+// ---- finish -> gamified layer ---------------------------------------------
+// The 2026-10-08 audit's P1 "empty workouts count fully": dismissing the
+// quick-log sheet finishes a session with zero completed sets, and that used
+// to reach challenge-service like a real workout. The gate lives here,
+// because health-service is the only service that can see the sets.
+
+function seedSession(userId, exercises) {
+  const session = {
+    id: nextId++, userId, bookingId: null, gymId: null,
+    localDate: todayIST(), startedAt: new Date(), endedAt: null,
+    coinsAwarded: false, exercises,
+  };
+  workoutSessions.push(session);
+  return session;
+}
+
+test('finishSessionService: a session with no completed set is finished but never reaches the gamified layer', async () => {
+  resetFakes();
+  const session = seedSession(1, [
+    { exercise: { name: 'Squat' }, sets: [{ setNumber: 1, completed: false }] },
+  ]);
+  const finished = await finishSessionService(session.id, 1, {});
+
+  assert.ok(finished.endedAt, 'finishing still works — only the reward is skipped');
+  assert.deepEqual(finished.gamification, { verified: false, credited: false });
+  assert.equal(notifyCalls.length, 0, 'notifyWorkoutFinished must not be called for an empty session');
+  assert.equal(workoutSessions[0].coinsAwarded, false);
+});
+
+test('finishSessionService: a session with zero exercises is finished but never reaches the gamified layer', async () => {
+  resetFakes();
+  const session = seedSession(1, []);
+  const finished = await finishSessionService(session.id, 1, {});
+  assert.ok(finished.endedAt);
+  assert.deepEqual(finished.gamification, { verified: false, credited: false });
+  assert.equal(notifyCalls.length, 0);
+});
+
+test('finishSessionService: one completed set pays, keyed on the session id', async () => {
+  resetFakes();
+  const session = seedSession(1, [
+    { exercise: { name: 'Bench Press' }, sets: [{ setNumber: 1, completed: true }] },
+    { exercise: { name: 'Row' }, sets: [{ setNumber: 1, completed: false }] },
+  ]);
+  const finished = await finishSessionService(session.id, 1, { rpe: 8 });
+
+  assert.equal(notifyCalls.length, 1);
+  assert.equal(notifyCalls[0].idempotencyKey, `workout-credit:${session.id}`);
+  assert.equal(notifyCalls[0].description, 'Verified workout — Bench Press');
+  assert.deepEqual(finished.gamification, { verified: true, credited: true, amount: 15 });
+  assert.equal(workoutSessions[0].coinsAwarded, true, 'coinsAwarded is this service\'s own replay guard');
+});
+
+test('finishSessionService: finishing an already-finished session is a no-op for the reward too', async () => {
+  resetFakes();
+  const session = seedSession(1, [
+    { exercise: { name: 'Bench Press' }, sets: [{ setNumber: 1, completed: true }] },
+  ]);
+  await finishSessionService(session.id, 1, {});
+  const again = await finishSessionService(session.id, 1, {});
+  assert.equal(notifyCalls.length, 1, 'a client retry after a timeout must not trigger a second credit attempt');
+  assert.equal(again.endedAt.getTime(), workoutSessions[0].endedAt.getTime());
 });
