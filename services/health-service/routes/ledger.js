@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { requireAdult } from '../middleware/requireAdult.js';
@@ -44,7 +44,7 @@ const consentGated = [...ledgerGated];
 
 router.get('/ledger/consent', ...consentGated, ledgerConsentCtrl.getConsent);
 // Current policy wording version on its own, so the app can render the prompt
-// before it has any consent state to show. Public within the ledger gate —
+// before it has any consent state to show. Public within the ledger gate â€”
 // there is nothing user-specific in it.
 router.get('/ledger/consent/policy', ...consentGated, ledgerConsentCtrl.getPolicy);
 router.post('/ledger/consent/nutrition', ...consentGated, requireAdult, ledgerConsentCtrl.grantNutrition);
@@ -112,6 +112,8 @@ router.get('/ledger/food-totals/:localDate', ...nutrition, ledgerCtrl.getDayTota
 router.get('/ledger/saved-meals', ...nutrition, ledgerCtrl.listSavedMeals);
 router.post('/ledger/saved-meals', ...nutrition, ledgerCtrl.saveMeal);
 router.post('/ledger/saved-meals/:id/log', ...nutrition, ledgerCtrl.logSavedMeal);
+router.patch('/ledger/saved-meals/:id', ...nutrition, ledgerCtrl.updateSavedMeal);
+router.delete('/ledger/saved-meals/:id', ...nutrition, ledgerCtrl.deleteSavedMeal);
 
 // ---- Photo food logging ---------------------------------------------------
 //
@@ -132,7 +134,7 @@ router.post('/ledger/saved-meals/:id/log', ...nutrition, ledgerCtrl.logSavedMeal
 // Recognition, upload and confirm: every route on which the image leaves this
 // service, or is recorded as having left it. Flag first (does this feature
 // exist), then the photo scope (has this person agreed to send it), then
-// nutrition underneath both — a photo of a meal is still a food log entry, so
+// nutrition underneath both â€” a photo of a meal is still a food log entry, so
 // turning the diary off stops the photo path too even if photo consent stands.
 const photo = [
   ...nutrition,

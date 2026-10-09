@@ -1,4 +1,4 @@
-// Nutrition: search the food table, log what was eaten, aggregate a day,
+﻿// Nutrition: search the food table, log what was eaten, aggregate a day,
 // and repeat a meal from a saved one.
 //
 // Two invariants run through the whole file:
@@ -114,7 +114,7 @@ function addInto(target, source) {
  *
  * Unverified rows are excluded unless the caller explicitly asks. The seeded
  * catalogue is all `verified: false` (see prisma/seed/foods.seed.js), so the
- * default would otherwise return an empty list — which is exactly the state we
+ * default would otherwise return an empty list â€” which is exactly the state we
  * want to be visible rather than papered over with numbers nobody has checked.
  * The Flutter app sets includeUnverified so the food log still works.
  */
@@ -607,7 +607,7 @@ export async function logSavedMeal(prisma, { userId, savedMealId, localDate, slo
   // because this write is many rows at once and there is no day for them to be
   // scoped to otherwise: an empty `localDate` still satisfies the column type,
   // so the repeat would report success while writing rows that `getDayTotals`
-  // — which queries `where: { localDate }` — could never match again. The
+  // â€” which queries `where: { localDate }` â€” could never match again. The
   // client sends the device date, and this refuses to trust it blindly.
   if (!isIsoDay(localDate)) {
     throw badRequest('localDate must be YYYY-MM-DD');
@@ -682,3 +682,20 @@ function notFound(message) {
   err.status = 404;
   return err;
 }
+
+export async function updateSavedMeal(prisma, { userId, id, name, slot }) {
+  const meal = await prisma.savedMeal.findFirst({ where: { id: Number(id), userId } });
+  if (!meal) throw notFound('Saved meal not found');
+  const data = {};
+  if (typeof name === 'string' && name.trim()) data.name = name.trim();
+  if (slot) data.slot = slot;
+  if (Object.keys(data).length) data.updatedAt = new Date();
+  return prisma.savedMeal.update({ where: { id: meal.id }, data, include: { lines: true } });
+}
+
+export async function deleteSavedMeal(prisma, { userId, id }) {
+  const meal = await prisma.savedMeal.findFirst({ where: { id: Number(id), userId } });
+  if (!meal) throw notFound('Saved meal not found');
+  await prisma.savedMeal.delete({ where: { id: meal.id } });
+}
+

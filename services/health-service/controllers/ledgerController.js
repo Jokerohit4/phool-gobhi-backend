@@ -1,4 +1,4 @@
-import * as nutritionService from '../services/ledger/nutritionService.js';
+﻿import * as nutritionService from '../services/ledger/nutritionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
@@ -70,7 +70,7 @@ export const getSetup = handle(async (req) => {
     userId: req.userId,
     localDate: req.query?.localDate,
     // So age and sex prefill from the signup DOB/gender instead of being asked
-    // twice. Prefill only — see getSetupState.
+    // twice. Prefill only â€” see getSetupState.
     fetchProfile: fetchUserProfileInternal,
   });
 });
@@ -96,13 +96,13 @@ export const saveSetup = async (req, res) => {
     }
 
     // Also a refusal, and also not a 200. The request was well-formed and
-    // individually valid — the target and the date just cannot both be honoured
-    // — so the screen needs its own copy and the `earliestDate` to offer, which
+    // individually valid â€” the target and the date just cannot both be honoured
+    // â€” so the screen needs its own copy and the `earliestDate` to offer, which
     // the generic validation branch would throw away.
     if (out.skipped === 'target_too_aggressive') {
       // Recorded before the early return, because health_intake_saved never fires
       // for a refused submission. Without this, a user our own safety cap turns
-      // away is indistinguishable from one who abandoned the wizard — the two
+      // away is indistinguishable from one who abandoned the wizard â€” the two
       // need opposite responses. limitedBy says which bound actually applied, so
       // a cap that is too tight for most users is visible rather than inferred.
       track('health_targets_pace_rejected', req.userId, {
@@ -119,7 +119,7 @@ export const saveSetup = async (req, res) => {
     }
 
     // Shape only: which fields were answered, whether a weight became a
-    // reading. Never the values themselves — a body weight has no business in
+    // reading. Never the values themselves â€” a body weight has no business in
     // analytics.
     track('health_intake_saved', req.userId, {
       skipped: out.skipped || null,
@@ -271,7 +271,7 @@ export const searchFoods = handle(async (req) => {
 //
 // The response shape carries one thing the client needs and cannot derive: if
 // the request already existed, `created: false`. A user who asks for omelette
-// twice should not be told twice that we have noted it — the second time, the
+// twice should not be told twice that we have noted it â€” the second time, the
 // useful message is that it is already on the list and how many people have
 // asked. Whether to say so is the client's call; it needs the fact to decide.
 
@@ -291,7 +291,7 @@ export const requestFood = handle(async (req) => {
   // is deliberate: "which foods are people failing to find" is the entire
   // reason this endpoint exists, and an event with no name in it cannot answer
   // that question at all. So this one carries the food name, and everything
-  // else here carries shape only — compare health_food_photo_recognized below,
+  // else here carries shape only â€” compare health_food_photo_recognized below,
   // which stays nameless because a photo has no name to begin with and its
   // contents are nobody else's business. The difference is not carelessness: a
   // requested food is a thing the user wants the catalogue to have, which is
@@ -564,7 +564,7 @@ export const regeneratePlan = handle(async (req) => {
     userId: req.userId,
     // The whole set. The generator is currently goal-agnostic (it keys items off
     // the nutrient targets rather than the objective), so this is not yet load-
-    // bearing — but passing one of several goals here would bake in a choice this
+    // bearing â€” but passing one of several goals here would bake in a choice this
     // endpoint has no basis to make.
     goals: goal?.goals ?? [],
     diet: goal?.diet,
@@ -914,7 +914,7 @@ export const recognizeFoodPhoto = handle(async (req) => {
     mimeType: req.file.mimetype,
     // Which candidate in the provider rotation serves this request. Multipart
     // delivers it as a string (coerced in providers/index.js); app versions
-    // that predate the rotation send nothing and get attempt 1 — the vendor
+    // that predate the rotation send nothing and get attempt 1 â€” the vendor
     // they always had.
     attempt: req.body?.attempt,
   });
