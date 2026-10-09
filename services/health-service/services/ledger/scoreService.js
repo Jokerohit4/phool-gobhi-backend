@@ -24,6 +24,7 @@ import { isScheduledFor } from './scoreEngine.js';
 import { openActions } from './remediation.js';
 import { assertGoal } from './goalGuard.js';
 import { currentNutritionTarget } from './currentTarget.js';
+import { isIsoDay } from './isoDay.js';
 import redis from '../../utils/redisClient.js';
 import { blendedScoreCacheKey } from './blendedScoreCache.js';
 
@@ -586,27 +587,12 @@ export async function clearPause(prisma, { userId }) {
 
 // --- internals -------------------------------------------------------------
 
-/**
- * A real calendar day in 'YYYY-MM-DD'.
- *
- * Not a regex alone. `/^\d{4}-\d{2}-\d{2}$/` happily accepts '2026-13-45',
- * which Date.UTC then silently rolls forward into a valid date in the next
- * year - so a pause written from garbage input would land on a real day in the
- * wrong month, and report itself as active. The round-trip check is what makes
- * "is this a day" mean a day the user could actually be living through.
- *
- * Exported because the controller needs the same notion of valid, and two
- * different definitions of a valid date in one feature is how the boundary ends
- * up accepting what the service rejects.
- */
-export function isIsoDay(value) {
-  const s = String(value ?? '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const [y, m, d] = s.split('-').map(Number);
-  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
-}
+// Re-exported from the shared module rather than defined here: the controller
+// and the nutrition service both need this exact notion of a valid day, and one
+// definition is what keeps the boundary from accepting what the writer rejects.
+// Kept on this namespace because callers have imported `scoreService.isIsoDay`
+// for a while.
+export { isIsoDay };
 
 // Local-date string arithmetic, in and out as 'YYYY-MM-DD'.
 //
