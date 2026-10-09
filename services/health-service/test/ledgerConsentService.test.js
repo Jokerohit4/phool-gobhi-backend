@@ -11,11 +11,18 @@ import assert from 'node:assert/strict';
 
 let consent = null;
 let updates = [];
+// Which photos the stub claims exist. Empty by default so the purge path that
+// reaches for storage is not exercised here - object deletion belongs to
+// foodPhotoStorage.test.js, and importing that module from this file would pull
+// a GCS client into a suite that is about JSON columns.
+let photoPaths = [];
+let purgeLog = [];
 let grantNutritionConsentService, getNutritionConsentService, revokeNutritionConsentService,
   getMedicalRecordsConsentService, grantMedicalRecordsConsentService,
-  hasNutritionConsentService, hasMedicalRecordsConsentService,
-  hasNutritionScopeService, hasMedicalRecordsScopeService,
-  LEDGER_POLICY_VERSION, isScopeStale, NUTRITION_SCOPE, MEDICAL_RECORDS_SCOPE;
+  getPhotoConsentService, grantPhotoConsentService, revokePhotoConsentService,
+  hasNutritionConsentService, hasMedicalRecordsConsentService, hasPhotoConsentService,
+  hasNutritionScopeService, hasMedicalRecordsScopeService, hasPhotoScopeService,
+  LEDGER_POLICY_VERSION, isScopeStale, NUTRITION_SCOPE, MEDICAL_RECORDS_SCOPE, PHOTO_SCOPE;
 
 test('setup: stub Prisma, import once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -30,12 +37,40 @@ test('setup: stub Prisma, import once', async (t) => {
               return consent;
             },
           };
-          // Revoke with purge would touch these; the tests here never purge, but
-          // leaving them absent makes an accidental purge a loud failure rather
-          // than a silent no-op.
-          this.foodLog = { deleteMany: async () => ({ count: 0 }) };
-          this.savedMeal = { deleteMany: async () => ({ count: 0 }) };
-          this.foodItem = { deleteMany: async () => ({ count: 0 }) };
+          // Purge surfaces, stubbed rather than left absent so an accidental
+          // purge shows up in `purgeLog` instead of throwing. Everything the
+          // three scopes can delete is recorded, because the photo-scope tests
+          // below are largely about which of these a photo revoke must NOT
+          // reach.
+          this.foodLog = {
+            deleteMany: async () => {
+              purgeLog.push(['foodLog.deleteMany', null]);
+              return { count: 0 };
+            },
+            findMany: async () => photoPaths.map((p) => ({ photoPath: p })),
+            updateMany: async ({ data }) => {
+              purgeLog.push(['foodLog.updateMany', data]);
+              return { count: photoPaths.length };
+            },
+          };
+          this.foodPhotoRequestLog = {
+            deleteMany: async () => {
+              purgeLog.push(['foodPhotoRequestLog.deleteMany', null]);
+              return { count: 0 };
+            },
+          };
+          this.savedMeal = {
+            deleteMany: async () => {
+              purgeLog.push(['savedMeal.deleteMany', null]);
+              return { count: 0 };
+            },
+          };
+          this.foodItem = {
+            deleteMany: async () => {
+              purgeLog.push(['foodItem.deleteMany', null]);
+              return { count: 0 };
+            },
+          };
           this.medicalDocument = { findMany: async () => [], deleteMany: async () => ({ count: 0 }) };
           this.doctorAppointment = { deleteMany: async () => ({ count: 0 }) };
           this.healthCondition = { deleteMany: async () => ({ count: 0 }) };
@@ -48,9 +83,10 @@ test('setup: stub Prisma, import once', async (t) => {
   ({
     grantNutritionConsentService, getNutritionConsentService, revokeNutritionConsentService,
     getMedicalRecordsConsentService, grantMedicalRecordsConsentService,
-    hasNutritionConsentService, hasMedicalRecordsConsentService,
-    hasNutritionScopeService, hasMedicalRecordsScopeService,
-    LEDGER_POLICY_VERSION, isScopeStale, NUTRITION_SCOPE, MEDICAL_RECORDS_SCOPE,
+    getPhotoConsentService, grantPhotoConsentService, revokePhotoConsentService,
+    hasNutritionConsentService, hasMedicalRecordsConsentService, hasPhotoConsentService,
+    hasNutritionScopeService, hasMedicalRecordsScopeService, hasPhotoScopeService,
+    LEDGER_POLICY_VERSION, isScopeStale, NUTRITION_SCOPE, MEDICAL_RECORDS_SCOPE, PHOTO_SCOPE,
   } = await import('../services/ledger/ledgerConsentService.js'));
 
   // A live device-level grant that predates the ledger scopes, which is the
@@ -64,6 +100,8 @@ test('setup: stub Prisma, import once', async (t) => {
     scopeVersions: {},
   };
   updates = [];
+  photoPaths = [];
+  purgeLog = [];
 });
 
 // Each test gets the same starting row. The stub hands back one shared object,
@@ -79,6 +117,8 @@ function resetConsent() {
     scopeVersions: {},
   };
   updates = [];
+  photoPaths = [];
+  purgeLog = [];
 }
 
 // --- the version must be written down ---------------------------------------
@@ -310,4 +350,126 @@ test('a revoked health consent closes both gates', async () => {
   await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
   consent.revokedAt = new Date();
   assert.equal(await hasNutritionConsentService(1), false);
+});
+
+// --- the photo scope --------------------------------------------------------
+//
+// A scope of its own because it is the only one whose data leaves this service.
+// Everything below is about it staying separate: granting it must not imply the
+// diary, withdrawing it must not take the diary, and purging it must take the
+// photographs without taking the rows the user typed themselves.
+
+test('the photo scope exists under its own wire name', () => {
+  // Read by the app as `LedgerConsentScope.photo` and stored on the same
+  // HealthConsent.scopes array. A rename here is a scope nobody can grant.
+  assert.equal(PHOTO_SCOPE, 'photo');
+  assert.notEqual(PHOTO_SCOPE, NUTRITION_SCOPE);
+  assert.notEqual(PHOTO_SCOPE, MEDICAL_RECORDS_SCOPE);
+});
+
+test('a photo grant records the version it was given under', async () => {
+  resetConsent();
+  const out = await grantPhotoConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  assert.equal(out.granted, true);
+  assert.equal(consent.scopeVersions[PHOTO_SCOPE], LEDGER_POLICY_VERSION);
+  assert.equal(await hasPhotoConsentService(1), true);
+});
+
+test('granting the photo scope grants nothing else', async () => {
+  // The whole point of a third scope: a user who agrees to send a plate to a
+  // vision provider still has not agreed to keep a written food diary, and must
+  // not appear to have.
+  resetConsent();
+  await grantPhotoConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  assert.equal(await hasPhotoConsentService(1), true);
+  assert.equal(await hasNutritionConsentService(1), false);
+  assert.equal(await hasMedicalRecordsConsentService(1), false);
+});
+
+test('nutrition consent does not open the photo gate', async () => {
+  // The other direction, and the one the bug lived in: photo logging used to
+  // ride entirely on nutrition consent, so this is the state that used to
+  // already work. It must now be refused.
+  resetConsent();
+  await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  assert.equal(await hasNutritionConsentService(1), true);
+  assert.equal(await hasPhotoConsentService(1), false);
+  assert.equal(await hasPhotoScopeService(1), false);
+});
+
+test('the data gate refuses a photo granted under superseded wording', async () => {
+  resetConsent();
+  consent.scopes = ['logs', PHOTO_SCOPE];
+  consent.scopeVersions = { [PHOTO_SCOPE]: 'ledger-2026-01-01' };
+  assert.equal(await hasPhotoScopeService(1), true, 'the grant is still on record');
+  assert.equal(
+    await hasPhotoConsentService(1),
+    false,
+    'but it must not authorise another photograph leaving for a third party',
+  );
+});
+
+test('withdrawing the photo scope leaves the written food log intact', async () => {
+  // Two things have to survive: the typed rows, and the nutrition scope that
+  // owns them. Purge is off here, so the photographs survive too - revoking
+  // permission to send a photo somewhere is not a request to destroy the
+  // diary the photo was logged into.
+  resetConsent();
+  await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  await grantPhotoConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  photoPaths = ['food/1/kept.jpg'];
+
+  const out = await revokePhotoConsentService(1, { purge: false });
+
+  assert.equal(out.granted, false);
+  assert.equal(await hasPhotoConsentService(1), false);
+  assert.equal(await hasNutritionConsentService(1), true, 'the diary is a separate decision');
+  assert.deepEqual(purgeLog, [], 'nothing was deleted without being asked to');
+  assert.deepEqual(photoPaths, ['food/1/kept.jpg'], 'the image survives a plain withdraw');
+});
+
+test('purging on a photo revoke takes the photographs, not the food rows', async () => {
+  // What "delete my photos" has to mean: the image objects, the pointers to
+  // them, and the ledger of which model read which plate. The rows the user
+  // typed stay, because they belong to NUTRITION and were not what was
+  // withdrawn.
+  resetConsent();
+  await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  await grantPhotoConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  photoPaths = [];
+
+  await revokePhotoConsentService(1, { purge: true });
+
+  const ops = purgeLog.map(([name]) => name);
+  assert.ok(
+    ops.includes('foodLog.updateMany'),
+    'the pointers to the deleted objects must be cleared, or every one of them ' +
+      'renders a broken picture for ever',
+  );
+  assert.ok(
+    ops.includes('foodPhotoRequestLog.deleteMany'),
+    'the record of which model read which plate is itself a food record',
+  );
+  assert.equal(
+    ops.includes('foodLog.deleteMany'),
+    false,
+    'the typed food rows belong to the nutrition scope and must survive',
+  );
+  assert.equal(
+    ops.includes('savedMeal.deleteMany'),
+    false,
+    'saved meals are nutrition data, not photographs',
+  );
+  assert.equal(
+    ops.includes('foodItem.deleteMany'),
+    false,
+    'the custom-food catalogue is nutrition data, not photographs',
+  );
+  assert.equal(
+    (purgeLog.find(([n]) => n === 'foodLog.updateMany')?.[1])?.photoPath,
+    null,
+    'the update must null photoPath specifically',
+  );
+  assert.equal(await hasPhotoConsentService(1), false);
+  assert.equal(await hasNutritionConsentService(1), true);
 });

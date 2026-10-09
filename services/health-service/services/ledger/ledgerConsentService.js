@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Two consent scopes, deliberately separate from each other and from
+// Three consent scopes, deliberately separate from each other and from
 // `location_routes`.
 //
 // The split is not tidiness. A food log is a daily behavioural record that
@@ -13,12 +13,22 @@ const prisma = new PrismaClient();
 // is a consent screen people click through without reading, which is worse
 // than not asking.
 //
+// PHOTO is separate from NUTRITION for a third reason: it is the only scope
+// here whose data leaves this service. Logging "2 rotis" stores a row in our
+// database; photographing a plate sends the bytes to Google or Groq to work
+// out what is on it. Nutrition consent never described that, so riding on it
+// meant a user who agreed to keep a food diary was silently agreeing to
+// hand a picture of their meal to an outside AI company - and the photo
+// screen was telling them the photo was private to their account while it
+// did so.
+//
 // Same shape as locationRoutesService.js: the scope lives on the existing
 // HealthConsent.scopes array (the field was built for exactly this — "a scope
 // is added when the surface needing it ships"), so revoking health consent
-// revokes both of these too.
+// revokes all three of these too.
 export const NUTRITION_SCOPE = 'nutrition';
 export const MEDICAL_RECORDS_SCOPE = 'medical_records';
+export const PHOTO_SCOPE = 'photo';
 
 // The wording currently on the consent screens, and the only value a grant may
 // be recorded against.
@@ -233,6 +243,43 @@ async function removeScope(userId, scope, { purge = false } = {}) {
     }
   }
 
+  if (purge && scope === PHOTO_SCOPE) {
+    // What this scope collected, and nothing else: the image objects, the
+    // pointers to them, and the ledger of which model read which plate.
+    //
+    // The food log rows stay. Revoking photo consent is withdrawing permission
+    // to send photographs to a third party, not asking for the diary to be
+    // rewritten - a row that says "2 rotis, 480 kcal" was typed by the user and
+    // belongs to NUTRITION. Only the photo half goes, and it goes completely:
+    // a pointer left behind would render a broken picture forever and would
+    // still name an object we deleted.
+    //
+    // Paths are read before the transaction for the same reason as the two
+    // scopes above: once `photoPath` is nulled nothing remembers what the
+    // objects were called.
+    const photos = await prisma.foodLog.findMany({
+      where: { userId, photoPath: { not: null } },
+      select: { photoPath: true },
+      distinct: ['photoPath'],
+    });
+    await prisma.$transaction([
+      prisma.foodLog.updateMany({
+        where: { userId, photoPath: { not: null } },
+        data: { photoPath: null },
+      }),
+      // A row recording "this user sent a photo, this model read it, this is
+      // what it cost" is a record of what they ate and how it was recognised.
+      prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+    ]);
+
+    if (photos.length) {
+      const { deletePhotos } = await import('./foodPhotoStorage.js');
+      await deletePhotos(photos.map((p) => p.photoPath)).catch((err) =>
+        console.error('[consent] photo cleanup failed:', err.message),
+      );
+    }
+  }
+
   if (purge && scope === MEDICAL_RECORDS_SCOPE) {
     // The objects themselves are best-effort removed: the row is the record
     // and it goes regardless, so an orphaned object with no path back to a
@@ -293,25 +340,33 @@ export const hasNutritionConsentService = (userId) =>
   hasCurrentScope(userId, NUTRITION_SCOPE);
 export const hasMedicalRecordsConsentService = (userId) =>
   hasCurrentScope(userId, MEDICAL_RECORDS_SCOPE);
+export const hasPhotoConsentService = (userId) =>
+  hasCurrentScope(userId, PHOTO_SCOPE);
 
 // The unqualified question, for callers that want presence alone.
 export const hasNutritionScopeService = (userId) =>
   hasScope(userId, NUTRITION_SCOPE);
 export const hasMedicalRecordsScopeService = (userId) =>
   hasScope(userId, MEDICAL_RECORDS_SCOPE);
+export const hasPhotoScopeService = (userId) => hasScope(userId, PHOTO_SCOPE);
 
 export const grantNutritionConsentService = (userId, opts) =>
   addScope(userId, NUTRITION_SCOPE, opts);
 export const grantMedicalRecordsConsentService = (userId, opts) =>
   addScope(userId, MEDICAL_RECORDS_SCOPE, opts);
+export const grantPhotoConsentService = (userId, opts) =>
+  addScope(userId, PHOTO_SCOPE, opts);
 
 export const revokeNutritionConsentService = (userId, opts) =>
   removeScope(userId, NUTRITION_SCOPE, opts);
 export const revokeMedicalRecordsConsentService = (userId, opts) =>
   removeScope(userId, MEDICAL_RECORDS_SCOPE, opts);
+export const revokePhotoConsentService = (userId, opts) =>
+  removeScope(userId, PHOTO_SCOPE, opts);
 
 export const getNutritionConsentService = (userId) =>
   readScope(userId, NUTRITION_SCOPE);
 export const getMedicalRecordsConsentService = (userId) =>
   readScope(userId, MEDICAL_RECORDS_SCOPE);
+export const getPhotoConsentService = (userId) => readScope(userId, PHOTO_SCOPE);
 export { LEDGER_POLICY_VERSION as CURRENT_LEDGER_POLICY_VERSION };

@@ -678,6 +678,18 @@
     "since": "2026-09-29",
     "notes": "medical-records scope withdrawn. props purged. Kept separate from the nutrition revoke because the two scopes are granted and withdrawn independently, and folding them together would make a partial withdrawal invisible"
   },
+  "health_photo_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-08",
+    "notes": "photo scope granted - permission to send a photograph of a meal to an outside vision provider. props version = the privacy-policy version the client asserted it was showing. The number to watch: it is the count of people who agreed to a transmission nutrition consent never described, and a gap between it and health_nutrition_consent_granted is how many food-logging users said no"
+  },
+  "health_photo_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-08",
+    "notes": "photo scope withdrawn. props purged (true = the already-sent photographs were deleted too, leaving the typed food rows behind). Separate from nutrition because someone can stop the photo path while continuing to keep a written diary"
+  },
   "health_intake_saved": {
     "source": "server",
     "service": "health-service",

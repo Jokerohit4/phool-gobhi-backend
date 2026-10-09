@@ -1,10 +1,13 @@
 import {
   hasNutritionConsentService,
   hasMedicalRecordsConsentService,
+  hasPhotoConsentService,
   getNutritionConsentService,
   getMedicalRecordsConsentService,
+  getPhotoConsentService,
   NUTRITION_SCOPE,
   MEDICAL_RECORDS_SCOPE,
+  PHOTO_SCOPE,
 } from '../services/ledger/ledgerConsentService.js';
 
 /// Gates the routes that read or write ledger data behind a specific consent
@@ -13,10 +16,12 @@ import {
 /// answers "has this person agreed to it". A CONSENT_REQUIRED is something the
 /// app can turn into an opt-in prompt; a FEATURE_DISABLED is not.
 ///
-/// Two scopes, two gates, and they are never interchangeable. Nutrition and
-/// medical records are consented separately on purpose - see the header of
-/// ledgerConsentService.js for why bundling them produces a consent screen
-/// people click through without reading.
+/// Three scopes, three gates, and they are never interchangeable. Nutrition,
+/// medical records and photographs are consented separately on purpose - see
+/// the header of ledgerConsentService.js for why bundling them produces a
+/// consent screen people click through without reading. The photo gate is the
+/// one that carries the most weight: it is what stops a plate reaching Google
+/// or Groq from someone who only ever agreed to keep a written diary.
 
 function check(hasConsent, readScope, scope) {
   return async (req, res, next) => {
@@ -71,6 +76,11 @@ export const requireMedicalRecordsConsent = check(
   getMedicalRecordsConsentService,
   MEDICAL_RECORDS_SCOPE,
 );
+export const requirePhotoConsent = check(
+  hasPhotoConsentService,
+  getPhotoConsentService,
+  PHOTO_SCOPE,
+);
 
 /// GET on the consent status endpoints themselves must NOT be gated by these -
 /// you cannot ask someone whether they consented only once they have. The
@@ -80,4 +90,5 @@ export const requireMedicalRecordsConsent = check(
 export const LEDGER_SCOPES = {
   [NUTRITION_SCOPE]: requireNutritionConsent,
   [MEDICAL_RECORDS_SCOPE]: requireMedicalRecordsConsent,
+  [PHOTO_SCOPE]: requirePhotoConsent,
 };

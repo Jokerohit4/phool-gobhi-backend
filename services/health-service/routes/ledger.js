@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { requireAdult } from '../middleware/requireAdult.js';
-import { requireNutritionConsent, requireMedicalRecordsConsent } from '../middleware/requireLedgerConsent.js';
+import { requireNutritionConsent, requireMedicalRecordsConsent, requirePhotoConsent } from '../middleware/requireLedgerConsent.js';
 import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
@@ -51,6 +51,12 @@ router.post('/ledger/consent/nutrition', ...consentGated, requireAdult, ledgerCo
 router.delete('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.revokeNutrition);
 router.post('/ledger/consent/medical-records', ...consentGated, requireAdult, ledgerConsentCtrl.grantMedicalRecords);
 router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.revokeMedicalRecords);
+// Photographs, asked for where the photograph is taken rather than folded into
+// nutrition: sending a plate to an outside AI company is a different decision
+// from keeping a written food diary, and one that nutrition consent never
+// described.
+router.post('/ledger/consent/photo', ...consentGated, requireAdult, ledgerConsentCtrl.grantPhoto);
+router.delete('/ledger/consent/photo', ...consentGated, ledgerConsentCtrl.revokePhoto);
 
 // ---- Intake ----------------------------------------------------------------
 
@@ -123,7 +129,16 @@ router.post('/ledger/saved-meals/:id/log', ...nutrition, ledgerCtrl.logSavedMeal
 // request is refused on the flag before the bytes are buffered - the multer
 // middleware sits after the gates for the same reason it does on the medical
 // route.
-const photo = [...nutrition, requireFeatureFlag('foodPhotoLogging')];
+// Recognition, upload and confirm: every route on which the image leaves this
+// service, or is recorded as having left it. Flag first (does this feature
+// exist), then the photo scope (has this person agreed to send it), then
+// nutrition underneath both — a photo of a meal is still a food log entry, so
+// turning the diary off stops the photo path too even if photo consent stands.
+const photo = [
+  ...nutrition,
+  requireFeatureFlag('foodPhotoLogging'),
+  requirePhotoConsent,
+];
 
 router.post(
   '/ledger/food-photos/recognize',

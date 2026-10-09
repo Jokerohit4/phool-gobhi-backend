@@ -78,10 +78,32 @@ test('every ledger route is behind the healthLedger flag', () => {
   // it inherits both the healthLedger flag AND the nutrition scope. Asserted
   // separately because the rule it has to satisfy is different, and folding it
   // into the loop above would assert the wrong thing about it.
+  //
+  // All three of its members are pinned by name. Dropping `...nutrition` would
+  // let a photograph be sent by someone who never opened a food diary; dropping
+  // the flag would let an admin switch-off be ignored; dropping
+  // `requirePhotoConsent` is the failure this whole change exists to prevent -
+  // a plate reaching Google or Groq on the strength of nutrition consent alone.
+  const decl = routes.match(/const photo = \[([^\]]*)\]/)?.[1] || '';
   assert.match(
-    routes,
-    /const photo = \[\.\.\.nutrition,\s*requireFeatureFlag\('foodPhotoLogging'\)\]/,
-    'the photo gate must build on the nutrition gate and add the photo flag',
+    decl,
+    /\.\.\.nutrition\b/,
+    'the photo gate must build on the nutrition gate',
+  );
+  assert.match(
+    decl,
+    /requireFeatureFlag\('foodPhotoLogging'\)/,
+    'the photo gate must add the photo flag',
+  );
+  assert.match(
+    decl,
+    /requirePhotoConsent\b/,
+    'the photo gate must check the photo consent scope',
+  );
+  assert.doesNotMatch(
+    decl,
+    /requireNutritionConsent\b|requireMedicalRecordsConsent\b/,
+    'the photo gate must check exactly one scope, its own',
   );
 });
 
@@ -193,6 +215,23 @@ test('the nutrition array holds the nutrition scope, the medical array the medic
   );
 });
 
+test('the photo consent routes grant and revoke the photo scope', () => {
+  // The photo gate reads `requirePhotoConsent`, so this is the other half of
+  // the same contract: without a route that can grant it, the gate can only
+  // ever answer "not granted" and the feature is unreachable for everyone.
+  // Named by handler rather than by path so a copy-paste of grantNutrition
+  // onto the photo path fails here instead of silently recording the wrong
+  // scope.
+  const grant = all.find((r) => r.line.includes("'/ledger/consent/photo'") && r.line.startsWith('router.post'));
+  const revoke = all.find((r) => r.line.includes("'/ledger/consent/photo'") && r.line.startsWith('router.delete'));
+  assert.ok(grant, 'no POST /ledger/consent/photo route');
+  assert.ok(revoke, 'no DELETE /ledger/consent/photo route');
+  assert.match(grant.line, /ledgerConsentCtrl\.grantPhoto\b/, `wrong grant handler: ${grant.line}`);
+  assert.match(revoke.line, /ledgerConsentCtrl\.revokePhoto\b/, `wrong revoke handler: ${revoke.line}`);
+  assert.match(grant.line, /\.\.\.consentGated\b/, 'the photo grant must be reachable without the scope');
+  assert.match(revoke.line, /\.\.\.consentGated\b/, 'the photo revoke must be reachable without the scope');
+});
+
 function declNutrition() {
   return routes.match(/const nutrition = \[([^\]]*)\]/)?.[1] || '';
 }
@@ -245,10 +284,14 @@ test('the consent endpoints themselves are NOT scope-gated', () => {
   // Otherwise there is no way to opt in: the only route that could grant a
   // scope would itself require that scope.
   const consent = all.filter((r) => r.line.includes('/ledger/consent'));
-  assert.ok(consent.length >= 5, 'expected get, grant and revoke for both scopes');
+  assert.ok(consent.length >= 7, 'expected get, policy and grant/revoke for all three scopes');
   for (const r of consent) {
     assert.match(r.line, /\.\.\.consentGated\b/, `${r.n}: ${r.line} must use consentGated`);
-    assert.doesNotMatch(r.line, /requireNutritionConsent|requireMedicalRecordsConsent/, `${r.n}: ${r.line} is self-blocking`);
+    assert.doesNotMatch(
+      r.line,
+      /requireNutritionConsent|requireMedicalRecordsConsent|requirePhotoConsent/,
+      `${r.n}: ${r.line} is self-blocking`,
+    );
   }
 });
 

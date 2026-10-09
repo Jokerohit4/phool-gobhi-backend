@@ -42,6 +42,7 @@ export const getConsent = handle(async (req) => ({
   version: ledgerConsent.CURRENT_LEDGER_POLICY_VERSION,
   nutrition: await ledgerConsent.getNutritionConsentService(req.userId),
   medicalRecords: await ledgerConsent.getMedicalRecordsConsentService(req.userId),
+  photo: await ledgerConsent.getPhotoConsentService(req.userId),
 }));
 
 export const grantNutrition = handle(async (req) => {
@@ -91,5 +92,25 @@ export const revokeMedicalRecords = handle(async (req) => {
   const purge = req.body?.deleteExisting === true;
   const out = await ledgerConsent.revokeMedicalRecordsConsentService(req.userId, { purge });
   track('health_medical_consent_revoked', req.userId, { purged: purge });
+  return out;
+});
+
+export const grantPhoto = handle(async (req) => {
+  const out = await ledgerConsent.grantPhotoConsentService(req.userId, {
+    privacyVersion: req.body?.privacyVersion,
+  });
+  track('health_photo_consent_granted', req.userId, {
+    version: req.body?.privacyVersion || null,
+  });
+  return out;
+});
+
+export const revokePhoto = handle(async (req) => {
+  // Purge opt-in, for the same reason as the other two. "Stop sending my
+  // photos" is not "delete every photo I already sent", and for a meal someone
+  // photographed as a record of an evening out the difference matters.
+  const purge = req.body?.deleteExisting === true;
+  const out = await ledgerConsent.revokePhotoConsentService(req.userId, { purge });
+  track('health_photo_consent_revoked', req.userId, { purged: purge });
   return out;
 });
