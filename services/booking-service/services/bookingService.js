@@ -2873,13 +2873,17 @@ export async function getGymSalesSummary(gymId, partnerId) {
 }
 
 function attendanceDateBuckets() {
-  const today = new Date();
-  const toDateString = (d) => d.toISOString().split('T')[0];
+  // Anchor on IST, not the server's UTC clock: `booking.date` is always an
+  // IST calendar date (slotTiming.js), so a raw UTC "today" mislabels every
+  // booking between IST 00:00 and 05:29 as yesterday's — the same off-by-one
+  // todayDateStringIST() exists to prevent.
+  const todayIstMs = Date.now() + IST_OFFSET_MS;
+  const toDateString = (ms) => new Date(ms).toISOString().split('T')[0];
   return {
-    todayString: toDateString(today),
-    weekAgoString: toDateString(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)),
-    monthAgoString: toDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)),
-    yearAgoString: toDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)),
+    todayString: toDateString(todayIstMs),
+    weekAgoString: toDateString(todayIstMs - 7 * 24 * 60 * 60 * 1000),
+    monthAgoString: toDateString(todayIstMs - 30 * 24 * 60 * 60 * 1000),
+    yearAgoString: toDateString(todayIstMs - 365 * 24 * 60 * 60 * 1000),
   };
 }
 
