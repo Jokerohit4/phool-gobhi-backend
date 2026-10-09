@@ -330,8 +330,11 @@ export async function behavioralAverages(prisma, { userIds, today = todayIST() }
  * Fetches behavioral consistency for a list of users.
  * Used by the buddy-service to build consistency leagues.
  */
-export async function getBatchBehavioralConsistency(prisma, { userIds }) {
-  const averages = await behavioralAverages(prisma, { userIds });
+export async function getBatchBehavioralConsistency(prisma, { userIds, today }) {
+  const averages = await behavioralAverages(
+    prisma,
+    today == null ? { userIds } : { userIds, today },
+  );
   return [...averages].map(([userId, avgScore]) => ({ userId, avgScore }));
 }
 

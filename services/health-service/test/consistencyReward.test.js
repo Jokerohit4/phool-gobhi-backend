@@ -63,7 +63,7 @@ test('a full week at close 400 averages exactly 80, today excluded', async () =>
 
 test('leagues get the same figure per user', async () => {
   snapshots = [...week(USER, 500), ...week(8, 250)];
-  const rows = await getBatchBehavioralConsistency(fakePrisma, { userIds: [USER, 8] });
+  const rows = await getBatchBehavioralConsistency(fakePrisma, { userIds: [USER, 8], today: TODAY });
   assert.deepEqual(
     Object.fromEntries(rows.map((r) => [r.userId, r.avgScore])),
     { [USER]: 100, 8: 50 },
