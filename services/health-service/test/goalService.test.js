@@ -3,7 +3,7 @@
 //   1. A derived goal is PERSISTED the first time it's resolved. If it were
 //      recomputed per request, a transient auth-service failure would hand
 //      the user a different target between two renders of the same screen.
-//   2. The goal week is Monday-start UTC, the same boundary
+//   2. The goal week is Monday-start IST, the same boundary
 //      challenge-service's UserStreakWeek uses. A ring that resets on a
 //      different day from the streak beside it is a bug report waiting to
 //      happen, and the two live in different services with no shared code.
@@ -76,15 +76,17 @@ function isoDay(date) {
   return date.toISOString().slice(0, 10);
 }
 
-test('startOfIsoWeek lands on Monday 00:00 UTC, whatever day it is given', () => {
-  // 2026-09-09 is a Wednesday; its ISO week starts Monday the 7th.
+test('startOfIsoWeek lands on the Monday of the IST week, whatever instant it is given', () => {
+  // 2026-09-09T18:30Z is 2026-09-10 00:00 IST (a Thursday); its week starts
+  // Monday the 7th.
   assert.equal(isoDay(startOfIsoWeek(new Date('2026-09-09T18:30:00Z'))), '2026-09-07');
   // A Monday is its own week start...
   assert.equal(isoDay(startOfIsoWeek(new Date('2026-09-07T00:00:00Z'))), '2026-09-07');
-  // ...and a Sunday belongs to the week that began six days earlier, not to
-  // the one starting tomorrow. This is the off-by-one that would silently
-  // desync the ring from the streak.
-  assert.equal(isoDay(startOfIsoWeek(new Date('2026-09-13T23:59:00Z'))), '2026-09-07');
+  // ...and the boundary is IST, not UTC: 2026-09-13T23:59Z is already 05:29
+  // on Monday the 14th in IST, so it belongs to the NEW week. Read as UTC it
+  // would sit in the previous week, which is exactly the off-by-one that
+  // desynced the ring from the streak.
+  assert.equal(isoDay(startOfIsoWeek(new Date('2026-09-13T23:59:00Z'))), '2026-09-14');
 });
 
 test('a stated onboarding intent seeds the goal', async () => {

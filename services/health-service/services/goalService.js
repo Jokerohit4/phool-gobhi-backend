@@ -1,5 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
+import {
+  startOfIsoWeek, addDays, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
+} from '../utils/sessionDay.js';
+
+// Re-exported for the sibling readers (stats, consistency streak) that have
+// always imported their week boundary from here, so there is exactly one
+// definition and the Monday boundary can never drift between them.
+export { startOfIsoWeek } from '../utils/sessionDay.js';
 
 const prisma = new PrismaClient();
 
@@ -28,28 +36,12 @@ const INTENT_TO_SESSIONS = {
   five_plus: 5,
 };
 
-// Monday-start, UTC — identical to challenge-service's startOfIsoWeek, so
-// the goal week and the streak week are the same week. They're separate
-// implementations because they're separate services, but they must not
-// drift: a ring that resets on a different day from the streak it sits next
-// to is a bug report waiting to happen.
-export function startOfIsoWeek(date = new Date()) {
-  const d = new Date(date);
-  const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  d.setUTCDate(d.getUTCDate() - day);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
-
-function toLocalDateString(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
-}
+// The Monday-start week boundary lives in utils/sessionDay.js (IST-anchored),
+// shared with challenge-service's copy so the goal week and the streak week
+// are the same week. They're separate services with no shared code, so the
+// boundary is duplicated-but-identical on purpose: a ring that resets on a
+// different day from the streak it sits next to is a bug report waiting to
+// happen.
 
 /// Resolves the user's target, persisting a derived one the first time so
 /// the number doesn't move under them between renders.
@@ -99,8 +91,10 @@ export async function setGoalService(userId, sessionsPerWeek) {
   return { sessionsPerWeek: value, source: 'user' };
 }
 
-// Counts finished, non-rest sessions per ISO week over the last three weeks
-// (this one plus the two before it) in a single query.
+// Counts counted workout sessions (see COUNTED_WORKOUT_WHERE: finished,
+// non-rest, at least one completed set) per IST week over the last three
+// weeks in a single query. The empty-set and rest exclusions are what let
+// the home ring, the stats KPI and the streak report the same number.
 //
 // Keyed on localDate — the day the user experienced — rather than startedAt,
 // so a session logged just after midnight or backfilled while travelling
@@ -114,10 +108,9 @@ async function weeklyCountsService(userId, weeks = 3) {
   const sessions = await prisma.workoutSession.findMany({
     where: {
       userId,
-      endedAt: { not: null },
-      NOT: { type: 'rest' },
+      ...COUNTED_WORKOUT_WHERE,
       OR: [
-        { localDate: { gte: toLocalDateString(windowStart) } },
+        { localDate: { gte: dayString(windowStart) } },
         { AND: [{ localDate: null }, { startedAt: { gte: windowStart } }] },
       ],
     },
@@ -126,14 +119,14 @@ async function weeklyCountsService(userId, weeks = 3) {
 
   const counts = new Map();
   for (let i = 0; i < weeks; i++) {
-    counts.set(toLocalDateString(addDays(windowStart, i * 7)), 0);
+    counts.set(dayString(addDays(windowStart, i * 7)), 0);
   }
 
   for (const session of sessions) {
     const day = session.localDate
-      ? new Date(`${session.localDate}T00:00:00Z`)
+      ? dayToDate(session.localDate)
       : session.startedAt;
-    const key = toLocalDateString(startOfIsoWeek(day));
+    const key = dayString(startOfIsoWeek(day));
     if (counts.has(key)) counts.set(key, counts.get(key) + 1);
   }
 
@@ -151,7 +144,7 @@ export async function getGoalStateService(userId) {
     weeklyCountsService(userId, 3),
   ]);
 
-  const weekStart = toLocalDateString(thisWeekStart);
+  const weekStart = dayString(thisWeekStart);
   const completedThisWeek = counts.get(weekStart) ?? 0;
   const previousWeeks = [...counts.entries()]
     .filter(([key]) => key !== weekStart)

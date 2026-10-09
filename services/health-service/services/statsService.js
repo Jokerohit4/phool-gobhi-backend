@@ -1,5 +1,7 @@
 import { buildRangeSeriesService } from './exportService.js';
-import { startOfIsoWeek } from './goalService.js';
+import {
+  istDateString, dayString, dayToDate, addDays, startOfIsoWeek, countsAsSession,
+} from '../utils/sessionDay.js';
 
 // FR-06 / PRD §08. Everything the Progress screen draws, from one request.
 //
@@ -27,15 +29,12 @@ export const DEFAULT_RANGE = '30d';
 // both because 12 weeks is the widest window anything here needs.
 const HEATMAP_DAYS = 84;
 
-function toLocalDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function daysAgo(days) {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - days);
-  return d;
+// UTC-midnight of the IST today, from which the window bounds are stepped
+// back. Anchoring on the IST day (via utils/sessionDay) is what stops the
+// KPI window, the weekly bars and the heatmap disagreeing about which day a
+// late-evening session belongs to.
+function istToday() {
+  return dayToDate(istDateString());
 }
 
 function mean(values) {
@@ -45,36 +44,42 @@ function mean(values) {
 
 /// PRD §8.3's stat definitions, in one place so the KPI strip, the bars and
 /// the export can't drift on what counts:
-///   sessions   = non-rest logs in range
+///   sessions   = counted workouts in range (finished, non-rest, >=1 set)
 ///   minutes    = sum of logged durations
 ///   volume     = Σ sets × reps × weight (detail-level only; a quick-log with
 ///                no exercises contributes 0 by design)
 ///   avg RPE    = mean effort over sessions that recorded one
-///   activeDays = distinct days with a non-rest log
+///   activeDays = distinct days with a counted workout
 export async function getStatsService(userId, requestedRange) {
   const range = RANGES[requestedRange] ? requestedRange : DEFAULT_RANGE;
   const rangeDays = RANGES[range];
 
+  const today = istToday();
   const windowDays = Math.max(rangeDays, HEATMAP_DAYS);
-  const windowStart = daysAgo(windowDays - 1);
-  const rangeStart = daysAgo(rangeDays - 1);
+  const windowStart = addDays(today, -(windowDays - 1));
+  const rangeStart = addDays(today, -(rangeDays - 1));
 
   const { sessions } = await buildRangeSeriesService(userId, {
-    from: toLocalDate(windowStart),
+    from: dayString(windowStart),
   });
 
-  // A session with no localDate predates that column; fall back to the day
-  // its startedAt landed on so old history still appears rather than
+  // A session with no localDate predates that column; fall back to the IST
+  // day its startedAt landed on so old history still appears rather than
   // silently dropping out of every chart.
   const dated = sessions.map((s) => ({
     ...s,
-    day: s.localDate || toLocalDate(new Date(s.startedAt)),
+    day: s.localDate || istDateString(new Date(s.startedAt)),
   }));
 
-  const rangeStartDay = toLocalDate(rangeStart);
-  const inRange = dated.filter((s) => s.day >= rangeStartDay);
-  const trained = inRange.filter((s) => s.type !== 'rest');
-  const restLogs = inRange.filter((s) => s.type === 'rest');
+  const rangeStartDay = dayString(rangeStart);
+  // `counted` uses the shared predicate (finished, non-rest, at least one
+  // completed set) so a workout means the same thing here as on the home ring
+  // and the streak; an empty quick-log is a session row but not a workout.
+  // It spans the wider window (>= the heatmap) so the bars and heatmap can
+  // outlive a short KPI range; `trained` narrows it to the requested range.
+  const counted = dated.filter((s) => countsAsSession(s));
+  const trained = counted.filter((s) => s.day >= rangeStartDay);
+  const restLogs = dated.filter((s) => s.type === 'rest' && s.day >= rangeStartDay);
 
   const volumeKg = trained.reduce((sum, s) => sum + (s.volumeKg || 0), 0);
   const minutes = trained.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
@@ -89,14 +94,12 @@ export async function getStatsService(userId, requestedRange) {
   const weeklyBars = [];
   const thisWeekStart = startOfIsoWeek();
   for (let i = weekCount - 1; i >= 0; i--) {
-    const start = new Date(thisWeekStart);
-    start.setUTCDate(start.getUTCDate() - i * 7);
-    const end = new Date(start);
-    end.setUTCDate(end.getUTCDate() + 6);
-    const startDay = toLocalDate(start);
-    const endDay = toLocalDate(end);
-    const weekSessions = dated.filter(
-      (s) => s.type !== 'rest' && s.day >= startDay && s.day <= endDay,
+    const start = addDays(thisWeekStart, -i * 7);
+    const end = addDays(start, 6);
+    const startDay = dayString(start);
+    const endDay = dayString(end);
+    const weekSessions = counted.filter(
+      (s) => s.day >= startDay && s.day <= endDay,
     );
     weeklyBars.push({
       weekStart: startDay,
@@ -108,9 +111,9 @@ export async function getStatsService(userId, requestedRange) {
   // ---- G3 consistency heatmap: only days with something logged. The client
   // draws the empty grid; sending 84 zeroes would be most of the payload.
   const heatmapCounts = new Map();
-  const heatmapStart = toLocalDate(daysAgo(HEATMAP_DAYS - 1));
-  for (const s of dated) {
-    if (s.type === 'rest' || s.day < heatmapStart) continue;
+  const heatmapStart = dayString(addDays(today, -(HEATMAP_DAYS - 1)));
+  for (const s of counted) {
+    if (s.day < heatmapStart) continue;
     heatmapCounts.set(s.day, (heatmapCounts.get(s.day) || 0) + 1);
   }
 
@@ -136,7 +139,7 @@ export async function getStatsService(userId, requestedRange) {
   return {
     range,
     from: rangeStartDay,
-    to: toLocalDate(new Date()),
+    to: istDateString(),
     days: rangeDays,
     kpi: {
       sessions: trained.length,

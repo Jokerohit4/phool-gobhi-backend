@@ -10,7 +10,7 @@
 //      streak mid-week would punish them for the calendar.
 //   3. longestWeeks can never go down, so it's computed over all history
 //      rather than the window the client is shown.
-//   4. Weeks are Monday-start UTC, the same boundary goalService and
+//   4. Weeks are Monday-start IST, the same boundary goalService and
 //      challenge-service's UserStreakWeek use.
 //
 // Run with: node --experimental-test-module-mocks --test

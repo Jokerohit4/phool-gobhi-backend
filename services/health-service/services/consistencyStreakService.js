@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { startOfIsoWeek } from './goalService.js';
+import {
+  startOfIsoWeek, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
+} from '../utils/sessionDay.js';
 
 const prisma = new PrismaClient();
 
@@ -42,10 +44,6 @@ const prisma = new PrismaClient();
 // to drift.
 export const QUALIFYING_SESSIONS_PER_WEEK = 2;
 
-function toDateKey(date) {
-  return date.toISOString().slice(0, 10);
-}
-
 function addWeeks(date, weeks) {
   const d = new Date(date);
   d.setUTCDate(d.getUTCDate() + weeks * 7);
@@ -66,24 +64,21 @@ function addWeeks(date, weeks) {
 // anyway for an all-time record that must never go down.
 async function qualifyingWeeksService(userId) {
   const sessions = await prisma.workoutSession.findMany({
-    where: {
-      userId,
-      endedAt: { not: null },
-      NOT: { type: 'rest' },
-    },
+    where: { userId, ...COUNTED_WORKOUT_WHERE },
     select: { localDate: true, startedAt: true },
   });
 
   // Keyed on localDate — the day the user experienced — with a startedAt
   // fallback for sessions that predate that column, same rule goalService
   // uses so a session can't land in one week for the ring and another for
-  // the streak.
+  // the streak. The count uses the shared predicate (finished, non-rest, at
+  // least one completed set), so an empty quick-log can't inflate the streak.
   const perWeek = new Map();
   for (const session of sessions) {
     const day = session.localDate
-      ? new Date(`${session.localDate}T00:00:00Z`)
+      ? dayToDate(session.localDate)
       : session.startedAt;
-    const key = toDateKey(startOfIsoWeek(day));
+    const key = dayString(startOfIsoWeek(day));
     perWeek.set(key, (perWeek.get(key) ?? 0) + 1);
   }
 
@@ -103,14 +98,14 @@ async function qualifyingWeeksService(userId) {
 // streak mid-week would punish people for the calendar, which inverts the
 // product's own rule that charts celebrate consistency and never shame gaps.
 function currentRun(qualifying, thisWeekStart) {
-  const thisWeekQualified = qualifying.has(toDateKey(thisWeekStart));
+  const thisWeekQualified = qualifying.has(dayString(thisWeekStart));
 
   // Start counting at this week if it already qualified, otherwise at last
   // week — leaving the current, unfinished week neutral.
   let cursor = thisWeekQualified ? thisWeekStart : addWeeks(thisWeekStart, -1);
   let weeks = 0;
 
-  while (qualifying.has(toDateKey(cursor))) {
+  while (qualifying.has(dayString(cursor))) {
     weeks += 1;
     cursor = addWeeks(cursor, -1);
   }
@@ -127,12 +122,12 @@ function longestRun(qualifying) {
   for (const week of qualifying) {
     // Only start counting from the beginning of a run, so each run is
     // walked once instead of once per week it contains.
-    const previous = toDateKey(addWeeks(new Date(`${week}T00:00:00Z`), -1));
+    const previous = dayString(addWeeks(dayToDate(week), -1));
     if (qualifying.has(previous)) continue;
 
     let length = 0;
-    let cursor = new Date(`${week}T00:00:00Z`);
-    while (qualifying.has(toDateKey(cursor))) {
+    let cursor = dayToDate(week);
+    while (qualifying.has(dayString(cursor))) {
       length += 1;
       cursor = addWeeks(cursor, 1);
     }
@@ -156,7 +151,7 @@ export async function getConsistencyStreakService(userId, { weeksToShow = 12 } =
 
   const recentWeeks = [];
   for (let i = weeksToShow - 1; i >= 0; i--) {
-    const weekStart = toDateKey(addWeeks(thisWeekStart, -i));
+    const weekStart = dayString(addWeeks(thisWeekStart, -i));
     recentWeeks.push({
       weekStart,
       sessions: perWeek.get(weekStart) ?? 0,
@@ -168,10 +163,10 @@ export async function getConsistencyStreakService(userId, { weeksToShow = 12 } =
     currentWeeks: weeks,
     longestWeeks: Math.max(longestRun(qualifying), weeks),
     sessionsLogged,
-    thisWeekSessions: perWeek.get(toDateKey(thisWeekStart)) ?? 0,
+    thisWeekSessions: perWeek.get(dayString(thisWeekStart)) ?? 0,
     thisWeekQualified,
     qualifyingSessionsPerWeek: QUALIFYING_SESSIONS_PER_WEEK,
-    weekStart: toDateKey(thisWeekStart),
+    weekStart: dayString(thisWeekStart),
     recentWeeks,
     // Says out loud what this number is, so no client can accidentally
     // present it as the verified streak or hang a reward off it.

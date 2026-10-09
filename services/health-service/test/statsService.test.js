@@ -3,9 +3,10 @@
 // they have to mean one thing:
 //
 //   - rest logs count toward neither sessions nor volume, but are reported
-//   - a quick-log with no exercise detail contributes 0 volume, by design
+//   - a workout is a finished, non-rest session with >=1 completed set, so an
+//     empty quick-log counts toward neither sessions nor volume
 //   - avg RPE is null, not 0, when nothing recorded effort
-//   - weekly bars are Monday-start ISO weeks, and empty weeks are emitted
+//   - weekly bars are Monday-start IST weeks, and empty weeks are emitted
 //   - the heatmap spans 12 weeks whatever the KPI range is
 //
 // Run with: node --experimental-test-module-mocks --test
@@ -27,13 +28,17 @@ function isoDay(offsetDays = 0) {
 // Shapes a row the way buildRangeSeriesService's prisma query returns it,
 // since stats is deliberately layered on that builder rather than querying
 // for itself.
+// A sessionRow is the raw Prisma shape (exercises -> sets); statsService
+// layers on buildRangeSeriesService, which computes completedSets/volumeKg/
+// durationMinutes from it. The default is one completed set, so a bare
+// sessionRow is a counted workout — pass `sets: []` for an empty quick-log.
 function sessionRow({
   id = 1,
   day = isoDay(0),
   type = 'strength',
   rpe = null,
   minutes = 45,
-  sets = [],
+  sets = [set(100, 5)],
 } = {}) {
   const startedAt = new Date(`${day}T09:00:00Z`);
   return {
@@ -92,22 +97,24 @@ test('KPIs follow the stat definitions', async () => {
     sessionRow({ id: 1, day: isoDay(0), rpe: 8, minutes: 60, sets: [set(100, 5), set(100, 5)] }),
     sessionRow({ id: 2, day: isoDay(1), rpe: 6, minutes: 30, sets: [set(50, 10)] }),
     // Rest: counted as a rest day, never as a session or as volume.
-    sessionRow({ id: 3, day: isoDay(2), type: 'rest', minutes: 0 }),
-    // A quick-log with no exercise detail: a real session, zero volume.
-    sessionRow({ id: 4, day: isoDay(3), rpe: null, minutes: 40 }),
+    sessionRow({ id: 3, day: isoDay(2), type: 'rest', minutes: 0, sets: [] }),
+    // An empty quick-log (finished with zero completed sets): a session row,
+    // but NOT a workout — it counts toward neither the KPI, the ring nor the
+    // streak, and contributes no minutes/volume.
+    sessionRow({ id: 4, day: isoDay(3), rpe: null, minutes: 40, sets: [] }),
   ];
 
   const { kpi } = await getStatsService(1, '7d');
 
-  assert.equal(kpi.sessions, 3, 'the rest log is not a session');
-  assert.equal(kpi.volumeKg, 1500, '100*5 + 100*5 + 50*10, quick-log adds nothing');
-  assert.equal(kpi.minutes, 130);
+  assert.equal(kpi.sessions, 2, 'neither the rest log nor the empty quick-log is a workout');
+  assert.equal(kpi.volumeKg, 1500, '100*5 + 100*5 + 50*10, empty quick-log adds nothing');
+  assert.equal(kpi.minutes, 90, 'only the two counted workouts contribute duration');
   assert.equal(kpi.restDays, 1);
-  assert.equal(kpi.activeDays, 3);
+  assert.equal(kpi.activeDays, 2);
   // Mean of the two sessions that recorded effort — the unrated one is not
   // averaged in as a zero.
   assert.equal(kpi.avgRpe, 7);
-  assert.equal(kpi.consistencyPct, Math.round((3 / 7) * 100));
+  assert.equal(kpi.consistencyPct, Math.round((2 / 7) * 100));
 });
 
 test('avg RPE is null, not zero, when nothing recorded effort', async () => {

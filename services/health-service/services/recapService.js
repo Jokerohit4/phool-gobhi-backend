@@ -1,4 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import {
+  istDateString, dayString, dayToDate, addDays, startOfIsoWeek, COUNTED_WORKOUT_WHERE,
+} from '../utils/sessionDay.js';
 const prisma = new PrismaClient();
 
 // The server returns numbers, the client renders the card (BRD Tech §5.4:
@@ -8,29 +11,28 @@ const prisma = new PrismaClient();
 // rather than trusting each client to omit it means a future web/partner
 // renderer can't accidentally reintroduce PII.
 
-function isoWeekStart(dateStr) {
-  const d = dateStr ? new Date(`${dateStr}T00:00:00Z`) : new Date();
-  const day = d.getUTCDay();
-  // Monday-start, matching challenge-service's UserStreakWeek convention so
-  // "this week" means the same thing in the recap as in the streak.
-  const diff = (day === 0 ? -6 : 1) - day;
-  const start = new Date(d);
-  start.setUTCDate(d.getUTCDate() + diff);
-  start.setUTCHours(0, 0, 0, 0);
-  return start;
-}
-
-function toLocalDate(d) {
-  return d.toISOString().slice(0, 10);
-}
-
+// The Monday-start week boundary is shared (utils/sessionDay, IST-anchored),
+// matching challenge-service's UserStreakWeek convention so "this week" means
+// the same thing in the recap as in the streak.
 export async function getWeeklyRecapService(userId, weekParam) {
-  const start = isoWeekStart(weekParam);
-  const end = new Date(start);
-  end.setUTCDate(start.getUTCDate() + 7);
+  const start = startOfIsoWeek(weekParam ? dayToDate(weekParam) : new Date());
+  const startStr = dayString(start);
+  const end = addDays(start, 7);
+  const endStr = dayString(end);
 
+  // A counted workout only (finished, non-rest, >=1 completed set), so a rest
+  // log or an empty quick-log doesn't appear as a session on the recap card.
+  // Bounded on localDate — the day the user experienced — with a startedAt
+  // fallback for rows that predate that column.
   const sessions = await prisma.workoutSession.findMany({
-    where: { userId, endedAt: { not: null }, startedAt: { gte: start, lt: end } },
+    where: {
+      userId,
+      ...COUNTED_WORKOUT_WHERE,
+      OR: [
+        { localDate: { gte: startStr, lt: endStr } },
+        { AND: [{ localDate: null }, { startedAt: { gte: start, lt: end } }] },
+      ],
+    },
     include: {
       exercises: {
         include: { exercise: { select: { name: true } }, sets: { where: { completed: true } } },
@@ -51,7 +53,8 @@ export async function getWeeklyRecapService(userId, weekParam) {
     if (s.endedAt) minutes += Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 60000);
     if (s.rpe) { rpeSum += s.rpe; rpeCount += 1; }
 
-    const dayIndex = Math.floor((s.startedAt.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+    const day = s.localDate || istDateString(s.startedAt);
+    const dayIndex = Math.round((dayToDate(day).getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
     if (dayIndex >= 0 && dayIndex < 7) activeDays[dayIndex] = true;
 
     for (const se of s.exercises) {
@@ -67,8 +70,8 @@ export async function getWeeklyRecapService(userId, weekParam) {
   }
 
   return {
-    weekStart: toLocalDate(start),
-    weekEnd: toLocalDate(new Date(end.getTime() - 24 * 60 * 60 * 1000)),
+    weekStart: startStr,
+    weekEnd: dayString(addDays(start, 6)),
     sessions: sessions.length,
     minutes,
     volumeKg: Math.round(volumeKg),

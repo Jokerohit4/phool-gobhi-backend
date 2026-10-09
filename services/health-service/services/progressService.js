@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { equipmentFit } from './homeSetup.js';
+import {
+  startOfIsoWeek, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
+} from '../utils/sessionDay.js';
 const prisma = new PrismaClient();
 
 const RANGE_DAYS = { '4w': 28, '3m': 90, '1y': 365 };
@@ -16,8 +19,11 @@ function startOfRange(range) {
 // be confused, per the implementation plan's file-layout note.
 export async function getProgressSummaryService(userId, range) {
   const since = startOfRange(range);
+  // Only counted workouts count, so an empty quick-log or a rest day doesn't
+  // inflate the "workouts" total on the Training Progress screen (matches the
+  // home ring, the stats KPI and the streak).
   const sessions = await prisma.workoutSession.findMany({
-    where: { userId, startedAt: { gte: since }, endedAt: { not: null } },
+    where: { userId, startedAt: { gte: since }, ...COUNTED_WORKOUT_WHERE },
     include: { exercises: { include: { exercise: true, sets: { where: { completed: true } } } } },
   });
 
@@ -27,9 +33,10 @@ export async function getProgressSummaryService(userId, range) {
   const volumeByMuscleGroup = {};
 
   for (const session of sessions) {
-    const weekStart = new Date(session.startedAt);
-    weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay());
-    const weekKey = weekStart.toISOString().slice(0, 10);
+    // Monday-start IST week, keyed on the day the user experienced — the same
+    // boundary as the goal, the streak and the stats bars.
+    const day = session.localDate ? dayToDate(session.localDate) : session.startedAt;
+    const weekKey = dayString(startOfIsoWeek(day));
     volumeByWeek[weekKey] = volumeByWeek[weekKey] || 0;
 
     if (session.endedAt) {
@@ -137,7 +144,9 @@ const RECOVERY_MODE_WINDOW_MULTIPLIER = 1.5;
 export async function getMuscleReadinessService(userId) {
   const [recentSessionExercises, profile] = await Promise.all([
     prisma.sessionExercise.findMany({
-      where: { session: { userId, endedAt: { not: null } } },
+      // "Last trained" means a counted session (finished, non-rest, >=1 set),
+      // so a rest day or an abandoned log doesn't mark a muscle as trained.
+      where: { session: { userId, ...COUNTED_WORKOUT_WHERE } },
       include: { exercise: { select: { muscleGroup: true } }, session: { select: { startedAt: true } } },
     }),
     prisma.personalisationProfile.findUnique({ where: { userId } }),

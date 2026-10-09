@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { fetchAttendanceSince } from '../utils/fetchAttendance.js';
+import { istDateString, COUNTED_WORKOUT_WHERE } from '../utils/sessionDay.js';
 
 const prisma = new PrismaClient();
 
@@ -14,31 +15,28 @@ const prisma = new PrismaClient();
 // off.
 const WINDOW_HOURS = 24;
 
-function localDateIST(date) {
-  return new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-}
-
 export async function getUnloggedAttendanceService(userId) {
   const events = await fetchAttendanceSince(WINDOW_HOURS, { userId });
   if (events.length === 0) return [];
 
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000);
+  // A counted workout on the day suppresses the prompt. An empty quick-log
+  // does not — the user still hasn't told us what they did, and the shared
+  // predicate is what "logged a workout" means everywhere else.
   const sessions = await prisma.workoutSession.findMany({
-    where: { userId, startedAt: { gte: since } },
-    select: { localDate: true, startedAt: true, endedAt: true },
+    where: { userId, startedAt: { gte: since }, ...COUNTED_WORKOUT_WHERE },
+    select: { localDate: true, startedAt: true },
   });
 
   const loggedDays = new Set(
-    sessions
-      .filter((s) => s.endedAt !== null)
-      .map((s) => s.localDate || localDateIST(s.startedAt)),
+    sessions.map((s) => s.localDate || istDateString(s.startedAt)),
   );
 
   // One entry per day, not per check-in: two gyms in a day is one prompt.
   // Someone who trained twice does not need telling twice.
   const byDay = new Map();
   for (const event of events) {
-    const day = localDateIST(event.attendedAt);
+    const day = istDateString(event.attendedAt);
     if (loggedDays.has(day)) continue;
     if (!byDay.has(day)) {
       byDay.set(day, {
@@ -71,13 +69,13 @@ export async function findUnloggedUsersService({ minMinutesSince, maxHours }) {
   const userIds = [...new Set(ripe.map((e) => e.userId))];
   const since = new Date(Date.now() - maxHours * 60 * 60 * 1000);
   const sessions = await prisma.workoutSession.findMany({
-    where: { userId: { in: userIds }, startedAt: { gte: since }, endedAt: { not: null } },
+    where: { userId: { in: userIds }, startedAt: { gte: since }, ...COUNTED_WORKOUT_WHERE },
     select: { userId: true, localDate: true, startedAt: true },
   });
 
   const loggedByUser = new Map();
   for (const s of sessions) {
-    const day = s.localDate || localDateIST(s.startedAt);
+    const day = s.localDate || istDateString(s.startedAt);
     if (!loggedByUser.has(s.userId)) loggedByUser.set(s.userId, new Set());
     loggedByUser.get(s.userId).add(day);
   }
@@ -85,7 +83,7 @@ export async function findUnloggedUsersService({ minMinutesSince, maxHours }) {
   const out = [];
   const seen = new Set();
   for (const event of ripe) {
-    const day = localDateIST(event.attendedAt);
+    const day = istDateString(event.attendedAt);
     const key = `${event.userId}:${day}`;
     if (seen.has(key)) continue;
     seen.add(key);
