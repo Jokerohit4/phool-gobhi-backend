@@ -9,6 +9,7 @@ import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
 import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
+import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -3376,8 +3377,8 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
     .map((r, i) => ({
       rank: i + 1,
       customerId: r.customerId,
-      name: userById[r.customerId]?.name || 'Anonymous',
-      photoUrl: userById[r.customerId]?.profileImageUrl || null,
+      // Others as initials only, no photo; own row keeps name + photo.
+      ...leaderboardIdentity(userById[r.customerId], Number(r.customerId) === Number(requestingCustomerId)),
       checkIns: r.checkIns,
       score: r.score,
       attendanceScore: r.attendanceScore,

@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 let profile = null;
+let cycleProfile = null;
 let sessionExercises = [];
 let templates = [];
 
@@ -32,8 +33,15 @@ test('setup: mock prisma once, import the services once', async (t) => {
               profile = profile ? { ...profile, ...update } : { injuryZones: [], ...create };
               return profile;
             },
+            updateMany: async ({ data }) => {
+              profile = profile ? { ...profile, ...data } : null;
+              return { count: profile ? 1 : 0 };
+            },
             deleteMany: async () => { profile = null; },
           };
+          // Read by progressService's lazy expiry of a cycle-owned recovery
+          // mode (releaseExpiredRecoveryMode). Null unless a test opts in.
+          this.cycleTrackingProfile = { findUnique: async () => cycleProfile };
         }
       },
       Prisma: {},
@@ -76,6 +84,7 @@ test('recovery mode stretches the window, so a recently-trained group stays reco
     { exercise: { muscleGroup: 'chest' }, session: { startedAt: daysAgo(2) } },
   ];
   templates = [];
+  cycleProfile = null;
 
   profile = { programmingMode: 'neutral', injuryZones: [] };
   const neutral = await getMuscleReadinessService(1);
@@ -85,6 +94,50 @@ test('recovery mode stretches the window, so a recently-trained group stays reco
   const recovery = await getMuscleReadinessService(1);
   assert.equal(recovery.readiness.find((r) => r.muscleGroup === 'chest').status, 'recovering');
   assert.equal(recovery.suppressPrPush, true, 'recovery mode must tell the client not to push PRs');
+});
+
+test('a cycle recovery mode whose window has closed lapses to neutral in readiness', async () => {
+  // The expiry is read-side: no cron needed. A low_impact the cycle sync set
+  // during the last period must not keep stretching windows weeks later.
+  sessionExercises = [];
+  templates = [];
+  profile = { programmingMode: 'low_impact_recovery', injuryZones: [] };
+  cycleProfile = {
+    userId: 1,
+    managesProgrammingMode: true,
+    lastPeriodStartDate: new Date(daysAgo(20)),
+  };
+
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.programmingMode, 'neutral', 'an owned, expired override is released');
+  assert.equal(result.suppressPrPush, false);
+  assert.equal(profile.programmingMode, 'neutral', 'the stored mode is cleared, not just the copy');
+});
+
+test('a cycle recovery mode inside its window keeps low-impact in readiness', async () => {
+  sessionExercises = [
+    { exercise: { muscleGroup: 'chest' }, session: { startedAt: daysAgo(2) } },
+  ];
+  templates = [];
+  profile = { programmingMode: 'low_impact_recovery', injuryZones: [] };
+  cycleProfile = { userId: 1, managesProgrammingMode: true, lastPeriodStartDate: new Date(daysAgo(0)) };
+
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.programmingMode, 'low_impact_recovery');
+  assert.equal(result.suppressPrPush, true);
+});
+
+test('a user-chosen low-impact is not expired by the cycle window', async () => {
+  // managesProgrammingMode distinguishes our programmatic override from the
+  // user's own choice (typically injury). Hers is never auto-expired.
+  sessionExercises = [];
+  templates = [];
+  profile = { programmingMode: 'low_impact_recovery', injuryZones: ['knee'] };
+  cycleProfile = { userId: 1, managesProgrammingMode: false, lastPeriodStartDate: new Date(daysAgo(20)) };
+
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.programmingMode, 'low_impact_recovery');
+  assert.equal(result.suppressPrPush, true);
 });
 
 test('female_default re-ranks toward the lower-body routine', async () => {
