@@ -141,9 +141,12 @@ test('launch-candidate leaves the known-broken gamification flags off', () => {
   }
 });
 
-test('launch-candidate keeps the two flags that are live in production', () => {
-  // buddy and referral default ON precisely because they are already shipped -
-  // turning them off in a launch profile would switch off a live feature.
+test('launch-candidate names the two shipped flags, whatever they default to', () => {
+  // referral defaults ON because it is already shipped. Buddy does NOT default
+  // on as of W3 — it fails closed until the safety backstop is verified — but
+  // launch-candidate still names it explicitly, because a profile is an
+  // allowlist and anything unnamed is off. The profile keeps proposing the
+  // surfaces the launch table in docs/FEATURE-FLAG-SPLIT.md §9 lists.
   assert.ok(on('launch-candidate').includes('buddy'));
   assert.ok(on('launch-candidate').includes('referral'));
 });
