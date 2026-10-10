@@ -58,6 +58,24 @@ export const VALID_GENDERS = Object.values(GENDERS);
 export const VALID_FITNESS_GOALS = Object.values(FITNESS_GOALS);
 export const VALID_EXPERIENCE_LEVELS = Object.values(EXPERIENCE_LEVELS);
 export const VALID_FREQUENCY_INTENTS = Object.values(FREQUENCY_INTENTS);
+
+// Older customer-app builds sent persona ids from the onboarding persona step
+// as fitnessGoals, which the FitnessGoal enum rejects (400). Newer builds send
+// the enum values; these aliases keep the old builds working. Unknown values
+// pass through untouched so validation still rejects real garbage.
+export const LEGACY_FITNESS_GOAL_ALIASES = {
+  muscle_builder: FITNESS_GOALS.MUSCLE_GAIN,
+  zen_seeker: FITNESS_GOALS.FLEXIBILITY_YOGA,
+  general_fit: FITNESS_GOALS.GENERAL_FITNESS,
+};
+
+// Maps legacy aliases and drops duplicates the mapping may create. Anything
+// that isn't an array is returned as-is (validation decides what it means).
+export function normalizeFitnessGoals(goals) {
+  if (!Array.isArray(goals)) return goals;
+  const mapped = goals.map((g) => (typeof g === 'string' && LEGACY_FITNESS_GOAL_ALIASES[g]) || g);
+  return [...new Set(mapped)];
+}
 // --- Onboarding branch (2026-09-18) -----------------------------------------
 
 export const TRAINING_LOCATION_PREFS = {

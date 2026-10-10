@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
+import { normalizeFitnessGoals } from '../constants/userEnums.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
@@ -364,6 +365,8 @@ export const updateProfile = async (req, res) => {
     const requestingUserId = parseInt(req.headers['x-user-id']);
     const targetUserId = parseInt(req.params.userId);
     if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
+    // Legacy persona ids (muscle_builder/zen_seeker/general_fit) -> enum values.
+    if (req.body && req.body.fitnessGoals !== undefined) req.body.fitnessGoals = normalizeFitnessGoals(req.body.fitnessGoals);
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
