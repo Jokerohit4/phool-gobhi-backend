@@ -593,6 +593,24 @@ export const logSavedMeal = handle(async (req) => {
   return out;
 });
 
+export const updateSavedMeal = handle(async (req) => {
+  const b = req.body || {};
+  return nutritionService.updateSavedMeal(prisma, {
+    userId: req.userId,
+    id: req.params.id,
+    name: b.name,
+    slot: b.slot,
+  });
+});
+
+export const deleteSavedMeal = handle(async (req) => {
+  await nutritionService.deleteSavedMeal(prisma, {
+    userId: req.userId,
+    id: req.params.id,
+  });
+  return { deleted: true };
+});
+
 // ---- Plan ----------------------------------------------------------------
 
 // Regenerating suggestions is the only write here that is not the user's own
