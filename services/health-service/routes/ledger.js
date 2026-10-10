@@ -93,6 +93,10 @@ router.get('/ledger/foods', ...nutrition, ledgerCtrl.searchFoods);
 // literal segment that could be read as an :id must come first, or "recent"
 // would be parsed as an id by a later route.
 router.get('/ledger/foods/recent', ...nutrition, ledgerCtrl.recentFoods);
+// The user's own food, created from the picker when the catalogue has nothing.
+// Unlike a food request (below), this is usable immediately: it is searchable
+// and loggable by its owner, and by nobody else.
+router.post('/ledger/foods', ...nutrition, ledgerCtrl.createCustomFood);
 // The empty state's escape hatch. Same gate as search itself, for the same
 // reason: it lives inside the picker, so a user who cannot reach the picker
 // cannot reach this.

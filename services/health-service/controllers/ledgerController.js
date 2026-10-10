@@ -272,6 +272,25 @@ export const searchFoods = handle(async (req) => {
   return rows.map(serializeFood);
 });
 
+// A food of the user's own, from the picker's empty state. Returned in the
+// search shape so the client can log it straight away and find it again later.
+export const createCustomFood = handle(async (req) => {
+  const b = req.body || {};
+  const food = await nutritionService.createCustomFood(prisma, {
+    userId: req.userId,
+    name: b.name,
+    kcal: b.kcal,
+    proteinG: b.proteinG,
+    carbsG: b.carbsG,
+    fatG: b.fatG,
+    servingGrams: b.servingGrams,
+    servingLabel: b.servingLabel,
+    nonVeg: b.nonVeg === true,
+  });
+  track('health_custom_food_created', req.userId, {});
+  return serializeFood(food);
+});
+
 // The picker's opening list. Same shape as search plus the two fields only the
 // recent list has: the grams and label the food was last logged with, so the
 // amount sheet opens on the portion the user actually chose last time.

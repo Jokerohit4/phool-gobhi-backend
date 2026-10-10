@@ -309,6 +309,30 @@ export async function recognizePhoto(
     });
   }
 
+  // Per-100 g numbers for every matched row, in one read, so the review screen
+  // can show what each line is worth before the user confirms it. The grounded
+  // branch above only has the slim prompt rows, which carry no nutrients (and
+  // no servings either, which this also fills in).
+  const ids = [...new Set(candidates.map((c) => c.foodItemId))];
+  if (ids.length) {
+    const nutrientRows = await prisma.foodItem.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, kcal: true, proteinG: true, carbsG: true, fatG: true, servings: true },
+    });
+    const byId = new Map(nutrientRows.map((r) => [r.id, r]));
+    for (const c of candidates) {
+      const r = byId.get(c.foodItemId);
+      if (!r) continue;
+      c.per100g = {
+        kcal: Number(r.kcal),
+        proteinG: Number(r.proteinG),
+        carbsG: Number(r.carbsG),
+        fatG: Number(r.fatG),
+      };
+      if (c.servings == null) c.servings = r.servings ?? null;
+    }
+  }
+
   await recordRequest(prisma, {
     userId,
     requestedAt: now,

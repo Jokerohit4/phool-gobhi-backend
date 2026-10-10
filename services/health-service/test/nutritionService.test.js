@@ -19,6 +19,7 @@ import {
   repeatDay,
   saveMeal,
   searchFoods,
+  createCustomFood,
   updateLog,
 } from '../services/ledger/nutritionService.js';
 
@@ -130,7 +131,10 @@ test('search excludes unverified catalogue rows by default', async () => {
     },
   });
   await searchFoods(prisma, 7, { query: 'rice' });
-  assert.deepEqual(seen.AND, [{ OR: [{ verified: true }, { createdByUserId: 7 }] }]);
+  assert.deepEqual(seen.AND, [
+    { OR: [{ createdByUserId: null }, { createdByUserId: 7 }] },
+    { OR: [{ verified: true }, { createdByUserId: 7 }] },
+  ]);
 });
 
 test('a user\'s own unverified food is still findable when the catalogue is filtered', async () => {
@@ -147,16 +151,75 @@ test('a user\'s own unverified food is still findable when the catalogue is filt
   });
   const rows = await searchFoods(prisma, 7, { query: 'special' });
   assert.equal(rows.length, 1);
-  assert.ok(seen.AND[0].OR.some((c) => c.createdByUserId === 7));
+  assert.ok(seen.AND[1].OR.some((c) => c.createdByUserId === 7));
 });
 
-test('includeUnverified drops the filter entirely', async () => {
+test('includeUnverified drops the verification filter but never the owner scope', async () => {
+  // Another user's custom food is their data. Asking for unverified rows widens
+  // the catalogue, not the set of people whose foods you can see.
   let seen;
   const prisma = mockPrisma({
     foodItem: { findMany: async (a) => ((seen = a.where), []) },
   });
   await searchFoods(prisma, 7, { query: 'rice', includeUnverified: true });
-  assert.deepEqual(seen.AND, []);
+  assert.deepEqual(seen.AND, [{ OR: [{ createdByUserId: null }, { createdByUserId: 7 }] }]);
+});
+
+// --- custom foods ----------------------------------------------------------
+
+test('a custom food is stored per 100 g, owned by its creator, with its serving', async () => {
+  let created;
+  const prisma = mockPrisma({
+    foodItem: {
+      findFirst: async () => null,
+      create: async (a) => ((created = a.data), { id: 9, ...a.data }),
+    },
+  });
+  await createCustomFood(prisma, {
+    userId: 7,
+    name: '  Veg   burger ',
+    kcal: 500,
+    proteinG: 20,
+    carbsG: 60,
+    fatG: 20,
+    servingGrams: 250,
+    servingLabel: '1 burger',
+  });
+  assert.equal(created.name, 'Veg burger');
+  assert.equal(created.createdByUserId, 7);
+  assert.equal(created.kcal, 200);
+  assert.equal(created.proteinG, 8);
+  assert.equal(created.carbsG, 24);
+  assert.equal(created.fatG, 8);
+  assert.deepEqual(created.servings, [{ label: '1 burger', grams: 250 }]);
+  assert.equal(created.source, 'user-entered');
+  assert.equal(created.verified, false);
+  assert.equal(created.searchText, 'veg burger');
+});
+
+test('re-adding a custom food the user already owns updates it', async () => {
+  let updated;
+  let createCalled = false;
+  const prisma = mockPrisma({
+    foodItem: {
+      findFirst: async (a) => {
+        assert.equal(a.where.createdByUserId, 7);
+        return { id: 3 };
+      },
+      update: async (a) => ((updated = a), { id: 3, ...a.data }),
+      create: async () => ((createCalled = true), {}),
+    },
+  });
+  await createCustomFood(prisma, { userId: 7, name: 'Veg burger', kcal: 300 });
+  assert.equal(createCalled, false);
+  assert.equal(updated.where.id, 3);
+  assert.equal(updated.data.kcal, 300);
+});
+
+test('a custom food needs a name and calories', async () => {
+  const prisma = mockPrisma();
+  await assert.rejects(createCustomFood(prisma, { userId: 7, name: ' ', kcal: 100 }), /Name the food/);
+  await assert.rejects(createCustomFood(prisma, { userId: 7, name: 'Momo', kcal: 0 }), /calories/);
 });
 
 test('an empty query searches nothing rather than everything', async () => {

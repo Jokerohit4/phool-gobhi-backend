@@ -800,6 +800,12 @@
     "since": "2026-10-10",
     "notes": "a user could not find a food in the picker and submitted it. props name. Fires only on CREATION, not on a repeat ask for a dish already requested \u2014 requestCount on the row is the demand signal, and counting both would make one persistent user look like growing demand. The volume and the shape of these names are the catalogue growth backlog: this is the only place that records what people actually searched for and did not find, as opposed to a guess about what they eat. Note the name IS carried \u2014 unlike a food photo's proposed names, a food name is not a description of somebody's diet, and the whole value of the event is knowing which dish"
   },
+  "health_custom_food_created": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-11",
+    "notes": "a user created (or re-saved) a food of their own from the picker's empty state, so it is searchable and loggable by them from then on. No props: the food's name is the user's own data, unlike health_food_requested where the name is the whole point (demand for the shared catalogue)"
+  },
   "health_food_photo_recognized": {
     "source": "server",
     "service": "health-service",

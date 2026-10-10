@@ -20,7 +20,7 @@ import {
   roundTo,
 } from './constants.js';
 
-import { rankFoods } from './foodMatch.js';
+import { rankFoods, buildSearchText } from './foodMatch.js';
 import { isIsoDay } from './isoDay.js';
 
 const GRAMS_MAX = 5000;
@@ -149,9 +149,15 @@ export async function searchFoods(prisma, userId, { query, includeUnverified = f
         { searchText: { contains: needle, mode: 'insensitive' } },
         { aliases: { has: needle } },
       ],
-      // A user's own foods are always available to them regardless of the
-      // verification flag; the flag is about our catalogue, not their data.
-      AND: includeUnverified ? [] : [{ OR: [{ verified: true }, { createdByUserId: userId }] }],
+      AND: [
+        // Never another user's custom food, whichever way the flag is set. The
+        // includeUnverified branch used to drop this filter entirely, which was
+        // harmless only while nothing created custom foods.
+        { OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
+        // A user's own foods are always available to them regardless of the
+        // verification flag; the flag is about our catalogue, not their data.
+        ...(includeUnverified ? [] : [{ OR: [{ verified: true }, { createdByUserId: userId }] }]),
+      ],
     },
     orderBy: [{ name: 'asc' }],
   });
@@ -369,6 +375,85 @@ export async function logUnknownFood(
 
 export function isUnknownSnapshot(nutrients) {
   return nutrients != null && nutrients.unknown === true;
+}
+
+/**
+ * Create a food of the user's own, so it can be searched and logged like a
+ * catalogue row from then on.
+ *
+ * The numbers arrive per the serving the user described ("1 burger = 250 g,
+ * 550 kcal") because that is what people know off a label or a menu; they are
+ * stored per 100 g like every other row, so computePortion treats this food
+ * exactly like a seeded one. The serving is kept as the row's one named portion
+ * so the amount sheet offers it back.
+ *
+ * Private by construction: createdByUserId is set, search only returns it to its
+ * owner, the photo prompt never sees it, and it is erased with the account.
+ * Re-adding a name the user already owns updates that row instead of creating a
+ * duplicate, so "add it again with the right calories" is how a typo is fixed.
+ */
+export async function createCustomFood(
+  prisma,
+  { userId, name, kcal, proteinG, carbsG, fatG, servingGrams = 100, servingLabel, nonVeg = false },
+) {
+  const cleanName = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  if (!cleanName) throw badRequest('Name the food', 'NAME_REQUIRED');
+
+  const calories = Number(kcal);
+  if (!(calories > 0)) throw badRequest('Enter the approximate calories', 'KCAL_REQUIRED');
+  if (calories > KCAL_MAX_QUICK) {
+    throw badRequest(`That is over ${KCAL_MAX_QUICK} kcal for one serving`);
+  }
+
+  const grams = Number(servingGrams) > 0 ? Number(servingGrams) : 100;
+  if (grams > GRAMS_MAX) {
+    throw badRequest(`That is over ${GRAMS_MAX} g, which is more food than one meal`);
+  }
+
+  // A macro left blank is stored as 0, not refused: one honest number is still
+  // worth saving, and the picker already shows the row as approximate.
+  const macro = (v, label) => {
+    if (v == null || v === '') return 0;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) throw badRequest(`${label} must be a positive number`);
+    if (n > grams) throw badRequest(`${label} cannot weigh more than the serving`);
+    return n;
+  };
+  const perServing = {
+    kcal: calories,
+    proteinG: macro(proteinG, 'Protein'),
+    carbsG: macro(carbsG, 'Carbs'),
+    fatG: macro(fatG, 'Fat'),
+  };
+  const factor = 100 / grams;
+  const per100 = {};
+  for (const [field, value] of Object.entries(perServing)) {
+    per100[field] = roundTo(value * factor, DECIMAL_PLACES.nutrients);
+  }
+
+  const label = String(servingLabel || '').trim().slice(0, 40) || '1 serving';
+  const data = {
+    ...per100,
+    fibreG: 0,
+    basis: 'as_served',
+    servings: [{ label, grams: roundTo(grams, DECIMAL_PLACES.grams) }],
+    nonVeg: nonVeg === true,
+    veg: nonVeg !== true,
+    source: 'user-entered',
+    verified: false,
+    searchText: buildSearchText(cleanName, []),
+  };
+
+  const existing = await prisma.foodItem.findFirst({
+    where: { createdByUserId: userId, name: { equals: cleanName, mode: 'insensitive' } },
+    select: { id: true },
+  });
+  if (existing) {
+    return prisma.foodItem.update({ where: { id: existing.id }, data });
+  }
+  return prisma.foodItem.create({
+    data: { ...data, name: cleanName, aliases: [], createdByUserId: userId },
+  });
 }
 
 /**
