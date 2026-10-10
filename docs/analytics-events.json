@@ -316,6 +316,30 @@
     "since": "2026-10-09",
     "notes": "health ledger \u2014 a Home/Progress health card was tapped (props.surface as above)"
   },
+  "health_food_log_opened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-08",
+    "notes": "health ledger \u2014 the food picker was opened against a usable nutrition scope (props.day = today | past). Top of the food-log funnel: the successful bottom is the server's health_food_logged, so the pair gives a per-day open-to-log conversion, and the split on day tells picker friction in the moment apart from friction only when backfilling a past date"
+  },
+  "health_food_log_abandoned": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-08",
+    "notes": "health ledger \u2014 the picker was opened and closed with the day's log count unraised (props.day as above). Fired from dispose only when the scope was usable, so a screen that only ever showed the consent prompt is neither an open nor an abandonment. Judged by the day's log count gain rather than a per-button flag, so a food logged from the photo screen or a saved-meals repeat still counts as logged and does not read as an abandonment"
+  },
+  "health_food_log_failed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-08",
+    "notes": "health ledger \u2014 an add from the picker was refused or did not land (props.day as above, props.source = search | custom | repeat_day). Names the entry path so a spike reads as one broken path rather than a broken picker. The server's own sentence is what the user sees; this only counts that it happened"
+  },
   "session_started": {
     "source": "client",
     "apps": [
