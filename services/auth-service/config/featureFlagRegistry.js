@@ -310,21 +310,21 @@ export const FEATURE_FLAGS = [
   // ------------------------------------------------------------------ social
   {
     name: 'buddy',
-    defaultEnabled: true,
+    defaultEnabled: false,
     deps: [],
     clientKey: 'buddyEnabled',
     group: 'social',
     dataClass: 'social',
     blastRadius: 'Buddy tab, swipe discovery, matches, chat, buddy profiles, paired streaks',
     rationale:
-      'Fails OPEN: buddy is live, so a missing or unknown flag must resolve to enabled ' +
-      'rather than hiding a shipped feature by mistake.\n\n' +
-      'DECISION PENDING. As of 2026-10-04 there is no reporting, blocking, or moderation ' +
-      'anywhere in the client or in buddy-service (grep for report|block|flag|moderate ' +
-      'returns nothing), no match expiry (matches persist indefinitely as status=active), ' +
-      'no city or distance filter on discovery so cross-city matching is possible, and no ' +
-      'gate tying it to bookings so it is fully usable with zero connection to the actual ' +
-      'product. That is a moderation and safety liability, not just a retention bet.',
+      'Fails CLOSED: buddy stays off by default until the safety backstop (reports, ' +
+      'automatic hold, suspension) is verified. A missing or unknown flag must resolve to ' +
+      'disabled rather than surface an unmoderated social feature by mistake.\n\n' +
+      'DECISION 2026-10-09. The reporting, hold and suspension routes now exist in ' +
+      'buddy-service (Group W), but they have not been exercised end-to-end on dev ' +
+      '(W10) and selfie verification is still outstanding, so anyone can declare a gender. ' +
+      'Dev keeps an explicit stored row set to true so it stays usable; prod stays false ' +
+      'until W10 passes and this entry is revisited.',
   },
   {
     name: 'referral',

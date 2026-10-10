@@ -84,14 +84,15 @@ test('defaultFeatures covers every registered flag', () => {
   assert.deepEqual(Object.keys(defaults).sort(), flagNames().slice().sort());
 });
 
-test('only the two live features default to on', () => {
-  // buddy and referral are live, so a missing or unknown flag must resolve to
-  // enabled rather than hide a shipped feature. Everything else collects or
-  // moves state and therefore fails closed — that convention is the reason a
-  // registry entry can be added without anyone having to reason about what an
-  // absent key means.
+test('only referral is live enough to default on', () => {
+  // referral is live, so a missing or unknown flag must resolve to enabled
+  // rather than hide a shipped feature. Buddy now fails CLOSED — a missing or
+  // unknown flag must not surface an unmoderated social surface — so it joins
+  // everything else that collects or moves state in defaulting to off. That
+  // convention is the reason a registry entry can be added without anyone
+  // having to reason about what an absent key means.
   const onByDefault = FEATURE_FLAGS.filter((f) => f.defaultEnabled).map((f) => f.name).sort();
-  assert.deepEqual(onByDefault, ['buddy', 'referral'], 'the fail-open set changed — re-read the rationale before doing that');
+  assert.deepEqual(onByDefault, ['referral'], 'the fail-open set changed — re-read the rationale before doing that');
 });
 
 // ---------------------------------------------------------------------------

@@ -141,7 +141,7 @@ WITH registry_defaults(name, enabled) AS (
     ('streaksCoins', false),
     ('challenges', false),
     ('buddyPairedStreaks', false),
-    ('buddy', true),
+    ('buddy', false),
     ('referral', true),
     ('brandedOnboarding', false),
     ('homeTrackHome', false),

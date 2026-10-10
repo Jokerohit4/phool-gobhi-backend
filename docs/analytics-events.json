@@ -208,6 +208,28 @@
     "source": "server",
     "service": "buddy-service"
   },
+  "buddy_auto_held": {
+    "source": "server",
+    "service": "buddy-service",
+    "since": "2026-10-09",
+    "notes": "a user was put on automatic moderation hold after 2+ qualifying reporters reported them within 30 days (W7). props reporter_count, reason — the hold hides the user from decks and blocks browsing/swiping on both sides, but leaves already-open chats working because a hold is not a verdict"
+  },
+  "buddy_women_only_toggled": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "women-only mode was switched in the buddy filters (W8). props enabled (bool) — only a profile whose synced gender is female can turn it on, and while it is on the gender filter is forced to [female]"
+  },
+  "buddy_safety_sheet_seen": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "the buddy safety sheet was shown (W8) — the report/hold/suspend explanation presented before women-only mode is offered"
+  },
   "otp_requested": {
     "source": "client",
     "apps": [
