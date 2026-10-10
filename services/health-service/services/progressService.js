@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { equipmentFit } from './homeSetup.js';
+import { releaseExpiredRecoveryMode } from './cycleTrackingService.js';
 import {
   startOfIsoWeek, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
 } from '../utils/sessionDay.js';
@@ -152,7 +153,10 @@ export async function getMuscleReadinessService(userId) {
     prisma.personalisationProfile.findUnique({ where: { userId } }),
   ]);
 
-  const mode = profile?.programmingMode ?? 'neutral';
+  // The mode is the stored value, lazily expired: a low_impact_recovery this
+  // service's cycle sync set during the last period lapses back to neutral the
+  // moment its window closes, so readiness never trusts a stale override.
+  const mode = await releaseExpiredRecoveryMode(userId, profile?.programmingMode ?? 'neutral');
   const injuryZones = profile?.injuryZones ?? [];
   const windowMultiplier = mode === 'low_impact_recovery' ? RECOVERY_MODE_WINDOW_MULTIPLIER : 1;
 

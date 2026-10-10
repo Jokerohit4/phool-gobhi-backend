@@ -14,9 +14,12 @@
 // between a confident wrong answer and a real one.
 //
 // Deliberately absent from the manual below, even though the backend has
-// endpoints for them: cycle/period tracking, and Apple Health auto-sync of
-// anything the user has not connected. They are called out as unavailable so
-// the model does not describe a roadmap item as though it were one tap away.
+// endpoints for them: a cycle/period tracking SCREEN, and Apple Health auto-
+// sync of anything the user has not connected. Cycle tracking is now real on
+// the backend and described here as such, but it still has no screen or toggle
+// in the released app, so the model must not invent a tap path for it. They
+// are called out as unavailable so the model does not describe a roadmap item
+// as though it were one tap away.
 //
 // The GPS run/walk/cycle tracker is the awkward one, and it is called out here
 // because the reason has changed. The run screens DO exist in the customer app
@@ -123,7 +126,7 @@ appearance settings (**Theme style**, **Sound effects**) are on Profile too.
 
 ### Not in the app yet
 Do not offer these — there is no screen for the user to find:
-- Cycle or period tracking.
+- Cycle or period tracking: there is no screen or toggle for it in the app yet, so do not send anyone looking for one. But the behaviour behind it IS in place for those who have switched it on: logging a period only ever suggests a low-impact training mode for the duration of that period. It expires on its own once the period length is up, it never switches on the lower-body emphasis mode, and it never touches a mode she chose herself.
 - Live crowd levels, wait times, or dynamic per-slot pricing.
 - Chat with a gym owner directly.
 - GPS run tracking, or importing runs from a watch. This one is built but not
