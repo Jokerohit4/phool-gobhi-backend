@@ -281,11 +281,14 @@ async function loadAppVersionConfig() {
 // the portal, the one place that decision is visible and reversible without a
 // deploy.
 //
-// `buddy` and `referral` fail OPEN (they are live, so a missing/unknown flag must
-// resolve to on rather than hide a shipped feature). Everything else fails CLOSED:
-// it collects or moves state, so a backend hiccup must hide it rather than risk
-// the app calling a route that isn't ready. The two exceptions are marked in the
-// registry and are deliberate.
+// `referral` fails OPEN (it is live, so a missing/unknown flag must resolve to
+// on rather than hide a shipped feature). `buddy` now fails CLOSED: it was
+// flipped to defaultEnabled:false in W3, because the safety backstop (reports,
+// hold, suspend) is the reason it can be shown at all, so an unknown flag must
+// hide it rather than reveal an unverified feature. Everything else fails
+// CLOSED: it collects or moves state, so a backend hiccup must hide it rather
+// than risk the app calling a route that isn't ready. The one open exception is
+// marked in the registry and is deliberate.
 //
 // otp.provider and profileCompletionBonus.amount are NOT registry entries — they
 // are served from their own singleton setting rows and overridden on top of this
@@ -669,6 +672,11 @@ const getUserInternal = async (req, res) => {
       phone: user.phone,
       dateOfBirth: user.dateOfBirth,
       gender: user.gender,
+      // Copied into buddy-service's BuddyProfile cache on profile sync: a
+      // gender changed to "female" (and not since cleared by an admin) blocks
+      // the user from women-only discovery (BuddyProfile.womenOnlyBlocked).
+      genderChangedAt: user.genderChangedAt ?? null,
+      genderChangedTo: user.genderChangedTo ?? null,
       fitnessGoals: user.fitnessGoals,
       // Onboarding answers health-service reads to seed a weekly training
       // goal (FR-04) instead of measuring everyone against one hardcoded

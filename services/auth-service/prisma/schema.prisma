@@ -21,6 +21,14 @@ model User {
   isActive  Boolean    @default(true)
   gender        Gender?
   dateOfBirth   DateTime?     @db.Date
+  // One real gender change is allowed, ever (old gender set and the new one
+  // differs). genderChangedAt records when that first change happened, and
+  // genderChangedTo what it became — buddy-service copies both into its own
+  // cache to keep a man who changed to "female" out of women-only decks
+  // (see BuddyProfile.womenOnlyBlocked). Set inside updateProfile's updates
+  // object so the profile-completion-bonus rollback reverts them too.
+  genderChangedAt DateTime?
+  genderChangedTo Gender?
   fitnessGoals  FitnessGoal[]
   // DEPRECATED — no writer and no reader as of 2026-09-30. The onboarding step
   // that collected it and the client-side gym scorer that read it are both

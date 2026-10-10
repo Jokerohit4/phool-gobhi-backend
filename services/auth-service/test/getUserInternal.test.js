@@ -80,6 +80,25 @@ test('getUserInternal carries the onboarding answers health-service reads', asyn
   assert.equal(res.body.freeTimeWindow, 'evening');
 });
 
+test('getUserInternal includes the gender-change stamps buddy-service reads', async () => {
+  // buddy-service copies these into BuddyProfile so a gender changed to
+  // "female" can be kept out of women-only decks (W7).
+  const changedAt = new Date('2026-10-01T00:00:00.000Z');
+  findUniqueImpl = async ({ where: { id } }) => ({
+    id, name: 'Test User', phone: '9990001111', dateOfBirth: null, gender: 'female',
+    genderChangedAt: changedAt, genderChangedTo: 'female',
+    fitnessGoals: [], profileImageUrl: null, fcmToken: null, referredByUserId: null,
+    linkedGymId: null,
+  });
+  const res = fakeRes();
+
+  await getUserInternal({ params: { id: '42' } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.genderChangedAt, changedAt);
+  assert.equal(res.body.genderChangedTo, 'female');
+});
+
 test('getUserInternal returns 404 when the user does not exist', async () => {
   findUniqueImpl = async () => null;
   const req = { params: { id: '999' } };
