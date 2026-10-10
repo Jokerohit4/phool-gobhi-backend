@@ -88,6 +88,11 @@ router.get(
 // catalogue ships unverified pending nutritionist sign-off, and the alternative
 // is a food log with nothing in it.
 router.get('/ledger/foods', ...nutrition, ledgerCtrl.searchFoods);
+// The picker's opening list, before a query is typed. Registered before the
+// parameterized food routes for the same reason the rest of this block is: a
+// literal segment that could be read as an :id must come first, or "recent"
+// would be parsed as an id by a later route.
+router.get('/ledger/foods/recent', ...nutrition, ledgerCtrl.recentFoods);
 // The empty state's escape hatch. Same gate as search itself, for the same
 // reason: it lives inside the picker, so a user who cannot reach the picker
 // cannot reach this.
@@ -99,6 +104,9 @@ router.get('/ledger/food-requests', ...nutrition, ledgerCtrl.listFoodRequests);
 // the ledger's consent gate rather than inventing their own surface.
 router.get('/ledger/food-embeddings', ...nutrition, ledgerCtrl.getFoodEmbeddings);
 router.post('/ledger/food-logs', ...nutrition, ledgerCtrl.logFood);
+// A whole day copied onto another. A literal sibling of the POST above, before
+// the parameterized routes, so "repeat" is never read as an id.
+router.post('/ledger/food-logs/repeat', ...nutrition, ledgerCtrl.repeatFoodLogs);
 router.delete('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.deleteFoodLog);
 // A correction to one row - size, label or meal. Separate from POST above for
 // the same reason PUT and POST are separate: POST makes a row and this one

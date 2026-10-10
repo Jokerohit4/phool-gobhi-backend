@@ -15,6 +15,8 @@ import {
   logUnknownFood,
   logSavedMeal,
   progressAgainstTarget,
+  recentFoods,
+  repeatDay,
   saveMeal,
   searchFoods,
   updateLog,
@@ -861,4 +863,203 @@ test('repeating a saved meal asks for its lines', async () => {
     seen?.include?.lines,
     'logSavedMeal iterates meal.lines, so the query must include them',
   );
+});
+
+// --- recent foods ----------------------------------------------------------
+
+test('recent foods dedupe by food and keep the newest portion', async () => {
+  let query;
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async (args) => {
+        query = args;
+        return [
+          { foodItemId: 1, grams: 180, servingLabel: '1 bowl', localDate: '2026-09-30' },
+          { foodItemId: 2, grams: 100, servingLabel: null, localDate: '2026-09-30' },
+          // An older log of food 1 must not appear a second time.
+          { foodItemId: 1, grams: 120, servingLabel: null, localDate: '2026-09-29' },
+        ];
+      },
+    },
+    foodItem: {
+      findMany: async () => [RICE, PANEER],
+    },
+  });
+
+  const out = await recentFoods(prisma, 7, { limit: 8 });
+  assert.deepEqual(out.map((r) => r.food.id), [1, 2]);
+  assert.equal(out[0].grams, 180, 'the last portion logged, not the first');
+  assert.equal(out[0].servingLabel, '1 bowl');
+  // Scoped to the user and to catalogue-backed logs; a hand-typed custom row has
+  // no FoodItem to show in the list.
+  assert.equal(query.where.userId, 7);
+  assert.deepEqual(query.where.foodItemId, { not: null });
+});
+
+test('recent foods drops a food that has since been deleted', async () => {
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => [
+        { foodItemId: 1, grams: 100, servingLabel: null },
+        { foodItemId: 42, grams: 100, servingLabel: null },
+      ],
+    },
+    foodItem: { findMany: async () => [RICE] },
+  });
+  const out = await recentFoods(prisma, 7, {});
+  assert.deepEqual(out.map((r) => r.food.id), [1]);
+});
+
+test('recent foods is empty, not a crash, for a new user', async () => {
+  const out = await recentFoods(mockPrisma({}), 7, {});
+  assert.deepEqual(out, []);
+});
+
+test('recent foods caps the read at five times the requested list', async () => {
+  // The wider read is what makes dedupe still fill a short list; the cap is what
+  // keeps an active logger from reading a thousand rows to show eight.
+  let query;
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async (args) => ((query = args), []),
+    },
+  });
+  await recentFoods(prisma, 7, { limit: 30 });
+  assert.equal(query.take, 150);
+});
+
+// --- repeat a day ----------------------------------------------------------
+
+const DAY_LOGS = [
+  { foodItemId: 1, slot: 'breakfast', grams: 150, servingLabel: '1 katori', nutrients: { kcal: 195 }, name: 'Rice', nonVeg: false, source: 'search', servings: null },
+  { foodItemId: 2, slot: 'lunch', grams: 100, servingLabel: null, nutrients: { kcal: 265 }, name: 'Paneer', nonVeg: false, source: 'search', servings: 1 },
+];
+
+test('repeating a day copies each row\'s snapshot, source and slot', async () => {
+  let created;
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => DAY_LOGS,
+      createMany: async (a) => ((created = a.data), { count: a.data.length }),
+    },
+    foodItem: { findMany: async () => [{ id: 1 }, { id: 2 }] },
+  });
+
+  const out = await repeatDay(prisma, {
+    userId: 7,
+    fromLocalDate: '2026-09-29',
+    localDate: '2026-09-30',
+  });
+  assert.equal(out.logged, 2);
+  assert.deepEqual(out.skipped, []);
+  assert.equal(created[0].localDate, '2026-09-30', 'the copy lands on the target day');
+  assert.equal(created[0].nutrients.kcal, 195, 'the snapshot is copied, not recomputed');
+  assert.equal(created[0].source, 'search', 'a copied row keeps its own provenance');
+  assert.equal(created[0].slot, 'breakfast', 'no forced slot keeps each row in its meal');
+  assert.equal(created[1].slot, 'lunch');
+});
+
+test('a forced slot moves every copied row into that meal', async () => {
+  let created;
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => DAY_LOGS,
+      createMany: async (a) => ((created = a.data), { count: a.data.length }),
+    },
+    foodItem: { findMany: async () => [{ id: 1 }, { id: 2 }] },
+  });
+  await repeatDay(prisma, {
+    userId: 7,
+    fromLocalDate: '2026-09-29',
+    localDate: '2026-09-30',
+    slot: 'dinner',
+  });
+  assert.deepEqual(created.map((r) => r.slot), ['dinner', 'dinner']);
+});
+
+test('a row whose food left the catalogue is skipped and named', async () => {
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => [
+        DAY_LOGS[0],
+        { ...DAY_LOGS[1], foodItemId: 42, name: 'Deleted thing' },
+      ],
+      createMany: async (a) => ({ count: a.data.length }),
+    },
+    foodItem: { findMany: async () => [{ id: 1 }] },
+  });
+  const out = await repeatDay(prisma, {
+    userId: 7,
+    fromLocalDate: '2026-09-29',
+    localDate: '2026-09-30',
+  });
+  assert.equal(out.logged, 1);
+  assert.deepEqual(out.skipped, ['Deleted thing']);
+});
+
+test('a custom row with no catalogue food is copied as-is', async () => {
+  // A hand-typed row has foodItemId null, so there is nothing to have gone
+  // missing; it must not be swept into `skipped` by the catalogue check.
+  let created;
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => [
+        { foodItemId: null, slot: 'snack', grams: 100, servingLabel: null, nutrients: { kcal: 350 }, name: "Mom's rajma", nonVeg: false, source: 'custom', servings: null },
+      ],
+      createMany: async (a) => ((created = a.data), { count: a.data.length }),
+    },
+  });
+  const out = await repeatDay(prisma, {
+    userId: 7,
+    fromLocalDate: '2026-09-29',
+    localDate: '2026-09-30',
+  });
+  assert.equal(out.logged, 1);
+  assert.deepEqual(out.skipped, []);
+  assert.equal(created[0].foodItemId, null);
+  assert.equal(created[0].source, 'custom');
+});
+
+test('repeating from a day with nothing logged fails clearly', async () => {
+  const prisma = mockPrisma({ foodLog: { findMany: async () => [] } });
+  await assert.rejects(
+    () => repeatDay(prisma, { userId: 7, fromLocalDate: '2026-09-29', localDate: '2026-09-30' }),
+    /nothing logged on that day/,
+  );
+});
+
+test('repeating a day onto itself is refused before any write', async () => {
+  // The client computes "yesterday"; a bug there must not silently double today.
+  const prisma = mockPrisma({
+    foodLog: { createMany: async () => { throw new Error('must not write'); } },
+  });
+  await assert.rejects(
+    () => repeatDay(prisma, { userId: 7, fromLocalDate: '2026-09-30', localDate: '2026-09-30' }),
+    /different day/,
+  );
+});
+
+test('a malformed fromLocalDate is refused', async () => {
+  const prisma = mockPrisma({});
+  await assert.rejects(
+    () => repeatDay(prisma, { userId: 7, fromLocalDate: '2026-9-3', localDate: '2026-09-30' }),
+    /fromLocalDate must be YYYY-MM-DD/,
+  );
+});
+
+test('a repeat copy only names columns the FoodLog model has', async () => {
+  // Same class as the logFood/saveMeal write-shape checks above: the mock takes
+  // whatever it is handed, so a renamed column only fails against the database.
+  let created;
+  const prisma = mockPrisma({
+    foodLog: {
+      findMany: async () => DAY_LOGS,
+      createMany: async (a) => ((created = a.data), { count: a.data.length }),
+    },
+    foodItem: { findMany: async () => [{ id: 1 }, { id: 2 }] },
+  });
+  await repeatDay(prisma, { userId: 7, fromLocalDate: '2026-09-29', localDate: '2026-09-30' });
+  const fields = modelFields('FoodLog');
+  const unknown = Object.keys(created[0]).filter((k) => !fields.has(k));
+  assert.deepEqual(unknown, [], `FoodLog has no column(s): ${unknown.join(', ')}`);
 });

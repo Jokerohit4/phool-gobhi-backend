@@ -160,6 +160,63 @@ export async function searchFoods(prisma, userId, { query, includeUnverified = f
 }
 
 /**
+ * The foods this user logged most recently, newest first, one row per food.
+ *
+ * This is the picker's shortcut: the handful of things someone actually eats
+ * are typed once and then re-found in a list instead of a search. It is derived
+ * from the user's own logs and nothing else, so it can never surface a food this
+ * user has no business seeing.
+ *
+ * Deduped by foodItemId rather than by name. Two spellings of "roti" are two
+ * catalogue rows and both are legitimately "recent"; two logs of the same row
+ * are one entry. The dedupe happens in JS after a slightly larger read, because
+ * Prisma has no "distinct on with a limit" and `distinct` would drop the
+ * per-row grams the last log carries.
+ *
+ * Rows whose FoodItem has since been deleted are dropped, the same way
+ * logSavedMeal skips them: a recent list is a convenience, and a convenience
+ * that offers a food which 404s on tap is worse than one entry shorter.
+ */
+export async function recentFoods(prisma, userId, { limit = 8 } = {}) {
+  const capped = Math.min(Math.max(Number(limit) || 8, 1), 30);
+
+  const recent = await prisma.foodLog.findMany({
+    where: { userId, foodItemId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    // A read wider than the cap, because duplicate logs of the same food are
+    // common (the whole point of a recent list is repetition) and deduping below
+    // would otherwise return fewer than `capped` rows for an active logger.
+    take: capped * 5,
+    select: { foodItemId: true, grams: true, servingLabel: true, localDate: true },
+  });
+
+  const seen = new Set();
+  const picked = [];
+  for (const row of recent) {
+    if (seen.has(row.foodItemId)) continue;
+    seen.add(row.foodItemId);
+    picked.push(row);
+    if (picked.length >= capped) break;
+  }
+  if (!picked.length) return [];
+
+  const foods = await prisma.foodItem.findMany({
+    where: { id: { in: picked.map((r) => r.foodItemId) } },
+  });
+  const byId = new Map(foods.map((f) => [f.id, f]));
+
+  return picked
+    .map((row) => {
+      const food = byId.get(row.foodItemId);
+      if (!food) return null;
+      // The last portion rides along so the picker can prefill the amount the
+      // user chose last time rather than a flat 100 g every tap.
+      return { food, grams: row.grams, servingLabel: row.servingLabel, localDate: row.localDate };
+    })
+    .filter(Boolean);
+}
+
+/**
  * Log one food for one meal on one local date.
  *
  * Requires nutrition consent. The snapshot is written here, at log time, and
@@ -660,6 +717,87 @@ export async function logSavedMeal(prisma, { userId, savedMealId, localDate, slo
 
   const logs = await prisma.foodLog.createMany({ data: created });
   return { logged: created.length, skipped, meal: meal.name };
+}
+
+/**
+ * Copy what was logged on one day onto another.
+ *
+ * "Repeat yesterday" is the cheapest way to log a day that looked like the last
+ * one, which for most people is most days. It is a per-row copy of the SNAPSHOT,
+ * never a re-derivation: grams, servingLabel and nutrients move verbatim, so a
+ * repeated day is exactly the day it came from, even if a food's catalogue
+ * numbers changed in between.
+ *
+ * Both days are validated, and repeating a day onto itself is refused. That
+ * refusal is the one guard the caller cannot supply: `from === to` would double
+ * the day with a single tap, which no confirmation dialog downstream would
+ * reveal as a mistake.
+ *
+ * Foods deleted from the catalogue since are skipped rather than failing the
+ * whole copy - the same rule logSavedMeal applies, and for the same reason. A
+ * row with no foodItemId (a custom estimate, or a photo line this catalogue
+ * could not name) is copied as-is: there is nothing to have gone missing, and
+ * the snapshot is all the row needs.
+ *
+ * Each copied row keeps its OWN source rather than being tagged `repeat`. The
+ * provenance columns on the wire stay honest - a copied custom row is still a
+ * custom row - and the fact that it arrived by repeat is the analytics event's
+ * job to carry, not the enum's (which would need a migration and would lie
+ * about where the numbers came from).
+ */
+export async function repeatDay(prisma, { userId, fromLocalDate, localDate, slot }) {
+  if (!isIsoDay(fromLocalDate)) throw badRequest('fromLocalDate must be YYYY-MM-DD');
+  if (!isIsoDay(localDate)) throw badRequest('localDate must be YYYY-MM-DD');
+  if (fromLocalDate === localDate) {
+    throw badRequest('Pick a different day to repeat from', 'SAME_DAY');
+  }
+  const targetSlot = slot || null;
+  if (targetSlot != null && !MEAL_SLOTS.includes(targetSlot)) {
+    throw badRequest(`slot must be one of: ${MEAL_SLOTS.join(', ')}`);
+  }
+
+  const source = await prisma.foodLog.findMany({
+    where: { userId, localDate: fromLocalDate, ...(targetSlot ? { slot: targetSlot } : {}) },
+    orderBy: [{ slot: 'asc' }, { createdAt: 'asc' }],
+  });
+  if (!source.length) {
+    throw badRequest('There is nothing logged on that day to repeat', 'NOTHING_TO_REPEAT');
+  }
+
+  const live = await prisma.foodItem.findMany({
+    where: { id: { in: source.map((l) => l.foodItemId).filter((id) => id != null) } },
+    select: { id: true },
+  });
+  const liveIds = new Set(live.map((f) => f.id));
+
+  const skipped = [];
+  const created = [];
+  for (const log of source) {
+    if (log.foodItemId != null && !liveIds.has(log.foodItemId)) {
+      skipped.push(log.name || 'a food no longer in the catalogue');
+      continue;
+    }
+    created.push({
+      userId,
+      foodItemId: log.foodItemId,
+      localDate,
+      // A caller may collapse the whole day into one meal; without a slot each
+      // row lands back in the meal it was in, which is the faithful default.
+      slot: targetSlot || log.slot,
+      grams: log.grams,
+      servingLabel: log.servingLabel,
+      servings: log.servings,
+      nutrients: log.nutrients,
+      source: log.source,
+      name: log.name,
+      nonVeg: log.nonVeg,
+    });
+  }
+
+  if (!created.length) throw badRequest('None of that day\'s foods are available any more');
+
+  await prisma.foodLog.createMany({ data: created });
+  return { logged: created.length, skipped };
 }
 
 export async function listSavedMeals(prisma, userId) {

@@ -238,13 +238,12 @@ export const savePrescription = handle(async (req) => {
 // carries that flag through to the client, and the numbers are never presented
 // as authoritative. Once a nutritionist signs the catalogue off this can
 // default to false, which is the state the code should end up in.
-export const searchFoods = handle(async (req) => {
-  const includeUnverified = req.query.includeUnverified !== 'false';
-  const rows = await nutritionService.searchFoods(prisma, req.userId, {
-    query: req.query.q,
-    includeUnverified,
-  });
-  return rows.map((f) => ({
+// One food, on the wire. Shared by search and the recent list so the two
+// cannot drift into subtly different shapes: the picker renders both through
+// the same model, and a field present on one and missing on the other shows as
+// a blank on whichever list happened to lose it.
+function serializeFood(f) {
+  return {
     id: f.id,
     name: f.name,
     aliases: f.aliases,
@@ -261,6 +260,29 @@ export const searchFoods = handle(async (req) => {
     fatG: Number(f.fatG),
     fibreG: Number(f.fibreG),
     ironMg: f.ironMg == null ? null : Number(f.ironMg),
+  };
+}
+
+export const searchFoods = handle(async (req) => {
+  const includeUnverified = req.query.includeUnverified !== 'false';
+  const rows = await nutritionService.searchFoods(prisma, req.userId, {
+    query: req.query.q,
+    includeUnverified,
+  });
+  return rows.map(serializeFood);
+});
+
+// The picker's opening list. Same shape as search plus the two fields only the
+// recent list has: the grams and label the food was last logged with, so the
+// amount sheet opens on the portion the user actually chose last time.
+export const recentFoods = handle(async (req) => {
+  const rows = await nutritionService.recentFoods(prisma, req.userId, {
+    limit: num(req.query.limit) || 8,
+  });
+  return rows.map(({ food, grams, servingLabel }) => ({
+    ...serializeFood(food),
+    lastGrams: grams == null ? null : Number(grams),
+    lastServingLabel: servingLabel || null,
   }));
 });
 
@@ -447,6 +469,29 @@ export const logFood = handle(async (req) => {
     source: 'search',
   });
   track('health_food_logged', req.userId, { slot: b.slot, source: 'search' });
+  return out;
+});
+
+// Repeat a whole day's log onto another date. Reaches the same foods-logged
+// funnel as a search or a saved meal, tagged `repeat_day`, so the feature's
+// usage is a source split on one event rather than a separate event that has to
+// be summed by hand. The slot is passed through as null when the caller did not
+// force one - the service then keeps each row in its original meal, and the
+// event mirrors that rather than inventing a slot the rows did not get.
+export const repeatFoodLogs = handle(async (req) => {
+  const b = req.body || {};
+  const out = await nutritionService.repeatDay(prisma, {
+    userId: req.userId,
+    fromLocalDate: b.fromLocalDate,
+    localDate: b.localDate,
+    slot: b.slot,
+  });
+  track('health_food_logged', req.userId, {
+    slot: b.slot || null,
+    source: 'repeat_day',
+    logged_count: out?.logged ?? null,
+    skipped_count: Array.isArray(out?.skipped) ? out.skipped.length : null,
+  });
   return out;
 });
 
