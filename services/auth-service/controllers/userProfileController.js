@@ -425,6 +425,21 @@ export const updateProfile = async (req, res) => {
     const before = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!before) return res.status(404).json({ error: 'User not found' });
 
+    // One real gender change, ever. A "real change" is the old gender being set
+    // and the new one differing — onboarding (empty -> value) and re-saving the
+    // same gender don't count. The first real change records when and what
+    // alongside the gender itself (inside `updates`, so a failed
+    // profile-completion-bonus credit rolls them back too, see below); a second
+    // is refused. buddy-service reads both fields on profile sync.
+    const realGenderChange =
+      gender !== undefined && gender !== null && before.gender != null && gender !== before.gender;
+    if (realGenderChange && before.genderChangedAt) {
+      return res.status(400).json({
+        error: "You've already changed your gender once. Contact support to change it again.",
+        code: 'GENDER_CHANGE_LIMIT',
+      });
+    }
+
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
@@ -432,6 +447,10 @@ export const updateProfile = async (req, res) => {
     if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl;
     if (fcmToken !== undefined) updates.fcmToken = fcmToken;
     if (gender !== undefined) updates.gender = gender;
+    if (realGenderChange) {
+      updates.genderChangedAt = new Date();
+      updates.genderChangedTo = gender;
+    }
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
     // linkedGymId is the gym-join attribution written when a customer follows
