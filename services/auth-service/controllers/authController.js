@@ -30,6 +30,8 @@ import {
   validateFeaturePayload,
   diffChangedFlags,
 } from '../config/featureFlagRegistry.js';
+import * as socialConfigService from '../services/socialConfigService.js';
+import { bucketFor } from '../services/experimentService.js';
 
 const prisma = new PrismaClient();
 
@@ -357,6 +359,10 @@ const getAppConfig = async (req, res) => {
   let entry = { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' };
   let features = DEFAULT_FEATURES;
   let maintenance = resolveMaintenance(null);
+  // Social master switch. Seeded off so a failure in socialConfigService can
+  // only ever fail closed — a social surface must never appear as enabled
+  // because the settings read threw.
+  let social = { enabled: false };
   try {
     const config = await loadAppVersionConfig();
     entry = config?.[app]?.[platform] || entry;
@@ -379,6 +385,15 @@ const getAppConfig = async (req, res) => {
       loadOtpProvider(),
       loadProfileCompletionBonusAmount(),
     ]);
+    // Non-fatal: a social-config read failure leaves the seeded {enabled:false}
+    // rather than aborting the whole app-config response, matching the
+    // fail-open philosophy of this endpoint (a bad social read must not stop
+    // the force-update check from reaching the app).
+    try {
+      social = await socialConfigService.get();
+    } catch (err) {
+      console.error('getAppConfig social error:', err);
+    }
     features = {
       ...DEFAULT_FEATURES,
       ...(config?.features || {}),
@@ -408,6 +423,10 @@ const getAppConfig = async (req, res) => {
     message: entry.message,
     features,
     maintenance,
+    // Top-level (not inside `features`): it is a master switch over the whole
+    // social surface, not one more flag, and B14 backs it with its own settings
+    // row rather than the flag registry.
+    social,
   });
 };
 
@@ -647,6 +666,11 @@ const getMe = async (req, res) => {
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,
       freeTimeWindow: user.freeTimeWindow,
+      // Server-assigned experiment buckets (A1 hook, B14 owns the assignment).
+      // Derived on every call rather than stored, so there is no per-user row
+      // to migrate and a user cannot be re-bucketed by a stale cache. Today it
+      // is the constant control arm; see services/experimentService.js.
+      experiments: bucketFor(user.id),
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

@@ -30,14 +30,33 @@ model User {
   genderChangedAt DateTime?
   genderChangedTo Gender?
   fitnessGoals  FitnessGoal[]
-  // DEPRECATED — no writer and no reader as of 2026-09-30. The onboarding step
-  // that collected it and the client-side gym scorer that read it are both
-  // gone; the one live experience concept is health-service's
-  // PersonalisationProfile.experienceLevel (Training preferences screen),
-  // which is what the AI coach reads. Left in place rather than dropped so
-  // old values stay in the DPDP export; do not start writing it again —
-  // wire PersonalisationProfile instead, or drop this column.
+  // LIVE AGAIN as of the coach-journey cutover (2026-10-16). It was deprecated
+  // on 2026-09-30: the onboarding step that collected it and the client-side
+  // gym scorer that read it were both removed. The coach journey re-introduces
+  // it as the answer that picks the starting plan layer (new_to_gym → layer 1,
+  // restarting_after_break → layer 2, experienced → all five layers), written
+  // by the journey flow and read by GET /me so Home can branch on the first
+  // call. health-service's PersonalisationProfile.experienceLevel is a
+  // different concept (the AI coach's training preference) and is unaffected.
   experienceLevel       ExperienceLevel?
+  // --- Coach journey: gym-link state (2026-10-16) ------------------------
+  // homeUnclaimedGymId is the user's own Places-sourced non-partner gym
+  // (gym-service UnclaimedGym.id) — the Home screen's "your gym" target when
+  // there is no partner GymLink to branch on. pendingGymPromptGymId is a
+  // partner Gym.id the one-time "your gym just joined, link?" prompt points
+  // at. Both are bare Ints with no Prisma relation, the same unenforced
+  // cross-service convention as linkedGymId/trainerGymId above (Gym and
+  // UnclaimedGym live in gym-service's own database).
+  homeUnclaimedGymId       Int?
+  pendingGymPromptGymId    Int?
+  // One-time notice the app shows then clears (e.g. "removed_by_gym"), set by
+  // the link/unlink flows (B2) and cleared by POST /api/auth/me/notice/clear.
+  gymLinkNotice            String?
+  // First-visit badge consent, collected once and never reset — the timestamp
+  // records when consent was given so the badge flow cannot re-ask. Defaults
+  // false so existing rows need no backfill.
+  firstVisitBadgeConsent    Boolean   @default(false)
+  firstVisitBadgeConsentAt  DateTime?
   weeklyFrequencyIntent FrequencyIntent?
   // --- Onboarding branch (2026-09-18) -------------------------------------
   // Who this user is, decided once at onboarding and revisable later. These
@@ -538,5 +557,59 @@ model AppModeHistory {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@schema("auth")
+}
+
+// How a GymLink was created: the user picked the gym themselves (self), or they
+// arrived through the gym's QR/link (gym_qr). Drives whether the link counts as
+// a self-declared membership or a verified check-in origin.
+enum GymLinkSource {
+  self
+  gym_qr
+
+  @@schema("auth")
+}
+
+// A customer↔gym membership link — the source of truth the linked-member Home
+// and the attendance-SaaS bill read. Distinct from User.linkedGymId, which is a
+// denormalised pointer to the single active link and stays for the reads that
+// must not join. gymId is a bare Int (gym-service's database), so this is an
+// unenforced cross-service reference like the rest of the file. A link is
+// "active" while removedAt is null; removed rows are kept so a self-re-link can
+// be blocked and history survives a gym removing a member.
+model GymLink {
+  id                     Int           @id @default(autoincrement())
+  userId                 Int
+  gymId                  Int
+  source                 GymLinkSource
+  linkedAt               DateTime      @default(now())
+  // Set by booking-service's member check-in ping the first time this linked
+  // member is verifiably checked in at the gym — the "verified member" signal.
+  firstVerifiedCheckinAt DateTime?
+  removedAt              DateTime?
+  removedByPartnerId     Int?
+  // True when the gym (not the user) removed the link: the user may not
+  // self-re-link to this gym without coming back through the gym's QR.
+  selfRelinkBlocked      Boolean       @default(false)
+
+  @@index([gymId, linkedAt])
+  @@index([userId])
+  @@schema("auth")
+}
+
+// One row per app install a user has signed in on, keyed by a stable
+// client-generated installId. Used to detect referral/self-link abuse across
+// accounts that share a device and to reach "all devices for this user".
+// lastSeenAt refreshes on every POST /api/auth/devices.
+model UserDevice {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  installId   String
+  platform    String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@unique([userId, installId])
+  @@index([installId])
   @@schema("auth")
 }
