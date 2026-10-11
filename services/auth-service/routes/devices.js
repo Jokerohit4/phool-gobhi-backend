@@ -1,19 +1,22 @@
 import { Router } from 'express';
+import verifyToken from '../middleware/verifyToken.js';
+import requireInternal from '../middleware/requireInternal.js';
+import { registerDevice, getUsersForInstall, getDevicesForUser } from '../controllers/deviceController.js';
 
-// Device registry — EMPTY STUB as of A1 (2026-10-16).
+// Device registry (coach-journey B1) — mounted at '/' beside authRoutes in
+// app.js, so these are flat under the gateway's /api/auth prefix:
 //
-// This router is intentionally empty. It exists so the paths below are reserved
-// under /api/auth before the Group B owner (B1) implements them, and so
-// app.js's mount does not have to change when that lands:
+//   POST /devices                            (verifyToken)    upsert UserDevice by
+//                                            userId + installId, touch lastSeenAt, 204
+//   GET  /internal/devices/:installId/users  (requireInternal) -> { userIds: [Int] }
+//   GET  /internal/users/:id/devices         (requireInternal) -> { installIds: [String] }
 //
-//   POST /devices                          (verifyToken)  upsert UserDevice by
-//                                          userId + installId, touch lastSeenAt
-//   GET  /internal/devices/:installId/users  (requireInternal) -> { userIds }
-//   GET  /internal/users/:id/devices         (requireInternal) -> { installIds }
-//
-// The UserDevice model backing them is added by A1 (prisma/schema.prisma). Do
-// not add routes here in A1 — B1 owns the handlers.
+// The UserDevice model backing them is added by A1 (prisma/schema.prisma).
 
 const router = Router();
+
+router.post('/devices', verifyToken, registerDevice);
+router.get('/internal/devices/:installId/users', requireInternal, getUsersForInstall);
+router.get('/internal/users/:id/devices', requireInternal, getDevicesForUser);
 
 export default router;
