@@ -1,22 +1,37 @@
 import { Router } from 'express';
+import verifyToken from '../middleware/verifyToken.js';
+import requireInternal from '../middleware/requireInternal.js';
+import {
+  selfLink,
+  leaveGymLink,
+  removeGymMember,
+  clearGymLinkNotice,
+  gymLinkCheckedIn,
+  unclaimedGymClaimed,
+} from '../controllers/gymLinkController.js';
 
-// Gym links — EMPTY STUB as of A1 (2026-10-16).
+// Gym links (coach-journey B2) — mounted at '/' beside authRoutes/deviceRoutes
+// in app.js, so these are flat under the gateway's /api/auth prefix:
 //
-// This router is intentionally empty. It exists so the paths below are reserved
-// under /api/auth before the Group B owner (B2) implements them, and so
-// app.js's mount does not have to change when that lands:
+//   POST   /gym-links/self                        (verifyToken, flag-gated)  -> 200 { link }
+//   DELETE /gym-links/self                        (verifyToken, flag-gated)  -> 204
+//   DELETE /gym/:gymId/members/:userId            (verifyToken, partner-only) -> 204
+//   POST   /me/notice/clear                       (verifyToken)              -> 204
+//   POST   /internal/gym-links/checked-in         (requireInternal)          -> 204
+//   POST   /internal/unclaimed-gym-claimed        (requireInternal)          -> 204
 //
-//   POST   /gym-links/self                (verifyToken, selfLinkGym flag)
-//                                          -> 200 { link } | 409 SELF_LINK_BLOCKED
-//                                             | 429 SELF_LINK_LIMIT
-//   DELETE /gym-links/self                (verifyToken, selfLinkGym flag) -> 204
-//   POST   /me/notice/clear               (verifyToken) -> 204, clears gymLinkNotice
-//   POST   /internal/gym-links/checked-in (requireInternal) -> 204, stamps
-//                                          firstVerifiedCheckinAt on the active link
-//
-// The GymLink model + GymLinkSource enum backing them are added by A1
-// (prisma/schema.prisma). Do not add routes here in A1 — B2 owns the handlers.
+// The partner-removal route is a distinct HTTP method from the existing
+// GET /gym/:gymId/members in routes/auth.js, so mount order does not matter.
+// The self-link flag is checked in the controller (it needs the DB to read an
+// admin's override), not here.
 
 const router = Router();
+
+router.post('/gym-links/self', verifyToken, selfLink);
+router.delete('/gym-links/self', verifyToken, leaveGymLink);
+router.delete('/gym/:gymId/members/:userId', verifyToken, removeGymMember);
+router.post('/me/notice/clear', verifyToken, clearGymLinkNotice);
+router.post('/internal/gym-links/checked-in', requireInternal, gymLinkCheckedIn);
+router.post('/internal/unclaimed-gym-claimed', requireInternal, unclaimedGymClaimed);
 
 export default router;

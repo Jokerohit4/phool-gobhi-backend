@@ -18,16 +18,29 @@ test('unanswered stays null so existing accounts are untouched', () => {
   assert.equal(deriveAppMode(undefined), null);
 });
 
-test('does not work out -> gym_seeker, whatever they would prefer', () => {
-  // PAYG is the proposition for someone who isn't training yet, including
-  // someone who says they'd prefer to train at home.
-  for (const pref of [undefined, null, ...Object.values(TRAINING_LOCATION_PREFS)]) {
+test('does not work out -> gym_seeker, unless they would start at home', () => {
+  // PAYG is the proposition for someone who isn't training yet, so discovery
+  // leads — for every answer except "home", which has nothing to book, so the
+  // app itself becomes the product. This carve-out was added with the rule in
+  // appModeService.js (build-plan B1); this test still encoded the old
+  // gym_seeker-for-everyone behaviour and failed against correct code.
+  for (const pref of [
+    undefined,
+    null,
+    TRAINING_LOCATION_PREFS.GYM,
+    TRAINING_LOCATION_PREFS.FITNESS_CENTRE,
+    TRAINING_LOCATION_PREFS.OTHER,
+  ]) {
     assert.equal(
       deriveAppMode({ currentlyWorksOut: false, trainingLocationPref: pref }),
       APP_MODES.GYM_SEEKER,
       `currentlyWorksOut=false, pref=${pref}`,
     );
   }
+  assert.equal(
+    deriveAppMode({ currentlyWorksOut: false, trainingLocationPref: TRAINING_LOCATION_PREFS.HOME }),
+    APP_MODES.HOME_TRACK,
+  );
 });
 
 test('trains at home -> home_track', () => {

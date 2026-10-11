@@ -10,6 +10,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyUser } from '../utils/notifyUser.js';
 import { eraseUserAcrossServices } from '../utils/eraseAcrossServices.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
+import { linkGym } from './gymLinkService.js';
 import redis from '../utils/redisClient.js';
 
 const SKIP_OTP_CODE = '123456';
@@ -161,21 +162,43 @@ export async function runAttendanceSaasReengagementSweepService() {
   return { candidates: candidates.length, nudged, alreadyActive };
 }
 
-// Attendance-SaaS monthly bill: count of users who joined each of the given
-// gyms in a calendar month (YYYY-MM, IST boundaries — a "month" is the
-// Indian business month). Joined means linkedGymId set at account creation,
-// so createdAt in the month window is the exact proxy. Returns a map of
-// gymId -> count; a gym with no joiners keys to 0? No — it's simply absent,
-// so callers should default missing keys to 0.
+// Attendance-SaaS monthly bill: count of GymLink rows for each of the given
+// gyms whose *qualifying* date (in IST) falls in the month (YYYY-MM). A
+// `gym_qr` link qualifies the moment it is made; a `self` link only counts in
+// the month it becomes a real membership — the later of its first verified
+// check-in or 7 days after the link — and only if the link was still active at
+// that point (removed-before-qualifying never counts). Counts by qualifying
+// date, not by linkedAt, so a self-link made in September that only earns its
+// first check-in in October bills October. Returns a map of gymId -> count; a
+// gym with no qualifiers is simply absent, so callers should default missing
+// keys to 0.
+const SELF_LINK_QUALIFY_MS = 7 * 24 * 60 * 60 * 1000;
+
 export async function countGymJoinedUsersByMonthService(gymIds, month) {
   const { start, end } = istMonthRange(month);
-  const rows = await prisma.user.groupBy({
-    by: ['linkedGymId'],
-    where: { linkedGymId: { in: gymIds }, createdAt: { gte: start, lt: end } },
-    _count: { linkedGymId: true },
+  const links = await prisma.gymLink.findMany({
+    where: {
+      gymId: { in: gymIds },
+      OR: [
+        { source: 'gym_qr', linkedAt: { gte: start, lt: end } },
+        { source: 'self', linkedAt: { lt: end }, firstVerifiedCheckinAt: { not: null } },
+      ],
+    },
+    select: { gymId: true, source: true, linkedAt: true, firstVerifiedCheckinAt: true, removedAt: true },
   });
   const counts = {};
-  for (const row of rows) counts[row.linkedGymId] = row._count.linkedGymId;
+  for (const link of links) {
+    const qualifiesAt =
+      link.source === 'self'
+        ? new Date(Math.max(
+            link.firstVerifiedCheckinAt.getTime(),
+            link.linkedAt.getTime() + SELF_LINK_QUALIFY_MS,
+          ))
+        : link.linkedAt;
+    if (qualifiesAt < start || qualifiesAt >= end) continue;
+    if (link.removedAt && link.removedAt < qualifiesAt) continue;
+    counts[link.gymId] = (counts[link.gymId] || 0) + 1;
+  }
   return counts;
 }
 
@@ -355,6 +378,11 @@ export async function deleteUserService(userId) {
       prisma.savedAddress.deleteMany({ where: { userId } }),
       prisma.partnerBankAccount.deleteMany({ where: { userId } }),
       prisma.appModeHistory.deleteMany({ where: { userId } }),
+      // Coach-journey B2: GymLink (membership history) and UserDevice (install
+      // ids) both key on userId with no cascade, and both outlive as personal
+      // data if left behind.
+      prisma.gymLink.deleteMany({ where: { userId } }),
+      prisma.userDevice.deleteMany({ where: { userId } }),
       prisma.user.updateMany({ where: { referredByUserId: userId }, data: { referredByUserId: null } }),
       prisma.user.delete({ where: { id: userId } }),
     ]);
@@ -616,7 +644,6 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
           type,
           gobhiType: role === ROLES.GOBHI ? gobhiType : null,
           referredByUserId,
-          linkedGymId: resolvedLinkedGymId,
           updatedAt: new Date(),
         },
       });
@@ -641,6 +668,13 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
       where: { id: user.id },
       data: { referralCode: referralCodeFor(user.id) },
     });
+    // Route the join-gym pointer through linkGym so the GymLink row (source
+    // gym_qr) is written alongside User.linkedGymId, exactly as a self-link or
+    // the existing-user backfill below does. Never throws for gym_qr.
+    if (resolvedLinkedGymId) {
+      const linked = await linkGym(prisma, user.id, resolvedLinkedGymId, 'gym_qr');
+      if (linked) user = linked;
+    }
   } else if (!user.isActive) {
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
   }
@@ -653,10 +687,8 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
       ? Number(linkedGymId)
       : null;
     if (resolvedLinkedGymId) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { linkedGymId: resolvedLinkedGymId },
-      });
+      const linked = await linkGym(prisma, user.id, resolvedLinkedGymId, 'gym_qr');
+      if (linked) user = linked;
     }
   }
 
