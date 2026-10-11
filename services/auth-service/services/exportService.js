@@ -13,11 +13,13 @@ const prisma = new PrismaClient();
 // returned WITH the gaps named, which serves the person better than an error
 // page that tells them nothing about anything.
 export async function buildFullExportService(userId) {
-  const [user, addresses, finds, platformReview] = await Promise.all([
+  const [user, addresses, finds, platformReview, gymLinks, devices] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.savedAddress.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     prisma.collectibleFind.findMany({ where: { userId }, orderBy: { foundAt: 'asc' } }),
     prisma.platformReview.findUnique({ where: { customerId: userId } }),
+    prisma.gymLink.findMany({ where: { userId }, orderBy: { linkedAt: 'asc' } }),
+    prisma.userDevice.findMany({ where: { userId }, orderBy: { firstSeenAt: 'asc' } }),
   ]);
 
   if (!user) {
@@ -60,8 +62,28 @@ export async function buildFullExportService(userId) {
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,
       freeTimeWindow: user.freeTimeWindow,
+      // Coach-journey membership + prompt state (B2), same class as the
+      // onboarding answers above: this person's own record.
+      linkedGymId: user.linkedGymId,
+      homeUnclaimedGymId: user.homeUnclaimedGymId,
+      pendingGymPromptGymId: user.pendingGymPromptGymId,
+      gymLinkNotice: user.gymLinkNotice,
+      firstVisitBadgeConsent: user.firstVisitBadgeConsent,
+      firstVisitBadgeConsentAt: user.firstVisitBadgeConsentAt,
       joinedAt: user.createdAt,
     },
+    gymLinks: gymLinks.map((l) => ({
+      gymId: l.gymId,
+      source: l.source,
+      linkedAt: l.linkedAt,
+      firstVerifiedCheckinAt: l.firstVerifiedCheckinAt,
+      removedAt: l.removedAt,
+      removedByPartnerId: l.removedByPartnerId,
+      selfRelinkBlocked: l.selfRelinkBlocked,
+    })),
+    devices: devices.map((d) => ({
+      installId: d.installId, platform: d.platform, firstSeenAt: d.firstSeenAt, lastSeenAt: d.lastSeenAt,
+    })),
     savedAddresses: addresses.map((a) => ({
       label: a.label, address: a.formattedAddress, lat: a.lat, lng: a.lng, savedAt: a.createdAt,
     })),
