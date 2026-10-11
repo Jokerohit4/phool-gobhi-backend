@@ -26,6 +26,12 @@ router.get('/internal/bookings/subscription/:id/last-visit-date', requireInterna
 // Internal (auth-service's attendance-SaaS re-engagement sweep — bulk "has this
 // customer ever completed a booking" check, batched to avoid N sequential calls)
 router.post('/internal/bookings/has-completed-batch', requireInternal, ctrl.getCustomerIdsWithCompletedBooking);
+// Internal (health-service's journey — showed-up days / steady weeks read the
+// distinct union of all three check-in surfaces; see checkinDaysService.js)
+router.get('/internal/users/:id/checkin-days', requireInternal, ctrl.getCheckinDaysInternal);
+// Internal (gym-service's unclaimed-gym-claimed hook — "which customers ever
+// checked in here", so auth can prompt them toward the now-partner gym)
+router.get('/internal/unclaimed-gyms/:id/customers', requireInternal, ctrl.getUnclaimedGymCustomersInternal);
 
 // Public, unauthenticated — marketing-site aggregate stat only. Must be
 // paired with a gateway PUBLIC_ROUTES entry (see index.js).
@@ -69,6 +75,9 @@ router.get('/admin/attendance-heatmap', requireRole('gobhi'), ctrl.getAdminAtten
 // Admin-only: top-performing-gyms leaderboard — the mirror image of the
 // existing supply-health view (which finds the worst gyms).
 router.get('/admin/top-gyms', requireRole('gobhi'), ctrl.getTopPerformingGyms);
+// Gobhi-only: how many customers train at an unclaimed gym (admin portal's
+// claim queue). k-anonymous — the count reads as null while under 5 people.
+router.get('/admin/unclaimed-gyms/:id/people-count', requireRole('gobhi'), ctrl.getUnclaimedGymPeopleCount);
 
 // Trainer self-service (role='trainer', see auth-service's new trainer
 // account type) — their own check-in + logging which attended customer
