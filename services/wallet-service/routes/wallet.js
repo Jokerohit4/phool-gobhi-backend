@@ -18,6 +18,8 @@ import {
   redeemGiftDayInternal,
   processLapsedSubscriptionsInternal,
   reconcilePendingRazorpayOrdersInternal,
+  creditReferral,
+  reconcileReferralsInternal,
   getGiftBonusPayoutsAnalytics,
   getMySubscriptions,
   ackGiftReveal,
@@ -79,6 +81,11 @@ router.get('/internal/subscriptions/active', requireInternal, getActiveSubscript
 router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
 router.post('/internal/orders/reconcile-pending', requireInternal, reconcilePendingRazorpayOrdersInternal); // Razorpay top-up reconciliation trigger
+// Referral payouts — the single writer of referral-credit-* keys (the generic
+// /:userId/credit route rejects them). Cap + `bonus` type enforced in
+// referralService.js; reconcile repairs half-paid pairs hourly.
+router.post('/internal/referrals/credit', requireInternal, creditReferral); // booking-service (first_booking) / health-service (home_days) trigger
+router.post('/internal/referrals/reconcile', requireInternal, reconcileReferralsInternal);
 router.post('/internal/subscriptions/has-purchased-batch', requireInternal, getCustomerIdsWithPurchasedSubscription); // auth-service's attendance-SaaS re-engagement sweep
 
 // Attendance-SaaS bank settlements — a separate ledger from Wallet above;

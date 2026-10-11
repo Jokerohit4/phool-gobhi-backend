@@ -1,0 +1,84 @@
+name: Reconcile referral payouts
+
+# Triggers wallet-service's referral reconciliation
+# (reconcileReferralPayoutsService, via POST /internal/referrals/reconcile) as
+# a real incoming HTTP request. The old booking-service referral path wrote
+# the two sides (friend ₹50, referrer ₹50) as two independent HTTP calls, so a
+# process death between them could leave one side credited and the other not;
+# this sweep finds and pays the missing side, still respecting the referrer's
+# 10-per-IST-month cap.
+#
+# Cloud Run throttles CPU to near-zero between requests unless
+# cpu-throttling is explicitly disabled (it isn't, for this service), so an
+# in-process timer would be starved of the CPU needed even to open a Postgres
+# connection — the same reason the Razorpay reconcile moved to a scheduled
+# workflow. A genuine incoming request gets full CPU allocation.
+#
+# Auth is two-layered, same as every other internal endpoint in this repo: an
+# x-internal-key header (the app-level requireInternal check) AND a
+# Google-signed ID token scoped to wallet-service's own URL as audience
+# (required by Cloud Run's IAM invoker check on this no-allow-unauthenticated
+# service — see reconcile-razorpay-orders.yml, whose exact pattern this
+# mirrors, reusing the same per-env WIF providers).
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # hourly
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  reconcile:
+    strategy:
+      matrix:
+        env: [dev, prod]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # wallet-service-secrets-<env> JSON payload (see deploy/README.md's
+      # "Consolidated secrets" section), not as its own Secret Manager entry.
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/wallet-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "wallet-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - id: reconcileauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.reconcileauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            "${{ steps.svcurl.outputs.url }}/internal/referrals/reconcile"

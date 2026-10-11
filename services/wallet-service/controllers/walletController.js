@@ -38,6 +38,7 @@ import {
   computeAttendanceSaasBillsService,
   applyAttendanceSaasBillService,
 } from '../services/walletService.js';
+import { creditReferralService, reconcileReferralPayoutsService, REFERRAL_CREDIT_KEY_PREFIX } from '../services/referralService.js';
 import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -132,6 +133,14 @@ export const creditWallet = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, description, idempotencyKey, userType, gymId } = req.body;
+    // Referral credits have their own endpoint (POST /internal/referrals/
+    // credit) because they must enforce the monthly cap and write the
+    // `bonus` type atomically across both sides. Only that endpoint may write
+    // referral-keyed credits — a caller that tries here is misusing the
+    // generic credit API (and would bypass the cap).
+    if (typeof idempotencyKey === 'string' && idempotencyKey.startsWith(REFERRAL_CREDIT_KEY_PREFIX)) {
+      return res.status(400).json({ error: 'Referral credits must go through /internal/referrals/credit' });
+    }
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'amount must be a positive finite number' });
     }
@@ -616,6 +625,35 @@ export const reconcilePendingRazorpayOrdersInternal = async (req, res) => {
   try {
     const userId = req.body?.userId ? Number(req.body.userId) : undefined;
     const result = await reconcilePendingRazorpayOrdersService(userId ? { userId } : {});
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal (requireInternal): the single entry point for referral payouts.
+// booking-service calls this on a friend's first completed booking;
+// health-service calls it on the friend's 3rd showed-up day (behind the
+// referralHomeTrigger flag). The caller owns the trigger decision and passes
+// the referrer it already looked up — this endpoint owns the cap, the
+// `bonus` type, and the atomic two-sided write.
+export const creditReferral = async (req, res) => {
+  try {
+    const { referrerId, friendId, trigger } = req.body || {};
+    const result = await creditReferralService({ referrerId, friendId, trigger });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Referral credit failed' });
+  }
+};
+
+// Internal (requireInternal): periodic sweep that repairs half-paid referral
+// pairs (a crash between the old two-credit sequence could leave one side
+// credited and the other not). Runs from .github/workflows/referral-
+// reconcile.yml; safe to call ad hoc.
+export const reconcileReferralsInternal = async (req, res) => {
+  try {
+    const result = await reconcileReferralPayoutsService();
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
