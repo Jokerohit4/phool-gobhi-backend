@@ -41,12 +41,20 @@ import * as ledgerCtrl from '../controllers/ledgerController.js';
 // one, and two distinct per-person consent scopes. Mixing those into `gated`
 // here would mean every ledger route inherited healthMetrics alone.
 import ledgerRouter from './ledger.js';
+// Coach-journey routers, mounted empty in A2 so later tasks add routes without
+// touching this file again. See routes/journey.js, habits.js, content.js.
+import journeyRouter from './journey.js';
+import habitsRouter from './habits.js';
+import contentRouter from './content.js';
 
 const router = Router();
 
 // Mounted, not spread. The ledger carries its own requireAuth, its own flag
 // checks and its own consent middlewares, and they have to run in that order.
 router.use(ledgerRouter);
+router.use(journeyRouter);
+router.use(habitsRouter);
+router.use(contentRouter);
 
 // Every customer-facing route is server-side gated, not just client-hidden —
 // same posture challenge-service takes with streaksCoins, and more important
