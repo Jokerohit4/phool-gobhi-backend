@@ -152,12 +152,15 @@ test('every write on the score surface is a PUT or DELETE, never a POST', () => 
   }
 });
 
-test('every score route is gated on the same consent scope', () => {
+test('every score route is gated on the same consent surface', () => {
   // Same failure class as the appointment gate: these routes serve score and
-  // weight-derived data, and the nutrition scope is the consent that covers
-  // them. A route that lost the gate serves health data to anyone who can
-  // reach it, which no screen-level error would ever report.
-  const gate = /\.\.\.nutrition\s*,\s*(ledgerCtrl|scoreService|attainmentService)\.\w+/;
+  // weight-derived data, so each must sit behind the nutrition consent OR
+  // (since B8) the coach journey's flag + `basic` scope — the either-gate
+  // that lets a coach user read a score derived from a plan they never
+  // opened a food diary for. Either form, never neither: a route that lost
+  // both serves health data to anyone who can reach it, which no
+  // screen-level error would ever report.
+  const gate = /(?:\.\.\.nutrition|anyOf\(coachBasic,\s*nutrition\))\s*,\s*(ledgerCtrl|scoreService|attainmentService)\.\w+/;
   const scoreRoutes = [
     ...routesSource.matchAll(
       /router\.(get|post|put|patch|delete)\(\s*'\/ledger\/(score[^']*|attainment[^']*)'/g,
@@ -178,7 +181,7 @@ test('every score route is gated on the same consent scope', () => {
       routesSource.slice(from, from + 200),
       gate,
       `${verb.toUpperCase()} ${path.replace(/^router\.\w+\(/, '').replace(/'$/, '')} is ` +
-        'missing its ...nutrition consent gate. The other score routes have it; ' +
+        'missing its nutrition-or-coach consent gate. The other score routes have it; ' +
         'an endpoint without it serves score and weight data unconsented.',
     );
   }
