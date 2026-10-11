@@ -193,9 +193,24 @@ export async function addUserEnteredItem(prisma, { userId, title, kind = DEFAULT
  * has to be safe to press: if it deleted a doctor's course of tablets because
  * the new target had a different protein number, the feature would be
  * dangerous rather than convenient.
+ *
+ * `unlockedLayerKeys` (the coach journey, B7) selects the layer-aware
+ * generator: items only for the unlocked layers, workout items from the
+ * stored `workoutSlots`, and - in that mode only - a null `targets` is
+ * legal, because a journey user's plan exists before their body data does.
+ * Without it the behaviour is exactly what it always was, refusal included.
  */
-export async function regenerateSuggestions(prisma, { userId, goals, diet, targets, measuredActivity }) {
-  if (!targets) throw badRequest('Set a nutrition target before generating a plan');
+export async function regenerateSuggestions(prisma, {
+  userId,
+  goals,
+  diet,
+  targets,
+  measuredActivity,
+  unlockedLayerKeys = null,
+  workoutSlots = null,
+  stepsPerDay = null,
+}) {
+  if (!targets && !unlockedLayerKeys) throw badRequest('Set a nutrition target before generating a plan');
 
   const activeCount = await prisma.planItem.count({ where: { userId, active: true } });
   const userItems = await prisma.planItem.count({
@@ -216,6 +231,9 @@ export async function regenerateSuggestions(prisma, { userId, goals, diet, targe
     targets,
     measuredActivity,
     hasDoctorItems,
+    unlockedLayerKeys,
+    workoutSlots,
+    stepsPerDay,
   });
   const keptSuggestions = suggestions.slice(0, room);
 
@@ -239,6 +257,11 @@ export async function regenerateSuggestions(prisma, { userId, goals, diet, targe
           // Hard-set, and asserted in the generator's tests. A suggested item
           // that claimed to come from a doctor would break the whole boundary.
           origin: 'suggested',
+          // The journey layer this item belongs to, or null for a
+          // pre-journey/legacy item (and for rest days, which belong to no
+          // layer). Written from the generator's own output so the two can
+          // never disagree about what guards what.
+          layerKey: item.layerKey ?? null,
           nutrientKey: item.nutrientKey || null,
           targetValue: item.targetValue != null ? roundTo(item.targetValue, DECIMAL_PLACES.nutrients) : null,
           active: true,
