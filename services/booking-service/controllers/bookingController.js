@@ -1,6 +1,7 @@
 import * as bookingService from '../services/bookingService.js';
 import * as globalLeaderboardService from '../services/globalLeaderboardService.js';
 import * as exportService from '../services/exportService.js';
+import * as checkinDaysService from '../services/checkinDaysService.js';
 
 export const createBooking = async (req, res) => {
   try {
@@ -124,6 +125,67 @@ export const getLastVisitDateForSubscription = async (req, res) => {
     const subscriptionId = parseInt(req.params.id);
     const lastVisitDate = await bookingService.getLastVisitDateForSubscription(subscriptionId);
     res.json({ data: { lastVisitDate } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Coach-journey B3 — internal service-to-service:
+//
+//   GET /internal/users/:id/checkin-days?from=YYYY-MM-DD  (health-service's
+//   journey — the distinct union of Booking.attendedAt, MemberAttendance.date
+//   and IndependentCheckIn.date as IST calendar days, optionally from a day
+//   onwards)
+//
+// The response is the contract's bare { days } shape, like auth-service's B1
+// device endpoints — not wrapped in { data } (the consumer is another
+// service, and the contract spells the JSON out literally).
+export const getCheckinDaysInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric user id is required' });
+    }
+    const from = typeof req.query.from === 'string' && req.query.from.length ? req.query.from : null;
+    if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      return res.status(400).json({ error: 'from must be a YYYY-MM-DD date' });
+    }
+    const days = await checkinDaysService.getDays(userId, from);
+    res.json({ days });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Coach-journey B3 — internal, called by gym-service when an unclaimed gym is
+// claimed: which customers ever checked in there (IndependentCheckIn rows),
+// so auth-service can prompt them toward the real gym. Bare { customerIds }
+// per the contract; gym-service's hook accepts this shape.
+export const getUnclaimedGymCustomersInternal = async (req, res) => {
+  try {
+    const unclaimedGymId = parseInt(req.params.id);
+    if (!Number.isInteger(unclaimedGymId)) {
+      return res.status(400).json({ error: 'A numeric unclaimed gym id is required' });
+    }
+    const customerIds = await bookingService.getUnclaimedGymCustomerIds(unclaimedGymId);
+    res.json({ customerIds });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Coach-journey B3 — gobhi-only companion to the unclaimed-gym claim queue:
+// how many distinct customers have ever checked in at this unclaimed gym.
+// Returns { count: null } under 5 people — a count of 1-4 is effectively a
+// list of who they are, so small numbers stay unsaid.
+export const getUnclaimedGymPeopleCount = async (req, res) => {
+  try {
+    const unclaimedGymId = parseInt(req.params.id);
+    if (!Number.isInteger(unclaimedGymId)) {
+      return res.status(400).json({ error: 'A numeric unclaimed gym id is required' });
+    }
+    const count = await bookingService.getUnclaimedGymPeopleCount(unclaimedGymId);
+    res.json({ count });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
