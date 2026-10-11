@@ -110,6 +110,21 @@ export async function getUserLinkedGymId(userId) {
   }
 }
 
+// Reads a user's referrer from auth-service's internal profile. Used only by
+// referralService's reconcile sweep, to learn the referrer for a friend whose
+// referrer credit is missing (the credit request carries referrerId; the
+// friend key alone does not). Best-effort like getUserLinkedGymId — a lookup
+// failure leaves that pair unpinned, to be retried on the next sweep.
+export async function getReferredByUserIdInternal(userId) {
+  try {
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${userId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    const referredBy = (res.data?.data || res.data)?.referredByUserId;
+    return referredBy == null ? null : Number(referredBy);
+  } catch (_) {
+    return null;
+  }
+}
+
 // Attendance-SaaS wedge (finalized 2026-08-19, honeymoon window removed
 // 2026-09-11): GymSubscription purchases don't share Gym.commissionPct with
 // one-off marketplace bookings — every subscription purchase carries a
@@ -330,30 +345,49 @@ async function alreadyAppliedWallet(userId, idempotencyKey) {
 // error surfaced anywhere. Upserting closes that class of bug for every
 // caller of this function at once (booking payouts, subscription payouts,
 // cancellation refunds), not just the one call site that first hit it.
-export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer', gymId = null) {
+// The write half of a credit, against a caller-supplied Prisma client/tx.
+// creditWalletService wraps this in its own $transaction; referralService
+// calls it inside a single transaction that must also read/credit the other
+// side of a referral pair atomically (see referralService.js). This helper
+// deliberately does NOT do the idempotency pre-check — callers own that, so a
+// referral transaction can check the friend key and count the referrer's
+// month keys against the same tx it will write into. `type` defaults to
+// 'credit'; the referral path passes 'bonus' (see docs Money rules).
+export async function applyWalletCredit(tx, {
+  userId,
+  amount,
+  description,
+  idempotencyKey = null,
+  userType = 'customer',
+  gymId = null,
+  type = 'credit',
+}) {
+  await tx.wallet.upsert({ where: { userId }, update: {}, create: { userId, userType } });
+  const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+  const updated = await tx.wallet.update({
+    where: { userId },
+    data: { balance: { increment: amount } }
+  });
+  await tx.walletTransaction.create({
+    data: {
+      walletId: wallet.id,
+      type,
+      amount,
+      description,
+      idempotencyKey,
+      gymId,
+    }
+  });
+  return serializeWallet(updated);
+}
+
+export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer', gymId = null, type = 'credit') {
   const already = await alreadyAppliedWallet(userId, idempotencyKey);
   if (already) return already;
   try {
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.wallet.upsert({ where: { userId }, update: {}, create: { userId, userType } });
-      const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
-      const updated = await tx.wallet.update({
-        where: { userId },
-        data: { balance: { increment: amount } }
-      });
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          type: 'credit',
-          amount,
-          description,
-          idempotencyKey,
-          gymId,
-        }
-      });
-      return updated;
-    });
-    return serializeWallet(updated);
+    return await prisma.$transaction((tx) =>
+      applyWalletCredit(tx, { userId, amount, description, idempotencyKey, userType, gymId, type })
+    );
   } catch (err) {
     // Unique-violation on idempotencyKey — a concurrent identical call
     // already applied it between our check and our create/insert.
