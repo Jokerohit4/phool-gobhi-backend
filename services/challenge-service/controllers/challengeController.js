@@ -363,7 +363,15 @@ export const recordAttendanceEventInternal = async (req, res) => {
     if (!userId || !gymId || !attendedAt || !source || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, gymId, attendedAt, source and idempotencyKey are required' });
     }
-    if (!bookingId && !memberAttendanceId) {
+    // Independent (non-partner) check-ins carry NEITHER id: the customer
+    // tapped in at an unclaimed gym they happened to be at, so there is no
+    // booking and no attendance-SaaS member row to point at. booking-service
+    // identifies them by source 'independent_gym_geofence' with a caller-
+    // derived `independent-<id>` idempotencyKey (see its recordAttendanceEvent
+    // call right after IndependentCheckIn.create), so accept that source with
+    // both ids null. Every other source still needs one of the two ids.
+    const isIndependentCheckIn = source === 'independent_gym_geofence';
+    if (!bookingId && !memberAttendanceId && !isIndependentCheckIn) {
       return res.status(400).json({ error: 'One of bookingId or memberAttendanceId is required' });
     }
     let result = { alreadyRecorded: true };

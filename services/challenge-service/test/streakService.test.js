@@ -147,6 +147,22 @@ test('recordAttendanceEvent for a member-checkin (no bookingId) still records an
   assert.equal(db.attendanceEvents.get('member-checkin:77').bookingId, null);
 });
 
+test('recordAttendanceEvent for an independent check-in (no booking AND no member id) still records and pays', async () => {
+  resetFakes();
+  const result = await recordAttendanceEvent({
+    userId: 9, bookingId: null, memberAttendanceId: null, gymId: 7, attendedAt: '2026-08-24T10:00:00Z',
+    source: 'independent_gym_geofence', idempotencyKey: 'independent-901',
+  });
+
+  assert.equal(result.alreadyRecorded, false);
+  assert.equal(creditCalls.length, 1);
+  assert.equal(creditCalls[0].idempotencyKey, 'checkin-coins:independent-901');
+  const row = db.attendanceEvents.get('independent-901');
+  assert.equal(row.bookingId, null, 'an independent check-in persists a null bookingId');
+  assert.equal(row.memberAttendanceId, null, 'an independent check-in persists a null memberAttendanceId');
+  assert.equal(row.source, 'independent_gym_geofence');
+});
+
 test('recordAttendanceEvent skips the coin credit entirely when coinsPerCheckin is 0', async () => {
   resetFakes();
   economyConfig.coinsPerCheckin = 0;
