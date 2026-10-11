@@ -21,11 +21,19 @@ export function deriveAppMode(user) {
   // actually answers — the app's branch falls through on null.
   if (currentlyWorksOut === null || currentlyWorksOut === undefined) return null;
 
-  // Doesn't train yet: PAYG is the proposition. This holds regardless of where
-  // they said they'd PREFER to train — someone who isn't training at all needs
-  // a reason to start more than they need a workout logger, and a booked
-  // session with money attached is a stronger commitment device than a plan.
-  if (currentlyWorksOut === false) return APP_MODES.GYM_SEEKER;
+  // Doesn't train yet. Someone who wants to start at a partner gym gets the
+  // marketplace: PAYG is the proposition, and a booked session with money
+  // attached is a stronger commitment device than a plan.
+  if (currentlyWorksOut === false) {
+    // ...but someone who says they'd start at home has nothing to book, so the
+    // app has to be the product (the workout/progress/habit tool). Home is the
+    // one "not training yet" answer that still leads with home_track rather
+    // than discovery (build-plan B1).
+    if (trainingLocationPref === TRAINING_LOCATION_PREFS.HOME) {
+      return APP_MODES.HOME_TRACK;
+    }
+    return APP_MODES.GYM_SEEKER;
+  }
 
   // Already trains at home: nothing to book, so the app has to be the product.
   if (trainingLocationPref === TRAINING_LOCATION_PREFS.HOME) {

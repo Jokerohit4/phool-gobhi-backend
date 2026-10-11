@@ -83,20 +83,21 @@ test('the first derived mode is logged as onboarding, in one transaction', async
 });
 
 test('changing the answer later logs the switch as settings', async () => {
-  // The edit that actually moves the mode is flipping currentlyWorksOut, not
-  // the training location. Any location now derives home_track (see
-  // appModeService): someone already training wants a workout and progress
-  // tool first, with partner-gym discovery demoted to the bottom of it.
+  // The answer edit that still moves the mode is "doesn't work out yet, wants a
+  // gym" (gym_seeker) versus the home_track they were in. Under the current
+  // rule (see appModeService) home is home_track whether or not they train, so
+  // the move has to pair currentlyWorksOut=false with a non-home location.
   //
-  // An earlier version of this test changed home -> gym and expected
-  // gym_seeker. That expectation encoded the old rule and has outlived it, so
-  // it failed against correct code. The switch being asserted here is the
-  // answer edit that still changes the mode, which keeps the point of the test
-  // intact: a later derivation is logged 'settings', not 'onboarding'.
+  // An earlier version of this test flipped currentlyWorksOut and left the
+  // location at home, expecting gym_seeker. That expectation encoded the pre-B1
+  // rule (false always -> gym_seeker) and no longer holds: false + home derives
+  // home_track. The switch asserted here is the answer edit that still changes
+  // the mode, which keeps the point of the test intact: a later derivation is
+  // logged 'settings', not 'onboarding'.
   reset({ currentlyWorksOut: true, trainingLocationPref: 'home', appMode: 'home_track' });
   const res = fakeRes();
 
-  await updateProfile(reqWith({ currentlyWorksOut: false }), res);
+  await updateProfile(reqWith({ currentlyWorksOut: false, trainingLocationPref: 'gym' }), res);
 
   assert.equal(res.statusCode, 200);
   assert.equal(stored.appMode, 'gym_seeker');
