@@ -172,6 +172,22 @@ export async function deleteAllDataService(userId) {
     // `medical/{userId}/` prefix as every other medical blob, so the sweep below
     // reclaims it.
     prisma.healthReport.deleteMany({ where: { userId } }),
+    // Coach journey (Gobhi the Coach, 2026-10): water and supplement habits
+    // are a behavioural record of what someone consumed each day, the
+    // JourneyProgress row is their self-declared start level and unlock
+    // history, and CoachConsent is the consent record behind the whole
+    // surface. Wired in with the migration that created the tables (A2), not
+    // deferred to a later sweep — a supplement schedule outliving its owner
+    // is exactly the "easiest to forget because it is newest" failure the
+    // erasureCompleteness suite exists to prevent.
+    //
+    // SupplementLog.scheduleId has no FK by design (a tick outlives its
+    // schedule), so both supplement tables are deleted explicitly.
+    prisma.waterLog.deleteMany({ where: { userId } }),
+    prisma.supplementSchedule.deleteMany({ where: { userId } }),
+    prisma.supplementLog.deleteMany({ where: { userId } }),
+    prisma.journeyProgress.deleteMany({ where: { userId } }),
+    prisma.coachConsent.deleteMany({ where: { userId } }),
   ]);
 
   // The medical BLOBS are swept here, after the transaction has committed.

@@ -45,24 +45,51 @@ function routeLines() {
 const all = routeLines();
 assert.ok(all.length > 20, `expected the ledger routes, found ${all.length}`);
 
+// The coach-consent revoke is requireAuth-only BY DESIGN (see the route
+// declaration): withdrawing must keep working after an admin switches the
+// feature off, so it is the one route in this file allowed to carry no flag
+// gate at all. Enumerated here rather than folded into the sweep below, the
+// same way routeSplitGates.test.js accounts for its ungated deletes, so the
+// exception is a visible, argued line instead of a regex widened to let
+// anything through.
+const UNGATED_BY_DESIGN = ["router.delete('/coach-consent/:scope'"];
+
 test('every ledger route is authenticated', () => {
-  // Each of these spreads `...nutrition`, `...medical`, `...consentGated` or
-  // `...photo`, all of which begin with requireAuth. Internal routes
+  // Each of these spreads `...nutrition`, `...medical`, `...consentGated`,
+  // `...photo`, `...coachGated` or `...coachBasic`, all of which begin with
+  // requireAuth — or ORs two of those arrays with anyOf, whose first array
+  // member is one of the same spreads. Internal routes
   // (service-to-service, e.g. wallet-service's rewards automation) instead
   // authenticate with `requireInternal` — that is auth too, not a gap.
   const ungated = all.filter(
     (r) =>
-        !/\.\.\.(nutrition|medical|consentGated|photo)\b/.test(r.line) &&
-        !/\brequireInternal\b/.test(r.line),
+        !/\.\.\.(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b/.test(r.line) &&
+        !/\banyOf\(\s*\.\.\.?(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b/.test(r.line) &&
+        !/\banyOf\(\s*(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b/.test(r.line) &&
+        !/\brequireInternal\b/.test(r.line) &&
+        !UNGATED_BY_DESIGN.some((p) => r.line.startsWith(p)),
   );
   assert.deepEqual(
     ungated.map((r) => `${r.n}: ${r.line}`),
     [],
     'a ledger route neither spreads a gate array nor requires internal auth',
   );
+  // The one ungated route is still authenticated — "never gated" means no
+  // flag and no scope, never "no auth": a revoke without a userId is not a
+  // revoke of anything.
+  for (const prefix of UNGATED_BY_DESIGN) {
+    const found = all.find((r) => r.line.startsWith(prefix));
+    assert.ok(found, `no route found for ${prefix}`);
+    assert.match(found.line, /\brequireAuth\b/, `${found.n}: ${found.line} must still authenticate`);
+    assert.doesNotMatch(
+      found.line,
+      /requireFeatureFlag|requireCoach|requireAdult/,
+      `${found.n}: ${found.line} must carry no flag, scope or age gate — revoking is never gated`,
+    );
+  }
 });
 
-test('every ledger route is behind the healthLedger flag', () => {
+test('every ledger route is behind the healthLedger flag, except the coach surfaces', () => {
   // All three gate arrays include requireFeatureFlag('healthLedger'), so this
   // is really asserting that no route bypasses the shared arrays.
   const declared = /const ledgerGated = \[[^\]]*requireFeatureFlag\('healthLedger'\)/s;
@@ -74,6 +101,44 @@ test('every ledger route is behind the healthLedger flag', () => {
       `${which} must build on ledgerGated`,
     );
   }
+  // The coach gates deliberately do NOT: the journey must work for a user
+  // with none of the old Health+ flags on (healthMetrics and healthLedger
+  // describe the food ledger and the derived score, not the coach's plan).
+  // Pinned as the OPPOSITE of the arrays above so a well-meaning "make it
+  // consistent" edit fails here instead of silently 403-ing every coach
+  // route the first time an admin turns only coachJourney on.
+  for (const which of ['coachGated', 'coachBasic']) {
+    const decl = routes.match(new RegExp(`const ${which} = \\[([^\\]]*)\\]`))?.[1] || '';
+    assert.ok(decl, `${which} is not declared`);
+    // coachGated names the flag outright; coachBasic inherits it by spreading
+    // coachGated, and must never reach for the flag any other way.
+    assert.match(
+      decl,
+      /requireCoachJourney|\.\.\.coachGated\b/,
+      `${which} must check the coachJourney flag (directly or via coachGated)`,
+    );
+    assert.doesNotMatch(
+      decl,
+      /requireFeatureFlag/,
+      `${which} must not inherit healthMetrics/healthLedger — the coach journey is independently switchable`,
+    );
+    // Auth first: directly for coachGated, transitively for coachBasic via
+    // the spread of the array that begins with requireAuth.
+    assert.ok(
+      decl.trimStart().startsWith('requireAuth') || /^\.\.\.coachGated\b/.test(decl.trimStart()),
+      `${which} must start with requireAuth — a flag check before auth leaks flag state`,
+    );
+  }
+  // The either-gate partner of nutrition carries the coach `basic` scope.
+  // Without this pin, anyOf(nutrition, coachGated) would widen the plan and
+  // score routes to anyone with the flag on, consent or not.
+  const coachBasicDecl = routes.match(/const coachBasic = \[([^\]]*)\]/)?.[1] || '';
+  assert.match(coachBasicDecl, /requireCoachConsent\('basic'\)/, 'coachBasic must require the basic scope');
+  assert.doesNotMatch(
+    coachBasicDecl,
+    /requireCoachConsent\('supplements'\)/,
+    'coachBasic must check exactly one scope, its own',
+  );
   // `photo` deliberately builds on `nutrition` rather than on `ledgerGated`, so
   // it inherits both the healthLedger flag AND the nutrition scope. Asserted
   // separately because the rule it has to satisfy is different, and folding it
@@ -258,25 +323,79 @@ test('medical document routes are gated on the medical scope', () => {
   }
 });
 
-test('food, plan and score routes are gated on the nutrition scope', () => {
-  // These are all derived from what someone eats. Medical records are a
-  // separate consent and must not be required to log a katori of rice - and
-  // equally, a nutrition consent must not open the prescription drawer: the
-  // drawer where a person's OWN uploaded prescription lives is
-  // `/ledger/medical-documents`, on `...medical`, and is asserted below.
-  //
-  // `/ledger/prescription` is a third thing and is deliberately in this list
-  // despite the name: it is the four-slider plan (calories, steps, sleep,
-  // sessions) derived from what the person eats and how they train - the
-  // same question `/ledger/targets` answers - not a medical document. The
-  // name comes from the app's route contract, not from the medical scope.
-  for (const prefix of ['/ledger/foods', '/ledger/food-logs', '/ledger/saved-meals', '/ledger/plan', '/ledger/score', '/ledger/targets', '/ledger/food-totals', '/ledger/prescription']) {
+test('food routes are gated on the nutrition scope, and only that scope', () => {
+  // B8 widened the plan, score-read and prescription-read routes to accept
+  // EITHER the nutrition array OR the coach journey's flag + basic scope.
+  // Food was deliberately left out of that: the diary routes below are the
+  // food log's own consent question, and a coach user's `basic` scope must
+  // never open someone's food diary. Asserted separately from the
+  // either-gated set so widening one cannot silently widen the other.
+  for (const prefix of ['/ledger/foods', '/ledger/food-logs', '/ledger/food-totals', '/ledger/saved-meals', '/ledger/targets', '/ledger/setup', '/ledger/food-requests', '/ledger/food-embeddings']) {
     const matching = all.filter((r) => r.line.includes(prefix));
     assert.ok(matching.length, `no routes found for ${prefix}`);
     for (const r of matching) {
       assert.match(r.line, /\.\.\.nutrition\b/, `${r.n}: ${r.line} is not on the nutrition gate`);
-      assert.doesNotMatch(r.line, /\.\.\.medical\b/, `${r.n}: ${r.line} must not be on the medical gate`);
+      assert.doesNotMatch(r.line, /\.\.\.medical\b|anyOf\(/, `${r.n}: ${r.line} must not be on the medical gate or an either-gate`);
     }
+  }
+});
+
+test('plan, score-read and prescription-read routes accept EITHER nutrition OR the coach basic gate', () => {
+  // The either-gate runs the COACH gate FIRST (anyOf(coachBasic, nutrition)),
+  // so
+  // with the coachJourney flag off the coach gate fails fast at the flag
+  // check and nutrition alone decides — and when both reject, the error the
+  // client sees is nutrition's (anyOf sends the SECOND gate's), which is the
+  // prompt every build in the field already knows how to render. The order is
+  // load-bearing and pinned, not cosmetic.
+  const either = /\banyOf\(\s*coachBasic\s*,\s*nutrition\s*\)/;
+  const reads = [
+    // Every plan route: today's plan, regeneration, and the item surface.
+    ...all.filter((r) => r.line.includes('/ledger/plan')),
+    // The score READS only — the writes are asserted separately below.
+    ...all.filter((r) => r.line.includes('/ledger/score') && r.line.startsWith('router.get(')),
+    ...all.filter((r) => r.line.includes('/ledger/attainment')),
+    // The prescription READ only — preview and save stay nutrition-only.
+    ...all.filter((r) => r.line.includes("/ledger/prescription'") && r.line.startsWith('router.get(')),
+  ];
+  assert.ok(
+    reads.filter((r) => r.line.includes('/ledger/plan')).length >= 5,
+    'expected the five plan routes',
+  );
+  assert.ok(
+    reads.filter((r) => r.line.includes('/ledger/score')).length >= 7,
+    'expected the score reads (series, calm, safety, pause, target, blended, preview)',
+  );
+  for (const r of reads) {
+    assert.match(
+      r.line,
+      either,
+      `${r.n}: ${r.line} must be anyOf(nutrition, coachBasic)`,
+    );
+    assert.doesNotMatch(
+      r.line,
+      /\.\.\.medical\b/,
+      `${r.n}: ${r.line} must not be on the medical gate`,
+    );
+  }
+
+  // The score WRITES and the prescription PREVIEW/SAVE are deliberately NOT
+  // either-gated — "score reads" is the contract line, and the scoring
+  // controls remain a food-ledger decision.
+  for (const prefix of [
+    "router.put('/ledger/score/calm-mode'",
+    "router.put('/ledger/score/pause'",
+    "router.delete('/ledger/score/pause'",
+    "router.put('/ledger/score/target'",
+    "router.delete('/ledger/score/target'",
+    "router.post('/ledger/score/:localDate/close'",
+    "router.post('/ledger/prescription/preview'",
+    "router.put('/ledger/prescription'",
+  ]) {
+    const found = all.find((r) => r.line.startsWith(prefix));
+    assert.ok(found, `no route found for ${prefix}`);
+    assert.match(found.line, /\.\.\.nutrition\b/, `${found.n}: ${found.line} must stay on the nutrition gate`);
+    assert.doesNotMatch(found.line, /anyOf\(/, `${found.n}: ${found.line} must not be either-gated`);
   }
 });
 
@@ -320,10 +439,11 @@ function photoRoute(pathFragment) {
 
 test('the consent gate does not appear after a handler', () => {
   // Guards against `router.post(path, handler, ...gated)`, which Express would
-  // run with no auth at all.
+  // run with no auth at all. anyOf( counts as a gate position for the
+  // either-gated routes, whose gates have no spread of their own.
   for (const r of all) {
-    const gateAt = r.line.search(/\.\.\.(nutrition|medical|consentGated|photo)\b/);
-    const handlerAt = r.line.search(/ledgerCtrl\.|ledgerConsentCtrl\./);
+    const gateAt = r.line.search(/\.\.\.(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b|anyOf\(/);
+    const handlerAt = r.line.search(/ledgerCtrl\.|ledgerConsentCtrl\.|coachConsentCtrl\./);
     if (gateAt > -1 && handlerAt > -1) {
       assert.ok(gateAt < handlerAt, `${r.n}: ${r.line} runs the handler before the gate`);
     }
@@ -430,22 +550,28 @@ test('the matcher half is customer-facing on the nutrition gate', () => {
   assert.doesNotMatch(matcher[0], /requireRole\('gobhi'\)/);
 });
 
-// The pause endpoints mutate the goal, which is nutrition data. They are gated
-// like every other ledger route, and asserted explicitly rather than left to the
-// "all ledger routes are gated" sweep above - because that sweep checks the GATE
-// and not the ROUTE, and a pause route that dropped ...nutrition would still pass
-// it while letting a user who revoked nutrition consent keep managing their
-// scoring state.
-test('the pause routes are on the nutrition gate, like the rest of the score surface', () => {
+// The pause endpoints mutate the goal, which is nutrition data. B8 split
+// them: the READ joined the score reads on the either-gate (a coach user's
+// pause state is part of their score surface), while the WRITES stayed on
+// the nutrition gate alone — mutating the scoring state remains a
+// food-ledger decision. Asserted explicitly rather than left to the sweeps
+// above, because a future edit that either-gates the writes or nutrition-gates
+// the read would still pass every prefix-level test in this file.
+test('the pause routes: the read is either-gated, the writes stay on nutrition', () => {
   const pauseRoutes = all.filter((r) => r.line.includes('/ledger/score/pause'));
   assert.equal(pauseRoutes.length, 3, 'expected GET, PUT and DELETE pause');
 
-  for (const r of pauseRoutes) {
+  const read = pauseRoutes.find((r) => r.line.startsWith('router.get('));
+  assert.ok(read, 'no GET pause route found');
+  assert.match(read.line, /\banyOf\(\s*coachBasic\s*,\s*nutrition\s*\)/);
+
+  for (const r of pauseRoutes.filter((r) => !r.line.startsWith('router.get('))) {
     assert.match(
       r.line,
       /\.\.\.nutrition\b/,
       `${r.n}: ${r.line} is not on the nutrition gate`,
     );
+    assert.doesNotMatch(r.line, /anyOf\(/, `${r.n}: ${r.line} must not be either-gated`);
   }
 });
 

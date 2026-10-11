@@ -1,11 +1,15 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { requireAdult } from '../middleware/requireAdult.js';
 import { requireNutritionConsent, requireMedicalRecordsConsent, requirePhotoConsent } from '../middleware/requireLedgerConsent.js';
 import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
+import { anyOf } from '../middleware/anyOf.js';
+import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
+import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
+import * as coachConsentCtrl from '../controllers/coachConsentController.js';
 import * as appointmentCtrl from '../controllers/appointmentController.js';
 import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js';
 import { uploadFoodPhotoMiddleware } from '../middleware/foodPhotoUpload.js';
@@ -40,11 +44,26 @@ const medical = [...ledgerGated, requireMedicalRecordsConsent];
 // scope already granted.
 const consentGated = [...ledgerGated];
 
+// The coach journey's gates, mirroring the two shapes above.
+//
+//   coachGated  - auth + the coachJourney flag. NOT built on ledgerGated:
+//                 healthMetrics and healthLedger describe the food ledger and
+//                 the derived-score surface, not the coach's plan, and the
+//                 journey must work for a user who has neither flag on. This
+//                 is the gate the coach-consent routes sit behind: reading
+//                 and granting consent must be reachable without the scope,
+//                 or there is no way to opt in.
+//   coachBasic   - auth + the flag + the coach `basic` scope. The gate the
+//                 either-gated routes below accept INSTEAD of nutrition, for
+//                 a user who granted the coach consent but never the diary's.
+const coachGated = [requireAuth, requireCoachJourney];
+const coachBasic = [...coachGated, requireCoachConsent('basic')];
+
 // ---- Consent --------------------------------------------------------------
 
 router.get('/ledger/consent', ...consentGated, ledgerConsentCtrl.getConsent);
 // Current policy wording version on its own, so the app can render the prompt
-// before it has any consent state to show. Public within the ledger gate â€”
+// before it has any consent state to show. Public within the ledger gate —
 // there is nothing user-specific in it.
 router.get('/ledger/consent/policy', ...consentGated, ledgerConsentCtrl.getPolicy);
 router.post('/ledger/consent/nutrition', ...consentGated, requireAdult, ledgerConsentCtrl.grantNutrition);
@@ -57,6 +76,20 @@ router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentC
 // described.
 router.post('/ledger/consent/photo', ...consentGated, requireAdult, ledgerConsentCtrl.grantPhoto);
 router.delete('/ledger/consent/photo', ...consentGated, ledgerConsentCtrl.revokePhoto);
+
+// ---- Coach consent ---------------------------------------------------------
+//
+// Gobhi the Coach's consent, separate from the ledger scopes above: `basic`
+// is what lets the journey, plan and score run at all; `supplements` is the
+// narrow extra that lets the supplement habit collect. Granting is
+// adults-only like every other consent grant in this service (requireAdult);
+// revoking is NEVER gated � not by the flag, not by a scope � for the same
+// reason DELETE /runs/consent and DELETE /biometrics/consent are not:
+// withdrawing must keep working after an admin switches the feature off, or
+// the switch strands the very record it created.
+router.get('/coach-consent', ...coachGated, coachConsentCtrl.getConsent);
+router.post('/coach-consent', ...coachGated, requireAdult, coachConsentCtrl.grantConsent);
+router.delete('/coach-consent/:scope', requireAuth, coachConsentCtrl.revokeConsent);
 
 // ---- Intake ----------------------------------------------------------------
 
@@ -142,7 +175,7 @@ router.delete('/ledger/saved-meals/:id', ...nutrition, ledgerCtrl.deleteSavedMea
 // Recognition, upload and confirm: every route on which the image leaves this
 // service, or is recorded as having left it. Flag first (does this feature
 // exist), then the photo scope (has this person agreed to send it), then
-// nutrition underneath both â€” a photo of a meal is still a food log entry, so
+// nutrition underneath both — a photo of a meal is still a food log entry, so
 // turning the diary off stops the photo path too even if photo consent stands.
 const photo = [
   ...nutrition,
@@ -174,12 +207,26 @@ router.get('/ledger/food-logs/:id/photo', ...nutrition, ledgerCtrl.getFoodPhotoL
 router.post('/ledger/food-photos/confirm', ...photo, ledgerCtrl.confirmFoodPhoto);
 
 // ---- Plan -----------------------------------------------------------------
-
-router.get('/ledger/plan/:localDate', ...nutrition, ledgerCtrl.getPlan);
-router.post('/ledger/plan/regenerate', ...nutrition, ledgerCtrl.regeneratePlan);
-router.post('/ledger/plan/items', ...nutrition, ledgerCtrl.addPlanItem);
-router.post('/ledger/plan/items/:id/complete', ...nutrition, ledgerCtrl.completePlanItem);
-router.delete('/ledger/plan/items/:id', ...nutrition, ledgerCtrl.deactivatePlanItem);
+//
+// Either-gated (anyOf): the coach journey's flag + `basic` scope is tried
+// FIRST and the old nutrition array SECOND. The order is load-bearing, not
+// cosmetic: when both gates reject, anyOf sends the SECOND gate's error, so
+// with the coachJourney flag off a user without nutrition consent still
+// gets exactly today's CONSENT_REQUIRED prompt — the FEATURE_DISABLED the
+// coach gate would send is never shown while the journey is switched off.
+// The coach gate failing fast at the flag check also means the flag-off
+// path costs no consent query at all. A coach user who never granted
+// nutrition consent can still read today's plan and tick an item, because
+// the `basic` scope is the consent that describes THEIR plan.
+//
+// Food stays out of this deliberately: the logging, targets and setup routes
+// below still require the nutrition scope alone, which is the food diary's
+// own consent question (see the Acceptance notes on B8).
+router.get('/ledger/plan/:localDate', anyOf(coachBasic, nutrition), ledgerCtrl.getPlan);
+router.post('/ledger/plan/regenerate', anyOf(coachBasic, nutrition), ledgerCtrl.regeneratePlan);
+router.post('/ledger/plan/items', anyOf(coachBasic, nutrition), ledgerCtrl.addPlanItem);
+router.post('/ledger/plan/items/:id/complete', anyOf(coachBasic, nutrition), ledgerCtrl.completePlanItem);
+router.delete('/ledger/plan/items/:id', anyOf(coachBasic, nutrition), ledgerCtrl.deactivatePlanItem);
 
 // ---- Appointments ---------------------------------------------------------
 //
@@ -209,12 +256,19 @@ router.patch('/ledger/appointments/:id', ...nutrition, appointmentCtrl.updateApp
 router.delete('/ledger/appointments/:id', ...nutrition, appointmentCtrl.deleteAppointment);
 
 // ---- Score ----------------------------------------------------------------
-
-router.get('/ledger/score', ...nutrition, ledgerCtrl.getScoreSeries);
-router.get('/ledger/score/calm', ...nutrition, ledgerCtrl.getCalmSeries);
-router.get('/ledger/score/safety', ...nutrition, ledgerCtrl.getSafetyFlag);
+//
+// The READS are either-gated like the plan routes above (coach gate first,
+// nutrition second, so the flag-off error is nutrition's own): a coach
+// user's score is derived from the plan the coach built, so the `basic`
+// scope is the consent that covers reading it. The WRITES (calm mode, pause,
+// target setting, day close) keep the nutrition gate alone — "score reads"
+// is the contract line, and the scoring controls remain a food-ledger
+// decision.
+router.get('/ledger/score', anyOf(coachBasic, nutrition), ledgerCtrl.getScoreSeries);
+router.get('/ledger/score/calm', anyOf(coachBasic, nutrition), ledgerCtrl.getCalmSeries);
+router.get('/ledger/score/safety', anyOf(coachBasic, nutrition), ledgerCtrl.getSafetyFlag);
 router.put('/ledger/score/calm-mode', ...nutrition, ledgerCtrl.setCalmMode);
-router.get('/ledger/score/pause', ...nutrition, ledgerCtrl.getPause);
+router.get('/ledger/score/pause', anyOf(coachBasic, nutrition), ledgerCtrl.getPause);
 router.put('/ledger/score/pause', ...nutrition, ledgerCtrl.setPause);
 router.delete('/ledger/score/pause', ...nutrition, ledgerCtrl.clearPause);
 // Attainment - whether the goal is being met, as distinct from what the day was
@@ -222,18 +276,18 @@ router.delete('/ledger/score/pause', ...nutrition, ledgerCtrl.clearPause);
 // answers a different question from different evidence: the score reads
 // snapshots, this reads the weight series. A client that could conflate them by
 // accident is a client we would rather not ship.
-router.get('/ledger/attainment', ...nutrition, ledgerCtrl.getAttainment);
+router.get('/ledger/attainment', anyOf(coachBasic, nutrition), ledgerCtrl.getAttainment);
 // The score's target: the number the user is aiming at and the window they gave
 // themselves. Separate from /ledger/attainment on purpose - attainment reads the
 // weight series and answers "is the goal being met", this reads the score chain
 // and answers "am I getting to the number I set". Different evidence, different
 // question, and a client that could conflate them by accident is a client we
 // would rather not ship.
-router.get('/ledger/score/target', ...nutrition, ledgerCtrl.getScoreTarget);
-router.get('/ledger/score/blended', ...nutrition, ledgerCtrl.getBlendedScore);
+router.get('/ledger/score/target', anyOf(coachBasic, nutrition), ledgerCtrl.getScoreTarget);
+router.get('/ledger/score/blended', anyOf(coachBasic, nutrition), ledgerCtrl.getBlendedScore);
 router.put('/ledger/score/target', ...nutrition, ledgerCtrl.setScoreTarget);
 router.delete('/ledger/score/target', ...nutrition, ledgerCtrl.clearScoreTarget);
-router.get('/ledger/score/:localDate/preview', ...nutrition, ledgerCtrl.previewScore);
+router.get('/ledger/score/:localDate/preview', anyOf(coachBasic, nutrition), ledgerCtrl.previewScore);
 router.post('/ledger/score/:localDate/close', ...nutrition, ledgerCtrl.closeScoreDay);
 
 // Rewards
@@ -263,7 +317,15 @@ router.post('/ledger/biometrics/batch-consistency', ...nutrition, ledgerCtrl.get
 // Declared after `/ledger/score/:localDate/preview` deliberately: the route
 // gate tests find a preview route by path, and the first one they find has to
 // be the GET they are written to expect.
-router.get('/ledger/prescription', ...nutrition, ledgerCtrl.getPrescription);
+//
+// The READ is either-gated (B8) with the coach gate first (see the plan
+// block above for why the order is load-bearing): the coach journey reads
+// the same sliders and slots here, and per the contract
+// `GET /ledger/prescription` works with coachJourney + the `basic` scope, no
+// nutrition consent needed. The PREVIEW and the SAVE keep the nutrition
+// gate — they are the food-ledger's own write path, and the coach journey
+// adjusts the plan through its own journey routes instead.
+router.get('/ledger/prescription', anyOf(coachBasic, nutrition), ledgerCtrl.getPrescription);
 router.post('/ledger/prescription/preview', ...nutrition, ledgerCtrl.previewPrescription);
 router.put('/ledger/prescription', ...nutrition, ledgerCtrl.savePrescription);
 
