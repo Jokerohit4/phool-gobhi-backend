@@ -15,9 +15,12 @@ model User {
   phone     String?    @unique
   email     String?    @unique
   password  String?
-   role      Role
-   recommendedEquipment Int[]?
-   type      UserType
+  role      Role
+  // Equipment ids the coach recommends for this user (customer app). Plain
+  // scalar list: Prisma lists cannot be optional; the column is nullable
+  // INTEGER[] and reads back as [].
+  recommendedEquipment Int[]    @default([])
+  type      UserType
   gobhiType GobhiType?
   isActive  Boolean    @default(true)
   gender        Gender?

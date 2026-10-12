@@ -373,7 +373,6 @@ export const updateProfile = async (req, res) => {
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
-<<<<<<< Updated upstream
       weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
       firstVisitBadgeConsent, recommendedEquipment,
     } = req.body;

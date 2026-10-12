@@ -686,7 +686,6 @@ const getMe = async (req, res) => {
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,
       freeTimeWindow: user.freeTimeWindow,
-<<<<<<< Updated upstream
       // Server-assigned experiment buckets (A1 hook, B14 owns the assignment).
       // Derived on every call rather than stored, so there is no per-user row
       // to migrate and a user cannot be re-bucketed by a stale cache. Today it
