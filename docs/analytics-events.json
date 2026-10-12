@@ -1054,5 +1054,65 @@
     "service": "health-service",
     "since": "2026-10-12",
     "notes": "a coach consent scope was withdrawn. props scope"
+  },
+  "journey_layer_unlocked": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "food_early_started": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "roadmap_opened": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "plan_day_opened": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "workout_set_ticked": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "water_logged": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "supplement_logged": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "gym_self_linked": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "gym_link_removed_seen": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "first_visit_badge_toggled": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "referral_offer_shown": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "score_intro_seen": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
   }
 }

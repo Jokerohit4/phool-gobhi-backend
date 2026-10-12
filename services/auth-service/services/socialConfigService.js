@@ -1,4 +1,4 @@
-// Social config service — MINIMAL STUB as of A1 (2026-10-16).
+// Social config service (A1 stub, real read since B14).
 //
 // Social surfaces (buddy, chat, paired streaks) are governed by their own flag
 // in the registry, but the customer app also reads a single top-level
@@ -10,12 +10,20 @@
 //
 // Contract: always resolves (never throws), always an object with a boolean.
 
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
 /**
  * The platform-wide social master switch.
  *
  * @returns {Promise<{ enabled: boolean }>}
  */
 export async function get() {
-  // STUB: social off. B14 will read from the admin-editable app-config row.
-  return { enabled: false };
+  try {
+    const row = await prisma.appVersionSetting.findUnique({ where: { id: 1 } });
+    const enabled = row?.config?.social?.enabled === true;
+    return { enabled };
+  } catch {
+    return { enabled: false };
+  }
 }
