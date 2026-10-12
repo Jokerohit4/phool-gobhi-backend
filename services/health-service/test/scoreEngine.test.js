@@ -735,6 +735,63 @@ test('unlocked layer items produce misses normally', () => {
   assert.ok(!missKeys.includes('no_meals_logged'));
 });
 
+test('null unlockedLayerKeys (not a coach journey) locks nothing on V2 dates', () => {
+  // A user outside the coach journey must still be scored on food after
+  // V2_FROM. scoreService passes null (not []) for them, and the engine has to
+  // read null as "no layers are locked" rather than "everything is". The
+  // pre-fix collapse of null and [] silently stopped charging food for
+  // everyone the day the cutover landed.
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { kcal: 1000, proteinG: 20, waterMl: 500, hasAnyFood: true },
+    closed: true,
+    unlockedLayerKeys: null,
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.includes('protein_short'), 'food counts with no coach journey');
+  assert.ok(missKeys.includes('calories_off_target'));
+  assert.ok(missKeys.includes('workout_missed'), 'layered items are not locked either');
+  assert.ok(missKeys.some((k) => k.startsWith('habit_missed')));
+});
+
+test('null unlockedLayerKeys still charges no_meals_logged when nothing is logged', () => {
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { kcal: 0, proteinG: 0, waterMl: 0, hasAnyFood: false },
+    closed: true,
+    unlockedLayerKeys: null,
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.includes('no_meals_logged'));
+});
+
+test('empty unlockedLayerKeys (a coach journey with nothing unlocked) still locks food', () => {
+  // The null/[] distinction must hold both ways: a real journey with an empty
+  // unlock set keeps food (and every layered item) locked until it earns them.
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { kcal: 1000, proteinG: 20, waterMl: 500, hasAnyFood: true },
+    closed: true,
+    unlockedLayerKeys: [],
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.includes('protein_short'), 'food stays locked for an empty journey');
+  assert.ok(!missKeys.includes('calories_off_target'));
+  assert.ok(!missKeys.includes('workout_missed'), 'layered items stay locked');
+});
+
 test('noMisses suppresses all miss lines but keeps earnings (easy start)', () => {
   // During easy start (first 14 days), no misses are charged but earns still count
   const day = computeDay({

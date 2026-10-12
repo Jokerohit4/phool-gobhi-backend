@@ -72,7 +72,19 @@ export function computeMisses({
     // Skip miss lines for items whose layerKey isn't unlocked.
     // Before V2_FROM (isV2=false), no layer filtering - all items are scored.
     // Exception: medicine layer is always on, never locked.
-    if (isV2 && item.layerKey && item.layerKey !== 'medicine' && !unlockedLayerKeys.includes(item.layerKey)) {
+    //
+    // `null` unlockedLayerKeys means "not a coach journey" (scoreService passes
+    // null when there is no scoring window), so nothing is locked. An empty
+    // array is a real coach state - a journey where no layer is unlocked yet -
+    // and locks every layered item except medicine. Collapsing the two (the
+    // pre-fix bug) locked food for everyone the day V2_FROM landed.
+    if (
+      isV2 &&
+      unlockedLayerKeys != null &&
+      item.layerKey &&
+      item.layerKey !== 'medicine' &&
+      !unlockedLayerKeys.includes(item.layerKey)
+    ) {
       continue;
     }
 
@@ -132,7 +144,11 @@ export function computeMisses({
   // 130 g protein" and "get to 130 g protein" would be charged twice.
   // Before V2_FROM (isV2=false), these rules always run (old behavior).
   // On or after V2_FROM, they only apply when the food layer is unlocked.
-  const foodLocked = isV2 && !unlockedLayerKeys.includes('food');
+  // null = not a coach journey, so food always counts; only a real coach
+  // journey can lock food (until its early period unlocks it). See the layer
+  // note in computeMisses.
+  const foodLocked =
+    isV2 && unlockedLayerKeys != null && !unlockedLayerKeys.includes('food');
   const foodNotSetUp = !targets || !targets.kcal;
   if (!foodLocked && !foodNotSetUp && targets && totals) {
     if (targets.proteinG > 0) {

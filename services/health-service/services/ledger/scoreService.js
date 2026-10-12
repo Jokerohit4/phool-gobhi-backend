@@ -51,9 +51,13 @@ function isV2Date(localDate) {
 }
 
 // Computes noMisses, unlockedLayerKeys, and foodNoPenalty from the scoring window.
+//
+// `unlockedLayerKeys: null` is the "not a coach journey" signal: it tells the
+// engine to lock nothing, so a user outside the journey is scored exactly as
+// before V2_FROM. Only a scoring window (a real journey) turns layer locking on.
 function deriveScoringFlags(scoringWindow, localDate) {
   if (!scoringWindow) {
-    return { noMisses: false, unlockedLayerKeys: [], foodNoPenalty: false };
+    return { noMisses: false, unlockedLayerKeys: null, foodNoPenalty: false };
   }
   const { easyStartUntil, inactiveSince, foodEarlyNoPenaltyUntilUnlock } = scoringWindow;
   let noMisses = false;
@@ -65,7 +69,7 @@ function deriveScoringFlags(scoringWindow, localDate) {
   }
   return {
     noMisses,
-    unlockedLayerKeys: [], // Will be filled by caller
+    unlockedLayerKeys: [], // Filled by the caller from getUnlockedLayerKeys
     foodNoPenalty: foodEarlyNoPenaltyUntilUnlock === true,
   };
 }
@@ -97,7 +101,7 @@ export async function previewDay(prisma, { userId, localDate, today }) {
   const closed = localDate < today;
 
   // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
-  let scoringFlags = { noMisses: false, unlockedLayerKeys: [], foodNoPenalty: false };
+  let scoringFlags = { noMisses: false, unlockedLayerKeys: null, foodNoPenalty: false };
   if (isV2Date(localDate)) {
     const scoringWindow = await getScoringWindow(prisma, userId);
     if (scoringWindow) {
@@ -185,7 +189,7 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   });
 
   // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
-  let scoringFlags = { noMisses: false, unlockedLayerKeys: [], foodNoPenalty: false };
+  let scoringFlags = { noMisses: false, unlockedLayerKeys: null, foodNoPenalty: false };
   if (isV2Date(localDate)) {
     const scoringWindow = await getScoringWindow(prisma, userId);
     if (scoringWindow) {
