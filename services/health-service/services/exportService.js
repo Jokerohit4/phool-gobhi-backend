@@ -338,7 +338,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests] =
+  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
@@ -419,6 +419,15 @@ export async function buildFullExportService(userId) {
       prisma.healthProfile.findUnique({ where: { userId } }),
       prisma.medicationReminder.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       prisma.healthProfileConsent.findUnique({ where: { userId } }),
+
+      // Coach journey (Gobhi the Coach, 2026-10): water logs, supplement
+      // schedules and logs, journey progress, and coach consent. Erased with
+      // the account in consentService.js, so exported with it.
+      prisma.waterLog.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }] }),
+      prisma.supplementSchedule.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.supplementLog.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { takenAt: 'asc' }] }),
+      prisma.journeyProgress.findUnique({ where: { userId } }),
+      prisma.coachConsent.findUnique({ where: { userId } }),
     ]);
 
   // Reuses the range builder with no range, so the session shape in a
@@ -770,6 +779,49 @@ export async function buildFullExportService(userId) {
           grantedAt: healthProfileConsent.grantedAt,
           revokedAt: healthProfileConsent.revokedAt,
           policyVersion: healthProfileConsent.policyVersion,
+        }
+      : null,
+    // Coach journey (Gobhi the Coach, 2026-10): water logs, supplement
+    // schedules and logs, journey progress, and coach consent. Erased with
+    // the account in consentService.js, so exported with it.
+    waterLogs: waterLogs.map((w) => ({
+      localDate: w.localDate,
+      ml: w.ml,
+      createdAt: w.createdAt,
+    })),
+    supplementSchedules: supplementSchedules.map((s) => ({
+      name: s.name,
+      times: s.times,
+      active: s.active,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    })),
+    supplementLogs: supplementLogs.map((l) => ({
+      name: l.name,
+      scheduleId: l.scheduleId ?? null,
+      localDate: l.localDate,
+      takenAt: l.takenAt,
+    })),
+    journeyProgress: journeyProgress
+      ? {
+          startLevel: journeyProgress.startLevel,
+          startedAt: journeyProgress.startedAt,
+          unlocked: journeyProgress.unlocked,
+          foodEarlyAt: journeyProgress.foodEarlyAt ?? null,
+          easyStartUntil: journeyProgress.easyStartUntil ?? null,
+          quitReason: journeyProgress.quitReason ?? null,
+          lastShowedUpDate: journeyProgress.lastShowedUpDate ?? null,
+          createdAt: journeyProgress.createdAt,
+          updatedAt: journeyProgress.updatedAt,
+        }
+      : null,
+    coachConsent: coachConsent
+      ? {
+          scopes: coachConsent.scopes,
+          policyVersions: coachConsent.policyVersions,
+          grantedAt: coachConsent.grantedAt,
+          revokedAt: coachConsent.revokedAt ?? null,
+          updatedAt: coachConsent.updatedAt,
         }
       : null,
     // Included because it is per-user behavioural data we hold, even though
