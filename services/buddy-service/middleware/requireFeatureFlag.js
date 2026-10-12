@@ -1,11 +1,25 @@
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
+// Copied from booking-service/middleware/requireFeatureFlag.js (W7). Only the
+// 403 body differs: buddy's error contract wants a readable sentence plus a
+// code, because old app builds show `error` to the user as-is.
+
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const FLAG_CACHE_TTL_MS = 30_000;
 let cachedFlags = null;
 let cachedAt = 0;
+// The refresh already on the wire, if any. A cold start (or a TTL expiry)
+// meets a BURST of requests — one app launch fans out into a dozen-plus routes
+// that each check a flag — and without this every one of them missed the
+// cache at once and fetched /app-config itself: ~17 identical calls in under
+// 100ms in auth-service-dev logs, 2026-10-01. Everyone now awaits one fetch.
 let inFlight = null;
 
+// Server-side enforcement of the admin-controlled feature flags served at
+// GET /app-config (auth-service) — same convention booking-service and
+// challenge-service use. Client-side hiding is not enough: buddy must stay off
+// in prod until the safety work is verified, and an old app build (or a
+// direct API call) ignores client-side flags.
 async function getFeatureFlags() {
   if (cachedFlags && Date.now() - cachedAt < FLAG_CACHE_TTL_MS) return cachedFlags;
   if (!inFlight) inFlight = refreshFlags().finally(() => { inFlight = null; });
@@ -22,6 +36,8 @@ async function refreshFlags() {
     cachedFlags = body.features || {};
     cachedAt = Date.now();
   } catch (err) {
+    // Fail closed on the very first call (no last-known-good yet), fail open
+    // to the last-known value on a transient blip thereafter.
     console.error('requireFeatureFlag: failed to refresh flags:', err.message);
     if (!cachedFlags) cachedFlags = {};
   }
@@ -33,9 +49,12 @@ export async function isFeatureEnabled(flagName) {
   return !!flags?.[flagName]?.enabled;
 }
 
+// 403, not 404: the app reads a 404 on /profile/me as "no profile yet".
+export const FEATURE_DISABLED_BODY = { error: "Gym buddy isn't available yet.", code: 'FEATURE_DISABLED' };
+
 export const requireFeatureFlag = (flagName) => async (req, res, next) => {
   if (!(await isFeatureEnabled(flagName))) {
-    return res.status(403).json({ error: 'FEATURE_DISABLED' });
+    return res.status(403).json(FEATURE_DISABLED_BODY);
   }
   next();
 };

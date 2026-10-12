@@ -3,6 +3,7 @@
 // Run with: node --experimental-test-module-mocks --test test/buddyService.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createFakePrisma } from './support/fakePrisma.js';
 
 // ── In-memory stores ────────────────────────────────────────────────────────
 const swipes = new Map();       // key: "swiperId-swipeeId"
@@ -10,6 +11,9 @@ const matches = new Map();      // key: match.id
 const messages = new Map();     // key: message.id
 const blocks = new Map();       // key: "blockerId-blockedId"
 const reports = new Map();      // key: report.id
+const profiles = new Map();     // key: buddyProfile.id
+const photos = new Map();       // key: buddyPhoto.id
+const filters = new Map();      // key: buddyFilter.id
 let nextId = 1;
 function resetAll() {
   swipes.clear();
@@ -17,7 +21,24 @@ function resetAll() {
   messages.clear();
   blocks.clear();
   reports.clear();
+  profiles.clear();
+  photos.clear();
+  filters.clear();
   nextId = 1;
+}
+
+// recordSwipe now runs the shared eligibility rule (W7), so both sides need a
+// real, visible, adult buddy profile. Geo is mocked to 1 km below.
+function seedProfile(userId, overrides = {}) {
+  const id = 50_000 + userId;
+  profiles.set(id, {
+    id, userId, bio: null, socialMediaUrl: null, gender: null,
+    dateOfBirth: new Date('1995-01-01'), fitnessGoals: [], lat: 28.6, lng: 77.2,
+    isDiscoverable: true, isActive: true, createdAt: new Date('2026-01-01'),
+    moderationHoldAt: null, genderChangedAt: null, genderChangedTo: null,
+    genderChangeClearedAt: null, womenOnlyBlocked: false,
+    ...overrides,
+  });
 }
 
 // ── Mock module setup (must run before importing buddyService) ──────────────
@@ -28,222 +49,14 @@ test('setup: mock all dependencies and import buddyService', async (t) => {
   resetAll();
 
   // -- @prisma/client -----------------------------------------------------------
+  // Shared filter-aware fake (test/support/fakePrisma.js), backed by the Maps
+  // above so tests can still seed and inspect rows directly.
+  const fake = createFakePrisma({
+    swipe: swipes, match: matches, chatMessage: messages, blockedUser: blocks, report: reports,
+    buddyProfile: profiles, buddyPhoto: photos, buddyFilter: filters,
+  });
   t.mock.module('@prisma/client', {
-    exports: {
-      PrismaClient: class {
-        constructor() {
-          // -- swipe --
-          this.swipe = {
-            upsert: async ({ where, create, update }) => {
-              const key = `${create.swiperId}-${create.swipeeId}`;
-              const existing = swipes.get(key);
-              if (existing) { existing.action = update.action; return existing; }
-              const row = { id: nextId++, ...create, createdAt: new Date() };
-              swipes.set(key, row);
-              return row;
-            },
-            findUnique: async ({ where }) => {
-              const { swiperId_swipeeId } = where;
-              if (swiperId_swipeeId) return swipes.get(`${swiperId_swipeeId.swiperId}-${swiperId_swipeeId.swipeeId}`) ?? null;
-              return null;
-            },
-          };
-
-          // -- match ---------------------------------------------------------------
-          this.match = {
-            create: async ({ data }) => {
-              const id = nextId++;
-              const now = new Date();
-              const row = {
-                id, ...data,
-                status: 'active',
-                unmatchedBy: null, unmatchedAt: null,
-                matchedAt: data.matchedAt ?? now,
-                // Mirrors the column DEFAULT. Tests that need a stale match
-                // overwrite this explicitly rather than reaching for a fake
-                // clock, so there is only one way a row goes stale.
-                lastActivityAt: data.lastActivityAt ?? now,
-              };
-              matches.set(id, row);
-              return row;
-            },
-            findUnique: async ({ where }) => {
-              if (where.id != null) return matches.get(where.id) ?? null;
-              if (where.userLowId_userHighId) {
-                const { userLowId, userHighId } = where.userLowId_userHighId;
-                for (const m of matches.values()) {
-                  if (m.userLowId === userLowId && m.userHighId === userHighId) return m;
-                }
-                return null;
-              }
-              return null;
-            },
-            // Deliberately filter-aware rather than a stub that ignores `where`.
-            // The whole point of the expiry tests is that the read side hides
-            // stale matches; a mock that returned every row would make
-            // getMatches pass no matter what the query said.
-            findMany: async ({ where, include }) => {
-              let rows = [...matches.values()];
-              if (where.status !== undefined) rows = rows.filter((r) => r.status === where.status);
-              if (where.lastActivityAt?.gte !== undefined) {
-                rows = rows.filter((r) => new Date(r.lastActivityAt) >= new Date(where.lastActivityAt.gte));
-              }
-              if (Array.isArray(where.OR)) {
-                rows = rows.filter((r) => where.OR.some((c) => (
-                  (c.userLowId !== undefined && r.userLowId === c.userLowId)
-                  || (c.userHighId !== undefined && r.userHighId === c.userHighId)
-                )));
-              }
-              if (where.lastActivityAt?.lt !== undefined) {
-                rows = rows.filter((r) => new Date(r.lastActivityAt) < new Date(where.lastActivityAt.lt));
-              }
-              // Honour the `include` getMatches uses for its last-message
-              // preview, otherwise m.messages[0] throws and every list test
-              // fails for a reason that has nothing to do with the filter.
-              if (include?.messages) {
-                rows = rows.map((r) => {
-                  const last = [...messages.values()]
-                    .filter((msg) => msg.matchId === r.id)
-                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-                    .slice(0, include.messages.take ?? 1);
-                  return { ...r, messages: last };
-                });
-              }
-              return rows;
-            },
-            update: async ({ where, data }) => {
-              const row = matches.get(where.id);
-              if (!row) throw Object.assign(new Error('Record not found'), { code: 'P2025' });
-              Object.assign(row, data);
-              return row;
-            },
-            updateMany: async ({ where, data }) => {
-              const rows = await this.match.findMany({ where });
-              rows.forEach((r) => Object.assign(r, data));
-              return { count: rows.length };
-            },
-          };
-
-          // -- chatMessage ---------------------------------------------------------
-          this.chatMessage = {
-            create: async ({ data }) => {
-              const id = nextId++;
-              const row = { id, ...data, createdAt: new Date(), readAt: null };
-              messages.set(id, row);
-              return row;
-            },
-            findMany: async ({ where }) => {
-              let rows = [...messages.values()];
-              if (where.matchId !== undefined) rows = rows.filter((r) => r.matchId === where.matchId);
-              if (where.id?.gt !== undefined) rows = rows.filter((r) => r.id > where.id.gt);
-              if (where.id?.lt !== undefined) rows = rows.filter((r) => r.id < where.id.lt);
-              return rows;
-            },
-          };
-
-          // -- buddyProfile (minimal: getMatches only needs the first photo) --------
-          this.buddyProfile = {
-            findMany: async ({ where }) => {
-              const ids = where.userId?.in ?? [];
-              return ids.map((userId) => ({ userId, photos: [] }));
-            },
-            findUnique: async () => null,
-          };
-
-          // -- report (moderation) -------------------------------------------------
-          // Unique-constraint violations are thrown as real P2002s, because the
-          // controller's 409 anti-spam handling is only meaningfully tested if
-          // the mock reproduces the error Prisma would raise.
-          this.report = {
-            create: async ({ data }) => {
-              const clash = [...reports.values()].find((r) => (
-                r.reporterId === data.reporterId && r.reportedUserId === data.reportedUserId
-              ));
-              if (clash) {
-                throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
-              }
-              const id = nextId++;
-              const row = {
-                id, ...data,
-                status: 'open',
-                reviewedBy: null, reviewedAt: null, resolutionNote: null,
-                // Monotonic rather than new Date(): rows created in the same tick
-                // would otherwise share a timestamp and make any "newest first"
-                // assertion a coin flip.
-                createdAt: new Date(1_700_000_000_000 + id * 1000),
-              };
-              reports.set(id, row);
-              return row;
-            },
-            findUnique: async ({ where }) => reports.get(where.id) ?? null,
-            findMany: async ({ where, orderBy }) => {
-              let rows = [...reports.values()];
-              if (where.status !== undefined) rows = rows.filter((r) => r.status === where.status);
-              if (where.reporterId !== undefined) rows = rows.filter((r) => r.reporterId === where.reporterId);
-              if (where.reportedUserId?.in !== undefined) {
-                rows = rows.filter((r) => where.reportedUserId.in.includes(r.reportedUserId));
-              }
-              const order = Array.isArray(orderBy) ? orderBy : (orderBy ? [orderBy] : []);
-              for (const clause of [...order].reverse()) {
-                const [field, dir] = Object.entries(clause)[0];
-                const sign = dir === 'asc' ? 1 : -1;
-                rows.sort((a, b) => {
-                  const av = a[field] instanceof Date ? a[field].getTime() : a[field];
-                  const bv = b[field] instanceof Date ? b[field].getTime() : b[field];
-                  return av === bv ? 0 : (av < bv ? -1 : 1) * sign;
-                });
-              }
-              return where.take ? rows.slice(0, where.take) : rows;
-            },
-            count: async ({ where }) => [...reports.values()].filter((r) => {
-              if (where.reporterId !== undefined && r.reporterId !== where.reporterId) return false;
-              if (where.reportedUserId !== undefined && r.reportedUserId !== where.reportedUserId) return false;
-              if (where.id?.not !== undefined && r.id === where.id.not) return false;
-              return true;
-            }).length,
-            update: async ({ where, data }) => {
-              const row = reports.get(where.id);
-              if (!row) throw Object.assign(new Error('Record not found'), { code: 'P2025' });
-              Object.assign(row, data);
-              return row;
-            },
-          };
-
-          // -- blockedUser ---------------------------------------------------------
-          this.blockedUser = {
-            upsert: async ({ where, create }) => {
-              const key = `${create.blockerId}-${create.blockedId}`;
-              const existing = blocks.get(key);
-              if (existing) { if (create.reason) existing.reason = create.reason; return existing; }
-              const row = { id: nextId++, ...create, createdAt: new Date() };
-              blocks.set(key, row);
-              return row;
-            },
-            findUnique: async ({ where }) => {
-              const { blockerId_blockedId } = where;
-              if (blockerId_blockedId) return blocks.get(`${blockerId_blockedId.blockerId}-${blockerId_blockedId.blockedId}`) ?? null;
-              return null;
-            },
-            deleteMany: async ({ where }) => {
-              let count = 0;
-              if (where.blockerId !== undefined && where.blockedId !== undefined) {
-                const key = `${where.blockerId}-${where.blockedId}`;
-                if (blocks.delete(key)) count = 1;
-              }
-              return { count };
-            },
-            findMany: async ({ where }) => {
-              const result = [];
-              for (const [key, row] of blocks) {
-                if (where.blockerId !== undefined && row.blockerId === where.blockerId) result.push(row);
-              }
-              return result;
-            },
-          };
-        }
-      },
-      Prisma: {},
-    },
+    exports: { PrismaClient: class { constructor() { return fake; } }, Prisma: {} },
   });
 
   // -- authClient (stubs) --
@@ -330,6 +143,7 @@ test('recordSwipe: invalid action throws 400', async () => {
 
 test('recordSwipe: swiper blocked by swipee throws 403', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   blocks.set('2-1', { id: nextId++, blockerId: 2, blockedId: 1, reason: null, createdAt: new Date() });
   await assert.rejects(
     () => recordSwipe(1, 2, 'like'),
@@ -339,6 +153,7 @@ test('recordSwipe: swiper blocked by swipee throws 403', async () => {
 
 test('recordSwipe: swiper has blocked swipee throws 403', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   blocks.set('1-2', { id: nextId++, blockerId: 1, blockedId: 2, reason: null, createdAt: new Date() });
   await assert.rejects(
     () => recordSwipe(1, 2, 'like'),
@@ -348,6 +163,7 @@ test('recordSwipe: swiper has blocked swipee throws 403', async () => {
 
 test('recordSwipe: pass returns matched:false and no match is created', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   const result = await recordSwipe(1, 2, 'pass');
   assert.deepEqual(result, { matched: false });
   assert.equal(matches.size, 0);
@@ -356,6 +172,7 @@ test('recordSwipe: pass returns matched:false and no match is created', async ()
 
 test('recordSwipe: one-sided like returns matched:false', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   const result = await recordSwipe(1, 2, 'like');
   assert.deepEqual(result, { matched: false });
   assert.equal(matches.size, 0);
@@ -364,6 +181,7 @@ test('recordSwipe: one-sided like returns matched:false', async () => {
 
 test('recordSwipe: mutual like creates match', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   // User 2 already liked user 1
   swipes.set('2-1', { id: nextId++, swiperId: 2, swipeeId: 1, action: 'like', createdAt: new Date() });
 
@@ -379,6 +197,7 @@ test('recordSwipe: mutual like creates match', async () => {
 
 test('recordSwipe: re-swipe (pass→like) upserts instead of erroring', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   await recordSwipe(1, 2, 'pass');
   assert.equal(swipes.get('1-2').action, 'pass');
 
@@ -391,6 +210,7 @@ test('recordSwipe: re-swipe (pass→like) upserts instead of erroring', async ()
 
 test('recordSwipe: re-swiping same action is idempotent', async () => {
   resetAll();
+  seedProfile(1); seedProfile(2);
   await recordSwipe(1, 2, 'like');
   await recordSwipe(1, 2, 'like');
   assert.equal(swipes.size, 1);
@@ -766,12 +586,19 @@ test('reportUser: does NOT block - blocking stays the user own explicit choice',
   assert.equal(blocks.size, 0);
 });
 
-test('reportUser: does not touch discovery filtering (no block row either way)', async () => {
+test('reportUser: hides the pair from each other in discovery, without a block row (W7)', async () => {
   resetAll();
+  seedProfile(10); seedProfile(30);
   await reportUser(10, 30, 'spam');
+  // Still no block either way: blocking stays the user's own choice ...
   for (const row of blocks.values()) {
     assert.ok(!(row.blockerId === 10 && row.blockedId === 30));
+    assert.ok(!(row.blockerId === 30 && row.blockedId === 10));
   }
+  // ... but W7's eligibility rule excludes a report in either direction, so
+  // neither side can like the other by id any more.
+  await assert.rejects(() => recordSwipe(10, 30, 'like'), (err) => err.code === 'TARGET_NOT_AVAILABLE');
+  await assert.rejects(() => recordSwipe(30, 10, 'like'), (err) => err.code === 'TARGET_NOT_AVAILABLE');
 });
 
 test('reportUser: rejects self-report', async () => {
@@ -819,7 +646,7 @@ test('listReports: counts prior reports about the same person', async () => {
   // "How many reports has this person ever had?" is the question that decides
   // whether one more tips into action, so it must be on the row.
   const [row] = await listReports({ status: 'all' });
-  assert.equal(row.priorReportsAboutReportedUser, 2);
+  assert.equal(row.priorReportCount, 2);
 });
 
 test('listReports: marks a report whose subject erased, and keeps it queued', async () => {

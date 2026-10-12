@@ -90,6 +90,9 @@ model BuddyProfile {
   // Women-only mode guard
   womenOnlyBlocked      Boolean @default(false)
 
+  // NOTE (upgrade path, not built now): at scale, replace the lat/lng
+  // BETWEEN pre-filter with a proper geo index (PostGIS earthdistance/GiST,
+  // or a ll_to_earth() functional index) instead of plain btree ranges.
   @@index([lat, lng])
   @@index([isDiscoverable, isActive])
   @@schema("buddy")
@@ -221,9 +224,13 @@ enum ReportStatus {
 }
 
 // Severity level for a report — used to order the moderation queue.
+// Declaration order matters: Postgres orders enums by it, so
+// `orderBy: { severity: 'desc' }` puts high first (listReports).
 enum ReportSeverity {
   normal
   high
+
+  @@schema("buddy")
 }
 
 // A safety report about another user.
@@ -250,6 +257,9 @@ model Report {
   // this is unreviewed user prose going straight into an admin surface.
   details String? @db.VarChar(1000)
   status  ReportStatus @default(open)
+  // threat and underage are high (they top the admin queue); everything else
+  // is normal. Set at creation from the reason — see severityForReason.
+  severity ReportSeverity @default(normal)
   // Null until a gobhi triages it, then the staff id. Distinct from
   // `reporterId` so "who reported" and "who reviewed" can't be confused.
   reviewedBy      Int?
