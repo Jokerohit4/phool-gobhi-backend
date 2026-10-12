@@ -6,6 +6,7 @@ import {
   RULES_VERSION,
   SAFETY,
   BIOLOGICAL_TARGETS,
+  V2_FROM,
 } from './constants.js';
 
 // The score engine.
@@ -51,6 +52,7 @@ export function computeMisses({
   noMisses = false,
   unlockedLayerKeys = [],
   foodNoPenalty = false,
+  isV2 = false,
 }) {
   // When noMisses is true (easy-start or inactive pause), we emit no miss
   // lines at all, but the earn pass still runs so positive points are kept.
@@ -67,12 +69,10 @@ export function computeMisses({
     if (!isScheduledFor(item, localDate)) continue;
     if (done.has(item.id)) continue;
 
-    // Skip miss lines for items whose layerKey isn't unlocked. A locked
-    // layer's items must not penalise the user — they simply don't exist in
-    // the day's scoring. This is the core of fair scoring: no red for
-    // something the user couldn't see.
+    // Skip miss lines for items whose layerKey isn't unlocked.
+    // Before V2_FROM (isV2=false), no layer filtering - all items are scored.
     // Exception: medicine layer is always on, never locked.
-    if (item.layerKey && item.layerKey !== 'medicine' && !unlockedLayerKeys.includes(item.layerKey)) {
+    if (isV2 && item.layerKey && item.layerKey !== 'medicine' && !unlockedLayerKeys.includes(item.layerKey)) {
       continue;
     }
 
@@ -130,7 +130,11 @@ export function computeMisses({
   // Aggregate nutrition rules. Each fires at most once regardless of how many
   // plan items mention the same nutrient — otherwise a plan with both "hit
   // 130 g protein" and "get to 130 g protein" would be charged twice.
-  if (targets && totals) {
+  // Before V2_FROM (isV2=false), these rules always run (old behavior).
+  // On or after V2_FROM, they only apply when the food layer is unlocked.
+  const foodLocked = isV2 && !unlockedLayerKeys.includes('food');
+  const foodNotSetUp = !targets || !targets.kcal;
+  if (!foodLocked && !foodNotSetUp && targets && totals) {
     if (targets.proteinG > 0) {
       const ratio = pct(totals.proteinG || 0, targets.proteinG);
       if (ratio !== null && ratio < 0.6) {
@@ -175,8 +179,6 @@ export function computeMisses({
   // Suppress when: food layer is locked (food not in unlockedLayerKeys), food
   // not set up (no nutrition target), or foodNoPenalty flag is set (early
   // food period before 3 showed-up days).
-  const foodLocked = !unlockedLayerKeys.includes('food');
-  const foodNotSetUp = !targets || !targets.kcal;
   if (!foodLocked && !foodNotSetUp && !foodNoPenalty) {
     if (!totals || !totals.hasAnyFood) {
       lines.push({
@@ -367,7 +369,10 @@ export function computeDay({
   if (!isV2) {
     noMisses = false;
     foodNoPenalty = false;
-    unlockedLayerKeys = [];
+    // Before V2_FROM, no layer filtering - all items are scored (old behavior)
+    // We don't modify unlockedLayerKeys; the engine will treat empty array as
+    // "all unlocked" when isV2 is false, but for simplicity we just skip the
+    // layer check entirely in computeMisses when !isV2.
   }
 
   // A paused day is neutral, and it is neutral in a specific way: not scored,
@@ -418,6 +423,7 @@ export function computeDay({
         noMisses,
         unlockedLayerKeys,
         foodNoPenalty,
+        isV2,
       })
     : [];
 

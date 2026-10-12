@@ -784,7 +784,7 @@ test('foodNoPenalty suppresses no_meals_logged when food unlocked but not set up
     planItems: B10_PLAN_ITEMS,
     completions: [],
     targets: { waterMl: 2500 }, // no kcal target = food not set up
-    totals: { waterMl: 2500, hasAnyFood: false },
+    totals: { waterMl: 500, hasAnyFood: false }, // water below target to trigger habit miss
     closed: true,
     unlockedLayerKeys: ['workout', 'water', 'food'], // food unlocked
     foodNoPenalty: true,

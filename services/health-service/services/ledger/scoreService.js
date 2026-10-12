@@ -796,16 +796,16 @@ async function gatherDayInputs(prisma, { userId, localDate, today }) {
  * Positive means the score went up over the week; negative means it went down.
  * Returns null if there aren't enough snapshots to compute.
  */
-export async function weekDelta(prisma, { userId }) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+export async function weekDelta(prisma, { userId, today }) {
+  const todayStr = today ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const from = new Date(Date.UTC(
-    ...today.split('-').map(Number)
+    ...todayStr.split('-').map(Number)
   ));
   from.setUTCDate(from.getUTCDate() - 7);
   const fromStr = from.toISOString().slice(0, 10);
 
   const snapshots = await prisma.scoreDaySnapshot.findMany({
-    where: { userId, localDate: { gte: fromStr, lte: today } },
+    where: { userId, localDate: { gte: fromStr, lte: todayStr } },
     orderBy: { localDate: 'asc' },
     select: { localDate: true, close: true },
   });
