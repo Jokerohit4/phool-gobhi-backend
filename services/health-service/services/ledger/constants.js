@@ -12,7 +12,12 @@
 // freezes closed days precisely so history is a record rather than a
 // recomputation; a version bump is how you stay honest about the fact that a
 // later retune does not apply backwards.
-export const RULES_VERSION = 'v1';
+export const RULES_VERSION = 'v2';
+
+// The cutover date for v2 rules. Days on or after this date use the new
+// rules (layer-aware scoring, easy-start pause, inactive pause). Frozen
+// snapshots before this date are never recomputed. Set at deploy time.
+export const V2_FROM = '2026-10-15';
 
 // Biological targets for the Health Score.
 // These are general guidelines; in a full medical implementation, these would be

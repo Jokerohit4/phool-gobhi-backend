@@ -16,7 +16,7 @@
 //   - the low-intake guard. checkForLowIntakeRun reads recent snapshots at
 //     read time, because it is a safety check about the user's current state,
 //     not a property of any one day.
-import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS } from './constants.js';
+import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS, V2_FROM } from './constants.js';
 import { computeDay, checkForLowIntakeRun, computeBiologicalScore, computeBlendedHealthScore } from './scoreEngine.js';
 import { getDayTotals } from './nutritionService.js';
 import { isDueOn } from './ledgerPlanService.js';
@@ -32,6 +32,43 @@ import {
 } from './blendedScoreCache.js';
 
 const CACHE_TTL = 3600; // 1 hour
+
+// Returns the scoring window for a user when coachJourney is enabled.
+// Returns null when the flag is off or journey not started.
+async function getScoringWindow(prisma, userId) {
+  try {
+    const { getScoringWindow: journeyGetScoringWindow } = await import('../journey/journeyService.js');
+    return await journeyGetScoringWindow(userId);
+  } catch {
+    return null;
+  }
+}
+
+// Determines if the v2 rules should apply for a given date.
+// Days on or after V2_FROM use the new rules; earlier days keep v1 behavior.
+function isV2Date(localDate) {
+  return localDate >= V2_FROM;
+}
+
+// Computes noMisses, unlockedLayerKeys, and foodNoPenalty from the scoring window.
+function deriveScoringFlags(scoringWindow, localDate) {
+  if (!scoringWindow) {
+    return { noMisses: false, unlockedLayerKeys: [], foodNoPenalty: false };
+  }
+  const { easyStartUntil, inactiveSince, foodEarlyNoPenaltyUntilUnlock } = scoringWindow;
+  let noMisses = false;
+  if (easyStartUntil && localDate <= easyStartUntil) {
+    noMisses = true;
+  }
+  if (inactiveSince && localDate >= inactiveSince) {
+    noMisses = true;
+  }
+  return {
+    noMisses,
+    unlockedLayerKeys: [], // Will be filled by caller
+    foodNoPenalty: foodEarlyNoPenaltyUntilUnlock === true,
+  };
+}
 
 /**
  * Compute (but do not store) what a day is worth.
@@ -58,6 +95,20 @@ export async function previewDay(prisma, { userId, localDate, today }) {
   // depend on it: the engine's own miss pass, and whether this day may carry an
   // action list at all.
   const closed = localDate < today;
+
+  // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
+  let scoringFlags = { noMisses: false, unlockedLayerKeys: [], foodNoPenalty: false };
+  if (isV2Date(localDate)) {
+    const scoringWindow = await getScoringWindow(prisma, userId);
+    if (scoringWindow) {
+      // Fetch unlocked layer keys from journey service
+      const { getUnlockedLayerKeys } = await import('../journey/journeyService.js');
+      const unlockedLayerKeys = await getUnlockedLayerKeys(userId);
+      scoringFlags = deriveScoringFlags(scoringWindow, localDate);
+      scoringFlags.unlockedLayerKeys = unlockedLayerKeys;
+    }
+  }
+
   return {
     ...computeDay({
       localDate,
@@ -66,6 +117,9 @@ export async function previewDay(prisma, { userId, localDate, today }) {
       targets: target,
       closed,
       paused: isPausedOn(goal, localDate),
+      noMisses: scoringFlags.noMisses,
+      unlockedLayerKeys: scoringFlags.unlockedLayerKeys,
+      foodNoPenalty: scoringFlags.foodNoPenalty,
     }),
     // What is still open today, attached to the day itself rather than served
     // separately. Two reasons it rides along here: the app already fetches the
@@ -130,6 +184,18 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     select: { pausedFrom: true, pausedUntil: true },
   });
 
+  // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
+  let scoringFlags = { noMisses: false, unlockedLayerKeys: [], foodNoPenalty: false };
+  if (isV2Date(localDate)) {
+    const scoringWindow = await getScoringWindow(prisma, userId);
+    if (scoringWindow) {
+      const { getUnlockedLayerKeys } = await import('../journey/journeyService.js');
+      const unlockedLayerKeys = await getUnlockedLayerKeys(userId);
+      scoringFlags = deriveScoringFlags(scoringWindow, localDate);
+      scoringFlags.unlockedLayerKeys = unlockedLayerKeys;
+    }
+  }
+
   const day = computeDay({
     localDate,
     previousClose: previous,
@@ -137,6 +203,9 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     targets: target,
     closed: true,
     paused: isPausedOn(goal, localDate),
+    noMisses: scoringFlags.noMisses,
+    unlockedLayerKeys: scoringFlags.unlockedLayerKeys,
+    foodNoPenalty: scoringFlags.foodNoPenalty,
   });
 
   // A day being closed is by definition closed, so the open list is empty.
@@ -717,4 +786,33 @@ async function gatherDayInputs(prisma, { userId, localDate, today }) {
     unplannedWorkout: loggedWorkout && !hasPlannedWorkoutDone,
     bySlot,
   };
+}
+
+/**
+ * Returns the change in close value over the last 7 days (including today if
+ * closed, otherwise the previous 7 closed days). Used by the journey summary
+ * to show the weekly trend.
+ *
+ * Positive means the score went up over the week; negative means it went down.
+ * Returns null if there aren't enough snapshots to compute.
+ */
+export async function weekDelta(prisma, { userId, today }) {
+  const todayStr = today ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const from = new Date(Date.UTC(
+    ...todayStr.split('-').map(Number)
+  ));
+  from.setUTCDate(from.getUTCDate() - 7);
+  const fromStr = from.toISOString().slice(0, 10);
+
+  const snapshots = await prisma.scoreDaySnapshot.findMany({
+    where: { userId, localDate: { gte: fromStr, lte: todayStr } },
+    orderBy: { localDate: 'asc' },
+    select: { localDate: true, close: true },
+  });
+
+  if (snapshots.length < 2) return null;
+
+  const firstClose = Number(snapshots[0].close);
+  const lastClose = Number(snapshots[snapshots.length - 1].close);
+  return lastClose - firstClose;
 }

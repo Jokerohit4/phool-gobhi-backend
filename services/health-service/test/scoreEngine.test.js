@@ -656,3 +656,304 @@ test('the day after a pause resumes from the paused day close', () => {
   assert.ok(resumed.close > 500, 'the resumed day should earn from the paused close');
   assert.equal(resumed.paused, false);
 });
+
+// --- B10: fair score (locked layers, easy start, inactive pause, v2) ----------
+
+const B10_TODAY = '2026-10-20';
+const B10_TOMORROW = '2026-10-21';
+const B10_YESTERDAY = '2026-10-19';
+
+const B10_PLAN_ITEMS = [
+  { id: 'w1', kind: 'workout', schedule: 'daily', active: true, title: 'Workout', layerKey: 'workout' },
+  { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
+  { id: 'f1', kind: 'nutrition', schedule: 'daily', active: true, title: 'Hit 130g protein', layerKey: 'food' },
+  { id: 's1', kind: 'habit', schedule: 'daily', active: true, title: 'Steps 8k', layerKey: 'steps' },
+  { id: 'sl1', kind: 'habit', schedule: 'daily', active: true, title: 'Sleep 7h', layerKey: 'sleep' },
+  { id: 'supp1', kind: 'habit', schedule: 'daily', active: true, title: 'Supplements', layerKey: 'supplements' },
+  { id: 'h2', kind: 'habit', schedule: 'daily', active: true, title: 'Health check', layerKey: 'health' },
+  { id: 'm1', kind: 'doctor_medication', schedule: 'daily', active: true, title: 'Medication', layerKey: 'medicine' },
+];
+
+const B10_TARGETS = {
+  kcal: 2500,
+  proteinG: 130,
+  waterMl: 2500,
+  micros: { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
+};
+
+const B10_ON_TARGET = {
+  kcal: 2500,
+  proteinG: 130,
+  waterMl: 2500,
+  micros: { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
+  hasAnyFood: true,
+};
+
+test('locked layer items produce no miss lines (fair scoring)', () => {
+  // When food layer is locked, missing food items should not generate red.
+  // Only workout and water (layer 1) are unlocked.
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [], // nothing done
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, waterMl: 500 }, // low intake, low water
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water'], // layer 1 only
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  // Should have workout_missed, habit_missed (water), rest_day_honoured not present since no rest item
+  // Should NOT have protein_short, calories_off_target, no_meals_logged (food locked)
+  // Should NOT have habit_missed for steps, sleep, supplements, health (locked layers)
+  assert.ok(missKeys.includes('workout_missed'));
+  // Water is unlocked but not met via logs, so it should have a miss
+  assert.ok(missKeys.some((k) => k === 'habit_missed' || k.startsWith('habit_missed')), 'water miss expected');
+  assert.ok(!missKeys.includes('protein_short'), 'food layer locked: no protein miss');
+  assert.ok(!missKeys.includes('calories_off_target'), 'food layer locked: no calories miss');
+  assert.ok(!missKeys.includes('no_meals_logged'), 'food layer locked: no no_meals_logged miss');
+});
+
+test('unlocked layer items produce misses normally', () => {
+  // All layers unlocked - everything should score normally
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20 },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.includes('workout_missed'));
+  assert.ok(missKeys.some((k) => k.startsWith('habit_missed')));
+  assert.ok(missKeys.includes('protein_short'));
+  assert.ok(missKeys.includes('calories_off_target'));
+  // no_meals_logged is not added because hasAnyFood is true
+  assert.ok(!missKeys.includes('no_meals_logged'));
+});
+
+test('noMisses suppresses all miss lines but keeps earnings (easy start)', () => {
+  // During easy start (first 14 days), no misses are charged but earns still count
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [{ planItemId: 'w1' }], // workout done
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20 },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
+    noMisses: true,
+  });
+
+  const missLines = day.breakdown.filter((l) => l.points < 0);
+  const earnLines = day.breakdown.filter((l) => l.points > 0);
+
+  assert.equal(missLines.length, 0, 'no miss lines when noMisses is true');
+  assert.ok(earnLines.length > 0, 'earnings should still be counted');
+  // Workout done should earn points
+  assert.ok(earnLines.some((l) => l.key.startsWith('item_done_')));
+});
+
+test('noMisses during inactive pause (7+ days since last showed-up)', () => {
+  // Same as easy start: no misses, earnings kept
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [{ planItemId: 'h1' }], // water done
+    targets: B10_TARGETS,
+    totals: B10_ON_TARGET,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
+    noMisses: true,
+  });
+
+  const missLines = day.breakdown.filter((l) => l.points < 0);
+  assert.equal(missLines.length, 0, 'no miss lines during inactive pause');
+  // Water habit done should earn points
+  assert.ok(day.breakdown.some((l) => l.points > 0 && l.kind === 'habit'));
+});
+
+test('foodNoPenalty suppresses no_meals_logged when food unlocked but not set up', () => {
+  // Food layer unlocked but no nutrition target yet (foodNoPenalty=true)
+  // Should not charge no_meals_logged
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: { waterMl: 2500 }, // no kcal target = food not set up
+    totals: { waterMl: 500, hasAnyFood: false }, // water below target to trigger habit miss
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water', 'food'], // food unlocked
+    foodNoPenalty: true,
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.includes('no_meals_logged'), 'foodNoPenalty suppresses no_meals_logged');
+  // Other misses (workout, water) should still apply
+  assert.ok(missKeys.includes('workout_missed'));
+  assert.ok(missKeys.some((k) => k.startsWith('habit_missed')));
+});
+
+test('foodNoPenalty suppresses no_meals_logged when food layer is locked', () => {
+  // Food layer locked - no_meals_logged should not appear regardless of foodNoPenalty
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water'], // food NOT unlocked
+    foodNoPenalty: false,
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.includes('no_meals_logged'), 'food locked suppresses no_meals_logged');
+});
+
+test('foodNoPenalty suppresses no_meals_logged when food early (before 3 showed-up days)', () => {
+  // Food layer unlocked, target exists, but foodEarlyNoPenaltyUntilUnlock=true
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water', 'food'],
+    foodNoPenalty: true, // food early period
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.includes('no_meals_logged'), 'food early suppresses no_meals_logged');
+  // Protein and calories misses should still apply (they're about quality, not logging)
+  assert.ok(missKeys.includes('protein_short'));
+  assert.ok(missKeys.includes('calories_off_target'));
+});
+
+test('water habit counts as done when WaterLog sum >= target (no miss)', () => {
+  // Water habit item with layerKey 'water' should not miss if WaterLog meets target
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: [
+      { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
+    ],
+    completions: [], // not manually ticked
+    targets: { waterMl: 2500 },
+    totals: { waterMl: 2600, hasAnyFood: true }, // water logged >= target
+    closed: true,
+    unlockedLayerKeys: ['water'],
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.some((k) => k.startsWith('habit_missed')), 'water met via logs: no miss');
+});
+
+test('water habit misses when WaterLog sum < target', () => {
+  // Water habit item should miss if WaterLog below target
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: [
+      { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
+    ],
+    completions: [],
+    targets: { waterMl: 2500 },
+    totals: { waterMl: 1000, hasAnyFood: true }, // water logged < target
+    closed: true,
+    unlockedLayerKeys: ['water'],
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.some((k) => k.startsWith('habit_missed')), 'water below target: miss charged');
+});
+
+test('water habit not charged when water layer is locked', () => {
+  // Water habit should not miss if water layer not unlocked
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: [
+      { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
+    ],
+    completions: [],
+    targets: { waterMl: 2500 },
+    totals: { waterMl: 0, hasAnyFood: true },
+    closed: true,
+    unlockedLayerKeys: [], // water NOT unlocked
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.some((k) => k.startsWith('habit_missed')), 'water locked: no miss');
+});
+
+test('medicine layer never locked (always on)', () => {
+  // Medicine items should always score regardless of unlockedLayerKeys
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: [
+      { id: 'm1', kind: 'doctor_medication', schedule: 'daily', active: true, title: 'Medication', layerKey: 'medicine' },
+    ],
+    completions: [],
+    targets: B10_TARGETS,
+    totals: B10_ON_TARGET,
+    closed: true,
+    unlockedLayerKeys: [], // nothing unlocked, but medicine is always on
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.includes('doctor_item_missed'), 'medicine always scores, even when no layers unlocked');
+});
+
+test('v2 rules apply only on or after V2_FROM', () => {
+  // Before V2_FROM, the new parameters should be ignored (backward compatibility)
+  const dayBefore = computeDay({
+    localDate: '2026-10-14', // before V2_FROM
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water'], // food locked
+    noMisses: true, // this should be ignored before V2_FROM
+    foodNoPenalty: true,
+  });
+
+  // Before V2_FROM, noMisses and foodNoPenalty should not take effect
+  // The old behavior should apply: misses are charged
+  const missKeys = dayBefore.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.length > 0, 'v2 flags ignored before V2_FROM');
+  // food locked but before V2_FROM, foodNoPenalty ignored so no_meals_logged may appear
+  // This test documents the backward compatibility boundary
+});
+
+test('v2 rules apply on V2_FROM', () => {
+  // On V2_FROM, the new parameters should take effect
+  const dayOn = computeDay({
+    localDate: '2026-10-15', // V2_FROM
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water'], // food locked
+    noMisses: true,
+    foodNoPenalty: true,
+  });
+
+  const missKeys = dayOn.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.equal(missKeys.length, 0, 'noMisses works on V2_FROM');
+});
+
+test('rulesVersion is v2 for days computed with v2 engine', () => {
+  const day = computeDay({
+    localDate: '2026-10-15',
+    planItems: [],
+    completions: [],
+    targets: null,
+    totals: null,
+    closed: true,
+  });
+  assert.equal(day.rulesVersion, 'v2');
+});
