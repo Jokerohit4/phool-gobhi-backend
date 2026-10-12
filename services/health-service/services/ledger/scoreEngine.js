@@ -48,13 +48,33 @@ export function computeMisses({
   targets = null,
   totals = null,
   localDate,
+  noMisses = false,
+  unlockedLayerKeys = [],
+  foodNoPenalty = false,
 }) {
+  // When noMisses is true (easy-start or inactive pause), we emit no miss
+  // lines at all, but the earn pass still runs so positive points are kept.
+  // This is different from the pause logic around line 336 which zeroes
+  // earnings too — here we only suppress the negative side.
+  if (noMisses) {
+    return [];
+  }
+
   const done = new Set(completions.map((c) => c.planItemId));
   const lines = [];
 
   for (const item of planItems) {
     if (!isScheduledFor(item, localDate)) continue;
     if (done.has(item.id)) continue;
+
+    // Skip miss lines for items whose layerKey isn't unlocked. A locked
+    // layer's items must not penalise the user — they simply don't exist in
+    // the day's scoring. This is the core of fair scoring: no red for
+    // something the user couldn't see.
+    // Exception: medicine layer is always on, never locked.
+    if (item.layerKey && item.layerKey !== 'medicine' && !unlockedLayerKeys.includes(item.layerKey)) {
+      continue;
+    }
 
     switch (item.kind) {
       case 'doctor_medication':
@@ -79,6 +99,16 @@ export function computeMisses({
         );
         break;
       case 'habit':
+        // Water habit: if water is unlocked, count it as done when the day's
+        // WaterLog sum >= target. This avoids a miss when the user actually
+        // met the goal through logs.
+        if (item.layerKey === 'water' && totals?.waterMl !== undefined) {
+          const waterTarget = targets?.waterMl ?? 2500;
+          if (totals.waterMl >= waterTarget) {
+            // Water was met via logs; don't charge a miss.
+            continue;
+          }
+        }
         lines.push(line('habit_missed', `${item.title} not done`, item.kind, POINTS.habitMissed, item));
         break;
       case 'rest':
@@ -142,13 +172,20 @@ export function computeMisses({
   // calories rule, because a day with no food log is a different situation
   // from a day of tracked eating that missed the target, and conflating them
   // makes both numbers mean less.
-  if (!totals || !totals.hasAnyFood) {
-    lines.push({
-      key: 'no_meals_logged',
-      label: 'Nothing logged',
-      kind: 'nutrition',
-      points: POINTS.noMealsLogged,
-    });
+  // Suppress when: food layer is locked (food not in unlockedLayerKeys), food
+  // not set up (no nutrition target), or foodNoPenalty flag is set (early
+  // food period before 3 showed-up days).
+  const foodLocked = !unlockedLayerKeys.includes('food');
+  const foodNotSetUp = !targets || !targets.kcal;
+  if (!foodLocked && !foodNotSetUp && !foodNoPenalty) {
+    if (!totals || !totals.hasAnyFood) {
+      lines.push({
+        key: 'no_meals_logged',
+        label: 'Nothing logged',
+        kind: 'nutrition',
+        points: POINTS.noMealsLogged,
+      });
+    }
   }
 
   return lines;
@@ -320,7 +357,19 @@ export function computeDay({
   hasPlannedWorkoutDone = false,
   unplannedWorkout = false,
   paused = false,
+  noMisses = false,
+  unlockedLayerKeys = [],
+  foodNoPenalty = false,
 }) {
+  // v2 rules only apply on or after V2_FROM. Before that date, v2 flags are
+  // ignored for backward compatibility with frozen v1 snapshots.
+  const isV2 = localDate >= V2_FROM;
+  if (!isV2) {
+    noMisses = false;
+    foodNoPenalty = false;
+    unlockedLayerKeys = [];
+  }
+
   // A paused day is neutral, and it is neutral in a specific way: not scored,
   // not merely scored as zero.
   //
@@ -359,7 +408,18 @@ export function computeDay({
     hasPlannedWorkoutDone,
     unplannedWorkout,
   });
-  const misses = closed ? computeMisses({ planItems, completions, targets, totals, localDate }) : [];
+  const misses = closed
+    ? computeMisses({
+        planItems,
+        completions,
+        targets,
+        totals,
+        localDate,
+        noMisses,
+        unlockedLayerKeys,
+        foodNoPenalty,
+      })
+    : [];
 
   const all = [...earns, ...misses];
 
