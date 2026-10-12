@@ -79,9 +79,17 @@ model BuddyProfile {
   photos         BuddyPhoto[]
   filter         BuddyFilter?
 
-  // NOTE (upgrade path, not built now): at scale, replace the lat/lng
-  // BETWEEN pre-filter with a proper geo index (PostGIS earthdistance/GiST,
-  // or a ll_to_earth() functional index) instead of plain btree ranges.
+  // Moderation
+  moderationHoldAt      DateTime?
+
+  // Gender change tracking (synced from auth-service by profile sync)
+  genderChangedAt       DateTime?   // copied from auth by profile sync
+  genderChangedTo       Gender?     // copied from auth by profile sync
+  genderChangeClearedAt DateTime?   // admin only; sync never writes it
+
+  // Women-only mode guard
+  womenOnlyBlocked      Boolean @default(false)
+
   @@index([lat, lng])
   @@index([isDiscoverable, isActive])
   @@schema("buddy")
@@ -109,6 +117,7 @@ model BuddyFilter {
   maxAge       Int           @default(60)
   genders      Gender[]
   fitnessGoals FitnessGoal[]
+  womenOnly    Boolean @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -209,6 +218,12 @@ enum ReportStatus {
   actioned
 
   @@schema("buddy")
+}
+
+// Severity level for a report — used to order the moderation queue.
+enum ReportSeverity {
+  normal
+  high
 }
 
 // A safety report about another user.

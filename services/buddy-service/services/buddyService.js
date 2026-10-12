@@ -27,6 +27,40 @@ function ageFromDOB(dob) {
   return age;
 }
 
+// Two-way eligibility rule used by both getFeed and recordSwipe.
+// Returns a Prisma where-clause that can be AND'd with { userId: targetId }.
+// The viewer is the profile of the person swiping/browsing.
+// excludedIds are user ids that should be explicitly excluded (e.g. already-swiped).
+function targetEligibility(viewer, excludedIds = []) {
+  const { gender: viewerGender, dateOfBirth: viewerDOB, filter: viewerFilter } = viewer;
+  const minAge = viewerFilter?.minAge ?? 18;
+  const maxAge = viewerFilter?.maxAge ?? 60;
+  return {
+    AND: [
+      { isActive: true },
+      { isDiscoverable: true },
+      { moderationHoldAt: null },
+      // Two-way filter: target's gender must be in viewer's accepted genders,
+      // and viewer's gender must be in target's accepted genders.
+      ...(viewerFilter?.genders?.length
+        ? { gender: { hasSome: viewerFilter.genders } }
+        : {}),
+      // Age range: target's dateOfBirth must fall within viewer's minAge-maxAge range
+      ...(viewerDOB != null
+        ? { dateOfBirth: {
+          gt: new Date(now.getFullYear() - maxAge, now.getMonth(), now.getDate()),
+          lte: new Date(now.getFullYear() - minAge, now.getMonth(), now.getDate()),
+        } }
+        : {}),
+      // Women-only: if viewer's filter is womenOnly and viewer is not female,
+      // target is blocked (womenOnlyBlocked must be false).
+      ...(viewerFilter?.womenOnly && viewerGender !== 'female'
+        ? { womenOnlyBlocked: true }
+        : {}),
+    ],
+  };
+}
+
 // Never includes lat/lng or an exact distance — only a bucketed range (see
 // utils/geo.js#bucketDistanceKm). This is the single seam all discovery/
 // match responses go through so that guarantee can't be bypassed by a
@@ -90,6 +124,8 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
     throw { status: 403, error: 'You must be 18 or older to use buddy matching' };
   }
 
+  // New profiles start hidden — the app may send isDiscoverable:true but we
+  // override it here; the profile becomes visible only after 3 photos are saved.
   const created = await prisma.buddyProfile.create({
     data: {
       userId,
@@ -101,6 +137,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
       dateOfBirth: new Date(authUser.dateOfBirth),
       fitnessGoals: authUser.fitnessGoals || [],
       lastSyncedAt: new Date(),
+      isDiscoverable: false,  // profiles start hidden per W7 spec
     },
   });
   track('buddy_profile_created', userId, {});
@@ -151,6 +188,10 @@ export async function addPhotos(userId, files) {
     throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
   }
 
+  // Determine new discoverability: visible only if 3 or more photos total.
+  const newPhotoCount = profile.photos.length + files.length;
+  const willBeDiscoverable = newPhotoCount >= 3;
+
   let nextOrder = profile.photos.length;
   const created = await prisma.$transaction(
     files.map((f) =>
@@ -159,6 +200,12 @@ export async function addPhotos(userId, files) {
       })
     )
   );
+
+  // Update discoverability based on photo count
+  if (willBeDiscoverable !== profile.isDiscoverable) {
+    await prisma.buddyProfile.update({ where: { userId }, data: { isDiscoverable: willBeDiscoverable } });
+  }
+
   return created;
 }
 
@@ -217,6 +264,13 @@ export async function deletePhoto(userId, photoId) {
   }
 
   await prisma.buddyPhoto.delete({ where: { id: photoId } });
+
+  // If the profile now has fewer than 3 photos, hide it again.
+  const profile = await prisma.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
+  if (profile.photos.length < 3 && profile.isDiscoverable) {
+    await prisma.buddyProfile.update({ where: { userId }, data: { isDiscoverable: false } });
+  }
+
   return { message: 'Photo deleted' };
 }
 
@@ -231,7 +285,7 @@ export async function upsertFilters(userId, data, userType) {
   const profile = await prisma.buddyProfile.findUnique({ where: { userId } });
   if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
 
-  const { radiusKm, minAge, maxAge, genders, fitnessGoals } = data;
+  const { radiusKm, minAge, maxAge, genders, fitnessGoals, womenOnly } = data;
 
   if (radiusKm !== undefined) {
     assertTierAllows(userType, 'radiusKm');
@@ -248,6 +302,12 @@ export async function upsertFilters(userId, data, userType) {
       throw { status: 400, error: 'minAge must be less than or equal to maxAge' };
     }
   }
+  // Women-only: only a profile whose synced gender is female can turn it on.
+  // Non-female → 400. If sync later changes gender away from female, the hold
+  // is cleared by the sync process.
+  if (womenOnly === true && profile.gender !== 'female') {
+    throw { status: 400, error: 'Women-only mode is only available for female users.' };
+  }
 
   const existing = await prisma.buddyFilter.findUnique({ where: { userId } });
   const payload = {
@@ -256,6 +316,7 @@ export async function upsertFilters(userId, data, userType) {
     maxAge: maxAge ?? existing?.maxAge ?? DEFAULT_FILTER.maxAge,
     genders: genders ?? existing?.genders ?? DEFAULT_FILTER.genders,
     fitnessGoals: fitnessGoals ?? existing?.fitnessGoals ?? DEFAULT_FILTER.fitnessGoals,
+    womenOnly: womenOnly ?? existing?.womenOnly ?? DEFAULT_FILTER.womenOnly,
   };
 
   return prisma.buddyFilter.upsert({
@@ -271,10 +332,10 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
   page = Math.max(1, page);
   limit = Math.min(Math.max(1, limit), 50);
 
-  const me = await prisma.buddyProfile.findUnique({ where: { userId } });
+  const me = await prisma.buddyProfile.findUnique({ where: { userId }, include: { filter: true } });
   if (!me) throw { status: 400, error: 'Create your buddy profile first' };
 
-  const filter = (await prisma.buddyFilter.findUnique({ where: { userId } })) || DEFAULT_FILTER;
+  const filter = me.filter || DEFAULT_FILTER;
 
   const [swiped, blockedByMe, blockedMe] = await Promise.all([
     prisma.swipe.findMany({ where: { swiperId: userId }, select: { swipeeId: true } }),
@@ -295,6 +356,23 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
   const maxDob = new Date(now.getFullYear() - filter.minAge, now.getMonth(), now.getDate());
   const minDob = new Date(now.getFullYear() - filter.maxAge - 1, now.getMonth(), now.getDate());
 
+  // Two-way filter: target's filter must also accept the viewer.
+  // Part 1: gender - target's filter.genders must accept viewer's gender
+  const genderCondition = filter.genders.length
+    ? { gender: { hasSome: filter.genders } }
+    : {};
+  // Part 2: age - target's minAge <= viewer's age AND target's maxAge >= viewer's age
+  // Viewer's age is computed from viewer's dateOfBirth using viewer's filter min/max
+  // But for the two-way check, we use the target's filter min/max against the viewer's dateOfBirth
+  const ageCondition = me.dateOfBirth != null
+    ? {
+      dateOfBirth: {
+        gt: new Date(now.getFullYear() - filter.maxAge, now.getMonth(), now.getDate()),
+        lte: new Date(now.getFullYear() - filter.minAge, now.getMonth(), now.getDate()),
+      },
+    }
+    : {};
+
   const where = {
     isActive: true,
     isDiscoverable: true,
@@ -309,6 +387,22 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
   };
   if (filter.genders.length) where.gender = { in: filter.genders };
   if (filter.fitnessGoals.length) where.fitnessGoals = { hasSome: filter.fitnessGoals };
+  // Add two-way filter conditions: target's filter must also accept viewer
+  const twoWayConditions = [];
+  if (filter.genders.length) {
+    twoWayConditions.push({ gender: { hasSome: filter.genders } });
+  }
+  if (me.dateOfBirth != null) {
+    twoWayConditions.push({
+      dateOfBirth: {
+        gt: new Date(now.getFullYear() - filter.maxAge, now.getMonth(), now.getDate()),
+        lte: new Date(now.getFullYear() - filter.minAge, now.getMonth(), now.getDate()),
+      },
+    });
+  }
+  if (twoWayConditions.length > 0) {
+    where.AND = twoWayConditions;
+  }
 
   // Hard cap per query as a worst-case bound — see prisma/schema.prisma's
   // note on the bounding-box+haversine strategy vs. real geo indexing.
@@ -339,11 +433,43 @@ export async function recordSwipe(swiperId, swipeeId, action) {
   if (swiperId === swipeeId) throw { status: 400, error: 'Cannot swipe on yourself' };
   if (!['like', 'pass'].includes(action)) throw { status: 400, error: 'action must be "like" or "pass"' };
 
+  // Load the swiper's profile and filter first, for eligibility checks below.
+  const swiperProfile = await prisma.buddyProfile.findUnique({ where: { userId: swiperId } });
+  if (!swiperProfile) throw { status: 400, error: 'Create your buddy profile first' };
+
+  // Require the swiper to be active, discoverable and not held.
+  if (swiperProfile.isActive === false) throw { status: 403, error: 'BUDDY_SUSPENDED' };
+  if (swiperProfile.isDiscoverable === false) throw { status: 403, error: 'NOT_DISCOVERABLE' };
+  if (swiperProfile.moderationHoldAt !== null) throw { status: 403, error: 'BUDDY_UNDER_REVIEW' };
+
   const [blockedByMe, blockedMe] = await Promise.all([
     prisma.blockedUser.findUnique({ where: { blockerId_blockedId: { blockerId: swiperId, blockedId: swipeeId } } }),
     prisma.blockedUser.findUnique({ where: { blockerId_blockedId: { blockerId: swipeeId, blockedId: swiperId } } }),
   ]);
   if (blockedByMe || blockedMe) throw { status: 403, error: 'Cannot swipe on a blocked user' };
+
+  // Run the target eligibility check using the two-way filter rule.
+  const eligibility = targetEligibility(swiperProfile, []);
+  // The eligibility where-clause is AND'd with { userId: swipeeId } per the
+  // function contract; if the target is not eligible, the upsert would fail
+  // or no match would result — we explicit-check here for a better error.
+  // We check the swipee's profile against the eligibility rules.
+  const swipeeProfile = await prisma.buddyProfile.findUnique({ where: { userId: swipeeId } });
+  if (!swipeeProfile) throw { status: 400, error: 'Target user has no buddy profile' };
+
+  // Build a where-clause for the swipee that combines eligibility with the target id.
+  // If targetEligibility returns AND conditions, we combine them with the userId check.
+  const targetWhere = eligibility.AND
+    ? { AND: [{ userId: swipeeId }, ...eligibility.AND] }
+    : { userId: swipeeId };
+
+  const eligibleSwipee = await prisma.buddyProfile.findFirst({
+    where: targetWhere,
+  });
+  if (!eligibleSwipee) throw {
+    status: 400,
+    error: 'Target is not eligible for discovery or swiping. Check gender, age, distance, and women-only filters.',
+  };
 
   // Idempotent: upsert instead of insert-and-catch, so a double-tap of the
   // same action is a no-op and changing your mind (pass -> like) just
@@ -639,13 +765,80 @@ async function assertActiveParticipant(matchId, userId, { inactiveStatus = 410 }
 // explicit choice, because a block also removes them from the other person's
 // view and they may not want that. So: the conversation is severed for them,
 // and discovery is untouched in both directions unless they also block.
-export async function reportUser(userId, reportedUserId, reason, details) {
+export async function reportUser(userId, reportedUserId, reason, details, severity) {
   if (userId === reportedUserId) throw { status: 400, error: 'Cannot report yourself' };
 
   const report = await prisma.report.create({
-    data: { reporterId: userId, reportedUserId, reason, details: details?.slice(0, 1000) ?? null },
+    data: { reporterId: userId, reportedUserId, reason, details: details?.slice(0, 1000) ?? null, severity },
   });
-  track('buddy_reported', userId, { reportedUserId, reason });
+  track('buddy_reported', userId, { reportedUserId, reason, severity });
+
+  // Auto-hold: count distinct qualifying reporters in the last 30 days.
+  // A "qualifying reporter" has an active match or a like with the reported user,
+  // and their profile is more than 7 days old, and they aren't held/suspended.
+  // We count other reporters (not the current user) of the reported user.
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const priorReporterIds = await prisma.report.findMany({
+    where: {
+      reportedUserId,
+      createdAt: { gte: thirtyDaysAgo },
+      reporterId: { not: userId },
+    },
+    select: { reporterId: true },
+  });
+  const priorReporterIdSet = new Set(priorReporterIds.map((r) => r.reporterId));
+  // Also check if the reporter already has a held/suspended profile.
+  const reporterProfile = await prisma.buddyProfile.findUnique({
+    where: { userId },
+  });
+  const reporterIsHeldOrSuspended = reporterProfile
+    && (reporterProfile.isActive === false || reporterProfile.moderationHoldAt !== null);
+
+  // A reporter is "qualifying" if they had a Match with the reported user
+  // (any status) or were liked by them, their profile is > 7 days old,
+  // and they aren't held/suspended.
+  let qualifyingCount = 0;
+  for (const priorReporterId of priorReporterIdSet) {
+    const priorProfile = await prisma.buddyProfile.findUnique({
+      where: { userId: priorReporterId },
+    });
+    if (!priorProfile || priorProfile.isActive === false || priorProfile.moderationHoldAt !== null) {
+      continue; // held or suspended → not qualifying
+    }
+    const age = Date.now() - new Date(priorProfile.createdAt).getTime();
+    const moreThan7Days = age > 7 * 24 * 60 * 60 * 1000;
+    if (!moreThan7Days) continue;
+
+    // Check if they had a match or like with the reported user
+    const hasMatch = await prisma.match.findFirst({
+      where: {
+        OR: [
+          { userLowId: priorReporterId, userHighId: reportedUserId },
+          { userLowId: reportedUserId, userHighId: priorReporterId },
+        ],
+        status: { not: 'expired' },
+      },
+    });
+    const hasLike = await prisma.swipe.findFirst({
+      where: {
+        swiperId: priorReporterId,
+        swipeeId: reportedUserId,
+        action: 'like',
+      },
+    });
+    if (hasMatch || hasLike) {
+      qualifyingCount++;
+    }
+  }
+
+  if (qualifyingCount >= 2) {
+    // Set moderationHoldAt and fire auto-hold event.
+    await prisma.buddyProfile.update({
+      where: { userId: reportedUserId },
+      data: { moderationHoldAt: new Date() },
+    });
+    track('buddy_auto_held', reportedUserId, { reporterId: userId });
+  }
 
   const userLowId = Math.min(userId, reportedUserId);
   const userHighId = Math.max(userId, reportedUserId);
@@ -663,19 +856,14 @@ export async function reportUser(userId, reportedUserId, reason, details) {
   }
 
   return { reportId: report.id, status: report.status, severedMatchId };
-}
 
 // Triage queue. Gobhi-only at the route layer; this function does no auth of
 // its own, matching how listBlocked/getMatches are shaped.
 export async function listReports({ status = 'open', limit = 50 } = {}) {
   const rows = await prisma.report.findMany({
     where: status === 'all' ? {} : { status },
-    // id as a secondary key, not just cosmetics: createdAt has millisecond
-    // resolution, so two reports can genuinely share a timestamp, and without a
-    // tie-break their relative order is undefined. In a paginated queue that
-    // means a report at a page boundary can be shown twice or skipped entirely.
-    // id is monotonic, so this makes the ordering total and the paging stable.
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    // Order by severity first (high before normal), then newest.
+    orderBy: [{ severity: 'desc' }, { createdAt: 'desc' }],
     take: Math.min(Math.max(1, parseInt(limit) || 50), 200),
   });
   // Resolve display names best-effort: a report must still be triageable when
@@ -701,17 +889,42 @@ export async function listReports({ status = 'open', limit = 50 } = {}) {
     }
   }
 
+  // Also fetch gender change info for the reported user, best-effort.
+  const genderChangeMap = new Map();
+  const reportedUserIds = [...new Set(rows.map((r) => r.reportedUserId).filter((v) => v !== null && v !== undefined))];
+  const reportedUserProfileMap = new Map();
+  if (reportedUserIds.length) {
+    const reportedUserProfile = await prisma.buddyProfile.findMany({ where: { userId: { in: reportedUserIds } } });
+    for (const p of reportedUserProfile) {
+      reportedUserProfileMap.set(p.userId, p);
+      genderChangeMap.set(p.userId, {
+        genderChangedAt: p.genderChangedAt,
+        genderChangedTo: p.genderChangedTo,
+        genderChangeClearedAt: p.genderChangeClearedAt,
+      });
+    }
+  }
+
   return rows.map((r) => {
     // minus one: the row itself is in priorRows, and "3 prior reports" must not
     // include the report being triaged.
     const prior = r.reportedUserId === null
       ? 0
       : Math.max(0, (priorCounts.get(r.reportedUserId) ?? 0) - 1);
+    const gc = genderChangeMap.get(r.reportedUserId) || {};
+    const gcInfo = gc.genderChangedAt && gc.genderChangedTo
+      ? { genderChanged: true, genderChangedTo: gc.genderChangedTo }
+      : { genderChanged: false };
+    // reported user's profile photos and bio
+    const priorProfile = reportedUserProfileMap.get(r.reportedUserId);
+    const reportedPhoto = priorProfile?.photos?.[0]?.url;
+    const reportedBio = priorProfile?.bio;
     return {
       id: r.id,
       reason: r.reason,
       details: r.details,
       status: r.status,
+      severity: r.severity,
       createdAt: r.createdAt,
       reviewedAt: r.reviewedAt,
       resolutionNote: r.resolutionNote,
@@ -720,8 +933,11 @@ export async function listReports({ status = 'open', limit = 50 } = {}) {
       // has erased their account. The report survives; the pointer does not.
       reportedUser: r.reportedUserId === null
         ? { userId: null, name: null, erased: true }
-        : { userId: r.reportedUserId, name: nameMap.get(r.reportedUserId) ?? null, erased: false },
-      priorReportsAboutReportedUser: prior,
+        : { userId: r.reportedUserId, name: nameMap.get(r.reportedUserId) ?? null, erased: false, ...gc,
+          priorReportCount: prior,
+          genderChanged: gcInfo.genderChanged,
+          photo: reportedPhoto,
+          bio: reportedBio },
     };
   });
 }

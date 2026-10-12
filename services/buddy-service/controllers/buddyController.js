@@ -217,14 +217,31 @@ export const reportUser = async (req, res) => {
     const { userId, reason, details } = req.body || {};
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     if (!reason) return res.status(400).json({ error: 'reason is required' });
-    if (!REPORT_REASONS.includes(reason)) {
-      return res.status(400).json({ error: `reason must be one of: ${REPORT_REASONS.join(', ')}` });
+    // Accept enum values from new builds, and map old app strings (case-insensitive).
+    const REASON_MAP = {
+      'harassment or abuse': 'harassment',
+      'inappropriate or offensive content': 'inappropriate_content',
+      'spam or scam': 'scam',
+      'sharing personal contact details': 'other',
+      'something else': 'other',
+    };
+    const mappedReason = REASON_MAP[reason?.toLowerCase()] || reason;
+    if (!['harassment', 'inappropriate_content', 'impersonation', 'spam',
+      'underage', 'scam', 'threat', 'other'].includes(mappedReason)) {
+      return res.status(400).json({ error: `reason must be one of: harassment, inappropriate_content, impersonation, spam, underage, scam, threat, other` });
     }
-    if (details && reason !== 'other') {
+    if (details && mappedReason !== 'other') {
       return res.status(400).json({ error: 'details is only allowed when reason is "other"' });
     }
+    // Check if the reporter is suspended — they cannot file reports.
+    const reporterProfile = await buddyService.getMyProfile(req.userId);
+    if (!reporterProfile || reporterProfile.isActive === false) {
+      return res.status(403).json({ error: 'BUDDY_SUSPENDED', code: 'BUDDY_SUSPENDED' });
+    }
+    // Determine severity: threat and underage are high, everything else is normal.
+    const severity = ['threat', 'underage'].includes(mappedReason) ? 'high' : 'normal';
     const result = await buddyService.reportUser(
-      req.userId, parseInt(userId), reason, details,
+      req.userId, parseInt(userId), mappedReason, details, severity,
     );
     res.status(201).json(result);
   } catch (err) {
