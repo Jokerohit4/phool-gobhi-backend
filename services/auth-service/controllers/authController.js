@@ -30,6 +30,8 @@ import {
   validateFeaturePayload,
   diffChangedFlags,
 } from '../config/featureFlagRegistry.js';
+import * as socialConfigService from '../services/socialConfigService.js';
+import { bucketFor } from '../services/experimentService.js';
 
 const prisma = new PrismaClient();
 
@@ -357,6 +359,10 @@ const getAppConfig = async (req, res) => {
   let entry = { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' };
   let features = DEFAULT_FEATURES;
   let maintenance = resolveMaintenance(null);
+  // Social master switch. Seeded off so a failure in socialConfigService can
+  // only ever fail closed — a social surface must never appear as enabled
+  // because the settings read threw.
+  let social = { enabled: false };
   try {
     const config = await loadAppVersionConfig();
     entry = config?.[app]?.[platform] || entry;
@@ -379,6 +385,15 @@ const getAppConfig = async (req, res) => {
       loadOtpProvider(),
       loadProfileCompletionBonusAmount(),
     ]);
+    // Non-fatal: a social-config read failure leaves the seeded {enabled:false}
+    // rather than aborting the whole app-config response, matching the
+    // fail-open philosophy of this endpoint (a bad social read must not stop
+    // the force-update check from reaching the app).
+    try {
+      social = await socialConfigService.get();
+    } catch (err) {
+      console.error('getAppConfig social error:', err);
+    }
     features = {
       ...DEFAULT_FEATURES,
       ...(config?.features || {}),
@@ -408,6 +423,10 @@ const getAppConfig = async (req, res) => {
     message: entry.message,
     features,
     maintenance,
+    // Top-level (not inside `features`): it is a master switch over the whole
+    // social surface, not one more flag, and B14 backs it with its own settings
+    // row rather than the flag registry.
+    social,
   });
 };
 
@@ -624,6 +643,18 @@ const getMe = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    // How the active gym membership was made (QR vs self-declared), so the app
+    // can render the linked-member home from /me alone. Null when the pointer
+    // exists but there is no live GymLink row yet (pre-backfill accounts).
+    let gymLinkSource = null;
+    if (user.linkedGymId) {
+      const active = await prisma.gymLink.findFirst({
+        where: { userId: user.id, removedAt: null },
+        orderBy: { linkedAt: 'desc' },
+        select: { source: true },
+      });
+      gymLinkSource = active?.source ?? null;
+    }
     res.json({
       id: user.id,
       phone: user.phone,
@@ -636,8 +667,16 @@ const getMe = async (req, res) => {
       fitnessGoals: user.fitnessGoals,
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
+      gymLinkSource,
       trainerGymId: user.trainerGymId,
       leaderboardOptIn: user.leaderboardOptIn,
+      // Coach-journey (B2) linked-member fields: which Home to route to, the
+      // unclaimed-gym prompt/notice state, and the first-visit badge consent.
+      experienceLevel: user.experienceLevel ?? null,
+      homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
+      pendingGymPromptGymId: user.pendingGymPromptGymId ?? null,
+      gymLinkNotice: user.gymLinkNotice ?? null,
+      firstVisitBadgeConsent: user.firstVisitBadgeConsent ?? false,
       // Onboarding branch — appMode in particular is read at app boot to pick
       // which Home to render, alongside linkedGymId directly above. Shipping
       // it on /me (not only on the profile endpoint) is what lets the app
@@ -647,6 +686,11 @@ const getMe = async (req, res) => {
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,
       freeTimeWindow: user.freeTimeWindow,
+      // Server-assigned experiment buckets (A1 hook, B14 owns the assignment).
+      // Derived on every call rather than stored, so there is no per-user row
+      // to migrate and a user cannot be re-bucketed by a stale cache. Today it
+      // is the constant control arm; see services/experimentService.js.
+      experiments: bucketFor(user.id),
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -698,6 +742,11 @@ const getUserInternal = async (req, res) => {
       referredByUserId: user.referredByUserId,
       linkedGymId: user.linkedGymId,
       trainerGymId: user.trainerGymId,
+      // Coach-journey B2: booking-service gates the partner "first visit"
+      // badge on firstVisitBadgeConsent and needs createdAt for the prompt
+      // cadence; health-service reads createdAt for journey timing.
+      firstVisitBadgeConsent: user.firstVisitBadgeConsent ?? false,
+      createdAt: user.createdAt ?? null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -733,7 +782,7 @@ const getUsersBatchInternal = async (req, res) => {
     if (!ids.length) return res.json({ data: [] });
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true },
+      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true, firstVisitBadgeConsent: true },
     });
     res.json({ data: users });
   } catch (err) {
@@ -767,6 +816,48 @@ const countGymJoinedUsersByMonthInternal = async (req, res) => {
   }
 };
 
+// Roster shared by the gobhi attendance-SaaS view and the partner-facing member
+// list (coach-journey B2). Reads active GymLinks rather than scanning
+// User.linkedGymId, so it can apply the self-link visibility rule: a
+// self-declared member is not shown until a verified check-in confirms they
+// really go there, and even then only by first name (they never opted into
+// being named next to check-ins they did not make). QR members show in full.
+async function gymRoster(gymId, { includePhone }) {
+  const links = await prisma.gymLink.findMany({
+    where: { gymId, removedAt: null },
+    orderBy: { linkedAt: 'asc' },
+    select: { userId: true, source: true, firstVerifiedCheckinAt: true },
+  });
+  const visible = links.filter((l) => l.source !== 'self' || l.firstVerifiedCheckinAt != null);
+  const ids = [...new Set(visible.map((l) => l.userId))];
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, createdAt: true, ...(includePhone ? { phone: true } : {}) },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return visible
+    .map((l) => {
+      const u = byId.get(l.userId);
+      if (!u) return null;
+      return {
+        id: u.id,
+        name: l.source === 'self' ? firstNameOnly(u.name) : u.name,
+        ...(includePhone ? { phone: u.phone } : {}),
+        createdAt: u.createdAt,
+        linkSource: l.source,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function firstNameOnly(name) {
+  if (typeof name !== 'string') return null;
+  const trimmed = name.trim();
+  return trimmed ? trimmed.split(/\s+/)[0] : null;
+}
+
 // Gobhi-only roster of a single gym's linked members (attendance-SaaS
 // wedge) — admin's /attendance-saas dashboard previously only had
 // gym-level aggregates (see wallet-service's getSubscriptionSummaryByGymService);
@@ -774,11 +865,7 @@ const countGymJoinedUsersByMonthInternal = async (req, res) => {
 const listAttendanceSaasMembers = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
-    const members = await prisma.user.findMany({
-      where: { linkedGymId: gymId },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, phone: true, createdAt: true },
-    });
+    const members = await gymRoster(gymId, { includePhone: true });
     res.json({ data: members });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -787,7 +874,7 @@ const listAttendanceSaasMembers = async (req, res) => {
 
 // Partner-facing member roster (attendance-SaaS gap-analysis finding: every
 // competitor treats "see your own members" as day-one baseline, and this
-// existed in code but was gobhi-only). Same query as
+// existed in code but was gobhi-only). Same roster as
 // listAttendanceSaasMembers above, minus phone — partners must never see a
 // customer's phone number (same rule bookingController's getGymBookings
 // already enforces for the booking-history roster).
@@ -796,11 +883,7 @@ export const listGymMembersForPartner = async (req, res) => {
     if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
     const gymId = parseInt(req.params.gymId);
     await assertPartnerOwnsGym(gymId, req.user.id);
-    const members = await prisma.user.findMany({
-      where: { linkedGymId: gymId },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, createdAt: true },
-    });
+    const members = await gymRoster(gymId, { includePhone: false });
     res.json({ data: members });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

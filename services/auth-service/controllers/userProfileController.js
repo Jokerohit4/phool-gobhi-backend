@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
+import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
 import { normalizeFitnessGoals } from '../constants/userEnums.js';
+import { linkGym } from '../services/gymLinkService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
@@ -370,7 +371,8 @@ export const updateProfile = async (req, res) => {
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
-      weeklyFrequencyIntent, linkedGymId,
+      weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
+      firstVisitBadgeConsent,
     } = req.body;
 
     // appMode is deliberately NOT accepted here. It is derived server-side
@@ -407,13 +409,34 @@ export const updateProfile = async (req, res) => {
       return res.status(400).json({ error: `trainingLocationOther must be text of at most ${MAX_TRAINING_LOCATION_OTHER_CHARS} characters` });
     }
 
+    // Onboarding/coach-journey level (new_to_gym | restarting_after_break |
+    // experienced). Validated against the same enum the Prisma column uses, so
+    // a bad value is a 400 rather than a Prisma 500. null clears it.
+    if (experienceLevel !== undefined && experienceLevel !== null
+        && !VALID_EXPERIENCE_LEVELS.includes(experienceLevel)) {
+      return res.status(400).json({ error: `Invalid experienceLevel. Must be one of: ${VALID_EXPERIENCE_LEVELS.join(', ')}` });
+    }
+    // The user's own Places-sourced (non-partner) gym, a bare gym-service id.
+    // Accepts a positive integer or null (null = "no gym to show yet").
+    if (homeUnclaimedGymId !== undefined && homeUnclaimedGymId !== null) {
+      const resolvedHomeUnclaimed = Number(homeUnclaimedGymId);
+      if (!Number.isInteger(resolvedHomeUnclaimed) || resolvedHomeUnclaimed <= 0) {
+        return res.status(400).json({ error: 'homeUnclaimedGymId must be a positive integer or null' });
+      }
+    }
+    // First-visit badge consent — a plain boolean, collected once.
+    if (firstVisitBadgeConsent !== undefined && firstVisitBadgeConsent !== null
+        && typeof firstVisitBadgeConsent !== 'boolean') {
+      return res.status(400).json({ error: 'firstVisitBadgeConsent must be a boolean' });
+    }
+
     if (gender !== undefined && gender !== null && !VALID_GENDERS.includes(gender)) {
       return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
     }
     if (dateOfBirth !== undefined && dateOfBirth !== null && dateOfBirth !== '') {
       const dob = new Date(dateOfBirth);
       if (Number.isNaN(dob.getTime()) || dob.getTime() > minAgeCutoffDate().getTime()) {
-        return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old` });
+        return res.status(400).json({ error: `You must be at least ${MIN_AGE_YEARS} years old`, code: 'UNDER_MIN_AGE' });
       }
     }
     if (fitnessGoals !== undefined && fitnessGoals !== null) {
@@ -457,13 +480,28 @@ export const updateProfile = async (req, res) => {
     // a gym's join link (the app PUTs it here, and signup/login backfill it
     // server-side). This handler read it as a field to return but never as one
     // to accept, so the app's call succeeded while the value was silently
-    // dropped. Immutable once set - same guard as issueSessionForUser, so a
-    // later save or a repeat scan of a different poster can never reassign
-    // somebody to another gym.
+    // dropped. Routed through linkGym so the GymLink row and the denormalised
+    // User.linkedGymId pointer are written together (B2 replaces the stub);
+    // immutable once set (linkGym also guards this), the same rule as
+    // issueSessionForUser, so a later save or a repeat scan of a different
+    // poster can never reassign somebody to another gym. linkGym validates the
+    // id, so an invalid value is simply ignored here.
     if (linkedGymId != null && !before.linkedGymId) {
-      const resolved = Number(linkedGymId);
-      if (Number.isInteger(resolved) && resolved > 0) {
-        updates.linkedGymId = resolved;
+      await linkGym(prisma, targetUserId, linkedGymId, 'gym_qr');
+    }
+    if (experienceLevel !== undefined) updates.experienceLevel = experienceLevel;
+    if (homeUnclaimedGymId !== undefined) {
+      updates.homeUnclaimedGymId = homeUnclaimedGymId === null ? null : Number(homeUnclaimedGymId);
+    }
+    if (firstVisitBadgeConsent !== undefined) {
+      updates.firstVisitBadgeConsent = firstVisitBadgeConsent;
+      // The timestamp records when consent was given (so the badge flow can
+      // never re-ask), so a repeat grant keeps the original moment; only an
+      // explicit revoke clears it.
+      if (firstVisitBadgeConsent) {
+        if (!before.firstVisitBadgeConsentAt) updates.firstVisitBadgeConsentAt = new Date();
+      } else {
+        updates.firstVisitBadgeConsentAt = null;
       }
     }
     if (currentlyWorksOut !== undefined) updates.currentlyWorksOut = currentlyWorksOut;

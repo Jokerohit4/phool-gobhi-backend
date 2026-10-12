@@ -20,6 +20,23 @@
 // Bounds travel with every response. They are rules, not styling: a kcal floor
 // that differs between this service and the slider is a value the server
 // refuses and the user can reproduce by dragging.
+//
+// ---- The coach journey (B7) ----------------------------------------------
+//
+// Each endpoint takes an optional `journey` context, `{ unlockedLayerKeys }`,
+// which ONLY the caller supplies when the coachJourney flag is on. Without it
+// every path below is byte-for-byte the pre-journey behaviour - including the
+// refusal when no NutritionTarget exists. With it:
+//
+//   - a missing NutritionTarget stops being an error: the plan is served with
+//     kcal null and the macros null, because a first-timer's plan is built
+//     from workouts and water, not from a calorie budget nobody computed yet;
+//   - the week's sessions are read from Prescription.workoutSlots (one slot
+//     per WeeklyGoal.sessionsPerWeek, written by starterPlanService), with the
+//     old WORKOUT_MENU computation as the fallback for pre-journey rows;
+//   - the response adds workoutSlots, foodSetupNeeded, diet and
+//     bodyDataNeeded, which are the fields the coach journey's Plan tab reads
+//     to know what to ask for next.
 import { currentNutritionTarget } from './currentTarget.js';
 import {
   DEFAULT_SLEEP_MINUTES,
@@ -33,6 +50,12 @@ import {
   MIN_SESSIONS_PER_WEEK,
   NEUTRAL_DEFAULT,
 } from '../goalService.js';
+import { isScopeStale, NUTRITION_SCOPE } from './ledgerConsentService.js';
+
+// The coach journey's default water, before any body data exists. Same value
+// as JOURNEY.defaultWaterMl in the Contracts (the map's home is B9's
+// journeyConfig.js — see planGenerator.js for the copied-layer TODO).
+const JOURNEY_DEFAULT_WATER_ML = 2500;
 
 // Monday first, and the order the plan prefers to spread a week across: two
 // hard days never land back to back, and Saturday - the day most people have
@@ -231,12 +254,18 @@ function pick(...values) {
  * Anything the read path had to move is named in `adjustedBy`. The client uses
  * it to say "adjusted to fit your other changes" rather than silently showing
  * a number the user did not choose.
+ *
+ * `allowNullKcal` is the coach journey's state: with no NutritionTarget there
+ * is no budget to validate, and null is the honest answer on the wire (A3
+ * parses it) rather than a floor the person never saw. A draft or saved kcal
+ * still validates normally - the null is only carried when nothing supplied
+ * one.
  */
-function resolve(ctx, draft, mode) {
+function resolve(ctx, draft, mode, { allowNullKcal = false } = {}) {
   const bounds = boundsFor(ctx.target);
 
   const requested = {
-    kcal: pick(draft.kcal, ctx.saved?.kcal, Number(ctx.target.kcal)),
+    kcal: pick(draft.kcal, ctx.saved?.kcal, ctx.target ? Number(ctx.target.kcal) : null),
     stepsPerDay: pick(draft.stepsPerDay, ctx.saved?.stepsPerDay),
     sleepMinutes: pick(draft.sleepMinutes, ctx.saved?.sleepMinutes, DEFAULT_SLEEP_MINUTES),
     sessionsPerWeek: pick(
@@ -253,6 +282,10 @@ function resolve(ctx, draft, mode) {
   const adjustedBy = [];
   for (const field of Object.keys(bounds)) {
     const bound = bounds[field];
+    if (allowNullKcal && field === 'kcal' && requested.kcal == null) {
+      out[field] = null;
+      continue;
+    }
     const value = Number(requested[field]);
     const inRange = Number.isInteger(value) && value >= bound.min && value <= bound.max;
     if (inRange) {
@@ -276,32 +309,41 @@ function resolve(ctx, draft, mode) {
  * carbs, fat and fibre are re-split for the kcal currently on the table, and
  * they go through the same function computeTargets uses so the two screens can
  * never show different carbs for the same calories.
+ *
+ * In journey mode with no target there is nothing to re-split, so the macros
+ * are null and water falls back to the journey default - the plan exists to be
+ * followed (workouts, water), not to show a budget nobody computed.
  */
-function buildPlan(ctx, resolved) {
+function buildPlan(ctx, resolved, journey = null) {
   const { target } = ctx;
-  const proteinG = Number(target.proteinG);
-  const inputs = target.inputs || {};
+  const inputs = target?.inputs || {};
   const fatFraction = Number.isFinite(Number(inputs.fatFraction))
     ? Number(inputs.fatFraction)
     : defaultFatFraction();
-  const { fatG, carbsG, fibreG } = splitMacrosForKcal({
-    kcal: resolved.kcal,
-    proteinG,
-    fatFraction,
-  });
 
-  return {
+  let macros = null;
+  if (target) {
+    const proteinG = Number(target.proteinG);
+    const { fatG, carbsG, fibreG } = splitMacrosForKcal({
+      kcal: resolved.kcal,
+      proteinG,
+      fatFraction,
+    });
+    macros = { proteinG, carbsG, fatG, fibreG };
+  }
+
+  const plan = {
     kcal: resolved.kcal,
-    proteinG,
-    carbsG,
-    fatG,
-    fibreG,
-    waterMl: Number(target.waterMl),
-    micros: target.micros || {},
+    proteinG: macros ? macros.proteinG : null,
+    carbsG: macros ? macros.carbsG : null,
+    fatG: macros ? macros.fatG : null,
+    fibreG: macros ? macros.fibreG : null,
+    waterMl: target ? Number(target.waterMl) : JOURNEY_DEFAULT_WATER_ML,
+    micros: target ? target.micros || {} : {},
     stepsPerDay: resolved.stepsPerDay,
     sleepMinutes: resolved.sleepMinutes,
     sessionsPerWeek: resolved.sessionsPerWeek,
-    workout: buildWorkout(resolved.sessionsPerWeek, target.goals),
+    workout: buildWorkout(resolved.sessionsPerWeek, target ? target.goals : ctx.healthGoal?.goals ?? []),
     bounds: resolved.bounds,
     adjustedBy: resolved.adjustedBy,
     // The version of the rules that produced THIS response, always current.
@@ -309,24 +351,89 @@ function buildPlan(ctx, resolved) {
     // plan written before a retune explicable afterwards.
     rulesVersion: PRESCRIPTION_RULES_VERSION,
   };
+
+  if (!journey) return plan;
+
+  // ---- The coach-journey additions ---------------------------------------
+  //
+  // The stored slots ARE the week the user is living: one per
+  // WeeklyGoal.sessionsPerWeek as starterPlanService wrote them (half of them
+  // during an ease-back week, which is the contract's one sanctioned
+  // deviation). The legacy `workout` menu keeps serving the pre-journey
+  // users, whose slots are null, so every screen keeps working.
+  const stored = Array.isArray(ctx.saved?.workoutSlots) ? ctx.saved.workoutSlots : [];
+  plan.workoutSlots = stored.map((slot) => ({
+    weekday: Number(slot?.weekday),
+    templateId: slot?.templateId ?? null,
+    title: String(slot?.title ?? ''),
+    level: slot?.level ?? null,
+  }));
+  if (stored.length > 0) {
+    plan.workout = stored.map((slot) => ({
+      weekday: Number(slot?.weekday) + 1,
+      title: String(slot?.title ?? ''),
+      focus: null,
+      intensity: null,
+    }));
+  }
+
+  plan.foodSetupNeeded = ctx.foodSetupNeeded;
+  plan.bodyDataNeeded = ctx.bodyDataNeeded;
+  plan.diet = ctx.healthGoal?.diet ?? null;
+
+  return plan;
 }
 
-async function loadContext(prisma, userId) {
+/**
+ * The journey-mode half of the read context: the diet (a response field) and
+ * the two "what should the app ask for next" flags.
+ *
+ *   foodSetupNeeded  layer 2 is open but there is no nutrition consent or no
+ *                    target - the "Set up food" card, and per the Contracts
+ *                    "no food items, no food misses" until it is resolved.
+ *   bodyDataNeeded   no target exists, so height/weight/sex/date of birth are
+ *                    what stands between this user and a food plan.
+ */
+async function loadJourneyExtras(prisma, userId, target, journey) {
+  const [healthGoal, consent] = await Promise.all([
+    prisma.healthGoal.findUnique({ where: { userId } }),
+    prisma.healthConsent.findUnique({ where: { userId } }),
+  ]);
+  const foodUnlocked = (journey.unlockedLayerKeys || []).includes('food');
+  const hasConsent = Boolean(
+    consent
+    && !consent.revokedAt
+    && (consent.scopes || []).includes(NUTRITION_SCOPE)
+    && !isScopeStale(consent, NUTRITION_SCOPE),
+  );
+  return {
+    healthGoal,
+    foodSetupNeeded: foodUnlocked && (!hasConsent || !target),
+    bodyDataNeeded: !target,
+  };
+}
+
+async function loadContext(prisma, userId, journey = null) {
   const target = await currentNutritionTarget(prisma, userId);
-  if (!target) throw unavailable();
+  // The pre-journey refusal, unchanged: without the journey context there is
+  // no honest number to show and no screen that can act on one, so the read
+  // says so instead of inventing a plan.
+  if (!target && !journey) throw unavailable();
 
   const [weekly, saved] = await Promise.all([
     prisma.weeklyGoal.findUnique({ where: { userId } }),
     prisma.prescription.findUnique({ where: { userId } }),
   ]);
-  return { target, weekly, saved };
+  const ctx = { target, weekly, saved };
+  if (journey) Object.assign(ctx, await loadJourneyExtras(prisma, userId, target, journey));
+  return ctx;
 }
 
 // ---- Endpoints ------------------------------------------------------------
 
-export async function getPlan({ prisma, userId }) {
-  const ctx = await loadContext(prisma, userId);
-  return buildPlan(ctx, resolve(ctx, {}, 'read'));
+export async function getPlan({ prisma, userId, journey = null }) {
+  const ctx = await loadContext(prisma, userId, journey);
+  return buildPlan(ctx, resolve(ctx, {}, 'read', { allowNullKcal: Boolean(journey) }), journey);
 }
 
 /**
@@ -334,14 +441,14 @@ export async function getPlan({ prisma, userId }) {
  * hundred times and explored without cost, which is the whole point of
  * splitting preview from save.
  */
-export async function previewPlan({ prisma, userId, draft = {} }) {
-  const ctx = await loadContext(prisma, userId);
-  return buildPlan(ctx, resolve(ctx, draft, 'write'));
+export async function previewPlan({ prisma, userId, draft = {}, journey = null }) {
+  const ctx = await loadContext(prisma, userId, journey);
+  return buildPlan(ctx, resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) }), journey);
 }
 
-export async function savePlan({ prisma, userId, draft = {} }) {
-  const ctx = await loadContext(prisma, userId);
-  const resolved = resolve(ctx, draft, 'write');
+export async function savePlan({ prisma, userId, draft = {}, journey = null }) {
+  const ctx = await loadContext(prisma, userId, journey);
+  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) });
 
   await prisma.prescription.upsert({
     where: { userId },
@@ -379,10 +486,11 @@ export async function savePlan({ prisma, userId, draft = {} }) {
   }
 
   ctx.saved = {
+    ...ctx.saved,
     kcal: resolved.kcal,
     stepsPerDay: resolved.stepsPerDay,
     sleepMinutes: resolved.sleepMinutes,
   };
 
-  return buildPlan(ctx, resolved);
+  return buildPlan(ctx, resolved, journey);
 }

@@ -47,7 +47,7 @@
 /** Bumped whenever the flag SET changes shape, so a client can tell a flag that
  * is off from a server that predates the flag existing. Emitted as
  * `schemaVersion` on GET /api/auth/app-config. */
-export const FLAG_SCHEMA_VERSION = 2;
+export const FLAG_SCHEMA_VERSION = 3;
 
 /**
  * Ordering within a group is only for the admin portal's render order. `deps`
@@ -368,6 +368,71 @@ export const FEATURE_FLAGS = [
       'so the real home/partner-gym/non-partner split can be measured on live users before ' +
       'anyone builds on the assumption. Requires workoutTracking (was healthMetrics) — the ' +
       'home-track screen leads with workout/routine widgets that flag gates.',
+  },
+  // ------------------------------------------------------------------- coach
+  {
+    name: 'coachJourney',
+    defaultEnabled: false,
+    deps: ['workoutTracking', 'nonPartnerAttendance'],
+    clientKey: 'coachJourneyEnabled',
+    group: 'coach',
+    dataClass: 'health-derived',
+    blastRadius:
+      'New onboarding, Home overview, Plan tab, journey and habit APIs, and the plan/score read without nutrition consent',
+    rationale:
+      'Umbrella flag for the coach journey: the new onboarding, the Home overview, the ' +
+      'Plan tab, the journey/habit APIs, and letting the plan and score read on `basic` ' +
+      'consent alone. In prod it needs `workoutTracking` (the daily log the journey is ' +
+      'graded on) and `nonPartnerAttendance` (non-partner gym search and check-in) on too, ' +
+      'which is why both are deps: without them the journey has nothing to score. Off until ' +
+      'the app-version minimum is raised, and REQUIRED to be byte-for-byte the old ' +
+      'behaviour while off, so existing screens and tests stay green.',
+  },
+  {
+    name: 'selfLinkGym',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'selfLinkGymEnabled',
+    group: 'coach',
+    dataClass: 'none',
+    blastRadius:
+      'Self-link and leave-gym endpoints (POST/DELETE /gym-links/self) and the linked-member Home',
+    rationale:
+      'Lets a customer attach themselves to a partner gym without a QR, so it is a ' +
+      'membership claim the gym can be billed off — needs the raised app-version minimum ' +
+      'first, because older builds do not read the linked-member fields /me returns and ' +
+      'would fall back to the marketplace Home silently. Deliberately its own flag rather ' +
+      'than part of coachJourney so the link surface can be held back independently.',
+  },
+  {
+    name: 'referralHomeTrigger',
+    defaultEnabled: false,
+    deps: ['coachJourney'],
+    clientKey: 'referralHomeTriggerEnabled',
+    group: 'coach',
+    dataClass: 'none',
+    blastRadius: 'Referral payout on a friend\'s 3rd showed-up day (a second trigger beside the first-booking one)',
+    rationale:
+      'A second referral trigger that credits the referrer when the referred friend reaches ' +
+      'their 3rd showed-up day instead of only on their first completed booking. It is ' +
+      'evaluated inside journeyService.get, so it is inert without `coachJourney` — hence ' +
+      'the dep rather than a bare flag. Money moves on it, so it is last in the rollout ' +
+      'order and stays off until the showed-up-day rules are verified on dev.',
+  },
+  {
+    name: 'coachAssistant',
+    defaultEnabled: false,
+    deps: ['coachJourney'],
+    clientKey: 'coachAssistantEnabled',
+    group: 'coach',
+    dataClass: 'health-derived',
+    blastRadius: 'The new grounded AI coach guardrail path (reads plan summary and approved content)',
+    rationale:
+      'Kill switch for the new grounded guardrail path in the AI coach — it answers with the ' +
+      'user\'s plan summary plus approved articles and exercise content. Kept separate from ' +
+      'coachJourney so the assistant can be pulled without taking the journey down, and ' +
+      'layered on `coachJourney` because there is nothing to ground on without a journey. ' +
+      'Off until the disclaimer and grounding wording are reviewed.',
   },
   {
     name: 'nonPartnerAttendance',

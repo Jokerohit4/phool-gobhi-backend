@@ -20,6 +20,7 @@ import { evaluateWeeklyRewards, evaluateUserReward } from '../services/rewardSer
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
 import { correlateMarkerImprovement } from '../services/correlationService.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
+import { resolveUnlockedLayerKeys } from '../services/ledger/starterPlanService.js';
 
 const prisma = new PrismaClient();
 
@@ -192,8 +193,23 @@ export const getTargets = handle(async (req) => {
 
 // ---- The adjustable plan ---------------------------------------------------
 
+// The coach journey's read context for the three prescription endpoints:
+// null when the coachJourney flag is off, so every one of them then behaves
+// byte-for-byte as it did before the journey existed. Resolving the unlocked
+// layers here (rather than inside the service) keeps prescriptionService
+// pure enough to take a fake prisma in tests, and keeps ONE place that
+// knows the flag exists.
+async function journeyPlanContext(userId) {
+  if (!(await isFeatureEnabled('coachJourney'))) return null;
+  return { unlockedLayerKeys: await resolveUnlockedLayerKeys(userId) };
+}
+
 export const getPrescription = handle(async (req) => {
-  return prescriptionService.getPlan({ prisma, userId: req.userId });
+  return prescriptionService.getPlan({
+    prisma,
+    userId: req.userId,
+    journey: await journeyPlanContext(req.userId),
+  });
 });
 
 // Read-only, and the reason there are two of them: a slider drag asks what the
@@ -204,6 +220,7 @@ export const previewPrescription = handle(async (req) => {
     prisma,
     userId: req.userId,
     draft: req.body || {},
+    journey: await journeyPlanContext(req.userId),
   });
 });
 
@@ -212,6 +229,7 @@ export const savePrescription = handle(async (req) => {
     prisma,
     userId: req.userId,
     draft: req.body || {},
+    journey: await journeyPlanContext(req.userId),
   });
   // Shape only. Never the numbers: a calorie target and a sleep window are
   // health data, and the analytics util's no-PII rule means this dictionary is

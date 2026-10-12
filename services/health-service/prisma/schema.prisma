@@ -117,6 +117,9 @@ model Exercise {
   loggingType      LoggingType
   primaryMuscles   String[]
   secondaryMuscles String[]
+  // "beginner" | "intermediate" | "advanced". Null for an entry nobody has
+  // tagged yet — a null is "unclassified", not "beginner".
+  difficulty       String?
   demoImageUrl     String?
   createdByUserId  Int?
   createdAt        DateTime    @default(now())
@@ -801,9 +804,16 @@ model WeeklyGoal {
 // that row.
 model Prescription {
   userId       Int      @id
-  kcal         Int
+  // Null until height + weight give a NutritionTarget. A null budget is not a
+  // zero-calorie plan — it is the state where the plan can be built but its
+  // numbers cannot, so the app shows a setup prompt instead of a target.
+  kcal         Int?
   stepsPerDay  Int
   sleepMinutes Int
+  // [{ "weekday":0-6, "templateId":Int|null, "title":String, "level":
+  // "beginner"|"intermediate"|"advanced" }]. The week's workout shape, written
+  // by the plan generator. Null for a prescription built before slots existed.
+  workoutSlots Json?
   // Bumped when the rules that turn these three into a plan change, so a
   // saved plan stays explicable after a retune - the same contract
   // NutritionTarget.rulesVersion and ScoreDaySnapshot carry.
@@ -1771,6 +1781,10 @@ model PlanItem {
   id             Int            @id @default(autoincrement())
   userId         Int
   kind           PlanItemKind
+  // Which journey layer this item belongs to ('workout' | 'water' | 'food' |
+  // 'steps' | 'sleep' | 'supplements' | 'health' | 'medicine'). Null for items
+  // created before the journey existed, and for anything with no layer.
+  layerKey       String?
   // Free text, always shown to the user. For a doctor item this is EXACTLY
   // what they typed off the prescription — there is no medicine picker
   // anywhere in the product, because a picker is us suggesting a dose.
@@ -2116,5 +2130,136 @@ model ReportExtraction {
   createdAt        DateTime    @default(now())
 
   @@index([reportId])
+  @@schema("health")
+}
+
+// ---------------------------------------------------------------------------
+// Coach journey (2026-10). The daily habits, the journey's own start-of-record,
+// the coach consent row, and the content tables the journey reads.
+
+// One row per drink rather than a running daily total. A total can only be
+// overwritten; a row can be timestamped, undone, and summed on read the same
+// way the food log is. Summing is cheap and the row is the record.
+model WaterLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  localDate String
+  ml        Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// A supplement the user takes, in their own words. Never suggested by us and
+// never a medicine — this is the habit half of the plan, the same posture as
+// MedicationReminder but without the clinical framing.
+model SupplementSchedule {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  times     String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@schema("health")
+}
+
+// One tick of a schedule on one day. scheduleId is nullable and deliberately
+// has no relation: a tick outlives the schedule it was taken against — deleting
+// the schedule must not delete the history of having taken it.
+model SupplementLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  scheduleId Int?
+  name       String
+  localDate  String
+  takenAt    DateTime @default(now())
+
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// The journey's own start-of-record, one row per user: which level someone
+// began at, what has unlocked and when, and the pause/quit state the score
+// engine reads. Deliberately separate from auth's User so the journey can be
+// erased and re-started without touching the account.
+model JourneyProgress {
+  userId           Int       @id
+  // ExperienceLevel value at start.
+  startLevel       String
+  startedAt        DateTime  @default(now())
+  // [{ "layer": 1, "at": "ISO", "via": "start|showed_up|steady_weeks|early|existing" }].
+  unlocked         Json
+  foodEarlyAt      DateTime?
+  // YYYY-MM-DD, set once, never reset.
+  easyStartUntil   String?
+  quitReason       String?
+  lastShowedUpDate String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// Consent to let the coach read the plan and — with the supplements scope —
+// the supplement schedule. Shaped like the other consent rows: server-stamped
+// policy versions per scope, revoke sets revokedAt. Absence of the row is "not
+// asked yet", not "declined".
+model CoachConsent {
+  userId         Int       @id
+  // "basic" | "supplements".
+  scopes         String[]
+  // { "basic": "2026-10", "supplements": "2026-10" }.
+  policyVersions Json
+  grantedAt      DateTime
+  revokedAt      DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// The instruction sheet behind one exercise, per language, review-gated. Kept
+// out of Exercise so a corrected cue is a new reviewable row rather than an
+// edit to the training record, and so the library can ship before the copy is
+// signed off.
+model ExerciseContent {
+  id           Int       @id @default(autoincrement())
+  exerciseId   Int
+  // en | hinglish | hi
+  lang         String
+  steps        String[]
+  feelCues     String[]
+  mistakes     String[]
+  reviewStatus String    @default("pending")
+  reviewedBy   Int?
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([exerciseId, lang])
+  @@schema("health")
+}
+
+// A coach article. `kind` is `first_visit` | `faq`. Same review gate as
+// ExerciseContent, same reason.
+model CoachArticle {
+  id           Int       @id @default(autoincrement())
+  slug         String
+  kind         String
+  lang         String
+  title        String
+  body         String
+  reviewStatus String    @default("pending")
+  reviewedBy   Int?
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([slug, lang])
   @@schema("health")
 }

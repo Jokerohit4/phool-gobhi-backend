@@ -9,6 +9,7 @@ import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
 import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
+import * as checkinDaysService from './checkinDaysService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -114,7 +115,6 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:50
 const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
 const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
-const REFERRAL_BONUS = 50;
 
 // Booking's money fields are Decimal in Postgres (see schema.prisma) — every
 // read site below runs the fetched/created/updated row through this
@@ -149,6 +149,85 @@ const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT
 // async (internally cached/refreshed, so this is cheap).
 async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
+}
+
+// Coach-journey B3: fire-and-forget ping to auth-service after a member
+// check-in or a booking is marked attended. Auth flips the customer's active
+// GymLink.firstVerifiedCheckinAt from null if this was their first verified
+// visit to their linked gym — that's what makes a self-linked member visible
+// on the partner roster (B2). Idempotent on auth's side, so a redundant ping
+// is a no-op there; never awaited by the caller and never allowed to throw,
+// the same contract as notifyCustomer's catch-and-drop usage.
+function pingGymLinkCheckedIn(userId, gymId) {
+  internalHeadersFor(AUTH_SERVICE_URL)
+    .then((headers) => axios.post(`${AUTH_SERVICE_URL}/internal/gym-links/checked-in`, { userId, gymId }, headers))
+    .catch((err) => {
+      console.error(`gym-link checked-in ping failed for user ${userId} gym ${gymId}:`, err.message);
+    });
+}
+
+// Coach-journey B3: the partner "first visit" badge. firstVisit is true only
+// when the customer opted in (User.firstVisitBadgeConsent, auth-service) AND
+// this booking's attendance is their first-ever check-in at ANY gym — no
+// earlier attended booking, MemberAttendance or IndependentCheckIn exists.
+//
+// Map of customerId -> earliest attendance instant (ms) across all three
+// check-in sources, batched over the list's customers (getGymBookings) or a
+// single id (verifyAttendance).
+async function firstVisitEarliestByCustomer(customerIds) {
+  const [bookingMins, memberMins, independentMins] = await Promise.all([
+    prisma.booking.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds }, attendedAt: { not: null } },
+      _min: { attendedAt: true },
+    }),
+    prisma.memberAttendance.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds } },
+      _min: { checkedInAt: true },
+    }),
+    prisma.independentCheckIn.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds } },
+      _min: { checkedInAt: true },
+    }),
+  ]);
+  const earliest = new Map();
+  const consider = (customerId, at) => {
+    if (at == null) return;
+    const t = new Date(at).getTime();
+    const cur = earliest.get(customerId);
+    if (cur == null || t < cur) earliest.set(customerId, t);
+  };
+  for (const g of bookingMins) consider(g.customerId, g._min.attendedAt);
+  for (const g of memberMins) consider(g.customerId, g._min.checkedInAt);
+  for (const g of independentMins) consider(g.customerId, g._min.checkedInAt);
+  return earliest;
+}
+
+// True iff `booking` is the customer's first-ever attendance (its attendedAt
+// IS the earliest instant across the union) and they consented to the badge.
+function isFirstVisit(booking, consent, earliestByCustomer) {
+  if (!consent || !booking.attendedAt) return false;
+  const earliest = earliestByCustomer.get(booking.customerId);
+  if (earliest == null) return false;
+  return new Date(booking.attendedAt).getTime() === earliest;
+}
+
+// Best-effort single-booking flag for verifyAttendance's response. Any
+// failure degrades to false — the verification itself already succeeded, so
+// the badge lookup must never be what fails it.
+async function firstVisitFlagForBooking(booking) {
+  try {
+    const [profileRes, earliest] = await Promise.all([
+      axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL)),
+      firstVisitEarliestByCustomer([booking.customerId]),
+    ]);
+    const consent = profileRes.data?.firstVisitBadgeConsent === true;
+    return isFirstVisit(booking, consent, earliest);
+  } catch (_) {
+    return false;
+  }
 }
 
 // Shared by every partner-facing, gym-scoped read (bookings, sales summary,
@@ -1154,8 +1233,11 @@ async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, com
   // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
   // very first completed booking (never re-fires on later sessions) and
   // only if they were referred. Same fire-and-forget, error-logged-not-
-  // thrown pattern as the partner payout above; idempotency keys make a
-  // retried completeBooking call (or a duplicate updateMany race) safe.
+  // thrown pattern as the partner payout above. Since B4 the two credits
+  // live behind wallet's POST /internal/referrals/credit — the single
+  // writer of referral-credit-* keys, which also enforces the monthly
+  // referrer cap and writes the `bonus` transaction type atomically; the
+  // old two-call shape here is now a 400 on wallet's generic credit route.
   try {
     // Identified by "earliest-booked (lowest id) session that is now
     // completed", not a count — a plain count of completed bookings taken
@@ -1174,19 +1256,22 @@ async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, com
       const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
       const referredByUserId = profileRes.data?.referredByUserId;
       if (referredByUserId) {
-        await axios.post(`${WALLET_SERVICE_URL}/${referredByUserId}/credit`, {
-          amount: REFERRAL_BONUS,
-          description: 'Referral bonus',
-          idempotencyKey: `referral-credit-referrer-${referredByUserId}-for-${booking.customerId}`,
+        // Idempotent on wallet's side (the friend-side key dedupes a
+        // retried call), and capped/already_credited are both legitimate
+        // outcomes, not failures — only fire the analytics event when this
+        // call actually moved money ('credited' pays both sides, 'capped'
+        // still pays the friend when the referrer is over the monthly cap).
+        const res = await axios.post(`${WALLET_SERVICE_URL}/internal/referrals/credit`, {
+          referrerId: referredByUserId,
+          friendId: booking.customerId,
+          trigger: 'first_booking',
         }, await internalHeadersFor(WALLET_SERVICE_URL));
-        await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
-          amount: REFERRAL_BONUS,
-          description: 'Referral bonus',
-          idempotencyKey: `referral-credit-referred-${booking.customerId}`,
-        }, await internalHeadersFor(WALLET_SERVICE_URL));
-        track('referral_credited', booking.customerId, {
-          booking_id: booking.id, referrer_id: referredByUserId,
-        });
+        const status = res.data?.data?.status;
+        if (status === 'credited' || status === 'capped') {
+          track('referral_credited', booking.customerId, {
+            booking_id: booking.id, referrer_id: referredByUserId,
+          });
+        }
       }
     }
   } catch (referralErr) {
@@ -1306,6 +1391,9 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
         customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override',
         attendanceMethod: updatedBooking.attendanceMethod, attendedAt: updatedBooking.attendedAt,
       });
+      // Attendance was just recorded for the first time here (not by a
+      // scan) — same GymLink.firstVerifiedCheckinAt ping as the scans send.
+      pingGymLinkCheckedIn(booking.customerId, gymId);
     }
 
     await settleCompletedBooking({ booking, updatedBooking, gym, gymId });
@@ -1515,6 +1603,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
         attendedAt: booking.attendedAt,
         attendanceMethod: booking.attendanceMethod,
         alreadyVerified: true,
+        firstVisit: await firstVisitFlagForBooking(booking),
       };
     }
 
@@ -1608,10 +1697,15 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
         attendedAt: current.attendedAt,
         attendanceMethod: current.attendanceMethod,
         alreadyVerified: true,
+        firstVisit: await firstVisitFlagForBooking(current),
       };
     }
 
     const updated = await prisma.booking.findUnique({ where: { id: bookingId } });
+
+    // This booking was just marked attended — auth may need to flip the
+    // customer's GymLink.firstVerifiedCheckinAt (roster visibility, B2).
+    pingGymLinkCheckedIn(booking.customerId, gymId);
 
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
@@ -1626,6 +1720,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
       attendedAt: updated.attendedAt,
       attendanceMethod: updated.attendanceMethod,
       alreadyVerified: false,
+      firstVisit: await firstVisitFlagForBooking(updated),
       ...(slotShift ? { slotShifted: true, newStartTime: slotShift.newStartTime, newEndTime: slotShift.newEndTime } : {}),
     };
   } catch (err) {
@@ -1816,6 +1911,10 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
       customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin',
       attendanceMethod: updated.attendanceMethod, attendedAt: updated.attendedAt,
     });
+
+    // This booking was just marked attended — auth may need to flip the
+    // customer's GymLink.firstVerifiedCheckinAt (roster visibility, B2).
+    pingGymLinkCheckedIn(customerId, gymId);
 
     return {
       bookingId: updated.id,
@@ -2018,7 +2117,13 @@ export async function getBookingCountForGym(gymId) {
 // strips slotShiftWarning, which is customer-facing only. Originally
 // inlined once in getGymBookings; now shared by the live-occupancy and
 // admin bookings-explorer reads too.
-async function enrichBookingsWithCustomerInfo(bookings) {
+//
+// { withFirstVisit: true } adds the coach-journey B3 "first visit" badge to
+// each row (see firstVisitEarliestByCustomer) — only the partner booking
+// list passes it, per the contract. The consent flag rides the same
+// /internal/users/batch call the names already use, so the badge adds no
+// extra auth round trip.
+async function enrichBookingsWithCustomerInfo(bookings, { withFirstVisit = false } = {}) {
   const uniqueCustomerIds = [...new Set(bookings.map(b => b.customerId))];
   const customerMap = {};
   if (uniqueCustomerIds.length) {
@@ -2030,9 +2135,26 @@ async function enrichBookingsWithCustomerInfo(bookings) {
       );
       const users = batchRes.data?.data || [];
       for (const u of users) {
-        customerMap[u.id] = { name: u.name || null, photoUrl: u.profileImageUrl || null };
+        customerMap[u.id] = {
+          name: u.name || null,
+          photoUrl: u.profileImageUrl || null,
+          firstVisitBadgeConsent: u.firstVisitBadgeConsent === true,
+        };
       }
     } catch (_) { /* leave customerMap empty — graceful degradation */ }
+  }
+
+  // First-visit badge: earliest attendance instant per customer across all
+  // three check-in sources. Computed only when asked for — the admin/live/
+  // member-activity lists don't carry the badge and shouldn't pay for it.
+  let earliestByCustomer = null;
+  if (withFirstVisit && uniqueCustomerIds.length) {
+    try {
+      earliestByCustomer = await firstVisitEarliestByCustomer(uniqueCustomerIds);
+    } catch (err) {
+      console.error('firstVisit earliest-attendance lookup failed:', err.message);
+      earliestByCustomer = null;
+    }
   }
 
   return bookings.map(b => {
@@ -2041,6 +2163,13 @@ async function enrichBookingsWithCustomerInfo(bookings) {
       ...safe,
       customerName: customerMap[b.customerId]?.name ?? null,
       customerPhotoUrl: customerMap[b.customerId]?.photoUrl ?? null,
+      ...(withFirstVisit
+        ? {
+            firstVisit: earliestByCustomer
+              ? isFirstVisit(b, customerMap[b.customerId]?.firstVisitBadgeConsent === true, earliestByCustomer)
+              : false,
+          }
+        : {}),
     };
   });
 }
@@ -2059,7 +2188,10 @@ export async function getGymBookings(gymId, partnerId) {
       take: 200,
     });
     bookings = bookings.map(normalizeBookingMoney);
-    return enrichBookingsWithCustomerInfo(bookings);
+    // withFirstVisit: the partner booking list carries the coach-journey B3
+    // "first visit" badge per booking (contract: "partner booking list /
+    // verify responses").
+    return enrichBookingsWithCustomerInfo(bookings, { withFirstVisit: true });
   } catch (err) {
     if (err.error) throw err;
     console.error('getGymBookings error:', err);
@@ -3003,25 +3135,27 @@ export async function getAdminAttendanceByGym(period = 'monthly') {
 // a day", timezone, and grace-period rules are exactly the kind of thing
 // that shouldn't be locked into the API prematurely. This just returns raw
 // facts (totals + recent attended dates) for a client to compute with.
+//
+// Coach-journey B3: the totals now count all three check-in sources
+// (verified bookings, MemberAttendance, IndependentCheckIn) through
+// checkinDaysService — a linked member who never books must not look like
+// they never show up. Totals are distinct showed-up days, not a flat row
+// sum, so a booking and a same-day member check-in can't double count.
 export async function getCustomerAttendanceSummary(customerId) {
   try {
     const { todayString } = attendanceDateBuckets();
     const monthStart = `${todayString.slice(0, 7)}-01`;
-    const [totalAttended, thisMonthAttended, recent] = await Promise.all([
-      prisma.booking.count({ where: { customerId, attendedAt: { not: null } } }),
-      prisma.booking.count({ where: { customerId, attendedAt: { not: null }, date: { gte: monthStart } } }),
-      prisma.booking.findMany({
-        where: { customerId, attendedAt: { not: null } },
-        orderBy: { attendedAt: 'desc' },
-        take: 90,
-        select: { date: true, gymId: true, attendedAt: true },
-      }),
+    const [days, lastAttendedAt] = await Promise.all([
+      checkinDaysService.getDays(customerId),
+      checkinDaysService.getLatestCheckInAt(customerId),
     ]);
     return {
-      totalAttended,
-      thisMonthAttended,
-      lastAttendedAt: recent[0]?.attendedAt ?? null,
-      attendedDates: recent.map((r) => r.date),
+      totalAttended: days.length,
+      thisMonthAttended: days.filter((d) => d >= monthStart).length,
+      lastAttendedAt,
+      // Keep the historical cap and ordering: the 90 most recent days,
+      // newest first (was: the 90 most recent attended bookings' dates).
+      attendedDates: days.slice(-90).reverse(),
     };
   } catch (err) {
     console.error('getCustomerAttendanceSummary error:', err);
@@ -3170,6 +3304,10 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
         where: { id: existing.id },
         data: { checkedOutAt: null },
       });
+      // A real re-entry, not a duplicate tap — the member is checked in
+      // again, so the GymLink ping applies here too (idempotent on auth's
+      // side, which is what makes re-pinging safe).
+      pingGymLinkCheckedIn(customerId, gymId);
       return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: false };
     }
     return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: true };
@@ -3179,6 +3317,12 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
   });
 
   await emitMemberAttendanceSignals({ customerId, attendanceId: record.id, gymId, city: gym?.city });
+
+  // A member check-in counts as a verified visit for the GymLink roster
+  // exactly like a booked session does — ping auth so it can flip
+  // firstVerifiedCheckinAt on the customer's active link (B2). Skipped on
+  // the alreadyCheckedIn branch above: nothing happened just now.
+  pingGymLinkCheckedIn(customerId, gymId);
 
   return { attendanceId: record.id, checkedInAt: record.checkedInAt, alreadyCheckedIn: false };
 }
@@ -3542,6 +3686,33 @@ export async function listIndependentCheckIns(customerId, { limit = 60 } = {}) {
     orderBy: { checkedInAt: 'desc' },
     take: Math.min(Math.max(limit, 1), 200),
   });
+}
+
+// Coach-journey B3: which customers have ever checked in at an unclaimed
+// gym. Internal only — gym-service's unclaimed-gym-claimed hook (B6) passes
+// this list to auth-service so those customers get the "your gym joined,
+// book it properly" prompt when the place becomes a partner gym.
+export async function getUnclaimedGymCustomerIds(unclaimedGymId) {
+  const rows = await prisma.independentCheckIn.findMany({
+    where: { unclaimedGymId },
+    distinct: ['customerId'],
+    select: { customerId: true },
+  });
+  return rows.map((r) => r.customerId);
+}
+
+// Gobhi-only companion for the admin portal's unclaimed-gym claim queue: how
+// many distinct customers ever checked in there. Returns null under 5 —
+// "4 people" would identify them just as well as a list would, so small
+// counts stay unsaid (the same k-anonymity idea as the public attendance
+// stats, which expose no small-number breakdowns either).
+export async function getUnclaimedGymPeopleCount(unclaimedGymId) {
+  const count = await prisma.independentCheckIn.findMany({
+    where: { unclaimedGymId },
+    distinct: ['customerId'],
+    select: { customerId: true },
+  });
+  return count.length < 5 ? null : count.length;
 }
 
 // ---- Daily partner briefing (9am IST push) -------------------------------

@@ -26,13 +26,78 @@ import { MAX_ACTIVE_PLAN_ITEMS } from './constants.js';
 const TARGET_MIN_ITEMS = 4;
 const TARGET_MAX_ITEMS = 8;
 
+// ---- The coach journey's layers --------------------------------------------
+//
+// TODO(B9): this map is copied from the Contracts section and belongs, verbatim,
+// in services/journey/journeyConfig.js (B9's file — read-only for B7). Replace
+// the constants below with an import from there once it exists; until then a
+// copy keeps this module pure (no async import on the trim path) and the two
+// must not drift.
+//
+// 'medicine' is always on and never locked, but the generator can never emit
+// it — medicine items come only from the user transcribing their own
+// prescription (see the ONE RULE above), and medicine reminders are B8's. A
+// doctor item keeps whatever layerKey it already carries ('medicine' for
+// medications, 'health' for tests/appointments) precisely because this
+// generator never touches it.
+export const JOURNEY_LAYERS = [
+  { layer: 1, key: 'basics', layerKeys: ['workout', 'water'] },
+  { layer: 2, key: 'food', layerKeys: ['food'] },
+  { layer: 3, key: 'body', layerKeys: ['steps', 'sleep'] },
+  { layer: 4, key: 'supplements', layerKeys: ['supplements'] },
+  { layer: 5, key: 'health', layerKeys: ['health'] },
+];
+
+// layerKey -> the layer that owns it. Items from a higher layer are trimmed
+// before items from a lower one, so water (layer 1) is the last thing the
+// size cap can ever take.
+export const LAYER_OF_LAYER_KEY = Object.fromEntries(
+  JOURNEY_LAYERS.flatMap((l) => l.layerKeys.map((k) => [k, l.layer])),
+);
+
+// Every layerKey unlocked at or below [startLayer] — the journey's starting
+// position for an experience level (new_to_gym -> 1, restarting -> 2,
+// experienced -> 5, per the Contracts' startLayer).
+export function layerKeysUpTo(startLayer) {
+  return JOURNEY_LAYERS.filter((l) => l.layer <= Number(startLayer)).flatMap((l) => l.layerKeys);
+}
+
 // `goals` is the user's whole set. It is not read for anything today — plan items
 // key off the nutrient targets, so retargeting the numbers retargets the plan
 // regardless of which goals produced them — but it is accepted so the generator
 // can answer "is this suggestion right for someone building muscle AND losing
 // fat?" without a signature change. Named `goals` rather than `goal` because the
 // one-goal reading is the thing that was wrong.
-export function generatePlan({ goals = [], diet, targets, measuredActivity, hasDoctorItems = false }) {
+//
+// `unlockedLayerKeys` selects the coach-journey generator. When it is absent
+// (the coachJourney flag off, every pre-journey caller) the legacy generator
+// below runs byte-for-byte as before; when present, items are created only for
+// the unlocked layers, every generated item carries its layerKey, and workout
+// items come from the stored `workoutSlots` rather than the measured activity.
+export function generatePlan({
+  goals = [],
+  diet,
+  targets,
+  measuredActivity,
+  hasDoctorItems = false,
+  unlockedLayerKeys = null,
+  workoutSlots = null,
+  stepsPerDay = null,
+}) {
+  if (unlockedLayerKeys == null) {
+    return generatePlanLegacy({ goals, diet, targets, measuredActivity, hasDoctorItems });
+  }
+  return generateJourneyPlan({
+    goals,
+    diet,
+    targets,
+    hasDoctorItems,
+    unlockedLayerKeys,
+    workoutSlots,
+    stepsPerDay,
+  });
+}
+function generatePlanLegacy({ goals = [], diet, targets, measuredActivity, hasDoctorItems = false }) {
   const items = [];
 
   // --- Nutrition ---------------------------------------------------------
@@ -158,6 +223,202 @@ export function generatePlan({ goals = [], diet, targets, measuredActivity, hasD
     // silently handing back a shorter plan than the user expected. Captured
     // BEFORE the trim — reading items.length afterwards would always report
     // the target size and the field would be permanently null.
+    trimmedFrom: originalCount > TARGET_MAX_ITEMS ? originalCount : null,
+    hasDoctorItems,
+  };
+}
+
+// ---- The coach-journey generator -------------------------------------------
+//
+// Same ONE RULE as above, stated again because this path is new: nothing here
+// can emit a doctor item, and no generated item ever carries the layerKeys
+// 'medicine' or 'health'. 'supplements' is unlocked by the journey but the
+// generator stays silent on it — suggesting a supplement is the one thing the
+// medical line forbids, so that layer's items come only from the user's own
+// schedule (B11) and never from here.
+
+// The water a journey user gets before any body data exists. Same value as
+// JOURNEY.defaultWaterMl in the Contracts; a body-derived target replaces it
+// the moment one exists.
+const JOURNEY_DEFAULT_WATER_ML = 2500;
+
+// The steps the plan names when no saved step target exists yet. The
+// starter plan always writes one (starterPlanService's level defaults), so
+// this is the defensive floor, not the product path.
+const JOURNEY_DEFAULT_STEPS = 6000;
+
+// What the size cap takes first. Highest layer first — the card's rule — and
+// water last of all, so "Drink water" is the one item a crowded plan can
+// never lose. Rest sits between the layers and the layer-1 essentials: a
+// plan that drops its rest day makes the engine punish the plan it generated
+// (see the legacy comment above), but it still goes before water.
+const TRIM_RANK = {
+  supplements: 60,
+  steps: 50,
+  sleep: 40,
+  food: 30,
+  rest: 20,
+  workout: 10,
+  water: 0,
+};
+
+function trimRank(item) {
+  if (item.layerKey) return TRIM_RANK[item.layerKey] ?? 0;
+  // Layerless generated items are rest days (and, defensively, anything the
+  // map above does not know). Rest earns its own rank; anything unknown
+  // trims before water too, never after.
+  return item.kind === 'rest' ? TRIM_RANK.rest : TRIM_RANK.workout;
+}
+
+function generateJourneyPlan({
+  goals = [], // accepted for signature parity; the journey keys items off layers, not goals
+  diet,
+  targets,
+  hasDoctorItems = false,
+  unlockedLayerKeys,
+  workoutSlots,
+  stepsPerDay,
+}) {
+  const unlocked = new Set(unlockedLayerKeys);
+  const items = [];
+
+  // --- Food (layer 2) ----------------------------------------------------
+  //
+  // Only when the layer is unlocked AND a nutrition target exists. Food
+  // unlocked with no target or no consent is the "Set up food" card, and the
+  // Contracts are explicit: that state shows "No food items, no food
+  // misses". An iron nudge with no target behind it would be a food item the
+  // user cannot act on, so both food items sit behind the same guard.
+  if (unlocked.has('food') && targets?.proteinG) {
+    items.push({
+      kind: 'nutrition',
+      title: `Hit ${targets.proteinG} g protein`,
+      schedule: 'daily',
+      origin: 'suggested',
+      nutrientKey: 'proteinG',
+      targetValue: targets.proteinG,
+      layerKey: 'food',
+    });
+
+    const ironFoods = ironRichFoods(diet);
+    if (ironFoods) {
+      items.push({
+        kind: 'nutrition',
+        title: `Eat 2 iron-rich foods (${ironFoods})`,
+        schedule: 'daily',
+        origin: 'suggested',
+        nutrientKey: null,
+        targetValue: null,
+        layerKey: 'food',
+      });
+    }
+  }
+
+  // --- Water (layer 1) ---------------------------------------------------
+  //
+  // The one item the trim rule protects outright. Before any body data the
+  // journey's default applies; once a target exists its water figure is the
+  // honest one.
+  if (unlocked.has('water')) {
+    const waterMl = Number(targets?.waterMl) || JOURNEY_DEFAULT_WATER_ML;
+    items.push({
+      kind: 'habit',
+      title: `Drink ${(waterMl / 1000).toFixed(1)} L water`,
+      schedule: 'daily',
+      origin: 'suggested',
+      layerKey: 'water',
+    });
+  }
+
+  // --- Movement (layer 1) ------------------------------------------------
+  //
+  // One item per stored slot, not one item from the measured activity: the
+  // slot is the promise the Plan tab shows (a day, a template, a tap away
+  // from starting it), and each scheduled day is its own tickable thing.
+  // The slot's weekday is 0 = Monday .. 6 = Sunday; PlanItem schedules are
+  // 1 = Monday .. 7 = Sunday (see isDueOn), hence the +1.
+  const slots = Array.isArray(workoutSlots) ? workoutSlots : [];
+  if (unlocked.has('workout')) {
+    for (const slot of slots) {
+      const weekday = Number(slot?.weekday);
+      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) continue;
+      items.push({
+        kind: 'workout',
+        title: String(slot.title || 'Workout'),
+        schedule: String(weekday + 1),
+        origin: 'suggested',
+        layerKey: 'workout',
+      });
+    }
+  }
+
+  // --- Rest ----------------------------------------------------------------
+  //
+  // The first weekday no slot covers, rather than a fixed Sunday: the slot
+  // pattern can place a session on any day, and a rest item colliding with a
+  // workout is the exact failure the legacy tests assert against. A
+  // seven-session week has no free day, so it gets no rest item — that week
+  // genuinely has none, and inventing a colliding one would be worse.
+  const usedDays = new Set(slots.map((s) => Number(s?.weekday)).filter(Number.isInteger));
+  const freeDay = [1, 2, 3, 4, 5, 6, 7].find((d) => !usedDays.has(d - 1));
+  if (freeDay) {
+    items.push({
+      kind: 'rest',
+      title: 'Rest day',
+      schedule: String(freeDay),
+      origin: 'suggested',
+    });
+  }
+
+  // --- Steps and sleep (layer 3) -------------------------------------------
+  //
+  // Unlocked together, trimmed independently: the cap takes steps before
+  // sleep because sleep is the harder thing to fake and the easier thing to
+  // honour. The step figure comes from the starter plan's saved target; the
+  // default is the defensive floor for a caller that had none.
+  if (unlocked.has('steps')) {
+    const steps = Number.isFinite(Number(stepsPerDay)) && Number(stepsPerDay) > 0
+      ? Math.round(Number(stepsPerDay))
+      : JOURNEY_DEFAULT_STEPS;
+    items.push({
+      kind: 'habit',
+      title: `Walk ${steps.toLocaleString('en-IN')} steps`,
+      schedule: 'daily',
+      origin: 'suggested',
+      layerKey: 'steps',
+    });
+  }
+
+  if (unlocked.has('sleep')) {
+    items.push({
+      kind: 'habit',
+      title: 'Sleep 7 h',
+      schedule: 'daily',
+      origin: 'suggested',
+      layerKey: 'sleep',
+    });
+  }
+
+  // --- The size cap, layer-aware -------------------------------------------
+  //
+  // Highest layer trims first so water (layer 1) always survives: the sort
+  // puts the LOWEST rank first (water before workouts, workouts before rest,
+  // and so on up the layers) and the cap keeps the head of that order.
+  // Within one layer, later-created items sort after earlier ones, so the
+  // last workout slot goes before the first. Order is restored afterwards so
+  // the caller (and the app) still sees the plan in the order it was thought
+  // up.
+  const originalCount = items.length;
+  if (items.length > TARGET_MAX_ITEMS) {
+    const ranked = items
+      .map((item, index) => ({ item, index }))
+      .sort((a, b) => trimRank(a.item) - trimRank(b.item) || a.index - b.index);
+    items.length = 0;
+    items.push(...ranked.slice(0, TARGET_MAX_ITEMS).sort((a, b) => a.index - b.index).map((r) => r.item));
+  }
+
+  return {
+    items,
     trimmedFrom: originalCount > TARGET_MAX_ITEMS ? originalCount : null,
     hasDoctorItems,
   };

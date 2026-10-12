@@ -7,6 +7,8 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.js';
 import userProfileRoutes from './routes/userProfile.js';
+import deviceRoutes from './routes/devices.js';
+import gymLinkRoutes from './routes/gymLinks.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -17,6 +19,17 @@ app.use(express.json());
 // Routes
 app.use('/', authRoutes);
 app.use('/users', userProfileRoutes);
+// Coach-journey routers (mounted 2026-10-16 as empty stubs so the paths below
+// are reserved under /api/auth before the Group B owners fill them in):
+//   devices  - POST /devices, GET /internal/devices/:installId/users,
+//              GET /internal/users/:id/devices
+//   gymLinks - POST/DELETE /gym-links/self, POST /me/notice/clear,
+//              POST /internal/gym-links/checked-in
+// Both are mounted at '/' beside authRoutes for the same reason authRoutes is:
+// the gateway already strips the /api/auth prefix, and these paths are flat
+// under it.
+app.use('/', deviceRoutes);
+app.use('/', gymLinkRoutes);
 
 app.get('/health', async (req, res) => {
   try {

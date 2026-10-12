@@ -220,6 +220,36 @@ test('the DPDPA export accepts either flag — an access right may not fail clos
   );
 });
 
+test('medication reminder writes are either-gated: the coach gate first, profileWrite second', () => {
+  // B8 makes the medication reminders reachable from day 1 of the coach
+  // journey (coachJourney flag + the coach `basic` scope) while keeping the
+  // old profileWrite path for branded-onboarding users. The order is
+  // load-bearing, exactly as on the ledger's plan and score routes: when both
+  // gates reject, anyOf sends the SECOND gate's error, so with the
+  // coachJourney flag off the client still sees today's refusal
+  // (brandedOnboarding's FEATURE_DISABLED), never the coach gate's.
+  const either = /anyOf\(\s*coachMedications\s*,\s*profileWrite\s*\)/;
+  const writes = all
+    .filter((r) => r.line.includes("'/health-profile/medications"))
+    .filter((r) => /router\.(post|patch)\(/.test(r.line));
+  assert.equal(writes.length, 2, 'expected the POST and PATCH medication routes');
+  for (const found of writes) {
+    assert.match(found.line, either, `${found.n}: ${found.line} must be anyOf(coachMedications, profileWrite)`);
+  }
+
+  // Reads and deletes stay requireAuth-only: seeing and erasing your own
+  // reminders never depends on a feature switch (the delete is also in
+  // MUST_STAY_UNGATED below).
+  const read = all.find((r) => r.line.includes("'/health-profile/medications'") && r.line.startsWith('router.get('));
+  assert.ok(read, 'no medications read route found');
+  assert.doesNotMatch(read.line, /anyOf\(|coachMedications|profileWrite/);
+
+  // The coach half of the pair: auth first, its OWN flag, exactly one scope.
+  const decl = routes.match(/const coachMedications = \[([^\]]*)\]/)?.[1] || '';
+  assert.ok(decl, 'coachMedications is not declared');
+  assert.match(decl, /^requireAuth, requireCoachJourney, requireCoachConsent\('basic'\)$/);
+});
+
 // ---- Deletion must never be stranded --------------------------------------
 // The most important invariant in this file, and the one most easily broken by
 // a well-meaning "make it consistent" edit during a refactor like this one.
@@ -332,6 +362,7 @@ test('every gate array authenticates before it checks a flag', () => {
     'runTrackerGated',
     'cycleGated',
     'profileWrite',
+    'coachMedications',
   ]) {
     const decl = routes.match(new RegExp(`const ${name} = \\[([^\\]]*)\\]`))?.[1] || '';
     assert.ok(decl, `${name} is not declared`);
@@ -346,13 +377,25 @@ test('every customer-facing route is behind some gate or internal auth', () => {
   // The sweep. /reports/* are inline-spread from vaultGated rather than
   // declared before a named array, and the internal/* and admin/* routes
   // authenticate differently, so both are accounted for explicitly.
+  //
+  // The medication writes (B8) are the one either-gated pair here:
+  // anyOf(profileWrite, coachMedications). Counted as gated when BOTH of
+  // anyOf's arguments name a declared gate array - checking for the anyOf
+  // call alone would let `anyOf(anything, anything)` through, and the
+  // medication route is exactly where a future typo would hide.
+  const GATE_NAMES = /^(workoutGated|metricsGated|vaultGated|consentGated|exportGated|personalisationGated|recapGated|assistantGated|runTrackerGated|cycleGated|profileWrite|coachMedications)$/;
+  const onAnyOfGate = (line) => {
+    const m = line.match(/anyOf\(\s*(\w+)\s*,\s*(\w+)\s*\)/);
+    return !!m && GATE_NAMES.test(m[1]) && GATE_NAMES.test(m[2]);
+  };
   const ungated = all.filter(
     (r) =>
-      !/\.\.\.(workoutGated|metricsGated|vaultGated|consentGated|exportGated|personalisationGated|recapGated|assistantGated|runTrackerGated|cycleGated|profileWrite)\b/.test(r.line) &&
-      !/^router\.\w+\('\/reports\//.test(r.line) &&
-      !/\brequireInternal\b/.test(r.line) &&
-      !/requireRole\('gobhi'\)/.test(r.line) &&
-      !/\brequireAuth\b/.test(r.line),
+        !/\.\.\.(workoutGated|metricsGated|vaultGated|consentGated|exportGated|personalisationGated|recapGated|assistantGated|runTrackerGated|cycleGated|profileWrite)\b/.test(r.line) &&
+        !onAnyOfGate(r.line) &&
+        !/^router\.\w+\('\/reports\//.test(r.line) &&
+        !/\brequireInternal\b/.test(r.line) &&
+        !/requireRole\('gobhi'\)/.test(r.line) &&
+        !/\brequireAuth\b/.test(r.line),
   );
   assert.deepEqual(
     ungated.map((r) => `${r.n}: ${r.line}`),

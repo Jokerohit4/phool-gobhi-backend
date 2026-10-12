@@ -1021,5 +1021,20 @@
     ],
     "since": "2026-10-09",
     "notes": "the session was saved on the server \u2014 props type, rpe, sets_completed, duration_s. The other half of the funnel: workout_started without workout_finished is the abandonment signal"
+  },
+  "coach_onboarding_step_viewed": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "coach_onboarding_completed": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "coach_referral_offer_shown": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
   }
 }

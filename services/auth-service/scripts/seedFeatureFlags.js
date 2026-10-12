@@ -121,6 +121,14 @@ export const PROFILES = {
     // cycleTracking or fhirExport - they stay off until named. The reverse
     // relation is the one that bites, which is why workoutTracking is on here:
     // healthMetrics would be dead without it.
+    //
+    // `coachJourney` (registered 2026-10-16) is the next candidate to name here,
+    // right next to workoutTracking — the journey is graded on the workout log,
+    // so it belongs beside it, and its other dep (nonPartnerAttendance) is
+    // already on. It is deliberately left out of this profile until the
+    // app-version minimum is raised. When it is added, coachAssistant and
+    // referralHomeTrigger stay out: both are off here for their own recorded
+    // reasons above and are named only in the all-on/local profile.
     on: () => [
       'workoutTracking',
       'healthMetrics',

@@ -6,6 +6,7 @@ import {
   RULES_VERSION,
   SAFETY,
   BIOLOGICAL_TARGETS,
+  V2_FROM,
 } from './constants.js';
 
 // The score engine.
@@ -48,13 +49,32 @@ export function computeMisses({
   targets = null,
   totals = null,
   localDate,
+  noMisses = false,
+  unlockedLayerKeys = [],
+  foodNoPenalty = false,
+  isV2 = false,
 }) {
+  // When noMisses is true (easy-start or inactive pause), we emit no miss
+  // lines at all, but the earn pass still runs so positive points are kept.
+  // This is different from the pause logic around line 336 which zeroes
+  // earnings too — here we only suppress the negative side.
+  if (noMisses) {
+    return [];
+  }
+
   const done = new Set(completions.map((c) => c.planItemId));
   const lines = [];
 
   for (const item of planItems) {
     if (!isScheduledFor(item, localDate)) continue;
     if (done.has(item.id)) continue;
+
+    // Skip miss lines for items whose layerKey isn't unlocked.
+    // Before V2_FROM (isV2=false), no layer filtering - all items are scored.
+    // Exception: medicine layer is always on, never locked.
+    if (isV2 && item.layerKey && item.layerKey !== 'medicine' && !unlockedLayerKeys.includes(item.layerKey)) {
+      continue;
+    }
 
     switch (item.kind) {
       case 'doctor_medication':
@@ -79,6 +99,16 @@ export function computeMisses({
         );
         break;
       case 'habit':
+        // Water habit: if water is unlocked, count it as done when the day's
+        // WaterLog sum >= target. This avoids a miss when the user actually
+        // met the goal through logs.
+        if (item.layerKey === 'water' && totals?.waterMl !== undefined) {
+          const waterTarget = targets?.waterMl ?? 2500;
+          if (totals.waterMl >= waterTarget) {
+            // Water was met via logs; don't charge a miss.
+            continue;
+          }
+        }
         lines.push(line('habit_missed', `${item.title} not done`, item.kind, POINTS.habitMissed, item));
         break;
       case 'rest':
@@ -100,7 +130,11 @@ export function computeMisses({
   // Aggregate nutrition rules. Each fires at most once regardless of how many
   // plan items mention the same nutrient — otherwise a plan with both "hit
   // 130 g protein" and "get to 130 g protein" would be charged twice.
-  if (targets && totals) {
+  // Before V2_FROM (isV2=false), these rules always run (old behavior).
+  // On or after V2_FROM, they only apply when the food layer is unlocked.
+  const foodLocked = isV2 && !unlockedLayerKeys.includes('food');
+  const foodNotSetUp = !targets || !targets.kcal;
+  if (!foodLocked && !foodNotSetUp && targets && totals) {
     if (targets.proteinG > 0) {
       const ratio = pct(totals.proteinG || 0, targets.proteinG);
       if (ratio !== null && ratio < 0.6) {
@@ -142,13 +176,18 @@ export function computeMisses({
   // calories rule, because a day with no food log is a different situation
   // from a day of tracked eating that missed the target, and conflating them
   // makes both numbers mean less.
-  if (!totals || !totals.hasAnyFood) {
-    lines.push({
-      key: 'no_meals_logged',
-      label: 'Nothing logged',
-      kind: 'nutrition',
-      points: POINTS.noMealsLogged,
-    });
+  // Suppress when: food layer is locked (food not in unlockedLayerKeys), food
+  // not set up (no nutrition target), or foodNoPenalty flag is set (early
+  // food period before 3 showed-up days).
+  if (!foodLocked && !foodNotSetUp && !foodNoPenalty) {
+    if (!totals || !totals.hasAnyFood) {
+      lines.push({
+        key: 'no_meals_logged',
+        label: 'Nothing logged',
+        kind: 'nutrition',
+        points: POINTS.noMealsLogged,
+      });
+    }
   }
 
   return lines;
@@ -320,7 +359,22 @@ export function computeDay({
   hasPlannedWorkoutDone = false,
   unplannedWorkout = false,
   paused = false,
+  noMisses = false,
+  unlockedLayerKeys = [],
+  foodNoPenalty = false,
 }) {
+  // v2 rules only apply on or after V2_FROM. Before that date, v2 flags are
+  // ignored for backward compatibility with frozen v1 snapshots.
+  const isV2 = localDate >= V2_FROM;
+  if (!isV2) {
+    noMisses = false;
+    foodNoPenalty = false;
+    // Before V2_FROM, no layer filtering - all items are scored (old behavior)
+    // We don't modify unlockedLayerKeys; the engine will treat empty array as
+    // "all unlocked" when isV2 is false, but for simplicity we just skip the
+    // layer check entirely in computeMisses when !isV2.
+  }
+
   // A paused day is neutral, and it is neutral in a specific way: not scored,
   // not merely scored as zero.
   //
@@ -359,7 +413,19 @@ export function computeDay({
     hasPlannedWorkoutDone,
     unplannedWorkout,
   });
-  const misses = closed ? computeMisses({ planItems, completions, targets, totals, localDate }) : [];
+  const misses = closed
+    ? computeMisses({
+        planItems,
+        completions,
+        targets,
+        totals,
+        localDate,
+        noMisses,
+        unlockedLayerKeys,
+        foodNoPenalty,
+        isV2,
+      })
+    : [];
 
   const all = [...earns, ...misses];
 

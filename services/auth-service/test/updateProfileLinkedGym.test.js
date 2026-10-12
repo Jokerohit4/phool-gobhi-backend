@@ -51,7 +51,23 @@ test('setup: mock @prisma/client once, import the controller once', async (t) =>
             },
           };
           this.appModeHistory = { create: async ({ data }) => data };
-          this.$transaction = async (ops) => Promise.all(ops);
+          // linkGym (B2) writes a GymLink row alongside the User pointer, in an
+          // interactive transaction. Both the row writes and the interactive
+          // form have to be no-ops-with-state here, or the join-link path 500s.
+          this.gymLink = {
+            findFirst: async () => null,
+            findMany: async () => [],
+            updateMany: async () => ({ count: 0 }),
+            count: async () => 0,
+            create: async ({ data }) => ({ id: 1, ...data }),
+          };
+          this.userDevice = { findMany: async () => [], deleteMany: async () => ({ count: 0 }) };
+          // updateProfile uses the array form (mode + history), linkGym the
+          // interactive form. Support both: an array is awaited in parallel, a
+          // callback is handed this fake client to act as the tx.
+          const self = this;
+          this.$transaction = async (arg) =>
+            typeof arg === 'function' ? arg(self) : Promise.all(arg);
         }
       },
       Prisma: {},

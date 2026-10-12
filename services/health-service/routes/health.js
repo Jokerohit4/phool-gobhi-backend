@@ -25,6 +25,9 @@ import { requireLocationRoutesConsent } from '../middleware/requireLocationRoute
 import { requireAssistantConsent } from '../middleware/requireAssistantConsent.js';
 import { requireDeviceHealthConsent } from '../middleware/requireDeviceHealthConsent.js';
 import { requireBiometricWriteConsent } from '../middleware/requireBiometricConsent.js';
+import { anyOf } from '../middleware/anyOf.js';
+import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
+import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
 import * as biometricConsentCtrl from '../controllers/biometricConsentController.js';
 import * as healthProfileCtrl from '../controllers/healthProfileController.js';
 import * as reportCtrl from '../controllers/reportController.js';
@@ -41,12 +44,20 @@ import * as ledgerCtrl from '../controllers/ledgerController.js';
 // one, and two distinct per-person consent scopes. Mixing those into `gated`
 // here would mean every ledger route inherited healthMetrics alone.
 import ledgerRouter from './ledger.js';
+// Coach-journey routers, mounted empty in A2 so later tasks add routes without
+// touching this file again. See routes/journey.js, habits.js, content.js.
+import journeyRouter from './journey.js';
+import habitsRouter from './habits.js';
+import contentRouter from './content.js';
 
 const router = Router();
 
 // Mounted, not spread. The ledger carries its own requireAuth, its own flag
 // checks and its own consent middlewares, and they have to run in that order.
 router.use(ledgerRouter);
+router.use(journeyRouter);
+router.use(habitsRouter);
+router.use(contentRouter);
 
 // Every customer-facing route is server-side gated, not just client-hidden —
 // same posture challenge-service takes with streaksCoins, and more important
@@ -356,9 +367,30 @@ router.delete('/health-profile', requireAuth, healthProfileCtrl.deleteProfile);
 router.get('/health-profile/consent', requireAuth, healthProfileCtrl.getConsent);
 router.post('/health-profile/consent', ...profileWrite, requireAdult, healthProfileCtrl.grantConsent);
 router.delete('/health-profile/consent', requireAuth, healthProfileCtrl.revokeConsent);
+// Medicine reminders from day 1 of the coach journey. The coach gate — the
+// coachJourney flag plus the coach `basic` scope — is tried FIRST and the old
+// profileWrite gate SECOND: when both reject, anyOf sends the SECOND gate's
+// error, so with the coachJourney flag off a user still sees exactly today's
+// refusal (brandedOnboarding's FEATURE_DISABLED), never the coach gate's.
+// Reads and deletes stay requireAuth-only, as before: seeing and erasing
+// your own reminders never depends on a feature switch.
+//
+// NOTE: createMedicationService/updateMedicationService ALSO check
+// health-profile consent inside the service (see the B8 HANDOFF) — the route
+// gate here is only half of "reachable from day 1" until that check accepts
+// the coach path too.
+const coachMedications = [requireAuth, requireCoachJourney, requireCoachConsent('basic')];
 router.get('/health-profile/medications', requireAuth, healthProfileCtrl.listMedications);
-router.post('/health-profile/medications', ...profileWrite, healthProfileCtrl.createMedication);
-router.patch('/health-profile/medications/:id', ...profileWrite, healthProfileCtrl.updateMedication);
+router.post(
+  '/health-profile/medications',
+  anyOf(coachMedications, profileWrite),
+  healthProfileCtrl.createMedication,
+);
+router.patch(
+  '/health-profile/medications/:id',
+  anyOf(coachMedications, profileWrite),
+  healthProfileCtrl.updateMedication,
+);
 router.delete('/health-profile/medications/:id', requireAuth, healthProfileCtrl.deleteMedication);
 
 // ---- Data export (FR-16) ------------------------------------------------

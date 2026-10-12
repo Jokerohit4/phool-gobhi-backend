@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import * as placesService from './placesService.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const prisma = new PrismaClient();
+
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 
 // How close two coordinates must be, in metres, before we treat a Places
 // result as "this is the partner gym we already have". Gyms sit in buildings,
@@ -211,13 +215,102 @@ export async function listUnclaimedGymsService({ claimStatus } = {}) {
   });
 }
 
+/// Announce that a place our own customers checked into independently is now a
+/// real partner gym. Two best-effort hops:
+///   1. booking-service tells us which customers ever checked in there;
+///   2. auth-service turns that into a "this gym joined, book it properly"
+///      prompt for them (and for anyone who called it home).
+///
+/// Every failure is logged and swallowed on purpose. By the time this runs the
+/// admin's claim-status change has already committed, and a notification that
+/// neither downstream service guarantees must never fail or delay that action.
+/// customerIds stays [] if hop 1 fails: hop 2 is still worth sending, because
+/// auth also matches customers by homeUnclaimedGymId rather than by the list.
+export async function notifyUnclaimedGymClaimed(unclaimedGymId, claimedGymId) {
+  const internalHeaders = (extra = {}) => ({
+    'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+    ...extra,
+  });
+
+  let customerIds = [];
+  try {
+    const resp = await fetch(
+      `${BOOKING_SERVICE_URL}/internal/unclaimed-gyms/${unclaimedGymId}/customers`,
+      {
+        headers: {
+          ...internalHeaders(),
+          ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
+        },
+      }
+    );
+    if (resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      // The contract types this as {customerIds}, but booking-service ships
+      // every other internal read wrapped in {data}; accept both so a change
+      // in envelope convention can't silently drop the list.
+      const raw = body?.data?.customerIds ?? body?.customerIds;
+      if (Array.isArray(raw)) {
+        customerIds = raw.map(Number).filter(Number.isFinite);
+      }
+    } else {
+      console.error(
+        `unclaimedGymClaimed: booking customers fetch failed (${resp.status}) for unclaimed gym ${unclaimedGymId}`
+      );
+    }
+  } catch (err) {
+    console.error(
+      `unclaimedGymClaimed: booking customers fetch errored for unclaimed gym ${unclaimedGymId}:`,
+      err.message
+    );
+  }
+
+  try {
+    const resp = await fetch(`${AUTH_SERVICE_URL}/internal/unclaimed-gym-claimed`, {
+      method: 'POST',
+      headers: {
+        ...internalHeaders({ 'content-type': 'application/json' }),
+        ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
+      },
+      body: JSON.stringify({ unclaimedGymId, claimedGymId, customerIds }),
+    });
+    if (!resp.ok) {
+      console.error(
+        `unclaimedGymClaimed: auth notify failed (${resp.status}) for unclaimed gym ${unclaimedGymId}`
+      );
+    }
+  } catch (err) {
+    console.error(
+      `unclaimedGymClaimed: auth notify errored for unclaimed gym ${unclaimedGymId}:`,
+      err.message
+    );
+  }
+}
+
 export async function updateClaimStatusService(id, { claimStatus, claimedGymId }) {
-  await getUnclaimedGymService(id);
-  return prisma.unclaimedGym.update({
+  const existing = await getUnclaimedGymService(id);
+  const updated = await prisma.unclaimedGym.update({
     where: { id },
     data: {
       ...(claimStatus ? { claimStatus } : {}),
       ...(claimedGymId !== undefined ? { claimedGymId } : {}),
     },
   });
+
+  // Only the transition that turns an independent place into a real partner
+  // gym is worth announcing; re-saving an already-claimed row is a no-op for
+  // the downstream services and would re-prompt customers a second time.
+  const justClaimed =
+    updated.claimStatus === 'claimed' &&
+    updated.claimedGymId != null &&
+    !(existing.claimStatus === 'claimed' && existing.claimedGymId === updated.claimedGymId);
+
+  if (justClaimed) {
+    // Deliberately not awaited: the admin action is already committed, and the
+    // response should not wait on (nor fail because of) two downstream calls.
+    notifyUnclaimedGymClaimed(updated.id, updated.claimedGymId).catch((err) => {
+      console.error('updateClaimStatusService: claim hook failed:', err.message);
+    });
+  }
+
+  return updated;
 }

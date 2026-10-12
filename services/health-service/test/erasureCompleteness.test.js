@@ -14,38 +14,24 @@ import { dirname, join } from 'node:path';
 // failure mode this exists to prevent: someone adds a model holding health
 // data, forgets to add it here, and a user's prescriptions outlive their
 // account while every test in the repo stays green.
+//
+// SCHEMA SWEEP: parse schema.prisma; every model with a `userId` field must
+// appear in the erasure list (consentService.js deleteAllDataService) or in
+// an explicit EXEMPT list with a reason. ExerciseContent and CoachArticle have
+// no userId, so they aren't swept.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serviceSource = readFileSync(join(here, '..', 'services', 'consentService.js'), 'utf8');
 const schemaSource = readFileSync(join(here, '..', 'prisma', 'schema.prisma'), 'utf8');
 
-// Models that hold per-user data and must be erased with the account.
-const MUST_ERASE = [
-  'HealthGoal',
-  'HealthCondition',
-  'NutritionTarget',
-  'FoodItem',
-  'FoodLog',
-  'SavedMeal',
-  'PlanItem',
-  'MedicalDocument',
-  'DoctorAppointment',
-  'ScoreDaySnapshot',
-  'FoodPhotoRequestLog',
-  'HealthProfile',
-  'HealthProfileConsent',
-  'MedicationReminder',
-  'HealthReport',
-  // A free-text list of what this person searched for and could not find. A
-  // record of somebody's diet that outlives their account is exactly the
-  // failure this suite exists to prevent, and it is easier to forget than a log
-  // row because nothing reads it back except a backlog view.
-  'FoodRequest',
-];
+// Prisma names the client accessor after the model in lowerCamelCase, so
+// `model HealthGoal` is `prisma.healthGoal`.
+const accessor = (model) => model[0].toLowerCase() + model.slice(1);
 
-// Models whose rows cascade from a parent that IS in the list, so an explicit
-// delete would be redundant. Enumerated rather than left implicit, so that
+// Models that hold per-user data but are NOT erased because they cascade from
+// a parent that IS erased. Enumerated rather than left implicit, so that
 // promoting one of these to MUST_ERASE is a visible edit.
+// The test also verifies that the schema still declares the cascade.
 const CASCADING = {
   SavedMealLine: 'SavedMeal',
   PlanItemCompletion: 'PlanItem',
@@ -54,22 +40,61 @@ const CASCADING = {
   ReportExtraction: 'HealthReport',
 };
 
-// Prisma names the client accessor after the model in lowerCamelCase, so
-// `model HealthGoal` is `prisma.healthGoal`. Comparing the raw model name
-// against the source would report every table as missing and the test would
-// pass vacuously while erasing nothing.
-const accessor = (model) => model[0].toLowerCase() + model.slice(1);
+// Models that have a userId but are EXEMPT from erasure, with a written
+// reason. These are tables that must survive account deletion for legal,
+// audit, or cross-service integrity reasons. Adding an entry here requires a
+// code review comment explaining why the data must not be erased.
+const EXEMPT = {
+  HealthDataAuditLog: 'audit trail of who touched this person\'s health data; deleting it during erasure would erase the proof the erasure happened',
+};
 
-test('every ledger model is either erased explicitly or cascades from one that is', () => {
-  const missing = MUST_ERASE.filter(
-    (m) => !new RegExp(`prisma\\.${accessor(m)}\\.deleteMany`).test(serviceSource),
-  );
+function extractModelsWithUserId(schema) {
+  // Find all model blocks and check if they have a userId field
+  const modelRegex = /model\s+(\w+)\s+\{([^}]+)\}/g;
+  const models = [];
+  let match;
+  while ((match = modelRegex.exec(schema)) !== null) {
+    const modelName = match[1];
+    const modelBody = match[2];
+    // Check for userId field (can be `userId Int`, `userId Int @id`, `userId Int?`, etc.)
+    // Must match `userId` as a whole word at the start of a field declaration, not
+    // `createdByUserId` or other fields ending with userId.
+    if (/^\s+userId\s+(Int|String)\b/m.test(modelBody)) {
+      models.push(modelName);
+    }
+  }
+  return models;
+}
+
+function extractErasedModels(serviceSource) {
+  // Find all prisma.<model>.deleteMany calls
+  const erased = new Set();
+  const regex = /prisma\.(\w+)\.deleteMany/g;
+  let match;
+  while ((match = regex.exec(serviceSource)) !== null) {
+    erased.add(match[1]);
+  }
+  return erased;
+}
+
+const modelsWithUserId = extractModelsWithUserId(schemaSource);
+const erasedModels = extractErasedModels(serviceSource);
+
+test('schema sweep: every model with userId is erased, cascades, or is explicitly exempt', () => {
+  const missing = [];
+  for (const model of modelsWithUserId) {
+    const acc = accessor(model);
+    if (erasedModels.has(acc)) continue;
+    if (CASCADING[model]) continue;
+    if (EXEMPT[model]) continue;
+    missing.push(model);
+  }
   assert.deepEqual(
     missing,
     [],
-    `these models are not in deleteAllDataService: ${missing.join(', ')}. ` +
-      'An erasure that misses one of these leaves a user\'s own health data ' +
-      'behind after account deletion.',
+    'these models have a userId but are not in deleteAllDataService, not cascading, and not exempt: ' +
+      missing.join(', ') +
+      '. An erasure that misses one of these leaves a user\'s own health data behind after account deletion.'
   );
 });
 
@@ -170,4 +195,16 @@ test('the erasure list has no delete scoped to a table that does not exist', () 
   const referenced = [...serviceSource.matchAll(/prisma\.(\w+)\.deleteMany/g)].map((m) => m[1]);
   const unknown = [...new Set(referenced)].filter((m) => !models.has(m));
   assert.deepEqual(unknown, [], `deleteAllDataService references models that are not in the schema: ${unknown.join(', ')}`);
+});
+
+test('Exempt models have a written reason and are not accidentally erased', () => {
+  for (const [model, reason] of Object.entries(EXEMPT)) {
+    const acc = accessor(model);
+    assert.doesNotMatch(
+      serviceSource,
+      new RegExp(`prisma\\.${acc}\\.deleteMany`),
+      `${model} is exempt (${reason}) but appears in deleteAllDataService`
+    );
+    assert.ok(reason.length > 10, `${model} exemption reason is too short: "${reason}"`);
+  }
 });
