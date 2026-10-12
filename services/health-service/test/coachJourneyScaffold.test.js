@@ -60,18 +60,14 @@ test('the three coach-journey routers are mounted on the health router', () => {
   }
 });
 
-test('the mounted routers are inert - no routes registered yet', () => {
-  // Empty on purpose in A2. A route appearing here without a B-task is either a
-  // mistake or an ungated surface, and either way it should be a deliberate edit
-  // that also removes this test.
-  for (const [name, router] of [
-    ['journey', journeyRouter],
-    ['habits', habitsRouter],
-    ['content', contentRouter],
-  ]) {
-    assert.equal(typeof router, 'function', `${name} is not an Express router`);
-    assert.equal(router.stack.length, 0, `${name} router already has routes`);
-  }
+test('the journey router has routes (B9), habits and content are still inert (B11, B15)', () => {
+  // A2 mounted them empty. B9 owns journey, B11 owns habits, B15 owns content.
+  assert.equal(typeof journeyRouter, 'function', 'journey is not an Express router');
+  assert.ok(journeyRouter.stack.length > 0, 'journey router should have routes (B9)');
+  assert.equal(typeof habitsRouter, 'function', 'habits is not an Express router');
+  assert.equal(habitsRouter.stack.length, 0, 'habits router should be inert until B11');
+  assert.equal(typeof contentRouter, 'function', 'content is not an Express router');
+  assert.equal(contentRouter.stack.length, 0, 'content router should be inert until B15');
 });
 
 test('the migration is additive and opens with a lock_timeout', () => {
