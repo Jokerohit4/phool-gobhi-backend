@@ -65,7 +65,7 @@ test('the journey router has routes (B9), habits and content are still inert (B1
   assert.equal(typeof journeyRouter, 'function', 'journey is not an Express router');
   assert.ok(journeyRouter.stack.length > 0, 'journey router should have routes (B9)');
   assert.equal(typeof habitsRouter, 'function', 'habits is not an Express router');
-  assert.equal(habitsRouter.stack.length, 0, 'habits router should be inert until B11');
+  assert.ok(habitsRouter.stack.length > 0, 'habits router should have routes (B11)');
   assert.equal(typeof contentRouter, 'function', 'content is not an Express router');
   assert.equal(contentRouter.stack.length, 0, 'content router should be inert until B15');
 });
