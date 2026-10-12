@@ -148,6 +148,12 @@ export async function deleteAllDataService(userId) {
     prisma.foodRequest.deleteMany({ where: { userId } }),
     prisma.planItem.deleteMany({ where: { userId } }),
     prisma.nutritionTarget.deleteMany({ where: { userId } }),
+    // The saved plan itself (kcal / steps / sleep / workout slots). Its own
+    // row, keyed by userId as the primary key — it has no FK to HealthGoal, so
+    // it does not cascade and would otherwise survive the account.
+    // erasureCompleteness.test.js caught exactly that: the table was added
+    // with the plan generator and never listed here.
+    prisma.prescription.deleteMany({ where: { userId } }),
     prisma.healthCondition.deleteMany({ where: { userId } }),
     prisma.doctorAppointment.deleteMany({ where: { userId } }),
     // The goal row is the FK parent of NutritionTarget, so it goes after it.
