@@ -1042,5 +1042,17 @@
     "service": "health-service",
     "since": "2026-10-12",
     "notes": "the AI coach guardrail replaced an answer with the fixed doctor reply (B16). props stage (input = question never sent to the model; output = model reply replaced), reason (substance_advice | diagnosis_or_treatment | dose | cure_claim), lang (en | hinglish | hi)"
+  },
+  "coach_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-12",
+    "notes": "a coach consent scope was granted (A2/B coach journey). props scope (basic | supplements | ...) only, never anything about the journey it unlocks"
+  },
+  "coach_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-12",
+    "notes": "a coach consent scope was withdrawn. props scope"
   }
 }
