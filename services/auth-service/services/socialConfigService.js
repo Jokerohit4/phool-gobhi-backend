@@ -5,7 +5,8 @@
 // `social: { enabled }` switch from GET /app-config that can mute every social
 // surface at once without touching individual flags. A1 ships the fail-closed
 // constant (disabled); the real store — an admin-editable singleton row, like
-// the other *Setting models — is B14's to add, at which point this reads it.
+// the other *Setting models — is B14's to add, at which point this reads it from
+// the same storage `updateAppConfigAdmin` writes. It defaults to `false`.
 //
 // Contract: always resolves (never throws), always an object with a boolean.
 
@@ -15,6 +16,6 @@
  * @returns {Promise<{ enabled: boolean }>}
  */
 export async function get() {
-  // STUB: social off. B14 backs this with a settings row.
+  // STUB: social off. B14 will read from the admin-editable app-config row.
   return { enabled: false };
 }

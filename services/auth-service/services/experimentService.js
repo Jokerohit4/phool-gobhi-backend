@@ -16,6 +16,7 @@
  * @returns {{ tabBar: 'A' | 'B' }}
  */
 export function bucketFor(userId) { // eslint-disable-line no-unused-vars
-  // STUB: everyone is in the control arm. B14 makes this a stable hash of userId.
-  return { tabBar: 'A' };
+  // deterministic hash of userId + ':tabBar', 50/50 A/B, stable per userId
+  const h = (userId * 2654435761) >>> 0; // simple multiply‑add hash
+  return { tabBar: h % 2 === 0 ? 'A' : 'B' };
 }
