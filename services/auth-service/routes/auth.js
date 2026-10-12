@@ -44,13 +44,6 @@ router.delete('/account', verifyToken, deleteUser);
 // to every service holding this user's data and returns one document. Add
 // ?format=download to get it as a saved file.
 router.get('/export', verifyToken, exportMyData);
-router.post('/forgot-password', async (req, res) => {
-  // Only email/password accounts (gobhi/staff, via /admin/staff — customer
-  // and partner accounts are phone+OTP only) would ever need this. No email
-  // delivery integration exists yet, so this returns an honest "not
-  // implemented" rather than silently claiming an email was sent.
-  res.status(501).json({ error: 'Password reset isn\'t available yet — contact an admin to reset a staff account.' });
-});
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/verify-firebase-token', verifyFirebaseToken);

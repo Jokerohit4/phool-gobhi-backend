@@ -7,16 +7,28 @@ export const hasCloudinary = Boolean(
     process.env.CLOUDINARY_API_SECRET
 );
 
-// Buffers in memory instead of streaming straight to Cloudinary (as
-// multer-storage-cloudinary did) so a failed Cloudinary call can be retried
-// against the same buffer — see uploadBufferToCloudinary below.
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+const ALLOWED_DOC_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+const fileFilterImage = (req, file, cb) => {
+  if (ALLOWED_IMAGE_MIME.includes(file.mimetype)) return cb(null, true);
+  cb(new Error('Invalid file type. Only JPG, PNG, and WebP images are allowed.'));
+};
+
+const fileFilterDoc = (req, file, cb) => {
+  if (ALLOWED_DOC_MIME.includes(file.mimetype)) return cb(null, true);
+  cb(new Error('Invalid file type. Only PDF and images (JPG, PNG, WebP) are allowed.'));
+};
+
 export const uploadGymImage = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap, same as documents below
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: fileFilterImage,
 });
 export const uploadGymDoc = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for documents
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: fileFilterDoc,
 });
 
 // Cloudinary intermittently rejects an otherwise-valid, correctly-signed

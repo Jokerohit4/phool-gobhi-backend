@@ -45,7 +45,7 @@ const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-serv
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|logout|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|logout|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
   { method: 'GET', pattern: /^\/api\/auth\/app-config(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/auth\/launch-status(\?.*)?$/ },
@@ -138,7 +138,7 @@ const eventsIngestLimiter = rateLimit({
   message: { error: 'Too many events' },
 });
 const RATE_LIMITED_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact|refresh-token|google|verify-firebase-token|forgot-password)$/, limiter: authAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact|refresh-token|google|verify-firebase-token)$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },

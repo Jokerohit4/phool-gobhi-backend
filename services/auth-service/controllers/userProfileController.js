@@ -19,6 +19,7 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // the customer app's DOB pickers and the privacy policy say 18 too.
 const MIN_AGE_YEARS = 18;
 const MAX_TRAINING_LOCATION_OTHER_CHARS = 80;
+const MAX_RECOMMENDED_EQUIPMENT_ITEMS = 20;
 
 // Latest allowed DOB as a UTC-midnight Date (both sides of the comparison in
 // updateProfile parse date-only strings, so no timezone drift).
@@ -157,6 +158,7 @@ function formatUser(user) {
     gender: user.gender || null,
     dateOfBirth: user.dateOfBirth || null,
     fitnessGoals: user.fitnessGoals || [],
+    recommendedEquipment: user.recommendedEquipment ?? null,
     experienceLevel: user.experienceLevel || null,
     weeklyFrequencyIntent: user.weeklyFrequencyIntent || null,
     referralCode: user.referralCode || null,
@@ -371,8 +373,9 @@ export const updateProfile = async (req, res) => {
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
+<<<<<<< Updated upstream
       weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
-      firstVisitBadgeConsent,
+      firstVisitBadgeConsent, recommendedEquipment,
     } = req.body;
 
     // appMode is deliberately NOT accepted here. It is derived server-side
@@ -444,6 +447,15 @@ export const updateProfile = async (req, res) => {
         return res.status(400).json({ error: `Invalid fitnessGoals. Must be an array of: ${VALID_FITNESS_GOALS.join(', ')}` });
       }
     }
+    if (recommendedEquipment !== undefined && recommendedEquipment !== null) {
+      if (
+        !Array.isArray(recommendedEquipment)
+        || recommendedEquipment.length > MAX_RECOMMENDED_EQUIPMENT_ITEMS
+        || recommendedEquipment.some((id) => !Number.isInteger(id) || id < 0)
+      ) {
+        return res.status(400).json({ error: 'recommendedEquipment must be an array of at most 20 non-negative integers' });
+      }
+    }
 
     const before = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!before) return res.status(404).json({ error: 'User not found' });
@@ -476,6 +488,7 @@ export const updateProfile = async (req, res) => {
     }
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
+    if (recommendedEquipment !== undefined) updates.recommendedEquipment = recommendedEquipment;
     // linkedGymId is the gym-join attribution written when a customer follows
     // a gym's join link (the app PUTs it here, and signup/login backfill it
     // server-side). This handler read it as a field to return but never as one
