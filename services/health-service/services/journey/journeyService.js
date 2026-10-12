@@ -393,7 +393,7 @@ export async function getJourneySummary(userId) {
   let weekDelta = null;
   try {
     const { weekDelta: weekDeltaFn } = await import('../ledger/scoreService.js');
-    weekDelta = await weekDeltaFn(userId);
+    weekDelta = await weekDeltaFn(prisma, { userId, today });
   } catch {
     weekDelta = null;
   }
