@@ -4,6 +4,7 @@ import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { tierOf, orderMemories } from './memoryService.js';
 import { summariseHomeSetup } from '../homeSetup.js';
 import { summariseForCoach } from '../healthProfile.js';
+import { quoteUserText, QUOTE_NOTE } from './guardrails.js';
 
 const prisma = new PrismaClient();
 
@@ -23,7 +24,8 @@ const prisma = new PrismaClient();
 // +1,500 for the health profile (gamified onboarding v2, 2026-10-01): the
 // allergy safety line at its cap (12 x 40 chars + phrasing, ~560) and the
 // lifestyle line at its worst (every phrase plus a 60-char hometown, ~900).
-const MAX_CONTEXT_CHARS = 5350;
+// +150 for the quoted-text note and the «» around each memory value (B16).
+const MAX_CONTEXT_CHARS = 5500;
 const ATTENDANCE_WINDOW_HOURS = 24 * 30;
 const RECENT_SESSION_LIMIT = 10;
 
@@ -279,8 +281,11 @@ export async function buildUserContextService(userId) {
   // turns and that prefix keeps caching.
   const ordered = orderMemories(memories);
   const byTier = (t) => ordered.filter((m) => tierOf(m.key) === t);
+  // Memory values are the user's own words (extracted from chat), so they go
+  // in as quoted data with a hard cap — never as text the model could read as
+  // an instruction (B16). The key is ours, from KEY_POLICY.
   const renderMemories = (rows) =>
-    rows.map((m) => `- ${m.key}: ${m.value}`).join('\n');
+    rows.map((m) => `- ${m.key}: ${quoteUserText(m.value, 120)}`).join('\n');
 
   const safety = byTier(1);
   const parts = [];
@@ -320,6 +325,10 @@ export async function buildUserContextService(userId) {
   if (rest.length) {
     parts.push(`Things they have told the assistant:\n${renderMemories(rest)}`);
   }
+
+  // Stated once, before any quoted text, and fixed wording, so the cached
+  // prefix stays byte-identical.
+  if (memories.length) parts.unshift(QUOTE_NOTE);
 
   let text = parts.join('\n');
   if (text.length > MAX_CONTEXT_CHARS) {

@@ -1036,5 +1036,11 @@
     "source": "client",
     "service": "auth-service",
     "experiment_variant": ""
+  },
+  "assistant_guardrail_triggered": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-12",
+    "notes": "the AI coach guardrail replaced an answer with the fixed doctor reply (B16). props stage (input = question never sent to the model; output = model reply replaced), reason (substance_advice | diagnosis_or_treatment | dose | cure_claim), lang (en | hinglish | hi)"
   }
 }

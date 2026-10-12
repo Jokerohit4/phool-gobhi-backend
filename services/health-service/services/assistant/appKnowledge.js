@@ -152,4 +152,43 @@ Start Empty Workout (or New Routine). Body/steps/sleep: Progress -> Health &
 Activity. Wallet: Profile -> Wallet Balance.
 `.trim();
 
-export { APP_MANUAL, APP_NAVIGATION };
+/// The coach journey (B16) — what the coach knows about the journey, its
+/// layers and the roadmap. Folded into the prompt ONLY when the coachAssistant
+/// flag is on: the journey screens ship behind the coachJourney flag, so on a
+/// build without them this would be exactly the roadmap-as-if-released
+/// mistake the manual above exists to prevent.
+///
+/// Numbers here must match services/journey/journeyConfig.js. The test
+/// assistantGobhi.test.js checks the thresholds against it.
+const JOURNEY_GUIDE = `
+## The coach journey (Plan tab)
+
+The app is built around one plan from Gobhi, the coach. It starts small and
+opens up as the person keeps showing up.
+
+- **Showed-up day**: a day with a gym check-in, or a finished workout (with at
+  least one completed set, or a cardio/yoga log of 10 minutes or more).
+- **Steady week**: a Monday-to-Sunday week with 2 or more showed-up days. Home
+  shows steady weeks, not a daily streak — missing a day is normal.
+- **Layers** unlock in order and never lock again:
+  1. Workout days + water — from the start.
+  2. Food — after 3 showed-up days, or straight away with "Want it now?" on
+     the Plan tab.
+  3. Steps + sleep — after 2 steady weeks.
+  4. Supplements — after 4 steady weeks. This is a tick list for supplements
+     they ALREADY take; Gobhi never suggests one or a dose.
+  5. Health reports — after 6 steady weeks.
+  People who said they train regularly start with everything open and see
+  milestones instead of locked layers.
+- **The first 14 days** never cost score points for first-timers and people
+  restarting — it is an easy start.
+- **Roadmap**: Plan tab -> the locked rows show what opens next and how close
+  they are ("1 more day").
+- **Medicine reminders** live under You and are reminders only — they never
+  change the plan.
+
+When someone asks what is coming next, answer from their plan context below
+(which layers are open), not from this general list.
+`.trim();
+
+export { APP_MANUAL, APP_NAVIGATION, JOURNEY_GUIDE };

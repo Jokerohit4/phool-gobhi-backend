@@ -10,7 +10,8 @@
 // pasted here, so that product changes touch one file and this one stays about
 // the rules.
 
-import { APP_MANUAL, APP_NAVIGATION } from './appKnowledge.js';
+import { APP_MANUAL, APP_NAVIGATION, JOURNEY_GUIDE } from './appKnowledge.js';
+import { classifyQuestion, doctorAnswer } from './guardrails.js';
 
 /// Bump this whenever the disclosure the user agreed to changes in substance.
 ///
@@ -47,6 +48,11 @@ export const CURRENT_POLICY_VERSION = 'assistant-full-scope-2026-09-18';
 /// full-scope decision was about. Policy version deliberately not bumped: the
 /// disclosure the user agreed to ("not a doctor") did not change.
 export const CURRENT_PROMPT_VERSION = 'v5';
+
+/// The prompt version recorded when the coachAssistant flag is on: v5 plus the
+/// Gobhi persona, the journey guide and per-message grounding (B16). Separate
+/// constant rather than a bump, because flag-off users still get v5 exactly.
+export const COACH_PROMPT_VERSION = 'v6-gobhi';
 
 /// How strict the assistant is about medical questions.
 ///
@@ -138,10 +144,32 @@ then offer to help with something you can: programming, technique, scheduling,
 consistency or general nutrition.
 `.trim();
 
-export function getSystemPrompt() {
+/// Gobhi (B16). Layered on top of the shared rules, never instead of them:
+/// the persona changes HOW the coach talks, not what it may say.
+export const GOBHI_PERSONA = `
+Persona: you are Gobhi — the broccoli in the Phool Gobhi logo, a gym coach with
+25 years of experience who meets people where they are. Most people you talk to
+are beginners whose nutrition knowledge comes from reels.
+- Reply in the language the person wrote in: English, Hinglish (Hindi in the
+  Roman alphabet, mixed with everyday English gym words) or Hindi (Devanagari).
+- Plain words, short sentences, warm and a little funny. Never shame a missed
+  day — a steady week is 2 days, not 7.
+- Never use these words: hypertrophy, RPE, 1RM, eccentric, concentric,
+  biomarker, calibrate, macros (say "your food plan"), VO2.
+- Never suggest a supplement, a medicine, or an amount or time to take one —
+  not even one they already log. Log-keeping is theirs; advice is their
+  doctor's.
+- When "Approved coaching notes" below cover the question, answer from them.
+  They are the founder-reviewed version and win over your own knowledge.
+`.trim();
+
+export function getSystemPrompt({ coach = false } = {}) {
   const scope = STRICTNESS === 'general_wellness'
     ? GENERAL_WELLNESS_RULES
     : FULL_SCOPE_RULES;
+  if (coach) {
+    return [SHARED_RULES, scope, '', GOBHI_PERSONA, '', APP_MANUAL, APP_NAVIGATION, '', JOURNEY_GUIDE].join('\n');
+  }
   // The app guide sits outside the strictness switch on purpose. A tightened
   // medical scope says "don't answer questions about injury" — it has nothing
   // to say about where the Book Now button is, and dropping the guide there
@@ -150,16 +178,16 @@ export function getSystemPrompt() {
   return [SHARED_RULES, scope, '', APP_MANUAL, APP_NAVIGATION].join('\n');
 }
 
-/// The seam for a stricter input classifier.
+/// The input classifier (B16; was a no-op seam until then).
 ///
-/// A no-op today by design: adding one now, with nothing to compare it
-/// against, would be guessing. It exists so that dropping one in later is a
-/// change to one function rather than a hunt through the request path for the
-/// right place to put it.
+/// Questions asking which medicine or supplement to take, how much or when,
+/// or asking for a diagnosis or treatment, get one fixed doctor answer in the
+/// person's own language and never reach the model. Rules in guardrails.js.
 ///
-/// Returns null to allow, or a string to refuse with.
-export function classifyMessage(_text) {
-  return null;
+/// Returns null to allow, or the string to refuse with.
+export function classifyMessage(text) {
+  const verdict = classifyQuestion(text);
+  return verdict.blocked ? doctorAnswer(verdict.lang) : null;
 }
 
 /// The disclaimer the user agrees to before their first message, and the
