@@ -292,6 +292,22 @@
       "phool_gobhi"
     ]
   },
+  "home_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-12",
+    "notes": "the three homes emitted only the automatic screen_viewed, so an opened-and-abandoned home looked identical to one that drove a booking. `home_viewed` names the persona once per home mount; `home_section_tapped` names the section the person reached for (the shared action rows; the health cards and rails keep their own richer events). Registered in the backend's docs/analytics-events.json alongside `home_section_tapped`."
+  },
+  "home_section_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-12",
+    "notes": "names the section the person reached for (the shared action rows; the health cards and rails keep their own richer events). Registered in the backend's docs/analytics-events.json alongside `home_viewed`."
+  },
   "topup_tapped": {
     "source": "client",
     "apps": [
