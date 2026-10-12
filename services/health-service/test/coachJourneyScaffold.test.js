@@ -11,7 +11,7 @@ import contentRouter from '../routes/content.js';
 // The migration-vs-schema parity sweep in schemaMigrationParity.test.js already
 // proves every model and column reaches the SQL; this file pins the parts that
 // sweep cannot see: that the new routers are actually mounted, that they are
-// inert, and that the two nullable flips really are nullable.
+// filled by their tasks, and that the two nullable flips really are nullable.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(here, '..', 'prisma', 'schema.prisma'), 'utf8');
@@ -60,14 +60,14 @@ test('the three coach-journey routers are mounted on the health router', () => {
   }
 });
 
-test('the journey router has routes (B9), habits and content are still inert (B11, B15)', () => {
+test('the journey (B9), habits (B11) and content (B15) routers all have routes', () => {
   // A2 mounted them empty. B9 owns journey, B11 owns habits, B15 owns content.
   assert.equal(typeof journeyRouter, 'function', 'journey is not an Express router');
   assert.ok(journeyRouter.stack.length > 0, 'journey router should have routes (B9)');
   assert.equal(typeof habitsRouter, 'function', 'habits is not an Express router');
   assert.ok(habitsRouter.stack.length > 0, 'habits router should have routes (B11)');
   assert.equal(typeof contentRouter, 'function', 'content is not an Express router');
-  assert.equal(contentRouter.stack.length, 0, 'content router should be inert until B15');
+  assert.ok(contentRouter.stack.length > 0, 'content router should have routes (B15)');
 });
 
 test('the migration is additive and opens with a lock_timeout', () => {
