@@ -237,7 +237,8 @@
             "NODE_ENV": "development",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "buddy-service",
-            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app"
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "buddy-service-secrets"
@@ -248,7 +249,8 @@
             "NODE_ENV": "production",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "buddy-service",
-            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app"
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
           },
           "secrets": {
             "SECRETS_JSON": "buddy-service-secrets"
