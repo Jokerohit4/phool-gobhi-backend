@@ -13,8 +13,17 @@ import { isFeatureEnabled } from './requireFeatureFlag.js';
 // and the pre-existing routes are untouched (see anyOf for why the either-gated
 // ones keep answering exactly as they did).
 export const requireCoachJourney = async (req, res, next) => {
-  if (!(await isFeatureEnabled('coachJourney'))) {
-    return res.status(403).json({ error: 'FEATURE_DISABLED' });
+  try {
+    const enabled = await isFeatureEnabled('coachJourney');
+    if (!enabled) {
+      return res.status(403).json({ error: 'FEATURE_DISABLED' });
+    }
+  } catch (err) {
+    console.error('requireCoachJourney: feature flag check error:', err.message);
+    return res.status(503).json({
+      error: 'Could not verify feature flag. Please try again.',
+      code: 'FEATURE_CHECK_FAILED',
+    });
   }
   next();
 };
