@@ -22,7 +22,7 @@ function istDayOf(instant) {
 async function getQualifyingWorkoutDays(userId, from = null) {
   const where = {
     userId,
-    type: { notIn: [null, 'rest'] },
+    type: { not: null, notIn: ['rest'] },
     endedAt: { not: null },
     ...(from ? { localDate: { gte: from } } : {}),
   };
