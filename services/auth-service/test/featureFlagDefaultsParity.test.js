@@ -177,12 +177,23 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
 
   assert.ok(cubitDefaults.size > 0, 'found no bool flag fields in the cubit');
 
-  // Two flags the cubit deliberately does not carry: both are read straight off
-  // AppConfigStore by the widgets that need them (app_config_store.dart's
-  // healthLedgerVisible / foodPhotoLoggingVisible), because the ledger gate also
-  // has to fold in healthMetrics and food-photo logging has no home-screen
-  // surface. Listed rather than skipped so a genuinely dropped flag is noticed.
-  const readFromTheStore = new Set(['healthLedgerEnabled', 'foodPhotoLoggingEnabled']);
+  // Flags the cubit deliberately does not carry. Each is read straight off
+  // AppConfigStore by the widgets that need it (app_config_store.dart's
+  // healthLedgerVisible / foodPhotoLoggingVisible / coachJourneyVisible /
+  // selfLinkGymVisible), where the getter can fold in a parent flag - the ledger
+  // gate also has to account for healthMetrics, and food-photo logging and the
+  // coach-journey / self-link surfaces have no home-screen cubit field. The last
+  // two - referralHomeTrigger and coachAssistant - have no client reader at all
+  // yet: they exist in AppConfigModel only and default false, so they fail
+  // closed. Listed rather than skipped so a genuinely dropped flag is noticed.
+  const readFromTheStore = new Set([
+    'healthLedgerEnabled',
+    'foodPhotoLoggingEnabled',
+    'coachJourneyEnabled',
+    'selfLinkGymEnabled',
+    'referralHomeTriggerEnabled',
+    'coachAssistantEnabled',
+  ]);
 
   const divergence = [];
   const missing = [];
