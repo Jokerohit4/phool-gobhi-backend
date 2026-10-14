@@ -145,6 +145,14 @@ test('unsafeReason: doses with drug words and cure claims; ordinary coaching pas
   assert.equal(unsafeReason('Eat dal and paneer for protein.'), null);
 });
 
+test('unsafeReason: Hindi units and Devanagari digits are doses too', () => {
+  // The protein-myths Hindi translation slipped through with "ग्राम" + "सप्लीमेंट्स".
+  assert.ok(unsafeReason('रोज़ाना लगभग 54 ग्राम प्रोटीन चाहिए। सप्लीमेंट्स मदद कर सकते हैं।'));
+  assert.ok(unsafeReason('५ ग्राम क्रिएटिन, विटामिन के साथ'));
+  assert.ok(unsafeReason('500 मि.ग्रा. की गोली'));
+  assert.equal(unsafeReason('30 सेकंड रुकें, फिर 60 सेकंड आराम करें।'), null);
+});
+
 test('parseJsonReply tolerates a ```json fence', () => {
   assert.deepEqual(parseJsonReply('```json\n{"a":1}\n```'), { a: 1 });
 });

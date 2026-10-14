@@ -120,7 +120,8 @@ export function classifyQuestion(text) {
 
 // ---- output -----------------------------------------------------------------
 
-const DOSE = /\d+(?:[.,]\d+)?\s?(?:mg|mcg|µg|iu|ml|g|gm|gms|grams?|milligrams?|units?|scoops?)\b|\d+\s?(?:मि\.?\s?ग्रा|ग्राम|मिलीग्राम)/i;
+// Digits may be Devanagari (५ ग्राम) as well as ASCII.
+const DOSE = /[0-9०-९]+(?:[.,][0-9०-९]+)?\s?(?:mg|mcg|µg|iu|ml|g|gm|gms|grams?|milligrams?|units?|scoops?)\b|[0-9०-९]+\s?(?:मि\.?\s?ग्रा|ग्राम|मिलीग्राम|माइक्रोग्राम)/i;
 const CURE_CLAIM = new RegExp(
   '\\b(cures?|cured|treats?|treated|heals?|reverses?|reversed|fixes)\\b[^.!?\\n।]*?' + `(${CONDITION.source})`
   + '|इलाज\\s*(करता|करती|करेगा|करेगी|है)',

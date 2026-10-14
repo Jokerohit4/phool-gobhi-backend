@@ -86,6 +86,12 @@ test('output filter blocks a dose next to a supplement or medicine word', () => 
   assert.equal(filterReply('Roz 2 goli lo, 500 mg wali.').blocked, true);
 });
 
+test('output filter reads Devanagari digits in a dose', () => {
+  assert.equal(filterReply('५०० मिलीग्राम की गोली रोज़ लें।').blocked, true);
+  assert.equal(filterReply('500 मिलीग्राम की गोली रोज़ लें।').blocked, true);
+  assert.equal(filterReply('३० सेकंड रुकें।').blocked, false);
+});
+
 test('output filter blocks a cure or treatment claim', () => {
   assert.deepEqual(filterReply('Walking daily can reverse diabetes.'), { blocked: true, reason: 'cure_claim' });
   assert.equal(filterReply('This routine treats PCOS.').blocked, true);

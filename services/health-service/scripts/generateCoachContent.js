@@ -48,7 +48,9 @@ const LANGS = ['en', 'hinglish', 'hi'];
 // Same spirit as the AI coach's output filter: a number with a unit next to a
 // supplement or medicine word, or a cure/treatment claim, is never shipped as
 // coaching copy.
-const DOSE = /\d+(\.\d+)?\s?(mg|mcg|µg|iu|ml|g|gm|grams?|milligrams?)\b/i;
+// Digits may be Devanagari (५) and units Hindi (ग्राम, मि.ग्रा): the Hindi
+// translation is checked by the same rule as the English.
+const DOSE = /[0-9०-९]+([.,][0-9०-९]+)?\s?(mg|mcg|µg|iu|ml|g|gm|grams?|milligrams?)\b|[0-9०-९]+\s?(ग्राम|मिलीग्राम|माइक्रोग्राम|मि\.?\s?ग्रा|मि\.?\s?ली)/i;
 const DRUG_WORDS = /(supplement|creatine|whey|protein powder|vitamin|tablet|capsule|pill|medicine|medication|steroid|pre-?workout|fat burner|dawai|dava|goli|सप्लीमेंट|दवा|गोली|टैबलेट|विटामिन)/i;
 const CURE = /\b(cures?|treats?|heals?|reverses?)\b.*\b(disease|diabetes|thyroid|pcos|pcod|bp|blood pressure|cholesterol|arthritis)\b|इलाज/i;
 
