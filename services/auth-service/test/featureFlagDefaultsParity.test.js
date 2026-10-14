@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { FEATURE_FLAGS } from '../config/featureFlagRegistry.js';
 
 // The offline fallback and the server defaults answer the same question - "the
@@ -17,17 +17,22 @@ import { FEATURE_FLAGS } from '../config/featureFlagRegistry.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const reposRoot = join(here, '..', '..', '..', '..');
+// The app checkout to compare against. Defaults to the sibling repo, but
+// CUSTOMER_APP_DIR overrides it so the test can run against a specific (e.g.
+// clean) checkout; a relative value is resolved from the cwd of the test run,
+// so `../../../pg-app-clean` works from this service directory.
+const customerAppDir = process.env.CUSTOMER_APP_DIR
+  ? resolve(process.env.CUSTOMER_APP_DIR)
+  : join(reposRoot, 'phool-gobhi-customer-app');
 const customerAppModel = join(
-  reposRoot,
-  'phool-gobhi-customer-app',
+  customerAppDir,
   'lib',
   'data',
   'models',
   'app_config_model.dart',
 );
 const customerAppCubit = join(
-  reposRoot,
-  'phool-gobhi-customer-app',
+  customerAppDir,
   'lib',
   'presentation',
   'bloc',
