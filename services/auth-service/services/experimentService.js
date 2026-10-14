@@ -1,11 +1,15 @@
-// Tab experiment service — MINIMAL STUB as of A1 (2026-10-16).
+// Tab experiment service — the A/B test is ENDED (2026-10-14).
 //
-// The coach journey ships an A/B on the tab bar: `bucketFor` returns which
-// variant this user sees, and GET /me exposes it as `experiments.tabBar` so the
-// app can branch on the first call. A1 ships the constant control (`'A'`) so the
-// endpoint shape exists and nothing changes for any user yet; B14 replaces the
-// body with a deterministic per-user hash (same user → same bucket, forever, no
-// storage) once the treatment screens exist.
+// The coach journey shipped an A/B on the tab bar: B14 replaced the constant
+// control with a deterministic per-user hash, and GET /me exposes the bucket as
+// `experiments.tabBar` so the app can branch on the first call. The founder
+// ended the experiment on 2026-10-14 — at roughly 60 users the 50/50 split could
+// not produce a meaningful result — so `bucketFor` now pins every user to the
+// control.
+//
+// 'A' = no Bookings tab. The app's variant-B code is removed in a later task.
+// The function signature and the `experiments.tabBar` field on /me stay exactly
+// as they are, because installed app builds still read that field.
 //
 // Contract: 'A' | 'B', assigned per userId and stable across calls.
 
@@ -16,7 +20,8 @@
  * @returns {{ tabBar: 'A' | 'B' }}
  */
 export function bucketFor(userId) { // eslint-disable-line no-unused-vars
-  // deterministic hash of userId + ':tabBar', 50/50 A/B, stable per userId
-  const h = (userId * 2654435761) >>> 0; // simple multiply‑add hash
-  return { tabBar: h % 2 === 0 ? 'A' : 'B' };
+  // The A/B test is over: everyone is in the control, so no user gets the
+  // Bookings tab. `userId` is unused but kept in the signature (and above the
+  // no-unused-vars lint) so the endpoint contract is unchanged.
+  return { tabBar: 'A' };
 }
