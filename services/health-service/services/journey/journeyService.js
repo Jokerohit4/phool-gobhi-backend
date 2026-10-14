@@ -123,9 +123,9 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
   let next = null;
   if (nextLocked) {
     const unlock = unlockConfigForLayerKey(nextLocked.key);
-    if (unlock.type === 'showed_up_days') {
+    if (unlock && unlock.type === 'showed_up_days') {
       next = { layer: nextLocked.layer, type: 'showed_up_days', have: showedUpDays.length, need: unlock.need };
-    } else if (unlock.type === 'steady_weeks') {
+    } else if (unlock && unlock.type === 'steady_weeks') {
       next = { layer: nextLocked.layer, type: 'steady_weeks', have: steadyWeeks, need: unlock.need };
     }
   }
