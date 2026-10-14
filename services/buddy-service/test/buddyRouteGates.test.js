@@ -83,7 +83,8 @@ const allRoutes = router.stack
 const isInternal = (r) => r.path.startsWith('/internal/');
 const isAdmin = (r) => r.path.startsWith('/moderation/') || (r.path.startsWith('/reports') && !(r.method === 'POST' && r.path === '/reports'));
 const concrete = (path) => path.replace(/:[A-Za-z]+/g, '1');
-const customerRoutes = allRoutes.filter((r) => !isInternal(r) && !isAdmin(r));
+const isLeague = (r) => r.path === '/league';
+const customerRoutes = allRoutes.filter((r) => !isInternal(r) && !isAdmin(r) && !isLeague(r));
 const adminRoutes = allRoutes.filter(isAdmin);
 
 test('the router has the routes the contract names', () => {
@@ -112,6 +113,14 @@ test('flag off: every customer route answers 403 FEATURE_DISABLED (not 404)', as
     assert.equal(res.status, 403, `${r.method} ${r.path}`);
     assert.deepEqual(res.body, DISABLED, `${r.method} ${r.path}`);
   }
+});
+
+test('the consistency league is not behind the buddy flag', async () => {
+  appConfig = 'off';
+  const res = await call('GET', '/league');
+  assert.notEqual(res.body?.code, 'FEATURE_DISABLED');
+  const anon = await call('GET', '/league', { role: null });
+  assert.equal(anon.status, 401);
 });
 
 test('flag off: admin report and moderation routes still work for gobhi', async () => {

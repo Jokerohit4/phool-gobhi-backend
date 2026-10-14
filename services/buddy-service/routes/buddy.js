@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireInternal, requireRole } from '../middleware/requireAuth.js';
+import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { uploadBuddyPhotos, MAX_BUDDY_PHOTOS } from '../utils/upload.js';
 import * as ctrl from '../controllers/buddyController.js';
@@ -60,7 +60,9 @@ router.patch('/reports/:id', gobhi, ctrl.reviewReport);
 router.get('/moderation/gender-changes', gobhi, ctrl.listGenderChanges);
 router.patch('/moderation/gender-changes/:userId/clear', gobhi, ctrl.clearGenderChange);
 
-router.get('/league', ...customer, ctrl.getConsistencyLeague);
+// The consistency league is not part of buddy: it has its own visibility (the
+// social switch hides it in the app) and must keep working when buddy is off.
+router.get('/league', requireAuth, ctrl.getConsistencyLeague);
 
 // Internal: auth-service calls this after a profile edit that touches
 // gender/dateOfBirth/fitnessGoals, to keep buddy-service's denormalized
