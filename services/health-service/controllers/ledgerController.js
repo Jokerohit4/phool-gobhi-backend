@@ -4,6 +4,7 @@ import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { currentNutritionTarget } from '../services/ledger/currentTarget.js';
+import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
 import * as scoreTargetService from '../services/ledger/scoreTargetService.js';
@@ -915,3 +916,28 @@ export const sweepFoodPhotos = handle(async () =>
 export const runDayCloseSweepInternal = handle(async () =>
   dayCloseService.runDayCloseSweep(prisma, { isEnabled: isFeatureEnabled }),
 );
+// Kept (the Food layer's targets screen): restored verbatim from the pre-one-plan controller.
+export const getTargetActivityDetail = handle(async (req) => {
+  return targetService.describeActivity({
+    prisma,
+    userId: req.userId,
+    localDate: req.query?.localDate,
+  });
+});
+
+export const getTargets = handle(async (req) => {
+  const target = await currentNutritionTarget(prisma, req.userId);
+  if (!target) return null;
+  // Decimal columns come back as strings over JSON, which would make the
+  // client parse every number. Normalised once, here.
+  return {
+    ...target,
+    kcal: Number(target.kcal),
+    proteinG: Number(target.proteinG),
+    carbsG: Number(target.carbsG),
+    fatG: Number(target.fatG),
+    fibreG: Number(target.fibreG),
+    waterMl: Number(target.waterMl),
+  };
+});
+

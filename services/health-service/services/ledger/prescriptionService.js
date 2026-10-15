@@ -506,4 +506,4 @@ export async function saveSlots({ prisma, userId, slots = [], journey = null }) 
   return buildPlan(ctx, { ...resolve(ctx, {}, 'read', { allowNullKcal: Boolean(journey) }), sessionsPerWeek }, journey);
 }
 
-export { deriveStepsPerDay, boundsFor, buildPlan, getPlan, previewPlan, savePlan, saveSettings, saveSlots };
+export { buildPlan };

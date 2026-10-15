@@ -3,7 +3,7 @@ import * as todayService from '../services/plan/todayService.js';
 import { rebuildPlan } from '../services/plan/rebuildPlan.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
-import { unlockFoodEarly } from '../journey/journeyService.js';
+import { unlockFoodEarly } from '../services/journey/journeyService.js';
 import { track } from '../utils/analytics.js';
 
 const prisma = new PrismaClient();

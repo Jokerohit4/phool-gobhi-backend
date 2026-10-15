@@ -1,238 +1,3 @@
-import { PrismaClient } from '@prisma/client';
-import { isDueOn } from '../ledger/ledgerPlanService.js';
-import { getDayTotals } from '../ledger/nutritionService.js';
-import { currentNutritionTarget } from '../ledger/currentTarget.js';
-import { isQualifyingSession } from '../journey/showedUpDays.js';
-import { getOnLayerKeys } from './layerState.js';
-import { JOURNEY, ALWAYS_ON_LAYER_KEYS, LAYER_OF_LAYER_KEY } from '../journey/journeyConfig.js';
-import { POINTS, ROW_POINTS } from '../ledger/constants.js';
-
-/**
- * Determines the "today" date the same way dayCloseService does.
- * @returns {string} YYYY-MM-DD in IST
- */
-function todayIST() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-}
-
-/**
- * Checks if a date is in the future relative to today.
- * @param {string} localDate - YYYY-MM-DD
- * @returns {boolean}
- */
-function isFutureDate(localDate) {
-  const today = todayIST();
-  return localDate > today;
-}
-
-/**
- * Gets the display order index for a row kind.
- * Display order (Contracts): workout/rest, water, food, steps, sleep, supplements (by name), doctor (by createdAt), own (by createdAt)
- */
-function getDisplayOrder(row) {
-  const kindOrder = {
-    workout: 0,
-    rest: 0,
-    water: 1,
-    food: 2,
-    steps: 3,
-    sleep: 4,
-    supplement: 5,
-    doctor: 6,
-    own: 7,
-  };
-  return kindOrder[row.kind] ?? 99;
-}
-
-/**
- * Builds a row object for the /plan/today response.
- * @param {object} item - PlanItem from database
- * @param {object} completion - Completion record if exists
- * @param {object} totals - Day totals from nutritionService
- * @param {object} target - NutritionTarget if exists
- * @param {string} localDate - The date being resolved
- * @param {boolean} hasQualifyingSession - Whether user had a qualifying workout session
- * @returns {object} Row object for the response
- */
-function buildRow(item, completion, totals, target, localDate, hasQualifyingSession) {
-  const isDone = !!completion;
-  const how = completion?.how ?? null;
-  let progress = isDone ? 1 : 0;
-  let value = null;
-  let targetValue = null;
-  let unit = null;
-  let action = 'tick';
-  let points = 0;
-  let earned = null;
-  let supplementId = null;
-  let templateId = null;
-  let moves = null;
-  let protein = null;
-
-  switch (item.kind) {
-    case 'workout':
-      points = ROW_POINTS.workout;
-      if (!isDone && hasQualifyingSession) {
-        progress = 1;
-      }
-      action = isDone ? 'open_session' : 'start_session';
-      templateId = item.templateId ?? null;
-      // Moves would need to be fetched from template exercises
-      break;
-    case 'rest':
-      points = ROW_POINTS.rest;
-      progress = 1; // Rest is always done
-      action = 'none';
-      break;
-    case 'habit':
-      if (item.layerKey === 'water') {
-        points = ROW_POINTS.habit;
-        value = totals?.waterMl ?? 0;
-        targetValue = target?.waterMl ?? 2500;
-        unit = 'ml';
-        action = 'log_water';
-        if (!isDone) progress = Math.min(1, value / targetValue);
-      } else {
-        // Other habits (sleep is handled separately, but could be here too)
-        points = ROW_POINTS.habit;
-      }
-      break;
-    case 'steps':
-      points = ROW_POINTS.habit;
-      value = totals?.steps ?? 0;
-      targetValue = item.targetValue ?? 6000;
-      unit = 'steps';
-      action = 'tick';
-      if (!isDone) progress = Math.min(1, value / targetValue);
-      break;
-    case 'sleep':
-      points = ROW_POINTS.habit;
-      value = totals?.sleepMinutes ?? 0;
-      targetValue = item.targetValue ?? 420;
-      unit = 'min';
-      action = 'tick';
-      if (!isDone) progress = Math.min(1, value / targetValue);
-      break;
-    case 'supplement':
-      points = ROW_POINTS.habit;
-      supplementId = item.sourceRef ? Number(item.sourceRef.replace('supplement:', '')) : null;
-      action = 'mark_supplement';
-      break;
-    case 'own':
-      points = item.ownKind === 'workout' ? ROW_POINTS.workout : ROW_POINTS.habit;
-      action = 'tick';
-      break;
-    case 'doctor_medication':
-    case 'doctor_test':
-    case 'doctor_appointment':
-      points = ROW_POINTS.doctor;
-      action = 'tick';
-      break;
-  }
-
-  const row = {
-    key: `item:${item.id}`,
-    itemId: item.id,
-    kind: item.kind === 'rest' ? 'rest' : item.kind,
-    layerKey: item.layerKey,
-    origin: item.origin,
-    title: item.title,
-    points,
-    done: isDone,
-    how,
-    progress,
-    value,
-    target: targetValue,
-    unit,
-    action,
-  };
-
-  if (templateId !== null) row.templateId = templateId;
-  if (moves !== null) row.moves = moves;
-  if (supplementId !== null) row.supplementId = supplementId;
-  if (protein !== null) row.protein = protein;
-
-  return row;
-}
-
-/**
- * Builds the synthesized food row.
- * @param {object} totals - Day totals from nutritionService
- * @param {object} target - NutritionTarget if exists
- * @param {boolean} foodLayerOn - Whether food layer is on
- * @returns {object|null} Food row or null if food layer not on
- */
-function buildFoodRow(totals, target, foodLayerOn) {
-  if (!foodLayerOn) return null;
-
-  const proteinTarget = target?.proteinG ?? 0;
-  const calorieTarget = target?.kcal ?? 0;
-  const proteinValue = totals?.proteinG ?? 0;
-  const calorieValue = totals?.kcal ?? 0;
-  const mealsLogged = totals?.mealSlotsCovered ?? 0;
-
-  const possibleProtein = proteinTarget > 0 ? ROW_POINTS.foodProtein : 0;
-  const possibleCalories = calorieTarget > 0 ? ROW_POINTS.foodCalories : 0;
-  const possibleMeals = ROW_POINTS.foodMeals;
-  const possible = possibleProtein + possibleCalories + possibleMeals;
-
-  let earned = 0;
-  if (proteinTarget > 0 && proteinValue / proteinTarget >= 0.9) earned += ROW_POINTS.foodProtein;
-  if (calorieTarget > 0 && Math.abs(1 - calorieValue / calorieTarget) <= 0.1) earned += ROW_POINTS.foodCalories;
-  if (mealsLogged >= 3) earned += ROW_POINTS.foodMeals;
-
-  const done = earned === possible && possible > 0;
-
-  return {
-    key: 'food',
-    itemId: null,
-    kind: 'food',
-    layerKey: 'food',
-    origin: 'suggested',
-    title: 'Food',
-    points: possible,
-    earned,
-    done,
-    how: null,
-    progress: possible > 0 ? earned / possible : 0,
-    value: calorieValue,
-    target: calorieTarget,
-    unit: 'kcal',
-    protein: proteinTarget > 0 ? { value: proteinValue, target: proteinTarget } : null,
-    action: 'log_food',
-  };
-}
-
-/**
- * Calculates bonus points for the day.
- * @param {object} totals - Day totals
- * @param {boolean} hasQualifyingSession - Whether user had a qualifying workout session
- * @param {boolean} hasPlannedWorkout - Whether a workout was planned
- * @param {boolean} hasPlannedWorkoutDone - Whether the planned workout was done
- * @param {boolean} isRestDay - Whether today is a rest day
- * @returns {number} Bonus points
- */
-function calculateBonus(totals, hasQualifyingSession, hasPlannedWorkout, hasPlannedWorkoutDone, isRestDay) {
-  let bonus = 0;
-
-  // Unplanned workout bonus (+8)
-  // Qualifying session on a day with no workout row, or second qualifying session on a workout day
-  // Max one +8 per day
-  if (hasQualifyingSession) {
-    if (!hasPlannedWorkout || (hasPlannedWorkout && !hasPlannedWorkoutDone)) {
-      bonus += POINTS.unplannedWorkout; // 8
-    }
-  }
-
-  // Micronutrient bonus (<= 10)
-  if (totals && target) {
-    // Note: target is not available here, this would need to be passed
-    // For now, we'll calculate this in the main function where target is available
-  }
-
-  return bonus;
-}
-
 /**
  * Resolves one localDate into the full row list (the single "done" resolver
  * shared by todayService and the score engine).
@@ -249,126 +14,357 @@ import { ROW_POINTS, DEFAULT_SLEEP_MINUTES } from '../ledger/constants.js';
 import { DEFAULT_STEPS } from '../journey/journeyConfig.js';
 
 export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}) {
-  // Validate date
-  if (!localDate || !/^\d{4}-\d{2}-\d{2}$/.test(localDate)) {
-    localDate = todayIST();
-  }
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-  // If future date, treat as today
-  if (isFutureDate(localDate)) {
-    localDate = todayIST();
-  }
-
-  // Get onLayerKeys if not provided
-  if (!onLayerKeys) {
-    onLayerKeys = await getOnLayerKeys(prisma, userId);
-  }
-
-  // Check if food layer is on
-  const foodLayerOn = onLayerKeys.includes('food');
-
-  // Get plan items due today
-  const items = await prisma.planItem.findMany({
-    where: { userId, active: true },
-    include: {
-      completions: { where: { localDate } },
-    },
-    orderBy: [{ kind: 'asc' }, { id: 'asc' }],
-  });
-
-  // Get food totals and target
-  const [totals, target] = await Promise.all([
+  const [
+    planResult,
+    foodResult,
+    nutritionTarget,
+    sessions,
+    supplementLogs,
+  ] = await Promise.all([
+    getPlanForDate(prisma, { userId, localDate, today }),
     getDayTotals(prisma, userId, localDate),
     currentNutritionTarget(prisma, userId),
+    prisma.workoutSession.findMany({
+      where: { userId, localDate, endedAt: { not: null }, type: { not: null, not: 'rest' } },
+      select: { id: true, startedAt: true, endedAt: true, exercises: { select: { sets: { where: { completed: true }, select: { id: true } } } } },
+    }),
+    prisma.supplementLog.findMany({
+      where: { userId, localDate, taken: true },
+      select: { scheduleId: true },
+    }),
   ]);
 
-  // Check for qualifying workout session
-  const sessions = await prisma.workoutSession.findMany({
-    where: { userId, localDate, endedAt: { not: null } },
-    select: { id: true, type: true, endedAt: true, startedAt: true, exercises: { select: { sets: { where: { completed: true }, select: { id: true } } } } },
-  });
+  const planItems = planResult.items;
+  const completions = planItems.flatMap((item) =>
+    (item.completions || []).map((c) => ({ ...c, planItemId: item.id }))
+  );
 
-  const hasQualifyingSession = sessions.some((s) => isQualifyingSession(s));
-  const hasPlannedWorkout = items.some((i) => i.kind === 'workout');
-  const hasPlannedWorkoutDone = items.some((i) => i.kind === 'workout' && i.completions?.length > 0);
-  const isRestDay = items.some((i) => i.kind === 'rest');
+  const completedItemIds = new Set(completions.map((c) => c.planItemId));
+  const takenSupplementIds = new Set(supplementLogs.map((l) => l.scheduleId));
 
-  // Build rows for each plan item
+  const waterTarget = nutritionTarget?.waterMl ?? 2500;
+  const waterLogged = foodResult.totals.waterMl || 0;
+  const waterDone = waterLogged >= waterTarget;
+
+  const stepsTarget = nutritionTarget?.stepsPerDay ?? DEFAULT_STEPS;
+  const stepsLogged = Math.max(
+    foodResult.bySlot?.steps?.total || 0,
+    foodResult.totals.steps || 0
+  );
+  const stepsDone = stepsLogged >= stepsTarget;
+
+  const sleepTarget = nutritionTarget?.sleepMinutes ?? DEFAULT_SLEEP_MINUTES;
+  const sleepLogged = foodResult.totals.sleepMinutes || 0;
+  const sleepDone = sleepLogged >= sleepTarget;
+
+  const qualifyingSessions = sessions.filter(isQualifyingSession);
+  const hasPlannedWorkout = planItems.some((i) => i.kind === 'workout');
+  const hasPlannedWorkoutDone = planItems.some(
+    (i) => i.kind === 'workout' && completedItemIds.has(i.id)
+  );
+  const unplannedWorkout = qualifyingSessions.length > 0 && !hasPlannedWorkoutDone;
+
   const rows = [];
   let earned = 0;
-  let totalRows = 0;
-  let doneRows = 0;
+  let target = 0;
+  let doneCount = 0;
+  let totalCount = 0;
 
-  // Sort items by display order
-  const sortedItems = [...items].sort((a, b) => getDisplayOrder(a) - getDisplayOrder(b));
+  const restItem = planItems.find((i) => i.kind === 'rest');
 
-  for (const item of sortedItems) {
-    // Check if item is due today
-    if (item.endsOn && localDate > item.endsOn) continue;
-    if (!isDueOn(item, localDate, localDate)) continue;
+  for (const item of planItems) {
+    const isDue = item.kind === 'rest' ? restItem === item : true;
 
-    // Filter by onLayerKeys for suggested items
-    if (item.origin === 'suggested' && item.layerKey && !onLayerKeys.includes(item.layerKey)) {
-      continue;
-    }
-    // Medicine layer items only when medical_records consent granted
-    if (item.layerKey === 'medicine' && !onLayerKeys.includes('medicine')) {
-      continue;
-    }
+    if (!isDue) continue;
 
-    const completion = item.completions?.[0] ?? null;
-    const row = buildRow(item, completion, totals, target, localDate, hasQualifyingSession);
-    rows.push(row);
+    const completed = completedItemIds.has(item.id);
+    const completion = completions.find((c) => c.planItemId === item.id);
+    const how = completed ? (completion?.how === 'auto' ? 'auto' : 'tick') : null;
 
-    totalRows++;
-    if (row.done) doneRows++;
-    if (row.kind !== 'food' && row.done && row.points > 0) {
-      earned += row.points;
-    }
-  }
+    let points = 0;
+    let progress = 0;
+    let done = false;
+    let value = null;
+    let tgt = null;
+    let unit = null;
+    let action = 'tick';
+    let templateId = null;
+    let moves = null;
+    let protein = null;
+    let earnedFood = null;
+    let possibleFood = null;
 
-  // Build food row
-  const foodRow = buildFoodRow(totals, target, foodLayerOn);
-  if (foodRow) {
-    rows.push(foodRow);
-    totalRows++;
-    if (foodRow.done) doneRows++;
-    earned += foodRow.earned ?? 0;
-  }
-
-  // Calculate target (sum of points for all due rows)
-  const targetPoints = rows.reduce((sum, r) => sum + (r.points ?? 0), 0);
-
-  // Calculate bonus
-  let bonus = 0;
-  // Unplanned workout bonus
-  if (hasQualifyingSession && (!hasPlannedWorkout || (hasPlannedWorkout && !hasPlannedWorkoutDone))) {
-    bonus += POINTS.unplannedWorkout; // 8
-  }
-  // Micronutrient bonus (max 10)
-  if (target && totals) {
-    let microPoints = 0;
-    const micros = ['iron', 'magnesium', 'calcium', 'zinc'];
-    for (const key of micros) {
-      const t = target.micros?.[key];
-      if (!t) continue;
-      const got = totals[key];
-      if (got !== undefined && got !== null && got / t >= 0.8) {
-        microPoints += 2; // POINTS.microPerMet
+    switch (item.kind) {
+      case 'workout': {
+        points = ROW_POINTS.workout;
+        target += points;
+        totalCount += 1;
+        if (completed) {
+          done = true;
+          doneCount += 1;
+          earned += points;
+        }
+        action = completed ? 'open_session' : 'start_session';
+        const slot = await prisma.workoutTemplate.findUnique({ where: { id: item.templateId } });
+        templateId = item.templateId;
+        moves = slot?.moves ?? null;
+        progress = done ? 1 : 0;
+        break;
+      }
+      case 'rest': {
+        points = ROW_POINTS.rest;
+        target += points;
+        totalCount += 1;
+        done = true;
+        doneCount += 1;
+        earned += points;
+        action = 'none';
+        progress = 1;
+        break;
+      }
+      case 'habit': {
+        if (item.layerKey === 'water') {
+          points = ROW_POINTS.habit;
+          target += points;
+          totalCount += 1;
+          progress = Math.min(1, waterLogged / waterTarget);
+          if (waterDone) {
+            done = true;
+            doneCount += 1;
+            earned += points;
+          }
+          value = waterLogged;
+          tgt = waterTarget;
+          unit = 'ml';
+          action = 'log_water';
+        } else if (item.layerKey === 'steps') {
+          points = ROW_POINTS.habit;
+          target += points;
+          totalCount += 1;
+          progress = Math.min(1, stepsLogged / stepsTarget);
+          if (stepsDone) {
+            done = true;
+            doneCount += 1;
+            earned += points;
+          }
+          value = stepsLogged;
+          tgt = stepsTarget;
+          unit = 'steps';
+          action = 'tick';
+        } else if (item.layerKey === 'sleep') {
+          points = ROW_POINTS.habit;
+          target += points;
+          totalCount += 1;
+          progress = Math.min(1, sleepLogged / sleepTarget);
+          if (sleepDone) {
+            done = true;
+            doneCount += 1;
+            earned += points;
+          }
+          value = sleepLogged;
+          tgt = sleepTarget;
+          unit = 'min';
+          action = 'tick';
+        } else {
+          points = ROW_POINTS.habit;
+          target += points;
+          totalCount += 1;
+          if (completed) {
+            done = true;
+            doneCount += 1;
+            earned += points;
+          }
+          progress = done ? 1 : 0;
+        }
+        break;
+      }
+      case 'supplement': {
+        points = ROW_POINTS.habit;
+        target += points;
+        totalCount += 1;
+        const suppDone = takenSupplementIds.has(item.sourceRef?.replace('supplement:', ''));
+        if (suppDone || completed) {
+          done = true;
+          doneCount += 1;
+          earned += points;
+        }
+        action = 'mark_supplement';
+        progress = done ? 1 : 0;
+        break;
+      }
+      case 'own': {
+        points = item.ownKind === 'workout' ? ROW_POINTS.workout : ROW_POINTS.habit;
+        target += points;
+        totalCount += 1;
+        if (completed) {
+          done = true;
+          doneCount += 1;
+          earned += points;
+        }
+        progress = done ? 1 : 0;
+        break;
+      }
+      case 'doctor_medication':
+      case 'doctor_test': {
+        points = ROW_POINTS.doctor;
+        target += points;
+        totalCount += 1;
+        if (completed) {
+          done = true;
+          doneCount += 1;
+          earned += points;
+        }
+        progress = done ? 1 : 0;
+        break;
+      }
+      case 'doctor_appointment': {
+        points = ROW_POINTS.doctor;
+        target += points;
+        totalCount += 1;
+        if (completed) {
+          done = true;
+          doneCount += 1;
+          earned += points;
+        }
+        progress = done ? 1 : 0;
+        break;
+      }
+      case 'nutrition': {
+        // Legacy nutrition items - not used in one-plan (food is synthesised)
+        break;
       }
     }
-    bonus += Math.min(microPoints, 10); // POINTS.microMaxPerDay
+
+    rows.push({
+      key: `item:${item.id}`,
+      itemId: item.id,
+      kind: item.kind,
+      layerKey: item.layerKey,
+      origin: item.origin,
+      title: item.title,
+      points,
+      done,
+      how,
+      progress,
+      value,
+      target: tgt,
+      unit,
+      action,
+      templateId,
+      moves,
+      protein,
+    });
   }
+
+  // Food row (synthesised)
+  let food = null;
+  let foodPossible = 0;
+  let foodEarned = 0;
+
+  if (onLayerKeys?.includes('food') && nutritionTarget) {
+    const hasProteinTarget = nutritionTarget.proteinG > 0;
+    const hasCalorieTarget = nutritionTarget.kcal > 0;
+
+    if (hasProteinTarget) foodPossible += ROW_POINTS.foodProtein;
+    if (hasCalorieTarget) foodPossible += ROW_POINTS.foodCalories;
+    foodPossible += ROW_POINTS.foodMeals;
+
+    const proteinRatio = nutritionTarget.proteinG > 0
+      ? (foodResult.totals.proteinG || 0) / nutritionTarget.proteinG
+      : null;
+    const kcalRatio = nutritionTarget.kcal > 0
+      ? (foodResult.totals.kcal || 0) / nutritionTarget.kcal
+      : null;
+    const mealsLogged = foodResult.logCount || 0;
+
+    let proteinEarned = 0;
+    let kcalEarned = 0;
+    let mealsEarned = 0;
+
+    if (hasProteinTarget && proteinRatio !== null && proteinRatio >= 0.9) {
+      proteinEarned = ROW_POINTS.foodProtein;
+    }
+    if (hasCalorieTarget && kcalRatio !== null && Math.abs(1 - kcalRatio) <= 0.1) {
+      kcalEarned = ROW_POINTS.foodCalories;
+    }
+    if (mealsLogged >= 3) {
+      mealsEarned = ROW_POINTS.foodMeals;
+    }
+
+    foodEarned = proteinEarned + kcalEarned + mealsEarned;
+    earned += foodEarned;
+
+    food = {
+      key: 'food',
+      itemId: null,
+      kind: 'food',
+      layerKey: 'food',
+      origin: 'suggested',
+      title: 'Food',
+      points: foodPossible,
+      earned: foodEarned,
+      done: foodEarned === foodPossible && foodPossible > 0,
+      how: null,
+      progress: foodPossible > 0 ? foodEarned / foodPossible : 0,
+      value: foodResult.totals.kcal || 0,
+      target: nutritionTarget.kcal || 0,
+      unit: 'kcal',
+      protein: {
+        value: foodResult.totals.proteinG || 0,
+        target: nutritionTarget.proteinG || 0,
+      },
+      action: 'log_food',
+    };
+
+    totalCount += 1;
+    if (food.done) doneCount += 1;
+    target += foodPossible;
+  }
+
+  // Bonus
+  let bonus = 0;
+  const micronutrientPoints = calculateMicronutrientPoints(nutritionTarget, foodResult.totals);
+  bonus += micronutrientPoints;
+  if (unplannedWorkout) {
+    bonus += ROW_POINTS.unplannedWorkout;
+  }
+
+  // Display order: workout/rest, water, food, steps, sleep, supplements, doctor, own
+  const order = ['workout', 'rest', 'water', 'food', 'steps', 'sleep', 'supplement', 'doctor_medication', 'doctor_test', 'doctor_appointment', 'own'];
+  rows.sort((a, b) => {
+    const ia = order.indexOf(a.kind);
+    const ib = order.indexOf(b.kind);
+    if (ia !== ib) return ia - ib;
+    if (a.kind === 'supplement' || a.kind === 'doctor_medication' || a.kind === 'doctor_test' || a.kind === 'doctor_appointment' || a.kind === 'own') {
+      return (a.title || '').localeCompare(b.title || '');
+    }
+    return 0;
+  });
 
   return {
     rows,
-    food: foodRow,
+    food,
     bonus,
     earned,
-    target: targetPoints,
-    counts: { done: doneRows, total: totalRows },
-    onLayerKeys,
+    target,
+    counts: { done: doneCount, total: totalCount },
+    onLayerKeys: onLayerKeys || [],
   };
 }
 
-export { todayIST, isFutureDate, getDisplayOrder, buildRow, buildFoodRow, calculateBonus };
+function calculateMicronutrientPoints(targets, totals) {
+  const MICROS_TRACKED = ['iron', 'magnesium', 'calcium', 'zinc'];
+  let points = 0;
+  if (!targets?.micros) return 0;
+  for (const key of MICROS_TRACKED) {
+    const target = targets.micros[key];
+    if (!target) continue;
+    const got = totals[key];
+    if (got !== undefined && got !== null && got / target >= 0.8) {
+      points += 2;
+    }
+  }
+  return Math.min(points, 10);
+}
