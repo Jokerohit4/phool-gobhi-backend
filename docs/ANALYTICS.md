@@ -224,6 +224,35 @@ note on `ip`):
 | `ip` | gateway, from `req.ip` | every client event, via the gateway's `/api/events` handler |
 | `geo_country` / `geo_city` | website's `/api/events` BFF route (added 2026-08-24), from Vercel's `x-vercel-ip-country`/`x-vercel-ip-city` edge headers | country stored as its readable name (`'India'`, via `Intl.DisplayNames`) so filters don't need an ISO-code lookup; absent outside Vercel (local dev) and on rows that predate it. This is the visitor's real location — unlike `ip`, which for website traffic is the BFF's own egress address. Powers the admin traffic view's country/city filters (`?country=&city=` on `/admin/analytics/website-traffic`) |
 
+### One plan (added 2026-10-15)
+
+The "one plan" work replaces the old wander-through-every-layer health
+experience with a single plan that spans a few layers at a time, unlocked as
+the user shows up. These events are what the plan's own churn and its
+unlock/activation gap are measured with. Names are in
+`docs/analytics-events.json`; the table below is the human-readable view.
+
+**Server-emitted (health-service):**
+
+| Event | distinct_id | Key properties |
+|---|---|---|
+| `plan_built` | userId | `reason` (`start`/`unlock`/`consent`/`setup`/`edit`/`supplements`/`migrate`), `on_layers` (how many layers the plan now spans), `created`, `updated`, `deactivated` — every plan write funnels through `rebuildPlan`, so this is all plan churn, and the funnel for whether the UB5 migration actually rebuilt anyone. A no-op rebuild still fires, with `created=0 updated=0 deactivated=0` |
+| `layer_turned_on` | userId | `layer` (layerKey), `reason` (`setup`/`coach`/`migrate`) — fires on the transition only, never re-fires an already-on layer. `plan_built.on_layers` is the stock level; this is the flow into it |
+| `layer_unlocked` | userId | `layer`, `how` (`showed_up`/`steady_weeks`/`early`/`existing_data`/`start_level`) — unlock is not activation: this is the gate opening, `layer_turned_on` is the user walking through it |
+| `plan_item_completed` | userId | `row_kind` (PlanItemKind), `layer` (layerKey) — **manual ticks only.** Auto-satisfied completions (`how='auto'`) were deleted by the UB5 migration and the generator no longer writes them, so this is the honest count of what the user chose to do |
+| `plan_edited` | userId | `what` (`settings`/`slots`/`item_added`/`item_removed`) — settings/slots fire alongside `plan_built` with `reason=edit`; added/removed are the user asserting ownership over the list (the `own` layer) |
+
+`health_day_closed` (pre-existing) now also carries `earned`, `target`, and
+`hit` — the one-plan daily score frozen at day close (`frozen` still means the
+call was a no-op on an already-closed day).
+
+**Client-emitted (customer app):**
+
+| Event | When |
+|---|---|
+| `today_row_tapped` | A row on the Today card was tapped (`row_kind`, `action` = `open_detail`/`tick`/`expand`). Client-side because the point is the tap on the card face, before any server call — the gap to `plan_item_completed` is the retry/expiry story |
+| `today_target_hit` | The Today card showed its target-reached celebration (`earned`, `target`). Fires optimistically, before `health_day_closed` freezes the day server-side — the pair brackets the day-close race the way `book_tapped`/`booking_confirmed` does |
+
 ---
 
 ## 5. The funnels
