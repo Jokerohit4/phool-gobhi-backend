@@ -14,6 +14,14 @@ import {
   clearPause,
 } from '../services/ledger/scoreService.js';
 
+// Mock layerState.getOnLayerKeys and getLayers
+mock.module("../services/plan/layerState.js", {
+  exports: {
+    getOnLayerKeys: async () => ["workout", "water", "food", "steps", "sleep", "supplements", "health", "medicine", "own"],
+    getLayers: async () => [],
+  },
+});
+
 // Mock journeyService.getJourney to avoid Prisma calls
 mock.module('../services/journey/journeyService.js', {
   namedExports: {
@@ -23,14 +31,6 @@ mock.module('../services/journey/journeyService.js', {
     }),
     getUnlockedLayerKeys: async () => ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'],
     getScoringWindow: async () => ({ easyStartUntil: null, inactiveSince: null, foodEarlyNoPenaltyUntilUnlock: false }),
-  },
-});
-
-// Mock fetchInternal.getAppConfig for flags
-mock.module('../utils/fetchInternal.js', {
-  namedExports: {
-    getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
-    fetchInternal: async () => ({ data: { days: [] } }),
   },
 });
 
