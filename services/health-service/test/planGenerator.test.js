@@ -1,185 +1,258 @@
-import test from 'node:test';
+// The plan generator (one-plan UB1): the suggested rows rebuildPlan writes.
+//
+// Two properties matter most and neither is obvious from reading the code:
+//
+//   1. THE MEDICAL LINE. generatePlan cannot emit origin 'doctor', and no code
+//      path can produce a 'medicine' or 'health' row at all. Suggested rows
+//      come only from movement, water, steps, sleep and the user's own
+//      supplement schedules. That is the difference between a wellness tracker
+//      and a regulated device.
+//   2. THE SIZE CAP. A plan with too many items turns every day red; the
+//      generator targets ≤8 and, when it must trim, protects water above all.
+//
+// Run with: node --experimental-test-module-mocks --test
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { generatePlan } from '../services/ledger/planGenerator.js';
-import { MAX_ACTIVE_PLAN_ITEMS, TARGET_MAX_ITEMS } from '../services/ledger/planGenerator.js';
+import { JOURNEY, DEFAULT_STEPS, DEFAULT_SLEEP_MIN } from '../services/journey/journeyConfig.js';
 
-const TARGETS = {
-  kcal: 2500,
-  proteinG: 133,
-  carbsG: 300,
-  fatG: 78,
-  fibreG: 35,
-  waterMl: 2950,
-  micros: { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
-};
+const TARGETS = { kcal: 2500, proteinG: 133, waterMl: 3000, micros: { iron: 19 } };
 
-// The single most important test in the plan. If this fails, the feature has
-// crossed from "wellness software" into "medical device" territory and must
-// not ship in that state.
-test('the generator cannot emit a doctor-sourced item, even for a user full of medical data', () => {
-  const r = generatePlan({
-    goals: ['doctor_plan'],
+const SLOTS = (weekdays) =>
+  weekdays.map((weekday, i) => ({
+    weekday,
+    templateId: 10 + i,
+    title: `Session ${i + 1}`,
+    level: 'beginner',
+  }));
+
+const byLayer = (out, key) => out.items.filter((i) => i.layerKey === key);
+
+// ---- the medical line -------------------------------------------------------
+
+test('the generator only ever produces suggested rows, never a doctor row', () => {
+  const out = generatePlan({
+    onLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
+    workoutSlots: SLOTS([0, 1, 2, 3, 4, 5, 6]),
     targets: TARGETS,
-    measuredActivity: 'light',
-    hasDoctorItems: true,
+    stepsPerDay: 8000,
+    sleepMinutes: 450,
+    supplements: [{ id: 1, name: 'Vitamin D' }],
   });
-
-  for (const item of r.items) {
-    assert.notEqual(
-      item.origin,
-      'doctor',
-      'generatePlan produced a doctor-origin item: the medical line has been breached',
-    );
-  }
-
-  // Nothing condition-shaped either. A title that reads like a treatment
-  // instruction is the failure mode the origin enum alone would not catch.
-  const forbidden = /anemia|anaemia|thyroid|diabet|blood\s*pressure|insulin|dosage|dose|mg\s*daily|treatment|prescrib/i;
-  for (const item of r.items) {
-    assert.ok(!forbidden.test(item.title), `condition-shaped title leaked: "${item.title}"`);
-  }
-
-  // "I have a doctor's plan" is reported, not reproduced.
-  assert.equal(r.hasDoctorItems, true);
-});
-
-test('no goal type produces a doctor item', () => {
-  for (const goals of [
-    ['build_muscle'],
-    ['lose_fat'],
-    ['recomp'],
-    ['endurance'],
-    ['general_health'],
-    ['doctor_plan'],
-    // A set, and specifically one containing doctor_plan: the medical line is a
-    // property of the PLAN GENERATOR, so it has to hold when the goal set carries
-    // a clinical objective alongside an ordinary one.
-    ['doctor_plan', 'build_muscle'],
-    ['build_muscle', 'lose_fat', 'general_health'],
-  ]) {
-    const r = generatePlan({ goals, targets: TARGETS, measuredActivity: 'moderate' });
-    const label = goals.join('+');
-    assert.ok(r.items.length > 0, `${label} produced an empty plan`);
-    assert.ok(
-      r.items.every((i) => i.origin === 'suggested'),
-      `${label} produced a non-suggested item`,
-    );
+  assert.ok(out.items.length > 0);
+  for (const item of out.items) {
+    assert.equal(item.origin, 'suggested', 'the generator wrote a non-suggested row');
   }
 });
 
-test('a plan stays inside the size band', () => {
-  // A 20-item plan turns every day red, which kills the feature faster than
-  // any scoring bug.
-  for (const measured of [null, 'sedentary', 'light', 'moderate', 'very_active']) {
-    const r = generatePlan({ goals: ['recomp'], targets: TARGETS, measuredActivity: measured });
-    assert.ok(r.items.length <= TARGET_MAX_ITEMS, `${measured}: ${r.items.length} items exceeds the band`);
-    assert.ok(r.items.length >= 4, `${measured}: ${r.items.length} items is too thin to be a plan`);
-    assert.ok(r.items.length <= MAX_ACTIVE_PLAN_ITEMS);
-  }
-});
-
-test('the doc\'s worked example is reproduced: protein, 4 sessions, sleep, water', () => {
-  // phool-gobhi-health-ledger-plan-20260927.html §8 for the 70 kg recomposing
-  // man: "Plan: protein target, 4× strength sessions, sleep 7 h, water 3.2 L".
-  const r = generatePlan({
-    goals: ['recomp'],
+test('no layer key produces a medicine or health row, whatever is passed', () => {
+  // 'medicine' and 'health' are real on-layer keys, but the generator has no
+  // branch for them. If this ever changes, we have started prescribing.
+  const out = generatePlan({
+    onLayerKeys: ['medicine', 'health', 'supplements'],
+    workoutSlots: SLOTS([0]),
     targets: TARGETS,
-    measuredActivity: 'moderate', // 4 logged workouts a week
+    supplements: [{ id: 1, name: 'Creatine' }],
   });
+  assert.equal(byLayer(out, 'medicine').length, 0);
+  assert.equal(byLayer(out, 'health').length, 0);
+  for (const item of out.items) {
+    assert.notEqual(item.layerKey, 'medicine');
+    assert.notEqual(item.layerKey, 'health');
+  }
+});
 
-  const kinds = r.items.map((i) => i.kind);
-  assert.ok(kinds.includes('nutrition'));
-  assert.ok(kinds.includes('workout'));
-  assert.ok(kinds.includes('rest'));
-  assert.ok(kinds.includes('habit'));
+// ---- layer gating -----------------------------------------------------------
 
-  const protein = r.items.find((i) => i.nutrientKey === 'proteinG');
-  assert.equal(protein.targetValue, 133);
+test('no on-layer keys means no items at all', () => {
+  const out = generatePlan({ onLayerKeys: [], workoutSlots: SLOTS([0, 2, 4]), targets: TARGETS });
+  assert.deepEqual(out.items, []);
+  assert.equal(out.trimmedFrom, null);
+});
 
-  const workout = r.items.find((i) => i.kind === 'workout');
-  assert.equal(workout.schedule.split(',').length, 4, 'measured-moderate must mean 4 sessions');
-  assert.match(workout.title, /strength/i);
+test('items are created only for the on-layer keys, each carrying its layerKey', () => {
+  const l1 = generatePlan({
+    onLayerKeys: ['workout', 'water'],
+    workoutSlots: SLOTS([0, 2, 4]),
+    targets: TARGETS,
+  });
+  assert.deepEqual([...new Set(l1.items.map((i) => i.layerKey))].sort(), ['water', 'workout']);
+  assert.equal(l1.items.some((i) => i.layerKey === 'steps'), false);
+  assert.equal(l1.items.some((i) => i.layerKey === 'sleep'), false);
+});
 
-  // Sleep and water are habits, and water tracks the target it was given.
-  const water = r.items.find((i) => /water/i.test(i.title));
-  assert.ok(water, 'expected a water habit');
-  assert.match(water.title, /3\.0 L/); // 2950 ml rounds to 3.0 L
+test('food never produces a stored row, even when the food layer is on', () => {
+  // Food is synthesised at resolveDay time from targets and logs. There is no
+  // food PlanItem — editing a target retargets tomorrow without a rebuild.
+  const out = generatePlan({
+    onLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep'],
+    workoutSlots: SLOTS([0, 3]),
+    targets: TARGETS,
+    stepsPerDay: 8000,
+  });
+  assert.equal(out.items.some((i) => i.layerKey === 'food'), false);
+  assert.equal(out.items.some((i) => i.kind === 'nutrition'), false);
+});
 
-  const sleep = r.items.find((i) => /sleep/i.test(i.title));
+// ---- movement ---------------------------------------------------------------
+
+test('one workout row per slot, from the stored slots', () => {
+  const out = generatePlan({
+    onLayerKeys: ['workout', 'water'],
+    workoutSlots: SLOTS([0, 2, 4]), // Mon, Wed, Fri
+    targets: TARGETS,
+  });
+  const workouts = byLayer(out, 'workout').filter((i) => i.kind === 'workout');
+  assert.equal(workouts.length, 3, 'one item per slot');
+  // Slot weekdays are 0 = Monday; item schedules are 1 = Monday.
+  assert.deepEqual(workouts.map((w) => w.schedule), ['1', '3', '5']);
+  assert.deepEqual(workouts.map((w) => w.title), ['Session 1', 'Session 2', 'Session 3']);
+});
+
+test('a slot with no title still gets a row, and a bad weekday is skipped', () => {
+  const out = generatePlan({
+    onLayerKeys: ['workout'],
+    workoutSlots: [
+      { weekday: 0 },
+      { weekday: 7 },
+      { weekday: -1 },
+      { weekday: 'x' },
+      { weekday: 2, title: 'Push' },
+    ],
+  });
+  const workouts = out.items.filter((i) => i.kind === 'workout');
+  assert.deepEqual(workouts.map((w) => w.title), ['Workout', 'Push']);
+  assert.deepEqual(workouts.map((w) => w.schedule), ['1', '3']);
+});
+
+test('the rest row covers every weekday no slot uses, and is layered under workout', () => {
+  const out = generatePlan({
+    onLayerKeys: ['workout', 'water'],
+    workoutSlots: SLOTS([0, 2, 4]), // uses Mon/Wed/Fri -> free Tue/Thu/Sat/Sun
+    targets: TARGETS,
+  });
+  const rest = out.items.find((i) => i.kind === 'rest');
+  assert.ok(rest, 'no rest row');
+  assert.equal(rest.schedule, '2,4,6,7');
+  assert.equal(rest.layerKey, 'workout', 'rest must sit under workout so it turns off with it');
+  assert.equal(rest.title, 'Rest day');
+});
+
+test('an empty workout week gets a daily rest row; a full week gets none', () => {
+  const none = generatePlan({ onLayerKeys: ['workout'], workoutSlots: [] });
+  const rest = none.items.find((i) => i.kind === 'rest');
+  assert.ok(rest, 'an empty week should still rest every day');
+  assert.equal(rest.schedule, 'daily');
+
+  const seven = generatePlan({
+    onLayerKeys: ['workout', 'water'],
+    workoutSlots: SLOTS([0, 1, 2, 3, 4, 5, 6]),
+    targets: TARGETS,
+  });
+  assert.equal(seven.items.some((i) => i.kind === 'rest'), false, 'a seven-slot week has no rest day');
+});
+
+// ---- water, steps, sleep ----------------------------------------------------
+
+test('water falls back to the journey default until a target exists', () => {
+  const noTarget = generatePlan({ onLayerKeys: ['water'] });
+  const water = noTarget.items.find((i) => i.layerKey === 'water');
+  assert.match(water.title, /2\.5 L water/); // JOURNEY.defaultWaterMl = 2500
+  assert.equal(water.targetValue, JOURNEY.defaultWaterMl);
+
+  const withTarget = generatePlan({ onLayerKeys: ['water'], targets: TARGETS }); // waterMl 3000
+  const water2 = withTarget.items.find((i) => i.layerKey === 'water');
+  assert.match(water2.title, /3\.0 L water/);
+  assert.equal(water2.targetValue, 3000);
+});
+
+test('steps and sleep arrive with their layer and respect the saved values', () => {
+  const out = generatePlan({
+    onLayerKeys: ['steps', 'sleep'],
+    stepsPerDay: 7500,
+    sleepMinutes: 450,
+  });
+  const steps = out.items.find((i) => i.layerKey === 'steps');
+  assert.match(steps.title, /7,500 steps/);
+  assert.equal(steps.targetValue, 7500);
+  const sleep = out.items.find((i) => i.layerKey === 'sleep');
+  assert.equal(sleep.title, 'Sleep 7.5 h');
+  assert.equal(sleep.targetValue, 450);
   assert.equal(sleep.schedule, 'daily');
 });
 
-test('a rest day is always scheduled, on a day the plan asks for no workout', () => {
-  // Without this, the generator schedules its own rest day and the scorer
-  // marks it as a missed workout — the engine punishing its own plan.
-  for (const measured of [null, 'sedentary', 'light', 'moderate', 'very_active']) {
-    const r = generatePlan({ goals: ['general_health'], targets: TARGETS, measuredActivity: measured });
-    const rest = r.items.find((i) => i.kind === 'rest');
-    assert.ok(rest, `${measured}: no rest day`);
-
-    const workoutDays = new Set(
-      (r.items.find((i) => i.kind === 'workout')?.schedule ?? '').split(',').map(Number),
-    );
-    const restDay = Number(rest.schedule);
-    assert.ok(
-      !workoutDays.has(restDay),
-      `${measured}: rest day ${restDay} collides with a workout day`,
-    );
-  }
+test('steps and sleep fall back to the contract defaults', () => {
+  const out = generatePlan({ onLayerKeys: ['steps', 'sleep'] });
+  const steps = out.items.find((i) => i.layerKey === 'steps');
+  assert.equal(steps.targetValue, DEFAULT_STEPS);
+  assert.match(steps.title, /6,000 steps/);
+  const sleep = out.items.find((i) => i.layerKey === 'sleep');
+  assert.equal(sleep.targetValue, DEFAULT_SLEEP_MIN);
+  assert.equal(sleep.title, 'Sleep 7 h');
 });
 
-test('iron foods respect the diet pattern', () => {
-  // A Jain user being told to eat chicken is a correctness failure that would
-  // ship silently, because the item title is just a string and nothing else
-  // in the request path validates it.
-  for (const [diet, banned] of [
-    ['vegan', /chicken|egg|curd|whey|paneer|dal makhani/i],
-    ['jain', /chicken|egg|onion|garlic/i],
-    ['non_veg', /^$/],
-  ]) {
-    const r = generatePlan({
-      goals: ['general_health'],
-      diet,
-      targets: TARGETS,
-      measuredActivity: null,
-    });
-    const iron = r.items.find((i) => /iron/i.test(i.title));
-    assert.ok(iron, `${diet}: no iron item`);
-    assert.ok(!banned.test(iron.title), `${diet}: banned food in "${iron.title}"`);
-  }
+// ---- supplements ------------------------------------------------------------
+
+test('each active supplement schedule becomes one row keyed by sourceRef', () => {
+  const out = generatePlan({
+    onLayerKeys: ['supplements'],
+    supplements: [
+      { id: 11, name: 'Vitamin D' },
+      { id: 12, name: 'Omega 3' },
+    ],
+  });
+  const supp = byLayer(out, 'supplements');
+  assert.equal(supp.length, 2);
+  assert.deepEqual(supp.map((s) => s.sourceRef), ['supplement:11', 'supplement:12']);
+  assert.deepEqual(supp.map((s) => s.title), ['Vitamin D', 'Omega 3']);
+  // Supplements are the user's own schedules, so they are habit rows, not a
+  // dose we invented.
+  for (const s of supp) assert.equal(s.kind, 'habit');
 });
 
-test('the workout split matches the frequency it claims', () => {
-  // Regression: the split table used to be a flat array indexed by
-  // frequency, so a 2-day prescription scheduled 3 days and a 3-day one
-  // scheduled 4. Each row must contain exactly as many days as its key.
-  const expected = {
-    sedentary: 2,
-    light: 3,
-    moderate: 4,
-    very_active: 5,
-  };
-  for (const [measured, days] of Object.entries(expected)) {
-    const r = generatePlan({ goals: ['recomp'], targets: TARGETS, measuredActivity: measured });
-    const workout = r.items.find((i) => i.kind === 'workout');
-    const actual = workout.schedule.split(',');
-    assert.equal(actual.length, days, `${measured}: scheduled ${actual.length} days, expected ${days}`);
-    // No duplicate days, and none in 1..7 outside the range.
-    assert.equal(new Set(actual).size, actual.length, `${measured}: duplicate days in ${workout.schedule}`);
-    for (const d of actual) {
-      const n = Number(d);
-      assert.ok(n >= 1 && n <= 7, `${measured}: day ${n} out of range`);
-    }
-  }
+test('the generator stays silent on supplements when the caller passes null', () => {
+  const out = generatePlan({ onLayerKeys: ['supplements'], supplements: null });
+  assert.equal(byLayer(out, 'supplements').length, 0);
 });
 
-test('a user-supplied supplement is never added by the generator', () => {
-  // The doc: "No supplements in the plan unless he adds one". The generator
-  // has no supplement vocabulary at all, and this asserts it.
-  const r = generatePlan({ goals: ['build_muscle'], targets: TARGETS, measuredActivity: 'very_active' });
-  const supplementish = /whey|creatine|multivitamin|supplement|protein powder|bcAA/i;
-  for (const item of r.items) {
-    assert.ok(!supplementish.test(item.title), `generator proposed a supplement: "${item.title}"`);
-  }
+// ---- the size cap -----------------------------------------------------------
+
+test('the cap trims to 8 and protects water above every other layer', () => {
+  // 5 slots + rest + water + steps + sleep + 3 supplements = 12 against a cap
+  // of 8. Highest rank trims first, so supplements then steps go before sleep,
+  // then workout, and water (rank 0) is never touched.
+  const out = generatePlan({
+    onLayerKeys: ['workout', 'water', 'steps', 'sleep', 'supplements'],
+    workoutSlots: SLOTS([0, 1, 2, 3, 4]),
+    stepsPerDay: 8000,
+    supplements: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }, { id: 3, name: 'C' }],
+  });
+  assert.equal(out.items.length, 8, `${out.items.length} items exceeded the cap`);
+  assert.equal(out.trimmedFrom, 12);
+  assert.ok(out.items.some((i) => i.layerKey === 'water'), 'the cap took water');
+  assert.equal(out.items.some((i) => i.layerKey === 'supplements'), false, 'supplements should trim first');
+  assert.equal(out.items.some((i) => i.layerKey === 'steps'), false, 'steps should trim next');
+});
+
+test('the cap keeps week order and drops the last workout slot first', () => {
+  // 8 workouts + water = 9 against a cap of 8: the EIGHTH slot goes, not the
+  // first, and the survivors keep their order.
+  const out = generatePlan({
+    onLayerKeys: ['workout', 'water'],
+    workoutSlots: SLOTS([0, 1, 2, 3, 4, 5, 6, 0]), // 8 slots
+    targets: TARGETS,
+  });
+  const workouts = out.items.filter((i) => i.kind === 'workout');
+  assert.equal(workouts.length, 7);
+  assert.deepEqual(workouts.map((w) => w.title), [
+    'Session 1', 'Session 2', 'Session 3', 'Session 4', 'Session 5', 'Session 6', 'Session 7',
+  ]);
+  assert.equal(out.trimmedFrom, 9);
+  assert.ok(out.items.some((i) => i.layerKey === 'water'));
+});
+
+test('a plan at or under the cap reports no trimming', () => {
+  const out = generatePlan({ onLayerKeys: ['workout', 'water'], workoutSlots: SLOTS([0, 2, 4]), targets: TARGETS });
+  assert.equal(out.trimmedFrom, null);
 });

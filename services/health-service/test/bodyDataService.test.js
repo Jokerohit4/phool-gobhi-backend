@@ -37,6 +37,17 @@ test('setup: mock targetService once, import bodyDataService once', async (t) =>
     },
   });
 
+  // UB1: regenerateForUser now delegates to rebuildPlan, whose layerState
+  // dependency (getOnLayerKeys) is still a 501 stub until UB2 merges. Mock the
+  // rebuild so this suite keeps testing what it is about - the writes this
+  // service makes and the plan it returns - not the plan engine. The plan
+  // engine has its own coverage in test/rebuildPlan.test.js.
+  t.mock.module(new URL('../services/plan/rebuildPlan.js', import.meta.url).href, {
+    exports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deactivated: 0, onLayerKeys: [] }),
+    },
+  });
+
   ({ ageOn } = await import('../services/ledger/bodyDataService.js'));
   ({ save, saveDiet } = await import('../services/ledger/bodyDataService.js'));
   assert.equal(typeof save, 'function');
@@ -227,15 +238,18 @@ test('answers outside human range are refused before anything is written', async
   assert.equal(recomputeCalls.length, 0);
 });
 
-test('the rebuild after a save never invents a calorie budget', async () => {
+test('a save without a target never invents a calorie budget', async () => {
   resetFakes();
   const prisma = fakePrisma();
 
-  await save(prisma, 7, { heightCm: 170 });
+  const out = await save(prisma, 7, { heightCm: 170 });
 
+  // UB1: the rebuild now writes planItem rows through rebuildPlan and no longer
+  // rewrites the prescription, so the guarantee moves to the returned plan: a
+  // user without a target comes back with no budget.
   const saved = prisma.writes.find((w) => w.model === 'prescription');
-  assert.equal(saved.create.kcal, null, 'a rebuild for a user without a target keeps kcal null');
-  assert.ok(Array.isArray(saved.create.workoutSlots), 'the rebuild wrote slots');
+  assert.equal(saved, undefined, 'the rebuild no longer rewrites the prescription');
+  assert.equal(out.plan.kcal, null, 'no target yet, so no invented budget');
 });
 
 // ---- saveDiet ----------------------------------------------------------------
