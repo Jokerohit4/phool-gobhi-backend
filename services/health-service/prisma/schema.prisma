@@ -1814,12 +1814,18 @@ model PlanItem {
   // scoring after it but is never auto-deleted, because stopping someone's
   // course of tablets because a date passed is not this service's call.
   endsOn         String?
+  // Stable-identity key for suggested rows the generator owns, e.g.
+  // 'supplement:<scheduleId>'. Rebuild matches desired rows to existing ones by
+  // (kind, layerKey, schedule, sourceRef ?? ''), so a schedule edit updates the
+  // row in place and today's ticks survive. Null for user and doctor rows.
+  sourceRef      String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
   completions PlanItemCompletion[]
 
   @@index([userId, active])
+  @@index([userId, sourceRef])
   @@schema("health")
 }
 

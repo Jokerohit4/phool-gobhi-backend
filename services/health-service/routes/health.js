@@ -49,6 +49,9 @@ import ledgerRouter from './ledger.js';
 import journeyRouter from './journey.js';
 import habitsRouter from './habits.js';
 import contentRouter from './content.js';
+// The one-plan router (UA1). Carries its own planGated/planSoftGated gates
+// (auth + journey + coach basic consent), so it mounts, not spreads.
+import planRouter from './plan.js';
 
 const router = Router();
 
@@ -56,6 +59,7 @@ const router = Router();
 // checks and its own consent middlewares, and they have to run in that order.
 router.use(ledgerRouter);
 router.use(journeyRouter);
+router.use(planRouter);
 router.use(habitsRouter);
 router.use(contentRouter);
 
