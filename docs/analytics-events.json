@@ -850,7 +850,7 @@
     "source": "server",
     "service": "health-service",
     "since": "2026-09-29",
-    "notes": "a day was finalised. props frozen (false = the day was already closed, so the call was a no-op)"
+    "notes": "a day was finalised. props frozen (false = the day was already closed, so the call was a no-op), earned, target, hit (the one-plan daily score: points earned against the day's target, and whether the target was reached)"
   },
   "health_medical_doc_uploaded": {
     "source": "server",
@@ -863,6 +863,52 @@
     "service": "health-service",
     "since": "2026-10-10",
     "notes": "an appointment was added to the plan. props NONE, deliberately: a doctor, a speciality, a date and a note are all health data, and the analytics util's no-PII rule applies with nothing to trade against. Fires on create only \u2014 editing an appointment is a correction, not a new booking, and re-emitting it would inflate the count of appointments a user has. Renamed from doctor_appointment_recorded at registration: this was the only health-service event without the health_ prefix, and it was renamed rather than registered as-is because it had never shipped, so no historical rows change meaning. A bare doctor_appointment prefix would also have read as the AI prescription kind of the same name, which is a different thing entirely and is explicitly rejected as a plan item kind"
+  },
+  "plan_built": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "the one plan was rebuilt for a user. props reason (start|unlock|consent|setup|edit|supplements|migrate), on_layers (count of layers the plan now spans), created, updated, deactivated. Emitted by rebuildPlan (UA1) \u2014 every plan write path funnels through it, so this is the count of plan churn per user, and the funnel for 'did the migrate (UB5) actually rebuild anyone'. A no-op rebuild (reason=edit that changed nothing) still emits with created=0 updated=0 deactivated=0"
+  },
+  "layer_turned_on": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "a journey layer was switched on for a user. props layer (the layerKey), reason (setup|coach|migrate). Fires on the transition only, never on an already-on layer \u2014 on_layers on plan_built is the stock level, this is the flow"
+  },
+  "layer_unlocked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "a locked journey layer became available to switch on. props layer, how (showed_up|steady_weeks|early|existing_data|start_level). Unlock is not activation: this counts the gate opening, layer_turned_on counts the user walking through it, and the gap between them is the story of whether the next layer is a good idea"
+  },
+  "plan_item_completed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "the user tapped a plan item done on the Today card. props row_kind (PlanItemKind), layer (layerKey). MANUAL ticks only \u2014 auto-satisfied completions (how='auto') were deleted in the one-plan migration (UB5) and the generator no longer writes them, so this is the honest count of things the user chose to do. Server-side, because the tick goes through the plan API, not a client-only log"
+  },
+  "plan_edited": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "the user changed their plan outside a tick. props what (settings|slots|item_added|item_removed). settings and slots fire alongside plan_built with reason=edit; item_added/item_removed are the user asserting ownership over the list (the 'own' layer). Not a failure signal on its own \u2014 a plan nobody edits is a plan nobody reads"
+  },
+  "today_row_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-15",
+    "notes": "a row on the Today card was tapped. props row_kind, action (open_detail|tick|expand). Client-side because the point is the tap on the card face, before any server call; plan_item_completed is the server's truth that a tick landed. The gap between this and plan_item_completed is the retry/expiry story"
+  },
+  "today_target_hit": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-15",
+    "notes": "the Today card showed its daily-target-reached celebration. props earned, target. Client-side: it fires when the UI decides the target is met (optimistically, before health_day_closed freezes the day server-side). The client/server pair brackets the day-close race the way booking_tapped/booking_created does"
   },
   "attendance_recorded": {
     "source": "server",
