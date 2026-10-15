@@ -11,6 +11,25 @@ function istDayOf(instant) {
 }
 
 /**
+ * Check if a workout session qualifies as a "showed up" day.
+ * A qualifying session = type not null/'rest', endedAt set, AND (has completed set OR duration >= 10 min).
+ * Local-only helper for UB3/UB4 - no booking-service call.
+ */
+export function isQualifyingSession(session) {
+  if (!session || session.type == null || session.type === 'rest') return false;
+  if (!session.endedAt) return false;
+
+  const hasCompletedSet = session.exercises?.some((ex) => ex.sets?.length > 0) ?? false;
+  const durationMinutes = hasCompletedSet
+    ? null
+    : (session.endedAt && session.startedAt
+        ? (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 60000
+        : 0);
+
+  return hasCompletedSet || durationMinutes >= 10;
+}
+
+/**
  * Get qualifying workout days from health-service's WorkoutSession table.
  * A qualifying workout day = a WorkoutSession where:
  * - type is not null and not 'rest'
@@ -46,14 +65,7 @@ async function getQualifyingWorkoutDays(userId, from = null) {
 
   const days = new Set();
   for (const session of sessions) {
-    const hasCompletedSet = session.exercises.some((ex) => ex.sets.length > 0);
-    const durationMinutes = hasCompletedSet
-      ? null
-      : (session.endedAt && session.startedAt
-          ? (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 60000
-          : 0);
-
-    if (hasCompletedSet || durationMinutes >= 10) {
+    if (isQualifyingSession(session)) {
       const day = session.localDate ?? istDayOf(session.startedAt);
       days.add(day);
     }

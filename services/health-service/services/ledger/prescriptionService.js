@@ -16,27 +16,15 @@
 //   getPlan      read the saved plan, or the defaults when there is none
 //   previewPlan  the same computation over an unsaved draft - NEVER writes
 //   savePlan     validate, persist, and return the same shape back
+//   saveSettings validate, persist the 4 ints, rebuild slots on sessionsPerWeek change, rebuildPlan('edit')
+//   saveSlots    validate and persist the slot array, then rebuildPlan('edit')
 //
 // Bounds travel with every response. They are rules, not styling: a kcal floor
 // that differs between this service and the slider is a value the server
 // refuses and the user can reproduce by dragging.
 //
-// ---- The coach journey (B7) ----------------------------------------------
-//
-// Each endpoint takes an optional `journey` context, `{ unlockedLayerKeys }`,
-// which ONLY the caller supplies when the coachJourney flag is on. Without it
-// every path below is byte-for-byte the pre-journey behaviour - including the
-// refusal when no NutritionTarget exists. With it:
-//
-//   - a missing NutritionTarget stops being an error: the plan is served with
-//     kcal null and the macros null, because a first-timer's plan is built
-//     from workouts and water, not from a calorie budget nobody computed yet;
-//   - the week's sessions are read from Prescription.workoutSlots (one slot
-//     per WeeklyGoal.sessionsPerWeek, written by starterPlanService), with the
-//     old WORKOUT_MENU computation as the fallback for pre-journey rows;
-//   - the response adds workoutSlots, foodSetupNeeded, diet and
-//     bodyDataNeeded, which are the fields the coach journey's Plan tab reads
-//     to know what to ask for next.
+// The coach journey (UB4): all paths now take a journey context. The legacy
+// WORKOUT_MENU/buildWorkout and the 422-without-target path are deleted.
 import { currentNutritionTarget } from './currentTarget.js';
 import {
   DEFAULT_SLEEP_MINUTES,
@@ -51,50 +39,12 @@ import {
   NEUTRAL_DEFAULT,
 } from '../goalService.js';
 import { isScopeStale, NUTRITION_SCOPE } from './ledgerConsentService.js';
+import { buildWorkoutSlots } from './starterPlanService.js';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
+import { getOnLayerKeys } from '../plan/layerState.js';
+import { JOURNEY, DEFAULT_STEPS, DEFAULT_SLEEP_MIN, startLayerFor } from '../journey/journeyConfig.js';
 
-// The coach journey's default water, before any body data exists. Same value
-// as JOURNEY.defaultWaterMl in the Contracts (the map's home is B9's
-// journeyConfig.js — see planGenerator.js for the copied-layer TODO).
 const JOURNEY_DEFAULT_WATER_ML = 2500;
-
-// Monday first, and the order the plan prefers to spread a week across: two
-// hard days never land back to back, and Saturday - the day most people have
-// free - is the fourth session rather than the first.
-const WEEKDAY_PATTERN = [1, 3, 4, 6, 2, 5, 7];
-
-// What a session IS, by goal. Chosen rather than generated: a plan that says
-// "Workout 2" tells nobody what to do, and the menu is short enough that
-// capping at seven sessions covers every day of the week.
-const WORKOUT_MENU = {
-  build_muscle: [
-    { title: 'Push', focus: 'chest, shoulders, triceps', intensity: 'moderate' },
-    { title: 'Pull', focus: 'back and biceps', intensity: 'moderate' },
-    { title: 'Legs', focus: 'quads, glutes, hamstrings', intensity: 'hard' },
-    { title: 'Upper body', focus: 'strength', intensity: 'moderate' },
-    { title: 'Lower body', focus: 'strength', intensity: 'hard' },
-    { title: 'Full body', focus: 'compound lifts', intensity: 'moderate' },
-    { title: 'Mobility', focus: 'hips and shoulders', intensity: 'easy' },
-  ],
-  lose_fat: [
-    { title: 'Zone 2 cardio', focus: 'conversational pace', intensity: 'easy' },
-    { title: 'Full body circuit', focus: 'strength with the heart rate up', intensity: 'moderate' },
-    { title: 'Intervals', focus: 'short hard efforts', intensity: 'hard' },
-    { title: 'Strength basics', focus: 'squat, push, pull', intensity: 'moderate' },
-    { title: 'Brisk walk', focus: 'recovery', intensity: 'easy' },
-    { title: 'Conditioning', focus: 'carry, row, ride', intensity: 'moderate' },
-    { title: 'Mobility', focus: 'hips and shoulders', intensity: 'easy' },
-  ],
-};
-
-const DEFAULT_WORKOUT_MENU = [
-  { title: 'Full body', focus: 'squat, push, pull', intensity: 'moderate' },
-  { title: 'Zone 2 cardio', focus: 'conversational pace', intensity: 'easy' },
-  { title: 'Strength basics', focus: 'compound lifts', intensity: 'moderate' },
-  { title: 'Intervals', focus: 'short hard efforts', intensity: 'hard' },
-  { title: 'Upper body', focus: 'strength', intensity: 'moderate' },
-  { title: 'Lower body', focus: 'strength', intensity: 'moderate' },
-  { title: 'Mobility', focus: 'hips and shoulders', intensity: 'easy' },
-];
 
 const FIELD_LABELS = {
   kcal: 'Calories',
@@ -103,11 +53,6 @@ const FIELD_LABELS = {
   sessionsPerWeek: 'Sessions a week',
 };
 
-// ---- Errors ---------------------------------------------------------------
-
-// A refusal rather than a silent clamp, because the screen holds its sliders
-// where the user left them and puts this sentence next to the button that
-// failed. A 200 would let the client treat a rejected save as a success.
 function outOfRange(field, value, bound) {
   const err = new Error(
     `${FIELD_LABELS[field]} ${formatValue(field, value)} is outside the range we can plan for `
@@ -115,17 +60,6 @@ function outOfRange(field, value, bound) {
   );
   err.status = 422;
   err.code = 'PRESCRIPTION_OUT_OF_RANGE';
-  return err;
-}
-
-// Reached only when the intake never produced a target. The plan is arithmetic
-// over height, weight, age and sex; without them there is no honest number to
-// show, and a plausible-looking default is worse than an error the setup
-// wizard can fix.
-function unavailable() {
-  const err = new Error('Set up your details first - the plan needs them before it can work one out.');
-  err.status = 422;
-  err.code = 'PRESCRIPTION_UNAVAILABLE';
   return err;
 }
 
@@ -143,8 +77,6 @@ function formatValue(field, value) {
   return String(value);
 }
 
-// ---- Pure rules -----------------------------------------------------------
-
 function clamp(value, bound) {
   if (!Number.isFinite(value)) return bound.min;
   return Math.min(bound.max, Math.max(bound.min, Math.round(value)));
@@ -154,33 +86,11 @@ function roundToStep(value, step) {
   return Math.round(value / step) * step;
 }
 
-/**
- * The step target a calorie budget implies, for a plan nobody has saved yet.
- *
- * The coupling the screen promises, in one direction and one direction only:
- * a bigger appetite buys more movement. The slope (5 steps per kcal, minus a
- * 3,000 offset) puts a 1,800 kcal plan at 6,000 steps and a 2,200 kcal plan at
- * 8,000, which are the two figures the app's own contract test holds up as the
- * sensible answers.
- *
- * It runs when building defaults and never over a value the user is dragging:
- * re-deriving on every preview would snap the step slider back mid-drag, which
- * is precisely the failure `adjustedBy` exists to make visible instead.
- */
 export function deriveStepsPerDay(kcal) {
   const bound = PRESCRIPTION_BOUNDS.stepsPerDay;
   return clamp(roundToStep(5 * Number(kcal) - 3000, bound.step), bound);
 }
 
-/**
- * The slider ranges for THIS person.
- *
- * kcal's floor is the same eating-disorder guard computeTargets applies - never
- * below BMR, never below the absolute floor for their sex - rounded up to the
- * step so every reachable value stays at or above it. The ceiling is a multiple
- * of maintenance with an absolute floor, so a small person is not handed a cap
- * below their own target.
- */
 export function boundsFor(target) {
   const inputs = target?.inputs || {};
   const sex = inputs.sex;
@@ -193,9 +103,6 @@ export function boundsFor(target) {
   const min = roundToStep(Math.ceil(Math.max(Number(inputs.bmrKcal) || 0, floorBySex) / step) * step, step);
   const maintenance = Number(inputs.maintenanceKcal) || 0;
   let max = Math.max(capFloor, roundToStep(maintenance * capFactor, step));
-  // A maintenance figure low enough that the multiple sits under the floor
-  // would invert the slider. One step of headroom is the smallest fix that
-  // keeps both bounds honest rather than widening the cap for everyone.
   if (max <= min) max = min + step;
 
   return {
@@ -210,110 +117,11 @@ export function boundsFor(target) {
   };
 }
 
-/**
- * The week's sessions, Monday first, spread so two hard days never collide.
- *
- * More sessions than days in the pattern wraps rather than dropping the
- * overflow: someone training 10-14 times a week is entitled to a plan that
- * acknowledges every one of them, and a two-a-day is a real thing.
- */
-export function buildWorkout(sessionsPerWeek, goals) {
-  const count = Math.max(0, Math.floor(Number(sessionsPerWeek) || 0));
-  const goalList = normaliseGoals(goals);
-  const menu = goalList.map((g) => WORKOUT_MENU[g]).find(Boolean) || DEFAULT_WORKOUT_MENU;
-
-  const workout = [];
-  for (let i = 0; i < count; i++) {
-    const session = menu[i % menu.length];
-    workout.push({
-      weekday: WEEKDAY_PATTERN[i % WEEKDAY_PATTERN.length],
-      title: session.title,
-      focus: session.focus,
-      intensity: session.intensity,
-    });
-  }
-  return workout;
-}
-
-// ---- Assembly -------------------------------------------------------------
-
 function pick(...values) {
   for (const v of values) if (v != null) return v;
   return undefined;
 }
 
-/**
- * Resolve the four adjustable numbers out of (request, saved, derived).
- *
- * `mode: 'write'` validates and refuses anything outside its bound - this is
- * the preview and the save. `mode: 'read'` clamps instead, because a saved
- * plan can legitimately fall out of range later (the person's weight moved, so
- * the kcal floor moved with it) and a GET that answered 422 would leave the
- * screen with no plan to show and nothing to fix.
- *
- * Anything the read path had to move is named in `adjustedBy`. The client uses
- * it to say "adjusted to fit your other changes" rather than silently showing
- * a number the user did not choose.
- *
- * `allowNullKcal` is the coach journey's state: with no NutritionTarget there
- * is no budget to validate, and null is the honest answer on the wire (A3
- * parses it) rather than a floor the person never saw. A draft or saved kcal
- * still validates normally - the null is only carried when nothing supplied
- * one.
- */
-function resolve(ctx, draft, mode, { allowNullKcal = false } = {}) {
-  const bounds = boundsFor(ctx.target);
-
-  const requested = {
-    kcal: pick(draft.kcal, ctx.saved?.kcal, ctx.target ? Number(ctx.target.kcal) : null),
-    stepsPerDay: pick(draft.stepsPerDay, ctx.saved?.stepsPerDay),
-    sleepMinutes: pick(draft.sleepMinutes, ctx.saved?.sleepMinutes, DEFAULT_SLEEP_MINUTES),
-    sessionsPerWeek: pick(
-      draft.sessionsPerWeek,
-      ctx.weekly?.sessionsPerWeek,
-      NEUTRAL_DEFAULT,
-    ),
-  };
-  // Only reachable on a first read: there is no saved step target, so the plan
-  // derives one from the calorie budget it is about to show.
-  if (requested.stepsPerDay == null) requested.stepsPerDay = deriveStepsPerDay(requested.kcal);
-
-  const out = {};
-  const adjustedBy = [];
-  for (const field of Object.keys(bounds)) {
-    const bound = bounds[field];
-    if (allowNullKcal && field === 'kcal' && requested.kcal == null) {
-      out[field] = null;
-      continue;
-    }
-    const value = Number(requested[field]);
-    const inRange = Number.isInteger(value) && value >= bound.min && value <= bound.max;
-    if (inRange) {
-      out[field] = value;
-      continue;
-    }
-    if (mode === 'write') throw outOfRange(field, requested[field], bound);
-    out[field] = clamp(value, bound);
-    if (out[field] !== value) adjustedBy.push(field);
-  }
-
-  return { ...out, bounds, adjustedBy };
-}
-
-/**
- * Everything the response carries.
- *
- * protein, water and micros come off the stored target untouched: all three
- * are derived from body weight and age, not from the calorie budget, so
- * dragging the kcal slider must not move the number that matters most. Only
- * carbs, fat and fibre are re-split for the kcal currently on the table, and
- * they go through the same function computeTargets uses so the two screens can
- * never show different carbs for the same calories.
- *
- * In journey mode with no target there is nothing to re-split, so the macros
- * are null and water falls back to the journey default - the plan exists to be
- * followed (workouts, water), not to show a budget nobody computed.
- */
 function buildPlan(ctx, resolved, journey = null) {
   const { target } = ctx;
   const inputs = target?.inputs || {};
@@ -343,24 +151,14 @@ function buildPlan(ctx, resolved, journey = null) {
     stepsPerDay: resolved.stepsPerDay,
     sleepMinutes: resolved.sleepMinutes,
     sessionsPerWeek: resolved.sessionsPerWeek,
-    workout: buildWorkout(resolved.sessionsPerWeek, target ? target.goals : ctx.healthGoal?.goals ?? []),
     bounds: resolved.bounds,
     adjustedBy: resolved.adjustedBy,
-    // The version of the rules that produced THIS response, always current.
-    // The row stores the version it was written under, which is what makes a
-    // plan written before a retune explicable afterwards.
     rulesVersion: PRESCRIPTION_RULES_VERSION,
   };
 
   if (!journey) return plan;
 
-  // ---- The coach-journey additions ---------------------------------------
-  //
-  // The stored slots ARE the week the user is living: one per
-  // WeeklyGoal.sessionsPerWeek as starterPlanService wrote them (half of them
-  // during an ease-back week, which is the contract's one sanctioned
-  // deviation). The legacy `workout` menu keeps serving the pre-journey
-  // users, whose slots are null, so every screen keeps working.
+  // Journey additions: workoutSlots, foodSetupNeeded, bodyDataNeeded, diet
   const stored = Array.isArray(ctx.saved?.workoutSlots) ? ctx.saved.workoutSlots : [];
   plan.workoutSlots = stored.map((slot) => ({
     weekday: Number(slot?.weekday),
@@ -384,16 +182,6 @@ function buildPlan(ctx, resolved, journey = null) {
   return plan;
 }
 
-/**
- * The journey-mode half of the read context: the diet (a response field) and
- * the two "what should the app ask for next" flags.
- *
- *   foodSetupNeeded  layer 2 is open but there is no nutrition consent or no
- *                    target - the "Set up food" card, and per the Contracts
- *                    "no food items, no food misses" until it is resolved.
- *   bodyDataNeeded   no target exists, so height/weight/sex/date of birth are
- *                    what stands between this user and a food plan.
- */
 async function loadJourneyExtras(prisma, userId, target, journey) {
   const [healthGoal, consent] = await Promise.all([
     prisma.healthGoal.findUnique({ where: { userId } }),
@@ -415,10 +203,6 @@ async function loadJourneyExtras(prisma, userId, target, journey) {
 
 async function loadContext(prisma, userId, journey = null) {
   const target = await currentNutritionTarget(prisma, userId);
-  // The pre-journey refusal, unchanged: without the journey context there is
-  // no honest number to show and no screen that can act on one, so the read
-  // says so instead of inventing a plan.
-  if (!target && !journey) throw unavailable();
 
   const [weekly, saved] = await Promise.all([
     prisma.weeklyGoal.findUnique({ where: { userId } }),
@@ -429,18 +213,48 @@ async function loadContext(prisma, userId, journey = null) {
   return ctx;
 }
 
-// ---- Endpoints ------------------------------------------------------------
+function resolve(ctx, draft, mode, { allowNullKcal = false } = {}) {
+  const bounds = boundsFor(ctx.target);
+
+  const requested = {
+    kcal: pick(draft.kcal, ctx.saved?.kcal, ctx.target ? Number(ctx.target.kcal) : null),
+    stepsPerDay: pick(draft.stepsPerDay, ctx.saved?.stepsPerDay),
+    sleepMinutes: pick(draft.sleepMinutes, ctx.saved?.sleepMinutes, DEFAULT_SLEEP_MINUTES),
+    sessionsPerWeek: pick(
+      draft.sessionsPerWeek,
+      ctx.weekly?.sessionsPerWeek,
+      NEUTRAL_DEFAULT,
+    ),
+  };
+  if (requested.stepsPerDay == null) requested.stepsPerDay = deriveStepsPerDay(requested.kcal);
+
+  const out = {};
+  const adjustedBy = [];
+  for (const field of Object.keys(bounds)) {
+    const bound = bounds[field];
+    if (allowNullKcal && field === 'kcal' && requested.kcal == null) {
+      out[field] = null;
+      continue;
+    }
+    const value = Number(requested[field]);
+    const inRange = Number.isInteger(value) && value >= bound.min && value <= bound.max;
+    if (inRange) {
+      out[field] = value;
+      continue;
+    }
+    if (mode === 'write') throw outOfRange(field, requested[field], bound);
+    out[field] = clamp(value, bound);
+    if (out[field] !== value) adjustedBy.push(field);
+  }
+
+  return { ...out, bounds, adjustedBy };
+}
 
 export async function getPlan({ prisma, userId, journey = null }) {
   const ctx = await loadContext(prisma, userId, journey);
   return buildPlan(ctx, resolve(ctx, {}, 'read', { allowNullKcal: Boolean(journey) }), journey);
 }
 
-/**
- * What the draft would become. Reads only - the slider may be dragged a
- * hundred times and explored without cost, which is the whole point of
- * splitting preview from save.
- */
 export async function previewPlan({ prisma, userId, draft = {}, journey = null }) {
   const ctx = await loadContext(prisma, userId, journey);
   return buildPlan(ctx, resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) }), journey);
@@ -467,11 +281,6 @@ export async function savePlan({ prisma, userId, draft = {}, journey = null }) {
     },
   });
 
-  // The session count lives in WeeklyGoal rather than here: the home ring
-  // reads that row, and two sources of truth for one number is how the ring
-  // and the plan screen come to disagree. Written only when the request
-  // actually carried it, so a partial save cannot mark an untouched goal as
-  // explicitly chosen.
   if (draft.sessionsPerWeek != null) {
     await prisma.weeklyGoal.upsert({
       where: { userId },
@@ -494,3 +303,207 @@ export async function savePlan({ prisma, userId, draft = {}, journey = null }) {
 
   return buildPlan(ctx, resolved, journey);
 }
+
+/**
+ * Save settings (kcal, stepsPerDay, sleepMinutes, sessionsPerWeek).
+ * The 4-int rule: only these four integers are accepted.
+ * kcal only when Food layer is on.
+ * A sessionsPerWeek change rebuilds slots using buildWorkoutSlots, then rebuildPlan('edit').
+ */
+export async function saveSettings({ prisma, userId, draft = {}, journey = null }) {
+  // Validate 4-int rule
+  const allowedFields = ['kcal', 'stepsPerDay', 'sleepMinutes', 'sessionsPerWeek'];
+  for (const key of Object.keys(draft)) {
+    if (!allowedFields.includes(key)) {
+      const err = new Error(`Unexpected field: ${key}. Only kcal, stepsPerDay, sleepMinutes, sessionsPerWeek are allowed.`);
+      err.status = 400;
+      err.code = 'VALIDATION';
+      throw err;
+    }
+    if (draft[key] != null && !Number.isInteger(Number(draft[key]))) {
+      const err = new Error(`${key} must be an integer`);
+      err.status = 400;
+      err.code = 'VALIDATION';
+      throw err;
+    }
+  }
+
+  // Check kcal requires Food layer on
+  if (draft.kcal != null) {
+    const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey });
+    if (!onLayerKeys.includes('food')) {
+      const err = new Error('Calorie target can only be set when the Food layer is on');
+      err.status = 409;
+      err.code = 'LAYER_NOT_ON';
+      err.layer = 'food';
+      throw err;
+    }
+  }
+
+  const ctx = await loadContext(prisma, userId, journey);
+  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) });
+
+  // Check if sessionsPerWeek changed
+  const sessionsChanged = draft.sessionsPerWeek != null &&
+    draft.sessionsPerWeek !== ctx.weekly?.sessionsPerWeek;
+
+  await prisma.prescription.upsert({
+    where: { userId },
+    create: {
+      userId,
+      kcal: resolved.kcal,
+      stepsPerDay: resolved.stepsPerDay,
+      sleepMinutes: resolved.sleepMinutes,
+      rulesVersion: PRESCRIPTION_RULES_VERSION,
+    },
+    update: {
+      kcal: resolved.kcal,
+      stepsPerDay: resolved.stepsPerDay,
+      sleepMinutes: resolved.sleepMinutes,
+      rulesVersion: PRESCRIPTION_RULES_VERSION,
+    },
+  });
+
+  let slots = ctx.saved?.workoutSlots ?? [];
+  if (sessionsChanged) {
+    const experienceLevel = journey?.startLevel ?? 'new_to_gym';
+    const location = slots.length > 0
+      ? (slots.some((s) => s.title?.includes('home') || s.title?.includes('Home')) ? 'home' : 'gym')
+      : 'gym';
+    slots = await buildWorkoutSlots(prisma, {
+      experienceLevel,
+      location,
+      sessions: resolved.sessionsPerWeek,
+    });
+
+    await prisma.prescription.update({
+      where: { userId },
+      data: { workoutSlots: slots },
+    });
+
+    await prisma.weeklyGoal.upsert({
+      where: { userId },
+      create: {
+        userId,
+        sessionsPerWeek: resolved.sessionsPerWeek,
+        setByUser: true,
+      },
+      update: { sessionsPerWeek: resolved.sessionsPerWeek, setByUser: true },
+    });
+    ctx.weekly = { sessionsPerWeek: resolved.sessionsPerWeek, setByUser: true };
+  }
+
+  ctx.saved = {
+    ...ctx.saved,
+    kcal: resolved.kcal,
+    stepsPerDay: resolved.stepsPerDay,
+    sleepMinutes: resolved.sleepMinutes,
+    workoutSlots: slots,
+  };
+
+  // Rebuild plan if sessions changed or any other setting changed
+  if (sessionsChanged || draft.kcal != null || draft.stepsPerDay != null || draft.sleepMinutes != null) {
+    await rebuildPlan(prisma, userId, { reason: 'edit' });
+  }
+
+  return buildPlan(ctx, resolved, journey);
+}
+
+/**
+ * Save slots array.
+ * Validation: weekdays unique (0-6), each template must be system or user's own.
+ * Sets sessionsPerWeek = slots.length, then rebuildPlan('edit').
+ */
+export async function saveSlots({ prisma, userId, slots = [], journey = null }) {
+  if (!Array.isArray(slots)) {
+    const err = new Error('slots must be an array');
+    err.status = 400;
+    err.code = 'VALIDATION';
+    throw err;
+  }
+  if (slots.length > 7) {
+    const err = new Error('Maximum 7 slots allowed (one per weekday)');
+    err.status = 400;
+    err.code = 'VALIDATION';
+    throw err;
+  }
+
+  // Validate weekdays unique and in range
+  const weekdays = new Set();
+  for (const slot of slots) {
+    if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) {
+      const err = new Error('weekday must be an integer 0-6 (0 = Monday)');
+      err.status = 400;
+      err.code = 'VALIDATION';
+      throw err;
+    }
+    if (weekdays.has(slot.weekday)) {
+      const err = new Error('Duplicate weekday in slots');
+      err.status = 400;
+      err.code = 'VALIDATION';
+      throw err;
+    }
+    weekdays.add(slot.weekday);
+  }
+
+  // Validate templateIds are system or user's own
+  if (slots.length > 0) {
+    const templateIds = slots.map((s) => s.templateId).filter(Boolean);
+    if (templateIds.length > 0) {
+      const templates = await prisma.workoutTemplate.findMany({
+        where: { id: { in: templateIds } },
+        select: { id: true, userId: true, isSystem: true },
+      });
+      const validIds = new Set(
+        templates
+          .filter((t) => t.isSystem || t.userId === userId)
+          .map((t) => t.id)
+      );
+      for (const id of templateIds) {
+        if (!validIds.has(id)) {
+          const err = new Error(`Template ${id} not found or not accessible`);
+          err.status = 400;
+          err.code = 'VALIDATION';
+          throw err;
+        }
+      }
+    }
+  }
+
+  const ctx = await loadContext(prisma, userId, journey);
+  const sessionsPerWeek = slots.length;
+
+  await prisma.prescription.upsert({
+    where: { userId },
+    create: {
+      userId,
+      kcal: ctx.saved?.kcal ?? null,
+      stepsPerDay: ctx.saved?.stepsPerDay ?? DEFAULT_STEPS,
+      sleepMinutes: ctx.saved?.sleepMinutes ?? DEFAULT_SLEEP_MINUTES,
+      workoutSlots: slots,
+      rulesVersion: PRESCRIPTION_RULES_VERSION,
+    },
+    update: {
+      workoutSlots: slots,
+      rulesVersion: PRESCRIPTION_RULES_VERSION,
+    },
+  });
+
+  await prisma.weeklyGoal.upsert({
+    where: { userId },
+    create: {
+      userId,
+      sessionsPerWeek,
+      setByUser: true,
+    },
+    update: { sessionsPerWeek, setByUser: true },
+  });
+  ctx.weekly = { sessionsPerWeek, setByUser: true };
+  ctx.saved = { ...ctx.saved, workoutSlots: slots };
+
+  await rebuildPlan(prisma, userId, { reason: 'edit' });
+
+  return buildPlan(ctx, { ...resolve(ctx, {}, 'read', { allowNullKcal: Boolean(journey) }), sessionsPerWeek }, journey);
+}
+
+export { deriveStepsPerDay, boundsFor, buildPlan, getPlan, previewPlan, savePlan, saveSettings, saveSlots };
