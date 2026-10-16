@@ -57,9 +57,12 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
   ]);
 
   const planItems = planResult.items;
-  const completions = planItems.flatMap((item) =>
-    (item.completions || []).map((c) => ({ ...c, planItemId: item.id }))
-  );
+  // getPlanForDate returns every due row with its completion for the date
+  // (`completion: {how, late} | null`, how = 'tick' | 'auto'); it no longer
+  // hands back the raw `completions` array.
+  const completions = planItems
+    .filter((item) => item.completion)
+    .map((item) => ({ ...item.completion, planItemId: item.id }));
 
   const completedItemIds = new Set(completions.map((c) => c.planItemId));
   const takenSupplementIds = new Set(supplementLogs.map((l) => Number(l.scheduleId)));
