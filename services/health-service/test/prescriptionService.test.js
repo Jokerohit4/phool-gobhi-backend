@@ -299,12 +299,24 @@ test('the bounds that come back are the ones the refusal used', async () => {
 });
 
 test('writing kcal while Food layer is off returns 409 LAYER_NOT_ON', async (t) => {
-  t.mock.module('../services/plan/layerState.js', {
+  t.mock.module('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/middleware/requireFeatureFlag.js', {
     exports: {
-      getOnLayerKeys: async () => [],
-      getLayers: async () => [],
+      isFeatureEnabled: async () => true,
     },
   });
+  t.mock.module('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/plan/layerState.js', {
+    exports: {
+      getOnLayerKeys: async () => ['workout', 'water'],
+      getLayers: async () => [{ key: 'food', state: 'locked' }],
+    },
+  });
+  t.mock.module('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/journey/journeyService.js', {
+    exports: {
+      getJourney: async () => null,
+    },
+  });
+
+  const { saveSettings } = await import('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/ledger/prescriptionService.js?mock');
 
   const prisma = fakePrisma();
   await assert.rejects(
