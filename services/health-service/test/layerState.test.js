@@ -122,18 +122,24 @@ test('three journey routes exist', async () => {
 
 
 test('device-health revoke leaves plan data deletes suppressed', async () => {
-  // Import deleteAllDataService with a mocked prisma to ensure waterLog, supplementSchedule, supplementLog, journeyProgress, coachConsent are not deleted
-  mock.module('../services/consentService.js', { defaultExport: {}, namedExports: {} });
-  const { deleteAllDataService } = await import('../services/consentService.js');
-  // The real service uses PrismaClient; we verify file content instead to avoid DB
   const fs = await import('node:fs/promises');
   const path = await import('node:path');
   const file = path.join(process.cwd(), 'services', 'consentService.js');
   const content = await fs.readFile(file, 'utf8');
-  assert.ok(content.includes('// Device-health revoke does not delete journey plan data per One Plan.'));
-  assert.ok(!content.includes('prisma.waterLog.deleteMany'));
-  assert.ok(!content.includes('prisma.supplementSchedule.deleteMany'));
-  assert.ok(!content.includes('prisma.supplementLog.deleteMany'));
-  assert.ok(!content.includes('prisma.journeyProgress.deleteMany'));
-  assert.ok(!content.includes('prisma.coachConsent.deleteMany'));
+
+  const revokeMatch = content.match(/export async function revokeConsentService[\s\S]*?^}/m);
+  const revokeBody = revokeMatch ? revokeMatch[0] : '';
+  assert.ok(!revokeBody.includes('prisma.waterLog.deleteMany'));
+  assert.ok(!revokeBody.includes('prisma.supplementSchedule.deleteMany'));
+  assert.ok(!revokeBody.includes('prisma.supplementLog.deleteMany'));
+  assert.ok(!revokeBody.includes('prisma.journeyProgress.deleteMany'));
+  assert.ok(!revokeBody.includes('prisma.coachConsent.deleteMany'));
+
+  const deleteMatch = content.match(/export async function deleteAllDataService[\s\S]*?^}/m);
+  const deleteBody = deleteMatch ? deleteMatch[0] : '';
+  assert.ok(deleteBody.includes('prisma.waterLog.deleteMany'));
+  assert.ok(deleteBody.includes('prisma.supplementSchedule.deleteMany'));
+  assert.ok(deleteBody.includes('prisma.supplementLog.deleteMany'));
+  assert.ok(deleteBody.includes('prisma.journeyProgress.deleteMany'));
+  assert.ok(deleteBody.includes('prisma.coachConsent.deleteMany'));
 });

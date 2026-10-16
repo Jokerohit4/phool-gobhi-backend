@@ -46,11 +46,6 @@ const CASCADING = {
 // code review comment explaining why the data must not be erased.
 const EXEMPT = {
   HealthDataAuditLog: 'audit trail of who touched this person\'s health data; deleting it during erasure would erase the proof the erasure happened',
-  WaterLog: 'device-health revoke must not delete journey plan data per One Plan',
-  SupplementSchedule: 'device-health revoke must not delete journey plan data per One Plan',
-  SupplementLog: 'device-health revoke must not delete journey plan data per One Plan',
-  JourneyProgress: 'device-health revoke must not delete journey plan data per One Plan',
-  CoachConsent: 'device-health revoke must not delete journey plan data per One Plan',
 };
 
 function extractModelsWithUserId(schema) {

@@ -37,6 +37,7 @@ let service;
 let COACH_POLICY_VERSION;
 let BASIC_SCOPE;
 let SUPPLEMENTS_SCOPE;
+let rebuildCalls = [];
 
 test('setup: stub prisma, import the service once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -63,7 +64,10 @@ test('setup: stub prisma, import the service once', async (t) => {
 
   t.mock.module('../services/plan/rebuildPlan.js', {
     exports: {
-      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+      rebuildPlan: async (prisma, userId, opts) => {
+        rebuildCalls.push({ userId, opts });
+        return { created: 0, updated: 0, deactivated: 0, onLayerKeys: [] };
+      },
     },
   });
 
@@ -337,4 +341,13 @@ test('the coach routes read the same flag the prescription/plan context reads (B
   assert.match(middleware, /isFeatureEnabled\('coachJourney'\)/);
   const controller = read('controllers', 'ledgerController.js');
   assert.match(controller, /isFeatureEnabled\('coachJourney'\)/);
+});
+
+test('consent grant triggers rebuildPlan with reason consent', async () => {
+  reset();
+  rebuildCalls = [];
+  await service.grantCoachScopeService(7, 'basic', { policyVersion: COACH_POLICY_VERSION });
+  assert.equal(rebuildCalls.length, 1);
+  assert.equal(rebuildCalls[0].userId, 7);
+  assert.equal(rebuildCalls[0].opts.reason, 'consent');
 });

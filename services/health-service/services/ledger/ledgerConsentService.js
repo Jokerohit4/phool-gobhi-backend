@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
 
 const prisma = new PrismaClient();
 
@@ -146,7 +147,6 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
 
   // Rebuild plan after nutrition or medical records consent changes
   if (scope === NUTRITION_SCOPE || scope === MEDICAL_RECORDS_SCOPE) {
-    const { rebuildPlan } = await import('../plan/rebuildPlan.js');
     await rebuildPlan(prisma, userId, { reason: 'consent' });
   }
 
@@ -209,7 +209,6 @@ async function removeScope(userId, scope, { purge = false } = {}) {
 
   // Rebuild plan after nutrition or medical records consent changes
   if (scope === NUTRITION_SCOPE || scope === MEDICAL_RECORDS_SCOPE) {
-    const { rebuildPlan } = await import('../plan/rebuildPlan.js');
     await rebuildPlan(prisma, userId, { reason: 'consent' });
   }
 

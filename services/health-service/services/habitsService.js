@@ -25,6 +25,7 @@ import { currentNutritionTarget } from './ledger/currentTarget.js';
 // The coach journey's default water, before any body data exists. Imported from
 // journeyConfig to keep the two in sync.
 import { JOURNEY } from './journey/journeyConfig.js';
+import { rebuildPlan } from './plan/rebuildPlan.js';
 const JOURNEY_DEFAULT_WATER_ML = JOURNEY.defaultWaterMl;
 
 // Per-entry bounds from the Contracts. A drink, not a bucket: a per-entry cap
@@ -234,7 +235,6 @@ export async function createSupplement(prisma, { userId, name, times } = {}) {
     data: { userId, name: clean.name, times: timesToSave },
   });
 
-  const { rebuildPlan } = await import('./plan/rebuildPlan.js');
   await rebuildPlan(prisma, userId, { reason: 'supplements' });
 
   return { id: row.id, name: row.name, times: row.times || [], active: row.active };
@@ -251,7 +251,6 @@ export async function updateSupplement(prisma, { userId, id, name, times } = {})
     data: clean,
   });
 
-  const { rebuildPlan } = await import('./plan/rebuildPlan.js');
   await rebuildPlan(prisma, userId, { reason: 'supplements' });
 
   return { id: row.id, name: row.name, times: row.times || [], active: row.active };
@@ -269,7 +268,6 @@ export async function deleteSupplement(prisma, { userId, id } = {}) {
   if (!Number.isInteger(rowId)) return;
   await prisma.supplementSchedule.deleteMany({ where: { id: rowId, userId } });
 
-  const { rebuildPlan } = await import('./plan/rebuildPlan.js');
   await rebuildPlan(prisma, userId, { reason: 'supplements' });
 }
 

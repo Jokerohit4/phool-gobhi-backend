@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { rebuildPlan } from './plan/rebuildPlan.js';
 
 const prisma = new PrismaClient();
 
@@ -127,7 +128,6 @@ export async function grantCoachScopeService(userId, scope, { policyVersion } = 
 
   // Rebuild plan when supplements scope changes, or any coach consent grant
   if (scope === SUPPLEMENTS_SCOPE || scope === BASIC_SCOPE) {
-    const { rebuildPlan } = await import('./plan/rebuildPlan.js');
     await rebuildPlan(prisma, userId, { reason: 'consent' });
   }
 
@@ -171,7 +171,6 @@ export async function revokeCoachScopeService(userId, scope) {
 
   // Rebuild plan on revoke for basic scope, or any supplements change
   if (scope === BASIC_SCOPE || scope === SUPPLEMENTS_SCOPE) {
-    const { rebuildPlan } = await import('./plan/rebuildPlan.js');
     await rebuildPlan(prisma, userId, { reason: 'consent' });
   }
 
