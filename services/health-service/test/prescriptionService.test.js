@@ -187,7 +187,7 @@ test('a saved plan outside the bounds is clamped on read, and names what moved',
   assert.equal(prisma.writes.length, 0, 'the read must not write the clamp back');
 });
 
-test('a plan with no target returns a clamped default instead of refusing', async () => {
+test('a plan with no target has kcal null, never a default', async () => {
   const prisma = fakePrisma({ target: null });
 
   const plan = await getPlan({ prisma, userId: 7 });
@@ -299,24 +299,26 @@ test('the bounds that come back are the ones the refusal used', async () => {
 });
 
 test('writing kcal while Food layer is off returns 409 LAYER_NOT_ON', async (t) => {
-  t.mock.module('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/middleware/requireFeatureFlag.js', {
+  const at = (rel) => new URL(rel, import.meta.url).href;
+  t.mock.module(at('../middleware/requireFeatureFlag.js'), {
     exports: {
       isFeatureEnabled: async () => true,
     },
   });
-  t.mock.module('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/plan/layerState.js', {
+  t.mock.module(at('../services/plan/layerState.js'), {
     exports: {
       getOnLayerKeys: async () => ['workout', 'water'],
       getLayers: async () => [{ key: 'food', state: 'locked' }],
     },
   });
-  t.mock.module('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/journey/journeyService.js', {
+  t.mock.module(at('../services/journey/journeyService.js'), {
     exports: {
       getJourney: async () => null,
     },
   });
 
-  const { saveSettings } = await import('file:///C:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/ledger/prescriptionService.js?mock');
+  // Query string forces a fresh module instance so Node test module mocks are applied; do not remove
+  const { saveSettings } = await import(at('../services/ledger/prescriptionService.js') + '?mock');
 
   const prisma = fakePrisma();
   await assert.rejects(
