@@ -1176,5 +1176,41 @@
     "source": "client",
     "service": "auth-service",
     "experiment_variant": ""
+  },
+  "plan_built": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-17",
+    "notes": "plan rebuilt by rebuildPlan; props: reason, on_layers, created, updated, deactivated"
+  },
+  "layer_turned_on": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-17",
+    "notes": "layer turned on during rebuild; props: layer, reason"
+  },
+  "layer_unlocked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-17",
+    "notes": "layer unlocked via journey; props: layer, how (showed_up | steady_weeks | early | existing_data | start_level)"
+  },
+  "plan_item_completed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-17",
+    "notes": "manual tick on a plan row; props: row_kind, layer. Manual ticks only (409 AUTO_DONE on untick)"
+  },
+  "plan_edited": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-17",
+    "notes": "plan edited via settings/slots/item actions; props: what (settings | slots | item_added | item_removed)"
+  },
+  "health_day_closed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a day was finalised. props earned, target, hit (previously frozen=false)"
   }
 }

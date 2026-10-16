@@ -539,6 +539,7 @@ export async function buildFullExportService(userId) {
         // it to survive a rebuild replacing the row.
         sourceRef: p.sourceRef,
         createdAt: p.createdAt,
+        sourceRef: p.sourceRef,
       })),
       planCompletions: planCompletions.map((c) => ({
         planItemId: c.planItemId,

@@ -538,3 +538,31 @@ Customer app events (`app = phool_gobhi`), enum properties only — never DOB, g
 | `onboarding_completed` | wizard finished, or training answers saved from the resume prompt / Profile | `surface`, `currently_works_out`, `training_location` |
 
 `onboarding_step_completed` is shared with the partner app's gym wizard, so the partner funnel (`GET /admin/analytics/onboarding-funnel`) now excludes `properties->>'app' = 'phool_gobhi'`. The customer funnel is `GET /admin/analytics/customer-onboarding-funnel?days=30` (booking-service, gobhi-only): per step and surface, distinct users who viewed vs completed (drop-off = viewed − completed), permission grant rates, and completions by training location. No admin-portal view renders it yet.
+
+---
+
+## One plan
+
+New events for the coach journey / one-plan architecture (shipped 2026-10-17):
+
+| Event | Service | When |
+|---|---|---|
+| `plan_built` | health-service | `rebuildPlan` runs (UB1) — plan rows generated |
+| `layer_turned_on` | health-service | a layer transitions from locked→on during rebuild (UB2) |
+| `layer_unlocked` | health-service | a layer unlocks via journey progress (UB2) |
+| `plan_item_completed` | health-service | manual tick on a plan row (UB4 complete endpoint) |
+| `plan_edited` | health-service | plan edited via settings, slots, or item actions (UB4) |
+
+These events are emitted server-side and flow into the shared `analytics_events` Postgres table via the gateway's `/api/events` ingest route (client events) or in-process `track()` calls (server events). All five are now listed in `docs/analytics-events.json` and validated by `scripts/check-analytics-events.cjs` on deploy.
+
+Funnels:
+
+- **Plan build**: `plan_built` (reason ∈ {start, unlock, consent, setup, edit, supplements, migrate}) tracks when the plan engine regenerates suggested rows.
+- **Layer progress**: `layer_unlocked` maps from `journeyService.syncUnlocks` via the `via → how` matrix (start→start_level, showed_up→showed_up, steady_weeks→steady_weeks, early→early, existing→existing_data).
+- **Item completion**: `plan_item_completed` fires on the `/plan/items/:id/complete` endpoint; `how:'manual'` is the only valid value; auto-done rows emit `409 AUTO_DONE` on untick.
+
+---
+
+## Privacy
+
+- Only `userId` identifies a person; no phone/email/name in properties.
