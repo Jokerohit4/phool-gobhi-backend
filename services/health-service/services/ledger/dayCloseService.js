@@ -30,6 +30,7 @@
 // user is one IANA timeZone per user (§F.1), not a per-row offset; when that
 // lands, a per-user zone replaces this constant.
 import { closeDay } from './scoreService.js';
+import { isScopeStale, NUTRITION_SCOPE } from './ledgerConsentService.js';
 import { BASIC_SCOPE } from '../coachConsentService.js';
 import { evaluateUserReward } from '../rewardService.js';
 
@@ -76,11 +77,24 @@ export function resolveClientClose({ localDate, now = new Date() }) {
 /**
  * Close yesterday (IST) for every eligible user. Safe to re-run.
  *
- * Eligible = coachJourney flag on, coach `basic` scope live (not revoked),
- * and a JourneyProgress row. Coach users are NOT required to have device
- * health consent — the journey works for someone who never connects Apple
- * Health — and their goal is created by /journey/start, which is what makes
- * "the plan was actually set up" the same rule on both paths.
+ * Eligible = EITHER of:
+ *   - the old ledger rules: device health consent live, nutrition scope
+ *     granted under the CURRENT wording, and a HealthGoal row (the ledger was
+ *     actually set up).
+ *       - The consent rule mirrors requireNutritionConsent. A stale grant
+ *         stops the ledger collecting for that person, and freezing a new day
+ *         for them is collecting; the nightly job must not be a side door
+ *         around the gate a request would hit.
+ *       - The goal rule keeps the sweep from minting a row of zeros every
+ *         night for someone who granted consent and never opened the ledger.
+ *         A user who DID set up and then did nothing gets a real 0 - that is
+ *         the ledger working.
+ *   - the coach journey rules (B8): the coachJourney flag on, the coach
+ *     `basic` scope live, and a HealthGoal row. Coach users are NOT required
+ *     to have device health consent — the journey works for someone who
+ *     never connects Apple Health — and their goal is created by
+ *     /journey/start, which is what makes "the plan was actually set up" the
+ *     same rule on both paths.
  *
  * The ledger flags gate the old path only; the coach path is gated by its own
  * flag. With everything off the sweep writes nothing, and `isEnabled` is
@@ -96,13 +110,33 @@ export async function runDayCloseSweep(prisma, { now = new Date(), isEnabled } =
   const result = { localDate, eligible: 0, closed: 0, alreadyClosed: 0, skipped: 0, failed: 0, disabled: false };
 
   if (typeof isEnabled !== 'function') return { ...result, disabled: true };
+  const ledgerOn = (await isEnabled('healthMetrics')) && (await isEnabled('healthLedger'));
   const coachOn = await isEnabled('coachJourney');
-  if (!coachOn) {
+  if (!ledgerOn && !coachOn) {
     return { ...result, disabled: true };
   }
 
+  // A user who qualifies under both paths is closed once, not twice, so
+  // eligibility is a Set and `skipped` counts distinct users examined who did
+  // not qualify - the same number the single-path sweep reported before.
   const candidates = new Set();
   const eligible = new Set();
+
+  if (ledgerOn) {
+    const consents = await prisma.healthConsent.findMany({
+      where: { revokedAt: null, scopes: { has: NUTRITION_SCOPE } },
+      select: { userId: true, scopes: true, scopeVersions: true },
+    });
+    const current = consents.filter((c) => !isScopeStale(c, NUTRITION_SCOPE));
+    for (const c of consents) candidates.add(c.userId);
+    if (current.length) {
+      const goals = await prisma.healthGoal.findMany({
+        where: { userId: { in: current.map((c) => c.userId) } },
+        select: { userId: true },
+      });
+      for (const g of goals) eligible.add(g.userId);
+    }
+  }
 
   if (coachOn) {
     const coachConsents = await prisma.coachConsent.findMany({
@@ -112,11 +146,11 @@ export async function runDayCloseSweep(prisma, { now = new Date(), isEnabled } =
     for (const c of coachConsents) candidates.add(c.userId);
     const remaining = coachConsents.map((c) => c.userId).filter((id) => !eligible.has(id));
     if (remaining.length) {
-      const journeys = await prisma.journeyProgress.findMany({
+      const goals = await prisma.healthGoal.findMany({
         where: { userId: { in: remaining } },
         select: { userId: true },
       });
-      for (const j of journeys) eligible.add(j.userId);
+      for (const g of goals) eligible.add(g.userId);
     }
   }
 

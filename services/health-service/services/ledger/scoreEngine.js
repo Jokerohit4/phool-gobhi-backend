@@ -113,7 +113,7 @@ export function computeMisses({
             continue;
           }
         }
-        lines.push(line('habit_missed', `${item.title} not done`, item.kind, POINTS.habitMissed, item));
+        lines.push(line(`habit_missed${item.layerKey ? `_${item.layerKey}` : ''}`, `${item.title} not done`, item.kind, POINTS.habitMissed, item));
         break;
       case 'rest':
         // Rest day is handled in computeEarns as an earned line, not a miss.

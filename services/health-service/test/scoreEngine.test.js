@@ -55,7 +55,7 @@ test('undereating and overeating are scored identically', () => {
     totals: { ...ON_TARGET, kcal: 800 },
     targets: TARGETS,
     closed: true,
-    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
   });
   const high = computeDay({
     localDate: TUE,
@@ -63,7 +63,7 @@ test('undereating and overeating are scored identically', () => {
     totals: { ...ON_TARGET, kcal: 4200 },
     targets: TARGETS,
     closed: true,
-    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
   });
 
   const lowCal = low.breakdown.find((l) => l.key === 'calories_off_target');
@@ -108,7 +108,7 @@ test('five low days raise a check-in, not a red candle', () => {
       totals: { ...ON_TARGET, kcal: 700 },
       targets: TARGETS,
       closed: true,
-      unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
+      unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
     });
     return { localDate: date, close: day.close, breakdown: day.breakdown };
   });
@@ -180,7 +180,7 @@ test('the guard is off by default below its threshold and has one threshold', ()
     totals: { ...ON_TARGET, kcal: 700 },
     targets: TARGETS,
     closed: true,
-    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
   });
   const atThreshold = Array.from({ length: SAFETY.lowIntakeRunDays }, () => ({
     close: 100,

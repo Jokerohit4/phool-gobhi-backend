@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { resolveDay } from '../services/plan/rowProgress.js';
-import { ROW_POINTS, DEFAULT_STEPS, DEFAULT_SLEEP_MIN } from '../services/ledger/constants.js';
+import { ROW_POINTS } from '../services/ledger/constants.js';
+import { DEFAULT_STEPS, DEFAULT_SLEEP_MIN } from '../services/journey/journeyConfig.js';
 
 const TODAY = '2026-10-20';
 const USER = 42;
@@ -29,7 +30,7 @@ function mockPrisma({
     state,
     planItem: {
       findMany: async ({ where, include }) => {
-        return planItemsWithCompletions.filter(item => item.userId === where.userId && item.active === true);
+        return planItemsWithCompletions.filter(item => item.active === true);
       },
     },
     foodLog: {
@@ -42,6 +43,21 @@ function mockPrisma({
         return nutritionTarget;
       },
     },
+    waterLog: {
+      findMany: async ({ where }) => {
+        return waterLogs.filter(w => w.userId === where.userId);
+      },
+    },
+    dailyActivityMetric: {
+      findMany: async ({ where }) => {
+        return stepsLogs.filter(s => s.userId === where.userId);
+      },
+    },
+    biometricEntry: {
+      findMany: async ({ where }) => {
+        return sleepLogs.filter(b => b.userId === where.userId);
+      },
+    },
     workoutSession: {
       findMany: async ({ where, select }) => {
         return sessions.filter(s => 
@@ -52,6 +68,7 @@ function mockPrisma({
           s.type != null
         ).map(s => ({
           id: s.id,
+          type: s.type,
           startedAt: s.startedAt,
           endedAt: s.endedAt,
           exercises: s.exercises || [],
@@ -148,7 +165,7 @@ function workoutItem(id, kind = 'workout', layerKey = 'workout', completed = fal
 }
 
 function restItem(id, completed = true) {
-  return { id, kind: 'rest', title: 'Rest day', schedule: '7', active: true, layerKey: 'workout', origin: 'suggested', completed };
+  return { id, kind: 'rest', title: 'Rest day', schedule: 'daily', active: true, layerKey: 'workout', origin: 'suggested', completed };
 }
 
 function waterItem(id, completed = false) {
@@ -204,13 +221,9 @@ test('water auto-done: 2400/2500 ml = progress 0.96, not done', async () => {
   const prisma = mockPrisma({
     planItems: [waterItem(1)],
     nutritionTarget: { waterMl: 2500 },
-    foodLogs: [],
+    waterLogs: [{ userId: USER, localDate: TODAY, ml: 2400 }],
   });
-  // Manually set water total
-  prisma.foodLog.findMany = async () => [{
-    userId: USER, localDate: TODAY, slot: 'breakfast', nutrients: { waterMl: 2400 }, source: 'custom'
-  }];
-  
+
   const res = await resolveDay(prisma, { userId: USER, localDate: TODAY, onLayerKeys: ['water'] });
   const waterRow = res.rows.find(r => r.kind === 'water');
   assert.ok(waterRow);
@@ -222,11 +235,9 @@ test('water auto-done: 2500/2500 ml = done, +5, no manual tick', async () => {
   const prisma = mockPrisma({
     planItems: [waterItem(1)],
     nutritionTarget: { waterMl: 2500 },
+    waterLogs: [{ userId: USER, localDate: TODAY, ml: 2500 }],
   });
-  prisma.foodLog.findMany = async () => [{
-    userId: USER, localDate: TODAY, slot: 'breakfast', nutrients: { waterMl: 2500 }, source: 'custom'
-  }];
-  
+
   const res = await resolveDay(prisma, { userId: USER, localDate: TODAY, onLayerKeys: ['water'] });
   const waterRow = res.rows.find(r => r.kind === 'water');
   assert.ok(waterRow);
@@ -337,11 +348,9 @@ test('steps auto-done from DailyActivityMetric', async () => {
   const prisma = mockPrisma({
     planItems: [stepsItem(1)],
     nutritionTarget: { stepsPerDay: 7000 },
+    stepsLogs: [{ userId: USER, date: TODAY, steps: 8000 }],
   });
-  prisma.foodLog.findMany = async () => [{
-    userId: USER, localDate: TODAY, slot: 'breakfast', nutrients: { steps: 8000 }, source: 'custom'
-  }];
-  
+
   const res = await resolveDay(prisma, { userId: USER, localDate: TODAY, onLayerKeys: ['steps'] });
   const stepsRow = res.rows.find(r => r.kind === 'steps');
   assert.ok(stepsRow);
@@ -353,11 +362,9 @@ test('sleep auto-done from BiometricEntry', async () => {
   const prisma = mockPrisma({
     planItems: [sleepItem(1)],
     nutritionTarget: { sleepMinutes: 450 },
+    sleepLogs: [{ userId: USER, localDate: TODAY, metric: 'sleep_minutes', value: 500 }],
   });
-  prisma.foodLog.findMany = async () => [{
-    userId: USER, localDate: TODAY, slot: 'breakfast', nutrients: { sleepMinutes: 500 }, source: 'custom'
-  }];
-  
+
   const res = await resolveDay(prisma, { userId: USER, localDate: TODAY, onLayerKeys: ['sleep'] });
   const sleepRow = res.rows.find(r => r.kind === 'sleep');
   assert.ok(sleepRow);
