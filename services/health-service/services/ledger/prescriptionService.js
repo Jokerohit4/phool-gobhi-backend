@@ -252,17 +252,17 @@ function resolve(ctx, draft, mode, { allowNullKcal = false } = {}) {
 
 export async function getPlan({ prisma, userId, journey = null }) {
   const ctx = await loadContext(prisma, userId, journey);
-  return buildPlan(ctx, resolve(ctx, {}, 'read', { allowNullKcal: Boolean(journey) }), journey);
+  return buildPlan(ctx, resolve(ctx, {}, 'read', { allowNullKcal: true }), journey);
 }
 
 export async function previewPlan({ prisma, userId, draft = {}, journey = null }) {
   const ctx = await loadContext(prisma, userId, journey);
-  return buildPlan(ctx, resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) }), journey);
+  return buildPlan(ctx, resolve(ctx, draft, 'write', { allowNullKcal: true }), journey);
 }
 
 export async function savePlan({ prisma, userId, draft = {}, journey = null }) {
   const ctx = await loadContext(prisma, userId, journey);
-  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) });
+  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: true });
 
   await prisma.prescription.upsert({
     where: { userId },
@@ -341,7 +341,7 @@ export async function saveSettings({ prisma, userId, draft = {}, journey = null 
   }
 
   const ctx = await loadContext(prisma, userId, journey);
-  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: Boolean(journey) });
+  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: true });
 
   // Check if sessionsPerWeek changed
   const sessionsChanged = draft.sessionsPerWeek != null &&
@@ -503,7 +503,7 @@ export async function saveSlots({ prisma, userId, slots = [], journey = null }) 
 
   await rebuildPlan(prisma, userId, { reason: 'edit' });
 
-  return buildPlan(ctx, { ...resolve(ctx, {}, 'read', { allowNullKcal: Boolean(journey) }), sessionsPerWeek }, journey);
+  return buildPlan(ctx, { ...resolve(ctx, {}, 'read', { allowNullKcal: true }), sessionsPerWeek }, journey);
 }
 
 export { buildPlan };

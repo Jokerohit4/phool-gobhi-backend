@@ -4,7 +4,6 @@ import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { requireAdult } from '../middleware/requireAdult.js';
 import { requireNutritionConsent, requireMedicalRecordsConsent, requirePhotoConsent } from '../middleware/requireLedgerConsent.js';
 import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
-import { planGated } from '../middleware/requirePlan.js';
 import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
 import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
@@ -58,6 +57,9 @@ const consentGated = [...ledgerGated];
 //                 a user who granted the coach consent but never the diary's.
 const coachGated = [requireAuth, requireCoachJourney];
 const coachBasic = [...coachGated, requireCoachConsent('basic')];
+
+const planGated = [requireAuth, requireCoachJourney, requireCoachConsent('basic')];
+const planSoftGated = [requireAuth, requireCoachJourney];
 
 // ---- Consent --------------------------------------------------------------
 

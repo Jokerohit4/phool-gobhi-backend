@@ -145,16 +145,10 @@ test('a pre-journey row (slots null) keeps the computed menu and empty slots', a
 
   const plan = await getPlan({ prisma, userId: 7, journey: JOURNEY_L1 });
 
-  // Empty slots, so the app falls back to the computed menu - exactly what
-  // A3's model documents for pre-journey users.
+  // Empty slots, journey active => no legacy workout menu.
   assert.deepEqual(plan.workoutSlots, []);
-  // The menu computation, unchanged: three sessions spread Mon/Wed/Thu per
-  // the legacy pattern.
-  assert.equal(plan.workout.length, 3);
-  assert.deepEqual(
-    plan.workout.map((w) => w.weekday),
-    [1, 3, 4],
-  );
+  // With no stored slots the legacy workout field is not synthesised.
+  assert.equal(plan.workout, undefined);
 });
 
 // ---- foodSetupNeeded, bodyDataNeeded, diet -----------------------------------
@@ -275,7 +269,7 @@ test('a journey save keeps kcal null when no target exists', async () => {
 
 // ---- the flag-off path is byte-for-byte --------------------------------------
 
-test('without the journey context nothing changes: the refusal stands and no new fields appear', async () => {
+test('without the journey context the 422 path is removed and no new fields appear', async () => {
   const prisma = fakePrisma({
     target: null,
     saved: { kcal: null, stepsPerDay: 6000, sleepMinutes: 420, workoutSlots: SLOTS },
@@ -283,14 +277,10 @@ test('without the journey context nothing changes: the refusal stands and no new
     consent: NUTRITION_CONSENT,
   });
 
-  await assert.rejects(
-    () => getPlan({ prisma, userId: 7 }),
-    (err) => {
-      assert.equal(err.status, 422);
-      assert.equal(err.code, 'PRESCRIPTION_UNAVAILABLE');
-      return true;
-    },
-  );
+  const planNoTarget = await getPlan({ prisma, userId: 7 });
+  assert.ok(planNoTarget, 'plan returned instead of refusing');
+  assert.equal(planNoTarget.kcal, null, 'kcal is null when no target');
+  assert.ok(!planNoTarget.adjustedBy.includes('kcal'), 'kcal was not adjusted when null');
 
   // And with a target, the response carries none of the journey's fields -
   // a client on the old build must see the old shape, key for key.
@@ -302,11 +292,8 @@ test('without the journey context nothing changes: the refusal stands and no new
     }),
     userId: 7,
   });
-  for (const field of ['workoutSlots', 'foodSetupNeeded', 'bodyDataNeeded', 'diet']) {
+  for (const field of ['workoutSlots', 'foodSetupNeeded', 'bodyDataNeeded', 'diet', 'workout']) {
     assert.equal(field in plan, false, `${field} leaked into a flag-off response`);
   }
   assert.equal(plan.kcal, 2200);
-  // The menu computation, not the stored slots.
-  assert.equal(plan.workout.length, 3);
-  assert.ok(plan.workout.every((w) => w.focus && w.intensity), 'the legacy menu carries focus and intensity');
 });

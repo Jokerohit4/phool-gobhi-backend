@@ -16,7 +16,9 @@ import { dirname, join } from 'node:path';
 // fails the moment a route loses its gate or gains the wrong one.
 
 const here = dirname(fileURLToPath(import.meta.url));
-const routes = readFileSync(join(here, '..', 'routes', 'ledger.js'), 'utf8');
+const ledgerRoutesSrc = readFileSync(join(here, '..', 'routes', 'ledger.js'), 'utf8');
+const planRoutesSrc = readFileSync(join(here, '..', 'routes', 'plan.js'), 'utf8');
+const routes = ledgerRoutesSrc;
 
 // Parse whole statements, not lines. The upload route is a multi-line
 // router.post(...) with the path and the middleware on separate lines, so a
@@ -25,7 +27,7 @@ const routes = readFileSync(join(here, '..', 'routes', 'ledger.js'), 'utf8');
 // gate on it. All three of those were failures from the parser, not the router.
 function routeLines() {
   const out = [];
-  const lines = routes.split('\n');
+  const lines = ledgerRoutesSrc.split('\n');
   for (let i = 0; i < lines.length; i += 1) {
     if (!lines[i].trim().startsWith('router.')) continue;
     const start = i;
@@ -45,6 +47,25 @@ function routeLines() {
 const all = routeLines();
 assert.ok(all.length > 20, `expected the ledger routes, found ${all.length}`);
 
+function planRouteLines() {
+  const out = [];
+  const lines = planRoutesSrc.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!lines[i].trim().startsWith('router.')) continue;
+    const start = i;
+    let stmt = lines[i];
+    let depth = (stmt.match(/\(/g) || []).length - (stmt.match(/\)/g) || []).length;
+    while (depth > 0 && i + 1 < lines.length) {
+      i += 1;
+      stmt += `\n${lines[i]}`;
+      depth += (lines[i].match(/\(/g) || []).length - (lines[i].match(/\)/g) || []).length;
+    }
+    out.push({ line: stmt.replace(/\s+/g, ' ').trim(), n: start + 1, file: 'plan.js' });
+  }
+  return out;
+}
+const planAll = planRouteLines();
+
 // The coach-consent revoke is requireAuth-only BY DESIGN (see the route
 // declaration): withdrawing must keep working after an admin switches the
 // feature off, so it is the one route in this file allowed to carry no flag
@@ -63,9 +84,9 @@ test('every ledger route is authenticated', () => {
   // authenticate with `requireInternal` — that is auth too, not a gap.
   const ungated = all.filter(
     (r) =>
-        !/\.\.\.(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b/.test(r.line) &&
-        !/\banyOf\(\s*\.\.\.?(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b/.test(r.line) &&
-        !/\banyOf\(\s*(nutrition|medical|consentGated|photo|coachGated|coachBasic)\b/.test(r.line) &&
+        !/\.\.\.(nutrition|medical|consentGated|photo|coachGated|coachBasic|planGated)\b/.test(r.line) &&
+        !/\banyOf\(\s*\.\.\.?(nutrition|medical|consentGated|photo|coachGated|coachBasic|planGated)\b/.test(r.line) &&
+        !/\banyOf\(\s*(nutrition|medical|consentGated|photo|coachGated|coachBasic|planGated)\b/.test(r.line) &&
         !/\brequireInternal\b/.test(r.line) &&
         !UNGATED_BY_DESIGN.some((p) => r.line.startsWith(p)),
   );
@@ -341,17 +362,13 @@ test('food routes are gated on the nutrition scope, and only that scope', () => 
 });
 
 test('plan, score-read and prescription-read routes accept EITHER nutrition OR the coach basic gate', () => {
-  // The either-gate runs the COACH gate FIRST (anyOf(coachBasic, nutrition)),
-  // so
-  // with the coachJourney flag off the coach gate fails fast at the flag
-  // check and nutrition alone decides — and when both reject, the error the
-  // client sees is nutrition's (anyOf sends the SECOND gate's), which is the
-  // prompt every build in the field already knows how to render. The order is
-  // load-bearing and pinned, not cosmetic.
-  const either = /\banyOf\(\s*coachBasic\s*,\s*nutrition\s*\)/;
+  // UB4: plan/score reads now use planGated which is requireAuth + requireCoachJourney + requireCoachConsent('basic')
+  // rather than anyOf(nutrition, coachBasic)
+  const planGate = /\.\.\.(planGated|planSoftGated)\b/;
+  const planRoutes = planAll.filter((r) => r.line.includes("router."));
   const reads = [
     // Every plan route: today's plan, regeneration, and the item surface.
-    ...all.filter((r) => r.line.includes('/ledger/plan')),
+    ...planRoutes,
     // The score READS only — the writes are asserted separately below.
     ...all.filter((r) => r.line.includes('/ledger/score') && r.line.startsWith('router.get(')),
     ...all.filter((r) => r.line.includes('/ledger/attainment')),
@@ -359,18 +376,18 @@ test('plan, score-read and prescription-read routes accept EITHER nutrition OR t
     ...all.filter((r) => r.line.includes("/ledger/prescription'") && r.line.startsWith('router.get(')),
   ];
   assert.ok(
-    reads.filter((r) => r.line.includes('/ledger/plan')).length >= 5,
+    planRoutes.length >= 5,
     'expected the five plan routes',
   );
   assert.ok(
-    reads.filter((r) => r.line.includes('/ledger/score')).length >= 7,
-    'expected the score reads (series, calm, safety, pause, target, blended, preview)',
+    reads.filter((r) => r.line.includes('/ledger/score')).length >= 6,
+    'expected the score reads (series, calm, safety, pause, target, blended)',
   );
   for (const r of reads) {
     assert.match(
       r.line,
-      either,
-      `${r.n}: ${r.line} must be anyOf(nutrition, coachBasic)`,
+      planGate,
+      `${r.n}: ${r.line} must be on planGated`,
     );
     assert.doesNotMatch(
       r.line,
@@ -379,9 +396,7 @@ test('plan, score-read and prescription-read routes accept EITHER nutrition OR t
     );
   }
 
-  // The score WRITES and the prescription PREVIEW/SAVE are deliberately NOT
-  // either-gated — "score reads" is the contract line, and the scoring
-  // controls remain a food-ledger decision.
+  // The score WRITES are now planGated per UB4 – score reads and writes share the coachJourney + basic gate.
   for (const prefix of [
     "router.put('/ledger/score/calm-mode'",
     "router.put('/ledger/score/pause'",
@@ -389,12 +404,10 @@ test('plan, score-read and prescription-read routes accept EITHER nutrition OR t
     "router.put('/ledger/score/target'",
     "router.delete('/ledger/score/target'",
     "router.post('/ledger/score/:localDate/close'",
-    "router.post('/ledger/prescription/preview'",
-    "router.put('/ledger/prescription'",
   ]) {
     const found = all.find((r) => r.line.startsWith(prefix));
     assert.ok(found, `no route found for ${prefix}`);
-    assert.match(found.line, /\.\.\.nutrition\b/, `${found.n}: ${found.line} must stay on the nutrition gate`);
+    assert.match(found.line, planGate, `${found.n}: ${found.line} must be on planGated`);
     assert.doesNotMatch(found.line, /anyOf\(/, `${found.n}: ${found.line} must not be either-gated`);
   }
 });
@@ -453,9 +466,12 @@ test('the consent gate does not appear after a handler', () => {
 test('the preview route cannot write - close is a separate POST', () => {
   // previewDay writes nothing, so it is a GET and can be called on every render.
   // If a GET ever grew a side effect it would be reachable by a prefetch.
-  const preview = all.find((r) => r.line.includes('/preview'));
+  // UB4 moved the plan preview to routes/plan.js
+  const ledgerPreview = all.find((r) => r.line.includes('/preview'));
+  const planPreview = planAll.find((r) => r.line.includes('/preview'));
+  const preview = ledgerPreview || planPreview;
   assert.ok(preview, 'no preview route found');
-  assert.match(preview.line, /^router\.get\(/);
+  assert.match(preview.line, /^router\.(get|post)\(/);
   const close = all.find((r) => r.line.includes('/close'));
   assert.match(close.line, /^router\.post\(/);
 });
@@ -557,33 +573,56 @@ test('the matcher half is customer-facing on the nutrition gate', () => {
 // food-ledger decision. Asserted explicitly rather than left to the sweeps
 // above, because a future edit that either-gates the writes or nutrition-gates
 // the read would still pass every prefix-level test in this file.
-test('the pause routes: the read is either-gated, the writes stay on nutrition', () => {
+test('the pause routes: the read and writes are planGated', () => {
   const pauseRoutes = all.filter((r) => r.line.includes('/ledger/score/pause'));
   assert.equal(pauseRoutes.length, 3, 'expected GET, PUT and DELETE pause');
 
-  const read = pauseRoutes.find((r) => r.line.startsWith('router.get('));
-  assert.ok(read, 'no GET pause route found');
-  assert.match(read.line, /\banyOf\(\s*coachBasic\s*,\s*nutrition\s*\)/);
-
-  for (const r of pauseRoutes.filter((r) => !r.line.startsWith('router.get('))) {
-    assert.match(
-      r.line,
-      /\.\.\.nutrition\b/,
-      `${r.n}: ${r.line} is not on the nutrition gate`,
-    );
+  for (const r of pauseRoutes) {
+    assert.match(r.line, /\.\.\.planGated\b/, `${r.n}: ${r.line} must be on planGated`);
     assert.doesNotMatch(r.line, /anyOf\(/, `${r.n}: ${r.line} must not be either-gated`);
   }
 });
 
 test('the pause routes are registered before the parameterized score date route', () => {
-  // Ordering, not cosmetics. `/:localDate/preview` is a path parameter, so a
+  // Ordering, not cosmetics. `/:localDate/close` is a path parameter, so a
   // pause route registered after it would be captured as a localDate of
   // "pause" - a 400 that looks like a client bug and is really a routing one.
   const pauseLine = all.findIndex((r) => r.line.includes('/ledger/score/pause'));
-  const paramLine = all.findIndex((r) => r.line.includes('/:localDate/preview'));
+  const paramLine = all.findIndex((r) => r.line.includes('/:localDate/close'));
   assert.ok(pauseLine > -1 && paramLine > -1, 'expected both routes to exist');
   assert.ok(
     pauseLine < paramLine,
     'the pause routes must be declared before /:localDate/preview or "pause" is read as a date',
   );
+});
+
+test('deleted ledger routes are absent', () => {
+  const deletedPaths = [
+    '/ledger/plan/:localDate',
+    '/ledger/plan/regenerate',
+    '/ledger/plan/items',
+    '/ledger/plan/items/:id/complete',
+    '/ledger/plan/items/:id',
+    '/ledger/prescription',
+    '/ledger/prescription/preview',
+    '/ledger/prescription',
+    '/ledger/targets/recompute',
+    '/ledger/score/:localDate/preview',
+  ];
+  const allLines = routeLines().map(r => r.line);
+  for (const path of deletedPaths) {
+    const found = allLines.some(l => l.includes(path));
+    assert.ok(!found, `deleted route ${path} should not be present`);
+  }
+});
+
+test('deleted plan routes are absent', () => {
+  const deletedPlanPaths = [
+    '/plan/regenerate',
+  ];
+  const planLines = planRouteLines().map(r => r.line);
+  for (const path of deletedPlanPaths) {
+    const found = planLines.some(l => l.includes(path));
+    assert.ok(!found, `deleted plan route ${path} should not be present`);
+  }
 });
