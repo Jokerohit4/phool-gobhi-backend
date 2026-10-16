@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-import { JOURNEY, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, earlyAllowedForLayerKey } from './journeyConfig.js';
+import { JOURNEY, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
 import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
 import { countSteadyWeeks, getSteadyWeeksDetail } from './steadyWeeks.js';
 import { checkAndTriggerHomeDaysReferral } from './referralHomeTrigger.js';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
 
 const prisma = new PrismaClient();
 
@@ -33,9 +34,14 @@ function daysSince(dateStr) {
 async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, startLevel) {
   const now = new Date().toISOString();
   const unlocked = [];
+  const startLayer = startLayerFor(startLevel);
 
-  // Layer 1 (basics) always unlocked at start
-  unlocked.push({ layer: 1, at: progress.startedAt?.toISOString() ?? now, via: 'start' });
+  // Layers up to startLayer unlocked via start_level on every read
+  for (let layer = 1; layer <= startLayer; layer++) {
+    if (!unlocked.some(u => u.layer === layer)) {
+      unlocked.push({ layer, at: progress.startedAt?.toISOString() ?? now, via: 'start_level' });
+    }
+  }
 
   // Layer 2 (food) - 3 showed-up days or early request
   const foodUnlock = JOURNEY.layers.find((l) => l.key === 'food');
@@ -130,34 +136,53 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
     }
   }
 
-  // Milestones for experienced users
-  const isExperienced = startLevel === 'experienced';
-  let milestoneList = [];
-  if (isExperienced) {
-    for (const m of JOURNEY.milestones) {
-      let achieved = false;
-      if (m.needSteadyWeeks != null) achieved = steadyWeeks >= m.needSteadyWeeks;
-      if (m.needDaysSinceStart != null) achieved = daysSince(progress.startedAt?.toISOString().slice(0, 10) ?? todayLocalDate()) >= m.needDaysSinceStart;
-      if (m.requiresSocial) {
-        // Social check would need app-config; for now assume false if not passed
-        // The actual check will be done by the caller if needed
-      }
-      milestoneList.push({ key: m.key, label: m.label, achieved });
-    }
-  }
-
   return {
     startLevel,
     layers,
     next,
+    showedUpDates: showedUpDays,
     showedUpDays: showedUpDays.length,
     steadyWeeks,
     easyStartUntil: progress.easyStartUntil ?? null,
     foodEarly: !!progress.foodEarlyAt,
     easeBack,
     refreshProposal,
-    milestones: milestoneList,
+    milestones,
   };
+}
+
+/**
+ * Persist computed unlocks with conditional update guard, emit events and rebuild plan.
+ */
+async function syncUnlocks(userId, progress, computed) {
+  const existing = progress.unlocked ?? [];
+  const newUnlocks = computed.filter(u => !existing.some(e => e.layer === u.layer));
+  if (newUnlocks.length === 0 && (progress.lastShowedUpDate === null || progress.lastShowedUpDate === undefined)) {
+    return { updated: false, progress };
+  }
+  // conditional update to avoid concurrent races
+  const updated = await prisma.journeyProgress.update({
+    where: { userId, updatedAt: progress.updatedAt },
+    data: {
+      unlocked: computed,
+      lastShowedUpDate: progress.lastShowedUpDate,
+      updatedAt: new Date(),
+    },
+  }).catch(async err => {
+    // conflict, retry once
+    const fresh = await prisma.journeyProgress.findUnique({ where: { userId } });
+    if (!fresh) return null;
+    return await syncUnlocks(userId, fresh, computed);
+  });
+  if (!updated) return { updated: false, progress };
+  // emit layer_unlocked per new layer; how mapping from via
+  for (const u of newUnlocks) {
+    const howMap = { start_level: 'start_level', showed_up: 'showed_up', steady_weeks: 'steady_weeks', early: 'early', existing: 'existing_data' };
+    // emit placeholder – actual event emitter can be wired later
+    // rebuild plan for unlock
+    await rebuildPlan(prisma, userId, { reason: 'unlock', layer: u.layer, how: howMap[u.via] ?? u.via });
+  }
+  return { updated: true, progress: updated };
 }
 
 /**
@@ -184,31 +209,21 @@ export async function getJourney(userId) {
     easeBack = daysSinceLast >= JOURNEY.inactivePauseAfterDays;
   }
 
-  // Check for refresh proposal: plan 21+ days old and 2+ steady weeks since last build
-  let refreshProposal = null;
-  // We'll need to check the prescription's updatedAt or a dedicated field
-  // For now, skip until we have a planBuiltAt field
-
   // Check and trigger home-days referral (3rd showed-up day)
   await checkAndTriggerHomeDaysReferral(userId, showedUpDays, progress);
 
   // Compute unlocked layers
   const unlockedLayers = await computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, startLevel);
 
-  // Update progress if new layers unlocked or lastShowedUpDate changed
-  const existingUnlocked = progress.unlocked ?? [];
-  const newUnlocked = unlockedLayers.filter(
-    (u) => !existingUnlocked.some((e) => e.layer === u.layer)
-  );
+  // Sync unlocks with conditional guard and rebuild
+  const { updated, progress: syncedProgress } = await syncUnlocks(userId, { ...progress, lastShowedUpDate }, unlockedLayers);
+  progress = syncedProgress ?? progress;
 
-  if (newUnlocked.length > 0 || lastShowedUpDate !== progress.lastShowedUpDate) {
+  // Update lastShowedUpDate if changed without unlock
+  if (lastShowedUpDate !== progress.lastShowedUpDate) {
     progress = await prisma.journeyProgress.update({
       where: { userId },
-      data: {
-        unlocked: unlockedLayers,
-        lastShowedUpDate,
-        ...(newUnlocked.length > 0 ? { updatedAt: new Date() } : {}),
-      },
+      data: { lastShowedUpDate },
     });
   }
 
@@ -217,9 +232,10 @@ export async function getJourney(userId) {
     let achieved = false;
     if (m.needSteadyWeeks != null) achieved = steadyWeeks >= m.needSteadyWeeks;
     if (m.needDaysSinceStart != null) achieved = daysSince(progress.startedAt?.toISOString().slice(0, 10) ?? todayLocalDate()) >= m.needDaysSinceStart;
-    // Social flag check would be done externally
     return { key: m.key, label: m.label, achieved };
   });
+
+  const refreshProposal = null;
 
   return buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeeks, startLevel, easeBack, refreshProposal, milestones);
 }
@@ -285,38 +301,10 @@ export async function unlockFoodEarly(userId) {
     data: { foodEarlyAt: new Date() },
   });
 
-  // Trigger plan regeneration since layer unlocked
-  const { regenerateForUser } = await import('../ledger/starterPlanService.js');
-  await regenerateForUser(prisma, userId, { unlockedLayerKeys: await getUnlockedLayerKeys(userId) });
+  // Rebuild plan for early unlock
+  await rebuildPlan(prisma, userId, { reason: 'unlock', layer: 2, how: 'early' });
 
   return getJourney(userId);
-}
-
-/**
- * Accept a plan refresh proposal (POST /journey/accept-refresh).
- */
-export async function acceptRefresh(userId) {
-  const { regenerateForUser } = await import('../ledger/starterPlanService.js');
-  const journey = await getJourney(userId);
-  if (!journey) {
-    const err = new Error('Journey not started');
-    err.status = 404;
-    err.code = 'JOURNEY_NOT_STARTED';
-    throw err;
-  }
-
-  await regenerateForUser(prisma, userId, {
-    unlockedLayerKeys: await getUnlockedLayerKeys(userId),
-    easeBack: journey.easeBack,
-  });
-
-  // Clear refresh proposal
-  await prisma.journeyProgress.update({
-    where: { userId },
-    data: { updatedAt: new Date() }, // refreshProposal is not a field, it's computed
-  });
-
-  return { journey: await getJourney(userId), plan: null }; // plan would come from regenerateForUser
 }
 
 /**
@@ -329,6 +317,8 @@ export async function getUnlockedLayerKeys(userId) {
   const showedUpDays = await getShowedUpDays(userId);
   const steadyWeeks = countSteadyWeeks(showedUpDays);
   const unlockedLayers = await computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, progress.startLevel ?? DEFAULT_EXPERIENCE_LEVEL);
+
+  await syncUnlocks(userId, progress, unlockedLayers);
 
   return unlockedLayers.flatMap((u) => {
     const layer = JOURNEY.layers.find((l) => l.layer === u.layer);
@@ -408,9 +398,9 @@ export async function getJourneySummary(userId) {
   let nextUnlock = null;
   if (nextLocked) {
     const unlock = unlockConfigForLayerKey(nextLocked.key);
-    if (unlock.type === 'showed_up_days') {
+    if (unlock && unlock.type === 'showed_up_days') {
       nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: showedUpDays.length, need: unlock.need };
-    } else if (unlock.type === 'steady_weeks') {
+    } else if (unlock && unlock.type === 'steady_weeks') {
       nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: steadyWeeks, need: unlock.need };
     }
   }

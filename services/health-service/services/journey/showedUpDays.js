@@ -63,6 +63,25 @@ async function getQualifyingWorkoutDays(userId, from = null) {
 }
 
 /**
+ * Check if a session qualifies as a workout day.
+ * A qualifying session = type not null, not 'rest', endedAt set,
+ * AND (has at least one completed set OR duration >= 10 minutes).
+ * Used by both rowProgress (local DB) and showedUpDays (for history).
+ * @param {object} session - WorkoutSession with exercises/sets
+ * @returns {boolean}
+ */
+export function isQualifyingSession(session) {
+  if (!session.type || session.type === 'rest' || !session.endedAt) return false;
+  const hasCompletedSet = session.exercises?.some((ex) => ex.sets?.length > 0);
+  if (hasCompletedSet) return true;
+  if (session.startedAt && session.endedAt) {
+    const durationMinutes = (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 60000;
+    return durationMinutes >= 10;
+  }
+  return false;
+}
+
+/**
  * Get showed-up days by combining booking-service checkin-days with qualifying workout days.
  * Returns distinct IST days (YYYY-MM-DD), newest first, capped at 90 days.
  */

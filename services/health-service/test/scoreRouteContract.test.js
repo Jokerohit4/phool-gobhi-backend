@@ -153,14 +153,15 @@ test('every write on the score surface is a PUT or DELETE, never a POST', () => 
 });
 
 test('every score route is gated on the same consent surface', () => {
+  // UB4: score reads now use planGated; writes remain nutrition.
   // Same failure class as the appointment gate: these routes serve score and
   // weight-derived data, so each must sit behind the nutrition consent OR
-  // (since B8) the coach journey's flag + `basic` scope — the either-gate
+  // (since B8) the coach journey's flag + `basic` scope — planGated
   // that lets a coach user read a score derived from a plan they never
   // opened a food diary for. Either form, never neither: a route that lost
   // both serves health data to anyone who can reach it, which no
   // screen-level error would ever report.
-  const gate = /(?:\.\.\.nutrition|anyOf\(coachBasic,\s*nutrition\))\s*,\s*(ledgerCtrl|scoreService|attainmentService)\.\w+/;
+  const gate = /(?:\.\.\.planGated|\.\.\.nutrition|anyOf\(coachBasic,\s*nutrition\))\s*,\s*(ledgerCtrl|scoreService|attainmentService)\.\w+/;
   const scoreRoutes = [
     ...routesSource.matchAll(
       /router\.(get|post|put|patch|delete)\(\s*'\/ledger\/(score[^']*|attainment[^']*)'/g,

@@ -37,6 +37,7 @@
 import { validateLocalDate } from '../biometricService.js';
 import { SAFETY } from './constants.js';
 import { latestWeightKg, resolveInputs, recomputeTargets, MISSING_REASONS } from './targetService.js';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
 
 /**
  * The user's own calendar day, used only as a fallback when a caller omits one.
@@ -618,6 +619,9 @@ export async function saveIntake({ prisma, userId, input = {}, localDate }) {
   // whereas swallowing it would return 200 and let the wizard announce targets
   // that do not exist, which is the exact bug this replaced.
   const target = await recomputeTargets({ prisma, userId, localDate: day });
+
+  // Rebuild plan after intake targets recomputed
+  await rebuildPlan(prisma, userId, { reason: 'setup' });
 
   return {
     written: true,

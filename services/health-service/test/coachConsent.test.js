@@ -37,6 +37,7 @@ let service;
 let COACH_POLICY_VERSION;
 let BASIC_SCOPE;
 let SUPPLEMENTS_SCOPE;
+let rebuildCalls = [];
 
 test('setup: stub prisma, import the service once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -57,6 +58,15 @@ test('setup: stub prisma, import the service once', async (t) => {
             },
           };
         }
+      },
+    },
+  });
+
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    exports: {
+      rebuildPlan: async (prisma, userId, opts) => {
+        rebuildCalls.push({ userId, opts });
+        return { created: 0, updated: 0, deactivated: 0, onLayerKeys: [] };
       },
     },
   });
@@ -321,14 +331,36 @@ test('granting is adults-only; revoking carries no gate at all', () => {
 });
 
 test('the coach routes read the same flag the prescription/plan context reads (B7 handoff)', () => {
-  // B7's ledgerController gates its `journey` context on the coachJourney
-  // flag; requireCoachJourney must check the SAME flag through the SAME
-  // helper, or a route could be reachable with a plan served without the
-  // journey context (or the reverse).
+  // UB4: the score/appointment/plan routes are now planGated (coachJourney + basic consent).
+  // The planGated middleware includes requireCoachJourney which checks the coachJourney flag.
+  // The routes must use planGated, and planGated must include requireCoachJourney.
   const routes = read('routes', 'ledger.js');
   assert.match(routes, /const coachGated = \[requireAuth, requireCoachJourney\]/);
+  assert.match(routes, /const planGated = \[requireAuth, requireCoachJourney, requireCoachConsent\('basic'\)\]/);
+  assert.match(routes, /const planSoftGated = \[requireAuth, requireCoachJourney\]/);
+  
   const middleware = read('middleware', 'requireCoachJourney.js');
   assert.match(middleware, /isFeatureEnabled\('coachJourney'\)/);
-  const controller = read('controllers', 'ledgerController.js');
-  assert.match(controller, /isFeatureEnabled\('coachJourney'\)/);
+  
+  const planMiddleware = read('middleware', 'requirePlan.js');
+  assert.match(planMiddleware, /requireCoachJourney/);
+  
+  // Score routes should be on planGated
+  assert.match(routes, /router\.get\('\/ledger\/score', \.\.\.planGated,/);
+  assert.match(routes, /router\.get\('\/ledger\/score\/calm', \.\.\.planGated,/);
+  assert.match(routes, /router\.get\('\/ledger\/score\/safety', \.\.\.planGated,/);
+  assert.match(routes, /router\.put\('\/ledger\/score\/calm-mode', \.\.\.planGated,/);
+  assert.match(routes, /router\.get\('\/ledger\/score\/pause', \.\.\.planGated,/);
+  assert.match(routes, /router\.get\('\/ledger\/attainment', \.\.\.planGated,/);
+  assert.match(routes, /router\.get\('\/ledger\/score\/target', \.\.\.planGated,/);
+  assert.match(routes, /router\.get\('\/ledger\/score\/blended', \.\.\.planGated,/);
+});
+
+test('consent grant triggers rebuildPlan with reason consent', async () => {
+  reset();
+  rebuildCalls = [];
+  await service.grantCoachScopeService(7, 'basic', { policyVersion: COACH_POLICY_VERSION });
+  assert.equal(rebuildCalls.length, 1);
+  assert.equal(rebuildCalls[0].userId, 7);
+  assert.equal(rebuildCalls[0].opts.reason, 'consent');
 });

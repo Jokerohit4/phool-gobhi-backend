@@ -3,8 +3,8 @@ import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
-import * as targetService from '../services/ledger/targetService.js';
 import { currentNutritionTarget } from '../services/ledger/currentTarget.js';
+import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
 import * as scoreTargetService from '../services/ledger/scoreTargetService.js';
@@ -19,8 +19,6 @@ import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { evaluateWeeklyRewards, evaluateUserReward } from '../services/rewardService.js';
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
 import { correlateMarkerImprovement } from '../services/correlationService.js';
-import * as prescriptionService from '../services/ledger/prescriptionService.js';
-import { resolveUnlockedLayerKeys } from '../services/ledger/starterPlanService.js';
 
 const prisma = new PrismaClient();
 
@@ -71,7 +69,7 @@ export const getSetup = handle(async (req) => {
     userId: req.userId,
     localDate: req.query?.localDate,
     // So age and sex prefill from the signup DOB/gender instead of being asked
-    // twice. Prefill only â€” see getSetupState.
+    // twice. Prefill only — see getSetupState.
     fetchProfile: fetchUserProfileInternal,
   });
 });
@@ -97,13 +95,13 @@ export const saveSetup = async (req, res) => {
     }
 
     // Also a refusal, and also not a 200. The request was well-formed and
-    // individually valid â€” the target and the date just cannot both be honoured
-    // â€” so the screen needs its own copy and the `earliestDate` to offer, which
+    // individually valid — the target and the date just cannot both be honoured
+    // — so the screen needs its own copy and the `earliestDate` to offer, which
     // the generic validation branch would throw away.
     if (out.skipped === 'target_too_aggressive') {
       // Recorded before the early return, because health_intake_saved never fires
       // for a refused submission. Without this, a user our own safety cap turns
-      // away is indistinguishable from one who abandoned the wizard â€” the two
+      // away is indistinguishable from one who abandoned the wizard — the two
       // need opposite responses. limitedBy says which bound actually applied, so
       // a cap that is too tight for most users is visible rather than inferred.
       track('health_targets_pace_rejected', req.userId, {
@@ -120,7 +118,7 @@ export const saveSetup = async (req, res) => {
     }
 
     // Shape only: which fields were answered, whether a weight became a
-    // reading. Never the values themselves â€” a body weight has no business in
+    // reading. Never the values themselves — a body weight has no business in
     // analytics.
     track('health_intake_saved', req.userId, {
       skipped: out.skipped || null,
@@ -136,112 +134,6 @@ export const saveSetup = async (req, res) => {
       .json({ error: err.error || err.message || 'Server error', code: err.code });
   }
 };
-
-// ---- Targets --------------------------------------------------------------
-
-// Recomputes from the weight/height/activity actually on file, so a user who
-// has logged 78 kg gets targets for 78 kg rather than for whatever they typed
-// at intake.
-export const recomputeTargets = handle(async (req) => {
-  const out = await targetService.recomputeTargets({
-    prisma,
-    userId: req.userId,
-    localDate: req.body?.localDate || req.query?.localDate,
-  });
-  // `written: false, skipped: 'user_edited'` is the common, correct outcome -
-  // the service refuses to clobber a target the user set by hand, so tracking
-  // "recomputed" unconditionally would overstate how often the formula runs.
-  track('health_target_recomputed', req.userId, {
-    written: out?.written === true,
-    skipped: out?.skipped || null,
-  });
-  return out;
-});
-
-// A pure read of "where did these numbers come from", and the reason the app
-// does not POST to /targets/recompute to get it: doing that made opening the
-// targets screen create a NutritionTarget row on every visit, and it could never
-// work for a user whose target is `user_edited`, because the recompute is
-// refused precisely in that case - leaving the one user who set their own
-// numbers with no explanation of them.
-//
-// Returns the detail even when no target exists at all. The activity half is
-// still true and worth showing, and a 404 here would force the client to guess.
-export const getTargetActivityDetail = handle(async (req) => {
-  return targetService.describeActivity({
-    prisma,
-    userId: req.userId,
-    localDate: req.query?.localDate,
-  });
-});
-
-export const getTargets = handle(async (req) => {
-  const target = await currentNutritionTarget(prisma, req.userId);
-  if (!target) return null;
-  // Decimal columns come back as strings over JSON, which would make the
-  // client parse every number. Normalised once, here.
-  return {
-    ...target,
-    kcal: Number(target.kcal),
-    proteinG: Number(target.proteinG),
-    carbsG: Number(target.carbsG),
-    fatG: Number(target.fatG),
-    fibreG: Number(target.fibreG),
-    waterMl: Number(target.waterMl),
-  };
-});
-
-// ---- The adjustable plan ---------------------------------------------------
-
-// The coach journey's read context for the three prescription endpoints:
-// null when the coachJourney flag is off, so every one of them then behaves
-// byte-for-byte as it did before the journey existed. Resolving the unlocked
-// layers here (rather than inside the service) keeps prescriptionService
-// pure enough to take a fake prisma in tests, and keeps ONE place that
-// knows the flag exists.
-async function journeyPlanContext(userId) {
-  if (!(await isFeatureEnabled('coachJourney'))) return null;
-  return { unlockedLayerKeys: await resolveUnlockedLayerKeys(userId) };
-}
-
-export const getPrescription = handle(async (req) => {
-  return prescriptionService.getPlan({
-    prisma,
-    userId: req.userId,
-    journey: await journeyPlanContext(req.userId),
-  });
-});
-
-// Read-only, and the reason there are two of them: a slider drag asks what the
-// rest of the plan becomes, and asking must cost nothing. Nothing in
-// previewPlan writes - see the test that pins it.
-export const previewPrescription = handle(async (req) => {
-  return prescriptionService.previewPlan({
-    prisma,
-    userId: req.userId,
-    draft: req.body || {},
-    journey: await journeyPlanContext(req.userId),
-  });
-});
-
-export const savePrescription = handle(async (req) => {
-  const plan = await prescriptionService.savePlan({
-    prisma,
-    userId: req.userId,
-    draft: req.body || {},
-    journey: await journeyPlanContext(req.userId),
-  });
-  // Shape only. Never the numbers: a calorie target and a sleep window are
-  // health data, and the analytics util's no-PII rule means this dictionary is
-  // read by everyone who can query the analytics database. Whether the server
-  // had to move anything is the funnel fact - a rate that climbs says our
-  // bounds and people's expectations have drifted apart.
-  track('health_prescription_saved', req.userId, {
-    adjusted: plan.adjustedBy.length > 0,
-    had_workout: plan.workout.length > 0,
-  });
-  return plan;
-});
 
 // ---- Food search and logging --------------------------------------------
 
@@ -330,7 +222,7 @@ export const recentFoods = handle(async (req) => {
 //
 // The response shape carries one thing the client needs and cannot derive: if
 // the request already existed, `created: false`. A user who asks for omelette
-// twice should not be told twice that we have noted it â€” the second time, the
+// twice should not be told twice that we have noted it — the second time, the
 // useful message is that it is already on the list and how many people have
 // asked. Whether to say so is the client's call; it needs the fact to decide.
 
@@ -350,7 +242,7 @@ export const requestFood = handle(async (req) => {
   // is deliberate: "which foods are people failing to find" is the entire
   // reason this endpoint exists, and an event with no name in it cannot answer
   // that question at all. So this one carries the food name, and everything
-  // else here carries shape only â€” compare health_food_photo_recognized below,
+  // else here carries shape only — compare health_food_photo_recognized below,
   // which stays nameless because a photo has no name to begin with and its
   // contents are nobody else's business. The difference is not carelessness: a
   // requested food is a thing the user wants the catalogue to have, which is
@@ -648,87 +540,6 @@ export const deleteSavedMeal = handle(async (req) => {
   return { deleted: true };
 });
 
-// ---- Plan ----------------------------------------------------------------
-
-// Regenerating suggestions is the only write here that is not the user's own
-// words, and it only ever writes origin 'suggested' - see ledgerPlanService.js.
-export const regeneratePlan = handle(async (req) => {
-  const goal = await prisma.healthGoal.findUnique({ where: { userId: req.userId } });
-  const target = await currentNutritionTarget(prisma, req.userId);
-  if (!target) {
-    const err = new Error('Set a nutrition target before generating a plan');
-    err.status = 400;
-    throw err;
-  }
-  const out = await ledgerPlanService.regenerateSuggestions(prisma, {
-    userId: req.userId,
-    // The whole set. The generator is currently goal-agnostic (it keys items off
-    // the nutrient targets rather than the objective), so this is not yet load-
-    // bearing â€” but passing one of several goals here would bake in a choice this
-    // endpoint has no basis to make.
-    goals: goal?.goals ?? [],
-    diet: goal?.diet,
-    targets: {
-      kcal: Number(target.kcal),
-      proteinG: Number(target.proteinG),
-      carbsG: Number(target.carbsG),
-      fatG: Number(target.fatG),
-      fibreG: Number(target.fibreG),
-      waterMl: Number(target.waterMl),
-      micros: target.micros,
-    },
-    measuredActivity: goal?.activityIsMeasured === true,
-  });
-  track('health_plan_regenerated', req.userId, { created: out.created, dropped: out.dropped });
-  return out;
-});
-
-// A doctor item is reachable ONLY through here, and `fromPrescription` is a
-// field on the body the user controls. That is the intended shape: the user is
-// transcribing their own prescription, and the service records the words. There
-// is no medicine picker, no dose, and no validation of the content - see the
-// header of ledgerPlanService.js.
-export const addPlanItem = handle(async (req) => {
-  const b = req.body || {};
-  const out = await ledgerPlanService.addUserEnteredItem(prisma, {
-    userId: req.userId,
-    title: b.title,
-    kind: b.kind,
-    schedule: b.schedule,
-    endsOn: b.endsOn,
-    fromPrescription: b.fromPrescription === true,
-    prescribedBy: b.prescribedBy,
-    prescribedNote: b.prescribedNote,
-  });
-  return out;
-});
-
-export const getPlan = handle(async (req) => {
-  const { localDate } = req.params;
-  const out = await ledgerPlanService.getPlanForDate(prisma, {
-    userId: req.userId,
-    localDate,
-    today: req.query.today || localDate,
-  });
-  return out;
-});
-
-export const completePlanItem = handle(async (req) =>
-  ledgerPlanService.completeItem(prisma, {
-    userId: req.userId,
-    planItemId: req.params.id,
-    localDate: req.body?.localDate,
-    // `how` is forced to 'manual' here. A client cannot POST how: 'auto' to
-    // make something worth zero, and cannot POST points at all - the service
-    // derives both.
-    how: 'manual',
-  }),
-);
-
-export const deactivatePlanItem = handle(async (req) =>
-  ledgerPlanService.deactivateItem(prisma, { userId: req.userId, planItemId: req.params.id }),
-);
-
 // ---- Score ---------------------------------------------------------------
 
 export const getScoreSeries = handle(async (req) =>
@@ -788,17 +599,17 @@ export const clearPause = handle(async (req) =>
     scoreService.clearPause(prisma, { userId: req.userId }),
   );
 
-  // Attainment reads the weight series up to a day boundary, so `today` is
-  // required and validated the same way pause requires it. A missing or malformed
-  // date here would not be a cosmetic oddity: it decides which readings are
-  // visible at all, so a bad one would let a future-dated weigh-in into the
-  // series and could report the goal as met.
-  export const getAttainment = handle(async (req) =>
-    attainmentService.getAttainment(prisma, {
-      userId: req.userId,
-      localDate: requireToday(req.query?.today),
-    }),
-  );
+// Attainment reads the weight series up to a day boundary, so `today` is
+// required and validated the same way pause requires it. A missing or malformed
+// date here would not be a cosmetic oddity: it decides which readings are
+// visible at all, so a bad one would let a future-dated weigh-in into the
+// series and could report the goal as met.
+export const getAttainment = handle(async (req) =>
+  attainmentService.getAttainment(prisma, {
+    userId: req.userId,
+    localDate: requireToday(req.query?.today),
+  }),
+);
 
 // ---- Score target --------------------------------------------------------
 //
@@ -1014,7 +825,7 @@ export const recognizeFoodPhoto = handle(async (req) => {
     mimeType: req.file.mimetype,
     // Which candidate in the provider rotation serves this request. Multipart
     // delivers it as a string (coerced in providers/index.js); app versions
-    // that predate the rotation send nothing and get attempt 1 â€” the vendor
+    // that predate the rotation send nothing and get attempt 1 — the vendor
     // they always had.
     attempt: req.body?.attempt,
   });
@@ -1105,3 +916,28 @@ export const sweepFoodPhotos = handle(async () =>
 export const runDayCloseSweepInternal = handle(async () =>
   dayCloseService.runDayCloseSweep(prisma, { isEnabled: isFeatureEnabled }),
 );
+// Kept (the Food layer's targets screen): restored verbatim from the pre-one-plan controller.
+export const getTargetActivityDetail = handle(async (req) => {
+  return targetService.describeActivity({
+    prisma,
+    userId: req.userId,
+    localDate: req.query?.localDate,
+  });
+});
+
+export const getTargets = handle(async (req) => {
+  const target = await currentNutritionTarget(prisma, req.userId);
+  if (!target) return null;
+  // Decimal columns come back as strings over JSON, which would make the
+  // client parse every number. Normalised once, here.
+  return {
+    ...target,
+    kcal: Number(target.kcal),
+    proteinG: Number(target.proteinG),
+    carbsG: Number(target.carbsG),
+    fatG: Number(target.fatG),
+    fibreG: Number(target.fibreG),
+    waterMl: Number(target.waterMl),
+  };
+});
+

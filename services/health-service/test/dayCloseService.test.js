@@ -4,14 +4,60 @@
 // the nightly sweep and a user's own close race each other.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  serverTodayIST,
-  yesterdayIST,
-  resolveClientClose,
-  runDayCloseSweep,
-} from '../services/ledger/dayCloseService.js';
-import { closeDay } from '../services/ledger/scoreService.js';
 import { LEDGER_POLICY_VERSION } from '../services/ledger/ledgerConsentService.js';
+
+// closeDay reads the on-layer keys from layerState - a UB2 stub that throws
+// 'not implemented' until its owner lands - and the scoring window from the
+// journey service. Mock both once and import the module under test dynamically,
+// the same way scoreService.test.js does: a static import is hoisted above any
+// t.mock.module call and would resolve the real, throwing stub instead.
+const ON_LAYERS = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'];
+
+let serverTodayIST, yesterdayIST, resolveClientClose, runDayCloseSweep, closeDay;
+
+test('setup: mock layerState + journey deps once, import day close deps once', async (t) => {
+  t.mock.module(new URL('../services/plan/layerState.js', import.meta.url).href, {
+    namedExports: { getOnLayerKeys: async () => [...ON_LAYERS] },
+  });
+
+  t.mock.module(new URL('../services/journey/journeyService.js', import.meta.url).href, {
+    namedExports: {
+      getJourney: async () => ({
+        journeyProgress: { userId: 7, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' },
+        unlockedLayerKeys: [...ON_LAYERS],
+      }),
+      getUnlockedLayerKeys: async () => [...ON_LAYERS],
+      getScoringWindow: async () => null,
+    },
+  });
+
+  t.mock.module(new URL('../utils/fetchInternal.js', import.meta.url).href, {
+    namedExports: {
+      getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
+      fetchInternal: async () => ({ data: { days: [] } }),
+    },
+  });
+
+  t.mock.module(new URL('../utils/analytics.js', import.meta.url).href, {
+    namedExports: { track: () => {}, ingest: () => {} },
+  });
+
+  t.mock.module(new URL('../services/rewardService.js', import.meta.url).href, {
+    namedExports: {
+      CONSISTENCY_THRESHOLD: 80,
+      WEEKLY_REWARD_COINS: 50,
+      weekStartIST: () => null,
+      evaluateUserReward: async () => ({}),
+      evaluateWeeklyRewards: async () => ({}),
+    },
+  });
+
+  ({ serverTodayIST, yesterdayIST, resolveClientClose, runDayCloseSweep } =
+    await import('../services/ledger/dayCloseService.js'));
+  ({ closeDay } = await import('../services/ledger/scoreService.js'));
+  assert.equal(typeof closeDay, 'function');
+  assert.equal(typeof runDayCloseSweep, 'function');
+});
 
 // 2026-09-30 20:00 UTC = 2026-10-01 01:30 IST - the workflow's own run time.
 const RUN_AT = new Date('2026-09-30T20:00:00.000Z');
@@ -75,6 +121,9 @@ function fakePrisma({ consents = [], coachConsents = [], goals = [], snapshots =
     planItemCompletion: { findMany: async () => [] },
     foodLog: { findMany: async () => [] },
     workoutSession: { findMany: async () => [] },
+    supplementLog: { findMany: async () => [] },
+    waterLog: { findMany: async () => [] },
+    dailyActivityMetric: { findMany: async () => [] },
     exerciseRecord: { findMany: async () => [] },
     biometricEntry: { findMany: async () => [] },
   };

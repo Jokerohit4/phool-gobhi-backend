@@ -16,7 +16,7 @@
 //   - the low-intake guard. checkForLowIntakeRun reads recent snapshots at
 //     read time, because it is a safety check about the user's current state,
 //     not a property of any one day.
-import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS, V2_FROM } from './constants.js';
+import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS } from './constants.js';
 import { computeDay, checkForLowIntakeRun, computeBiologicalScore, computeBlendedHealthScore } from './scoreEngine.js';
 import { getDayTotals } from './nutritionService.js';
 import { isDueOn } from './ledgerPlanService.js';
@@ -25,6 +25,8 @@ import { openActions } from './remediation.js';
 import { assertGoal } from './goalGuard.js';
 import { currentNutritionTarget } from './currentTarget.js';
 import { isIsoDay } from './isoDay.js';
+import { resolveDay } from '../plan/rowProgress.js';
+import { getOnLayerKeys } from '../plan/layerState.js';
 import redis from '../../utils/redisClient.js';
 import {
   blendedScoreCacheKey,
@@ -42,12 +44,6 @@ async function getScoringWindow(prisma, userId) {
   } catch {
     return null;
   }
-}
-
-// Determines if the v2 rules should apply for a given date.
-// Days on or after V2_FROM use the new rules; earlier days keep v1 behavior.
-function isV2Date(localDate) {
-  return localDate >= V2_FROM;
 }
 
 // Computes noMisses, unlockedLayerKeys, and foodNoPenalty from the scoring window.
@@ -69,7 +65,7 @@ function deriveScoringFlags(scoringWindow, localDate) {
   }
   return {
     noMisses,
-    unlockedLayerKeys: [], // Filled by the caller from getUnlockedLayerKeys
+    unlockedLayerKeys: [], // Filled by the caller from getOnLayerKeys
     foodNoPenalty: foodEarlyNoPenaltyUntilUnlock === true,
   };
 }
@@ -80,64 +76,69 @@ function deriveScoringFlags(scoringWindow, localDate) {
  * Kept separate from `closeDay` so the app can show today's running score
  * without a snapshot row existing for today. Only a closed day gets frozen.
  */
+/**
+ * The three flags the engine needs to place the extra-workout line.
+ *
+ * They are derived here rather than by resolveDay because the two use different
+ * session definitions on purpose: resolveDay's `bonus` only pays a *qualifying*
+ * session (one with evidence of real sets, or a long enough duration), while the
+ * engine's line pays any finished session - the user who trained on their
+ * scheduled-workout day but never ticked it off is the person it exists for.
+ * `hasPlannedWorkoutDone` is a row question (done by tick, or auto by a
+ * qualifying session), so a qualifying session suppresses the line and a bare
+ * finished one does not.
+ */
+function workoutFlags(resolved) {
+  const hasPlannedWorkout = resolved.rows.some((r) => r.kind === 'workout');
+  const hasPlannedWorkoutDone = resolved.rows.some((r) => r.kind === 'workout' && r.done);
+  const unplannedWorkout = !hasPlannedWorkoutDone && (resolved.finishedSessions ?? 0) > 0;
+  return { hasPlannedWorkout, hasPlannedWorkoutDone, unplannedWorkout };
+}
+
 export async function previewDay(prisma, { userId, localDate, today }) {
-  const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
-  const target = await currentNutritionTarget(prisma, userId);
+  const onLayerKeys = await getOnLayerKeys(prisma, userId);
+  const resolved = await resolveDay(prisma, { userId, localDate, onLayerKeys });
   const previous = await previousClose(prisma, { userId, localDate });
   const goal = await prisma.healthGoal.findUnique({
     where: { userId },
     select: { pausedFrom: true, pausedUntil: true },
   });
-  // `targets`, plural, because that is what computeDay destructures. Passing
-  // `target` left it null inside the engine, so every nutrition line was
-  // silently skipped and a day could only ever be scored on plan completions.
-  // The engine tolerates a null target on purpose - someone who has set a plan
-  // but not a nutrition target should still get a score - which is precisely
-  // why this went unnoticed: it degraded to a working-looking number.
-  //
-  // A day is closed when it is before today. Hoisted because two things now
-  // depend on it: the engine's own miss pass, and whether this day may carry an
-  // action list at all.
+
   const closed = localDate < today;
 
-  // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
-  let scoringFlags = { noMisses: false, unlockedLayerKeys: null, foodNoPenalty: false };
-  if (isV2Date(localDate)) {
-    const scoringWindow = await getScoringWindow(prisma, userId);
-    if (scoringWindow) {
-      // Fetch unlocked layer keys from journey service
-      const { getUnlockedLayerKeys } = await import('../journey/journeyService.js');
-      const unlockedLayerKeys = await getUnlockedLayerKeys(userId);
-      scoringFlags = deriveScoringFlags(scoringWindow, localDate);
-      scoringFlags.unlockedLayerKeys = unlockedLayerKeys;
-    }
-  }
+  const day = computeDay({
+    localDate,
+    previousClose: previous,
+    planItems: resolved.rows.map(r => ({ ...r, active: true, completions: r.done ? [{ how: r.how }] : [] })),
+    completions: resolved.rows.flatMap(r => r.done ? [{ planItemId: r.itemId, how: r.how, late: false }] : []),
+    targets: null, // nutrition handled by resolveDay
+    totals: null,
+    closed,
+    paused: isPausedOn(goal, localDate),
+    noMisses: false, // preview doesn't charge misses
+    unlockedLayerKeys: onLayerKeys,
+    foodNoPenalty: false,
+    ...workoutFlags(resolved),
+  });
+
+  // Override the computed earned/target with resolveDay's values
+  day.close = day.open + resolved.earned + resolved.bonus;
+  day.high = Math.max(day.open, day.close);
+  day.low = Math.min(day.open, day.close);
+  day.earned = resolved.earned;
+  day.target = resolved.target;
+  day.bonus = resolved.bonus;
 
   return {
-    ...computeDay({
-      localDate,
-      previousClose: previous,
-      ...inputs,
-      targets: target,
-      closed,
-      paused: isPausedOn(goal, localDate),
-      noMisses: scoringFlags.noMisses,
-      unlockedLayerKeys: scoringFlags.unlockedLayerKeys,
-      foodNoPenalty: scoringFlags.foodNoPenalty,
-    }),
-    // What is still open today, attached to the day itself rather than served
-    // separately. Two reasons it rides along here: the app already fetches the
-    // preview on every hub render, so a second endpoint would be a round trip to
-    // show something this response already knows; and actions computed from a
-    // *different* read of the plan could describe work the user has already done.
-    openActions: previewActions({ ...inputs, localDate, closed }),
+    ...day,
+    openActions: previewActions({ ...resolved, localDate, closed }),
   };
 }
 
 /**
  * What is still open on `localDate`, for the day payload.
  *
- * The inputs have already been through `gatherDayInputs`, which drops inactive
+ * The inputs have already been through `resolveDay`, which drops inactive
  * items, items past their `endsOn`, and anything `isDueOn` says is not due. So
  * there is nothing left for this to re-check, and it deliberately does not: a
  * second copy of those rules here would be a place for them to drift away from
@@ -148,14 +149,26 @@ export async function previewDay(prisma, { userId, localDate, today }) {
  * hands it unfiltered items - and so the predicate under test is the engine's
  * rather than a stand-in.
  */
-function previewActions({ planItems = [], completions = [], localDate, closed }) {
+function previewActions({ rows = [], food = null, localDate, closed }) {
   // A frozen day gets nothing, and this is the one rule the module cannot infer
   // for itself. A preview of a past date is a historical read: the snapshot will
   // never be recomputed, so every action on it would be a tap that cannot work.
   // The check lives here rather than in the caller because the caller is the
   // only place that knows, and forgetting it there is exactly the bug.
   if (closed) return [];
-  return openActions({ planItems, completions, localDate }, { isScheduledFor });
+  // `rows` are resolveDay's already-filtered rows, not raw plan items, so they
+  // carry no `active` flag - and `isScheduledFor` treats a missing flag as
+  // inactive. Annotate them active, the same shape the scoring call gets, or
+  // every open row is silently dropped. A done row is handed over as a
+  // completion so `openActions` leaves it out of the open list.
+  return openActions(
+    {
+      planItems: rows.map((r) => ({ active: true, ...r })),
+      completions: rows.filter((r) => r.done).map((r) => ({ planItemId: r.itemId, localDate })),
+      localDate,
+    },
+    { isScheduledFor },
+  );
 }
 
 /**
@@ -180,8 +193,8 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     return { ...existing, alreadyClosed: true, openActions: [] };
   }
 
-  const inputs = await gatherDayInputs(prisma, { userId, localDate, today });
-  const target = await currentNutritionTarget(prisma, userId);
+  const onLayerKeys = await getOnLayerKeys(prisma, userId);
+  const resolved = await resolveDay(prisma, { userId, localDate, onLayerKeys });
   const previous = await previousClose(prisma, { userId, localDate });
   const goal = await prisma.healthGoal.findUnique({
     where: { userId },
@@ -189,28 +202,62 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   });
 
   // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
-  let scoringFlags = { noMisses: false, unlockedLayerKeys: null, foodNoPenalty: false };
-  if (isV2Date(localDate)) {
-    const scoringWindow = await getScoringWindow(prisma, userId);
-    if (scoringWindow) {
-      const { getUnlockedLayerKeys } = await import('../journey/journeyService.js');
-      const unlockedLayerKeys = await getUnlockedLayerKeys(userId);
-      scoringFlags = deriveScoringFlags(scoringWindow, localDate);
-      scoringFlags.unlockedLayerKeys = unlockedLayerKeys;
-    }
+  let scoringFlags = { noMisses: false, unlockedLayerKeys: onLayerKeys, foodNoPenalty: false };
+  const scoringWindow = await getScoringWindow(prisma, userId);
+  if (scoringWindow) {
+    scoringFlags = deriveScoringFlags(scoringWindow, localDate);
+    scoringFlags.unlockedLayerKeys = onLayerKeys;
   }
 
   const day = computeDay({
     localDate,
     previousClose: previous,
-    ...inputs,
-    targets: target,
+    planItems: resolved.rows.map(r => ({ ...r, active: true, completions: r.done ? [{ how: r.how }] : [] })),
+    completions: resolved.rows.flatMap(r => r.done ? [{ planItemId: r.itemId, how: r.how, late: false }] : []),
+    targets: null, // nutrition handled by resolveDay
+    totals: null,
     closed: true,
     paused: isPausedOn(goal, localDate),
     noMisses: scoringFlags.noMisses,
     unlockedLayerKeys: scoringFlags.unlockedLayerKeys,
     foodNoPenalty: scoringFlags.foodNoPenalty,
+    ...workoutFlags(resolved),
   });
+
+  // Override the computed earned/target with resolveDay's values, add misses from engine
+  const earned = resolved.earned;
+  const bonus = resolved.bonus;
+  const target = resolved.target;
+
+  // Recompute with misses to get the final close
+  const allLines = [...day.breakdown];
+  const misses = day.breakdown.filter(l => l.points < 0);
+  const earns = day.breakdown.filter(l => l.points > 0);
+
+  // Apply caps
+  let gain = 0;
+  let loss = 0;
+  for (const l of allLines) {
+    if (l.points > 0) gain += l.points;
+    else loss += l.points;
+  }
+  const cappedGain = Math.min(gain, 60); // DAILY_MAX_GAIN
+  const cappedLoss = Math.max(loss, -40); // DAILY_MAX_LOSS
+
+  const close = previous + cappedGain + cappedLoss;
+
+  const finalDay = {
+    ...day,
+    close,
+    high: previous + Math.max(cappedGain, 0),
+    low: previous + Math.min(cappedLoss, 0),
+    grossGain: gain,
+    grossLoss: loss,
+    capped: gain > 60 || loss < -40,
+    earned,
+    bonus,
+    target,
+  };
 
   // A day being closed is by definition closed, so the open list is empty.
   // Spelled out rather than left to the reader, because "why is this always
@@ -221,13 +268,13 @@ export async function closeDay(prisma, { userId, localDate, today }) {
       data: {
         userId,
         localDate,
-        open: day.open,
-        high: day.high,
-        low: day.low,
-        close: day.close,
-        breakdown: day.breakdown,
-        paused: day.paused === true,
-        rulesVersion: day.rulesVersion || RULES_VERSION,
+        open: finalDay.open,
+        high: finalDay.high,
+        low: finalDay.low,
+        close: finalDay.close,
+        breakdown: finalDay.breakdown,
+        paused: finalDay.paused === true,
+        rulesVersion: finalDay.rulesVersion || RULES_VERSION,
       },
     });
   } catch (err) {
@@ -252,7 +299,17 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   // most worth looking at (audit 2026-10-08, P2). Best-effort: a failed delete
   // must never fail the close that triggered it.
   await invalidateBlendedScore(userId);
-  return { ...row, openActions: [] };
+  
+  // Emit health_day_closed event
+  const { track } = await import('../../utils/analytics.js');
+  track('health_day_closed', userId, {
+    localDate,
+    earned,
+    target,
+    hit: earned >= target,
+  });
+
+  return { ...row, openActions: [], earned, bonus, target, hit: earned >= target };
 }
 
 export async function getBlendedScore(prisma, { userId }) {
@@ -723,73 +780,6 @@ export async function previousClose(prisma, { userId, localDate }) {
   // Null for the first day ever. The score starts at 0, deliberately, rather
   // than at a baseline invented to make the first chart look encouraging.
   return prev ? Number(prev.close) : 0;
-}
-
-async function gatherDayInputs(prisma, { userId, localDate, today }) {
-  const { totals, bySlot } = await getDayTotals(prisma, userId, localDate);
-
-  const items = await prisma.planItem.findMany({
-    where: { userId, active: true },
-    include: { completions: { where: { localDate } } },
-  });
-
-  const planItems = [];
-  const completions = [];
-  for (const item of items) {
-    if (item.endsOn && localDate > item.endsOn) continue;
-    if (!isDueOn(item, localDate, today)) continue;
-    planItems.push(item);
-    for (const c of item.completions || []) {
-      completions.push({ ...c, planItemId: item.id });
-    }
-  }
-
-  // Whether a workout was actually LOGGED that day, as opposed to merely being
-  // scheduled. The engine needs this to decide if an extra workout was
-  // unplanned, and "scheduled" is the wrong signal for that question: someone
-  // who skipped the plan and trained anyway has an unplanned workout, and
-  // someone who trained on a rest day has an unplanned workout too. Only
-  // `hasPlannedWorkoutDone` distinguishes either of those from a user who
-  // completed their plan.
-  const completedItemIds = new Set(completions.map((c) => c.planItemId));
-  const scheduledWorkout = planItems.some((i) => i.kind === 'workout');
-  const hasPlannedWorkoutDone = planItems.some(
-    (i) => i.kind === 'workout' && completedItemIds.has(i.id),
-  );
-
-  // A logged session on this localDate. Filtered in the query rather than in JS
-  // because a user with years of sessions should not have all of them loaded to
-  // find one day's worth.
-  //
-  // `endedAt` and `type` both matter. A draft that was started and abandoned is
-  // not a workout — it is a row that would otherwise score points for a session
-  // the user did not finish. And `type = 'rest'` is the schema's own way of
-  // recording a deliberate rest day, which is the opposite of an extra workout;
-  // scoring it as one would pay points for resting, in a system whose entire
-  // premise is that the score never punishes rest.
-  const sessions = await prisma.workoutSession.findMany({
-    where: { userId, localDate, endedAt: { not: null } },
-    select: { id: true, type: true, endedAt: true },
-  });
-  const loggedWorkout = sessions.some((s) => s.type !== 'rest');
-
-  return {
-    planItems,
-    completions,
-    totals,
-    // Kept as "is one scheduled", because that is what the engine's
-    // planned-vs-unplanned split is about. Both are passed: the engine needs to
-    // know whether a plan existed to compare an extra session against, and
-    // whether the plan's workout was actually done.
-    hasPlannedWorkout: scheduledWorkout,
-    hasPlannedWorkoutDone,
-    // Now derived rather than defaulting to false. Before this, the "extra
-    // workout" line in the engine was unreachable: nothing ever passed the
-    // flag, so POINTS.unplannedWorkout was dead code and a user who trained on
-    // a rest day got nothing for it.
-    unplannedWorkout: loggedWorkout && !hasPlannedWorkoutDone,
-    bySlot,
-  };
 }
 
 /**
