@@ -30,8 +30,8 @@ let svc;
 
 test('setup: import habitsService (pure imports - no prisma mock needed)', async (t) => {
   t.mock.module('../services/plan/rebuildPlan.js', {
-    namedExports: {
-      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+    exports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deactivated: 0, onLayerKeys: [] }),
     },
   });
   svc = await import('../services/habitsService.js');
