@@ -378,15 +378,16 @@ export const FEATURE_FLAGS = [
     group: 'coach',
     dataClass: 'health-derived',
     blastRadius:
-      'Gobhi\'s one plan: layers, Today card, score. Off = no plan or score anywhere',
+      "Gobhi's one plan: layers, Today card, score. Off = no plan or score anywhere",
     rationale:
-      'Umbrella flag for the coach journey: the new onboarding, the Home overview, the ' +
-      'Plan tab, the journey/habit APIs, and letting the plan and score read on `basic` ' +
-      'consent alone. In prod it needs `workoutTracking` (the daily log the journey is ' +
-      'graded on) and `nonPartnerAttendance` (non-partner gym search and check-in) on too, ' +
-      'which is why both are deps: without them the journey has nothing to score. Off until ' +
-      'the app-version minimum is raised, and the byte-for-byte promise is gone; the plan ' +
-      'and score are meaningfully different when off rather than preserving exact equivalence.',
+      'Umbrella flag for Gobhi\'s one plan: the layered journey (a few layers at a ' +
+      'time, unlocked as the user shows up), the Today card, the plan/habit APIs, and ' +
+      'letting the plan and score read on `basic` consent alone. In prod it needs ' +
+      '`workoutTracking` (the daily log the journey is graded on) and ' +
+      '`nonPartnerAttendance` (non-partner gym search and check-in) on too, which is ' +
+      'why both are deps: without them the journey has nothing to score. Off means no ' +
+      'plan and no score anywhere; the pre-plan health screens keep working unchanged. ' +
+      'Keep off until the app-version minimum is raised.',
   },
   {
     name: 'selfLinkGym',
