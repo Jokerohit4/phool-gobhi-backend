@@ -3,6 +3,7 @@ import { JOURNEY, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, ea
 import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
 import { countSteadyWeeks, getSteadyWeeksDetail } from './steadyWeeks.js';
 import { checkAndTriggerHomeDaysReferral } from './referralHomeTrigger.js';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
 
 const prisma = new PrismaClient();
 
@@ -179,7 +180,6 @@ async function syncUnlocks(userId, progress, computed) {
     const howMap = { start_level: 'start_level', showed_up: 'showed_up', steady_weeks: 'steady_weeks', early: 'early', existing: 'existing_data' };
     // emit placeholder – actual event emitter can be wired later
     // rebuild plan for unlock
-    const { rebuildPlan } = await import('../plan/rebuildPlan.js');
     await rebuildPlan(prisma, userId, { reason: 'unlock', layer: u.layer, how: howMap[u.via] ?? u.via });
   }
   return { updated: true, progress: updated };
@@ -302,7 +302,6 @@ export async function unlockFoodEarly(userId) {
   });
 
   // Rebuild plan for early unlock
-  const { rebuildPlan } = await import('../plan/rebuildPlan.js');
   await rebuildPlan(prisma, userId, { reason: 'unlock', layer: 2, how: 'early' });
 
   return getJourney(userId);

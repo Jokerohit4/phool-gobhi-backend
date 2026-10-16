@@ -26,8 +26,8 @@ let grantNutritionConsentService, getNutritionConsentService, revokeNutritionCon
 
 test('setup: stub Prisma, import once', async (t) => {
   t.mock.module('../services/plan/rebuildPlan.js', {
-    namedExports: {
-      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+    exports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deactivated: 0, onLayerKeys: [] }),
     },
   });
   t.mock.module('@prisma/client', {
