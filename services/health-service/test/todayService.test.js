@@ -15,6 +15,8 @@ test('setup: mock modules and import todayService once', async (t) => {
     steadyWeeks: 2,
     easeBack: false,
     easyStartUntil: null,
+    showedUpDates: ['2026-10-10', '2026-10-11'],
+    showedUpDays: 2,
   };
 
   t.mock.module('@prisma/client', {
@@ -93,12 +95,6 @@ test('setup: mock modules and import todayService once', async (t) => {
     },
   });
 
-  t.mock.module('file:///c:/Users/rohit/Phool-Gobhi/wt/op-UB4/services/health-service/services/journey/showedUpDays.js', {
-    exports: {
-      getShowedUpDays: async () => ['2026-10-10', '2026-10-11'],
-    },
-  });
-
   ({ buildToday, buildPlanDefinition } = await import('../services/plan/todayService.js'));
   // Warm up dynamic imports while mocks are active
   await buildToday(
@@ -142,7 +138,7 @@ test('no_plan reason no_journey when journey missing', async () => {
 
 test('getJourney called exactly once on success', async () => {
   coachConsentRow = { revokedAt: null, scopes: ['basic'] };
-  journeyStub = { steadyWeeks: 2, easeBack: false, easyStartUntil: null };
+  journeyStub = { steadyWeeks: 2, easeBack: false, easyStartUntil: null, showedUpDates: [], showedUpDays: 0 };
   journeyCalls = 0;
   const prisma = {
     coachConsent: { findUnique: async () => coachConsentRow },
@@ -155,7 +151,7 @@ test('getJourney called exactly once on success', async () => {
 
 test('payload shape includes rows points counts week from showedUpDays', async () => {
   coachConsentRow = { revokedAt: null, scopes: ['basic'] };
-  journeyStub = { steadyWeeks: 2, easeBack: false, easyStartUntil: null };
+  journeyStub = { steadyWeeks: 2, easeBack: false, easyStartUntil: null, showedUpDates: ['2026-10-10', '2026-10-11'], showedUpDays: 2 };
   const prisma = {
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
@@ -171,11 +167,13 @@ test('payload shape includes rows points counts week from showedUpDays', async (
   assert.ok(Array.isArray(res.week));
   assert.equal(res.week.length, 7);
   assert.ok(typeof res.journey.showedUpDays === 'number');
+  const showedUpDays = res.week.filter(d => d.showedUp).map(d => d.localDate).sort();
+  assert.deepEqual(showedUpDays, ['2026-10-10','2026-10-11']);
 });
 
 test('session today/tomorrow present and paused gives points null', async () => {
   coachConsentRow = { revokedAt: null, scopes: ['basic'] };
-  journeyStub = { steadyWeeks: 1, easeBack: false, easyStartUntil: null };
+  journeyStub = { steadyWeeks: 1, easeBack: false, easyStartUntil: null, showedUpDates: [], showedUpDays: 0 };
   // Override healthGoal mock for pause via dynamic re-mock not possible; assume unpaused path
   const prisma = {
     coachConsent: { findUnique: async () => coachConsentRow },

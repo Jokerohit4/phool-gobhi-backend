@@ -149,18 +149,15 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     };
   }
 
-  // In parallel: get layers, onLayerKeys, resolveDay, previousClose, pause, week, session
-  const [layers, onLayerKeys, dayResolution, scoreOpen, pauseState, showedUpDays] = await Promise.all([
+  // In parallel: get layers, onLayerKeys, resolveDay, previousClose, pause
+  const [layers, onLayerKeys, dayResolution, scoreOpen, pauseState] = await Promise.all([
     getLayers(prisma, userId, { journey }),
     getOnLayerKeys(prisma, userId, { journey }),
     resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys: undefined }), // Will compute internally
     previousClose(prisma, { userId, localDate: resolvedDate }),
     getPauseState(prisma, userId, resolvedDate),
-    (async () => {
-      const { getShowedUpDays } = await import('../journey/showedUpDays.js');
-      return getShowedUpDays(userId);
-    })(),
   ]);
+  const showedUpDays = journey.showedUpDates ?? [];
 
   // Re-extract resolved values from dayResolution
   const { rows, food, bonus, earned, target, counts, onLayerKeys: resolvedOnLayerKeys } = dayResolution;
