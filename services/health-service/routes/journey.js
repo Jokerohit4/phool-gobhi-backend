@@ -16,18 +16,6 @@ router.post('/journey/start', ...coachGated, requireAdult, journeyCtrl.startJour
 // GET /journey - Get current journey progress
 router.get('/journey', ...coachGated, journeyCtrl.getJourneyController);
 
-// POST /journey/food-early - Unlock food layer early
-router.post('/journey/food-early', ...coachGated, journeyCtrl.unlockFoodEarlyController);
-
-// POST /journey/accept-refresh - Accept a plan refresh proposal
-router.post('/journey/accept-refresh', ...coachGated, journeyCtrl.acceptRefreshController);
-
-// POST /journey/body - Save body data (height, weight) and rebuild plan
-router.post('/journey/body', ...coachGated, journeyCtrl.journeyBodyController);
-
-// POST /journey/diet - Save diet preference and rebuild plan
-router.post('/journey/diet', ...coachGated, journeyCtrl.journeyDietController);
-
 // GET /journey/summary - Get journey summary for Home screen
 router.get('/journey/summary', ...coachGated, journeyCtrl.journeySummaryController);
 

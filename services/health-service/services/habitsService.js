@@ -22,11 +22,11 @@
 import { isIsoDay } from './ledger/isoDay.js';
 import { currentNutritionTarget } from './ledger/currentTarget.js';
 
-// The coach journey's default water, before any body data exists. Same value
-// as prescriptionService's JOURNEY_DEFAULT_WATER_ML — the two must move
-// together, which is why the fallback here is the same literal with the same
-// comment rather than an import across the ledger boundary.
-const JOURNEY_DEFAULT_WATER_ML = 2500;
+// The coach journey's default water, before any body data exists. Imported from
+// journeyConfig to keep the two in sync.
+import { JOURNEY } from './journey/journeyConfig.js';
+import { rebuildPlan } from './plan/rebuildPlan.js';
+const JOURNEY_DEFAULT_WATER_ML = JOURNEY.defaultWaterMl;
 
 // Per-entry bounds from the Contracts. A drink, not a bucket: a per-entry cap
 // is what makes "logged 4 L" impossible to fake with one tap.
@@ -234,6 +234,9 @@ export async function createSupplement(prisma, { userId, name, times } = {}) {
   const row = await prisma.supplementSchedule.create({
     data: { userId, name: clean.name, times: timesToSave },
   });
+
+  await rebuildPlan(prisma, userId, { reason: 'supplements' });
+
   return { id: row.id, name: row.name, times: row.times || [], active: row.active };
 }
 
@@ -247,6 +250,9 @@ export async function updateSupplement(prisma, { userId, id, name, times } = {})
     where: { id: existing.id },
     data: clean,
   });
+
+  await rebuildPlan(prisma, userId, { reason: 'supplements' });
+
   return { id: row.id, name: row.name, times: row.times || [], active: row.active };
 }
 
@@ -261,6 +267,8 @@ export async function deleteSupplement(prisma, { userId, id } = {}) {
   const rowId = Number(id);
   if (!Number.isInteger(rowId)) return;
   await prisma.supplementSchedule.deleteMany({ where: { id: rowId, userId } });
+
+  await rebuildPlan(prisma, userId, { reason: 'supplements' });
 }
 
 /**
