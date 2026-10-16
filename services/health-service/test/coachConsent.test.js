@@ -61,6 +61,12 @@ test('setup: stub prisma, import the service once', async (t) => {
     },
   });
 
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    exports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+    },
+  });
+
   service = await import('../services/coachConsentService.js');
   ({
     COACH_POLICY_VERSION,

@@ -125,6 +125,12 @@ export async function grantCoachScopeService(userId, scope, { policyVersion } = 
     create: { userId, scopes, policyVersions, grantedAt: now },
   });
 
+  // Rebuild plan when supplements scope changes, or any coach consent grant
+  if (scope === SUPPLEMENTS_SCOPE || scope === BASIC_SCOPE) {
+    const { rebuildPlan } = await import('./plan/rebuildPlan.js');
+    await rebuildPlan(prisma, userId, { reason: 'consent' });
+  }
+
   return {
     scopes,
     grantedAt: now,
@@ -162,6 +168,12 @@ export async function revokeCoachScopeService(userId, scope) {
     where: { userId },
     data: { scopes, policyVersions, revokedAt },
   });
+
+  // Rebuild plan on revoke for basic scope, or any supplements change
+  if (scope === BASIC_SCOPE || scope === SUPPLEMENTS_SCOPE) {
+    const { rebuildPlan } = await import('./plan/rebuildPlan.js');
+    await rebuildPlan(prisma, userId, { reason: 'consent' });
+  }
 
   return { scopes, grantedAt: row.grantedAt, revokedAt };
 }

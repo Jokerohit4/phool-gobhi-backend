@@ -619,6 +619,10 @@ export async function saveIntake({ prisma, userId, input = {}, localDate }) {
   // that do not exist, which is the exact bug this replaced.
   const target = await recomputeTargets({ prisma, userId, localDate: day });
 
+  // Rebuild plan after intake targets recomputed
+  const { rebuildPlan } = await import('../plan/rebuildPlan.js');
+  await rebuildPlan(prisma, userId, { reason: 'setup' });
+
   return {
     written: true,
     goal,

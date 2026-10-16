@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+test('setup: mock rebuildPlan', async (t) => {
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    namedExports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+    },
+  });
+});
+
 import {
   ageFromDob,
   getSetupState,

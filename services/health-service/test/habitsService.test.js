@@ -28,7 +28,12 @@ const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' 
 
 let svc;
 
-test('setup: import habitsService (pure imports - no prisma mock needed)', async () => {
+test('setup: import habitsService (pure imports - no prisma mock needed)', async (t) => {
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    namedExports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+    },
+  });
   svc = await import('../services/habitsService.js');
   assert.equal(typeof svc.getToday, 'function');
 });

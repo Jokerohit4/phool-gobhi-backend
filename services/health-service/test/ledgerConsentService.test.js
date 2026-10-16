@@ -25,6 +25,11 @@ let grantNutritionConsentService, getNutritionConsentService, revokeNutritionCon
   LEDGER_POLICY_VERSION, isScopeStale, NUTRITION_SCOPE, MEDICAL_RECORDS_SCOPE, PHOTO_SCOPE;
 
 test('setup: stub Prisma, import once', async (t) => {
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    namedExports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deleted: 0 }),
+    },
+  });
   t.mock.module('@prisma/client', {
     exports: {
       PrismaClient: class {

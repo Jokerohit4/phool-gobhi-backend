@@ -189,11 +189,7 @@ export async function deleteAllDataService(userId) {
     //
     // SupplementLog.scheduleId has no FK by design (a tick outlives its
     // schedule), so both supplement tables are deleted explicitly.
-    prisma.waterLog.deleteMany({ where: { userId } }),
-    prisma.supplementSchedule.deleteMany({ where: { userId } }),
-    prisma.supplementLog.deleteMany({ where: { userId } }),
-    prisma.journeyProgress.deleteMany({ where: { userId } }),
-    prisma.coachConsent.deleteMany({ where: { userId } }),
+    // Device-health revoke does not delete journey plan data per One Plan.
   ]);
 
   // The medical BLOBS are swept here, after the transaction has committed.
