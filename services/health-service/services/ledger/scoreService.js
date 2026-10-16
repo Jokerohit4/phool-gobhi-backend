@@ -76,6 +76,25 @@ function deriveScoringFlags(scoringWindow, localDate) {
  * Kept separate from `closeDay` so the app can show today's running score
  * without a snapshot row existing for today. Only a closed day gets frozen.
  */
+/**
+ * The three flags the engine needs to place the extra-workout line.
+ *
+ * They are derived here rather than by resolveDay because the two use different
+ * session definitions on purpose: resolveDay's `bonus` only pays a *qualifying*
+ * session (one with evidence of real sets, or a long enough duration), while the
+ * engine's line pays any finished session - the user who trained on their
+ * scheduled-workout day but never ticked it off is the person it exists for.
+ * `hasPlannedWorkoutDone` is a row question (done by tick, or auto by a
+ * qualifying session), so a qualifying session suppresses the line and a bare
+ * finished one does not.
+ */
+function workoutFlags(resolved) {
+  const hasPlannedWorkout = resolved.rows.some((r) => r.kind === 'workout');
+  const hasPlannedWorkoutDone = resolved.rows.some((r) => r.kind === 'workout' && r.done);
+  const unplannedWorkout = !hasPlannedWorkoutDone && (resolved.finishedSessions ?? 0) > 0;
+  return { hasPlannedWorkout, hasPlannedWorkoutDone, unplannedWorkout };
+}
+
 export async function previewDay(prisma, { userId, localDate, today }) {
   const onLayerKeys = await getOnLayerKeys(prisma, userId);
   const resolved = await resolveDay(prisma, { userId, localDate, onLayerKeys });
@@ -99,6 +118,7 @@ export async function previewDay(prisma, { userId, localDate, today }) {
     noMisses: false, // preview doesn't charge misses
     unlockedLayerKeys: onLayerKeys,
     foodNoPenalty: false,
+    ...workoutFlags(resolved),
   });
 
   // Override the computed earned/target with resolveDay's values
@@ -136,7 +156,19 @@ function previewActions({ rows = [], food = null, localDate, closed }) {
   // The check lives here rather than in the caller because the caller is the
   // only place that knows, and forgetting it there is exactly the bug.
   if (closed) return [];
-  return openActions({ planItems: rows, completions: [], localDate }, { isScheduledFor });
+  // `rows` are resolveDay's already-filtered rows, not raw plan items, so they
+  // carry no `active` flag - and `isScheduledFor` treats a missing flag as
+  // inactive. Annotate them active, the same shape the scoring call gets, or
+  // every open row is silently dropped. A done row is handed over as a
+  // completion so `openActions` leaves it out of the open list.
+  return openActions(
+    {
+      planItems: rows.map((r) => ({ active: true, ...r })),
+      completions: rows.filter((r) => r.done).map((r) => ({ planItemId: r.itemId, localDate })),
+      localDate,
+    },
+    { isScheduledFor },
+  );
 }
 
 /**
@@ -189,6 +221,7 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     noMisses: scoringFlags.noMisses,
     unlockedLayerKeys: scoringFlags.unlockedLayerKeys,
     foodNoPenalty: scoringFlags.foodNoPenalty,
+    ...workoutFlags(resolved),
   });
 
   // Override the computed earned/target with resolveDay's values, add misses from engine
@@ -268,14 +301,13 @@ export async function closeDay(prisma, { userId, localDate, today }) {
   await invalidateBlendedScore(userId);
   
   // Emit health_day_closed event
-  const { emitAnalyticsEvent } = await import('../../utils/analytics.js');
-  emitAnalyticsEvent('health_day_closed', {
-    userId,
+  const { track } = await import('../../utils/analytics.js');
+  track('health_day_closed', userId, {
     localDate,
     earned,
     target,
     hit: earned >= target,
-  }, prisma).catch(() => {});
+  });
 
   return { ...row, openActions: [], earned, bonus, target, hit: earned >= target };
 }

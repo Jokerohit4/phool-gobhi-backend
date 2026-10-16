@@ -1,50 +1,57 @@
-import { test, mock } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  closeDay,
-  getCalmSeries,
-  getSafetyFlag,
-  getScoreSeries,
-  previewDay,
-  setCalmMode,
-  isPausedOn,
-  getPauseState,
-  setPause,
-  clearPause,
-} from '../services/ledger/scoreService.js';
+// scoreService pulls the on-layer keys from layerState (a UB2 stub that throws
+// until its owner lands) and the journey window from journeyService. Mock all
+// of them once, then import scoreService dynamically so the mocks are in the
+// module registry before scoreService resolves its imports (static imports are
+// hoisted above any top-level mock.module call and would never see it).
+const ON_LAYERS = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'];
 
-// Mock journeyService.getJourney to avoid Prisma calls
-mock.module('../services/journey/journeyService.js', {
-  namedExports: {
-    getJourney: async () => ({
-      journeyProgress: { userId: 7, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' },
-      unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'],
-    }),
-    getUnlockedLayerKeys: async () => ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'],
-    getScoringWindow: async () => ({ easyStartUntil: null, inactiveSince: null, foodEarlyNoPenaltyUntilUnlock: false }),
-  },
-});
+let closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause;
 
-// Mock fetchInternal.getAppConfig for flags
-mock.module('../utils/fetchInternal.js', {
-  namedExports: {
-    getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
-    fetchInternal: async () => ({ data: { days: [] } }),
-  },
-});
+test('setup: mock layerState + journey deps once, import scoreService once', async (t) => {
+  t.mock.module(new URL('../services/plan/layerState.js', import.meta.url).href, {
+    namedExports: {
+      getOnLayerKeys: async () => [...ON_LAYERS],
+    },
+  });
 
-// Mock analytics emitAnalyticsEvent
-mock.module('../utils/analytics.js', {
-  namedExports: {
-    emitAnalyticsEvent: async () => {},
-  },
+  t.mock.module(new URL('../services/journey/journeyService.js', import.meta.url).href, {
+    namedExports: {
+      getJourney: async () => ({
+        journeyProgress: { userId: 7, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' },
+        unlockedLayerKeys: [...ON_LAYERS],
+      }),
+      getUnlockedLayerKeys: async () => [...ON_LAYERS],
+      getScoringWindow: async () => ({ easyStartUntil: null, inactiveSince: null, foodEarlyNoPenaltyUntilUnlock: false }),
+    },
+  });
+
+  t.mock.module(new URL('../utils/fetchInternal.js', import.meta.url).href, {
+    namedExports: {
+      getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
+      fetchInternal: async () => ({ data: { days: [] } }),
+    },
+  });
+
+  t.mock.module(new URL('../utils/analytics.js', import.meta.url).href, {
+    namedExports: {
+      track: () => {},
+      ingest: () => {},
+    },
+  });
+
+  ({ closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause } =
+    await import('../services/ledger/scoreService.js'));
+  assert.equal(typeof closeDay, 'function');
+  assert.equal(typeof previewDay, 'function');
 });
 
 const TODAY = '2026-09-28';
 const USER = 7;
 
-function mockPrisma({ snapshots = [], goal = null, target = null, planItems = [], logs = [], sessions = [], onLayerKeys = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'] } = {}) {
+function mockPrisma({ snapshots = [], goal = null, target = null, planItems = [], logs = [], sessions = [], waterLogs = [], stepsLogs = [], sleepLogs = [], onLayerKeys = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'] } = {}) {
   const state = { created: [], updated: [] };
   const prisma = {
     state,
@@ -86,13 +93,13 @@ function mockPrisma({ snapshots = [], goal = null, target = null, planItems = []
         return { count: goal ? 1 : 0 };
       },
     },
-    planItem: { 
+    planItem: {
       findMany: async ({ where, include }) => {
-        const items = planItems.filter(item => item.userId === where.userId && item.active === true);
+        const items = planItems.filter(item => item.active === true);
         if (include?.completions) {
           return items.map(item => ({
             ...item,
-            completions: item.completed ? [{ how: 'tick', late: false, localDate: TODAY }] : [],
+            completions: item.completions ?? (item.completed ? [{ how: 'tick', late: false, localDate: TODAY }] : []),
           }));
         }
         return items;
@@ -127,6 +134,15 @@ function mockPrisma({ snapshots = [], goal = null, target = null, planItems = []
           l.taken === true
         ).map(l => ({ scheduleId: l.scheduleId }));
       },
+    },
+    waterLog: {
+      findMany: async ({ where }) => waterLogs.filter(w => w.userId === where.userId),
+    },
+    dailyActivityMetric: {
+      findMany: async ({ where }) => stepsLogs.filter(s => s.userId === where.userId),
+    },
+    biometricEntry: {
+      findMany: async ({ where }) => sleepLogs.filter(b => b.userId === where.userId),
     },
     workoutTemplate: {
       findUnique: async ({ where }) => {
