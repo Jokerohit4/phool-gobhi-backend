@@ -151,13 +151,13 @@ test('getJourney called exactly once on success', async () => {
 
 test('payload shape includes rows points counts week from showedUpDays', async () => {
   coachConsentRow = { revokedAt: null, scopes: ['basic'] };
-  journeyStub = { steadyWeeks: 2, easeBack: false, easyStartUntil: null, showedUpDates: ['2026-10-10', '2026-10-11'], showedUpDays: 2 };
+  journeyStub = { steadyWeeks: 2, easeBack: false, easyStartUntil: null, showedUpDates: ['2026-10-13', '2026-10-15'], showedUpDays: 2 };
   const prisma = {
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
   };
-  const res = await buildToday(prisma, 1);
+  const res = await buildToday(prisma, 1, { localDate: '2026-10-14' });
   assert.equal(res.state, 'active');
   assert.ok(Array.isArray(res.rows));
   assert.ok(res.points);
@@ -168,7 +168,7 @@ test('payload shape includes rows points counts week from showedUpDays', async (
   assert.equal(res.week.length, 7);
   assert.ok(typeof res.journey.showedUpDays === 'number');
   const showedUpDays = res.week.filter(d => d.showedUp).map(d => d.localDate).sort();
-  assert.deepEqual(showedUpDays, ['2026-10-10','2026-10-11']);
+  assert.deepEqual(showedUpDays, ['2026-10-13','2026-10-15']);
 });
 
 test('session today/tomorrow present and paused gives points null', async () => {
