@@ -534,6 +534,10 @@ export async function buildFullExportService(userId) {
         prescribedBy: p.prescribedBy,
         prescribedNote: p.prescribedNote,
         active: p.active,
+        // The generator's stable identity for a suggested row. A re-import
+        // (or a support conversation about "which plan line is this") needs
+        // it to survive a rebuild replacing the row.
+        sourceRef: p.sourceRef,
         createdAt: p.createdAt,
       })),
       planCompletions: planCompletions.map((c) => ({
