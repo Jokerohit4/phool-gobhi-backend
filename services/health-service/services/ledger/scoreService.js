@@ -18,12 +18,9 @@
 //     not a property of any one day.
 import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS } from './constants.js';
 import { computeDay, checkForLowIntakeRun, computeBiologicalScore, computeBlendedHealthScore } from './scoreEngine.js';
-import { getDayTotals } from './nutritionService.js';
-import { isDueOn } from './ledgerPlanService.js';
 import { isScheduledFor } from './scoreEngine.js';
 import { openActions } from './remediation.js';
 import { assertGoal } from './goalGuard.js';
-import { currentNutritionTarget } from './currentTarget.js';
 import { isIsoDay } from './isoDay.js';
 import { resolveDay } from '../plan/rowProgress.js';
 import { getOnLayerKeys } from '../plan/layerState.js';
@@ -35,8 +32,7 @@ import {
 
 const CACHE_TTL = 3600; // 1 hour
 
-// Returns the scoring window for a user when coachJourney is enabled.
-// Returns null when the flag is off or journey not started.
+// Returns null when the journey has not started or its read is unavailable.
 async function getScoringWindow(prisma, userId) {
   try {
     const { getScoringWindow: journeyGetScoringWindow } = await import('../journey/journeyService.js');
@@ -46,14 +42,10 @@ async function getScoringWindow(prisma, userId) {
   }
 }
 
-// Computes noMisses, unlockedLayerKeys, and foodNoPenalty from the scoring window.
-//
-// `unlockedLayerKeys: null` is the "not a coach journey" signal: it tells the
-// engine to lock nothing, so a user outside the journey is scored exactly as
-// before V2_FROM. Only a scoring window (a real journey) turns layer locking on.
+// Scoring windows control close-day penalties. The caller supplies on layers.
 function deriveScoringFlags(scoringWindow, localDate) {
   if (!scoringWindow) {
-    return { noMisses: false, unlockedLayerKeys: null, foodNoPenalty: false };
+    return { noMisses: true, foodNoPenalty: false };
   }
   const { easyStartUntil, inactiveSince, foodEarlyNoPenaltyUntilUnlock } = scoringWindow;
   let noMisses = false;
@@ -65,7 +57,6 @@ function deriveScoringFlags(scoringWindow, localDate) {
   }
   return {
     noMisses,
-    unlockedLayerKeys: [], // Filled by the caller from getOnLayerKeys
     foodNoPenalty: foodEarlyNoPenaltyUntilUnlock === true,
   };
 }
@@ -76,26 +67,8 @@ function deriveScoringFlags(scoringWindow, localDate) {
  * Kept separate from `closeDay` so the app can show today's running score
  * without a snapshot row existing for today. Only a closed day gets frozen.
  */
-/**
- * The three flags the engine needs to place the extra-workout line.
- *
- * They are derived here rather than by resolveDay because the two use different
- * session definitions on purpose: resolveDay's `bonus` only pays a *qualifying*
- * session (one with evidence of real sets, or a long enough duration), while the
- * engine's line pays any finished session - the user who trained on their
- * scheduled-workout day but never ticked it off is the person it exists for.
- * `hasPlannedWorkoutDone` is a row question (done by tick, or auto by a
- * qualifying session), so a qualifying session suppresses the line and a bare
- * finished one does not.
- */
-function workoutFlags(resolved) {
-  const hasPlannedWorkout = resolved.rows.some((r) => r.kind === 'workout');
-  const hasPlannedWorkoutDone = resolved.rows.some((r) => r.kind === 'workout' && r.done);
-  const unplannedWorkout = !hasPlannedWorkoutDone && (resolved.finishedSessions ?? 0) > 0;
-  return { hasPlannedWorkout, hasPlannedWorkoutDone, unplannedWorkout };
-}
-
 export async function previewDay(prisma, { userId, localDate, today }) {
+  const scoringWindow = await getScoringWindow(prisma, userId);
   const onLayerKeys = await getOnLayerKeys(prisma, userId);
   const resolved = await resolveDay(prisma, { userId, localDate, onLayerKeys });
   const previous = await previousClose(prisma, { userId, localDate });
@@ -103,31 +76,24 @@ export async function previewDay(prisma, { userId, localDate, today }) {
     where: { userId },
     select: { pausedFrom: true, pausedUntil: true },
   });
-
   const closed = localDate < today;
-
+  const paused = isPausedOn(goal, localDate);
+  const scored = scoringWindow !== null && !paused;
   const day = computeDay({
-    localDate,
-    previousClose: previous,
-    planItems: resolved.rows.map(r => ({ ...r, active: true, completions: r.done ? [{ how: r.how }] : [] })),
-    completions: resolved.rows.flatMap(r => r.done ? [{ planItemId: r.itemId, how: r.how, late: false }] : []),
-    targets: null, // nutrition handled by resolveDay
-    totals: null,
-    closed,
-    paused: isPausedOn(goal, localDate),
-    noMisses: false, // preview doesn't charge misses
-    unlockedLayerKeys: onLayerKeys,
-    foodNoPenalty: false,
-    ...workoutFlags(resolved),
+    localDate, previousClose: previous,
+    rows: scored ? resolved.rows : [],
+    targets: scored ? resolved.nutritionTarget : null,
+    totals: scored ? resolved.totals : null,
+    unplannedWorkout: scored && resolved.unplannedWorkout,
+    closed: false, paused,
   });
-
-  // Override the computed earned/target with resolveDay's values
-  day.close = day.open + resolved.earned + resolved.bonus;
-  day.high = Math.max(day.open, day.close);
-  day.low = Math.min(day.open, day.close);
-  day.earned = resolved.earned;
+  day.earned = scored ? resolved.earned : 0;
   day.target = resolved.target;
-  day.bonus = resolved.bonus;
+  day.bonus = scored ? resolved.bonus : 0;
+  // A live preview shows all earned points; caps apply only when freezing.
+  day.close = previous + day.earned + day.bonus;
+  day.high = Math.max(previous, day.close);
+  day.low = Math.min(previous, day.close);
 
   return {
     ...day,
@@ -163,7 +129,10 @@ function previewActions({ rows = [], food = null, localDate, closed }) {
   // completion so `openActions` leaves it out of the open list.
   return openActions(
     {
-      planItems: rows.map((r) => ({ active: true, ...r })),
+      planItems: rows.map((r) => ({ ...r, active: true,
+        kind: r.kind === 'own' ? r.ownKind : r.kind === 'doctor' ? 'doctor_medication'
+          : ['water', 'steps', 'sleep', 'supplement'].includes(r.kind) ? 'habit' : r.kind,
+      })),
       completions: rows.filter((r) => r.done).map((r) => ({ planItemId: r.itemId, localDate })),
       localDate,
     },
@@ -201,63 +170,24 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     select: { pausedFrom: true, pausedUntil: true },
   });
 
-  // v2 scoring: fetch scoring window and unlocked layer keys when coachJourney is on
-  let scoringFlags = { noMisses: false, unlockedLayerKeys: onLayerKeys, foodNoPenalty: false };
   const scoringWindow = await getScoringWindow(prisma, userId);
-  if (scoringWindow) {
-    scoringFlags = deriveScoringFlags(scoringWindow, localDate);
-    scoringFlags.unlockedLayerKeys = onLayerKeys;
-  }
-
-  const day = computeDay({
-    localDate,
-    previousClose: previous,
-    planItems: resolved.rows.map(r => ({ ...r, active: true, completions: r.done ? [{ how: r.how }] : [] })),
-    completions: resolved.rows.flatMap(r => r.done ? [{ planItemId: r.itemId, how: r.how, late: false }] : []),
-    targets: null, // nutrition handled by resolveDay
-    totals: null,
-    closed: true,
-    paused: isPausedOn(goal, localDate),
-    noMisses: scoringFlags.noMisses,
-    unlockedLayerKeys: scoringFlags.unlockedLayerKeys,
+  const scoringFlags = deriveScoringFlags(scoringWindow, localDate);
+  const paused = isPausedOn(goal, localDate);
+  const scored = scoringWindow !== null && !paused;
+  const finalDay = computeDay({
+    localDate, previousClose: previous,
+    rows: scored ? resolved.rows : [],
+    targets: scored ? resolved.nutritionTarget : null,
+    totals: scored ? resolved.totals : null,
+    unplannedWorkout: scored && resolved.unplannedWorkout,
+    closed: true, paused,
+    noMisses: !scored || scoringFlags.noMisses,
+    unlockedLayerKeys: onLayerKeys,
     foodNoPenalty: scoringFlags.foodNoPenalty,
-    ...workoutFlags(resolved),
   });
-
-  // Override the computed earned/target with resolveDay's values, add misses from engine
-  const earned = resolved.earned;
-  const bonus = resolved.bonus;
+  const earned = scored ? resolved.earned : 0;
+  const bonus = scored ? resolved.bonus : 0;
   const target = resolved.target;
-
-  // Recompute with misses to get the final close
-  const allLines = [...day.breakdown];
-  const misses = day.breakdown.filter(l => l.points < 0);
-  const earns = day.breakdown.filter(l => l.points > 0);
-
-  // Apply caps
-  let gain = 0;
-  let loss = 0;
-  for (const l of allLines) {
-    if (l.points > 0) gain += l.points;
-    else loss += l.points;
-  }
-  const cappedGain = Math.min(gain, 60); // DAILY_MAX_GAIN
-  const cappedLoss = Math.max(loss, -40); // DAILY_MAX_LOSS
-
-  const close = previous + cappedGain + cappedLoss;
-
-  const finalDay = {
-    ...day,
-    close,
-    high: previous + Math.max(cappedGain, 0),
-    low: previous + Math.min(cappedLoss, 0),
-    grossGain: gain,
-    grossLoss: loss,
-    capped: gain > 60 || loss < -40,
-    earned,
-    bonus,
-    target,
-  };
 
   // A day being closed is by definition closed, so the open list is empty.
   // Spelled out rather than left to the reader, because "why is this always

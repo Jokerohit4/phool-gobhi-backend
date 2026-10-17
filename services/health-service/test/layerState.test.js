@@ -26,7 +26,7 @@ test('layerState exports exist', async () => {
 });
 
 test('getLayers returns array with 5 layers for a new user', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => null } };
+  const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 0, steadyWeeks: 0 };
   const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -37,7 +37,7 @@ test('getLayers returns array with 5 layers for a new user', async () => {
 });
 
 test('layer on state when unlocked and prerequisites met', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => ({ targetCals: 2000 }) } };
+  const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: Array.from({ length: 5 }, (_, i) => ({ layer: i + 1, unlocked: true, unlockedAt: new Date().toISOString() })), showedUpDays: 10, steadyWeeks: 3 };
   const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -46,7 +46,7 @@ test('layer on state when unlocked and prerequisites met', async () => {
 });
 
 test('layer locked when prerequisites not met', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => ({ targetCals: 2000 }) } };
+  const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: [{ layer: 2, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 0, steadyWeeks: 0 };
   const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -56,7 +56,7 @@ test('layer locked when prerequisites not met', async () => {
 });
 
 test('layer needs_consent when consent missing', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => ({ targetCals: 2000 }) } };
+  const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 5, steadyWeeks: 1 };
   const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -66,7 +66,7 @@ test('layer needs_consent when consent missing', async () => {
 });
 
 test('flags off layers omitted', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => null } };
+  const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = { layers: Array.from({ length: 5 }, (_, i) => ({ layer: i + 1, unlocked: true, unlockedAt: new Date().toISOString() })), showedUpDays: 0, steadyWeeks: 0 };
   const flags = { coachJourney: false, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -75,7 +75,7 @@ test('flags off layers omitted', async () => {
 });
 
 test('layer needs_setup for food when target missing', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => null } };
+  const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 5, steadyWeeks: 1 };
   const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -84,7 +84,7 @@ test('layer needs_setup for food when target missing', async () => {
 });
 
 test('layer needs_consent policy_updated state present', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => ({ targetCals: 2000 }) } };
+  const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 5, steadyWeeks: 1 };
   const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
@@ -94,7 +94,7 @@ test('layer needs_consent policy_updated state present', async () => {
 });
 
 test('experienced user has 5 layers unlocked but none on without consent', async () => {
-  const prisma = { nutritionTarget: { findUnique: async () => null } };
+  const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = {
     layers: Array.from({ length: 5 }, (_, i) => ({ layer: i + 1, unlocked: true, unlockedAt: new Date().toISOString() })),
     showedUpDays: 100,

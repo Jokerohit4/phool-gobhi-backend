@@ -407,7 +407,7 @@ test('rows returned in display order', async () => {
   
   const kinds = res.rows.map(r => r.kind);
   // workout/rest, water, food, steps, sleep, supplements, doctor, own
-  assert.deepEqual(kinds, ['workout', 'rest', 'water', 'steps', 'sleep', 'supplement', 'doctor_medication', 'own']);
+  assert.deepEqual(kinds, ['workout', 'rest', 'water', 'steps', 'sleep', 'supplement', 'doctor', 'own']);
 });
 
 // --- Rest day always done ---
@@ -477,7 +477,7 @@ test('workout row includes templateId and moves', async () => {
   const prisma = mockPrisma({
     planItems: [workoutItem(1, 'workout', 'workout', false, 14)],
     nutritionTarget: NUTRITION_TARGET,
-    workoutTemplates: [{ id: 14, moves: 6 }],
+    workoutTemplates: [{ id: 14, exercises: Array.from({ length: 6 }, (_, id) => ({ id })) }],
   });
   
   const res = await resolveDay(prisma, { userId: USER, localDate: TODAY, onLayerKeys: ['workout'] });

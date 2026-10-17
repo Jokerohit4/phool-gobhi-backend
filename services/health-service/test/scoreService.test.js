@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 // scoreService pulls the on-layer keys from layerState (a UB2 stub that throws
@@ -17,7 +17,7 @@ test('setup: mock layerState + journey deps once, import scoreService once', asy
     },
   });
 
-  t.mock.module(new URL('../services/journey/journeyService.js', import.meta.url).href, {
+  mock.module(new URL('../services/journey/journeyService.js', import.meta.url).href, {
     namedExports: {
       getJourney: async () => ({
         journeyProgress: { userId: 7, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' },
@@ -191,13 +191,13 @@ const TARGET = { kcal: 2000, proteinG: 120, carbsG: 220, fatG: 65, fibreG: 28, w
 // dropped before the engine ever saw it, and these tests would pass for the
 // wrong reason.
 function workoutItem(id, completions = []) {
-  return { id, kind: 'workout', title: 'Leg day', schedule: 'daily', active: true, endsOn: null, completions };
+  return { id, kind: 'workout', layerKey: 'workout', origin: 'suggested', templateId: 1, title: 'Leg day', schedule: 'daily', active: true, endsOn: null, completions };
 }
 function doneOn(date) {
   return [{ localDate: date, how: 'manual', late: false }];
 }
 function session(localDate, type = 'strength', endedAt = `${localDate}T10:00:00Z`) {
-  return { id: 99, userId: USER, localDate, type, endedAt };
+  return { id: 99, userId: USER, localDate, type, startedAt: `${localDate}T09:30:00Z`, endedAt, exercises: [] };
 }
 const lineFor = (day, key) => day.breakdown.find((l) => l.key === key);
 
@@ -258,26 +258,17 @@ test('completing the planned workout pays the planned rate, not the extra rate',
 });
 
 test('training when the plan said to train but it was never ticked off still pays', async () => {
-  // The distinction that was being lost. A scheduled workout that was never
-  // completed is not a workout done, so the session is genuinely extra — and
-  // this is the user the line exists for. Guarding on "was a workout scheduled"
-  // instead of "was one done" meant anyone with a workout item in their plan
-  // could never earn it, however they actually trained.
+  // A qualifying session completes the planned workout automatically. One
+  // session earns the planned +15, without a manual tick, miss or extra +8.
   const prisma = mockPrisma({
     target: TARGET,
     planItems: [workoutItem(1)],          // scheduled, no completions
     sessions: [session('2026-09-27')],
   });
-  // closeDay, not previewDay: misses are only computed for a closed day
-  // (`closed: localDate < today`), so previewing today would show the extra
-  // workout with no miss against it and the assertion below would fail for a
-  // reason that has nothing to do with this feature.
   const day = await closeDay(prisma, { userId: USER, localDate: '2026-09-27', today: TODAY });
-  assert.ok(lineFor(day, 'workout_unplanned'));
-  assert.equal(lineFor(day, 'item_done_1'), undefined, 'the unticked item is not paid');
-  // The missed item still costs points. An extra session does not buy off a
-  // missed plan item, or "just train instead" becomes the optimal strategy.
-  assert.ok(lineFor(day, 'workout_missed').points < 0);
+  assert.equal(lineFor(day, 'workout_unplanned'), undefined);
+  assert.equal(lineFor(day, 'item_done_1').points, 15);
+  assert.equal(lineFor(day, 'workout_missed'), undefined);
 });
 
 test('an extra workout is worth less than the plan, always', async () => {

@@ -1,3 +1,5 @@
+import { currentNutritionTarget } from '../ledger/currentTarget.js';
+
 /**
  * Computes every layer's state (left out / locked / needs_consent / needs_setup / on)
  * from the journey, flags and consents.
@@ -8,6 +10,10 @@
  * @returns {Promise<object[]>} Layer[] as in the /plan/today payload
  */
 export async function getLayers(prisma, userId, { journey, flags } = {}) {
+  if (journey === undefined) {
+    const { getJourney } = await import('../journey/journeyService.js');
+    journey = await getJourney(userId);
+  }
   const { JOURNEY } = await import('../journey/journeyConfig.js');
   const { isFeatureEnabled } = await import('../../middleware/requireFeatureFlag.js');
   const { hasCoachScopeService } = await import('../coachConsentService.js');
@@ -97,7 +103,7 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
 
     // food setup
     if (cfg.needsSetup) {
-      const target = await prisma.nutritionTarget.findUnique({ where: { userId } });
+      const target = await currentNutritionTarget(prisma, userId);
       if (!target) {
         layers.push({
           layer: cfg.layer,

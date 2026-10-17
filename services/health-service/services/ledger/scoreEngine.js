@@ -45,6 +45,7 @@ function pct(actual, target) {
 // in the plan. A missed micronutrient is 0, because an RDA is an average over
 // time and not hitting it on one Tuesday is not an event.
 export function computeMisses({
+  rows = null,
   planItems = [],
   completions = [],
   targets = null,
@@ -60,6 +61,11 @@ export function computeMisses({
   // earnings too — here we only suppress the negative side.
   if (noMisses) {
     return [];
+  }
+
+  if (rows) {
+    planItems = rows.filter((r) => r.kind !== 'food').map(scoringItem);
+    completions = rows.filter((r) => r.done).map((r) => ({ planItemId: r.itemId }));
   }
 
   const done = new Set(completions.map((c) => c.planItemId));
@@ -196,6 +202,7 @@ export function computeMisses({
 // --- Earned points ---------------------------------------------------------
 
 export function computeEarns({
+  rows = null,
   planItems = [],
   completions = [],
   targets = null,
@@ -207,24 +214,26 @@ export function computeEarns({
   unplannedWorkout = false,
   restDay = false,
 }) {
+  if (rows) {
+    // resolveDay alone decides done/late. Food is aggregated below; bonus is
+    // separate from the target and may coexist with a planned workout.
+    const lines = rows.filter((r) => r.kind !== 'food' && r.done).map((r) =>
+      line(`item_done_${r.itemId}`, r.title, r.kind, r.earned ?? r.points, { id: r.itemId }, r.late === true));
+    return [...lines, ...computeEarns({ targets, totals, localDate, unplannedWorkout })];
+  }
   const done = new Set(completions.map((c) => c.planItemId));
   const lines = [];
 
   // A late completion records that the thing happened but earns nothing. The
   // check is on the item's own date, not the wall clock, so a user backfilling
   // yesterday's tablet this morning gets the record without the points.
-  const latePenalty =
-    late || (completions.some((c) => c.late) ?? false);
+  const latePenalty = late;
 
   for (const item of planItems) {
     if (!isScheduledFor(item, localDate)) continue;
     if (!done.has(item.id)) continue;
 
-    // An auto-satisfied item already credited through the food log or the
-    // session log, so paying it again here is double-counting. The completion
-    // row says which.
     const completion = completions.find((c) => c.planItemId === item.id);
-    if (completion && completion.how === 'auto') continue;
 
     let points = 0;
     let label = item.title;
@@ -258,7 +267,7 @@ export function computeEarns({
         continue;
     }
 
-    lines.push(line(`item_done_${item.id}`, label, item.kind, points, item, latePenalty));
+    lines.push(line(`item_done_${item.id}`, label, item.kind, points, item, latePenalty || completion?.late));
   }
 
   // Rest day honoured (moved from computeMisses to show during the day)
@@ -325,7 +334,7 @@ export function computeEarns({
     // Micronutrients. Nudge only, capped, never negative.
     let microPoints = 0;
     const microHit = [];
-    for (const key of MICROS_TRACKED) {
+    for (const key of Object.keys(targets.micros ?? {})) {
       const target = targets.micros?.[key];
       if (!target) continue;
       const got = totals[key];
@@ -358,6 +367,7 @@ export function computeEarns({
 // anything — a baseline that began at 100 would make a user who did nothing
 // for a month look identical to one who did a lot.
 export function computeDay({
+  rows = null,
   localDate,
   previousClose = 0,
   planItems = [],
@@ -402,6 +412,7 @@ export function computeDay({
   }
 
   const earns = computeEarns({
+    rows,
     planItems,
     completions,
     targets,
@@ -413,6 +424,7 @@ export function computeDay({
   });
   const misses = closed
     ? computeMisses({
+        rows,
         planItems,
         completions,
         targets,
@@ -515,6 +527,15 @@ export function checkForLowIntakeRun(snapshots) {
 }
 
 // --- Helpers ---------------------------------------------------------------
+
+// Wire kinds differ from database kinds. These rows have already been filtered
+// for the day by the ledger; preserve the resolver's completion decisions.
+function scoringItem(row) {
+  const kind = row.kind === 'own' ? row.ownKind
+    : row.kind === 'doctor' ? 'doctor_medication'
+    : ['water', 'steps', 'sleep', 'supplement'].includes(row.kind) ? 'habit' : row.kind;
+  return { ...row, id: row.itemId, kind, active: true };
+}
 
 export function isScheduledFor(item, localDate) {
   if (!item.active) return false;

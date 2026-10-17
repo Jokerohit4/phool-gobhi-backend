@@ -12,6 +12,8 @@ import { currentNutritionTarget } from '../ledger/currentTarget.js';
 import { isQualifyingSession } from '../journey/showedUpDays.js';
 import { ROW_POINTS, POINTS, DEFAULT_SLEEP_MINUTES } from '../ledger/constants.js';
 import { DEFAULT_STEPS } from '../journey/journeyConfig.js';
+import { getOnLayerKeys } from './layerState.js';
+import { computeEarns } from '../ledger/scoreEngine.js';
 
 // Row kinds the app renders for habit rows are named after the layer, not the
 // generic PlanItem kind ('habit'). Row kinds for the other kinds are the
@@ -20,6 +22,7 @@ const ROW_KIND_BY_LAYER = { water: 'water', steps: 'steps', sleep: 'sleep' };
 
 export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}) {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  onLayerKeys ??= await getOnLayerKeys(prisma, userId);
 
   const [
     planResult,
@@ -31,11 +34,11 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     activityRows,
     biometricRows,
   ] = await Promise.all([
-    getPlanForDate(prisma, { userId, localDate, today }),
+    getPlanForDate(prisma, { userId, localDate, today, onLayerKeys }),
     getDayTotals(prisma, userId, localDate),
     currentNutritionTarget(prisma, userId),
     prisma.workoutSession.findMany({
-      where: { userId, localDate, endedAt: { not: null }, type: { not: null, not: 'rest' } },
+      where: { userId, localDate, endedAt: { not: null }, type: { not: null, notIn: ['rest'] } },
       select: { id: true, type: true, startedAt: true, endedAt: true, exercises: { select: { sets: { where: { completed: true }, select: { id: true } } } } },
     }),
     prisma.supplementLog.findMany({
@@ -71,7 +74,6 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
   // manual BiometricEntry; sleep from a BiometricEntry.
   const waterTarget = nutritionTarget?.waterMl ?? 2500;
   const waterLogged = waterLogs.reduce((sum, r) => sum + (Number(r.ml) || 0), 0);
-  const waterDone = waterLogged >= waterTarget;
 
   const activitySteps = activityRows.reduce((max, r) => Math.max(max, Number(r.steps) || 0), 0);
   const biometricSteps = biometricRows
@@ -79,24 +81,20 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     .reduce((max, r) => Math.max(max, Number(r.value) || 0), 0);
   const stepsTarget = nutritionTarget?.stepsPerDay ?? DEFAULT_STEPS;
   const stepsLogged = Math.max(activitySteps, biometricSteps);
-  const stepsDone = stepsLogged >= stepsTarget;
 
   const sleepTarget = nutritionTarget?.sleepMinutes ?? DEFAULT_SLEEP_MINUTES;
   const sleepLogged = biometricRows
     .filter((r) => r.metric === 'sleep_minutes')
     .reduce((max, r) => Math.max(max, Number(r.value) || 0), 0);
-  const sleepDone = sleepLogged >= sleepTarget;
 
   const qualifyingSessions = sessions.filter(isQualifyingSession);
+  // PlanItem stores the weekday schedule; the template lives on its slot.
+  const prescription = planItems.some((i) => i.kind === 'workout' && i.origin !== 'user' && !i.templateId)
+    ? await prisma.prescription.findUnique({ where: { userId } }) : null;
+  const weekday = (new Date(`${localDate}T00:00:00Z`).getUTCDay() + 6) % 7;
 
-  // If the caller passed onLayerKeys it has already resolved the on layers;
-  // don't recompute. When it is absent, treat every row as on.
-  const layerFilter = Array.isArray(onLayerKeys) ? new Set(onLayerKeys) : null;
-  // A null layerKey means the item belongs to no layer (the schema allows it
-  // for anything created before the journey existed, or that simply has no
-  // layer). The layer filter decides which *layers* are on, so it cannot
-  // exclude a row that has no layer - those are always part of the day.
-  const isOnLayer = (item) => !layerFilter || !item.layerKey || layerFilter.has(item.layerKey);
+  const layerFilter = new Set(onLayerKeys);
+  const isOnLayer = (item) => layerFilter.has(item.layerKey);
 
   const rows = [];
   let earned = 0;
@@ -124,7 +122,13 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     let moves = null;
     let protein = null;
 
-    switch (item.kind) {
+    const wireKind = item.origin === 'user' ? 'own'
+      : item.origin === 'doctor' ? 'doctor'
+      : item.layerKey === 'supplements' ? 'supplement'
+      : item.kind === 'habit' ? (ROW_KIND_BY_LAYER[item.layerKey] || 'habit') : item.kind;
+    const resolveKind = wireKind === 'doctor' ? item.kind
+      : ['water', 'steps', 'sleep'].includes(wireKind) ? 'habit' : wireKind;
+    switch (resolveKind) {
       case 'workout': {
         points = ROW_POINTS.workout;
         target += points;
@@ -137,9 +141,12 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         }
         how = manualHow ?? autoHow(sessionDone);
         action = done ? 'open_session' : 'start_session';
-        const slot = await prisma.workoutTemplate.findUnique({ where: { id: item.templateId } });
-        templateId = item.templateId;
-        moves = slot?.moves ?? null;
+        const slot = prescription?.workoutSlots?.find((s) => Number(s.weekday) === weekday);
+        templateId = slot?.templateId ?? item.templateId ?? null;
+        const template = templateId ? await prisma.workoutTemplate.findUnique({
+          where: { id: templateId }, include: { exercises: true },
+        }) : null;
+        moves = template?.exercises?.length ?? null;
         progress = done ? 1 : 0;
         break;
       }
@@ -160,27 +167,30 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         target += points;
         totalCount += 1;
         if (item.layerKey === 'water') {
-          progress = waterTarget > 0 ? Math.min(1, waterLogged / waterTarget) : 0;
-          done = completed || waterDone;
-          how = manualHow ?? autoHow(waterDone);
+          const rowTarget = Number(item.targetValue ?? waterTarget);
+          progress = rowTarget > 0 ? Math.min(1, waterLogged / rowTarget) : 0;
+          done = completed || waterLogged >= rowTarget;
+          how = manualHow ?? autoHow(done);
           value = waterLogged;
-          tgt = waterTarget;
+          tgt = rowTarget;
           unit = 'ml';
           action = 'log_water';
         } else if (item.layerKey === 'steps') {
-          progress = stepsTarget > 0 ? Math.min(1, stepsLogged / stepsTarget) : 0;
-          done = completed || stepsDone;
-          how = manualHow ?? autoHow(stepsDone);
+          const rowTarget = Number(item.targetValue ?? stepsTarget);
+          progress = rowTarget > 0 ? Math.min(1, stepsLogged / rowTarget) : 0;
+          done = completed || stepsLogged >= rowTarget;
+          how = manualHow ?? autoHow(done);
           value = stepsLogged;
-          tgt = stepsTarget;
+          tgt = rowTarget;
           unit = 'steps';
           action = 'tick';
         } else if (item.layerKey === 'sleep') {
-          progress = sleepTarget > 0 ? Math.min(1, sleepLogged / sleepTarget) : 0;
-          done = completed || sleepDone;
-          how = manualHow ?? autoHow(sleepDone);
+          const rowTarget = Number(item.targetValue ?? sleepTarget);
+          progress = rowTarget > 0 ? Math.min(1, sleepLogged / rowTarget) : 0;
+          done = completed || sleepLogged >= rowTarget;
+          how = manualHow ?? autoHow(done);
           value = sleepLogged;
-          tgt = sleepTarget;
+          tgt = rowTarget;
           unit = 'min';
           action = 'tick';
         } else {
@@ -210,7 +220,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         break;
       }
       case 'own': {
-        points = item.ownKind === 'workout' ? ROW_POINTS.workout : ROW_POINTS.habit;
+        points = (item.ownKind ?? item.kind) === 'workout' ? ROW_POINTS.workout : ROW_POINTS.habit;
         target += points;
         totalCount += 1;
         done = completed;
@@ -240,20 +250,26 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         continue;
       }
       default:
-        break;
+        continue;
     }
 
-    const kind = item.kind === 'habit' ? (ROW_KIND_BY_LAYER[item.layerKey] || 'habit') : item.kind;
+    const kind = wireKind;
+    const late = completion?.late === true;
+    if (done) progress = 1;
+    if (done && late) earned -= points;
 
     rows.push({
       key: `item:${item.id}`,
       id: item.id,
       itemId: item.id,
       kind,
+      ...(kind === 'own' ? { ownKind: item.ownKind ?? item.kind } : {}),
       layerKey: item.layerKey,
       origin: item.origin,
       title: item.title,
       points,
+      earned: done && !late ? points : 0,
+      late,
       done,
       how,
       progress,
@@ -271,8 +287,19 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
   let food = null;
   let foodPossible = 0;
   let foodEarned = 0;
+  const scoringTarget = layerFilter.has('food') ? nutritionTarget : null;
+  const scoringTotals = {
+    ...foodResult.totals,
+    hasAnyFood: foodResult.logCount > 0,
+    mealSlotsCovered: ['breakfast', 'lunch', 'dinner'].filter((slot) => foodResult.bySlot[slot]?.count > 0).length,
+  };
+  for (const key of Object.keys(scoringTarget?.micros ?? {})) {
+    scoringTotals[key] = foodResult.logs.reduce((sum, log) =>
+      sum + (log.nutrients?.unknown ? 0 : Number(log.nutrients?.[key]) || 0), 0);
+  }
+  const foodLines = computeEarns({ targets: scoringTarget, totals: scoringTotals, localDate });
 
-  if (layerFilter ? layerFilter.has('food') : true) {
+  if (layerFilter.has('food')) {
     if (nutritionTarget) {
       const hasProteinTarget = Number(nutritionTarget.proteinG) > 0;
       const hasCalorieTarget = Number(nutritionTarget.kcal) > 0;
@@ -281,29 +308,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
       if (hasCalorieTarget) foodPossible += ROW_POINTS.foodCalories;
       foodPossible += ROW_POINTS.foodMeals;
 
-      const proteinRatio = hasProteinTarget
-        ? (foodResult.totals.proteinG || 0) / nutritionTarget.proteinG
-        : null;
-      const kcalRatio = hasCalorieTarget
-        ? (foodResult.totals.kcal || 0) / nutritionTarget.kcal
-        : null;
-      const mealsLogged = foodResult.logCount || 0;
-
-      let proteinEarned = 0;
-      let kcalEarned = 0;
-      let mealsEarned = 0;
-
-      if (hasProteinTarget && proteinRatio !== null && proteinRatio >= 0.9) {
-        proteinEarned = ROW_POINTS.foodProtein;
-      }
-      if (hasCalorieTarget && kcalRatio !== null && Math.abs(1 - kcalRatio) <= 0.1) {
-        kcalEarned = ROW_POINTS.foodCalories;
-      }
-      if (mealsLogged >= 3) {
-        mealsEarned = ROW_POINTS.foodMeals;
-      }
-
-      foodEarned = proteinEarned + kcalEarned + mealsEarned;
+      foodEarned = foodLines.filter((l) => l.key !== 'micros_met').reduce((sum, l) => sum + l.points, 0);
       earned += foodEarned;
 
       food = {
@@ -332,6 +337,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
       totalCount += 1;
       if (food.done) doneCount += 1;
       target += foodPossible;
+      rows.push(food);
     }
   }
 
@@ -344,17 +350,21 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
   const unplannedWorkout =
     qualifyingSessions.length > 0 && (!hasWorkoutRow || qualifyingSessions.length > 1);
   if (unplannedWorkout) bonus += POINTS.unplannedWorkout;
-  bonus += calculateMicronutrientPoints(nutritionTarget, foodResult.logs);
+  bonus += foodLines.find((l) => l.key === 'micros_met')?.points ?? 0;
 
   // Display order: workout/rest, water, food, steps, sleep, supplements,
   // doctor, own.
-  const order = ['workout', 'rest', 'water', 'food', 'steps', 'sleep', 'supplement', 'doctor_medication', 'doctor_test', 'doctor_appointment', 'own'];
+  const order = ['workout', 'rest', 'water', 'food', 'steps', 'sleep', 'supplement', 'doctor', 'own'];
   rows.sort((a, b) => {
     const ia = order.indexOf(a.kind);
     const ib = order.indexOf(b.kind);
     if (ia !== ib) return ia - ib;
-    if (a.kind === 'supplement' || a.kind === 'doctor_medication' || a.kind === 'doctor_test' || a.kind === 'doctor_appointment' || a.kind === 'own') {
+    if (a.kind === 'supplement') {
       return (a.title || '').localeCompare(b.title || '');
+    }
+    if (a.kind === 'doctor' || a.kind === 'own') {
+      const created = (id) => new Date(planItems.find((i) => i.id === id)?.createdAt ?? 0).getTime();
+      return created(a.itemId) - created(b.itemId) || a.itemId - b.itemId;
     }
     return 0;
   });
@@ -366,34 +376,10 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     earned,
     target,
     counts: { done: doneCount, total: totalCount },
-    // Finished non-rest sessions for the day, before the qualifying filter.
-    // `bonus` above only pays a *qualifying* session; the engine's extra-workout
-    // line pays any finished one, so the caller needs the unfiltered count.
+    nutritionTarget: scoringTarget,
+    totals: scoringTotals,
+    unplannedWorkout,
     finishedSessions: sessions.length,
     onLayerKeys: onLayerKeys || [],
   };
-}
-
-// Micronutrients are read from the raw food-log snapshots (the totals only
-// carry the macro/4-mineral snapshot fields). Every key the target tracks is
-// scored, 2 points each over the met ratio, capped at 10 a day.
-function calculateMicronutrientPoints(targets, logs) {
-  if (!targets?.micros) return 0;
-
-  const got = {};
-  for (const log of logs || []) {
-    const nutrients = log?.nutrients || {};
-    for (const [key, raw] of Object.entries(nutrients)) {
-      const value = Number(raw);
-      if (Number.isFinite(value)) got[key] = (got[key] || 0) + value;
-    }
-  }
-
-  let points = 0;
-  for (const key of Object.keys(targets.micros)) {
-    const target = Number(targets.micros[key]);
-    if (!target) continue;
-    if ((got[key] || 0) / target >= 0.8) points += 2;
-  }
-  return Math.min(points, 10);
 }

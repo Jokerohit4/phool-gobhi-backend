@@ -51,9 +51,9 @@ async function getPauseState(prisma, userId, localDate) {
  * @returns {object[]} Week array with 7 entries Mon-Sun
  */
 function buildWeek(showedUpDays, today) {
-  // Use the same IST date logic as journeyService.todayLocalDate()
-  const todayDate = new Date(`${today}T00:00:00+05:30`);
-  const dayOfWeek = todayDate.getUTCDay(); // 0 = Sunday in UTC
+  // Calendar arithmetic on a date-only UTC anchor, independent of host zone.
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  const dayOfWeek = todayDate.getUTCDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const monday = new Date(todayDate);
   monday.setUTCDate(monday.getUTCDate() + mondayOffset);
@@ -97,20 +97,23 @@ async function getSessions(prisma, userId, today) {
   const todaySlot = slots.find((s) => Number(s.weekday) === todayISOWeekday);
   const tomorrowSlot = slots.find((s) => Number(s.weekday) === tomorrowISOWeekday);
 
-  const formatSession = (slot) => {
+  const formatSession = async (slot) => {
     if (!slot) return null;
-    const template = slot.templateId ? null : null; // We'll need to fetch template for moves
+    const template = slot.templateId ? await prisma.workoutTemplate.findUnique({
+      where: { id: slot.templateId }, include: { exercises: true },
+    }) : null;
     return {
       templateId: slot.templateId ?? null,
-      title: slot.title ?? 'Workout',
-      moves: null, // Would need template lookup
-      done: false, // Will be set by todayService based on completions
+      title: slot.title ?? template?.name ?? 'Workout',
+      moves: template?.exercises?.length ?? null,
+      done: false,
     };
   };
 
+  const [todaySession, tomorrowSession] = await Promise.all([formatSession(todaySlot), formatSession(tomorrowSlot)]);
   return {
-    today: formatSession(todaySlot),
-    tomorrow: formatSession(tomorrowSlot),
+    today: todaySession,
+    tomorrow: tomorrowSession,
   };
 }
 
@@ -149,18 +152,18 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     };
   }
 
-  // In parallel: get layers, onLayerKeys, resolveDay, previousClose, pause
-  const [layers, onLayerKeys, dayResolution, scoreOpen, pauseState] = await Promise.all([
+  // Load the journey once, then pass its on layers into the resolver.
+  const [layers, onLayerKeys, scoreOpen, pauseState] = await Promise.all([
     getLayers(prisma, userId, { journey }),
     getOnLayerKeys(prisma, userId, { journey }),
-    resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys: undefined }), // Will compute internally
     previousClose(prisma, { userId, localDate: resolvedDate }),
     getPauseState(prisma, userId, resolvedDate),
   ]);
+  const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys });
   const showedUpDays = journey.showedUpDates ?? [];
 
   // Re-extract resolved values from dayResolution
-  const { rows, food, bonus, earned, target, counts, onLayerKeys: resolvedOnLayerKeys } = dayResolution;
+  const { rows, bonus, earned, target, counts } = dayResolution;
 
   // Check easy start
   const easyStartUntil = journey.easyStartUntil ? todayIST() <= journey.easyStartUntil ? journey.easyStartUntil : null : null;
@@ -198,9 +201,9 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     easyStartUntil: easyStartUntil,
     noMisses,
     points: pauseState.paused ? null : { earned, target, bonus },
-    counts: pauseState.paused ? { done: 0, total: 0 } : counts,
+    counts,
     score: pauseState.paused ? { open: scoreOpen, live: scoreOpen } : { open: scoreOpen, live: liveScore },
-    rows: pauseState.paused ? [] : rows,
+    rows,
     session: sessions,
     layers,
     week,
