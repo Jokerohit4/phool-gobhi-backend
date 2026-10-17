@@ -39,7 +39,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     currentNutritionTarget(prisma, userId),
     prisma.workoutSession.findMany({
       where: { userId, localDate, endedAt: { not: null }, type: { not: null, notIn: ['rest'] } },
-      select: { id: true, type: true, startedAt: true, endedAt: true, exercises: { select: { sets: { where: { completed: true }, select: { id: true } } } } },
+      select: { id: true, type: true, startedAt: true, endedAt: true, exercises: { select: { sets: { select: { id: true, completed: true } } } } },
     }),
     prisma.supplementLog.findMany({
       where: { userId, localDate, taken: true },

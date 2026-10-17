@@ -292,7 +292,9 @@ test('second qualifying session adds +8 on a workout day; unfinished/short/rest 
   const ctx = await setup(t);
   assert.equal((await today(ctx)).points.bonus, 0);
   fixture.tables.workoutSession.push({ ...session(), id: 91, endedAt: null },
-    { ...session(), id: 92, exercises: [], endedAt: new Date(`${DATE}T08:05:00Z`) }, { ...session(), id: 93, type: 'rest' });
+    { ...session(), id: 92, exercises: [], endedAt: new Date(`${DATE}T08:05:00Z`) },
+    { ...session(), id: 93, type: 'rest' },
+    { ...session(), id: 95, exercises: [{ sets: [{ id: 1, completed: false }] }] });
   assert.equal((await today(ctx)).points.bonus, 0);
   fixture.tables.workoutSession.push(session(DATE, 94));
   assert.equal((await today(ctx)).points.bonus, 8);
@@ -310,6 +312,34 @@ test('paused day retains rows and saves ticks while preview and frozen score sta
   assert.equal(fixture.tables.planItemCompletion.length, 1);
   const { closed } = await freeze(ctx);
   assert.equal(closed.paused, true); assert.equal(closed.close, 312);
+});
+
+for (const date of [DATE, '2026-10-17']) test(`incomplete sets earn no workout or bonus on ${date}, regardless of duration`, async (t) => {
+  const ctx = await setup(t, date);
+  fixture.tables.workoutSession[0].exercises = [{ sets: [{ id: 1, completed: false }] }];
+  const { payload, closed } = await freeze(ctx);
+  assert.equal(payload.points.bonus, 0);
+  assert.equal(closed.breakdown.find((l) => l.key === 'workout_unplanned'), undefined);
+  if (date === DATE) {
+    assert.equal(row(payload, 'workout').done, false);
+    assert.equal(closed.breakdown.find((l) => l.key === 'workout_missed').points, -15);
+  } else {
+    assert.equal(row(payload, 'rest').earned, 5);
+  }
+});
+
+test('completed-set and no-set duration boundaries agree from Today through frozen scoring', async (t) => {
+  const ctx = await setup(t);
+  const sessionRow = fixture.tables.workoutSession[0];
+  sessionRow.endedAt = new Date(`${DATE}T08:01:00Z`);
+  assert.equal(row((await agree(ctx)).payload, 'workout').earned, 15);
+  sessionRow.exercises = [];
+  sessionRow.endedAt = new Date(`${DATE}T08:09:59Z`);
+  assert.equal(row((await agree(ctx)).payload, 'workout').done, false);
+  sessionRow.endedAt = new Date(`${DATE}T08:10:00Z`);
+  const { payload } = await freeze(ctx);
+  assert.equal(row(payload, 'workout').earned, 15);
+  assert.equal(payload.points.bonus, 0);
 });
 
 test('easy start and ease-back keep earnings and suppress all close-day misses', async (t) => {
