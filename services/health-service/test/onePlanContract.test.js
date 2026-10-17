@@ -238,6 +238,8 @@ test('regular day: automatic progress, manual tick, engine preview and frozen cl
   const after = await agree(ctx);
   assert.equal(after.payload.points.earned, before.payload.points.earned + 5);
   assert.equal(row(after.payload, 'own').how, 'tick');
+  await tick(ctx, row(after.payload, 'workout').itemId);
+  assert.equal((await today(ctx)).points.earned, after.payload.points.earned, 'manual + auto counts once');
   assert.equal(fixture.tables.planItemCompletion[0].how, 'manual');
   assert.equal(after.payload.points.target, 75);
   assert.deepEqual(after.payload.rows.map((r) => r.kind), ['workout', 'water', 'food', 'steps', 'sleep', 'supplement', 'doctor', 'own']);
@@ -420,8 +422,12 @@ test('late ticks save with zero earnings and future ticks are rejected', async (
   const resolved = await resolveDay(ctx.prisma, { userId: USER, localDate: DATE });
   assert.equal(row(resolved, 'own').done, true);
   assert.equal(row(resolved, 'own').earned, 0);
+  fixture.tables.workoutSession.push(session(DATE));
+  const workout = fixture.tables.planItem.find((i) => i.kind === 'workout' && i.schedule === '5');
+  await tick(ctx, workout.id, DATE);
   const preview = await previewDay(ctx.prisma, { userId: USER, localDate: DATE, today: ctx.date });
   assert.equal(preview.breakdown.find((l) => l.itemId === ctx.own.id).points, 0);
+  assert.equal(preview.breakdown.find((l) => l.itemId === workout.id).points, 15, 'a late tick cannot erase a qualifying session');
   await assert.rejects(tick(ctx, ctx.own.id, '2026-10-18'), { status: 400 });
 });
 

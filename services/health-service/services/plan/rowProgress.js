@@ -113,6 +113,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     let points = 0;
     let progress = 0;
     let done = false;
+    let automaticSatisfied = false;
     let how = manualHow;
     let value = null;
     let tgt = null;
@@ -134,6 +135,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         target += points;
         totalCount += 1;
         const sessionDone = qualifyingSessions.length > 0;
+        automaticSatisfied = sessionDone;
         done = completed || sessionDone;
         if (done) {
           doneCount += 1;
@@ -155,6 +157,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         target += points;
         totalCount += 1;
         done = true;
+        automaticSatisfied = true;
         doneCount += 1;
         earned += points;
         how = manualHow ?? 'auto';
@@ -169,8 +172,9 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         if (item.layerKey === 'water') {
           const rowTarget = Number(item.targetValue ?? waterTarget);
           progress = rowTarget > 0 ? Math.min(1, waterLogged / rowTarget) : 0;
-          done = completed || waterLogged >= rowTarget;
-          how = manualHow ?? autoHow(done);
+          automaticSatisfied = rowTarget > 0 && waterLogged >= rowTarget;
+          done = completed || automaticSatisfied;
+          how = manualHow ?? autoHow(automaticSatisfied);
           value = waterLogged;
           tgt = rowTarget;
           unit = 'ml';
@@ -178,8 +182,9 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         } else if (item.layerKey === 'steps') {
           const rowTarget = Number(item.targetValue ?? stepsTarget);
           progress = rowTarget > 0 ? Math.min(1, stepsLogged / rowTarget) : 0;
-          done = completed || stepsLogged >= rowTarget;
-          how = manualHow ?? autoHow(done);
+          automaticSatisfied = rowTarget > 0 && stepsLogged >= rowTarget;
+          done = completed || automaticSatisfied;
+          how = manualHow ?? autoHow(automaticSatisfied);
           value = stepsLogged;
           tgt = rowTarget;
           unit = 'steps';
@@ -187,8 +192,9 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         } else if (item.layerKey === 'sleep') {
           const rowTarget = Number(item.targetValue ?? sleepTarget);
           progress = rowTarget > 0 ? Math.min(1, sleepLogged / rowTarget) : 0;
-          done = completed || sleepLogged >= rowTarget;
-          how = manualHow ?? autoHow(done);
+          automaticSatisfied = rowTarget > 0 && sleepLogged >= rowTarget;
+          done = completed || automaticSatisfied;
+          how = manualHow ?? autoHow(automaticSatisfied);
           value = sleepLogged;
           tgt = rowTarget;
           unit = 'min';
@@ -209,6 +215,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         totalCount += 1;
         const scheduleId = Number(String(item.sourceRef || '').replace('supplement:', ''));
         const suppDone = takenSupplementIds.has(scheduleId);
+        automaticSatisfied = suppDone;
         done = suppDone || completed;
         how = manualHow ?? autoHow(suppDone);
         if (done) {
@@ -254,7 +261,9 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
     }
 
     const kind = wireKind;
-    const late = completion?.late === true;
+    // A backfilled tick earns zero, but cannot erase credit already supplied
+    // by an on-date log (or the always-honoured rest row).
+    const late = completion?.late === true && !automaticSatisfied;
     if (done) progress = 1;
     if (done && late) earned -= points;
 
