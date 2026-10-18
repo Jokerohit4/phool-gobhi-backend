@@ -22,6 +22,9 @@ on:
       expected_sha:
         description: 'Exact deployed dev SHA for a data action'
         required: false
+      log_view:
+        description: 'Explicit dev-job log view resource for a data action'
+        required: false
 
 permissions:
   contents: read
@@ -404,7 +407,10 @@ jobs:
       - name: Verify requested dev revision
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-        run: test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          LOG_VIEW_RESOURCE: ${{ inputs.log_view }}
+        run: |
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          [[ "$LOG_VIEW_RESOURCE" =~ ^projects/phool-gobhi/locations/[a-z0-9-]+/buckets/_Default/views/one-plan-dev-data$ ]]
 
       - uses: google-github-actions/auth@v2
         with:
@@ -459,12 +465,18 @@ jobs:
           APPLY: ${{ inputs.one_plan_data == 'apply' }}
           REVISION: ${{ steps.config.outputs.revision }}
           IMAGE: ${{ steps.config.outputs.image }}
+          LOG_VIEW_RESOURCE: ${{ inputs.log_view }}
         run: |
           EXECUTION=$(node -p "require(process.env.RUNNER_TEMP+'/one-plan-dev-execution.json').metadata.name.split('/').pop()")
-          for attempt in $(seq 1 12); do
-            gcloud logging read \
+          for attempt in $(seq 1 24); do
+            if ! gcloud logging read \
               "resource.type=cloud_run_job AND resource.labels.job_name=one-plan-dev-data AND labels.\"run.googleapis.com/execution_name\"=\"$EXECUTION\" AND textPayload:\"ONE_PLAN_DEV_RESULT=\"" \
-              --project=phool-gobhi --limit=5 --format=json > "$RUNNER_TEMP/one-plan-dev-result-logs.json"
+              --project=phool-gobhi --resource-names="$LOG_VIEW_RESOURCE" \
+              --limit=5 --format=json > "$RUNNER_TEMP/one-plan-dev-result-logs.json"; then
+              # A newly granted view binding may take time to propagate.
+              sleep 5
+              continue
+            fi
             if node -e "const r=require(process.env.RUNNER_TEMP+'/one-plan-dev-result-logs.json'); process.exit(r.some(x=>x.textPayload?.includes('ONE_PLAN_DEV_RESULT='))?0:1)"; then break; fi
             sleep 5
           done
