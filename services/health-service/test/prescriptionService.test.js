@@ -21,11 +21,11 @@ import assert from 'node:assert/strict';
 
 import {
   boundsFor,
-  buildWorkout,
   deriveStepsPerDay,
   getPlan,
   previewPlan,
   savePlan,
+  saveSettings,
 } from '../services/ledger/prescriptionService.js';
 
 const TARGET = {
@@ -121,44 +121,6 @@ test('a maintenance figure below the floor cannot invert the slider', () => {
   );
 });
 
-test('the week is spread across weekdays rather than packed into the front', () => {
-  const plan = buildWorkout(4, ['lose_fat']);
-
-  // Monday first, and two hard days never back to back: the pattern skips
-  // Tuesday and Friday for the first four sessions.
-  assert.deepEqual(plan.map((s) => s.weekday), [1, 3, 4, 6]);
-  assert.deepEqual(
-    plan.map((s) => s.title),
-    ['Zone 2 cardio', 'Full body circuit', 'Intervals', 'Strength basics'],
-  );
-  for (const slot of plan) {
-    assert.ok(slot.weekday >= 1 && slot.weekday <= 7);
-    assert.ok(slot.title.length > 0);
-    assert.ok(slot.intensity.length > 0);
-  }
-});
-
-test('the session count is honoured, including a two-a-day week', () => {
-  assert.equal(buildWorkout(1, []).length, 1);
-  assert.equal(buildWorkout(7, ['build_muscle']).length, 7);
-  // Above seven the weekday pattern wraps rather than dropping the overflow:
-  // ten sessions a week is real, and a plan that silently shows seven of them
-  // is lying about the week it was asked for.
-  assert.equal(buildWorkout(10, ['general_health']).length, 10);
-  assert.equal(buildWorkout(0, []).length, 0);
-});
-
-test('the menu follows the goal, and an unknown goal falls back rather than emptying', () => {
-  const muscle = buildWorkout(3, ['build_muscle']);
-  assert.deepEqual(muscle.map((s) => s.title), ['Push', 'Pull', 'Legs']);
-
-  // A goal the menu does not cover still produces sessions - a plan with an
-  // empty workout block is a screen that tells the user to train and not how.
-  const unknown = buildWorkout(3, ['some_future_goal']);
-  assert.equal(unknown.length, 3);
-  assert.equal(unknown[0].title, 'Full body');
-});
-
 // ---- Reading --------------------------------------------------------------
 
 test('a first read derives the plan from the target and writes nothing', async () => {
@@ -174,7 +136,6 @@ test('a first read derives the plan from the target and writes nothing', async (
   assert.equal(plan.sessionsPerWeek, 3, 'the neutral default, no WeeklyGoal row');
   assert.equal(plan.adjustedBy.length, 0);
   assert.equal(plan.rulesVersion, 'v1');
-  assert.equal(plan.workout.length, 3);
 });
 
 test('nutrition is derived, never echoed: the client cannot supply it', async () => {
@@ -206,7 +167,6 @@ test('nutrition is derived, never echoed: the client cannot supply it', async ()
   assert.deepEqual(plan.micros, { ironMg: 18, magnesiumMg: 340 });
 
   assert.equal(plan.sessionsPerWeek, 4);
-  assert.equal(plan.workout.length, 4);
   assert.equal(prisma.writes.length, 0, 'a preview must never write');
 });
 
@@ -227,18 +187,17 @@ test('a saved plan outside the bounds is clamped on read, and names what moved',
   assert.equal(prisma.writes.length, 0, 'the read must not write the clamp back');
 });
 
-test('a plan with no target refuses instead of inventing numbers', async () => {
+test('a plan with no target has kcal null, never a default', async () => {
   const prisma = fakePrisma({ target: null });
 
-  await assert.rejects(
-    () => getPlan({ prisma, userId: 7 }),
-    (err) => {
-      assert.equal(err.status, 422);
-      assert.equal(err.code, 'PRESCRIPTION_UNAVAILABLE');
-      assert.match(err.message, /Set up your details/);
-      return true;
-    },
-  );
+  const plan = await getPlan({ prisma, userId: 7 });
+  assert.ok(plan, 'plan returned');
+  assert.equal(plan.kcal, null, 'kcal is null when no target');
+  assert.equal(plan.proteinG, null);
+  assert.equal(plan.carbsG, null);
+  assert.equal(plan.fatG, null);
+  assert.equal(plan.fibreG, null);
+  assert.ok(!plan.adjustedBy.includes('kcal'), 'kcal was not adjusted when null');
 });
 
 // ---- Preview and save -----------------------------------------------------
@@ -295,7 +254,6 @@ test('save persists the three adjustable numbers and returns the plan', async ()
   assert.equal(goal.args.update.setByUser, true);
 
   assert.equal(plan.kcal, 2350);
-  assert.equal(plan.workout.length, 4);
   // The save returns the same shape as the GET, so the screen needs no second
   // parser to show what it just wrote.
   assert.deepEqual(Object.keys(plan.bounds).sort(), [
@@ -337,5 +295,39 @@ test('the bounds that come back are the ones the refusal used', async () => {
   await assert.rejects(
     () => previewPlan({ prisma, userId: 7, draft: { sessionsPerWeek: plan.bounds.sessionsPerWeek.max + 1 } }),
     (err) => err.code === 'PRESCRIPTION_OUT_OF_RANGE',
+  );
+});
+
+test('writing kcal while Food layer is off returns 409 LAYER_NOT_ON', async (t) => {
+  const at = (rel) => new URL(rel, import.meta.url).href;
+  t.mock.module(at('../middleware/requireFeatureFlag.js'), {
+    exports: {
+      isFeatureEnabled: async () => true,
+    },
+  });
+  t.mock.module(at('../services/plan/layerState.js'), {
+    exports: {
+      getOnLayerKeys: async () => ['workout', 'water'],
+      getLayers: async () => [{ key: 'food', state: 'locked' }],
+    },
+  });
+  t.mock.module(at('../services/journey/journeyService.js'), {
+    exports: {
+      getJourney: async () => null,
+    },
+  });
+
+  // Query string forces a fresh module instance so Node test module mocks are applied; do not remove
+  const { saveSettings } = await import(at('../services/ledger/prescriptionService.js') + '?mock');
+
+  const prisma = fakePrisma();
+  await assert.rejects(
+    () => saveSettings({ prisma, userId: 7, draft: { kcal: 2100 } }),
+    (err) => {
+      assert.equal(err.status, 409);
+      assert.equal(err.code, 'LAYER_NOT_ON');
+      assert.equal(err.layer, 'food');
+      return true;
+    },
   );
 });

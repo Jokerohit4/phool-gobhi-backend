@@ -478,7 +478,7 @@ test('list refuses a negative page size instead of walking the ordering backward
 
 // ---- Gates ----------------------------------------------------------------
 
-test('every appointment route is behind auth and the ledger gates', () => {
+test('every appointment route is behind auth and the medical gate (medical_records consent)', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const routes = readFileSync(join(here, '..', 'routes', 'ledger.js'), 'utf8');
 
@@ -488,9 +488,9 @@ test('every appointment route is behind auth and the ledger gates', () => {
 
   assert.ok(lines.length >= 6, `expected 6 appointment routes, found ${lines.length}`);
   for (const line of lines) {
-    // `nutrition` is the composed array defined in this file: requireAuth plus
-    // both flags plus the per-person consent scope.
-    assert.match(line, /\.\.\.nutrition/, `ungated appointment route: ${line.trim()}`);
+    // `medical` is the composed array: requireAuth + healthMetrics + healthLedger + medicalRecordsConsent
+    // Appointments are medical records, so they require medical_records consent.
+    assert.match(line, /\.\.\.medical/, `appointment route missing ...medical gate: ${line.trim()}`);
   }
 });
 

@@ -122,6 +122,21 @@ export const POINTS = {
   restDayHonoured: 5,
 };
 
+// The points a single today-row is worth when done (Contracts · Rows). Built
+// from POINTS so a retune moves both — these are the same numbers the score
+// engine applies, not a second table that can drift from it. The food row's
+// possible points are the sum of its positive lines (protein + calories +
+// allMealsLogged), which is why food is split into its three components here.
+export const ROW_POINTS = {
+  workout: POINTS.plannedWorkoutDone,
+  rest: POINTS.restDayHonoured,
+  habit: POINTS.habitDone,
+  doctor: POINTS.doctorItemDone,
+  foodProtein: POINTS.proteinMet,
+  foodCalories: POINTS.caloriesOnTarget,
+  foodMeals: POINTS.allMealsLogged,
+};
+
 // A plan with twenty items turns every day red, which is how the feature
 // dies. The intake, the generator and the all-items path all read
 // this so the ceiling is enforced everywhere rather than in one place that

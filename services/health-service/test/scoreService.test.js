@@ -1,23 +1,57 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  closeDay,
-  getCalmSeries,
-  getSafetyFlag,
-  getScoreSeries,
-  previewDay,
-  setCalmMode,
-  isPausedOn,
-  getPauseState,
-  setPause,
-  clearPause,
-} from '../services/ledger/scoreService.js';
+// scoreService pulls the on-layer keys from layerState (a UB2 stub that throws
+// until its owner lands) and the journey window from journeyService. Mock all
+// of them once, then import scoreService dynamically so the mocks are in the
+// module registry before scoreService resolves its imports (static imports are
+// hoisted above any top-level mock.module call and would never see it).
+const ON_LAYERS = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'];
+
+let closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause;
+
+test('setup: mock layerState + journey deps once, import scoreService once', async (t) => {
+  t.mock.module(new URL('../services/plan/layerState.js', import.meta.url).href, {
+    namedExports: {
+      getOnLayerKeys: async () => [...ON_LAYERS],
+    },
+  });
+
+  mock.module(new URL('../services/journey/journeyService.js', import.meta.url).href, {
+    namedExports: {
+      getJourney: async () => ({
+        journeyProgress: { userId: 7, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' },
+        unlockedLayerKeys: [...ON_LAYERS],
+      }),
+      getUnlockedLayerKeys: async () => [...ON_LAYERS],
+      getScoringWindow: async () => ({ easyStartUntil: null, inactiveSince: null, foodEarlyNoPenaltyUntilUnlock: false }),
+    },
+  });
+
+  t.mock.module(new URL('../utils/fetchInternal.js', import.meta.url).href, {
+    namedExports: {
+      getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
+      fetchInternal: async () => ({ data: { days: [] } }),
+    },
+  });
+
+  t.mock.module(new URL('../utils/analytics.js', import.meta.url).href, {
+    namedExports: {
+      track: () => {},
+      ingest: () => {},
+    },
+  });
+
+  ({ closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause } =
+    await import('../services/ledger/scoreService.js'));
+  assert.equal(typeof closeDay, 'function');
+  assert.equal(typeof previewDay, 'function');
+});
 
 const TODAY = '2026-09-28';
 const USER = 7;
 
-function mockPrisma({ snapshots = [], goal = null, target = null, planItems = [], logs = [], sessions = [] } = {}) {
+function mockPrisma({ snapshots = [], goal = null, target = null, planItems = [], logs = [], sessions = [], waterLogs = [], stepsLogs = [], sleepLogs = [], onLayerKeys = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'] } = {}) {
   const state = { created: [], updated: [] };
   const prisma = {
     state,
@@ -54,28 +88,97 @@ function mockPrisma({ snapshots = [], goal = null, target = null, planItems = []
     healthGoal: {
       findUnique: async () => goal,
       update: async (a) => ((state.updated.push(a.data), { userId: USER, ...a.data })),
-      // clearPause and setCalmMode use this so a missing row is a count of zero
-      // rather than a Prisma P2025. Without it in the mock, the suite passed while
-      // the real endpoint threw that error at a client.
       updateMany: async (a) => {
         state.updated.push(a.data);
         return { count: goal ? 1 : 0 };
       },
     },
-    planItem: { findMany: async () => planItems },
-    foodLog: { findMany: async () => logs },
-    // where/select are honoured rather than ignored: gatherDayInputs relies on
-    // the `localDate` + `endedAt: { not: null }` filter to keep a user's whole
-    // session history from being loaded, and a fake that ignored the filter
-    // would let a regression in the query itself pass.
+    planItem: {
+      findMany: async ({ where, include }) => {
+        const items = planItems.filter(item => item.active === true);
+        if (include?.completions) {
+          return items.map(item => ({
+            ...item,
+            completions: item.completions ?? (item.completed ? [{ how: 'tick', late: false, localDate: TODAY }] : []),
+          }));
+        }
+        return items;
+      },
+    },
+    foodLog: { 
+      findMany: async ({ where, orderBy }) => {
+        return logs.filter(log => log.userId === where.userId && log.localDate === where.localDate);
+      },
+    },
     workoutSession: {
       findMany: async ({ where, select }) => {
         let rows = sessions.filter((s) => s.userId === (where?.userId ?? USER));
         if (where?.localDate) rows = rows.filter((s) => s.localDate === where.localDate);
         if (where?.endedAt?.not === null) rows = rows.filter((s) => s.endedAt != null);
-        return select ? rows.map((s) => ({ id: s.id, type: s.type, endedAt: s.endedAt })) : rows;
+        if (where?.type?.not) rows = rows.filter((s) => s.type !== where.type.not);
+        if (where?.type?.notIn) rows = rows.filter((s) => !where.type.notIn.includes(s.type));
+        return select ? rows.map((s) => ({ 
+          id: s.id, 
+          type: s.type, 
+          endedAt: s.endedAt,
+          startedAt: s.startedAt,
+          exercises: s.exercises || [],
+        })) : rows;
       },
     },
+    supplementLog: {
+      findMany: async ({ where, select }) => {
+        return logs.filter(l => 
+          l.userId === where.userId && 
+          l.localDate === where.localDate &&
+          l.taken === true
+        ).map(l => ({ scheduleId: l.scheduleId }));
+      },
+    },
+    waterLog: {
+      findMany: async ({ where }) => waterLogs.filter(w => w.userId === where.userId),
+    },
+    dailyActivityMetric: {
+      findMany: async ({ where }) => stepsLogs.filter(s => s.userId === where.userId),
+    },
+    biometricEntry: {
+      findMany: async ({ where }) => sleepLogs.filter(b => b.userId === where.userId),
+    },
+    workoutTemplate: {
+      findUnique: async ({ where }) => {
+        const templates = {
+          1: { id: 1, moves: 6, name: 'Full body A' },
+        };
+        return templates[where.id] || null;
+      },
+    },
+    nutritionTarget: { findFirst: async () => target },
+    healthGoal: {
+      findUnique: async () => goal,
+      update: async (a) => ((state.updated.push(a.data), { userId: USER, ...a.data })),
+      updateMany: async (a) => {
+        state.updated.push(a.data);
+        return { count: goal ? 1 : 0 };
+      },
+    },
+    // Mock for layerState.getOnLayerKeys
+    journeyProgress: {
+      findUnique: async ({ where }) => ({ userId: where.userId, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' }),
+      findFirst: async () => ({ userId: USER, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' }),
+    },
+    coachConsent: {
+      findMany: async () => [{ userId: USER, revokedAt: null, scopes: ['basic', 'supplements'] }],
+    },
+    healthConsent: {
+      findFirst: async ({ where }) => {
+        if (where?.scopes?.has === 'nutrition') return { userId: USER, revokedAt: null, scopes: ['nutrition'], scopeVersions: { nutrition: '2026-01-01' } };
+        if (where?.scopes?.has === 'medical_records') return { userId: USER, revokedAt: null, scopes: ['medical_records'], scopeVersions: { medical_records: '2026-01-01' } };
+        if (where?.scopes?.has === 'device_health') return { userId: USER, revokedAt: null, scopes: ['device_health'] };
+        return null;
+      },
+    },
+    // Mock getOnLayerKeys by providing a helper that the service can call
+    // We inject a mock implementation directly into the module
   };
   return prisma;
 }
@@ -88,13 +191,13 @@ const TARGET = { kcal: 2000, proteinG: 120, carbsG: 220, fatG: 65, fibreG: 28, w
 // dropped before the engine ever saw it, and these tests would pass for the
 // wrong reason.
 function workoutItem(id, completions = []) {
-  return { id, kind: 'workout', title: 'Leg day', schedule: 'daily', active: true, endsOn: null, completions };
+  return { id, kind: 'workout', layerKey: 'workout', origin: 'suggested', templateId: 1, title: 'Leg day', schedule: 'daily', active: true, endsOn: null, completions };
 }
 function doneOn(date) {
   return [{ localDate: date, how: 'manual', late: false }];
 }
 function session(localDate, type = 'strength', endedAt = `${localDate}T10:00:00Z`) {
-  return { id: 99, userId: USER, localDate, type, endedAt };
+  return { id: 99, userId: USER, localDate, type, startedAt: `${localDate}T09:30:00Z`, endedAt, exercises: [] };
 }
 const lineFor = (day, key) => day.breakdown.find((l) => l.key === key);
 
@@ -155,26 +258,17 @@ test('completing the planned workout pays the planned rate, not the extra rate',
 });
 
 test('training when the plan said to train but it was never ticked off still pays', async () => {
-  // The distinction that was being lost. A scheduled workout that was never
-  // completed is not a workout done, so the session is genuinely extra — and
-  // this is the user the line exists for. Guarding on "was a workout scheduled"
-  // instead of "was one done" meant anyone with a workout item in their plan
-  // could never earn it, however they actually trained.
+  // A qualifying session completes the planned workout automatically. One
+  // session earns the planned +15, without a manual tick, miss or extra +8.
   const prisma = mockPrisma({
     target: TARGET,
     planItems: [workoutItem(1)],          // scheduled, no completions
     sessions: [session('2026-09-27')],
   });
-  // closeDay, not previewDay: misses are only computed for a closed day
-  // (`closed: localDate < today`), so previewing today would show the extra
-  // workout with no miss against it and the assertion below would fail for a
-  // reason that has nothing to do with this feature.
   const day = await closeDay(prisma, { userId: USER, localDate: '2026-09-27', today: TODAY });
-  assert.ok(lineFor(day, 'workout_unplanned'));
-  assert.equal(lineFor(day, 'item_done_1'), undefined, 'the unticked item is not paid');
-  // The missed item still costs points. An extra session does not buy off a
-  // missed plan item, or "just train instead" becomes the optimal strategy.
-  assert.ok(lineFor(day, 'workout_missed').points < 0);
+  assert.equal(lineFor(day, 'workout_unplanned'), undefined);
+  assert.equal(lineFor(day, 'item_done_1').points, 15);
+  assert.equal(lineFor(day, 'workout_missed'), undefined);
 });
 
 test('an extra workout is worth less than the plan, always', async () => {

@@ -142,13 +142,13 @@ test('next is registered before :id so it is not read as an id', () => {
   );
 });
 
-test('every appointment route is gated on the same consent scope', () => {
-  // All six routes carry ...nutrition. A split here would mean an endpoint that
-  // returns a user's medical schedule without checking the consent that covers
-  // medical data - the one failure in this file that is a breach rather than a
-  // broken screen, and the one that cannot be noticed by a user reporting an
-  // empty screen.
-  const gate = /\.\.\.nutrition\s*,\s*appointmentCtrl\.\w+/;
+test('every appointment route is gated on the medical scope (medical_records consent)', () => {
+  // All six routes carry ...medical. Appointments are medical records, not food logs.
+  // The score engine reads PlanItem kind doctor_appointment; these routes are for
+  // the appointment calendar. Gating on medical_records consent (the `medical` array)
+  // is the correct boundary - a user must consent to medical records to manage
+  // their appointment calendar.
+  const gate = /\.\.\.medical\s*,\s*appointmentCtrl\.\w+/;
   const appointmentRoutes = [
     ...routesSource.matchAll(
       /router\.(get|post|patch|delete)\(\s*'\/ledger\/appointments[^']*'/g,
@@ -169,8 +169,8 @@ test('every appointment route is gated on the same consent scope', () => {
       routesSource.slice(from, from + 200),
       gate,
       `${verb.toUpperCase()} ${path.replace(/^router\.\w+\(/, '').replace(/'$/, '')} is ` +
-        'missing its ...nutrition consent gate. The other appointment routes have ' +
-        'it; an endpoint without it serves medical data to anyone who can reach it.',
+        'missing its ...medical consent gate. Appointments are medical records; ' +
+        'the medical_records consent scope is required.',
     );
   }
 });

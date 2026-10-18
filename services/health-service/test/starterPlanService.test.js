@@ -7,22 +7,56 @@
 //   2. The slot count is exactly WeeklyGoal.sessionsPerWeek - the ring on
 //      Home and the week on the Plan tab agree because they read the same
 //      number, and the slots are written from it.
-//   3. regenerateForUser rebuilds slots and items and never touches a
-//      doctor's or the user's own items - the "regenerate is safe to press"
-//      guarantee, reused rather than re-implemented.
-//   4. easeBack halves the week's sessions without lowering the goal.
+//   3. createStarterPlan hands the row work to rebuildPlan({reason:'start'}),
+//      and regenerateForUser is a one-line wrapper over
+//      rebuildPlan({reason:'unlock'}) - there is exactly ONE rebuild
+//      implementation (one-plan UB1).
+//   4. resolveUnlockedLayerKeys returns the journey service's answer, or the
+//      honest layer-1 fallback when there is none.
+//
+// rebuildPlan is mocked here: its own behaviour is pinned by
+// rebuildPlan.test.js, so this file is about the seam (which reason is asked
+// for, and what is written before the ask).
 //
 // Run with: node --experimental-test-module-mocks --test
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
+// ---- the rebuildPlan seam ----------------------------------------------------
+
+const rebuildCalls = [];
+const state = {
+  rebuildResult: { created: 2, updated: 0, deactivated: 0, onLayerKeys: ['workout', 'water'] },
+  unlockedKeys: ['workout', 'water', 'food'],
+  unlockedThrows: false,
+};
+
+mock.module('../services/plan/rebuildPlan.js', {
+  exports: {
+    rebuildPlan: async (prisma, userId, options) => {
+      rebuildCalls.push({ prisma, userId, options });
+      return state.rebuildResult;
+    },
+  },
+});
+
+// The journey reads are imported lazily by resolveUnlockedLayerKeys.
+mock.module('../services/journey/journeyService.js', {
+  exports: {
+    getUnlockedLayerKeys: async () => {
+      if (state.unlockedThrows) throw new Error('journey service unavailable');
+      return state.unlockedKeys;
+    },
+  },
+});
+
+const {
   buildWorkoutSlots,
   createStarterPlan,
   regenerateForUser,
   resolveUnlockedLayerKeys,
   START_LAYER,
-} from '../services/ledger/starterPlanService.js';
+} = await import('../services/ledger/starterPlanService.js');
 
 // The whole template catalogue the pools name: the gym starters (B7's seeds)
 // and the home track's (seedHomeTrack.js). Ids are arbitrary but stable per
@@ -97,29 +131,7 @@ function fakePrisma(overrides = {}) {
       findMany: async ({ where }) =>
         TEMPLATE_ROWS.filter((r) => r.isSystem && where?.name?.in?.includes(r.name)),
     },
-    planItem: {
-      count: async ({ where }) => {
-        if (where?.origin === 'suggested') return 0;
-        if (where?.origin?.in) return state.userItems ?? 0;
-        return 0;
-      },
-      updateMany: async (args) => {
-        writes.push({ model: 'planItem.updateMany', args });
-        return { count: 0 };
-      },
-      create: async (args) => {
-        writes.push({ model: 'planItem.create', args });
-        return { id: writes.length, ...args.data };
-      },
-    },
     healthConsent: { findUnique: async () => null },
-    personalisationProfile: {
-      upsert: async (args) => writes.push({ model: 'personalisationProfile', args }),
-    },
-    biometricEntry: {
-      findFirst: async () => null,
-      upsert: async (args) => writes.push({ model: 'biometricEntry', args }),
-    },
     ...overrides.prisma,
   };
   return prisma;
@@ -151,7 +163,8 @@ test('the starter plan refuses answers it cannot plan with', async () => {
 
 // ---- the writes --------------------------------------------------------------
 
-test('createStarterPlan writes the goal, the session count and the prescription defaults', async () => {
+test('createStarterPlan writes the goal, the session count and the prescription defaults, then rebuilds', async () => {
+  rebuildCalls.length = 0;
   const prisma = fakePrisma();
   // No nutrition target: a first-timer who has answered four questions.
   prisma.state.nutritionTarget = null;
@@ -175,13 +188,17 @@ test('createStarterPlan writes the goal, the session count and the prescription 
   assert.equal(saved.args.create.kcal, null, 'kcal must be null without a NutritionTarget');
   assert.equal(saved.args.create.stepsPerDay, 6000, 'the new_to_gym step default');
   assert.equal(saved.args.create.sleepMinutes, 420);
-
-  // The returned plan is the prescription shape B9's /journey/start returns,
-  // journey fields included.
   assert.equal(saved.args.create.workoutSlots.length, 3);
+
+  // The rows are not written here: the one rebuild implementation is asked for
+  // them, with the start reason.
+  assert.equal(rebuildCalls.length, 1);
+  assert.equal(rebuildCalls[0].userId, 7);
+  assert.equal(rebuildCalls[0].options.reason, 'start');
 });
 
 test('a target that already exists sets the starter budget, and goals survive a re-run', async () => {
+  rebuildCalls.length = 0;
   const prisma = fakePrisma();
   prisma.state.nutritionTarget = { kcal: 2200, proteinG: 130, waterMl: 3000, micros: {}, goals: ['lose_fat'], inputs: { fatFraction: 0.28 } };
 
@@ -293,108 +310,55 @@ test('unseeded templates still produce a plan: the slot names the routine anyway
   assert.equal(slots[0].level, 'beginner');
 });
 
-// ---- regenerateForUser ---------------------------------------------------------
+// ---- regenerateForUser: a one-line wrapper over the one rebuild ----------------
 
-test('regenerateForUser rebuilds the slots and regenerates only suggested items', async () => {
+test('regenerateForUser asks rebuildPlan for an unlock rebuild and returns its result', async () => {
+  rebuildCalls.length = 0;
   const prisma = fakePrisma();
-  prisma.state.weeklyGoal = { userId: 7, sessionsPerWeek: 4, setByUser: true };
-  prisma.state.journeyProgress = { userId: 7, startLevel: 'new_to_gym' };
-  prisma.state.prescription = {
-    userId: 7,
-    kcal: null,
-    stepsPerDay: 6000,
-    sleepMinutes: 420,
-    workoutSlots: [{ weekday: 0, templateId: 101, title: 'Full Body x3 — Beginner-friendly', level: 'beginner' }],
-  };
+  state.rebuildResult = { created: 3, updated: 1, deactivated: 2, onLayerKeys: ['workout', 'water', 'food'] };
 
-  const out = await regenerateForUser(prisma, 7, { unlockedLayerKeys: ['workout', 'water'] });
+  const out = await regenerateForUser(prisma, 7);
 
-  // Four slots, matching the goal, on the gym branch (the stored slot is a
-  // gym-pool template).
-  assert.equal(out.slots.length, 4);
-  assert.equal(out.sessions, 4);
-  const saved = prisma.writes.find((w) => w.model === 'prescription');
-  assert.equal(saved.args.update.workoutSlots.length, 4);
-  // The rebuild never moves the user's sliders.
-  assert.equal('stepsPerDay' in saved.args.update, false);
-  assert.equal('kcal' in saved.args.update, false);
-
-  // The items: suggested-only soft delete, then the journey generator's items.
-  const softDelete = prisma.writes.find((w) => w.model === 'planItem.updateMany');
-  assert.deepEqual(softDelete.args.where.origin, 'suggested');
-  const created = prisma.writes.filter((w) => w.model === 'planItem.create');
-  assert.ok(created.length > 0);
-  for (const item of created) {
-    assert.equal(item.args.data.origin, 'suggested');
-    assert.equal(item.args.data.autoGenerated, true);
-    if (item.args.data.kind === 'workout') assert.equal(item.args.data.layerKey, 'workout');
-  }
+  assert.equal(rebuildCalls.length, 1);
+  assert.equal(rebuildCalls[0].prisma, prisma);
+  assert.equal(rebuildCalls[0].userId, 7);
+  assert.equal(rebuildCalls[0].options.reason, 'unlock');
+  // The result is passed through untouched.
+  assert.deepEqual(out, { created: 3, updated: 1, deactivated: 2, onLayerKeys: ['workout', 'water', 'food'] });
 });
 
-test('the rebuild keeps training where the user trains: home slots rebuild from the home pool', async () => {
+test('legacy options are accepted and ignored - there is no second rebuild path', async () => {
+  rebuildCalls.length = 0;
   const prisma = fakePrisma();
-  prisma.state.weeklyGoal = { userId: 7, sessionsPerWeek: 3, setByUser: true };
-  prisma.state.journeyProgress = { userId: 7, startLevel: 'new_to_gym' };
-  prisma.state.prescription = {
-    userId: 7,
-    kcal: null,
-    stepsPerDay: 6000,
-    sleepMinutes: 420,
-    workoutSlots: [{ weekday: 0, templateId: 201, title: 'Full body — 15 minute', level: 'beginner' }],
-  };
 
-  const out = await regenerateForUser(prisma, 7, { unlockedLayerKeys: ['workout', 'water'] });
-  assert.ok(out.slots.every((s) => s.title.includes('body') || s.title.includes('Core')),
-    'a home user was handed a gym routine');
+  await regenerateForUser(prisma, 7, { unlockedLayerKeys: ['workout', 'water'], easeBack: true });
+
+  assert.equal(rebuildCalls.length, 1);
+  // onLayerKeys come from layerState on every rebuild, and slot reshaping is
+  // UB4's saveSlots - neither leaks in from the caller here.
+  assert.deepEqual(rebuildCalls[0].options, { reason: 'unlock' });
 });
 
-test('easeBack halves the week (minimum one) without lowering the goal', async () => {
-  const prisma = fakePrisma();
-  prisma.state.weeklyGoal = { userId: 7, sessionsPerWeek: 5, setByUser: true };
-  prisma.state.journeyProgress = { userId: 7, startLevel: 'new_to_gym' };
-  prisma.state.prescription = {
-    userId: 7,
-    kcal: null,
-    stepsPerDay: 6000,
-    sleepMinutes: 420,
-    workoutSlots: [],
-  };
+// ---- resolveUnlockedLayerKeys --------------------------------------------------
 
-  const out = await regenerateForUser(prisma, 7, {
-    unlockedLayerKeys: ['workout', 'water'],
-    easeBack: true,
-  });
-  assert.equal(out.sessions, 2, 'half of five, floored');
-  assert.equal(out.slots.length, 2);
-  // The standing goal is NOT lowered because someone was away for a week.
-  assert.equal(prisma.state.weeklyGoal.sessionsPerWeek, 5);
-  assert.equal(prisma.writes.some((w) => w.model === 'weeklyGoal'), false);
-
-  // One session a week halves to one, never zero.
-  prisma.state.weeklyGoal = { userId: 7, sessionsPerWeek: 1, setByUser: true };
-  const min = await regenerateForUser(prisma, 7, {
-    unlockedLayerKeys: ['workout', 'water'],
-    easeBack: true,
-  });
-  assert.equal(min.sessions, 1);
+test('resolveUnlockedLayerKeys returns the journey service answer when there is one', async () => {
+  state.unlockedThrows = false;
+  state.unlockedKeys = ['workout', 'water', 'food'];
+  assert.deepEqual(await resolveUnlockedLayerKeys(7), ['workout', 'water', 'food']);
 });
 
-test('a rebuild without a journey row still works, at the first-timer defaults', async () => {
-  const prisma = fakePrisma();
-  const out = await regenerateForUser(prisma, 7, { unlockedLayerKeys: ['workout', 'water'] });
-  assert.equal(out.slots.length, 3, 'no WeeklyGoal: the neutral default of three');
-  assert.equal(prisma.state.prescription.stepsPerDay, 6000, 'the new_to_gym defaults on the create path');
+test('resolveUnlockedLayerKeys falls back to layer 1 when the journey service throws', async () => {
+  state.unlockedThrows = true;
+  assert.deepEqual(await resolveUnlockedLayerKeys(7), ['workout', 'water']);
 });
 
-// ---- the unlocked-layer fallback ----------------------------------------------
-
-test('before B9 lands, unlocked layers resolve to layer 1 - workouts and water', async () => {
-  // services/journey/journeyService.js does not exist yet (B9); the resolver
-  // must fall back rather than throw, and the fallback is the honest state
-  // for a journey that has only just started.
-  const keys = await resolveUnlockedLayerKeys(7);
-  assert.deepEqual(keys, ['workout', 'water']);
+test('resolveUnlockedLayerKeys falls back when the journey service answers with nothing', async () => {
+  state.unlockedThrows = false;
+  state.unlockedKeys = [];
+  assert.deepEqual(await resolveUnlockedLayerKeys(7), ['workout', 'water']);
 });
+
+// ---- the starting layers -------------------------------------------------------
 
 test('the starting layers match the Contracts', () => {
   assert.deepEqual(START_LAYER, {

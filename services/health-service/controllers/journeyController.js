@@ -2,14 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import {
   getJourney,
   startJourney,
-  unlockFoodEarly,
-  acceptRefresh,
   getJourneySummary,
   getUnlockedLayerKeys,
   getScoringWindow,
 } from '../services/journey/journeyService.js';
-import { saveDiet } from '../services/ledger/bodyDataService.js';
-import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { hasCoachScopeService } from '../services/coachConsentService.js';
 
 const prisma = new PrismaClient();
@@ -71,86 +67,8 @@ export async function startJourneyController(req, res) {
   }
 }
 
-export async function unlockFoodEarlyController(req, res) {
-  try {
-    const journey = await unlockFoodEarly(req.userId);
-    return res.json({ data: journey });
-  } catch (err) {
-    console.error('[journey] POST /journey/food-early error:', err);
-    return res.status(err.status || 500).json({
-      error: err.error || err.message || 'Server error',
-      code: err.code,
-    });
-  }
-}
 
-export async function acceptRefreshController(req, res) {
-  try {
-    const result = await acceptRefresh(req.userId);
-    return res.json({ data: result });
-  } catch (err) {
-    console.error('[journey] POST /journey/accept-refresh error:', err);
-    return res.status(err.status || 500).json({
-      error: err.error || err.message || 'Server error',
-      code: err.code,
-    });
-  }
-}
 
-export async function journeyBodyController(req, res) {
-  try {
-    const { heightCm, weightKg } = req.body || {};
-    if (heightCm == null || weightKg == null) {
-      return res.status(400).json({ error: 'heightCm and weightKg are required', code: 'MISSING_BODY_DATA' });
-    }
-
-    // Get sex and date of birth from internal profile
-    const profile = await fetchUserProfileInternal(req.userId);
-    const sex = profile?.gender; // 'male' | 'female' | 'other'
-    const dateOfBirth = profile?.dateOfBirth; // ISO string
-
-    const { bodyDataService } = await import('../ledger/bodyDataService.js');
-    await bodyDataService.save(prisma, req.userId, { heightCm: Number(heightCm), weightKg: Number(weightKg), sex, dateOfBirth });
-
-    // Return the updated plan
-    const { prescriptionService } = await import('../ledger/prescriptionService.js');
-    const journeyContext = { unlockedLayerKeys: await getUnlockedLayerKeys(req.userId) };
-    const plan = await prescriptionService.getPlan({ prisma, userId: req.userId, journey: journeyContext });
-
-    return res.json({ data: { plan } });
-  } catch (err) {
-    console.error('[journey] POST /journey/body error:', err);
-    return res.status(err.status || 500).json({
-      error: err.error || err.message || 'Server error',
-      code: err.code,
-    });
-  }
-}
-
-export async function journeyDietController(req, res) {
-  try {
-    const { diet } = req.body || {};
-    const validDiets = ['veg', 'egg', 'non_veg', 'vegan', 'jain'];
-    if (!diet || !validDiets.includes(diet)) {
-      return res.status(400).json({ error: `diet must be one of: ${validDiets.join(', ')}`, code: 'INVALID_DIET' });
-    }
-
-    await saveDiet(prisma, req.userId, diet);
-
-    // Return the updated plan
-    const { prescriptionService } = await import('../ledger/prescriptionService.js');
-    const journeyContext = { unlockedLayerKeys: await getUnlockedLayerKeys(req.userId) };
-    const plan = await prescriptionService.getPlan({ prisma, userId: req.userId, journey: journeyContext });
-
-    return res.json({ data: { plan } });
-  } catch (err) {
-    console.error('[journey] POST /journey/diet error:', err);
-    return res.status(err.status || 500).json({
-      error: err.error || err.message || 'Server error',
-      code: err.code,
-    });
-  }
-}
 
 export async function journeySummaryController(req, res) {
   try {

@@ -1,12 +1,47 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  setScoreTarget,
-  getScoreTargetState,
-  clearScoreTarget,
-  TARGET_LIMITS,
-} from '../services/ledger/scoreTargetService.js';
+// getScoreTargetState reads the score through previewDay, which asks layerState
+// for the on-layers - a UB2 stub that throws 'not implemented' until its owner
+// lands - and the journey service for the scoring window. Mock both once and
+// import the service dynamically, the same way scoreService.test.js does: a
+// static import is hoisted above any t.mock.module call and would resolve the
+// real, throwing stub instead.
+const ON_LAYERS = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'];
+
+let setScoreTarget, getScoreTargetState, clearScoreTarget, TARGET_LIMITS;
+
+test('setup: mock layerState + journey deps once, import score target service once', async (t) => {
+  t.mock.module(new URL('../services/plan/layerState.js', import.meta.url).href, {
+    namedExports: { getOnLayerKeys: async () => [...ON_LAYERS] },
+  });
+
+  t.mock.module(new URL('../services/journey/journeyService.js', import.meta.url).href, {
+    namedExports: {
+      getJourney: async () => ({
+        journeyProgress: { userId: 7, showedUpDays: 10, steadyWeeks: 2, startLayer: 5, experienceLevel: 'experienced' },
+        unlockedLayerKeys: [...ON_LAYERS],
+      }),
+      getUnlockedLayerKeys: async () => [...ON_LAYERS],
+      getScoringWindow: async () => null,
+    },
+  });
+
+  t.mock.module(new URL('../utils/fetchInternal.js', import.meta.url).href, {
+    namedExports: {
+      getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
+      fetchInternal: async () => ({ data: { days: [] } }),
+    },
+  });
+
+  t.mock.module(new URL('../utils/analytics.js', import.meta.url).href, {
+    namedExports: { track: () => {}, ingest: () => {} },
+  });
+
+  ({ setScoreTarget, getScoreTargetState, clearScoreTarget, TARGET_LIMITS } =
+    await import('../services/ledger/scoreTargetService.js'));
+  assert.equal(typeof getScoreTargetState, 'function');
+});
 
 // The score target is a threshold on a running total that can fall, plus a
 // window the user chose. The decisions worth testing are the ones that could be
@@ -65,6 +100,10 @@ function mockPrisma({ snapshots = [], goal = null, target = null } = {}) {
     planItem: { findMany: async () => [] },
     foodLog: { findMany: async () => [] },
     workoutSession: { findMany: async () => [] },
+    supplementLog: { findMany: async () => [] },
+    waterLog: { findMany: async () => [] },
+    dailyActivityMetric: { findMany: async () => [] },
+    biometricEntry: { findMany: async () => [] },
   };
 }
 

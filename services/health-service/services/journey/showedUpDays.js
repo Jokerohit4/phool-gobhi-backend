@@ -31,13 +31,13 @@ async function getQualifyingWorkoutDays(userId, from = null) {
     where,
     select: {
       localDate: true,
+      type: true,
       startedAt: true,
       endedAt: true,
       exercises: {
         select: {
           sets: {
-            where: { completed: true },
-            select: { id: true },
+            select: { id: true, completed: true },
           },
         },
       },
@@ -46,20 +46,35 @@ async function getQualifyingWorkoutDays(userId, from = null) {
 
   const days = new Set();
   for (const session of sessions) {
-    const hasCompletedSet = session.exercises.some((ex) => ex.sets.length > 0);
-    const durationMinutes = hasCompletedSet
-      ? null
-      : (session.endedAt && session.startedAt
-          ? (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 60000
-          : 0);
-
-    if (hasCompletedSet || durationMinutes >= 10) {
+    if (isQualifyingSession(session)) {
       const day = session.localDate ?? istDayOf(session.startedAt);
       days.add(day);
     }
   }
 
   return Array.from(days).sort();
+}
+
+/**
+ * Check if a session qualifies as a workout day.
+ * A qualifying session = type not null, not 'rest', endedAt set,
+ * AND (has at least one completed set OR no sets with duration >= 10 minutes).
+ * Used by both rowProgress (local DB) and showedUpDays (for history).
+ * @param {object} session - WorkoutSession with exercises/sets
+ * @returns {boolean}
+ */
+export function isQualifyingSession(session) {
+  if (!session.type || session.type === 'rest' || !session.endedAt) return false;
+  // Callers must retain all sets and their completed flag. Filtering to
+  // completed sets would make an unfinished workout look like a no-set log.
+  const sets = session.exercises?.flatMap((ex) => ex.sets ?? []) ?? [];
+  if (sets.some((set) => set.completed === true)) return true;
+  if (sets.length > 0) return false;
+  if (session.startedAt && session.endedAt) {
+    const durationMinutes = (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 60000;
+    return durationMinutes >= 10;
+  }
+  return false;
 }
 
 /**

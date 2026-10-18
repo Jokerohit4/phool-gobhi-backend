@@ -20,20 +20,18 @@ const TARGETS = {
   micros: { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
 };
 
+// New plan items without nutrition (food is synthesised)
 const PLAN_ITEMS = [
-  { id: 'p1', kind: 'nutrition', schedule: 'daily', active: true, title: 'Hit 133 g protein' },
-  { id: 'w1', kind: 'workout', schedule: '1,3,5', active: true, title: 'Workout' },
-  { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Sleep 7 h' },
-  { id: 'r1', kind: 'rest', schedule: '7', active: true, title: 'Rest day' },
-  { id: 'd1', kind: 'doctor_medication', schedule: 'daily', active: true, title: 'As advised' },
+  { id: 'w1', kind: 'workout', schedule: '1,3,5', active: true, title: 'Workout', layerKey: 'workout' },
+  { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Sleep 7 h', layerKey: 'sleep' },
+  { id: 'r1', kind: 'rest', schedule: '7', active: true, title: 'Rest day', layerKey: 'workout' },
+  { id: 'd1', kind: 'doctor_medication', schedule: 'daily', active: true, title: 'As advised', layerKey: 'medicine' },
 ];
 
 // A Tuesday, ISO weekday 2.
 const TUE = '2026-09-29';
 // A Wednesday, ISO weekday 3. The workout item is scheduled '1,3,5', so a
-// Tuesday is NOT a day it is due — which is easy to miss when picking a date
-// for a workout test, and silently turns an assertion about a completed
-// workout into one about a day with no workout scheduled.
+// Tuesday is NOT a day it is due.
 const WED = '2026-09-30';
 // A Sunday, ISO weekday 7 — the rest day.
 const SUN = '2026-10-04';
@@ -44,51 +42,53 @@ const ON_TARGET = {
   fatG: 78,
   waterMl: 2950,
   micros: { iron: 19, magnesium: 440, calcium: 1000, zinc: 17 },
+  hasAnyFood: true,
+  mealSlotsCovered: 3,
 };
 
 // --- The eating-disorder guard --------------------------------------------
-//
-// These justify the feature existing. Everything else here is arithmetic.
 
 test('undereating and overeating are scored identically', () => {
-  // The doc's guard: "under-eating is never rewarded". Not "penalised less" —
-  // never rewarded. Same points in both directions is the only way to make
-  // rewarding it impossible rather than merely discouraged.
   const low = computeDay({
     localDate: TUE,
     planItems: PLAN_ITEMS,
     totals: { ...ON_TARGET, kcal: 800 },
     targets: TARGETS,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
   });
   const high = computeDay({
     localDate: TUE,
     planItems: PLAN_ITEMS,
     totals: { ...ON_TARGET, kcal: 4200 },
     targets: TARGETS,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
   });
 
   const lowCal = low.breakdown.find((l) => l.key === 'calories_off_target');
   const highCal = high.breakdown.find((l) => l.key === 'calories_off_target');
 
+  assert.ok(lowCal, 'low cal miss should exist');
+  assert.ok(highCal, 'high cal miss should exist');
   assert.equal(lowCal.points, highCal.points);
   assert.equal(lowCal.points, POINTS.caloriesOffTarget);
   assert.ok(lowCal.points < 0, 'undereating must never earn points');
-  // Same score, opposite direction — the only thing that differs.
   assert.equal(lowCal.direction, 'low');
   assert.equal(highCal.direction, 'high');
 });
 
 test('a day of severe undereating cannot fall further than the daily loss cap', () => {
-  // A streak of very-low days is the documented trigger. The per-day loss cap
-  // bounds how fast the candle drops, so a bad week cannot produce a cliff.
   let close = 500;
   for (let i = 0; i < 7; i += 1) {
     const day = computeDay({
       localDate: `2026-09-${String(20 + i).padStart(2, '0')}`,
       planItems: PLAN_ITEMS,
-      totals: { ...ON_TARGET, kcal: 200, proteinG: 0, waterMl: 0 },
+      totals: { ...ON_TARGET, kcal: 200, proteinG: 0, waterMl: 0, hasAnyFood: false, mealSlotsCovered: 0 },
       targets: TARGETS,
       previousClose: close,
+      closed: true,
+      unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
     });
     assert.ok(
       day.low >= close - DAILY_MAX_LOSS,
@@ -96,7 +96,6 @@ test('a day of severe undereating cannot fall further than the daily loss cap', 
     );
     close = day.close;
   }
-  // Seven days of near-starvation still cannot zero the line.
   assert.ok(close > 0, `a bad week zeroed the score (close ${close})`);
 });
 
@@ -108,6 +107,8 @@ test('five low days raise a check-in, not a red candle', () => {
       planItems: PLAN_ITEMS,
       totals: { ...ON_TARGET, kcal: 700 },
       targets: TARGETS,
+      closed: true,
+      unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
     });
     return { localDate: date, close: day.close, breakdown: day.breakdown };
   });
@@ -116,10 +117,8 @@ test('five low days raise a check-in, not a red candle', () => {
   assert.ok(run, 'expected a low-intake run to be detected');
   assert.equal(run.kind, 'check_in');
   assert.equal(run.days, 5);
-  // Not a miss and not negative. This is the entire point of the rule.
   assert.equal(run.points, 0);
   assert.equal(run.isMiss, false);
-  // Phrased as an invitation, never as a judgement about the person.
   assert.ok(
     !/fail|lose|bad|missed|wrong|starv/i.test(run.message),
     `tone is wrong: "${run.message}"`,
@@ -128,18 +127,13 @@ test('five low days raise a check-in, not a red candle', () => {
 });
 
 test('the check-in is not affected by the wording of the label', () => {
-  // Regression. The guard used to decide "was this low or high?" by regex-
-  // parsing the display string "Calories 800 (32%)". Rewriting that copy for a
-  // localisation pass, or changing the number format, would have silently
-  // switched off the eating-disorder card while every test still passed.
-  // Direction now travels as a field, so the label is free to be anything.
   const snapshots = Array.from({ length: 5 }, (_, i) => ({
     localDate: `2026-09-${20 + i}`,
     close: 100,
     breakdown: [
       {
         key: 'calories_off_target',
-        label: 'بائی کیلوری کم ہیں', // any string at all
+        label: 'بائی کیلوری کم ہیں',
         points: -8,
         direction: 'low',
       },
@@ -156,6 +150,8 @@ test('four low days do not trigger the check-in', () => {
       planItems: PLAN_ITEMS,
       totals: { ...ON_TARGET, kcal: 700 },
       targets: TARGETS,
+      closed: true,
+      unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
     });
     return { localDate: `2026-09-${20 + i}`, close: day.close, breakdown: day.breakdown };
   });
@@ -163,15 +159,14 @@ test('four low days do not trigger the check-in', () => {
 });
 
 test('a high-intake streak is NOT treated as a low-intake run', () => {
-  // The symmetric bug: a detector keyed on "calories off target" rather than
-  // "too few calories" would fire on binge days and tell someone they may be
-  // undereating.
   const snapshots = Array.from({ length: 6 }, (_, i) => {
     const day = computeDay({
       localDate: `2026-09-${20 + i}`,
       planItems: PLAN_ITEMS,
       totals: { ...ON_TARGET, kcal: 5000 },
       targets: TARGETS,
+      closed: true,
+      unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
     });
     return { localDate: `2026-09-${20 + i}`, close: day.close, breakdown: day.breakdown };
   });
@@ -179,13 +174,13 @@ test('a high-intake streak is NOT treated as a low-intake run', () => {
 });
 
 test('the guard is off by default below its threshold and has one threshold', () => {
-  // If lowIntakeRunDays and the card's trigger ever drift apart, the card
-  // appears on a different day than the copy promises.
   const day = computeDay({
     localDate: TUE,
     planItems: PLAN_ITEMS,
     totals: { ...ON_TARGET, kcal: 700 },
     targets: TARGETS,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine', 'food'],
   });
   const atThreshold = Array.from({ length: SAFETY.lowIntakeRunDays }, () => ({
     close: 100,
@@ -207,6 +202,8 @@ test('a perfect day and an empty day differ, and both are finite', () => {
     planItems: PLAN_ITEMS,
     totals: ON_TARGET,
     targets: TARGETS,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
     completions: [
       { planItemId: 'w1' },
       { planItemId: 'h1' },
@@ -216,20 +213,18 @@ test('a perfect day and an empty day differ, and both are finite', () => {
   const empty = computeDay({
     localDate: TUE,
     planItems: PLAN_ITEMS,
-    totals: {},
+    totals: { ...ON_TARGET, kcal: 0, proteinG: 0, waterMl: 0, hasAnyFood: false, mealSlotsCovered: 0 },
     targets: TARGETS,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
   });
 
   assert.ok(perfect.close > empty.close);
   assert.ok(Number.isFinite(perfect.close) && Number.isFinite(empty.close));
-  // The first day starts at zero, not at a flattering baseline. A baseline of
-  // 100 would make a month of doing nothing look like a month of doing a lot.
   assert.equal(perfect.open, 0);
 });
 
 test('one huge day cannot out-earn a run of good days', () => {
-  // The chart is a trend, not a scoreboard. If a single day could swing the
-  // line arbitrarily, the line would measure logging effort, not behaviour.
   let close = 0;
   for (let i = 0; i < 10; i += 1) {
     close = computeDay({
@@ -238,6 +233,8 @@ test('one huge day cannot out-earn a run of good days', () => {
       totals: ON_TARGET,
       targets: TARGETS,
       previousClose: close,
+      closed: true,
+      unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
       completions: [{ planItemId: 'w1' }, { planItemId: 'h1' }, { planItemId: 'd1' }],
     }).close;
   }
@@ -255,6 +252,8 @@ test('the close is an integer, so the chart has no fractional pixels', () => {
     totals: ON_TARGET,
     targets: TARGETS,
     previousClose: 137,
+    closed: true,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
     completions: [{ planItemId: 'h1' }],
   });
   assert.equal(Number.isInteger(day.close), true, `close was ${day.close}`);
@@ -262,8 +261,6 @@ test('the close is an integer, so the chart has no fractional pixels', () => {
 });
 
 test('an open day carries no misses, so the candle can still move up', () => {
-  // Today, mid-afternoon. The miss pass runs at day close, so an unlogged
-  // evening must not already have been charged as a red day.
   const day = computeDay({
     localDate: TUE,
     planItems: PLAN_ITEMS,
@@ -271,22 +268,20 @@ test('an open day carries no misses, so the candle can still move up', () => {
     targets: TARGETS,
     previousClose: 200,
     closed: false,
+    unlockedLayerKeys: ['workout', 'sleep', 'medicine'],
   });
   assert.equal(day.breakdown.some((l) => l.points < 0), false);
   assert.ok(day.close >= day.open);
 });
 
 test('the snapshot records which rules version produced it', () => {
-  // Frozen days are only reproducible if the version travels with them.
-  const day = computeDay({ localDate: TUE, planItems: PLAN_ITEMS, totals: {}, targets: TARGETS });
-  assert.equal(day.rulesVersion, POINTS.__rulesVersion ?? day.rulesVersion);
+  const day = computeDay({ localDate: TUE, planItems: PLAN_ITEMS, totals: {}, targets: TARGETS, closed: true, unlockedLayerKeys: [] });
   assert.match(day.rulesVersion, /^v\d+$/);
 });
 
 // --- Scheduling ------------------------------------------------------------
 
 test('a day-of-week schedule fires on exactly its own days', () => {
-  // 2026-09-28 is a Monday (ISO 1), 2026-10-04 a Sunday (ISO 7).
   const dates = [
     ['2026-09-28', 1], // Mon
     ['2026-09-29', 2],
@@ -312,14 +307,10 @@ test('daily, one-off and weekly schedules all resolve', () => {
 });
 
 test('a single-day schedule fires on that day only', () => {
-  // Regression, and it was a live bug. The weekday branch only matched strings
-  // containing a comma, so a bare '7' — which is exactly what planGenerator
-  // emits for a rest day — fell through to "always true" and fired all seven
-  // days. Every rest day was simultaneously a rest day and a missed workout.
   const sundayOnly = { schedule: '7', active: true };
   assert.equal(isScheduledFor(sundayOnly, SUN), true);
   assert.equal(isScheduledFor(sundayOnly, TUE), false);
-  assert.equal(isScheduledFor(sundayOnly, '2026-10-03'), false); // Saturday
+  assert.equal(isScheduledFor(sundayOnly, '2026-10-03'), false);
 
   const mondayOnly = { schedule: '1', active: true };
   assert.equal(isScheduledFor(mondayOnly, '2026-09-28'), true);
@@ -327,20 +318,14 @@ test('a single-day schedule fires on that day only', () => {
 });
 
 test('the weekday helper is timezone-proof', () => {
-  // The whole ledger is date-keyed in the user's local calendar. If this used
-  // the host's timezone, a Monday workout would silently not count for a user
-  // west of the server, and the bug would only appear in production.
   const mon = { schedule: '1', active: true };
-  assert.equal(isScheduledFor(mon, '2026-09-28'), true); // Monday
-  assert.equal(isScheduledFor(mon, '2026-09-29'), false); // Tuesday
-  // A year boundary and a leap day, both classic timezone/off-by-one traps.
-  assert.equal(isScheduledFor(mon, '2027-01-04'), true); // Monday
-  assert.equal(isScheduledFor(mon, '2028-02-29'), false); // Tuesday, leap day
+  assert.equal(isScheduledFor(mon, '2026-09-28'), true);
+  assert.equal(isScheduledFor(mon, '2026-09-29'), false);
+  assert.equal(isScheduledFor(mon, '2027-01-04'), true);
+  assert.equal(isScheduledFor(mon, '2028-02-29'), false);
 });
 
 test('an item whose course has ended stops counting but is not deleted', () => {
-  // Stopping someone's prescription because a date passed is not this
-  // service's call.
   const item = { schedule: 'daily', active: true, endsOn: '2026-09-28' };
   assert.equal(isScheduledFor(item, '2026-09-28'), true);
   assert.equal(isScheduledFor(item, '2026-09-29'), false);
@@ -354,9 +339,6 @@ test('an inactive item is never scheduled', () => {
 // --- Item-level scoring ---------------------------------------------------
 
 test('a completed doctor item earns its points, and never auto-completes', () => {
-  // The user typed their doctor's instruction in themselves and ticked it off.
-  // This is the whole reason the feature can exist in a regulated space, so it
-  // must score — and nothing may tick it on their behalf.
   const item = PLAN_ITEMS.find((i) => i.kind === 'doctor_medication');
 
   const done = computeEarns({
@@ -380,8 +362,6 @@ test('a completed doctor item earns its points, and never auto-completes', () =>
 });
 
 test('a late completion records the event but earns nothing', () => {
-  // Backfilling yesterday from this morning keeps the record, drops the
-  // points. Otherwise the chart would reward logging a week late.
   const item = PLAN_ITEMS.find((i) => i.kind === 'habit');
   const r = computeEarns({
     planItems: [item],
@@ -394,48 +374,50 @@ test('a late completion records the event but earns nothing', () => {
   assert.equal(r[0].late, true);
 });
 
-test('an auto-satisfied item is not paid twice', () => {
-  // Items credited through the food log or session log carry how='auto'.
-  // Paying them again here would let one breakfast satisfy a plan item twice.
+test('no auto completion rows are written', () => {
+  // Auto completions are not written to DB; computeEarns no longer checks how='auto'
+  // This test documents the new behavior
   const r = computeEarns({
-    planItems: PLAN_ITEMS.filter((i) => i.kind === 'nutrition'),
-    completions: [{ planItemId: 'p1', how: 'auto' }],
+    planItems: PLAN_ITEMS.filter((i) => i.kind === 'habit'),
+    completions: [{ planItemId: 'h1' }], // no how field
     targets: null,
     totals: null,
     localDate: TUE,
   });
-  assert.equal(r.length, 0);
+  assert.equal(r.length, 1, 'habit completion is paid without how check');
 });
 
-test('a nutrition plan item is scored by the aggregate, not by ticking a box', () => {
-  // Ticking "hit 133 g protein" must not be possible — protein comes from
-  // logged food. If it were tickable the ledger would measure optimism.
-  const r = computeMisses({
-    planItems: PLAN_ITEMS.filter((i) => i.kind === 'nutrition'),
-    completions: [{ planItemId: 'p1' }],
-    targets: TARGETS,
-    totals: { ...ON_TARGET, proteinG: 20 },
-    localDate: TUE,
-  });
-  const miss = r.find((m) => m.key === 'protein_short');
-  assert.ok(miss, 'expected a protein miss from the aggregate');
-  assert.equal(miss.points, POINTS.proteinShort);
-});
+// --- Rest day honoured in earns (not misses) ---
 
-test('a rest day is honoured automatically, not charged as a miss', () => {
-  // The generator schedules a rest day; if the scorer also charged for not
-  // ticking it, the engine would be punishing its own plan.
-  const r = computeMisses({
-    planItems: [PLAN_ITEMS.find((i) => i.kind === 'rest')],
+test('a rest day is honoured automatically in earns, not charged as a miss', () => {
+  // Rest day now earns +5 in computeEarns, not in computeMisses
+  const restItem = PLAN_ITEMS.find((i) => i.kind === 'rest');
+  
+  const earns = computeEarns({
+    planItems: [restItem],
     completions: [],
     targets: null,
     totals: ON_TARGET,
     localDate: SUN,
   });
-  const honoured = r.find((l) => l.key === 'rest_day_honoured');
-  assert.ok(honoured, 'expected the rest day to be honoured');
+  const honoured = earns.find((l) => l.key === 'rest_day_honoured');
+  assert.ok(honoured, 'expected the rest day to be honoured in earns');
   assert.equal(honoured.points, POINTS.restDayHonoured);
   assert.ok(honoured.points > 0);
+
+  // Misses should NOT include rest_day_honoured
+  const misses = computeMisses({
+    planItems: [restItem],
+    completions: [],
+    targets: null,
+    totals: ON_TARGET,
+    localDate: SUN,
+    noMisses: false,
+    unlockedLayerKeys: ['workout'],
+    foodNoPenalty: false,
+  });
+  const missHonoured = misses.find((l) => l.key === 'rest_day_honoured');
+  assert.equal(missHonoured, undefined, 'rest_day_honoured should not be in misses');
 });
 
 test('a workout is not charged on a day it was not scheduled', () => {
@@ -445,6 +427,9 @@ test('a workout is not charged on a day it was not scheduled', () => {
     targets: TARGETS,
     totals: ON_TARGET,
     localDate: TUE, // ISO 2, not in 1,3,5
+    noMisses: false,
+    unlockedLayerKeys: ['workout'],
+    foodNoPenalty: false,
   });
   assert.equal(
     r.some((l) => l.key === 'workout_missed'),
@@ -460,6 +445,9 @@ test('a workout IS charged on a day it was scheduled and missed', () => {
     targets: null,
     totals: null,
     localDate: '2026-09-30', // Wednesday, ISO 3 — inside 1,3,5
+    noMisses: false,
+    unlockedLayerKeys: ['workout'],
+    foodNoPenalty: false,
   });
   const miss = r.find((l) => l.key === 'workout_missed');
   assert.ok(miss, 'expected a missed workout on a scheduled day');
@@ -468,16 +456,6 @@ test('a workout IS charged on a day it was scheduled and missed', () => {
 });
 
 // --- planned vs unplanned workouts (engine level) ---------------------------
-//
-// scoreService.test.js covers this from the service side, where `unplannedWorkout`
-// is derived and so is only ever true when no planned workout was completed. That
-// leaves the engine's own guard untested: nothing anywhere can currently hand the
-// engine `unplannedWorkout: true` together with `hasPlannedWorkoutDone: true`.
-// So the pair is asserted here directly, where both flags are inputs.
-//
-// The engine guard is worth keeping even so. scoreService computing the flag
-// correctly today is not a promise that the two can never disagree, and a
-// double-paid day is exactly the kind of number a user would screenshot.
 
 test('an extra workout is paid when the plan had no workout done', () => {
   const r = computeEarns({
@@ -496,8 +474,6 @@ test('an extra workout is paid when the plan had no workout done', () => {
 });
 
 test('an extra workout is NOT paid on top of a completed planned one', () => {
-  // The double-pay case. Both flags true must yield one workout line, not two:
-  // 15 for the plan item and 8 for "extra" would be 23 points for one session.
   const workout = PLAN_ITEMS.find((i) => i.kind === 'workout');
   const r = computeEarns({
     planItems: [workout],
@@ -516,9 +492,6 @@ test('an extra workout is NOT paid on top of a completed planned one', () => {
 });
 
 test('an extra workout is paid when a workout was scheduled but never completed', () => {
-  // The distinction the two flags exist for. "Scheduled" and "done" are
-  // different questions, and guarding on the wrong one is what made the extra
-  // workout unreachable for anyone with a workout item in their plan.
   const workout = PLAN_ITEMS.find((i) => i.kind === 'workout');
   const r = computeEarns({
     planItems: [workout],
@@ -535,20 +508,10 @@ test('an extra workout is paid when a workout was scheduled but never completed'
 });
 
 test('the extra workout rate stays below the planned rate', () => {
-  // The stated design reason: the score must never pay more for improvising
-  // than for following the plan. If someone retunes these constants, this fails
-  // rather than quietly making skipping the plan the better strategy.
   assert.ok(POINTS.unplannedWorkout < POINTS.plannedWorkoutDone);
 });
 
 // --- Pause ------------------------------------------------------------------
-//
-// A paused day must be neutral, and "neutral" has a specific meaning that is
-// easy to get wrong in a way no assertion about the total would catch. It is
-// not a day worth zero: it is a day that was never scored. The difference shows
-// up in the breakdown, which for a paused day is empty rather than full of
-// zero-point lines, and in the `paused` flag, which is the only thing that tells
-// a reader this flat candle is not a user who did nothing.
 
 const PAUSED = { paused: true };
 const FULL_PLAN = [
@@ -558,9 +521,6 @@ const FULL_PLAN = [
 const NO_TARGETS = null;
 
 test('a paused day earns nothing even with a plan and nothing done', () => {
-  // The plan is fully scheduled and fully incomplete, which on a normal day is
-  // the most negative day the engine can produce. Paused, it must produce
-  // nothing at all.
   const day = computeDay({
     localDate: '2026-09-29',
     previousClose: 120,
@@ -576,10 +536,6 @@ test('a paused day earns nothing even with a plan and nothing done', () => {
 });
 
 test('a paused day is not a day worth zero - it has no breakdown at all', () => {
-  // This is the assertion that distinguishes a pause from a bad day. A zero
-  // earned day would carry the plan's misses at 0 points, which reads as "you
-  // were charged nothing" rather than "you were not scored", and would still
-  // list every workout you did not do.
   const day = computeDay({
     localDate: '2026-09-29',
     previousClose: 120,
@@ -595,9 +551,6 @@ test('a paused day is not a day worth zero - it has no breakdown at all', () => 
 });
 
 test('a paused day passes the chain through unchanged', () => {
-  // open == high == low == close, so the next real day resumes from the close
-  // the user last earned instead of from a stale value. A pause that lowered
-  // the high/low band would draw a candle and imply a dip that never happened.
   const day = computeDay({
     localDate: '2026-09-29',
     previousClose: 314,
@@ -611,18 +564,11 @@ test('a paused day passes the chain through unchanged', () => {
 });
 
 test('a paused day ignores the caps rather than being clamped by them', () => {
-  // A paused day is not subject to DAILY_MAX_GAIN/LOSS at all, because it never
-  // accumulates a gain or a loss to cap. Asserted indirectly: a paused day
-  // reports capped=false even though gain and loss are both trivially inside
-  // the caps, which is the only honest value for a day that was not scored.
   const day = computeDay({ localDate: '2026-09-29', previousClose: 0, closed: true, ...PAUSED });
   assert.equal(day.capped, false);
 });
 
 test('a day that is not paused says so, rather than leaving it undefined', () => {
-  // `paused` is definite on both paths on purpose. A reader that has to treat
-  // missing as false is one edit away from treating missing as true, and the
-  // failure that causes is a chart that claims every ordinary day was paused.
   const day = computeDay({
     localDate: '2026-09-29',
     previousClose: 0,
@@ -636,10 +582,6 @@ test('a day that is not paused says so, rather than leaving it undefined', () =>
 });
 
 test('the day after a pause resumes from the paused day close', () => {
-  // The end-to-end shape: pause for a week, come back, and the first real day
-  // scores from where the user left off. If the pause were skipped rather than
-  // written flat, this would still pass on the total, so the assertion is on
-  // the close the paused day produced.
   const paused = computeDay({ localDate: '2026-09-30', previousClose: 500, closed: true, ...PAUSED });
   const resumed = computeDay({
     localDate: '2026-10-01',
@@ -657,16 +599,13 @@ test('the day after a pause resumes from the paused day close', () => {
   assert.equal(resumed.paused, false);
 });
 
-// --- B10: fair score (locked layers, easy start, inactive pause, v2) ----------
+// --- B10: fair score (locked layers, easy start, inactive pause) ------------
 
 const B10_TODAY = '2026-10-20';
-const B10_TOMORROW = '2026-10-21';
-const B10_YESTERDAY = '2026-10-19';
 
 const B10_PLAN_ITEMS = [
   { id: 'w1', kind: 'workout', schedule: 'daily', active: true, title: 'Workout', layerKey: 'workout' },
   { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
-  { id: 'f1', kind: 'nutrition', schedule: 'daily', active: true, title: 'Hit 130g protein', layerKey: 'food' },
   { id: 's1', kind: 'habit', schedule: 'daily', active: true, title: 'Steps 8k', layerKey: 'steps' },
   { id: 'sl1', kind: 'habit', schedule: 'daily', active: true, title: 'Sleep 7h', layerKey: 'sleep' },
   { id: 'supp1', kind: 'habit', schedule: 'daily', active: true, title: 'Supplements', layerKey: 'supplements' },
@@ -690,40 +629,38 @@ const B10_ON_TARGET = {
 };
 
 test('locked layer items produce no miss lines (fair scoring)', () => {
-  // When food layer is locked, missing food items should not generate red.
-  // Only workout and water (layer 1) are unlocked.
-  const day = computeDay({
-    localDate: B10_TODAY,
-    planItems: B10_PLAN_ITEMS,
-    completions: [], // nothing done
-    targets: B10_TARGETS,
-    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, waterMl: 500 }, // low intake, low water
-    closed: true,
-    unlockedLayerKeys: ['workout', 'water'], // layer 1 only
-  });
-
-  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
-  // Should have workout_missed, habit_missed (water), rest_day_honoured not present since no rest item
-  // Should NOT have protein_short, calories_off_target, no_meals_logged (food locked)
-  // Should NOT have habit_missed for steps, sleep, supplements, health (locked layers)
-  assert.ok(missKeys.includes('workout_missed'));
-  // Water is unlocked but not met via logs, so it should have a miss
-  assert.ok(missKeys.some((k) => k === 'habit_missed' || k.startsWith('habit_missed')), 'water miss expected');
-  assert.ok(!missKeys.includes('protein_short'), 'food layer locked: no protein miss');
-  assert.ok(!missKeys.includes('calories_off_target'), 'food layer locked: no calories miss');
-  assert.ok(!missKeys.includes('no_meals_logged'), 'food layer locked: no no_meals_logged miss');
-});
-
-test('unlocked layer items produce misses normally', () => {
-  // All layers unlocked - everything should score normally
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
     completions: [],
     targets: B10_TARGETS,
-    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20 },
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, waterMl: 500, hasAnyFood: true },
+    closed: true,
+    unlockedLayerKeys: ['workout', 'water'], // layer 1 only
+    noMisses: false,
+    foodNoPenalty: false,
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(missKeys.includes('workout_missed'));
+  assert.ok(missKeys.some((k) => k.startsWith('habit_missed')), 'water miss expected');
+  assert.ok(!missKeys.includes('protein_short'), 'food layer locked: no protein miss');
+  assert.ok(!missKeys.includes('calories_off_target'), 'food layer locked: no calories miss');
+  assert.ok(!missKeys.includes('no_meals_logged'), 'food layer locked: no no_meals_logged miss');
+  assert.ok(!missKeys.some((k) => k.startsWith('habit_missed') && k !== 'habit_missed_water'), 'steps/sleep/supplements/health locked: no habit misses');
+});
+
+test('unlocked layer items produce misses normally', () => {
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: B10_PLAN_ITEMS,
+    completions: [],
+    targets: B10_TARGETS,
+    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: true },
     closed: true,
     unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
@@ -731,16 +668,10 @@ test('unlocked layer items produce misses normally', () => {
   assert.ok(missKeys.some((k) => k.startsWith('habit_missed')));
   assert.ok(missKeys.includes('protein_short'));
   assert.ok(missKeys.includes('calories_off_target'));
-  // no_meals_logged is not added because hasAnyFood is true
   assert.ok(!missKeys.includes('no_meals_logged'));
 });
 
-test('null unlockedLayerKeys (not a coach journey) locks nothing on V2 dates', () => {
-  // A user outside the coach journey must still be scored on food after
-  // V2_FROM. scoreService passes null (not []) for them, and the engine has to
-  // read null as "no layers are locked" rather than "everything is". The
-  // pre-fix collapse of null and [] silently stopped charging food for
-  // everyone the day the cutover landed.
+test('null unlockedLayerKeys (not a coach journey) locks nothing', () => {
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
@@ -749,6 +680,8 @@ test('null unlockedLayerKeys (not a coach journey) locks nothing on V2 dates', (
     totals: { kcal: 1000, proteinG: 20, waterMl: 500, hasAnyFood: true },
     closed: true,
     unlockedLayerKeys: null,
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
@@ -767,6 +700,8 @@ test('null unlockedLayerKeys still charges no_meals_logged when nothing is logge
     totals: { kcal: 0, proteinG: 0, waterMl: 0, hasAnyFood: false },
     closed: true,
     unlockedLayerKeys: null,
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
@@ -774,8 +709,6 @@ test('null unlockedLayerKeys still charges no_meals_logged when nothing is logge
 });
 
 test('empty unlockedLayerKeys (a coach journey with nothing unlocked) still locks food', () => {
-  // The null/[] distinction must hold both ways: a real journey with an empty
-  // unlock set keeps food (and every layered item) locked until it earns them.
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
@@ -784,6 +717,8 @@ test('empty unlockedLayerKeys (a coach journey with nothing unlocked) still lock
     totals: { kcal: 1000, proteinG: 20, waterMl: 500, hasAnyFood: true },
     closed: true,
     unlockedLayerKeys: [],
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
@@ -793,16 +728,16 @@ test('empty unlockedLayerKeys (a coach journey with nothing unlocked) still lock
 });
 
 test('noMisses suppresses all miss lines but keeps earnings (easy start)', () => {
-  // During easy start (first 14 days), no misses are charged but earns still count
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
-    completions: [{ planItemId: 'w1' }], // workout done
+    completions: [{ planItemId: 'w1' }],
     targets: B10_TARGETS,
     totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20 },
     closed: true,
     unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
     noMisses: true,
+    foodNoPenalty: false,
   });
 
   const missLines = day.breakdown.filter((l) => l.points < 0);
@@ -810,52 +745,47 @@ test('noMisses suppresses all miss lines but keeps earnings (easy start)', () =>
 
   assert.equal(missLines.length, 0, 'no miss lines when noMisses is true');
   assert.ok(earnLines.length > 0, 'earnings should still be counted');
-  // Workout done should earn points
   assert.ok(earnLines.some((l) => l.key.startsWith('item_done_')));
 });
 
 test('noMisses during inactive pause (7+ days since last showed-up)', () => {
-  // Same as easy start: no misses, earnings kept
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
-    completions: [{ planItemId: 'h1' }], // water done
+    completions: [{ planItemId: 'h1' }],
     targets: B10_TARGETS,
     totals: B10_ON_TARGET,
     closed: true,
     unlockedLayerKeys: ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine'],
     noMisses: true,
+    foodNoPenalty: false,
   });
 
   const missLines = day.breakdown.filter((l) => l.points < 0);
   assert.equal(missLines.length, 0, 'no miss lines during inactive pause');
-  // Water habit done should earn points
   assert.ok(day.breakdown.some((l) => l.points > 0 && l.kind === 'habit'));
 });
 
 test('foodNoPenalty suppresses no_meals_logged when food unlocked but not set up', () => {
-  // Food layer unlocked but no nutrition target yet (foodNoPenalty=true)
-  // Should not charge no_meals_logged
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
     completions: [],
     targets: { waterMl: 2500 }, // no kcal target = food not set up
-    totals: { waterMl: 500, hasAnyFood: false }, // water below target to trigger habit miss
+    totals: { waterMl: 500, hasAnyFood: false },
     closed: true,
-    unlockedLayerKeys: ['workout', 'water', 'food'], // food unlocked
+    unlockedLayerKeys: ['workout', 'water', 'food'],
+    noMisses: false,
     foodNoPenalty: true,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
   assert.ok(!missKeys.includes('no_meals_logged'), 'foodNoPenalty suppresses no_meals_logged');
-  // Other misses (workout, water) should still apply
   assert.ok(missKeys.includes('workout_missed'));
   assert.ok(missKeys.some((k) => k.startsWith('habit_missed')));
 });
 
 test('foodNoPenalty suppresses no_meals_logged when food layer is locked', () => {
-  // Food layer locked - no_meals_logged should not appear regardless of foodNoPenalty
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
@@ -863,7 +793,8 @@ test('foodNoPenalty suppresses no_meals_logged when food layer is locked', () =>
     targets: B10_TARGETS,
     totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
     closed: true,
-    unlockedLayerKeys: ['workout', 'water'], // food NOT unlocked
+    unlockedLayerKeys: ['workout', 'water'],
+    noMisses: false,
     foodNoPenalty: false,
   });
 
@@ -872,7 +803,6 @@ test('foodNoPenalty suppresses no_meals_logged when food layer is locked', () =>
 });
 
 test('foodNoPenalty suppresses no_meals_logged when food early (before 3 showed-up days)', () => {
-  // Food layer unlocked, target exists, but foodEarlyNoPenaltyUntilUnlock=true
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: B10_PLAN_ITEMS,
@@ -881,36 +811,17 @@ test('foodNoPenalty suppresses no_meals_logged when food early (before 3 showed-
     totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
     closed: true,
     unlockedLayerKeys: ['workout', 'water', 'food'],
-    foodNoPenalty: true, // food early period
+    noMisses: false,
+    foodNoPenalty: true,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
   assert.ok(!missKeys.includes('no_meals_logged'), 'food early suppresses no_meals_logged');
-  // Protein and calories misses should still apply (they're about quality, not logging)
   assert.ok(missKeys.includes('protein_short'));
   assert.ok(missKeys.includes('calories_off_target'));
 });
 
 test('water habit counts as done when WaterLog sum >= target (no miss)', () => {
-  // Water habit item with layerKey 'water' should not miss if WaterLog meets target
-  const day = computeDay({
-    localDate: B10_TODAY,
-    planItems: [
-      { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
-    ],
-    completions: [], // not manually ticked
-    targets: { waterMl: 2500 },
-    totals: { waterMl: 2600, hasAnyFood: true }, // water logged >= target
-    closed: true,
-    unlockedLayerKeys: ['water'],
-  });
-
-  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
-  assert.ok(!missKeys.some((k) => k.startsWith('habit_missed')), 'water met via logs: no miss');
-});
-
-test('water habit misses when WaterLog sum < target', () => {
-  // Water habit item should miss if WaterLog below target
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: [
@@ -918,9 +829,30 @@ test('water habit misses when WaterLog sum < target', () => {
     ],
     completions: [],
     targets: { waterMl: 2500 },
-    totals: { waterMl: 1000, hasAnyFood: true }, // water logged < target
+    totals: { waterMl: 2600, hasAnyFood: true },
     closed: true,
     unlockedLayerKeys: ['water'],
+    noMisses: false,
+    foodNoPenalty: false,
+  });
+
+  const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
+  assert.ok(!missKeys.some((k) => k.startsWith('habit_missed')), 'water met via logs: no miss');
+});
+
+test('water habit misses when WaterLog sum < target', () => {
+  const day = computeDay({
+    localDate: B10_TODAY,
+    planItems: [
+      { id: 'h1', kind: 'habit', schedule: 'daily', active: true, title: 'Water 2.5L', layerKey: 'water' },
+    ],
+    completions: [],
+    targets: { waterMl: 2500 },
+    totals: { waterMl: 1000, hasAnyFood: true },
+    closed: true,
+    unlockedLayerKeys: ['water'],
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
@@ -928,7 +860,6 @@ test('water habit misses when WaterLog sum < target', () => {
 });
 
 test('water habit not charged when water layer is locked', () => {
-  // Water habit should not miss if water layer not unlocked
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: [
@@ -938,7 +869,9 @@ test('water habit not charged when water layer is locked', () => {
     targets: { waterMl: 2500 },
     totals: { waterMl: 0, hasAnyFood: true },
     closed: true,
-    unlockedLayerKeys: [], // water NOT unlocked
+    unlockedLayerKeys: [],
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
@@ -946,7 +879,6 @@ test('water habit not charged when water layer is locked', () => {
 });
 
 test('medicine layer never locked (always on)', () => {
-  // Medicine items should always score regardless of unlockedLayerKeys
   const day = computeDay({
     localDate: B10_TODAY,
     planItems: [
@@ -956,61 +888,24 @@ test('medicine layer never locked (always on)', () => {
     targets: B10_TARGETS,
     totals: B10_ON_TARGET,
     closed: true,
-    unlockedLayerKeys: [], // nothing unlocked, but medicine is always on
+    unlockedLayerKeys: [],
+    noMisses: false,
+    foodNoPenalty: false,
   });
 
   const missKeys = day.breakdown.filter((l) => l.points < 0).map((l) => l.key);
   assert.ok(missKeys.includes('doctor_item_missed'), 'medicine always scores, even when no layers unlocked');
 });
 
-test('v2 rules apply only on or after V2_FROM', () => {
-  // Before V2_FROM, the new parameters should be ignored (backward compatibility)
-  const dayBefore = computeDay({
-    localDate: '2026-10-14', // before V2_FROM
-    planItems: B10_PLAN_ITEMS,
-    completions: [],
-    targets: B10_TARGETS,
-    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
-    closed: true,
-    unlockedLayerKeys: ['workout', 'water'], // food locked
-    noMisses: true, // this should be ignored before V2_FROM
-    foodNoPenalty: true,
-  });
-
-  // Before V2_FROM, noMisses and foodNoPenalty should not take effect
-  // The old behavior should apply: misses are charged
-  const missKeys = dayBefore.breakdown.filter((l) => l.points < 0).map((l) => l.key);
-  assert.ok(missKeys.length > 0, 'v2 flags ignored before V2_FROM');
-  // food locked but before V2_FROM, foodNoPenalty ignored so no_meals_logged may appear
-  // This test documents the backward compatibility boundary
-});
-
-test('v2 rules apply on V2_FROM', () => {
-  // On V2_FROM, the new parameters should take effect
-  const dayOn = computeDay({
-    localDate: '2026-10-15', // V2_FROM
-    planItems: B10_PLAN_ITEMS,
-    completions: [],
-    targets: B10_TARGETS,
-    totals: { ...B10_ON_TARGET, kcal: 1000, proteinG: 20, hasAnyFood: false },
-    closed: true,
-    unlockedLayerKeys: ['workout', 'water'], // food locked
-    noMisses: true,
-    foodNoPenalty: true,
-  });
-
-  const missKeys = dayOn.breakdown.filter((l) => l.points < 0).map((l) => l.key);
-  assert.equal(missKeys.length, 0, 'noMisses works on V2_FROM');
-});
-
-test('rulesVersion is v2 for days computed with v2 engine', () => {
+test('rulesVersion is v2 for all days', () => {
   const day = computeDay({
-    localDate: '2026-10-15',
+    localDate: '2026-10-14',
     planItems: [],
     completions: [],
     targets: null,
     totals: null,
     closed: true,
+    unlockedLayerKeys: [],
   });
   assert.equal(day.rulesVersion, 'v2');
 });

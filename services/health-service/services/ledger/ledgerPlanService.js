@@ -13,14 +13,13 @@
 // The same words typed by the user off their own prescription are the user
 // keeping track of their own advice.
 //
-// Everything else here is bookkeeping: schedules, the active-item cap,
-// completions, and regenerating suggested items without touching anyone's.
+// Everything else here is bookkeeping: schedules, the active-item cap, and
+// completions. Suggested-row (re)writing lives in services/plan/rebuildPlan.js
+// — there is exactly one rebuild implementation, and it is not this file's.
 import {
   MAX_ACTIVE_PLAN_ITEMS,
-  DECIMAL_PLACES,
-  roundTo,
+  LATE_LOGGING_WINDOW_DAYS,
 } from './constants.js';
-import { generatePlan } from './planGenerator.js';
 
 // The kinds a user-entered item may carry. This list is the database enum and
 // nothing else: health.PlanItemKind in the Prisma schema, which is the seven
@@ -74,6 +73,12 @@ export { PLAN_ITEM_KINDS };
 // starts on, so an item with no stated kind lands where the user would have
 // left it.
 const DEFAULT_PLAN_ITEM_KIND = 'habit';
+
+// The kinds a user-entered row may carry when the one-plan wire sends
+// `ownKind` (see addUserEnteredItem). A user row is a habit or a workout and
+// nothing else: 'nutrition', the doctor kinds and 'rest' are not things a
+// person adds by hand from the today screen.
+const OWN_KINDS = ['habit', 'workout'];
 
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -142,6 +147,39 @@ export function isDueOn(item, localDate, today) {
   return normalised.includes(WEEKDAYS[(date.getDay() + 6) % 7]);
 }
 
+// Ticks are counted in the user's zone, the same zone the app derives localDate
+// from. A tick made at 00:30 IST belongs to that IST day, not the UTC one.
+function istDateString(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+// A tick for a future date is always wrong: a timezone mistake upstream must
+// not write a completion the day has not reached. A past date is allowed only
+// inside LATE_LOGGING_WINDOW_DAYS — beyond it the plan has moved on and the
+// tick is refused rather than silently recorded. `today` is optional so callers
+// without a today payload are unaffected.
+function assertTickableDate(localDate, today) {
+  if (!today || !DATE_RE.test(String(today))) return;
+  const day = Date.parse(`${localDate}T00:00:00Z`);
+  const now = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(day) || Number.isNaN(now)) return;
+  const diffDays = Math.round((day - now) / 86400000);
+  if (diffDays > 0) throw badRequest('You cannot tick a future date');
+  if (diffDays < -LATE_LOGGING_WINDOW_DAYS) {
+    throw badRequest('That day is closed for logging');
+  }
+}
+
+// Late means recorded after the day it counts for. The completion only stores
+// createdAt, so compare its zone-local date to the localDate the tick is for:
+// equal for an on-time tick, later for a backfilled one.
+function isLateTick(row, localDate) {
+  const recorded = istDateString(row.createdAt);
+  return recorded != null && recorded > localDate;
+}
+
 /**
  * Add a plan item the user typed themselves.
  *
@@ -150,11 +188,25 @@ export function isDueOn(item, localDate, today) {
  * client that can be spoofed into it (it is a function argument chosen by this
  * service, not read from the request body), and the title is whatever the user
  * typed.
+ *
+ * `ownKind` (the one-plan wire contract for user rows) must be 'habit' or
+ * 'workout' and is stored in the existing `kind` column — the wire shape has
+ * no separate kind field for own rows. A caller that passes only the legacy
+ * `kind` keeps the old validation; either way the row's layerKey is 'own' for
+ * user rows and 'medicine' for doctor rows, which is what lets
+ * getPlanForDate's layer filter treat them like any other row.
  */
-export async function addUserEnteredItem(prisma, { userId, title, kind = DEFAULT_PLAN_ITEM_KIND, schedule = 'daily', endsOn = null, fromPrescription = false, prescribedBy = null, prescribedNote = null }) {
+export async function addUserEnteredItem(prisma, { userId, title, kind = DEFAULT_PLAN_ITEM_KIND, ownKind = null, schedule = 'daily', endsOn = null, fromPrescription = false, prescribedBy = null, prescribedNote = null }) {
   const clean = String(title || '').trim();
   if (!clean) throw badRequest('An item needs a title');
-  if (!PLAN_ITEM_KINDS.includes(kind)) {
+  // ownKind is the one-plan wire field for user rows; it lands in the same
+  // `kind` column. A legacy caller that sends only `kind` is still validated
+  // against the enum below, so both shapes behave identically.
+  const resolvedKind = ownKind != null ? ownKind : kind;
+  if (ownKind != null && !OWN_KINDS.includes(ownKind)) {
+    throw badRequest(`ownKind must be one of: ${OWN_KINDS.join(', ')}`);
+  }
+  if (!PLAN_ITEM_KINDS.includes(resolvedKind)) {
     throw badRequest(`kind must be one of: ${PLAN_ITEM_KINDS.join(', ')}`);
   }
 
@@ -173,10 +225,11 @@ export async function addUserEnteredItem(prisma, { userId, title, kind = DEFAULT
   return prisma.planItem.create({
     data: {
       userId,
-      kind,
+      kind: resolvedKind,
       title: clean,
       schedule: String(schedule || 'daily').trim() || 'daily',
       origin: fromPrescription ? 'doctor' : 'user',
+      layerKey: fromPrescription ? 'medicine' : 'own',
       prescribedBy: fromPrescription ? String(prescribedBy || '').trim() || null : null,
       prescribedNote: fromPrescription ? String(prescribedNote || '').trim() || null : null,
       endsOn,
@@ -187,132 +240,87 @@ export async function addUserEnteredItem(prisma, { userId, title, kind = DEFAULT
 }
 
 /**
- * Replace the SUGGESTED items, leaving user and doctor items untouched.
+ * Tick an item for a date.
  *
- * This is the whole reason PlanItem.autoGenerated exists. "Regenerate my plan"
- * has to be safe to press: if it deleted a doctor's course of tablets because
- * the new target had a different protein number, the feature would be
- * dangerous rather than convenient.
+ * Idempotent: the unique (planItemId, localDate) makes a second tap an update
+ * rather than a double count.
  *
- * `unlockedLayerKeys` (the coach journey, B7) selects the layer-aware
- * generator: items only for the unlocked layers, workout items from the
- * stored `workoutSlots`, and - in that mode only - a null `targets` is
- * legal, because a journey user's plan exists before their body data does.
- * Without it the behaviour is exactly what it always was, refusal included.
+ * Every tick is written `how:'manual'`. The old `how:'auto'` / 0-point branch is
+ * gone: automatic satisfaction (a workout the session log already credited) is
+ * reconciled by the score engine, which reads completions and decides what a
+ * row is worth. This function only records that the person ticked the row.
+ *
+ * So `points` here is a fixed 1, not a grant. The engine owns the real award
+ * (and the late-tick 0); a client-supplied point value would let any client
+ * mint score for itself, which is why none is accepted.
+ *
+ * The server rejects a future date (400). A past date is accepted only inside
+ * LATE_LOGGING_WINDOW_DAYS; the engine then values it at 0. `today` is optional
+ * so existing callers that do not pass it keep working.
  */
-export async function regenerateSuggestions(prisma, {
-  userId,
-  goals,
-  diet,
-  targets,
-  measuredActivity,
-  unlockedLayerKeys = null,
-  workoutSlots = null,
-  stepsPerDay = null,
-}) {
-  if (!targets && !unlockedLayerKeys) throw badRequest('Set a nutrition target before generating a plan');
+export async function completeItem(prisma, { userId, itemId, planItemId = null, localDate, today = null }) {
+  const id = Number(itemId ?? planItemId);
+  if (!Number.isInteger(id)) throw badRequest('A plan item id is required');
+  if (!DATE_RE.test(String(localDate || ''))) throw badRequest('A date is required');
+  assertTickableDate(localDate, today);
 
-  const activeCount = await prisma.planItem.count({ where: { userId, active: true } });
-  const userItems = await prisma.planItem.count({
-    where: { userId, active: true, origin: { in: ['user', 'doctor'] } },
-  });
-  // A user's own and doctor's items are permanent as far as regeneration is
-  // concerned, so they do not consume the room the generated items have. The
-  // cap that matters for them is the one addUserEnteredItem enforces.
-  const room = Math.max(0, MAX_ACTIVE_PLAN_ITEMS - userItems);
-
-  const hasDoctorItems = (await prisma.planItem.count({
-    where: { userId, origin: 'doctor', active: true },
-  })) > 0;
-
-  const { items: suggestions, trimmedFrom } = generatePlan({
-    goals,
-    diet,
-    targets,
-    measuredActivity,
-    hasDoctorItems,
-    unlockedLayerKeys,
-    workoutSlots,
-    stepsPerDay,
-  });
-  const keptSuggestions = suggestions.slice(0, room);
-
-  // Soft-delete rather than delete: an item someone already ticked stays
-  // visible in past days, and a hard delete would cascade its completions and
-  // rewrite a frozen score.
-  await prisma.planItem.updateMany({
-    where: { userId, origin: 'suggested', active: true },
-    data: { active: false },
-  });
-
-  const created = [];
-  for (const item of keptSuggestions) {
-    created.push(
-      await prisma.planItem.create({
-        data: {
-          userId,
-          kind: item.kind,
-          title: item.title,
-          schedule: item.schedule,
-          // Hard-set, and asserted in the generator's tests. A suggested item
-          // that claimed to come from a doctor would break the whole boundary.
-          origin: 'suggested',
-          // The journey layer this item belongs to, or null for a
-          // pre-journey/legacy item (and for rest days, which belong to no
-          // layer). Written from the generator's own output so the two can
-          // never disagree about what guards what.
-          layerKey: item.layerKey ?? null,
-          nutrientKey: item.nutrientKey || null,
-          targetValue: item.targetValue != null ? roundTo(item.targetValue, DECIMAL_PLACES.nutrients) : null,
-          active: true,
-          autoGenerated: true,
-        },
-      }),
-    );
-  }
-
-  // `trimmed` is what the generator wanted to propose, `room` is how many
-  // there was space for, and `dropped` is the difference. Surfaced so the app
-  // can say "your plan is full" rather than handing back a short plan with no
-  // explanation.
-  const generatedBeforeRoomLimit = trimmedFrom ?? suggestions.length;
-  return {
-    created: created.length,
-    kept: userItems,
-    dropped: Math.max(0, generatedBeforeRoomLimit - keptSuggestions.length),
-    room,
-    items: created,
-  };
-}
-
-/**
- * Tick an item for a date. Idempotent: the unique (planItemId, localDate) makes
- * a second tap an update rather than a double count.
- */
-export async function completeItem(prisma, { userId, planItemId, localDate, points = 0, how = 'manual' }) {
-  const item = await prisma.planItem.findFirst({ where: { id: Number(planItemId), userId } });
+  const item = await prisma.planItem.findFirst({ where: { id, userId } });
   if (!item) throw notFound('No such plan item');
   if (!item.active) throw badRequest('That item is not active');
 
-  // A tick is worth exactly one point, always. The value is derived here rather
-  // than accepted from the caller because a client-supplied point value would
-  // let any client mint score for itself - and `how: 'auto'` is worth zero,
-  // since an auto-satisfied item (a workout the session log already credited)
-  // must not score twice.
-  const isManual = how !== 'auto';
-  const earned = isManual ? 1 : 0;
-
   return prisma.planItemCompletion.upsert({
     where: { planItemId_localDate: { planItemId: item.id, localDate } },
-    create: { planItemId: item.id, userId, localDate, points: earned, how },
-    update: { points: earned, how },
+    create: { planItemId: item.id, userId, localDate, points: 1, how: 'manual' },
+    update: { points: 1, how: 'manual' },
   });
+}
+
+/**
+ * Undo a manual tick.
+ *
+ * Only `how:'manual'` rows are deleted. An automatic completion is not the
+ * user's to undo — it reflects the session log, and deleting it would desync
+ * the day from the log until the next rebuild. When the only completion for
+ * (item, date) is automatic this throws 409 AUTO_DONE rather than silently
+ * doing nothing, so the client can say "this one counts from your workout".
+ */
+export async function uncompleteItem(prisma, { userId, itemId, planItemId = null, localDate }) {
+  const id = Number(itemId ?? planItemId);
+  if (!Number.isInteger(id)) throw badRequest('A plan item id is required');
+  if (!DATE_RE.test(String(localDate || ''))) throw badRequest('A date is required');
+
+  const { count } = await prisma.planItemCompletion.deleteMany({
+    where: { userId, planItemId: id, localDate, how: 'manual' },
+  });
+  if (count === 0) {
+    const err = new Error('That row is satisfied automatically and cannot be unticked');
+    err.status = 409;
+    err.code = 'AUTO_DONE';
+    throw err;
+  }
+  return { deleted: count };
 }
 
 /**
  * Items due today, with their completion state for the date.
+ *
+ * Only rows on an unlocked layer are returned. `onLayerKeys` already includes
+ * 'own' and, when allowed, 'medicine'; a row whose layerKey is null (legacy
+ * pre-layer row) is dropped, because a lock is a real lock. When no
+ * `onLayerKeys` is given the filter is skipped, matching the pre-journey
+ * behaviour for callers that have no layer context yet.
+ *
+ * Each row carries `completion: {how, late} | null`. `how` is the wire value —
+ * 'tick' for a manual tick, 'auto' for the automatic rule, which is what the
+ * app reads (the DB stores 'manual').
+ * `late` is true when the tick was recorded after the day it counts for: the
+ * completion's createdAt (in the user's zone) is a later date than localDate,
+ * which is exactly a backfilled tick inside the late window.
+ *
+ * `completed` (bool) is kept alongside `completion` for callers not yet moved
+ * onto the richer shape.
  */
-export async function getPlanForDate(prisma, { userId, localDate, today }) {
+export async function getPlanForDate(prisma, { userId, localDate, onLayerKeys = null, today = null }) {
   const items = await prisma.planItem.findMany({
     where: { userId, active: true },
     include: { completions: { where: { localDate } } },
@@ -321,6 +329,9 @@ export async function getPlanForDate(prisma, { userId, localDate, today }) {
 
   const due = [];
   for (const item of items) {
+    if (Array.isArray(onLayerKeys) && !(item.layerKey != null && onLayerKeys.includes(item.layerKey))) {
+      continue;
+    }
     // "until the 5th", inclusive. The comparison is a string compare because
     // both sides are 'YYYY-MM-DD', which sorts as a date — but only if both are
     // actually that shape. A single malformed endsOn used to expire the item
@@ -329,13 +340,18 @@ export async function getPlanForDate(prisma, { userId, localDate, today }) {
     // here, so an unparseable end date is ignored and the item stays due.
     if (item.endsOn && DATE_RE.test(item.endsOn) && localDate > item.endsOn) continue;
     if (!isDueOn(item, localDate, today)) continue;
-    due.push({
-      ...item,
-      completed: (item.completions || []).length > 0,
-    });
+
+    const { completions, ...rest } = item;
+    const row = (completions || [])[0] || null;
+    const completion = row
+      ? { how: row.how === 'manual' ? 'tick' : row.how, late: isLateTick(row, localDate) }
+      : null;
+
+    due.push({ ...rest, completion, completed: row != null });
   }
 
-  return { localDate, items: due, total: due.length };
+  const completedCount = due.reduce((n, item) => (item.completed ? n + 1 : n), 0);
+  return { localDate, items: due, total: due.length, completedCount };
 }
 
 export async function deactivateItem(prisma, { userId, planItemId }) {

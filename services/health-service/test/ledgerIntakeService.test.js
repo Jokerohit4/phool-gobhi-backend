@@ -1,13 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  ageFromDob,
-  getSetupState,
-  saveIntake,
-  checkTargetPace,
-  validateIntake,
-} from '../services/ledger/ledgerIntakeService.js';
+let ledgerIntakeService;
+
+let ageFromDob;
+let getSetupState;
+let saveIntake;
+let checkTargetPace;
+let validateIntake;
+
+test('setup: mock rebuildPlan and load service', async (t) => {
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    exports: {
+      rebuildPlan: async () => ({ created: 0, updated: 0, deactivated: 0, onLayerKeys: [] }),
+    },
+  });
+  ledgerIntakeService = await import('../services/ledger/ledgerIntakeService.js');
+  ({ ageFromDob, getSetupState, saveIntake, checkTargetPace, validateIntake } = ledgerIntakeService);
+});
 
 const TODAY = '2026-09-28';
 

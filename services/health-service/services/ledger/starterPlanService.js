@@ -9,36 +9,25 @@
 // body data produces a NutritionTarget; the plan is workouts and water until
 // then, which is the part a beginner can actually follow.
 //
-// Two entry points, both called by B9:
+// Entry points:
 //
 //   createStarterPlan   /journey/start - writes the goal, the session count,
-//                        the prescription defaults and the week's slots.
-//   regenerateForUser    layer unlock, accept-refresh, ease-back and start -
-//                        rebuilds the slots for the current level and
-//                        location and replaces the auto-generated plan items,
-//                        never touching a doctor's or the user's own.
+//                        the prescription defaults and the week's slots,
+//                        then rebuildPlan({reason:'start'}) for the rows.
+//   regenerateForUser    layer unlock and friends - a one-line wrapper over
+//                        rebuildPlan({reason:'unlock'}). Slot reshaping on
+//                        unlock is UB4's saveSlots; this only diffs rows.
 import { currentNutritionTarget } from './currentTarget.js';
 import * as prescriptionService from './prescriptionService.js';
-import * as ledgerPlanService from './ledgerPlanService.js';
-import { layerKeysUpTo } from './planGenerator.js';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
+import { layerKeysUpTo, JOURNEY } from '../journey/journeyConfig.js';
 import { normaliseGoals } from './targetEngine.js';
 import { DEFAULT_SLEEP_MINUTES, PRESCRIPTION_RULES_VERSION } from './constants.js';
-import { NEUTRAL_DEFAULT } from '../goalService.js';
 
-// The coach journey's default water, before any body data exists. Same value
-// as JOURNEY.defaultWaterMl in the Contracts.
-const JOURNEY_DEFAULT_WATER_ML = 2500;
-
-// ---- The journey's own constants (copied; TODO(B9): journeyConfig.js) ------
-//
-// Both maps below are copied from the Contracts (B9's journeyConfig.js is
-// read-only for B7 and does not exist yet). Replace them with an import once
-// B9 lands; the two must not drift in the meantime.
-
-// Starting layer per experience level. new_to_gym begins with workouts and
-// water only; an on-off user starts with food unlocked too; a regular starts
-// with everything (their locks become milestones instead).
-const START_LAYER = { new_to_gym: 1, restarting_after_break: 2, experienced: 5 };
+// Aliases kept for callers/tests that import these names from here; the
+// values live in journeyConfig and must not drift from it.
+export const JOURNEY_DEFAULT_WATER_ML = JOURNEY.defaultWaterMl;
+export const START_LAYER = JOURNEY.startLayer;
 
 // The step and sleep targets written into the starter prescription, before
 // any body data exists. Sleep is the same seven hours for everyone (the
@@ -255,6 +244,11 @@ export async function createStarterPlan(prisma, userId, {
     },
   });
 
+  // The plan rows themselves. rebuildPlan reads the prescription just
+  // written (slots/steps/sleep) plus the on-layer keys, so the starter
+  // plan's suggested rows exist before /journey/start returns.
+  await rebuildPlan(prisma, userId, { reason: 'start' });
+
   // The plan, in the same shape the prescription read serves - B9's
   // /journey/start returns { journey, plan } and this is the plan half.
   return prescriptionService.getPlan({
@@ -287,100 +281,16 @@ export async function resolveUnlockedLayerKeys(userId) {
   return ['workout', 'water'];
 }
 
-// Which pool the stored slots were built from, so a rebuild keeps training
-// where the user actually trains. Pre-journey rows have no slots and default
-// to the gym branch - the marketplace's own default.
-function locationFromSlots(slots) {
-  if (!Array.isArray(slots)) return null;
-  const gymNames = new Set(Object.values(GYM_TEMPLATE_POOL).flat());
-  const homeNames = new Set(Object.values(HOME_TEMPLATE_POOL).flat());
-  for (const slot of slots) {
-    const title = String(slot?.title ?? '');
-    if (gymNames.has(title)) return 'gym';
-    if (homeNames.has(title)) return 'home';
-  }
-  return null;
-}
-
 /**
- * Rebuild the week's slots and the auto-generated plan items. B9 calls this
- * when a layer unlocks, when a refresh is accepted, on ease-back, and at
- * start.
- *
- * Never touches a doctor's or the user's own items - that guarantee is
- * ledgerPlanService.regenerateSuggestions's own (origin 'suggested' only),
- * reused here rather than re-implemented, because "regenerate is safe to
- * press" is the one property this path must not lose.
- *
- * `easeBack` halves the week's sessions (minimum 1) without touching
- * WeeklyGoal: the user's standing goal is not lowered because they were
- * away for a week; only this week's plan is lighter.
+ * Rebuild the suggested plan rows — a one-line wrapper over rebuildPlan so
+ * there is exactly one rebuild implementation. Legacy options
+ * (unlockedLayerKeys/easeBack) are accepted and ignored: on-layer keys now
+ * come from layerState on every rebuild, and slot reshaping is UB4's
+ * saveSlots, not this path's. Never touches a doctor's or the user's own
+ * items — rebuildPlan diffs origin 'suggested' only.
  */
-export async function regenerateForUser(prisma, userId, {
-  unlockedLayerKeys = null,
-  easeBack = false,
-} = {}) {
-  const keys = Array.isArray(unlockedLayerKeys) && unlockedLayerKeys.length
-    ? unlockedLayerKeys
-    : await resolveUnlockedLayerKeys(userId);
-
-  const [progress, weekly, saved] = await Promise.all([
-    prisma.journeyProgress.findUnique({ where: { userId } }),
-    prisma.weeklyGoal.findUnique({ where: { userId } }),
-    prisma.prescription.findUnique({ where: { userId } }),
-  ]);
-
-  const level = progress?.startLevel ?? DEFAULT_EXPERIENCE_LEVEL;
-  const defaults = levelDefaults(level);
-  const sessionsPerWeek = weekly?.sessionsPerWeek ?? NEUTRAL_DEFAULT;
-  const sessions = easeBack ? Math.max(1, Math.floor(sessionsPerWeek / 2)) : sessionsPerWeek;
-
-  const location = locationFromSlots(saved?.workoutSlots) ?? 'gym';
-  const slots = await buildWorkoutSlots(prisma, { experienceLevel: level, location, sessions });
-
-  await prisma.prescription.upsert({
-    where: { userId },
-    // The create side carries the starter defaults, so a rebuild for a user
-    // who never started (no row yet) still produces a coherent prescription;
-    // the update side touches ONLY the slots - steps and sleep are the user's
-    // sliders' to move, not the rebuild's.
-    create: {
-      userId,
-      kcal: null,
-      stepsPerDay: defaults.stepsPerDay,
-      sleepMinutes: defaults.sleepMinutes,
-      workoutSlots: slots,
-      rulesVersion: PRESCRIPTION_RULES_VERSION,
-    },
-    update: { workoutSlots: slots },
-  });
-
-  const [goal, target] = await Promise.all([
-    prisma.healthGoal.findUnique({ where: { userId } }),
-    currentNutritionTarget(prisma, userId),
-  ]);
-
-  const regenerated = await ledgerPlanService.regenerateSuggestions(prisma, {
-    userId,
-    goals: goal?.goals ?? [],
-    diet: goal?.diet ?? null,
-    targets: target
-      ? {
-          kcal: Number(target.kcal),
-          proteinG: Number(target.proteinG),
-          carbsG: Number(target.carbsG),
-          fatG: Number(target.fatG),
-          fibreG: Number(target.fibreG),
-          waterMl: Number(target.waterMl),
-          micros: target.micros,
-        }
-      : null,
-    unlockedLayerKeys: keys,
-    workoutSlots: slots,
-    stepsPerDay: saved?.stepsPerDay ?? defaults.stepsPerDay,
-  });
-
-  return { sessions, slots, regenerated };
+export async function regenerateForUser(prisma, userId, _options = {}) {
+  return rebuildPlan(prisma, userId, { reason: 'unlock' });
 }
 
-export { JOURNEY_DEFAULT_WATER_ML, START_LAYER, LEVEL_DEFAULTS };
+export { LEVEL_DEFAULTS };
