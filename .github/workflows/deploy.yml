@@ -1,4 +1,5 @@
 name: Deploy to Cloud Run
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.one_plan_data != '' && inputs.one_plan_data != 'deploy' && format('One Plan dev data {0}', inputs.one_plan_data) || format('Deploy {0}', github.sha) }}
 
 on:
   push:
@@ -13,6 +14,14 @@ on:
       ref:
         description: 'Branch or commit SHA to deploy (default: current branch)'
         required: false
+      one_plan_data:
+        description: 'Dev-only One Plan data action; deploy retains normal deployment behavior'
+        type: choice
+        options: [deploy, dry-run, apply]
+        default: deploy
+      expected_sha:
+        description: 'Exact deployed dev SHA for a data action'
+        required: false
 
 permissions:
   contents: read
@@ -20,6 +29,7 @@ permissions:
 
 jobs:
   changes:
+    if: github.event_name != 'workflow_dispatch' || !inputs.one_plan_data || inputs.one_plan_data == 'deploy'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
@@ -380,3 +390,102 @@ jobs:
             --to-revisions="${{ steps.prev-revision.outputs.revision }}=100"
           echo "::error::Health check failed — rolled back ${{ matrix.service }}-${{ steps.env.outputs.ENV }} to ${{ steps.prev-revision.outputs.revision }}"
           exit 1
+
+  one-plan-dev-data:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev' && (inputs.one_plan_data == 'dry-run' || inputs.one_plan_data == 'apply')
+    concurrency:
+      group: one-plan-dev-data
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify requested dev revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: test "$GITHUB_SHA" = "$EXPECTED_SHA"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve deployed dev image and job environment
+        id: config
+        run: |
+          gcloud run services describe health-service-dev --project=phool-gobhi --region=asia-south1 \
+            --format=json > "$RUNNER_TEMP/health-service-dev.json"
+          REVISION=$(node -p "const s=require(process.env.RUNNER_TEMP+'/health-service-dev.json'); if(s.status.latestReadyRevisionName!==s.status.latestCreatedRevisionName || !s.status.traffic.some(t=>t.revisionName===s.status.latestReadyRevisionName && t.percent===100)) throw Error('Dev revision is not Ready at 100% traffic'); s.status.latestReadyRevisionName")
+          gcloud run revisions describe "$REVISION" --project=phool-gobhi --region=asia-south1 \
+            --format=json > "$RUNNER_TEMP/health-revision.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = require('./deploy/services.json');
+          const service = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/health-service-dev.json'));
+          const revision = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/health-revision.json'));
+          const image = revision.status.imageDigest;
+          if (!image || !image.includes('@sha256:')) throw Error('An immutable deployed image is required');
+          const account = manifest.runtimeServiceAccounts.dev;
+          if (service.spec.template.spec.serviceAccountName !== account) throw Error('Unexpected dev runtime identity');
+          const secret = service.spec.template.spec.containers[0].env.find(v => v.name === 'SECRETS_JSON');
+          if (secret?.valueFrom?.secretKeyRef?.name !== 'health-service-secrets-dev') throw Error('Unexpected dev secret binding');
+          const env = {...manifest.services['health-service'].env.dev.plain,
+            ANALYTICS_PROVIDER: 'none', ONE_PLAN_MIGRATION_ENV: 'dev', K_SERVICE: 'one-plan-dev-data'};
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-env.json', JSON.stringify(env));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `image=${image}\naccount=${account}\nrevision=${service.status.latestReadyRevisionName}\n`);
+          NODE
+
+      - name: Run dev-only data verification job
+        env:
+          IMAGE: ${{ steps.config.outputs.image }}
+          RUNTIME_ACCOUNT: ${{ steps.config.outputs.account }}
+          APPLY: ${{ inputs.one_plan_data == 'apply' }}
+        run: |
+          ARGS="--import=./bootstrap-secrets.js,scripts/prepareOnePlanDev.js"
+          if [ "$APPLY" = true ]; then ARGS="$ARGS,--apply"; fi
+          gcloud run jobs deploy one-plan-dev-data --project=phool-gobhi --region=asia-south1 \
+            --image="$IMAGE" --service-account="$RUNTIME_ACCOUNT" --command=node --args="$ARGS" \
+            --env-vars-file="$RUNNER_TEMP/one-plan-dev-env.json" \
+            --set-secrets=SECRETS_JSON=health-service-secrets-dev:latest \
+            --tasks=1 --parallelism=1 --max-retries=0 --task-timeout=1800s --memory=512Mi --cpu=1 --quiet
+          gcloud run jobs execute one-plan-dev-data --project=phool-gobhi --region=asia-south1 \
+            --wait --format=json > "$RUNNER_TEMP/one-plan-dev-execution.json"
+
+      - name: Capture structured verification report
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          APPLY: ${{ inputs.one_plan_data == 'apply' }}
+          REVISION: ${{ steps.config.outputs.revision }}
+          IMAGE: ${{ steps.config.outputs.image }}
+        run: |
+          EXECUTION=$(node -p "require(process.env.RUNNER_TEMP+'/one-plan-dev-execution.json').metadata.name.split('/').pop()")
+          for attempt in $(seq 1 12); do
+            gcloud logging read \
+              "resource.type=cloud_run_job AND resource.labels.job_name=one-plan-dev-data AND labels.\"run.googleapis.com/execution_name\"=\"$EXECUTION\" AND textPayload:\"ONE_PLAN_DEV_RESULT=\"" \
+              --project=phool-gobhi --limit=5 --format=json > "$RUNNER_TEMP/one-plan-dev-result-logs.json"
+            if node -e "const r=require(process.env.RUNNER_TEMP+'/one-plan-dev-result-logs.json'); process.exit(r.some(x=>x.textPayload?.includes('ONE_PLAN_DEV_RESULT='))?0:1)"; then break; fi
+            sleep 5
+          done
+          node <<'NODE'
+          const fs = require('node:fs');
+          const entries = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-result-logs.json'));
+          const entry = entries.find(x => x.textPayload?.includes('ONE_PLAN_DEV_RESULT='));
+          if (!entry) throw Error('No completed migration report found; acceptance remains unverified');
+          const report = JSON.parse(entry.textPayload.split('ONE_PLAN_DEV_RESULT=')[1]);
+          const apply = process.env.APPLY === 'true';
+          if (report.mode !== (apply ? 'apply' : 'dry-run') || report.dryRun.errors.length || (apply && !report.verified)) throw Error('Migration acceptance failed');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-data.json', JSON.stringify({sha:process.env.EXPECTED_SHA,
+            revision:process.env.REVISION,image:process.env.IMAGE,report},null,2));
+          console.log(JSON.stringify(report,null,2));
+          NODE
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-plan-dev-data-${{ inputs.one_plan_data }}
+          path: |
+            ${{ runner.temp }}/one-plan-dev-data.json
+            ${{ runner.temp }}/one-plan-dev-execution.json
+          retention-days: 7
