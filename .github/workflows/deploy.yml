@@ -432,7 +432,7 @@ jobs:
           const secret = service.spec.template.spec.containers[0].env.find(v => v.name === 'SECRETS_JSON');
           if (secret?.valueFrom?.secretKeyRef?.name !== 'health-service-secrets-dev') throw Error('Unexpected dev secret binding');
           const env = {...manifest.services['health-service'].env.dev.plain,
-            ANALYTICS_PROVIDER: 'none', ONE_PLAN_MIGRATION_ENV: 'dev', K_SERVICE: 'one-plan-dev-data'};
+            ANALYTICS_PROVIDER: 'none', ONE_PLAN_MIGRATION_ENV: 'dev'};
           fs.writeFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-env.json', JSON.stringify(env));
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `image=${image}\naccount=${account}\nrevision=${service.status.latestReadyRevisionName}\n`);
           NODE

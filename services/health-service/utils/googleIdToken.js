@@ -1,12 +1,13 @@
 import { GoogleAuth } from 'google-auth-library';
 
-// Cloud Run sets K_SERVICE automatically on every revision; it's unset in
+// Cloud Run sets K_SERVICE for services and CLOUD_RUN_JOB for jobs. Both are
+// provided by the platform and must not be configured manually. They're unset in
 // local dev / docker-compose, so this whole mechanism no-ops there — outbound
 // calls carry no Authorization override, identical to behavior before this
 // file existed. Copied verbatim from challenge-service's copy — deliberately
 // duplicated per-service rather than shared, same convention as the rest of
 // this backend's per-service utils.
-const onCloudRun = !!process.env.K_SERVICE;
+const onCloudRun = !!(process.env.K_SERVICE || process.env.CLOUD_RUN_JOB);
 
 const auth = onCloudRun ? new GoogleAuth() : null;
 const clientPromisesByAudience = new Map();
