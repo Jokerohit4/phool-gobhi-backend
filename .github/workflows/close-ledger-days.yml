@@ -2,7 +2,7 @@ name: Close ledger days
 
 # Fires health-service's nightly day close (dayCloseService.runDayCloseSweep,
 # via POST /internal/ledger/close-days): freezes YESTERDAY (IST) into a
-# ScoreDaySnapshot for every ledger user who has not closed it themselves.
+# ScoreDaySnapshot for every eligible coach journey not already closed.
 #
 # Why the server does this at all: the ledger's claim is "one frozen, auditable
 # row per day". While closing was client-only, a day nobody closed never got a
@@ -30,8 +30,8 @@ name: Close ledger days
 # `schedule` fires ONLY from the default branch (`main`), which lags `dev`, so
 # until this reaches `main` the only way to run it is workflow_dispatch. The
 # matrix is dev-only on purpose: prod is added by hand, in a reviewed change,
-# once health-service is promoted and the healthLedger flag is on there. The
-# service also no-ops while either healthMetrics or healthLedger is off.
+# once health-service is promoted and coachJourney is enabled there. The
+# service no-ops while coachJourney is off; Food flags do not gate the sweep.
 
 on:
   schedule:
@@ -47,10 +47,12 @@ jobs:
   close-days:
     strategy:
       matrix:
-        env: [dev]   # prod deliberately absent until health-service is promoted AND the flag is on
+        env: [dev]   # prod deliberately absent until promotion and coachJourney enablement are reviewed
       fail-fast: false
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -98,9 +100,18 @@ jobs:
 
       # The response reports closed / alreadyClosed / skipped / failed, so the
       # run log shows an idempotent re-run as zeros-with-reasons, not silence.
+      # HTTP 200 can include per-user failures, which must fail the job too.
       - run: |
-          curl --fail-with-body -sS -X POST \
+          response_file=$(mktemp)
+          trap 'rm -f "$response_file"' EXIT
+          if ! curl --fail-with-body -sS -X POST \
             -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
             -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
             -H "Content-Type: application/json" \
-            "${{ steps.svcurl.outputs.url }}/internal/ledger/close-days"
+            --output "$response_file" \
+            "${{ steps.svcurl.outputs.url }}/internal/ledger/close-days"; then
+            cat "$response_file"
+            exit 1
+          fi
+          cat "$response_file"
+          node .github/scripts/check-day-close-result.cjs < "$response_file"

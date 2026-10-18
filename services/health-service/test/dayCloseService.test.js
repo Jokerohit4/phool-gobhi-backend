@@ -82,21 +82,34 @@ test('resolveClientClose: a malformed date is a 400, not a snapshot keyed on jun
 });
 
 // A small fake with just what closeDay + the sweep read.
-function fakePrisma({ consents = [], coachConsents = [], goals = [], snapshots = [], raceOnCreate = false } = {}) {
-  const state = { created: [] };
+function fakePrisma({ consents = [], coachConsents = [], goals = [], journeys = [], snapshots = [], raceOnCreate = false, failUserIds = [] } = {}) {
+  const state = { created: [], eligibilityReads: [] };
   return {
     state,
     healthConsent: {
-      findMany: async ({ where }) =>
-        consents.filter((c) => c.revokedAt == null && (c.scopes || []).includes(where.scopes.has)),
+      findMany: async ({ where }) => {
+        state.eligibilityReads.push('healthConsent');
+        return consents.filter((c) => c.revokedAt == null && (c.scopes || []).includes(where.scopes.has));
+      },
     },
     coachConsent: {
-      findMany: async ({ where }) =>
-        coachConsents.filter((c) => c.revokedAt == null && (c.scopes || []).includes(where.scopes.has)),
+      findMany: async ({ where }) => {
+        state.eligibilityReads.push('coachConsent');
+        return coachConsents.filter((c) => c.revokedAt == null && (c.scopes || []).includes(where.scopes.has));
+      },
     },
     healthGoal: {
-      findMany: async ({ where }) => goals.filter((g) => where.userId.in.includes(g.userId)),
+      findMany: async ({ where }) => {
+        state.eligibilityReads.push('healthGoal');
+        return goals.filter((g) => where.userId.in.includes(g.userId));
+      },
       findUnique: async ({ where }) => goals.find((g) => g.userId === where.userId) || null,
+    },
+    journeyProgress: {
+      findMany: async ({ where }) => {
+        state.eligibilityReads.push('journeyProgress');
+        return journeys.filter((j) => where.userId.in.includes(j.userId));
+      },
     },
     scoreDaySnapshot: {
       findUnique: async ({ where: { userId_localDate: k } }) =>
@@ -104,6 +117,7 @@ function fakePrisma({ consents = [], coachConsents = [], goals = [], snapshots =
       findFirst: async () => null,
       findMany: async () => [],
       create: async ({ data }) => {
+        if (failUserIds.includes(data.userId)) throw new Error('snapshot write failed');
         if (raceOnCreate) {
           // Another closer inserted between our findUnique and our create.
           snapshots.push({ ...data, close: 999, id: 'winner' });
@@ -145,7 +159,10 @@ test('closeDay: a lost insert race returns the winning row, never throws, never 
 });
 
 test('sweep: closes yesterday for eligible users; a second run writes nothing', async () => {
-  const prisma = fakePrisma({ consents: [consent(1), consent(2)], goals: [{ userId: 1 }, { userId: 2 }] });
+  const prisma = fakePrisma({
+    coachConsents: [coachConsent(1), coachConsent(2)],
+    journeys: [{ userId: 1 }, { userId: 2 }],
+  });
   const first = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
   assert.equal(first.localDate, '2026-09-30');
   assert.equal(first.closed, 2);
@@ -157,91 +174,108 @@ test('sweep: closes yesterday for eligible users; a second run writes nothing', 
   assert.equal(prisma.state.created.length, 2, 'the re-run must not create another row');
 });
 
-test('sweep: stale-wording consent and never-set-up users are skipped, not closed', async () => {
+test('sweep: nutrition-only users never qualify even with every feature flag on', async () => {
   const prisma = fakePrisma({
-    consents: [consent(1), consent(2, '2020-01-01'), consent(3)],
-    goals: [{ userId: 1 }, { userId: 2 }], // user 3 granted but never set up the ledger
+    consents: [consent(1), consent(2, '2020-01-01')],
+    goals: [{ userId: 1 }, { userId: 2 }],
+    journeys: [{ userId: 1 }],
   });
   const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
-  assert.equal(out.closed, 1);
-  assert.equal(out.skipped, 2);
+  assert.equal(out.eligible, 0);
+  assert.equal(out.closed, 0);
+  assert.equal(prisma.state.created.length, 0);
+  assert.deepEqual(prisma.state.eligibilityReads, ['coachConsent']);
 });
 
-test('sweep: with the ledger flags off and the coach flag off it writes nothing', async () => {
+test('sweep: coach flag off disables closing even with nutrition flags on', async () => {
+  const flagsRead = [];
   const prisma = fakePrisma({
     consents: [consent(1)],
     coachConsents: [coachConsent(9)],
     goals: [{ userId: 1 }, { userId: 9 }],
+    journeys: [{ userId: 9 }],
   });
   const out = await runDayCloseSweep(prisma, {
     now: RUN_AT,
-    isEnabled: async (f) => f !== 'healthLedger' && f !== 'coachJourney',
+    isEnabled: async (flag) => { flagsRead.push(flag); return flag !== 'coachJourney'; },
   });
   assert.equal(out.disabled, true);
+  assert.equal(out.eligible, 0);
   assert.equal(prisma.state.created.length, 0);
+  assert.deepEqual(prisma.state.eligibilityReads, []);
+  assert.deepEqual(flagsRead, ['coachJourney']);
 });
 
-test('sweep: coach users close with the ledger flags off, nutrition users do not', async () => {
-  // The coach journey brings its own users with its own flag: healthMetrics
-  // and healthLedger off must stop the old path without stopping the coach
-  // one, or a coach user's days never freeze and their score never accrues.
+test('sweep: coach-only journey closes with all Food and health flags off and no HealthGoal', async () => {
   const prisma = fakePrisma({
     consents: [consent(1)],
     coachConsents: [coachConsent(9)],
-    goals: [{ userId: 1 }, { userId: 9 }],
+    goals: [{ userId: 1 }],
+    journeys: [{ userId: 9 }],
   });
   const out = await runDayCloseSweep(prisma, {
     now: RUN_AT,
     isEnabled: async (f) => f === 'coachJourney',
   });
   assert.equal(out.disabled, false);
+  assert.equal(out.eligible, 1);
   assert.equal(out.closed, 1);
   assert.equal(prisma.state.created.length, 1);
-  assert.equal(prisma.state.created[0].userId, 9, 'the nutrition-only user must not be closed while the ledger is off');
-  assert.equal(out.skipped, 0, 'the nutrition candidate is not even examined while its flags are off');
+  assert.equal(prisma.state.created[0].userId, 9);
+  assert.equal(out.skipped, 0);
+  assert.deepEqual(prisma.state.eligibilityReads, ['coachConsent', 'journeyProgress']);
 });
 
-test('sweep: a coach user with the basic scope and a goal closes without nutrition consent', async () => {
+test('sweep: basic consent plus HealthGoal without a journey is skipped', async () => {
   const prisma = fakePrisma({ coachConsents: [coachConsent(9)], goals: [{ userId: 9 }] });
   const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
-  assert.equal(out.closed, 1);
-  assert.equal(prisma.state.created[0].localDate, '2026-09-30');
+  assert.equal(out.eligible, 0);
+  assert.equal(out.closed, 0);
+  assert.equal(out.skipped, 1);
+  assert.equal(prisma.state.created.length, 0);
 });
 
-test('sweep: a coach user with no goal, or a revoked coach consent, is skipped', async () => {
+test('sweep: a journey with revoked basic consent or no basic scope is not closed', async () => {
   const prisma = fakePrisma({
-    coachConsents: [coachConsent(9), { userId: 10, revokedAt: new Date('2026-09-01'), scopes: ['basic'] }],
-    goals: [{ userId: 10 }], // user 9 granted basic but never started a journey
+    coachConsents: [
+      { ...coachConsent(9), revokedAt: new Date('2026-09-01') },
+      { userId: 10, revokedAt: null, scopes: ['supplements'] },
+    ],
+    consents: [consent(9), consent(10)],
+    goals: [{ userId: 9 }, { userId: 10 }],
+    journeys: [{ userId: 9 }, { userId: 10 }, { userId: 11 }],
   });
   const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
   assert.equal(out.closed, 0);
-  assert.equal(out.skipped, 1, 'only the live basic-scope user is a candidate');
+  assert.equal(out.eligible, 0);
+  assert.equal(out.skipped, 0, 'only live basic consents are candidates');
+  assert.equal(prisma.state.created.length, 0);
 });
 
-test('sweep: a user qualifying under both paths is closed exactly once', async () => {
+test('sweep: a coach journey with nutrition consent is still closed exactly once', async () => {
   const prisma = fakePrisma({
     consents: [consent(1)],
     coachConsents: [coachConsent(1)],
     goals: [{ userId: 1 }],
+    journeys: [{ userId: 1 }],
   });
   const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
   assert.equal(out.closed, 1);
   assert.equal(prisma.state.created.length, 1);
 });
 
-test('sweep: the coach flag off keeps the old rules, coach users included', async () => {
+test('sweep: one failed close is counted and does not prevent the next eligible user closing', async (t) => {
+  t.mock.method(console, 'error', () => {});
   const prisma = fakePrisma({
-    consents: [consent(1)],
-    coachConsents: [coachConsent(9)],
-    goals: [{ userId: 1 }, { userId: 9 }],
+    coachConsents: [coachConsent(1), coachConsent(2)],
+    journeys: [{ userId: 1 }, { userId: 2 }],
+    failUserIds: [1],
   });
-  const out = await runDayCloseSweep(prisma, {
-    now: RUN_AT,
-    isEnabled: async (f) => f !== 'coachJourney',
-  });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  assert.equal(out.eligible, 2);
+  assert.equal(out.failed, 1);
   assert.equal(out.closed, 1);
-  assert.equal(prisma.state.created[0].userId, 1);
-  assert.equal(out.skipped, 0, 'with the coach flag off the coach table is not even queried');
+  assert.equal(prisma.state.created[0].userId, 2);
 });
 
 test('sweep: a caller that forgets isEnabled gets a no-op, not an ungated write', async () => {
@@ -249,4 +283,5 @@ test('sweep: a caller that forgets isEnabled gets a no-op, not an ungated write'
   const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.disabled, true);
   assert.equal(prisma.state.created.length, 0);
+  assert.deepEqual(prisma.state.eligibilityReads, []);
 });
