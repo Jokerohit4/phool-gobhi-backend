@@ -42,7 +42,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
       select: { id: true, type: true, startedAt: true, endedAt: true, exercises: { select: { sets: { select: { id: true, completed: true } } } } },
     }),
     prisma.supplementLog.findMany({
-      where: { userId, localDate, taken: true },
+      where: { userId, localDate },
       select: { scheduleId: true },
     }),
     prisma.waterLog.findMany({
