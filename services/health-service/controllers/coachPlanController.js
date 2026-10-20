@@ -3,7 +3,7 @@ import * as todayService from '../services/plan/todayService.js';
 import { rebuildPlan } from '../services/plan/rebuildPlan.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
-import { unlockFoodEarly } from '../services/journey/journeyService.js';
+import { getJourney, unlockFoodEarly } from '../services/journey/journeyService.js';
 import { track } from '../utils/analytics.js';
 
 const prisma = new PrismaClient();
@@ -279,7 +279,7 @@ export const deleteItem = handle(async (req, res) => {
 // POST /plan/settings/preview
 export const previewSettings = handle(async (req, res) => {
   const draft = req.body || {};
-  const journey = await todayService.getJourney(req.userId); // We need to expose getJourney
+  const journey = await getJourney(req.userId);
   const plan = await prescriptionService.previewPlan({ prisma, userId: req.userId, draft, journey });
   res.json({ plan });
 });
@@ -287,7 +287,7 @@ export const previewSettings = handle(async (req, res) => {
 // PUT /plan/settings
 export const saveSettings = handle(async (req, res) => {
   const draft = req.body || {};
-  const journey = await todayService.getJourney(req.userId);
+  const journey = await getJourney(req.userId);
   const { plan, today } = await prescriptionService.saveSettings({ prisma, userId: req.userId, draft, journey });
   track('plan_edited', req.userId, { what: 'settings' });
   res.json({ plan, today });
@@ -302,7 +302,7 @@ export const saveSlots = handle(async (req, res) => {
     err.code = 'VALIDATION';
     throw err;
   }
-  const journey = await todayService.getJourney(req.userId);
+  const journey = await getJourney(req.userId);
   const { plan, today } = await prescriptionService.saveSlots({ prisma, userId: req.userId, slots, journey });
   track('plan_edited', req.userId, { what: 'slots' });
   res.json({ plan, today });
