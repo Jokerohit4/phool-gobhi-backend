@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { MUSCLE_GROUPS, EQUIPMENT, LOGGING_TYPES } from '../constants/healthEnums.js';
+import { rankExercises } from './exerciseSearch.js';
 const prisma = new PrismaClient();
 
 // The library is global (createdByUserId: null) plus this user's own custom
@@ -9,12 +10,12 @@ export async function searchExercisesService(userId, { q, muscleGroup, equipment
   const where = {
     AND: [
       { OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
-      q ? { name: { contains: q, mode: 'insensitive' } } : {},
       muscleGroup ? { muscleGroup } : {},
       equipment ? { equipment } : {},
     ],
   };
-  return prisma.exercise.findMany({ where, orderBy: { name: 'asc' } });
+  const exercises = await prisma.exercise.findMany({ where, orderBy: { name: 'asc' } });
+  return rankExercises(exercises, q);
 }
 
 export async function createCustomExerciseService(userId, body) {
