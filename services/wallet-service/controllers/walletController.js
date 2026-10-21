@@ -383,12 +383,16 @@ export const getMyAttendanceSaasBill = async (req, res) => {
 
 export const createTopUpOrder = async (req, res) => {
   try {
-    // Partner wallets are credited only from the platform's share of
-    // completed bookings/subscriptions — dispersal to partners happens
-    // manually via payoutPartner. Partners must never be able to add their
-    // own money in, so top-up is customer-only.
-    if (req.userRole === 'partner') {
-      return res.status(403).json({ error: 'Partner wallets cannot be topped up. Balance is credited automatically from completed bookings.' });
+    // Only customers hold top-up wallets — same gate as verifyAndCreditWallet
+    // below (and therefore the webhook, which can only settle orders created
+    // here). Partner wallets are credited only from the platform's share of
+    // completed bookings/subscriptions (dispersal via payoutPartner); gobhi/
+    // trainer accounts get wallet features via admin internal paths. The old
+    // check blocked only `partner`, letting a gobhi/trainer account create and
+    // pay an order that /verify then 403'd — while the webhook credited it
+    // anyway, contradicting the customer-only invariant.
+    if (req.userRole !== 'customer') {
+      return res.status(403).json({ error: 'Only customer wallets can be topped up.' });
     }
     const { amount } = req.body;
     const userId = req.userId; // from JWT middleware

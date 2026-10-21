@@ -144,3 +144,32 @@ test('a gym lookup failure leaves the payout for the next run', async () => {
     gymLookupFails = false;
   }
 });
+
+test('a bank-settled subscription retries the bank ledger rather than the wallet', async () => {
+  rows.clear(); posts.length = 0; creditFails = false; gymLookupFails = false;
+  rows.set(8, booking(8, { subscriptionId: 99, isAttendanceSaas: true }));
+  const result = await retryOwedPayouts();
+  assert.equal(result.paid, 1);
+  assert.equal(posts.length, 1);
+  assert.ok(posts[0].url.endsWith('/internal/bank-settlements/record'));
+  assert.equal(posts[0].body.bookingId, 8);
+  assert.equal(posts[0].body.subscriptionId, 99);
+});
+
+test('a failed bank-ledger retry remains owed without a wallet credit', async () => {
+  rows.clear(); posts.length = 0; creditFails = true; gymLookupFails = false;
+  rows.set(9, booking(9, { subscriptionId: 99, isAttendanceSaas: true }));
+  try {
+    assert.equal((await retryOwedPayouts()).paid, 0);
+    assert.equal(rows.get(9).payoutCreditedAt, null);
+    assert.equal(posts.length, 0);
+  } finally { creditFails = false; }
+});
+
+test('zero partner share settles without requesting a zero-value wallet credit', async () => {
+  rows.clear(); posts.length = 0; creditFails = false; gymLookupFails = false;
+  rows.set(10, booking(10, { payoutAmount: 0 }));
+  assert.equal((await retryOwedPayouts()).paid, 1);
+  assert.ok(rows.get(10).payoutCreditedAt instanceof Date);
+  assert.equal(posts.length, 0);
+});

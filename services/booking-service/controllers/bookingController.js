@@ -680,10 +680,11 @@ export const sendDailyBriefing = async (req, res) => {
 export const autoCompleteSessions = async (req, res) => {
   try {
     // The hourly settlement sweep: finish verified sessions, then retry any
-    // cancellation refund that is owed but was never credited.
+    // cancellation refund or partner payout that is owed but was never credited.
     const result = await bookingService.autoCompleteEndedSessions();
     const refunds = await bookingService.retryOwedRefunds();
-    res.json({ data: { ...result, refunds } });
+    const payouts = await bookingService.retryOwedPayouts();
+    res.json({ data: { ...result, refunds, payouts } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

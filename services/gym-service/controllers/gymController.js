@@ -6,6 +6,7 @@ import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
+import { sanitizeApiResponse } from '../utils/normalizeDecimal.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -24,7 +25,7 @@ export const listGyms = async (req, res) => {
       userLat: isNaN(userLat) ? null : userLat,
       userLng: isNaN(userLng) ? null : userLng,
     });
-    res.json({ data: gyms });
+    res.json({ data: sanitizeApiResponse(gyms) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -34,7 +35,7 @@ export const listGymsAdmin = async (req, res) => {
   try {
     const { status, partnerId } = req.query;
     const gyms = await gymService.listGymsAdmin({ status, partnerId });
-    res.json({ data: gyms });
+    res.json({ data: sanitizeApiResponse(gyms) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -45,7 +46,7 @@ export const listGymsAdmin = async (req, res) => {
 export const getGymAdmin = async (req, res) => {
   try {
     const gym = await gymService.getGymByIdRaw(parseInt(req.params.id));
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -60,7 +61,7 @@ export const getGym = async (req, res) => {
       isNaN(userLat) ? null : userLat,
       isNaN(userLng) ? null : userLng
     );
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -88,7 +89,7 @@ export const getGymInternal = async (req, res) => {
   try {
     const { startTime, date } = req.query;
     const gym = await gymService.getGymInternalWithSlotPrice(parseInt(req.params.id), startTime, date);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -186,11 +187,11 @@ export const getGymSlots = async (req, res) => {
     // minutes ahead" copy from the server's rule instead of hardcoding 60 and
     // silently drifting if the rule ever changes.
     res.json({
-      data: {
+      data: sanitizeApiResponse({
         slots: annotated,
         capacity: gym.capacity,
         leadTimeMinutes: MIN_LEAD_MINUTES,
-      },
+      }),
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -237,7 +238,7 @@ export const getGymAvailability = async (req, res) => {
       })
     );
 
-    res.json({ data: { dates: results } });
+    res.json({ data: sanitizeApiResponse({ dates: results }) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -246,7 +247,7 @@ export const getGymAvailability = async (req, res) => {
 export const getPartnerGyms = async (req, res) => {
   try {
     const gyms = await gymService.getPartnerGyms(req.userId);
-    res.json({ data: gyms });
+    res.json({ data: sanitizeApiResponse(gyms) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -278,7 +279,7 @@ export const createGym = async (req, res) => {
 export const updateGym = async (req, res) => {
   try {
     const gym = await gymService.updateGym(parseInt(req.params.id), req.userId, req.body);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -287,7 +288,7 @@ export const updateGym = async (req, res) => {
 export const refreshGoogleRating = async (req, res) => {
   try {
     const gym = await gymService.refreshGoogleRating(parseInt(req.params.id), req.userId);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -296,7 +297,7 @@ export const refreshGoogleRating = async (req, res) => {
 export const deleteGym = async (req, res) => {
   try {
     const gym = await gymService.softDeleteGym(parseInt(req.params.id), req.userId);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -548,7 +549,7 @@ export const addReview = async (req, res) => {
 export const getGymReviews = async (req, res) => {
   try {
     const reviews = await gymService.getGymReviews(parseInt(req.params.id));
-    res.json({ data: reviews });
+    res.json({ data: sanitizeApiResponse(reviews) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

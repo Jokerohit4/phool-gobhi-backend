@@ -24,6 +24,11 @@ const fakePrisma = {
       return { count: 1 };
     },
     findUnique: async ({ where }) => ({ ...rows.get(where.id) }),
+    update: async ({ where, data }) => {
+      const b = rows.get(where.id);
+      Object.assign(b, data);
+      return { ...b };
+    },
     // Referral check: never this customer's first completed booking.
     findFirst: async () => ({ id: -1 }),
   },

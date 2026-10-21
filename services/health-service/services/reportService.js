@@ -3,6 +3,7 @@ import { track } from '../utils/analytics.js';
 import { extractBiomarkersFromPDF } from '../utils/ocrService.js';
 import { signedDocumentUrl } from './ledger/medicalDocumentStorage.js';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
+import { istDateString } from '../utils/sessionDay.js';
 
 const prisma = new PrismaClient();
 
@@ -301,7 +302,7 @@ export function reportDate(report) {
   // guarantees. Falling back to today here rather than throwing, because a
   // misdated biomarker is a smaller harm than a 500 on the confirm button -
   // and the date is visible and correctable either way.
-  return new Date().toISOString().slice(0, 10);
+  return istDateString(new Date());
 }
 
 function isIsoDay(value) {

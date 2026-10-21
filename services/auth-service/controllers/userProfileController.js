@@ -3,6 +3,7 @@ import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAI
 import { deriveAppMode } from '../services/appModeService.js';
 import { normalizeFitnessGoals } from '../constants/userEnums.js';
 import { linkGym } from '../services/gymLinkService.js';
+import { normalizePhone } from '../services/authService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
@@ -20,6 +21,10 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 const MIN_AGE_YEARS = 18;
 const MAX_TRAINING_LOCATION_OTHER_CHARS = 80;
 const MAX_RECOMMENDED_EQUIPMENT_ITEMS = 20;
+// Pragmatic address check — one @, a dot in the domain, no spaces. Not RFC
+// 5322; it exists to reject obvious typos and anything with whitespace, since
+// the only consumer that breaks silently is email-keyed account lookup.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Latest allowed DOB as a UTC-midnight Date (both sides of the comparison in
 // updateProfile parse date-only strings, so no timezone drift).
@@ -435,6 +440,28 @@ export const updateProfile = async (req, res) => {
     if (gender !== undefined && gender !== null && !VALID_GENDERS.includes(gender)) {
       return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
     }
+    // Phone is the account's login identity and is keyed bare-10-digit
+    // everywhere (OTP store, Firebase path, User.phone). Without this the app
+    // could PUT "+91 93548 59197" and create a second, unreachable "identity"
+    // that no OTP lookup would ever match. Normalize to the canonical form so
+    // every writer agrees (a change of number stays unverified but at least
+    // resolves to the same key), and reject anything not a valid Indian mobile.
+    if (phone !== undefined) {
+      const normalizedPhone = normalizePhone(phone);
+      if (!normalizedPhone) {
+        return res.status(400).json({ error: 'Invalid phone number', code: 'INVALID_PHONE' });
+      }
+      req.body.phone = normalizedPhone;
+    }
+    // Email is optional but must be a plausible address when set — an invalid
+    // one silently breaks staff Google sign-in (which resolves accounts by
+    // email) and all mail. '' clears it (the app sends empty for "remove").
+    if (email !== undefined && email !== null && email !== '') {
+      if (typeof email !== 'string' || !EMAIL_REGEX.test(email.trim()) || email.trim().length > 254) {
+        return res.status(400).json({ error: 'Invalid email address', code: 'INVALID_EMAIL' });
+      }
+      req.body.email = email.trim().toLowerCase();
+    }
     if (dateOfBirth !== undefined && dateOfBirth !== null && dateOfBirth !== '') {
       const dob = new Date(dateOfBirth);
       if (Number.isNaN(dob.getTime()) || dob.getTime() > minAgeCutoffDate().getTime()) {
@@ -459,15 +486,26 @@ export const updateProfile = async (req, res) => {
     const before = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!before) return res.status(404).json({ error: 'User not found' });
 
-    // One real gender change, ever. A "real change" is the old gender being set
-    // and the new one differing — onboarding (empty -> value) and re-saving the
-    // same gender don't count. The first real change records when and what
-    // alongside the gender itself (inside `updates`, so a failed
-    // profile-completion-bonus credit rolls them back too, see below); a second
-    // is refused. buddy-service reads both fields on profile sync.
-    const realGenderChange =
-      gender !== undefined && gender !== null && before.gender != null && gender !== before.gender;
-    if (realGenderChange && before.genderChangedAt) {
+    // One real gender change, ever. A "real change" is the new value differing
+    // from the old — onboarding (empty -> value) and re-saving the same gender
+    // don't count. The first real change records when and what alongside the
+    // gender itself (inside `updates`, so a failed profile-completion-bonus
+    // credit rolls them back too, see below); a second is refused.
+    // Two must-haves, both fixing ways the limit used to be bypassable:
+    //   * the null-clearing trick — gender is NOT NULL, so a "clear to null"
+    //     was a no-op that never stamped, letting a user go male -> (null)
+    //     -> female with no change ever recorded. An explicit null is now
+    //     rejected outright (there is no null gender).
+    //   * an already-stamped account changing again — the guard must key on
+    //     the stamp (has this account EVER made a real change), not on the
+    //     old value happening to be non-null. As written the guard only fired
+    //     when `before.gender` was set AND differed, so any path that landed
+    //     `before.gender` back at null reopened the change window.
+    if (gender !== undefined && gender === null) {
+      return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
+    }
+    const realGenderChange = gender !== undefined && before.gender != null && gender !== before.gender;
+    if (before.genderChangedAt && gender !== undefined && gender !== before.gender) {
       return res.status(400).json({
         error: "You've already changed your gender once. Contact support to change it again.",
         code: 'GENDER_CHANGE_LIMIT',
@@ -476,8 +514,8 @@ export const updateProfile = async (req, res) => {
 
     const updates = {};
     if (name !== undefined) updates.name = name;
-    if (phone !== undefined) updates.phone = phone;
-    if (email !== undefined) updates.email = email;
+    if (phone !== undefined) updates.phone = req.body.phone;
+    if (email !== undefined) updates.email = email === '' ? null : req.body.email;
     if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl;
     if (fcmToken !== undefined) updates.fcmToken = fcmToken;
     if (gender !== undefined) updates.gender = gender;

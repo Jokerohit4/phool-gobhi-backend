@@ -43,7 +43,8 @@ function seedProfile(userId, overrides = {}) {
 
 // ── Mock module setup (must run before importing buddyService) ──────────────
 let recordSwipe, sendMessage, blockUser, unblockUser, unmatch, verifyActiveMatchMembership;
-let getMessages, getMatches, getMatchedProfile, reportUser, listReports, reviewReport;
+let getMessages, getMatches, getMatchedProfile, reportUser, listReports, reviewReport, addPhotos;
+let photoLockSql;
 
 test('setup: mock all dependencies and import buddyService', async (t) => {
   resetAll();
@@ -55,6 +56,7 @@ test('setup: mock all dependencies and import buddyService', async (t) => {
     swipe: swipes, match: matches, chatMessage: messages, blockedUser: blocks, report: reports,
     buddyProfile: profiles, buddyPhoto: photos, buddyFilter: filters,
   });
+  fake.$executeRaw = async (sql) => { photoLockSql = sql.join('?'); return 0; };
   t.mock.module('@prisma/client', {
     exports: { PrismaClient: class { constructor() { return fake; } }, Prisma: {} },
   });
@@ -118,6 +120,7 @@ test('setup: mock all dependencies and import buddyService', async (t) => {
     reportUser,
     listReports,
     reviewReport,
+    addPhotos,
   } = await import('../services/buddyService.js'));
 });
 
@@ -733,4 +736,24 @@ test('reviewReport: truncates an oversized resolution note', async () => {
   const [id] = [...reports.keys()];
   const updated = await reviewReport(id, { status: 'dismissed', resolutionNote: 'y'.repeat(900) }, 77);
   assert.equal(updated.resolutionNote.length, 500);
+});
+test('photo upload locks use PostgreSQL integer arguments and append beyond remaining orders', async () => {
+  resetAll();
+  seedProfile(1);
+  const profileId = 50001;
+  photos.set(1, { id: 1, buddyProfileId: profileId, order: 0, url: 'one' });
+  photos.set(2, { id: 2, buddyProfileId: profileId, order: 2, url: 'three' });
+  nextId = 3;
+  const created = await addPhotos(1, [{ path: 'new', filename: 'new-photo' }]);
+  assert.equal(created.length, 1);
+  assert.equal(created[0].order, 3);
+  assert.match(photoLockSql, /913001::int, \?::int/);
+});
+
+test('photo upload rechecks the cap inside the transaction before writing', async () => {
+  resetAll();
+  seedProfile(1);
+  for (let id = 1; id <= 6; id++) photos.set(id, { id, buddyProfileId: 50001, order: id - 1 });
+  await assert.rejects(() => addPhotos(1, [{ path: 'new', filename: 'new-photo' }]), (err) => err.status === 409);
+  assert.equal(photos.size, 6);
 });

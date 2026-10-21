@@ -104,6 +104,9 @@ function makeMockPrisma() {
     // Real service code always passes a callback; the mock hands it the same
     // object as the tx client (no isolation needed for these assertions).
     async $transaction(fn) { return fn(mockPrisma); },
+    // Advisory-lock calls (payReferrerIfEligible's cap serialization) are
+    // no-ops against the in-memory mock — there's no real concurrency here.
+    async $executeRaw() { return 0; },
   };
 }
 

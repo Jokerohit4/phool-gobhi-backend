@@ -84,6 +84,7 @@ test('getCustomerBookings: strips the platform/partner commercial split and is n
   bookingRows = new Map([[1, {
     id: 1, customerId: CUSTOMER, gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00',
     amount: 500, commissionPct: 20, partnerShare: 400, walletTxId: 77,
+    payoutAmount: 400, payoutCreditedAt: new Date(),
     status: 'completed', attendedAt: new Date(),
     attendanceVerifiedBy: 20, attendanceOverrideReason: 'phone dead', subscriptionId: null, isAttendanceSaas: false,
     classId: null, checkinRequested: false, locationVerified: true, slotShiftWarning: false,
@@ -97,6 +98,8 @@ test('getCustomerBookings: strips the platform/partner commercial split and is n
   assert.equal(b.commissionPct, undefined, 'platform take-rate is not the customer\'s business');
   assert.equal(b.partnerShare, undefined, 'what the gym keeps is not the customer\'s business');
   assert.equal(b.walletTxId, undefined);
+  assert.equal(b.payoutAmount, undefined);
+  assert.equal(b.payoutCreditedAt, undefined);
   assert.equal(b.attendanceOverrideReason, undefined);
   assert.equal(b.attendanceVerifiedBy, undefined);
   assert.equal(b.qrToken, 'qr.1.10.signed');

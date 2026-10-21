@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { istDateString } from '../utils/sessionDay.js';
 
 const prisma = new PrismaClient();
 
@@ -41,7 +42,7 @@ function addDaysIso(iso, days) {
 }
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return istDateString(new Date());
 }
 
 /// The last day low-impact recovery stays active for: the period start through

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { MATCH_EXPIRY_DAYS } from './buddyService.js';
+import { getUsersBatchInternal } from './authClient.js';
 
 const prisma = new PrismaClient();
 const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
@@ -48,18 +49,30 @@ export async function getConsistencyLeague(userId) {
 
     const scores = res.data.data || [];
 
-    // 3. Map scores to user profiles
-    const profiles = await prisma.buddyProfile.findMany({
-      where: { userId: { in: userList } },
-    });
+    // Display names come from auth-service's batch lookup — BuddyProfile has
+    // no `name`/`displayName` column, so the old `profile?.displayName`
+    // fallback rendered every row (including the caller's own) as
+    // "Unknown Buddy". Best-effort like elsewhere in the service: a lookup
+    // failure degrades to the fallback rather than failing the league.
+    let userInfos = [];
+    try {
+      userInfos = await getUsersBatchInternal(userList);
+    } catch (_) { /* fall back to 'Buddy' below */ }
+    const nameById = new Map(userInfos.map((u) => [u.id, u.name]));
 
-    const league = scores.map(s => {
-      const profile = profiles.find(p => p.userId === s.userId);
+    // Build from the full buddy set, not just the scored rows: users with no
+    // biometric snapshots in the 7-day window (new/light users) were omitted
+    // entirely, which zeroed their own myRank and undercounted
+    // totalParticipants. Scored users sort by score; unscored ones sink to
+    // the bottom with score 0.
+    const scoreByUserId = new Map(scores.map((s) => [s.userId, s]));
+    const league = userList.map((uid) => {
+      const s = scoreByUserId.get(uid);
       return {
-        userId: s.userId,
-        name: profile?.displayName || 'Unknown Buddy',
-        score: s.avgScore,
-        isMe: s.userId === userId,
+        userId: uid,
+        name: nameById.get(uid) || 'Buddy',
+        score: s ? s.avgScore : 0,
+        isMe: uid === userId,
       };
     }).sort((a, b) => b.score - a.score);
 

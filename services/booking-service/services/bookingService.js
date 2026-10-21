@@ -21,6 +21,20 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Inclusive [from, today] window of IST calendar days, as the bare
+// "YYYY-MM-DD" strings every date column here stores (Booking.date,
+// MemberAttendance.date, TrainerAttendance.date). Every analytics query used
+// to derive this from Date#toISOString, i.e. the UTC day — which is 5h30m
+// behind IST, so after 18:30 IST the "today" upper bound was still yesterday
+// and today's attendance/revenue silently vanished from every report.
+function istDateWindow(days) {
+  const todayString = todayDateStringIST();
+  const todayMs = new Date(`${todayString}T00:00:00+05:30`).getTime();
+  const fromMs = todayMs - days * 24 * 60 * 60 * 1000;
+  const fromDateString = new Date(fromMs + IST_OFFSET_MS).toISOString().slice(0, 10);
+  return { fromDateString, todayString };
+}
+
 const prisma = new PrismaClient();
 
 // "First-ever visit to this gym" spans BOTH attendance tables — a customer
@@ -129,6 +143,7 @@ function normalizeBookingMoney(booking) {
   if (out.amount != null) out.amount = Number(out.amount);
   if (out.commissionPct != null) out.commissionPct = Number(out.commissionPct);
   if (out.partnerShare != null) out.partnerShare = Number(out.partnerShare);
+  if (out.payoutAmount != null) out.payoutAmount = Number(out.payoutAmount);
   return out;
 }
 
@@ -1170,6 +1185,80 @@ export async function retryOwedRefunds() {
   return { owed: owed.length, refunded };
 }
 
+// Credits one completion's partner share to the partner's wallet and stamps
+// payoutCreditedAt. Keyed on the booking (booking-payout-<id>), so the manual
+// completion path and every retry by the sweep credit it most once. Never
+// throws; returns whether the payout is now settled.
+async function creditBookingPayout({ id, gymId, partnerId, amount }) {
+  if (!partnerId) return false;
+  try {
+    await axios.post(`${WALLET_SERVICE_URL}/${partnerId}/credit`, {
+      amount,
+      description: 'Gym session payout',
+      userType: 'partner',
+      gymId,
+      // One payout per session, whichever path completed it. The status flip
+      // is already race-guarded; this makes a retried credit safe too.
+      idempotencyKey: `booking-payout-${id}`,
+    }, await internalHeadersFor(WALLET_SERVICE_URL));
+  } catch (err) {
+    console.error('Partner payout failed for booking', id, err.message);
+    return false;
+  }
+  await prisma.booking.update({ where: { id }, data: { payoutCreditedAt: new Date() } })
+    .catch((err) => console.error('payoutCreditedAt stamp failed for booking', id, err.message));
+  return true;
+}
+
+// Retries every completion payout that is owed but not yet credited. Run by the
+// hourly settlement sweep (POST /internal/auto-complete) alongside refunds and
+// auto-completion. Safe to run any number of times: the credit is keyed on
+// booking-payout-<id>, so a payout whose stamp was lost is not paid twice.
+export async function retryOwedPayouts() {
+  const owed = await prisma.booking.findMany({
+    where: { status: 'completed', payoutAmount: { not: null }, payoutCreditedAt: null },
+    orderBy: { id: 'asc' },
+    take: 200,
+  });
+  const gyms = new Map();
+  let paid = 0;
+  for (const booking of owed) {
+    let partnerId = null;
+    try {
+      if (!gyms.has(booking.gymId)) {
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        gyms.set(booking.gymId, gymRes.data?.data || gymRes.data);
+      }
+      partnerId = gyms.get(booking.gymId)?.partnerId ?? null;
+    } catch (err) {
+      // Gym-service hiccup — leave the payout owed and pick it up next run.
+      console.error('payout retry gym lookup failed for booking', booking.id, err.message);
+      continue;
+    }
+    const amount = Number(booking.payoutAmount);
+    if (!partnerId || !Number.isFinite(amount) || amount < 0) continue;
+    // A failed bank-ledger record must retry the bank route, never credit
+    // the in-app wallet. Zero-share bookings only need a settlement stamp.
+    if (amount === 0 || (booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null)) {
+      try {
+        if (amount > 0) {
+          await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
+            partnerId, gymId: booking.gymId, bookingId: booking.id,
+            subscriptionId: booking.subscriptionId, amount,
+          }, await internalHeadersFor(WALLET_SERVICE_URL));
+        }
+        await prisma.booking.update({ where: { id: booking.id }, data: { payoutCreditedAt: new Date() } });
+        paid++;
+      } catch (err) {
+        console.error('Partner bank settlement retry failed for booking', booking.id, err.message);
+      }
+    } else if (await creditBookingPayout({ id: booking.id, gymId: booking.gymId, partnerId, amount })) {
+      paid++;
+    }
+  }
+  return { owed: owed.length, paid };
+}
+
 // Everything that follows a booking flipping to 'completed': the partner's
 // money, the referral bonus, the funnel event and the customer's push. Shared
 // by the partner's own "complete" tap and the auto-complete sweep, so a session
@@ -1190,7 +1279,7 @@ async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, com
   // same subscription. Current "perVisit" subscriptions DO have a real
   // (non-null) partnerShare snapshotted at booking-creation time — those
   // pay out here exactly like a normal paid booking.
-  const payoutAmount = booking.partnerShare ?? booking.amount;
+  const payoutOwed = booking.partnerShare ?? booking.amount;
   const skipPayout = booking.subscriptionId && booking.partnerShare == null;
   // Attendance-SaaS subscription visit: this partner share is settled
   // directly to the partner's bank account by admin, never credited to
@@ -1206,28 +1295,20 @@ async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, com
           gymId,
           bookingId,
           subscriptionId: booking.subscriptionId,
-          amount: payoutAmount,
+          amount: payoutOwed,
         }, await internalHeadersFor(WALLET_SERVICE_URL));
+        // Not owed through the wallet path — mark settled so retryOwedPayouts
+        // never chases it. (The bank ledger has its own admin reconciliation.)
+        await prisma.booking.update({ where: { id: bookingId }, data: { payoutCreditedAt: new Date() } })
+          .catch((err) => console.error('payoutCreditedAt stamp failed for booking', bookingId, err.message));
       }
     } catch (payoutErr) {
       console.error('Partner bank settlement record failed for booking', bookingId, payoutErr.message);
     }
   } else if (!skipPayout) {
-    try {
-      if (gym.partnerId) {
-        await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
-          amount: payoutAmount,
-          description: 'Gym session payout',
-          userType: 'partner',
-          gymId,
-          // One payout per session, whichever path completed it. The status
-          // flip is already race-guarded; this makes a retried credit safe too.
-          idempotencyKey: `booking-payout-${bookingId}`,
-        }, await internalHeadersFor(WALLET_SERVICE_URL));
-      }
-    } catch (payoutErr) {
-      console.error('Partner payout failed for booking', bookingId, payoutErr.message);
-    }
+    // Given to creditBookingPayout, which stamps payoutCreditedAt on success so
+    // the sweep can retry exactly the bookings whose credit failed.
+    await creditBookingPayout({ id: bookingId, gymId, partnerId: gym.partnerId, amount: payoutOwed });
   }
 
   // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
@@ -1373,9 +1454,15 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // 'confirmed' so two concurrent completion requests (double-tap, two
     // devices) can't both pass the check above and both trigger a payout;
     // only one update actually matches and the loser sees count === 0.
+    // payoutAmount is stamped in the same update (null when nothing is owed by
+    // the wallet path: an "upfront" subscription with partnerShare null) so a
+    // failed credit leaves a durable "owed but unpaid" row for retryOwedPayouts.
+    const payoutOwed = booking.subscriptionId && booking.partnerShare == null
+      ? null
+      : (booking.partnerShare ?? booking.amount);
     const { count } = await prisma.booking.updateMany({
       where: { id: bookingId, status: { in: ['confirmed', 'started'] } },
-      data: { status: 'completed', ...attendanceData }
+      data: { status: 'completed', ...attendanceData, payoutAmount: payoutOwed }
     });
     if (count === 0) {
       throw { status: 400, error: 'Booking cannot be completed' };
@@ -1465,9 +1552,12 @@ export async function autoCompleteEndedSessions({ nowMs = Date.now() } = {}) {
       const gym = gyms.get(booking.gymId);
       if (!gym) throw new Error('gym not found');
 
+      const payoutOwed = booking.subscriptionId && booking.partnerShare == null
+        ? null
+        : (booking.partnerShare ?? booking.amount);
       const { count } = await prisma.booking.updateMany({
         where: { id: booking.id, status: 'started' },
-        data: { status: 'completed' },
+        data: { status: 'completed', payoutAmount: payoutOwed },
       });
       if (count === 0) continue; // completed or cancelled by someone else meanwhile
 
@@ -1510,7 +1600,9 @@ export function isDueForReminder(booking, nowMs = Date.now()) {
 // claim is not retried, and one missed reminder beats a duplicate.
 export async function sendSessionReminders({ nowMs = Date.now() } = {}) {
   const today = todayDateStringIST(nowMs);
-  const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const todayMs = new Date(`${today}T00:00:00+05:30`).getTime();
+  const tomorrowMs = todayMs + 24 * 60 * 60 * 1000;
+  const tomorrow = new Date(tomorrowMs + IST_OFFSET_MS).toISOString().slice(0, 10);
   // Today and tomorrow cover every slot up to 2h ahead, including just after
   // midnight IST.
   const candidates = await prisma.booking.findMany({
@@ -2012,12 +2104,23 @@ export async function getCustomerBookings(customerId) {
       } catch (_) { /* leave gym undefined for this id */ }
     }));
 
-    // Strip the partner's internal override note — it's about the customer,
-    // not for them (e.g. "phone dead, verified manually"). Every booking gets
-    // a signed check-in token regardless of status — verifyAttendance's own
-    // status/date checks are what actually gate a successful scan.
+    // Strip partner-internal fields before this reaches the customer. Two
+    // families:
+    //   - the partner's private override note ("phone dead, verified manually")
+    //     and who verified attendance — about the customer, not for them;
+    //   - the platform/partner commercial split (commissionPct, partnerShare,
+    //     walletTxId): the customer paid `amount`, and how much of it the gym
+    //     keeps versus the platform is not theirs to see. Spreading the raw
+    //     row leaked all of these on the app's own booking list.
+    // Every booking gets a signed check-in token regardless of status —
+    // verifyAttendance's own status/date checks are what actually gate a
+    // successful scan.
     return bookings.map(b => {
-      const { attendanceOverrideReason, ...safe } = b;
+      const {
+        attendanceOverrideReason, attendanceVerifiedBy,
+        commissionPct, partnerShare, walletTxId, payoutAmount, payoutCreditedAt,
+        ...safe
+      } = b;
       return { ...safe, gym: gymMap[b.gymId] || null, qrToken: signQrToken(b.id, b.gymId) };
     });
   } catch (err) {
@@ -2289,10 +2392,14 @@ const HEATMAP_MAX_DAYS = 90;
 async function computeAttendanceHeatmap(baseWhere, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= HEATMAP_MAX_DAYS
     ? Number(days) : 30;
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - n);
-  const fromDateString = fromDate.toISOString().split('T')[0];
-  const todayString = new Date().toISOString().split('T')[0];
+  // Booking.date is an IST calendar day ("YYYY-MM-DD"), so the window bounds
+  // must be IST calendar days too. Deriving them from Date#toISOString gave
+  // UTC days, which are 5h30m behind IST: after 18:30 IST the UTC "today" is
+  // still yesterday, dropping every check-in booked for today from the grid.
+  const todayString = todayDateStringIST();
+  const todayMs = new Date(`${todayString}T00:00:00+05:30`).getTime();
+  const fromMs = todayMs - n * 24 * 60 * 60 * 1000;
+  const fromDateString = new Date(fromMs + IST_OFFSET_MS).toISOString().slice(0, 10);
 
   const rows = await prisma.booking.groupBy({
     by: ['date', 'startTime'],
@@ -2308,7 +2415,8 @@ async function computeAttendanceHeatmap(baseWhere, days) {
 
   const byWeekdayHour = new Map();
   for (const cell of cells) {
-    const weekday = new Date(`${cell.date}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+    const istMs = new Date(`${cell.date}T00:00:00Z`).getTime() + IST_OFFSET_MS;
+    const weekday = new Date(istMs).getUTCDay(); // 0 = Sunday, in IST
     const key = `${weekday}-${cell.hour}`;
     byWeekdayHour.set(key, (byWeekdayHour.get(key) || 0) + cell.count);
   }
@@ -2436,10 +2544,7 @@ export function clusterSameTimeVisits(times, tolerance = MEMBER_ACTIVITY_TIME_TO
 async function computeMemberActivity(gymId, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= MEMBER_ACTIVITY_MAX_DAYS
     ? Number(days) : 7;
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - n);
-  const fromDateString = fromDate.toISOString().split('T')[0];
-  const todayString = new Date().toISOString().split('T')[0];
+  const { fromDateString, todayString } = istDateWindow(n);
 
   const [bookings, memberCheckins] = await Promise.all([
     prisma.booking.findMany({
@@ -2584,10 +2689,7 @@ export async function getMyTrainerAttendance(trainerId, gymId, days) {
     await assertTrainerBelongsToGym(trainerId, gymId);
     const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
       ? Number(days) : 30;
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - n);
-    const fromDateString = fromDate.toISOString().split('T')[0];
-    const todayString = new Date().toISOString().split('T')[0];
+    const { fromDateString, todayString } = istDateWindow(n);
 
     const rows = await prisma.trainerAttendance.findMany({
       where: { trainerId, gymId, date: { gte: fromDateString, lte: todayString } },
@@ -2721,10 +2823,7 @@ export async function getTrainerSessionsAdmin(trainerId, gymId, days) {
 async function computeTrainersOverview(gymId, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
     ? Number(days) : 30;
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - n);
-  const fromDateString = fromDate.toISOString().split('T')[0];
-  const todayString = new Date().toISOString().split('T')[0];
+  const { fromDateString, todayString } = istDateWindow(n);
 
   const [attendanceRows, sessionRows] = await Promise.all([
     prisma.trainerAttendance.findMany({
@@ -2795,10 +2894,7 @@ export async function getTopPerformingGyms(days, limit) {
     const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= 365
       ? Number(days) : 30;
     const cappedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - n);
-    const fromDateString = fromDate.toISOString().split('T')[0];
-    const todayString = new Date().toISOString().split('T')[0];
+    const { fromDateString, todayString } = istDateWindow(n);
 
     const [revenueGroups, attendanceGroups] = await Promise.all([
       prisma.booking.groupBy({
@@ -3443,10 +3539,11 @@ async function fetchDailyActivityRows(userIds, fromKey, toKey) {
 
 function currentWeekStartIST() {
   const todayString = todayDateStringIST();
-  const today = new Date(`${todayString}T00:00:00Z`);
-  const daysSinceMonday = (today.getUTCDay() + 6) % 7; // Monday=0..Sunday=6
-  today.setUTCDate(today.getUTCDate() - daysSinceMonday);
-  return today.toISOString().split('T')[0];
+  const todayMs = new Date(`${todayString}T00:00:00+05:30`).getTime();
+  const dayOfWeek = new Date(todayMs + IST_OFFSET_MS).getUTCDay(); // 0=Sun..6=Sat in IST
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  const mondayMs = todayMs - daysSinceMonday * 24 * 60 * 60 * 1000;
+  return new Date(mondayMs + IST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 async function checkInCountsByCustomer(gymId, window) {
@@ -3491,7 +3588,7 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
   // Score feeds for the same window the board shows (weekly=7 / monthly=30 /
   // all=90), across everyone who could appear + the requester.
   const { startKey, startUtc } = scoreWindow(new Date(), validWindow);
-  const todayKey = new Date(Date.now() + (5 * 60 + 30) * 60000).toISOString().split('T')[0];
+  const todayKey = todayDateStringIST();
   const [eventRows, activityRows] = await Promise.all([
     fetchGymAttendanceEvents(gymId, startUtc),
     fetchDailyActivityRows(customerIds, startKey, todayKey),

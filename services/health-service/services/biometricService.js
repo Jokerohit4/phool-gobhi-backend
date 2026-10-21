@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
+import { istDateString } from '../utils/sessionDay.js';
 const prisma = new PrismaClient();
 
 // Fitness+ FR-12 + Health+ FR-01, one implementation. Fitness+ only surfaces
@@ -86,11 +87,11 @@ export function validateLocalDate(value, { today = localDateIST(new Date()), all
     return 'localDate must be YYYY-MM-DD';
   }
 
-  // Calendar reality, via Date. Constructing with the explicit T00:00:00Z and
+  // Calendar reality, via Date. Constructing with explicit IST offset and
   // reading it back is what catches the roll-over: '2026-02-31' comes back as
   // '2026-03-03', which is not what we were given.
-  const parsed = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+  const parsed = new Date(`${value}T00:00:00+05:30`);
+  if (Number.isNaN(parsed.getTime()) || istDateString(parsed) !== value) {
     return `localDate ${value} is not a real calendar date`;
   }
 
@@ -137,6 +138,12 @@ export async function upsertEntryService(userId, { metric, value, localDate, sou
     err.status = 400;
     throw err;
   }
+  const valueProblem = validateMetricValue(metric, value);
+  if (valueProblem) {
+    const err = new Error(valueProblem);
+    err.status = 400;
+    throw err;
+  }
   const unit = METRIC_UNITS[metric];
   const row = await prisma.biometricEntry.upsert({
     where: { userId_metric_localDate: { userId, metric, localDate: day } },
@@ -160,7 +167,7 @@ export async function upsertManyService(userId, entries, { localDate, source = '
   const rows = entries.map((entry) => ({
     metric: entry.metric,
     value: entry.value,
-    localDate: entry.localDate ?? localDate,
+    localDate: entry.localDate ?? localDate ?? localDateIST(new Date()),
     source: entry.source ?? source,
     unit: entry.unit,
   }));
@@ -195,10 +202,22 @@ export async function upsertManyService(userId, entries, { localDate, source = '
     }
   }
 
-  const saved = [];
-  for (const row of rows) {
-    saved.push(await upsertEntryService(userId, row));
-  }
+  const saved = await prisma.$transaction(async (tx) => {
+    const results = [];
+    for (const row of rows) {
+      const day = row.localDate ?? localDate;
+      const unit = METRIC_UNITS[row.metric];
+      const result = await tx.biometricEntry.upsert({
+        where: { userId_metric_localDate: { userId, metric: row.metric, localDate: day } },
+        create: { userId, metric: row.metric, value: row.value, unit, source: row.source, localDate: day },
+        update: { value: row.value, unit, source: row.source },
+      });
+      results.push(result);
+    }
+    return results;
+  });
+  // Invalidate after commit so a concurrent read cannot cache pre-commit data.
+  await invalidateBlendedScore(userId);
   return saved;
 }
 

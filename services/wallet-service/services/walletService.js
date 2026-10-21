@@ -430,7 +430,15 @@ export async function debitWalletService(userId, amount, description, idempotenc
         where: allowNegative ? { userId } : { userId, balance: { gte: amount } },
         data: { balance: { decrement: amount } },
       });
-      if (count === 0) throw new Error('Insufficient balance');
+      if (count === 0) {
+        // Carry status/code so controllers map this to 402 +
+        // INSUFFICIENT_BALANCE (routing clients to a top-up) instead of an
+        // opaque 500 — the message is preserved for older callers/tests.
+        const insuf = new Error('Insufficient balance');
+        insuf.status = 402;
+        insuf.code = 'INSUFFICIENT_BALANCE';
+        throw insuf;
+      }
       const updated = await tx.wallet.findUnique({ where: { userId } });
       await tx.walletTransaction.create({
         data: {
@@ -1024,100 +1032,145 @@ async function purchaseSubscriptionUnderLock(customerId, gymId, planType, { coin
   }
   const chargeAmount = Math.max(0, price - discountAmount);
 
-  const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
-  if (!wallet || Number(wallet.balance) < chargeAmount) {
+  // chargeAmount is 0 when a coin discount covers the full price — the
+  // redemption above is the entire payment and debitWalletService rejects
+  // non-positive amounts, so skip the wallet debit entirely in that case.
+  if (chargeAmount > 0) {
+    const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
+    if (!wallet || Number(wallet.balance) < chargeAmount) {
+      if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+      throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+    }
+
+    try {
+      await debitWalletService(
+        customerId, chargeAmount,
+        `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
+        `subscription-wallet-order-${syntheticOrderId}`,
+        gymId
+      );
+    } catch (err) {
+      // A concurrent debit on the same wallet (a booking, a purchase at a
+      // different gym, an admin payout) can land between the balance check
+      // above and this debit — the atomic updateMany inside
+      // debitWalletService then rejects. Without this catch the coin
+      // redemption was never reversed and the customer permanently lost
+      // coins for a purchase that never happened.
+      if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+      if (err && err.message === 'Insufficient balance') {
+        throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+      }
+      throw err;
+    }
+  }
+
+  // From here to gymSubscription.create, every failure must compensate the
+  // wallet debit (and coin redemption) — a DB error on the partner-wallet
+  // upsert or the subscription insert would otherwise strand the customer's
+  // money with no subscription and no record of what to reverse. The 409
+  // path compensates itself before throwing and must not double-refund.
+  try {
+    // A concurrent purchase (e.g. a double-tap racing this same function on
+    // another request) could have landed between the check above and this
+    // debit — guard again and reverse the wallet debit (and any coin
+    // redemption) if so.
+    const existingAfter = await getActiveSubscriptionService(customerId, gymId);
+    if (existingAfter) {
+      if (chargeAmount > 0) {
+        await creditWalletService(customerId, chargeAmount,
+          `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`,
+          null, 'customer', gymId);
+      }
+      if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+      throw { status: 409, error: 'You already have an active subscription for this gym' };
+    }
+
+    // Every purchase that reaches this point is under the attendance-SaaS
+    // model (opted-out gyms were rejected above) — always true going
+    // forward. Historical rows can still be false from before opt-out was a
+    // hard gate; bookingCommissionFields/completeBooking in booking-service
+    // still reads this per-row for that reason.
+    const isAttendanceSaas = true;
+
+    let commissionAmount;
+    if (subscriptionPricingMode === 'flatPerUser') {
+      // A flat fee can't exceed the price itself — a cheap weekly plan at a
+      // gym with a flat fee set higher than that plan's price is an edge
+      // case admin can misconfigure, not one this function should let
+      // through as a negative partnerShare.
+      commissionAmount = Math.min(subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER, price);
+    } else {
+      const pct = subscriptionCommissionPctOverride ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
+      commissionAmount = Math.round(price * pct / 100 * 100) / 100;
+    }
+    // Always stored as the equivalent percentage, regardless of which mode
+    // actually computed commissionAmount — every existing consumer of
+    // GymSubscription.commissionPct (revenue-split summaries, etc.) reads it
+    // as a plain percentage and shouldn't need to branch on pricingMode to
+    // stay correct.
+    const commissionPct = price > 0 ? Math.round((commissionAmount / price) * 100 * 100) / 100 : 0;
+    // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
+    // partner is credited partnerShare/days per completed visit instead (see
+    // bookingCommissionFields/completeBooking in booking-service), so this
+    // customer's own already-collected revenue is what funds every visit
+    // (including any later gift-day make-up visits) and unused days are simply
+    // never paid out. Still upsert the partner's wallet row now so the first
+    // per-visit credit never fails on a missing wallet (the bug that used to
+    // strand a purchase in PROCESSING when a partner had no wallet yet).
+    // partnerShare is computed off the full, undiscounted price (both here and
+    // above via commissionAmount) — a coin discount (Gamification Phase 2) is
+    // Phool Gobhi's own acquisition spend out of its commission margin, never
+    // the partner's.
+    const partnerShare = Math.round((price - commissionAmount) * 100) / 100;
+    const days = PLAN_DAYS[planType];
+    const startDate = new Date();
+    const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
+
+    await prisma.wallet.upsert({
+      where: { userId: partnerId },
+      update: {},
+      create: { userId: partnerId, userType: 'partner' },
+    });
+
+    const subscription = await prisma.gymSubscription.create({
+      data: {
+        customerId,
+        gymId,
+        partnerId,
+        planType,
+        price,
+        commissionPct,
+        partnerShare,
+        isAttendanceSaas,
+        pricingMode: subscriptionPricingMode,
+        startDate,
+        endDate,
+        razorpayOrderId: syntheticOrderId,
+        payoutModel: 'perVisit',
+        coinDiscountAmount: redemption ? discountAmount : null,
+        coinDiscountCoins: redemption ? redemption.coinCost : null,
+      },
+    });
+
+    return serializeSubscription(subscription);
+  } catch (err) {
+    if (err && err.status === 409) throw err; // already compensated above
+    // Reverse whatever was taken before the failure. The compensating
+    // credit is best-effort with logging (same posture as
+    // refundCoinRedemption) — it must never mask the original error that's
+    // already unwinding the purchase.
+    try {
+      if (chargeAmount > 0) {
+        await creditWalletService(customerId, chargeAmount,
+          `Refund - subscription purchase failed (wallet order ${syntheticOrderId})`,
+          null, 'customer', gymId);
+      }
+    } catch (refundErr) {
+      console.error('purchaseSubscription compensation credit failed for order', syntheticOrderId, refundErr.message);
+    }
     if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
-    throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+    throw err;
   }
-
-  await debitWalletService(
-    customerId, chargeAmount,
-    `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
-    `subscription-wallet-order-${syntheticOrderId}`,
-    gymId
-  );
-
-  // A concurrent purchase (e.g. a double-tap racing this same function on
-  // another request) could have landed between the check above and this
-  // debit — guard again and reverse the wallet debit (and any coin
-  // redemption) if so.
-  const existingAfter = await getActiveSubscriptionService(customerId, gymId);
-  if (existingAfter) {
-    await creditWalletService(customerId, chargeAmount,
-      `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`,
-      null, 'customer', gymId);
-    if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
-    throw { status: 409, error: 'You already have an active subscription for this gym' };
-  }
-
-  // Every purchase that reaches this point is under the attendance-SaaS
-  // model (opted-out gyms were rejected above) — always true going
-  // forward. Historical rows can still be false from before opt-out was a
-  // hard gate; bookingCommissionFields/completeBooking in booking-service
-  // still reads this per-row for that reason.
-  const isAttendanceSaas = true;
-
-  let commissionAmount;
-  if (subscriptionPricingMode === 'flatPerUser') {
-    // A flat fee can't exceed the price itself — a cheap weekly plan at a
-    // gym with a flat fee set higher than that plan's price is an edge
-    // case admin can misconfigure, not one this function should let
-    // through as a negative partnerShare.
-    commissionAmount = Math.min(subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER, price);
-  } else {
-    const pct = subscriptionCommissionPctOverride ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
-    commissionAmount = Math.round(price * pct / 100 * 100) / 100;
-  }
-  // Always stored as the equivalent percentage, regardless of which mode
-  // actually computed commissionAmount — every existing consumer of
-  // GymSubscription.commissionPct (revenue-split summaries, etc.) reads it
-  // as a plain percentage and shouldn't need to branch on pricingMode to
-  // stay correct.
-  const commissionPct = price > 0 ? Math.round((commissionAmount / price) * 100 * 100) / 100 : 0;
-  // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
-  // partner is credited partnerShare/days per completed visit instead (see
-  // bookingCommissionFields/completeBooking in booking-service), so this
-  // customer's own already-collected revenue is what funds every visit
-  // (including any later gift-day make-up visits) and unused days are simply
-  // never paid out. Still upsert the partner's wallet row now so the first
-  // per-visit credit never fails on a missing wallet (the bug that used to
-  // strand a purchase in PROCESSING when a partner had no wallet yet).
-  // partnerShare is computed off the full, undiscounted price (both here and
-  // above via commissionAmount) — a coin discount (Gamification Phase 2) is
-  // Phool Gobhi's own acquisition spend out of its commission margin, never
-  // the partner's.
-  const partnerShare = Math.round((price - commissionAmount) * 100) / 100;
-  const days = PLAN_DAYS[planType];
-  const startDate = new Date();
-  const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
-
-  await prisma.wallet.upsert({
-    where: { userId: partnerId },
-    update: {},
-    create: { userId: partnerId, userType: 'partner' },
-  });
-
-  const subscription = await prisma.gymSubscription.create({
-    data: {
-      customerId,
-      gymId,
-      partnerId,
-      planType,
-      price,
-      commissionPct,
-      partnerShare,
-      isAttendanceSaas,
-      pricingMode: subscriptionPricingMode,
-      startDate,
-      endDate,
-      razorpayOrderId: syntheticOrderId,
-      payoutModel: 'perVisit',
-      coinDiscountAmount: redemption ? discountAmount : null,
-      coinDiscountCoins: redemption ? redemption.coinCost : null,
-    },
-  });
-
-  return serializeSubscription(subscription);
 }
 
 // Used by booking-service (internal, requireInternal) at booking-creation

@@ -70,11 +70,21 @@ function parseFriendIdFromReferrerKey(key) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// Advisory-lock namespace for the monthly-cap check below. Single-bigint
+// form so it can't collide with purchaseSubscriptionWithWallet's two-int
+// (customerId, gymId) key space; the value itself is arbitrary.
+const REFERRAL_CAP_LOCK_NS = 771_000_000_000_000n;
+
 // Credits the referrer ₹50 unless this referral is already paid (their key
 // exists) or they've hit the monthly cap. Returns 'paid' | 'already' |
 // 'capped'. Runs against the caller's tx so a referral credit and its
-// cap-check are atomic — two concurrent first-referrals for the same referrer
-// cannot both count themselves under the cap and both pay.
+// cap-check are atomic. The count-then-insert below is a TOCTOU under
+// READ COMMITTED on its own — two concurrent first-referrals for the same
+// referrer (different friends, so different idempotency keys and no
+// unique-index serialization) could both count themselves under the cap
+// and both pay. A transaction-scoped advisory lock on the referrer
+// serializes just the cap decision: the second transaction waits here,
+// then recounts and sees the first's credit.
 async function payReferrerIfEligible(tx, referrerId, friendId, now = new Date()) {
   const referrerKey = referrerKeyFor(referrerId, friendId);
   const existing = await tx.walletTransaction.findUnique({
@@ -82,6 +92,8 @@ async function payReferrerIfEligible(tx, referrerId, friendId, now = new Date())
     select: { id: true },
   });
   if (existing) return 'already';
+
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REFERRAL_CAP_LOCK_NS + BigInt(referrerId)}::bigint)`;
 
   const { start, end } = istMonthBounds(now);
   const paidThisMonth = await tx.walletTransaction.count({

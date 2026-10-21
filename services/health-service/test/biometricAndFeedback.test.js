@@ -25,6 +25,12 @@ test('setup: mock prisma once, import the services once', async (t) => {
     exports: {
       PrismaClient: class {
         constructor() {
+          this.$transaction = async (work) => {
+            const before = structuredClone(entryRows);
+            const beforeId = nextId;
+            try { return await work(this); }
+            catch (err) { entryRows = before; nextId = beforeId; throw err; }
+          };
           this.biometricEntry = {
             upsert: async ({ where, create, update }) => {
               const { userId, metric, localDate } = where.userId_metric_localDate;
@@ -355,4 +361,14 @@ test('action rate is zero, not NaN, before anything has been shown', async () =>
   const stats = await getFeedbackStatsService();
   assert.equal(stats.shown, 0);
   assert.equal(stats.actionRate, 0);
+});
+
+test('quick-add without an explicit date uses the same resolved IST day for every entry', async () => {
+  resetFakes();
+  const rows = await upsertManyService(1, [
+    { metric: 'weight', value: 72 }, { metric: 'sleep_minutes', value: 420 },
+  ]);
+  assert.equal(rows.length, 2);
+  assert.match(rows[0].localDate, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(rows[0].localDate, rows[1].localDate);
 });

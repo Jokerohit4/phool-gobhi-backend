@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 // by date >= where.date.gte and applies the (customerId, date) distinct, the
 // same way the service asks a real DB for it.
 let rows = [];
+let independentRows = [];
 let users = {};
 let batchFails = false;
 let attendanceEvents = [];
@@ -18,6 +19,7 @@ let feedFails = false;
 
 function resetFakes() {
   rows = [];
+  independentRows = [];
   users = {};
   batchFails = false;
   attendanceEvents = [];
@@ -36,6 +38,24 @@ test('setup: mock dependencies once, import globalLeaderboardService once', asyn
             findMany: async ({ where, distinct }) => {
               const gte = where?.date?.gte;
               let out = rows.filter((r) => !gte || r.date >= gte);
+              if (distinct?.includes('customerId') && distinct?.includes('date')) {
+                const seen = new Set();
+                out = out.filter((r) => {
+                  const k = `${r.customerId}:${r.date}`;
+                  if (seen.has(k)) return false;
+                  seen.add(k);
+                  return true;
+                });
+              }
+              return out;
+            },
+          };
+          // Independent (unclaimed-gym) check-ins — same {customerId, date}
+          // shape and the same distinct handling as memberAttendance above.
+          this.independentCheckIn = {
+            findMany: async ({ where, distinct }) => {
+              const gte = where?.date?.gte;
+              let out = independentRows.filter((r) => !gte || r.date >= gte);
               if (distinct?.includes('customerId') && distinct?.includes('date')) {
                 const seen = new Set();
                 out = out.filter((r) => {
@@ -143,6 +163,31 @@ test('any gym has presence: a gym-555-only user ranks on the global board', asyn
   assert.equal(result.entries[0].customerId, 1, 'higher-trust presence leads');
   assert.equal(result.entries[1].customerId, 2);
   assert.equal(result.entries[1].score, 17, 'booking trust day -> 15.75 + 1.43 recent = 17');
+});
+
+test('an independent-gym-only user counts as presence and ranks on the global board', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true },
+    2: { id: 2, name: 'Bob', leaderboardOptIn: true },
+    99: { id: 99, name: 'Requester', leaderboardOptIn: false },
+  };
+  // Alice only uses member (partner) gyms; Bob's presence is entirely at an
+  // unclaimed/independent gym, so his presence lives only in IndependentCheckIn.
+  rows = [{ customerId: 1, gymId: 9, date: TODAY }];
+  independentRows = [
+    { customerId: 2, unclaimedGymId: 700, date: TODAY },
+    { customerId: 2, unclaimedGymId: 700, date: TODAY }, // same day twice -> one day
+  ];
+  attendanceEvents = [
+    { userId: 1, gymId: 9, attendedAt: new Date().toISOString(), source: 'member_checkin' },
+  ];
+
+  const result = await getGlobalLeaderboard('weekly', 99);
+  const byId = Object.fromEntries(result.entries.map((e) => [e.customerId, e]));
+
+  assert.equal(result.entries.length, 2, 'an independent-only user is on the board');
+  assert.equal(byId[2].checkIns, 1, 'their independent day counts once, deduped');
 });
 
 test('event-only users (no member row) are in the population and ranked', async () => {

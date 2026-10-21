@@ -84,6 +84,18 @@ model Booking {
   refundDueAmount          Decimal?      @db.Decimal(19, 2)
   refundedAt               DateTime?
 
+  // The partner payout counterpart of refundDueAmount/refundedAt above. A
+  // completion flips the booking to `completed` BEFORE the partner wallet
+  // credit; if that credit failed it was only logged, and since the hourly
+  // sweep scans only `started` rows nothing would ever retry it — the partner
+  // silently lost the session's share. payoutAmount records what completion
+  // owes the partner (null = nothing owed, e.g. an "upfront" subscription whose
+  // partnerShare is null, or a SaaS bank-settlement visit) and payoutCreditedAt
+  // when the credit succeeded, so the sweep can retry every completed-but-
+  // unpaid booking under the same idempotency key.
+  payoutAmount             Decimal?      @db.Decimal(19, 2)
+  payoutCreditedAt         DateTime?
+
   // Set when the gym, not the customer, cancelled. The customer always gets
   // a full refund then, and is shown gymCancelReason.
   cancelledByGymAt         DateTime?

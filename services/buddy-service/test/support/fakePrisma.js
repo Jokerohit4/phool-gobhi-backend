@@ -301,6 +301,7 @@ export function createFakePrisma(tables) {
   const client = {};
   for (const model of Object.keys(tables)) client[model] = delegate(model);
   client.$transaction = async (arg) => (typeof arg === 'function' ? arg(client) : Promise.all(arg));
+  client.$executeRaw = async () => 0;
   client.$queryRaw = async () => [{ '?column?': 1 }];
   return client;
 }

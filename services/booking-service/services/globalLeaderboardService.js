@@ -14,6 +14,7 @@ import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
+import { todayDateStringIST } from '../utils/slotTiming.js';
 
 const prisma = new PrismaClient();
 
@@ -59,22 +60,49 @@ async function fetchDailyActivityRows(userIds, fromKey, toKey) {
 export async function getGlobalLeaderboard(window, requestingCustomerId) {
   const validWindow = ['weekly', 'monthly', 'all'].includes(window) ? window : 'all';
   const { startKey, startUtc } = scoreWindow(new Date(), validWindow);
-  const todayKey = new Date(Date.now() + (5 * 60 + 30) * 60000).toISOString().split('T')[0];
+  const todayKey = todayDateStringIST();
 
   // Distinct check-in days across every gym in the window -- the global
   // "member presence days" stat and the board's candidate population. One row
   // per (customerId, date) regardless of gym, so 2 gyms the same day = 1 day.
+  // all-time is one row per (customerId, gym, date), so the check-ins a user
+  // sees ("member presence days") must be the distinct (customerId, date)
+  // count, NOT the raw row count — otherwise a multi-gym member reads 2 for
+  // one calendar day. Track the distinct days alongside the raw rows.
   let memberDays = [];
   try {
     memberDays = await prisma.memberAttendance.findMany({
       where: { date: { gte: startKey } },
-      select: { customerId: true },
+      select: { customerId: true, date: true },
       distinct: ['customerId', 'date'],
+      orderBy: { date: 'asc' },
     });
   } catch (_) {
     memberDays = [];
   }
-  const memberCustomerIds = [...new Set(memberDays.map((r) => r.customerId))];
+
+  // Independent (non-partner) gym check-ins are member presence too — the
+  // global board is "presence anywhere", same as the per-gym board counting a
+  // marketplace/independent visit. Left out, a user whose only presence is at
+  // an unclaimed gym shows as "0 presence days" and off the board, even though
+  // the challenge-service feed may still rank them. Add their distinct days.
+  try {
+    const independentDays = await prisma.independentCheckIn.findMany({
+      where: { date: { gte: startKey } },
+      select: { customerId: true, date: true },
+      distinct: ['customerId', 'date'],
+      orderBy: { date: 'asc' },
+    });
+    const seen = new Set(memberDays.map((r) => `${r.customerId}:${r.date}`));
+    for (const r of independentDays) {
+      const k = `${r.customerId}:${r.date}`;
+      if (!seen.has(k)) { seen.add(k); memberDays.push(r); }
+    }
+  } catch (_) {
+    // Table may not exist on very old deployments; the partner-gym days above
+    // still stand.
+  }
+  const allMemberCustomerIds = [...new Set(memberDays.map((r) => r.customerId))];
 
   // Attendance events across all gyms in the window widen the population to
   // anyone who attended (e.g. via a booking) without a member check-in row.
@@ -83,7 +111,7 @@ export async function getGlobalLeaderboard(window, requestingCustomerId) {
 
   // Always include the requester even with no attendance, so "where would I
   // rank" works before their first visit anywhere.
-  const candidateIds = [...new Set([...memberCustomerIds, ...eventUserIds, requestingCustomerId])];
+  const candidateIds = [...new Set([...allMemberCustomerIds, ...eventUserIds, requestingCustomerId])];
 
   let userById = {};
   try {

@@ -16,6 +16,11 @@ import redis from '../utils/redisClient.js';
 const SKIP_OTP_CODE = '123456';
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_EXPIRY_SECONDS = 300; // 5 minutes
+// The attempts counter must expire or it is a permanent lockout, not a
+// per-OTP one: nothing else ever deletes `otp_attempts:<phone>` on a
+// success path that was reached without the counter being reset, and a
+// fresh send-otp used to leave it in place. Bound it to the OTP lifetime.
+const OTP_ATTEMPTS_TTL_SECONDS = 300;
 
 const prisma = new PrismaClient();
 
@@ -560,9 +565,13 @@ export async function sendOtpService(rawPhone) {
   // (predictable from enough samples; this is a login credential for ~5 min).
   const code = String(crypto.randomInt(100000, 1000000));
   
-  // Store OTP and sent timestamp in Redis with TTL
+  // Store OTP and sent timestamp in Redis with TTL. Reset the attempts
+  // counter too — verifying a valid OTP deletes it, but a counter left over
+  // from an earlier expired/abandoned code would otherwise carry into this
+  // fresh one and lock the phone out early.
   await redis.setex(`otp_code:${phone}`, OTP_EXPIRY_SECONDS, code);
   await redis.setex(`otp_sent_at:${phone}`, 60, Date.now().toString());
+  await redis.del(`otp_attempts:${phone}`);
   
   const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
   // NEVER log the code (or the raw phone) if delivery fails �?" the code is a
@@ -749,6 +758,11 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
     }
     
     const attempts = await redis.incr(`otp_attempts:${phone}`);
+    if (attempts === 1) {
+      // First attempt for this code — start the counter's own clock so it
+      // can never outlive the lockout window (see OTP_ATTEMPTS_TTL_SECONDS).
+      await redis.expire(`otp_attempts:${phone}`, OTP_ATTEMPTS_TTL_SECONDS);
+    }
     if (attempts > OTP_MAX_ATTEMPTS) {
       await redis.del(`otp_code:${phone}`, `otp_attempts:${phone}`);
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };

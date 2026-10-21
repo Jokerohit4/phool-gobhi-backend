@@ -14,15 +14,15 @@ function todayLocalDate() {
 }
 
 function addDays(dateStr, days) {
-  const date = new Date(`${dateStr}T00:00:00`);
-  date.setDate(date.getDate() + days);
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
 function daysSince(dateStr) {
   const today = todayLocalDate();
-  const start = new Date(`${dateStr}T00:00:00`);
-  const end = new Date(`${today}T00:00:00`);
+  const start = new Date(`${dateStr}T00:00:00Z`);
+  const end = new Date(`${today}T00:00:00Z`);
   return Math.floor((end - start) / (1000 * 60 * 60 * 24));
 }
 

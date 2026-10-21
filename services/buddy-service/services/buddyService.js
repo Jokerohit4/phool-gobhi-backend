@@ -385,20 +385,33 @@ export async function refreshProfileFromAuth(userId) {
 // Adding photos never makes a profile visible on its own — that takes the
 // user's own "Show my profile" (see createOrUpdateProfile).
 export async function addPhotos(userId, files) {
-  const profile = await prisma.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
-  if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
-  if (profile.photos.length + files.length > MAX_BUDDY_PHOTOS) {
-    throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
-  }
+  // Advisory-lock + in-transaction re-check: the count and order must be
+  // read after the lock, not before it. The old code read the profile
+  // outside any transaction, so two concurrent uploads racing at 5/6
+  // photos both passed the cap check and stored 7-8 rows with duplicate
+  // `order` values. 913_001 is this table's lock namespace (buddy-service
+  // has no other advisory locks; wallet-service's namespaces live in a
+  // different database).
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(913001::int, ${userId}::int)`;
 
-  let nextOrder = profile.photos.length;
-  return prisma.$transaction(
-    files.map((f) =>
-      prisma.buddyPhoto.create({
-        data: { buddyProfileId: profile.id, url: f.path, publicId: f.filename, order: nextOrder++ },
-      })
-    )
-  );
+    const profile = await tx.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
+    if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
+    if (profile.photos.length + files.length > MAX_BUDDY_PHOTOS) {
+      throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
+    }
+
+    let nextOrder = Math.max(-1, ...profile.photos.map((photo) => photo.order ?? -1)) + 1;
+    const created = [];
+    for (const f of files) {
+      created.push(
+        await tx.buddyPhoto.create({
+          data: { buddyProfileId: profile.id, url: f.path, publicId: f.filename, order: nextOrder++ },
+        })
+      );
+    }
+    return created;
+  });
 }
 
 // One-way "use my main profile photo" shortcut — buddy and account photos
@@ -407,24 +420,36 @@ export async function addPhotos(userId, files) {
 // fetch-by-URL upload rather than requiring the client to download+re-upload
 // the bytes itself.
 export async function addPhotoFromUrl(userId, sourceUrl) {
-  const profile = await prisma.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
-  if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
-  if (profile.photos.length + 1 > MAX_BUDDY_PHOTOS) {
-    throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
-  }
-
+  // Upload outside the transaction (a network call must not hold a DB
+  // connection / the interactive-tx timeout), then the same advisory-locked
+  // count check as addPhotos. If the check rejects — or the insert fails —
+  // the just-uploaded Cloudinary asset is destroyed rather than orphaned.
   const uploaded = await cloudinary.uploader.upload(sourceUrl, {
     folder: 'phool-gobhi/buddy-profiles',
     transformation: [{ width: 1080, height: 1350, crop: 'limit', quality: 'auto' }],
   });
-  return prisma.buddyPhoto.create({
-    data: {
-      buddyProfileId: profile.id,
-      url: uploaded.secure_url,
-      publicId: uploaded.public_id,
-      order: profile.photos.length,
-    },
-  });
+  try {
+    return await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(913_001, ${userId})`;
+
+      const profile = await tx.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
+      if (!profile) throw { status: 400, error: 'Create your buddy profile first' };
+      if (profile.photos.length + 1 > MAX_BUDDY_PHOTOS) {
+        throw { status: 409, error: `A buddy profile can have at most ${MAX_BUDDY_PHOTOS} photos` };
+      }
+      return tx.buddyPhoto.create({
+        data: {
+          buddyProfileId: profile.id,
+          url: uploaded.secure_url,
+          publicId: uploaded.public_id,
+          order: profile.photos.length,
+        },
+      });
+    });
+  } catch (err) {
+    await cloudinary.uploader.destroy(uploaded.public_id).catch(() => {});
+    throw err;
+  }
 }
 
 export async function reorderPhotos(userId, order) {
@@ -517,8 +542,17 @@ export async function upsertFilters(userId, data, userType) {
     radiusKm: radiusKm ?? existing?.radiusKm ?? DEFAULT_FILTER.radiusKm,
     minAge: minAge ?? existing?.minAge ?? DEFAULT_FILTER.minAge,
     maxAge: maxAge ?? existing?.maxAge ?? DEFAULT_FILTER.maxAge,
-    // While women-only is on, genders is forced to [female].
-    genders: nextWomenOnly ? ['female'] : (genders ?? existing?.genders ?? DEFAULT_FILTER.genders),
+    // While women-only is on, an explicitly-passed genders is forced to
+    // [female] (and shown as such). With no explicit genders the stored
+    // preference is left untouched — effectiveGenders() forces [female]
+    // at query time anyway, so the deck behaves identically while the
+    // user's real preference survives for when they turn the mode off.
+    // (Previously the forced value was also written to the DB, so turning
+    // womenOnly off resurrected ['female'] and permanently destroyed the
+    // original preference.)
+    genders: nextWomenOnly
+      ? (genders !== undefined ? ['female'] : (existing?.genders ?? DEFAULT_FILTER.genders))
+      : (genders ?? existing?.genders ?? DEFAULT_FILTER.genders),
     fitnessGoals: fitnessGoals ?? existing?.fitnessGoals ?? DEFAULT_FILTER.fitnessGoals,
     womenOnly: nextWomenOnly,
   };
