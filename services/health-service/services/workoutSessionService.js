@@ -1,6 +1,39 @@
 import { PrismaClient } from '@prisma/client';
+import { computeProgression } from './progressionService.js';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
 const prisma = new PrismaClient();
+
+// Applies double progression to the routine a finished session was started
+// from, and returns what changed so the app can say so. Best-effort by the
+// caller: a failure here must never fail finishing the workout.
+async function applyTemplateProgression(finished, templateId) {
+  const rows = await prisma.templateExercise.findMany({ where: { templateId } });
+  const changes = [];
+  for (const te of rows) {
+    if (!te.repMax) continue;
+    const logged = finished.exercises.find((e) => e.exerciseId === te.exerciseId);
+    const next = computeProgression(te, logged?.sets);
+    if (!next) continue;
+    await prisma.templateExercise.update({
+      where: { id: te.id },
+      data: {
+        targetReps: next.targetReps,
+        ...(next.weightKg != null ? { targetWeightKg: next.weightKg } : {}),
+      },
+    });
+    if (next.kind !== 'baseline') {
+      changes.push({
+        exerciseId: te.exerciseId,
+        name: logged?.exercise?.name ?? null,
+        kind: next.kind,
+        fromWeightKg: te.targetWeightKg ?? null,
+        toWeightKg: next.weightKg,
+        targetReps: next.targetReps,
+      });
+    }
+  }
+  return changes;
+}
 
 const includeFull = {
   exercises: {
@@ -144,7 +177,13 @@ async function createSessionRow(createData, templateId, userId) {
           order: te.order,
           supersetGroup: te.supersetGroup,
           sets: {
-            create: Array.from({ length: te.targetSets }, (_, i) => ({ setNumber: i + 1 })),
+            // A routine with a stored weight / rep range pre-fills every set
+            // with today's goal; the checkmark still decides what was done.
+            create: Array.from({ length: te.targetSets }, (_, i) => ({
+              setNumber: i + 1,
+              ...(te.targetWeightKg != null ? { weightKg: te.targetWeightKg } : {}),
+              ...(te.repMax && te.targetReps ? { reps: te.targetReps } : {}),
+            })),
           },
         })),
       },
@@ -365,5 +404,14 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
     }
   }
 
-  return { ...updated, gamification };
+  let progression = [];
+  if (session.templateId) {
+    try {
+      progression = await applyTemplateProgression(updated, session.templateId);
+    } catch (err) {
+      console.error('[progression] failed for session', sessionId, err);
+    }
+  }
+
+  return { ...updated, gamification, progression };
 }

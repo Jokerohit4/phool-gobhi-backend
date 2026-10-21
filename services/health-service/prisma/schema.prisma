@@ -218,6 +218,19 @@ model TemplateExercise {
   targetDurationSeconds Int?
   restSeconds           Int?
   supersetGroup         Int?
+  // Double progression. Opt-in per exercise: a row with no repMax never
+  // progresses (every routine saved before 2026-10-21 is like that).
+  //   repMin..repMax  the rep range; targetReps is the goal right now, and
+  //                   climbs one rep at a time from repMin to repMax.
+  //   targetWeightKg  the working weight; null until set or first learned from
+  //                   a finished workout. Float, not Decimal: it is shown and
+  //                   edited as a plain number and Decimal serialises to a
+  //                   string in JSON.
+  // Hit repMax on every set and the weight goes up one step and targetReps
+  // resets to repMin. See services/progressionService.js.
+  repMin                Int?
+  repMax                Int?
+  targetWeightKg        Float?
 
   @@index([templateId])
   @@schema("health")

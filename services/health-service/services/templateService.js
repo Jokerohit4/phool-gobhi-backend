@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { equipmentFit, rankByFit } from './homeSetup.js';
+import { progressionFields } from './progressionService.js';
 const prisma = new PrismaClient();
 
 const includeExercises = {
@@ -81,8 +82,9 @@ export async function createTemplateService(userId, body) {
   // keeps the check here simple; a client that sends the wrong one for a
   // given exercise gets a target that's just never read on that screen,
   // not a 400 — same permissiveness the rest of this validation has.
-  for (const ex of exercises) {
-    if (!ex.exerciseId || !ex.targetSets || (!ex.targetReps && !ex.targetDurationSeconds)) {
+  const progression = exercises.map(progressionFields);
+  for (const [i, ex] of exercises.entries()) {
+    if (!ex.exerciseId || !ex.targetSets || (!progression[i].targetReps && !ex.targetDurationSeconds)) {
       const err = new Error('each exercise needs exerciseId, targetSets and either targetReps or targetDurationSeconds');
       err.status = 400;
       throw err;
@@ -97,10 +99,13 @@ export async function createTemplateService(userId, body) {
           exerciseId: ex.exerciseId,
           order: i,
           targetSets: ex.targetSets,
-          targetReps: ex.targetReps ?? null,
+          targetReps: progression[i].targetReps,
           targetDurationSeconds: ex.targetDurationSeconds ?? null,
           restSeconds: ex.restSeconds ?? null,
           supersetGroup: ex.supersetGroup ?? null,
+          repMin: progression[i].repMin,
+          repMax: progression[i].repMax,
+          targetWeightKg: progression[i].targetWeightKg,
         })),
       },
     },
@@ -127,6 +132,7 @@ export async function updateTemplateService(templateId, userId, body) {
   const { name, exercises } = body || {};
   return prisma.$transaction(async (tx) => {
     if (Array.isArray(exercises)) {
+      const progression = exercises.map(progressionFields);
       await tx.templateExercise.deleteMany({ where: { templateId } });
       await tx.templateExercise.createMany({
         data: exercises.map((ex, i) => ({
@@ -134,10 +140,13 @@ export async function updateTemplateService(templateId, userId, body) {
           exerciseId: ex.exerciseId,
           order: i,
           targetSets: ex.targetSets,
-          targetReps: ex.targetReps ?? null,
+          targetReps: progression[i].targetReps,
           targetDurationSeconds: ex.targetDurationSeconds ?? null,
           restSeconds: ex.restSeconds ?? null,
           supersetGroup: ex.supersetGroup ?? null,
+          repMin: progression[i].repMin,
+          repMax: progression[i].repMax,
+          targetWeightKg: progression[i].targetWeightKg,
         })),
       });
     }
