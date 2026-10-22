@@ -37,7 +37,11 @@ export const getMyAttendanceSummary = async (req, res) => {
 
 export const getVisitedGyms = async (req, res) => {
   try {
-    const visitedGyms = await bookingService.getVisitedGyms(req.userId);
+    const version = req.query?.version ?? '1';
+    if (version !== '1' && version !== '2') {
+      return res.status(400).json({ error: 'Unsupported visited-gyms version' });
+    }
+    const visitedGyms = await bookingService.getVisitedGyms(req.userId, { version: Number(version) });
     res.json({ data: visitedGyms });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

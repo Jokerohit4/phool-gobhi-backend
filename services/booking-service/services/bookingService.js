@@ -3259,34 +3259,76 @@ export async function getCustomerAttendanceSummary(customerId) {
   }
 }
 
-// Gamification wave 1: lifetime per-gym visit rollup for the badge shelf /
-// fog-of-war map. Deliberately a separate endpoint from
-// getCustomerAttendanceSummary rather than extending it — that endpoint caps
-// at the 90 most recent attended dates and drops gymId, both wrong for a
-// lifetime "every gym you've ever badged" list.
-export async function getVisitedGyms(customerId) {
+// Lifetime venue badges, derived only from persisted attendance. One visit
+// per venue per IST day, including across booking/member sources. Booking
+// days use attendedAt (not the scheduled slot date), matching checkinDaysService;
+// member/independent rows already store the verified IST day in date.
+// This projection never emits attendance signals or writes score/payment data.
+//
+// v1 keeps {gymId, firstVisitedAt, visitCount, gym} for partner gyms only.
+// GET /mine/visited-gyms?version=2 opts into all venues, adding venueId
+// ("partner:<id>" / "unclaimed:<id>") and nullable unclaimedGymId/gymId.
+// UnclaimedGym.id is NOT a Gym.id: never merge by numeric id, name, location,
+// or a later claim. Clients should key v2 badges by venueId, and refresh this
+// read on return from any check-in flow; no separate badge state is persisted.
+export async function getVisitedGyms(customerId, { version = 1 } = {}) {
+  if (version !== 1 && version !== 2) {
+    throw { status: 400, error: 'Unsupported visited-gyms version' };
+  }
   try {
-    const rows = await prisma.booking.groupBy({
-      by: ['gymId'],
-      where: { customerId, attendedAt: { not: null } },
-      _min: { attendedAt: true },
-      _count: { _all: true },
-    });
+    const [bookings, members, independent] = await Promise.all([
+      prisma.booking.findMany({
+        where: { customerId, attendedAt: { not: null } },
+        select: { gymId: true, attendedAt: true },
+      }),
+      prisma.memberAttendance.findMany({
+        where: { customerId },
+        select: { gymId: true, date: true, checkedInAt: true },
+      }),
+      version === 2 ? prisma.independentCheckIn.findMany({
+        where: { customerId },
+        select: { unclaimedGymId: true, date: true, checkedInAt: true },
+      }) : [],
+    ]);
 
-    const gymById = {};
-    await Promise.all(rows.map(async ({ gymId }) => {
+    const venues = new Map();
+    function addVisit(type, id, day, at) {
+      const venueId = `${type}:${id}`;
+      let venue = venues.get(venueId);
+      if (!venue) {
+        venue = { venueId, type, id, firstVisitedAt: at, days: new Set() };
+        venues.set(venueId, venue);
+      }
+      venue.days.add(day);
+      if (at < venue.firstVisitedAt) venue.firstVisitedAt = at;
+    }
+    for (const row of bookings) {
+      const day = new Date(row.attendedAt.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+      addVisit('partner', row.gymId, day, row.attendedAt);
+    }
+    for (const row of members) addVisit('partner', row.gymId, row.date, row.checkedInAt);
+    for (const row of independent) addVisit('unclaimed', row.unclaimedGymId, row.date, row.checkedInAt);
+
+    // Metadata is best-effort enrichment; missing/deleted gyms retain a badge.
+    const rows = [...venues.values()].sort((a, b) => a.type.localeCompare(b.type) || a.id - b.id);
+    return await Promise.all(rows.map(async (venue) => {
+      let gym = null;
       try {
-        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-        const gym = gymRes.data?.data || gymRes.data;
-        gymById[gymId] = gym ? { name: gym.name, lat: gym.lat, lng: gym.lng, city: gym.city } : null;
+        const path = venue.type === 'partner' ? `${venue.id}` : `unclaimed-gyms/${venue.id}`;
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${path}`, await internalHeadersFor(GYM_SERVICE_URL));
+        const metadata = gymRes.data && Object.hasOwn(gymRes.data, 'data') ? gymRes.data.data : gymRes.data;
+        if (metadata) gym = { name: metadata.name, lat: metadata.lat, lng: metadata.lng, city: metadata.city };
       } catch (_) { /* leave gym metadata null for this id */ }
-    }));
-
-    return rows.map((r) => ({
-      gymId: r.gymId,
-      firstVisitedAt: r._min.attendedAt,
-      visitCount: r._count._all,
-      gym: gymById[r.gymId] ?? null,
+      return {
+        ...(version === 2 ? {
+          venueId: venue.venueId,
+          unclaimedGymId: venue.type === 'unclaimed' ? venue.id : null,
+        } : {}),
+        gymId: venue.type === 'partner' ? venue.id : null,
+        firstVisitedAt: venue.firstVisitedAt,
+        visitCount: venue.days.size,
+        gym,
+      };
     }));
   } catch (err) {
     console.error('getVisitedGyms error:', err);
