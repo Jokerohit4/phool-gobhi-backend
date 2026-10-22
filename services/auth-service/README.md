@@ -38,3 +38,17 @@ npm run dev
 - `GET /api/auth/app-config` - Public app configuration
 - `GET /api/auth/otp-config` - OTP provider configuration
 - `GET /health` - Health check
+
+## Session lifetime
+
+Access tokens last 15 minutes. Refresh tokens last 30 days, and each successful
+rotation issues a successor valid for another 30 days. Regular use keeps a session
+signed in without a fixed cutoff from the original login; after 30 days without
+a successful refresh, login is required again.
+
+Existing unexpired seven-day tokens adopt the rolling expiry on their next
+successful refresh. Expired and revoked tokens remain invalid. Concurrent refresh
+retries within the grace window receive the same successor and its stored expiry;
+they do not extend it again. Explicit logout and late token reuse still revoke the
+entire rotation family. No database migration or mobile update is required for
+this lifetime change; it takes effect when auth-service is deployed.

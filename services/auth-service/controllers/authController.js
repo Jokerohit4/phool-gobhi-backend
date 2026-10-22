@@ -117,7 +117,7 @@ const refreshToken = async (req, res) => {
     const result = await refreshTokenService(req.body?.token);
     res.json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
+    res.status(err.status || 500).json({ error: err.error || 'Unknown error', errorCode: err.errorCode });
   }
 };
 

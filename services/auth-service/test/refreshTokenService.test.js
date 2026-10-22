@@ -7,12 +7,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
+import { signRefreshToken } from '../utils/generateTokens.js';
 
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 process.env.JWT_SECRET = 'test-access-secret';
 
 const NOW_UTC = Date.UTC(2026, 8, 14, 10, 0, 0);
-const FAMILY_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const REFRESH_LIFETIME_MS = 30 * DAY_MS;
 
 let prisma;
 let updateCalls = [];
@@ -43,7 +45,7 @@ function signTestToken({ id = 5, jti, familyId, expiresIn = '15m' } = {}) {
   return jwt.sign({ id, jti, familyId }, process.env.JWT_REFRESH_SECRET, { expiresIn });
 }
 
-function makeRow({ jti = 'j1', familyId = 'f1', userId = 5, expiresAt = new Date(NOW_UTC + FAMILY_LIFETIME_MS), revokedAt = null, usedAt = null, replacedByJti = null } = {}) {
+function makeRow({ jti = 'j1', familyId = 'f1', userId = 5, expiresAt = new Date(NOW_UTC + REFRESH_LIFETIME_MS), revokedAt = null, usedAt = null, replacedByJti = null } = {}) {
   return { jti, familyId, userId, expiresAt, revokedAt, usedAt, replacedByJti };
 }
 
@@ -94,7 +96,7 @@ test('rotate: rejects a revoked token as E120 (session revoked)', async (t) => {
   await assertThrows(rotate(token), { status: 403, errorCode: 'E120' });
 });
 
-test('rotate: rejects a family whose absolute expiry already passed (E109)', async (t) => {
+test('rotate: rejects a token whose stored expiry already passed (E109)', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
   prisma.refreshToken.findUnique = async () => makeRow({ expiresAt: new Date(NOW_UTC - 1) });
   const token = signTestToken({ jti: 'j1', familyId: 'f1' });
@@ -102,6 +104,22 @@ test('rotate: rejects a family whose absolute expiry already passed (E109)', asy
 });
 
 // ---- rotate(): happy path ---------------------------------------------------
+
+test('rotate: a failed account check does not consume the token and can be retried', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  prisma.refreshToken.findUnique = async () => makeRow();
+  wireHappyRotation();
+  const token = signTestToken({ jti: 'j1', familyId: 'f1' });
+  await assert.rejects(rotate(token, {
+    beforeRotate: async () => { throw new Error('database temporarily unavailable'); },
+  }), /database temporarily unavailable/);
+  assert.equal(updateCalls.length, 0);
+  assert.equal(createCalls.length, 0);
+
+  const out = await rotate(token, { beforeRotate: async () => {} });
+  assert.equal(out.userId, 5);
+  assert.equal(createCalls.length, 1);
+});
 
 test('rotate: claims the token and issues a successor in the same family', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
@@ -126,7 +144,8 @@ test('rotate: claims the token and issues a successor in the same family', async
   assert.equal(createCalls[0].data.jti, successor.jti);
   assert.equal(createCalls[0].data.familyId, 'f1');
   assert.equal(createCalls[0].data.userId, 5);
-  assert.equal(createCalls[0].data.expiresAt.getTime(), row.expiresAt.getTime());
+  assert.equal(createCalls[0].data.expiresAt.getTime(), NOW_UTC + REFRESH_LIFETIME_MS);
+  assert.equal(successor.exp * 1000, createCalls[0].data.expiresAt.getTime());
 });
 
 // ---- rotate(): reuse within grace (benign race) ------------------------------
@@ -216,7 +235,8 @@ test('issueRefreshFamily: creates a fresh family row and signs its first token',
   assert.equal(createArgs.data.userId, 9);
   assert.equal(createArgs.data.jti, payload.jti);
   assert.equal(createArgs.data.familyId, payload.familyId);
-  assert.equal(createArgs.data.expiresAt.getTime() - NOW_UTC, FAMILY_LIFETIME_MS);
+  assert.equal(createArgs.data.expiresAt.getTime() - NOW_UTC, REFRESH_LIFETIME_MS);
+  assert.equal(payload.exp * 1000, createArgs.data.expiresAt.getTime());
   assert.equal(createArgs.data.revokedAt, undefined);
 });
 
@@ -246,4 +266,121 @@ test('revokeByToken: a valid token revokes its whole family', async (t) => {
   const token = signTestToken({ jti: 'j9', familyId: 'family-logout' });
   await revokeByToken(token);
   assert.equal(revokedFamily, 'family-logout');
+});
+
+// Exercise full rotation chains so an unchanged expiry cannot accidentally
+// pass just because a fixture was created at the exact time of rotation.
+function wireTokenStore() {
+  const rows = new Map();
+  prisma.refreshToken.findUnique = async ({ where }) => {
+    const row = rows.get(where.jti);
+    return row ? { ...row } : null;
+  };
+  prisma.refreshToken.create = async ({ data }) => {
+    const row = { usedAt: null, replacedByJti: null, revokedAt: null, ...data };
+    rows.set(row.jti, row);
+    return row;
+  };
+  prisma.refreshToken.updateMany = async ({ where, data }) => {
+    let count = 0;
+    for (const row of rows.values()) {
+      if (Object.entries(where).every(([key, value]) => row[key] === value)) {
+        Object.assign(row, data);
+        count++;
+      }
+    }
+    return { count };
+  };
+  return rows;
+}
+
+test('rolling expiry: an existing seven-day session renews for 30 days without login', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const rows = wireTokenStore();
+  const oldExpiry = new Date(NOW_UTC + 7 * DAY_MS);
+  rows.set('legacy-jti', makeRow({ jti: 'legacy-jti', expiresAt: oldExpiry }));
+  const oldToken = signRefreshToken(5, 'legacy-jti', 'f1', oldExpiry);
+  t.mock.timers.tick(6 * DAY_MS);
+
+  const renewed = await rotate(oldToken);
+  const payload = jwt.verify(renewed.refreshToken, process.env.JWT_REFRESH_SECRET);
+  assert.equal(payload.familyId, 'f1');
+  assert.equal(payload.exp * 1000, Date.now() + REFRESH_LIFETIME_MS);
+  assert.equal(rows.get(payload.jti).expiresAt.getTime(), payload.exp * 1000);
+  assert.equal(rows.get('legacy-jti').expiresAt.getTime(), oldExpiry.getTime());
+
+  // Crossing the original seven-day deadline must not interrupt the session.
+  t.mock.timers.tick(2 * DAY_MS);
+  const next = await rotate(renewed.refreshToken);
+  assert.equal(jwt.verify(next.refreshToken, process.env.JWT_REFRESH_SECRET).exp * 1000,
+    Date.now() + REFRESH_LIFETIME_MS);
+});
+
+test('rolling expiry: regular use stays signed in for months and logout still revokes the family', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const rows = wireTokenStore();
+  let token = await issueRefreshFamily(5);
+  const familyId = jwt.verify(token, process.env.JWT_REFRESH_SECRET).familyId;
+  for (let month = 0; month < 5; month++) {
+    t.mock.timers.tick(29 * DAY_MS);
+    ({ refreshToken: token } = await rotate(token));
+    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    assert.equal(payload.familyId, familyId);
+    assert.equal(payload.exp * 1000, Date.now() + REFRESH_LIFETIME_MS);
+    assert.equal(rows.get(payload.jti).expiresAt.getTime(), payload.exp * 1000);
+  }
+  await revokeByToken(token);
+  assert.ok([...rows.values()].every((row) => row.revokedAt));
+  await assertThrows(rotate(token), { status: 403, errorCode: 'E120' });
+});
+
+test('rolling expiry: a session expires after 30 days without refresh and is not revived', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const rows = wireTokenStore();
+  const token = await issueRefreshFamily(5);
+  t.mock.timers.tick(REFRESH_LIFETIME_MS);
+  await assertThrows(rotate(token), { status: 403, errorCode: 'E109' });
+  assert.equal(rows.size, 1);
+  assert.equal([...rows.values()][0].usedAt, null);
+});
+
+test('rolling expiry: an already-expired seven-day session still requires login', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const rows = wireTokenStore();
+  const oldExpiry = new Date(NOW_UTC + 7 * DAY_MS);
+  rows.set('legacy-jti', makeRow({ jti: 'legacy-jti', expiresAt: oldExpiry }));
+  const token = signRefreshToken(5, 'legacy-jti', 'f1', oldExpiry);
+  t.mock.timers.tick(8 * DAY_MS);
+  await assertThrows(rotate(token), { status: 403, errorCode: 'E109' });
+  assert.equal(rows.size, 1);
+});
+
+test('rolling expiry: a grace-window retry returns the stored successor without extending its expiry', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const rows = wireTokenStore();
+  const original = await issueRefreshFamily(5);
+  t.mock.timers.tick(5 * DAY_MS);
+  const first = await rotate(original);
+  const firstPayload = jwt.verify(first.refreshToken, process.env.JWT_REFRESH_SECRET);
+  t.mock.timers.tick(2000);
+  const retry = await rotate(original);
+  const retryPayload = jwt.verify(retry.refreshToken, process.env.JWT_REFRESH_SECRET);
+  assert.equal(retryPayload.jti, firstPayload.jti);
+  assert.equal(retryPayload.exp, firstPayload.exp);
+  assert.equal(rows.get(firstPayload.jti).expiresAt.getTime(), firstPayload.exp * 1000);
+  assert.equal(rows.size, 2);
+});
+
+test('rolling expiry: concurrent refreshes create one successor with the same renewed expiry', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const rows = wireTokenStore();
+  const token = await issueRefreshFamily(5);
+  t.mock.timers.tick(6 * DAY_MS);
+  const [first, second] = await Promise.all([rotate(token), rotate(token)]);
+  const firstPayload = jwt.verify(first.refreshToken, process.env.JWT_REFRESH_SECRET);
+  const secondPayload = jwt.verify(second.refreshToken, process.env.JWT_REFRESH_SECRET);
+  assert.equal(firstPayload.jti, secondPayload.jti);
+  assert.equal(firstPayload.exp, secondPayload.exp);
+  assert.equal(firstPayload.exp * 1000, Date.now() + REFRESH_LIFETIME_MS);
+  assert.equal(rows.size, 2);
 });

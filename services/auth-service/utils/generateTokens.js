@@ -8,9 +8,8 @@ export const generateAccessToken = (userId, role, type) => {
 
 // Signs a refresh JWT for one row of the RefreshToken rotation chain
 // (services/refreshTokenService.js owns creating/rotating those rows — this
-// is pure signing). `expiresAt` is the family's fixed absolute expiry, not
-// extended per rotation, so total session length stays 7 days regardless of
-// how many times the token gets rotated in that window.
+// is pure signing). `expiresAt` belongs to this token's stored row. Rotation
+// renews it; a concurrent retry signs the existing successor's expiry again.
 export const signRefreshToken = (userId, jti, familyId, expiresAt) => {
   const expiresInSeconds = Math.max(
     1,

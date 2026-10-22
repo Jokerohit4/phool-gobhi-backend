@@ -5,7 +5,9 @@ import { signRefreshToken } from '../utils/generateTokens.js';
 
 const prisma = new PrismaClient();
 
-const FAMILY_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // matches the old flat 7d JWT expiry
+// Each successful refresh renews the session for 30 days. There is no fixed
+// cutoff from the original login; an unused session still expires naturally.
+const REFRESH_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 // Legitimate concurrent refreshes (two tabs, or a client's own two refresh
 // call sites racing before they're fixed to share one lock) present the same
 // pre-rotation token within a few ms of each other. A replay of an
@@ -20,7 +22,7 @@ const REUSE_GRACE_MS = 10 * 1000;
 export async function issueRefreshFamily(userId) {
   const familyId = crypto.randomUUID();
   const jti = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + FAMILY_LIFETIME_MS);
+  const expiresAt = new Date(Date.now() + REFRESH_LIFETIME_MS);
   await prisma.refreshToken.create({
     data: { jti, familyId, userId, expiresAt },
   });
@@ -39,7 +41,7 @@ export async function revokeFamily(familyId) {
 // Verifies + rotates a refresh token. Returns { accessTokenPayload: {id},
 // refreshToken } on success. Throws { status, error, errorCode } on any
 // rejection — same shape refreshTokenService/authController already expect.
-export async function rotate(token) {
+export async function rotate(token, { beforeRotate } = {}) {
   let payload;
   try {
     payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
@@ -65,6 +67,10 @@ export async function rotate(token) {
     throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
   }
 
+  // Finish fallible account checks before consuming this single-use token.
+  // A database outage during those checks must leave it available to retry.
+  if (beforeRotate) await beforeRotate(userId);
+
   if (row.usedAt) {
     return handleAlreadyUsedToken(row, userId, familyId);
   }
@@ -83,6 +89,7 @@ export async function rotate(token) {
   // so a benign race now genuinely hands both callers the same successor
   // token, instead of silently forking the session.
   const newJti = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + REFRESH_LIFETIME_MS);
   const claimed = await prisma.$transaction(async (tx) => {
     const result = await tx.refreshToken.updateMany({
       where: { jti, usedAt: null },
@@ -90,7 +97,7 @@ export async function rotate(token) {
     });
     if (result.count === 0) return false;
     await tx.refreshToken.create({
-      data: { jti: newJti, familyId, userId, expiresAt: row.expiresAt },
+      data: { jti: newJti, familyId, userId, expiresAt },
     });
     return true;
   });
@@ -102,7 +109,7 @@ export async function rotate(token) {
 
   return {
     userId,
-    refreshToken: signRefreshToken(userId, newJti, familyId, row.expiresAt),
+    refreshToken: signRefreshToken(userId, newJti, familyId, expiresAt),
   };
 }
 

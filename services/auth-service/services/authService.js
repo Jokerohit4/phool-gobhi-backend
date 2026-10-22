@@ -410,21 +410,29 @@ export async function refreshTokenService(token) {
     // rotateRefreshToken verifies the JWT, looks up its RefreshToken row, and
     // either rotates it (issuing a new one) or rejects it (revoked/reused/
     // expired) — see refreshTokenService.js for the full state machine.
-    const { userId, refreshToken } = await rotateRefreshToken(token);
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
-    if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
+    let user;
+    const { refreshToken } = await rotateRefreshToken(token, {
+      beforeRotate: async (userId) => {
+        user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
+        if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
+      },
+    });
     const accessToken = generateAccessToken(user.id, user.role, user.type);
     return { accessToken, refreshToken };
   } catch (err) {
     if (err.status) throw err;
-    throw { status: 403, error: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.message, errorCode: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.code };
+    // A database/transaction failure is not evidence of an invalid session.
+    // Mobile clients discard their saved credentials on a 401/403, so this
+    // must remain retryable during a deployment or temporary DB outage.
+    console.error('Refresh token temporarily unavailable', { name: err.name, code: err.code });
+    throw { status: 503, error: 'Unable to refresh session right now. Please try again.', errorCode: 'REFRESH_UNAVAILABLE' };
   }
 }
 
 // Explicit logout — revokes the token's whole rotation family so it (and any
 // clone of it) stops working immediately, rather than waiting out its
-// natural 7-day expiry. Never throws on a bad/missing token: logout should
+// natural expiry. Never throws on a bad/missing token: logout should
 // always succeed from the caller's point of view.
 export async function logoutService(token) {
   if (token) {
