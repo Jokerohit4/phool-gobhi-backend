@@ -1,3 +1,4 @@
+import { structuredExercises, routineDescription } from './routineStructure.js';
 import { PrismaClient } from '@prisma/client';
 import { equipmentFit, rankByFit } from './homeSetup.js';
 import { progressionFields } from './progressionService.js';
@@ -69,7 +70,9 @@ export async function listTemplatesService(userId) {
 }
 
 export async function createTemplateService(userId, body) {
-  const { name, exercises } = body || {};
+  const { name } = body || {};
+  const exercises = structuredExercises(body?.exercises);
+  const description = routineDescription(body || {});
   if (!name || !Array.isArray(exercises) || exercises.length === 0) {
     const err = new Error('name and a non-empty exercises array are required');
     err.status = 400;
@@ -94,10 +97,13 @@ export async function createTemplateService(userId, body) {
     data: {
       userId,
       name,
+      ...description,
       exercises: {
         create: exercises.map((ex, i) => ({
           exerciseId: ex.exerciseId,
           order: i,
+          phase: ex.phase,
+          instructions: ex.instructions,
           targetSets: ex.targetSets,
           targetReps: progression[i].targetReps,
           targetDurationSeconds: ex.targetDurationSeconds ?? null,
@@ -129,7 +135,9 @@ async function assertOwnsTemplate(templateId, userId) {
 // TemplateExercise rows is simpler and less error-prone than diffing.
 export async function updateTemplateService(templateId, userId, body) {
   await assertOwnsTemplate(templateId, userId);
-  const { name, exercises } = body || {};
+  const { name } = body || {};
+  const exercises = body?.exercises === undefined ? undefined : structuredExercises(body.exercises);
+  const description = routineDescription(body || {});
   return prisma.$transaction(async (tx) => {
     if (Array.isArray(exercises)) {
       const progression = exercises.map(progressionFields);
@@ -139,6 +147,8 @@ export async function updateTemplateService(templateId, userId, body) {
           templateId,
           exerciseId: ex.exerciseId,
           order: i,
+          phase: ex.phase,
+          instructions: ex.instructions,
           targetSets: ex.targetSets,
           targetReps: progression[i].targetReps,
           targetDurationSeconds: ex.targetDurationSeconds ?? null,
@@ -152,7 +162,7 @@ export async function updateTemplateService(templateId, userId, body) {
     }
     return tx.workoutTemplate.update({
       where: { id: templateId },
-      data: { ...(name ? { name } : {}) },
+      data: { ...(name ? { name } : {}), ...description },
       include: includeExercises,
     });
   });

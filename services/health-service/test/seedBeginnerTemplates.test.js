@@ -20,11 +20,11 @@ const EXERCISES = [
   'Overhead Press', 'Plank', 'Incline Dumbbell Press',
   'Cable Overhead Triceps Extension', 'Lateral Raise', 'Triceps Pushdown',
   'Barbell Squat', 'Deadlift', 'Calf Raise', 'Lat Pulldown', 'Barbell Row',
-  'Face Pull', 'Cable Crunch',
+  'Face Pull', 'Cable Crunch', 'March in Place', 'Cat-Cow', 'Chest Doorway Stretch', 'Hip Flexor Stretch', 'Standing Hamstring Stretch',
 ].map((name, i) => ({
   id: 500 + i,
   name,
-  loggingType: name === 'Plank' ? 'duration' : 'reps',
+  loggingType: ['Plank', 'March in Place', 'Cat-Cow', 'Chest Doorway Stretch', 'Hip Flexor Stretch', 'Standing Hamstring Stretch'].includes(name) ? 'duration' : 'reps',
 }));
 
 function fakePrisma({ missingExercises = [] } = {}) {

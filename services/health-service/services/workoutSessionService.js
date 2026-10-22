@@ -7,11 +7,13 @@ const prisma = new PrismaClient();
 // from, and returns what changed so the app can say so. Best-effort by the
 // caller: a failure here must never fail finishing the workout.
 async function applyTemplateProgression(finished, templateId) {
+  const owner = await prisma.workoutTemplate.findUnique({ where: { id: templateId } });
+  if (!owner || owner.userId !== finished.userId) return [];
   const rows = await prisma.templateExercise.findMany({ where: { templateId } });
   const changes = [];
   for (const te of rows) {
-    if (!te.repMax) continue;
-    const logged = finished.exercises.find((e) => e.exerciseId === te.exerciseId);
+    if (!te.repMax || (te.phase && te.phase !== 'main')) continue;
+    const logged = finished.exercises.find((e) => e.exerciseId === te.exerciseId && (e.phase ?? 'main') === 'main');
     const next = computeProgression(te, logged?.sets);
     if (!next) continue;
     await prisma.templateExercise.update({
@@ -65,6 +67,7 @@ async function attachPreviousPerformance(session) {
       const priorSessions = await prisma.sessionExercise.findMany({
         where: {
           exerciseId: se.exerciseId,
+          phase: se.phase ?? 'main',
           session: { userId: session.userId, startedAt: { lt: session.startedAt } },
         },
         include: { sets: { where: { completed: true } }, session: { select: { startedAt: true } } },
@@ -162,7 +165,7 @@ async function createSessionRow(createData, templateId, userId) {
     where: { id: templateId },
     include: { exercises: { orderBy: { order: 'asc' } } },
   });
-  if (!template || template.userId !== userId) {
+  if (!template || (template.userId !== userId && !template.isSystem)) {
     const err = new Error('Template not found');
     err.status = 404;
     throw err;
@@ -175,6 +178,9 @@ async function createSessionRow(createData, templateId, userId) {
         create: template.exercises.map((te) => ({
           exerciseId: te.exerciseId,
           order: te.order,
+          phase: te.phase ?? 'main',
+          instructions: te.instructions ?? null,
+          restSeconds: te.restSeconds ?? null,
           supersetGroup: te.supersetGroup,
           sets: {
             // A routine with a stored weight / rep range pre-fills every set
@@ -182,7 +188,8 @@ async function createSessionRow(createData, templateId, userId) {
             create: Array.from({ length: te.targetSets }, (_, i) => ({
               setNumber: i + 1,
               ...(te.targetWeightKg != null ? { weightKg: te.targetWeightKg } : {}),
-              ...(te.repMax && te.targetReps ? { reps: te.targetReps } : {}),
+              ...(te.targetReps != null ? { reps: te.targetReps } : {}),
+              ...(te.targetDurationSeconds != null ? { durationSeconds: te.targetDurationSeconds } : {}),
             })),
           },
         })),

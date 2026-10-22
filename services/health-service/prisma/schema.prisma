@@ -200,6 +200,8 @@ enum TemplateLevel {
 // even though the v1 Create Routine screen doesn't expose pairing yet, so
 // adding that UI later needs no migration.
 model TemplateExercise {
+  phase String @default("main")
+  instructions String?
   id                    Int             @id @default(autoincrement())
   templateId            Int
   template              WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
@@ -388,6 +390,9 @@ model WorkoutSession {
 // template if the user swapped/added something mid-workout (see
 // POST /sessions/:id/exercises).
 model SessionExercise {
+  restSeconds Int?
+  phase String @default("main")
+  instructions String?
   id            Int            @id @default(autoincrement())
   sessionId     Int
   session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

@@ -1,3 +1,4 @@
+import { withPreparation } from './routinePreparation.js';
 // The home track's starter content (docs/../sprint2/PG-HUNT-001 §13):
 // 12 no-equipment system routines + the 4-week beginner plan built from
 // them. Content entry against infrastructure that already shipped (the
@@ -164,7 +165,7 @@ const TEMPLATES = [
     level: 'beginner',
     exercises: [{ name: 'Yoga Flow', sets: 1, seconds: 480 }],
   },
-];
+].map((t) => ({ ...t, exercises: withPreparation(t.exercises), estMinutes: t.estMinutes + 14, description: t.description + ' Includes a 6-minute warm-up and 8-minute cool-down with stretching.' }));
 
 // The 75-coin marketplace reward (H-22). Week 4 ends on Full body —
 // intermediate so it lands on something to push against — the already-built
@@ -215,7 +216,10 @@ function buildExerciseRow(spec, order, byName) {
   return {
     exerciseId: exercise.id,
     order,
+    phase: spec.phase ?? 'main',
+    instructions: spec.instructions ?? null,
     targetSets: spec.sets,
+    restSeconds: spec.restSeconds ?? null,
     targetReps: isDuration ? null : spec.reps,
     targetDurationSeconds: isDuration ? spec.seconds : null,
   };

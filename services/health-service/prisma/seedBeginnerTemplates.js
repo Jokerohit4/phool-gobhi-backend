@@ -1,3 +1,4 @@
+import { withPreparation } from './routinePreparation.js';
 // The coach journey's beginner gym content (B7): the four starter routines
 // the customer app bundles (lib/data/workout/starter_templates.dart), ported
 // to system WorkoutTemplates so the plan engine can name a real template in
@@ -88,7 +89,7 @@ const TEMPLATES = [
       { name: 'Plank', sets: 3, seconds: 30, restSeconds: 45 },
     ],
   },
-];
+].map((t) => ({ ...t, exercises: withPreparation(t.exercises), estMinutes: t.estMinutes + 14, description: t.description + ' Includes a 6-minute warm-up and 8-minute cool-down with stretching.' }));
 
 // The template the slot builder reaches for first, by key, so tests and the
 // pool in starterPlanService.js have one name to agree on.
@@ -119,6 +120,8 @@ function buildExerciseRow(spec, order, byName) {
   return {
     exerciseId: exercise.id,
     order,
+    phase: spec.phase ?? 'main',
+    instructions: spec.instructions ?? null,
     targetSets: spec.sets,
     targetReps: isDuration ? null : spec.reps,
     targetDurationSeconds: isDuration ? spec.seconds : null,
