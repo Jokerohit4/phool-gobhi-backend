@@ -1142,6 +1142,11 @@
     "service": "auth-service",
     "experiment_variant": ""
   },
+  "exercise_content_viewed": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
   "water_logged": {
     "source": "client",
     "service": "auth-service",
