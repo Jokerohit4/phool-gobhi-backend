@@ -1,0 +1,113 @@
+{
+  "recordedAt": "2026-10-23T16:21:37.316164+00:00",
+  "nodeVersion": "v24.16.0",
+  "core": "0db69a2496f9fd46afd5037dffd4640250f00990",
+  "e4": "199337004f88464f374fc387800b67bd75926059",
+  "integratedSource": "1b221610b204c5bcf97e08dd041b6a61c82c2941",
+  "branch": "feature/explore-e10-backend",
+  "worktree": "C:/Users/rohit/Phool-Gobhi/wt/backend-e10",
+  "checks": [
+    {
+      "name": "gateway",
+      "command": "node --experimental-test-module-mocks --test test/gateway.test.js",
+      "evidenceClass": "unit/substitute dependencies",
+      "counts": {
+        "tests": 19,
+        "pass": 19,
+        "fail": 0,
+        "skipped": 0
+      },
+      "localLog": "tools/explore-e10/gateway.local.log",
+      "rawLogSha256": "2d2d4e9d1231812d1f86c143882f7a6baae96f020eefc201cc181661ffe8e8cd"
+    },
+    {
+      "name": "auth",
+      "command": "cd services/auth-service; node --experimental-test-module-mocks --test",
+      "evidenceClass": "loopback HTTP + memory DB and unit mocks",
+      "counts": {
+        "tests": 889,
+        "pass": 875,
+        "fail": 0,
+        "skipped": 14
+      },
+      "localLog": "tools/explore-e10/auth.local.log",
+      "rawLogSha256": "e8f0624d6936e78142e67be3326563e938bc471d95506e84a3ecb8ebc19f1b25"
+    },
+    {
+      "name": "booking",
+      "command": "cd services/booking-service; node --experimental-test-module-mocks --test",
+      "evidenceClass": "loopback HTTP + memory attendance DB",
+      "counts": {
+        "tests": 241,
+        "pass": 241,
+        "fail": 0,
+        "skipped": 0
+      },
+      "localLog": "tools/explore-e10/booking.local.log",
+      "rawLogSha256": "3d986677650ce9b6921b120b605d1ca7e5129277a088103e2487cfc8a28c3c7e"
+    },
+    {
+      "name": "http",
+      "command": "node --experimental-test-module-mocks --test tools/explore-e10/http.test.mjs",
+      "evidenceClass": "real JWT/gateway/auth/booking HTTP + memory DB + captured analytics",
+      "counts": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      "localLog": "tools/explore-e10/http.local.log",
+      "rawLogSha256": "99cfee433b97332e8abc07d4de5d5d799338f6057d4b25525504535912b4b167"
+    }
+  ],
+  "packet": [
+    {
+      "file": "catalogue-v1.json",
+      "jsonEqual": true,
+      "equalAfterLFNormalization": true,
+      "packetRawSha256": "58dd5c975d8da5bc9329d2fc447fec0f6ee6d60f4e0cffbe9e2c5b9e020b9e4b",
+      "vendoredRawSha256": "fc337592f20a7ef3e3245964f2e198d8bbdeb735fb07a35d62d5d02e2d8f42ab",
+      "lfSha256": "58dd5c975d8da5bc9329d2fc447fec0f6ee6d60f4e0cffbe9e2c5b9e020b9e4b"
+    },
+    {
+      "file": "generator-v1-fixtures.json",
+      "jsonEqual": true,
+      "equalAfterLFNormalization": true,
+      "packetRawSha256": "196805f155537988c09b623cf024a87224fa34c49f0fab2314a24ff9fe3bcc27",
+      "vendoredRawSha256": "7d2e0f55102ae1810ce061e77645aaaeb2ee86fca0c232255c59adac9118fed5",
+      "lfSha256": "196805f155537988c09b623cf024a87224fa34c49f0fab2314a24ff9fe3bcc27"
+    },
+    {
+      "file": "api-fixtures.json",
+      "jsonEqual": true,
+      "equalAfterLFNormalization": true,
+      "packetRawSha256": "be263ad7807637839cb5810b94c23986a26d8a1249187141513c9838acad3455",
+      "vendoredRawSha256": "f1e0e24752ac8fb34c19668773c3bf5d663ce56ccc3ebb363914debbe004baf7",
+      "lfSha256": "be263ad7807637839cb5810b94c23986a26d8a1249187141513c9838acad3455"
+    }
+  ],
+  "prismaFilesUnchangedFromCore": true,
+  "rehearsal": {
+    "startedAt": "2026-10-23T16:10:08.626Z",
+    "container": "explore-e10-3707d238ef9f",
+    "image": "postgres:16",
+    "checks": [],
+    "result": "blocked-or-failed",
+    "error": "docker info --format {{.ServerVersion}} failed: WARNING: Error loading config file: open C:\\Users\\rohit\\.docker\\config.json: Access is denied.\nfailed to connect to the docker API at npipe:////./pipe/docker_engine; check if the path is correct and if the daemon is running: open //./pipe/docker_engine: The system cannot find the file specified.\n",
+    "cleanup": "no container created",
+    "finishedAt": "2026-10-23T16:10:08.678Z"
+  },
+  "realDbChecksExecuted": false,
+  "independentDartParity": {
+    "cases": 543,
+    "completeSpawns": 440,
+    "passed": true,
+    "integratedApp": false
+  },
+  "remaining": [
+    "disposable PostgreSQL migration/history and real HTTP/DB execution",
+    "E2/E9 receipt telemetry emission and deduplication",
+    "integrated app and host baseline",
+    "E11 device acceptance"
+  ]
+}

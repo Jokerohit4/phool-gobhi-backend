@@ -322,6 +322,78 @@
     "since": "2026-08-03",
     "notes": "Share your code tapped on the Refer & Earn screen"
   },
+  "explore_visible": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: actual visible session; entry_source and world_state. Separate from historical map mount counts. No location/proof."
+  },
+  "explore_session_ended": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: visible session ends; coarse duration_bucket, client outcome and fix_state. Caught/pending never implies saved."
+  },
+  "explore_find_nearby": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: usable-fix session denominator; has_nearby and distinct_count within inclusive 150m. Does not establish accessibility. No occurrence IDs."
+  },
+  "explore_target_presented": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: target_state and nullable occurrence_kind. Only gym/reviewed can be directed targets; blocked states are not impressions."
+  },
+  "explore_encounter_started": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: encounter actually opened; occurrence_kind and cosmetic rarity only."
+  },
+  "explore_encounter_result": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: caught/missed_retry/abandoned, attempts, occurrence_kind and rarity. Client interaction, not authoritative pickup outcome."
+  },
+  "explore_pickup_pending": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: durable account outbox insertion; occurrence_kind and connectivity. No candidate ID, proof or saved claim."
+  },
+  "explore_collection_viewed": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: real journal access; entry_source and world_state. Does not mean eating or exercising."
+  },
+  "explore_gym_opened": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: explicit Explore-to-gym-detail handoff; entry_source and world_state. No attendance credit."
+  },
+  "explore_pickup_saved": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-23",
+    "notes": "Reserved E9 authoritative receipt event, deduplicated at transaction boundary. No client ingestion; no proof/location. Call-site implementation remains with E2/E9."
+  },
+  "explore_pickup_rejected": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-23",
+    "notes": "Reserved E9 terminal command rejection with typed reason and occurrence kind. No client ingestion or proof. Call-site implementation remains with E2/E9."
+  },
+  "explore_daily_set_completed": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-23",
+    "notes": "Reserved B1 authoritative acknowledged daily-set completion, never inferred from client activity. No B1 issuance in Increment A."
+  },
   "map_explored_opened": {
     "source": "client",
     "apps": [
