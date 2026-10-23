@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash, createHmac } from 'node:crypto';
 import express from 'express';
 import { memoryDb } from './exploreMemoryDb.js';
 import { createExploreService } from '../exploration/service.js';
-import { catalogueV1, hash, timingReason, windowBounds, errorResponse, ExploreError, parseOccurrence } from '../exploration/contracts.js';
+import { catalogueV1, canonical, timingReason, windowBounds, errorResponse, ExploreError, parseOccurrence } from '../exploration/contracts.js';
 
-const base='C:/Users/rohit/Phool-Gobhi/wt/explore-world/docs/explore-contracts/';
-const fixtures=JSON.parse(readFileSync(base+'api-fixtures.json','utf8'));
+const fixtures=JSON.parse(readFileSync(new URL('../exploration/contract/api-fixtures.json',import.meta.url),'utf8'));
 const [m1,m2]=fixtures.manifests;
 const savedCase=fixtures.httpCases.find(c=>c.name==='pickup-delayed-first-claim-C1-after-C2');
 const command=savedCase.request.body,receipt=savedCase.response.body.data.receipt;
@@ -16,9 +16,9 @@ test('setup: mock Prisma once and import exploration router',async t=>{
   t.mock.module('@prisma/client',{exports:{PrismaClient:class {},Prisma:{}}});
   ({createExploreRouter}=await import('../exploration/routes.js'));
 });
-function setup(time=receipt.acknowledgedAt) {
+function setup(time=receipt.acknowledgedAt,fingerprintSecret='test-fingerprint-secret') {
   const db=memoryDb();let timestamp=time,serial=0,current=catalogueV1;
-  const service=createExploreService({db,now:()=>timestamp,receiptId:()=>serial++===0?receipt.receiptId:`loc-A-${serial}`,cursorSecret:'test-cursor-secret',currentCatalogue:()=>current});
+  const service=createExploreService({db,now:()=>timestamp,receiptId:()=>serial++===0?receipt.receiptId:`loc-A-${serial}`,cursorSecret:'test-cursor-secret',fingerprintSecret,currentCatalogue:()=>current});
   return {db,service,setTime:t=>{timestamp=t;},setCatalogue:cat=>{current=cat;}};
 }
 async function bind(s,manifest=m1,cat=catalogueV1) {
@@ -246,4 +246,44 @@ test('find counts grow for duplicates while variety/milestones remain identity-b
   assert.ok(totals.milestones.includes('three_varieties'));
   const all=catalogueV1.items.map((item,i)=>({...receipt,itemKey:item.itemKey,receiptId:'loc-'+i}));
   assert.equal(summary(all,12).coreVarietyCount,12);assert.ok(summary(all,12).milestones.includes('twelve_core_varieties'));
+});
+
+
+test('stored claim fingerprints require the server secret and retain canonical-command idempotency',async()=>{
+  const secret='test-only-fingerprint-secret';
+  const s=setup(receipt.acknowledgedAt,secret);await bind(s);
+  await s.service.pickup(1,command);
+  const stored=s.db.inspect().exploreClaim[0].fingerprint;
+  const digest=stored.slice('hmac-sha256:'.length);
+  assert.match(stored,/^hmac-sha256:[a-f0-9]{64}$/);
+  assert.equal(digest,createHmac('sha256',secret).update(canonical(command),'utf8').digest('hex'));
+  assert.notEqual(digest,createHash('sha256').update(canonical(command),'utf8').digest('hex'));
+  assert.notEqual(digest,createHash('sha256').update(JSON.stringify(command),'utf8').digest('hex'));
+  const other=setup(receipt.acknowledgedAt,'different-test-secret');await bind(other);
+  await other.service.pickup(1,command);
+  assert.notEqual(other.db.inspect().exploreClaim[0].fingerprint,stored);
+  const reordered={...Object.fromEntries(Object.entries(command).reverse()),position:Object.fromEntries(Object.entries(command.position).reverse())};
+  assert.equal((await s.service.pickup(1,reordered)).result,'already_saved');
+  await assert.rejects(s.service.pickup(1,{...command,position:{...command.position,accuracyMeters:11}}),e=>e.code==='IDEMPOTENCY_CONFLICT');
+});
+
+test('claim fingerprints default to JWT_SECRET and fail closed without it before persistence',async()=>{
+  const previous=process.env.JWT_SECRET;
+  try {
+    const db=memoryDb();
+    for(const absent of [undefined,'','   ']) {
+      if(absent===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=absent;
+      const service=createExploreService({db});
+      await assert.rejects(service.pickup(1,command),e=>e.code==='WORLD_UNAVAILABLE');
+      assert.equal(db.inspect().exploreClaim.length,0);
+      assert.equal(db.inspect().exploreProgress.length,0);
+      assert.equal(db.inspect().exploreLocationReceipt.length,0);
+    }
+    process.env.JWT_SECRET='test-env-fingerprint-secret';
+    const s={db,service:createExploreService({db,now:()=>receipt.acknowledgedAt})};
+    await bind(s);await s.service.pickup(1,command);
+    assert.equal(db.inspect().exploreClaim[0].fingerprint,'hmac-sha256:'+createHmac('sha256',process.env.JWT_SECRET).update(canonical(command),'utf8').digest('hex'));
+  } finally {
+    if(previous===undefined)delete process.env.JWT_SECRET;else process.env.JWT_SECRET=previous;
+  }
 });

@@ -1,11 +1,14 @@
 # Explore core (E2 / E3-A)
 
 The authority is auth-service, behind the existing private `/api/auth` gateway.
-The frozen packet is read only at
-`C:/Users/rohit/Phool-Gobhi/wt/explore-world/docs/explore-contracts/`.
-This implementation uses the corrected full-radius scans and `foodFind_` catalogue
-keys (packet commits `9bcbb2b` and `c1ea328`). The production catalogue snapshot is
-bundled here; tests read both shared fixture JSON files by absolute path.
+The files in `contract/` are frozen copies of `docs/explore-contracts` in the
+customer-app repo: `catalogue-v1.json`, `generator-v1-fixtures.json` and
+`api-fixtures.json`. Re-copy these files together whenever the upstream contract
+changes. Tests resolve the vendored files relative to their own test file, so no
+customer-app checkout is required. A consistency test checks the catalogue's
+contentHash against the generator fixtures' catalogueHash and API manifest
+bindings. This implementation uses the corrected full-radius scans and
+`foodFind_` catalogue keys (packet commits `9bcbb2b` and `c1ea328`).
 
 ## Runtime behavior
 
@@ -41,11 +44,17 @@ proof-free canonical wire objects; only identities and revision/time indexes are
 separate columns. Summary counts and milestones derive from those receipts in
 that transaction rather than independent award counters.
 
-Only a SHA-256 command fingerprint and terminal receipt ID/reason are kept for
-claim idempotency. Position, fix accuracy/speed/time and capturedAt are never
+Only an HMAC-SHA256 fingerprint of the canonical command and terminal receipt
+ID/reason are kept for claim idempotency. The HMAC uses the existing JWT_SECRET;
+claims fail closed with WORLD_UNAVAILABLE before any persistence if it is absent
+or blank. The digest cannot be reproduced from the command alone. Reordered
+object keys replay identically, while changed proof still conflicts for the same
+claimId. Position, fix accuracy/speed/time and capturedAt are never
 persisted, exported or logged. Request/parser/storage errors use redacted typed
-errors. Cursor signatures use the existing JWT_SECRET; rotating it invalidates
-old cursors (clients restart pagination). No position is encoded in a cursor.
+errors. Cursor signatures also use JWT_SECRET. Keep this secret stable for
+retained claimId replays; rotating it requires a fingerprint-key transition and
+invalidates old cursors (clients restart pagination). No position is encoded in
+a cursor.
 
 Account export includes both receipt classes. Account deletion removes claims,
 both receipt classes and progress in the existing account transaction; global

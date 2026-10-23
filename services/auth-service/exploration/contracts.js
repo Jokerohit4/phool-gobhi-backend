@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual, randomUUID } from 'node:crypto
 import { readFileSync } from 'node:fs';
 import { generate } from './generator.js';
 
-export const catalogueV1 = JSON.parse(readFileSync(new URL('./catalogue-v1.json', import.meta.url), 'utf8'));
+export const catalogueV1 = JSON.parse(readFileSync(new URL('./contract/catalogue-v1.json', import.meta.url), 'utf8'));
 export function canonical(value) {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
   if (value !== null && typeof value === 'object') return '{' + Object.keys(value).sort().map(k => JSON.stringify(k)+':'+canonical(value[k])).join(',') + '}';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const fixtures=JSON.parse(readFileSync('C:/Users/rohit/Phool-Gobhi/wt/explore-world/docs/explore-contracts/api-fixtures.json','utf8'));
+const fixtures=JSON.parse(readFileSync(new URL('../exploration/contract/api-fixtures.json',import.meta.url),'utf8'));
 const location=fixtures.httpCases.find(c=>c.name==='collection-location').response.body.data.history[0];
 const reward=fixtures.rewardExamples[0];
 let exportData;

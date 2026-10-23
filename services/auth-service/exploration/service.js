@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { clock, scanRadius, gridOccurrence, haversineMeters } from './generator.js';
-import { catalogueV1, hash, fail, queryKeys, integer, id, validateCommand, parseOccurrence, resolveGrid, timingReason, windowBounds, noDelta, summary, cursorCodec } from './contracts.js';
+import { catalogueV1, canonical, hash, fail, queryKeys, integer, id, validateCommand, parseOccurrence, resolveGrid, timingReason, windowBounds, noDelta, summary, cursorCodec } from './contracts.js';
 
-export function createExploreService({db, now=()=>new Date().toISOString(), receiptId=()=>`loc-${randomUUID()}`, cursorSecret=process.env.JWT_SECRET, currentCatalogue=()=>catalogueV1}) {
+export function createExploreService({db, now=()=>new Date().toISOString(), receiptId=()=>`loc-${randomUUID()}`, cursorSecret=process.env.JWT_SECRET, fingerprintSecret=process.env.JWT_SECRET, currentCatalogue=()=>catalogueV1}) {
   const cursors=cursorCodec(cursorSecret);
   async function catalogueFrom(tx, version) {
     const row=await tx.exploreCatalogue.findUnique({where:{version}});
@@ -83,7 +83,12 @@ export function createExploreService({db, now=()=>new Date().toISOString(), rece
     },{isolationLevel:'RepeatableRead'});
   }
   async function pickup(userId,body) {
-    const command=validateCommand(body),fingerprint=hash(command),receivedAt=now();
+    const command=validateCommand(body);
+    // A keyed digest prevents recreating position-bearing commands from stored fingerprints.
+    // Refuse claims before any persistence if the server secret is unavailable.
+    if (typeof fingerprintSecret !== 'string' || !fingerprintSecret.trim()) fail('WORLD_UNAVAILABLE');
+    const fingerprint='hmac-sha256:'+createHmac('sha256',fingerprintSecret).update(canonical(command),'utf8').digest('hex');
+    const receivedAt=now();
     return db.$transaction(async tx=>{
       // Lock the parent account before progress creation, serializing all award writers
       // (including future B1 rewards) and coordinating with account deletion.

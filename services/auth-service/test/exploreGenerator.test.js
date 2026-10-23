@@ -2,12 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { cell, round6, pick, clock, generate } from '../exploration/generator.js';
-import { catalogueV1 } from '../exploration/contracts.js';
+import { catalogueV1, hash } from '../exploration/contracts.js';
 
-// Deliberately read the shared frozen fixture by absolute path, rather than a copied test oracle.
-const path='C:/Users/rohit/Phool-Gobhi/wt/explore-world/docs/explore-contracts/generator-v1-fixtures.json';
-const fixture=JSON.parse(readFileSync(path,'utf8'));
-assert.equal(fixture.catalogueHash,catalogueV1.contentHash);
+// Frozen copies are resolved relative to this test, independent of the checkout path or cwd.
+const fixture=JSON.parse(readFileSync(new URL('../exploration/contract/generator-v1-fixtures.json',import.meta.url),'utf8'));
+const apiFixture=JSON.parse(readFileSync(new URL('../exploration/contract/api-fixtures.json',import.meta.url),'utf8'));
+test('vendored catalogue contentHash agrees with generator and API fixture catalogueHash bindings',()=>{
+  const {contentHash,...payload}=catalogueV1;
+  assert.equal(hash(payload),contentHash);
+  assert.equal(fixture.catalogueHash,contentHash);
+  const bindings=apiFixture.manifests.filter(m=>m.catalogueVersion===catalogueV1.catalogueVersion);
+  assert.ok(bindings.length>0);
+  for(const manifest of bindings)assert.equal(manifest.catalogueHash,contentHash);
+  const catalogueRead=apiFixture.httpCases.find(c=>c.name==='catalogue-manifest-bound');
+  assert.equal(catalogueRead.response.body.data.contentHash,contentHash);
+});
 for (const c of fixture.cases) test(`generator v1: ${c.id}`,()=>{
   let actual;
   if (c.kind==='generate') {
