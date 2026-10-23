@@ -166,6 +166,98 @@
         "E2/E9 reviewed receipt telemetry implementation and evidence",
         "integrated-app acceptance"
       ]
+    },
+    {
+      "recordedAt": "2026-10-23T17:01:29.550124+00:00",
+      "reviewedCheckpoint": "098f852e482b13d84fdc722d01d240cc2c3a74df",
+      "branch": "feature/explore-e10-backend",
+      "initialGitStatus": "clean",
+      "tools": [
+        {
+          "path": "tools/explore-e10/rehearse.mjs",
+          "sourceCommit": "098f852e482b13d84fdc722d01d240cc2c3a74df",
+          "gitBlob": "88a3168f9e891134fd017e27e877f7ea70a4477e",
+          "rawFileSha256": "aa376f893108db4b3f8368c30ccf358dc2ccf3c9f93eb634bc7cbdb007a783b2"
+        },
+        {
+          "path": "tools/explore-e10/postgres.test.mjs",
+          "sourceCommit": "098f852e482b13d84fdc722d01d240cc2c3a74df",
+          "gitBlob": "aae8e87a58fa0ea15690521efbd7b4f7d3089068",
+          "rawFileSha256": "6814ed4a2cb26531171e8ebefdd322c5d5b2e9ec40a0fd6932e8c208980c4d92"
+        }
+      ],
+      "toolVersions": {
+        "node": "v24.16.0",
+        "dockerCli": "29.6.1, build 8900f1d",
+        "dockerDesktop": "4.81.0.232925"
+      },
+      "commandsAndOutcomes": [
+        {
+          "command": "git status --short; git branch --show-current; git rev-parse HEAD",
+          "result": "clean; expected branch; exact requested checkpoint"
+        },
+        {
+          "command": "Get-Command docker,node; Get-Process *docker*,*com.docker*,*wsl*; Get-Service *docker*,*vmcompute*,*wsl*,*Lxss*; docker context ls; wsl --status; wsl --list --verbose",
+          "result": "Docker installed; Desktop initially absent; vmcompute and WSLService running; Docker service stopped/manual. Docker context config access denied; WSL enumeration E_ACCESSDENIED."
+        },
+        {
+          "command": "Start-Process -FilePath 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe' -WindowStyle Hidden -PassThru",
+          "result": "launched PID 23912; backend processes 7064 and 24508 observed"
+        },
+        {
+          "command": "docker info --format '{{.ServerVersion}}'",
+          "exitCode": 1,
+          "result": "docker_engine pipe absent; config.json access denied after launch"
+        },
+        {
+          "command": "Get-Content -LiteralPath \"$env:LOCALAPPDATA\\Docker\\log\\host\\com.docker.backend.exe.log\" -Tail 55",
+          "result": "startup fatal at 2026-10-23T16:59:51.833610000Z; see diagnostic excerpt"
+        },
+        {
+          "command": "docker --host npipe:////./pipe/dockerDesktopLinuxEngine info --format '{{.ServerVersion}}'",
+          "exitCode": 1,
+          "result": "dockerDesktopLinuxEngine pipe absent; config.json access denied"
+        },
+        {
+          "command": "Start-Service -Name com.docker.service; Get-Service com.docker.service",
+          "result": "Cannot open com.docker.service service on computer; service remains Stopped"
+        },
+        {
+          "command": "git diff --exit-code 0db69a2496f9fd46afd5037dffd4640250f00990 -- services/auth-service/prisma",
+          "exitCode": 0,
+          "result": "schema and historical migrations unchanged"
+        }
+      ],
+      "diagnosticExcerpt": [
+        "backend crashed: initializing backend: doing migrations: fatal: ensuring credential helper: fatal: reading C:\\Users\\rohit\\.docker\\config.json: Access is denied.",
+        "loading/formatting daemon.json: CreateFile C:\\Users\\rohit\\.docker\\daemon.json: Access is denied.",
+        "saving settings: mkdir C:\\Users\\rohit\\.docker: Cannot create a file when that file already exists.",
+        "initializing cli binaries configuration: initialising configurator: The system cannot find the file specified."
+      ],
+      "image": {
+        "tag": "postgres:16",
+        "availability": "unverified: daemon unavailable",
+        "pulled": false
+      },
+      "rehearsalExecuted": false,
+      "realDbChecksExecuted": false,
+      "newPostgresCheckResults": [],
+      "resourcesCreated": [],
+      "cleanup": {
+        "required": false,
+        "reason": "no harness container, volume or database created; Desktop startup attempted, no unrelated runtime resources removed"
+      },
+      "passingSuitesRerun": false,
+      "harnessChanged": false,
+      "reviewedOwnerCommitsIncorporated": [],
+      "requiredHumanAction": "Outside this restricted agent session, launch Docker Desktop as the normal Windows user with access to C:\\Users\\rohit\\.docker\\config.json and daemon.json; resolve any Desktop startup prompt and verify docker info succeeds. If Docker requests its Windows service, an administrator must start com.docker.service. Then verify docker image inspect postgres:16; docker pull postgres:16 is authorized only if absent; resume node tools/explore-e10/rehearse.mjs in this candidate.",
+      "result": "checkpointed: attempted existing runtime startup; backend fatal on denied Docker configuration; service start unavailable",
+      "remaining": [
+        "all PostgreSQL migration/upgrade/history, real HTTP/DB, export/deletion and rollback acceptance checks",
+        "E2/E9 reviewed receipt telemetry implementation and evidence",
+        "integrated-app acceptance; E11 execution waits for accepted integrated E10 candidate",
+        "E8 Part 2 waits for approved credential fix"
+      ]
     }
   ]
 }

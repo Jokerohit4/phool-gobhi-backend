@@ -231,6 +231,74 @@ and integrated-app acceptance gates remain open. This continuation commits only
 the report and evidence JSON. Source lanes, shared infrastructure and historical
 migrations remain untouched; nothing is merged, pushed or deployed.
 
+## Runtime restoration attempt: 2026-10-23, 16:59 UTC
+
+Resumed `feature/explore-e10-backend` at the exact requested checkpoint
+`098f852e482b13d84fdc722d01d240cc2c3a74df`; initial tracked/untracked status
+was clean. Read this report, the harness README, `rehearse.mjs` and
+`postgres.test.mjs`. No passing mock suite was rerun. Tool source identities
+are unchanged from the prior checkpoint: runner blob
+`88a3168f9e891134fd017e27e877f7ea70a4477e`, PostgreSQL suite blob
+`aae8e87a58fa0ea15690521efbd7b4f7d3089068`; full raw SHA-256 values and
+commands/outcomes are recorded in the new evidence continuation entry.
+Node is `v24.16.0`, Docker CLI `29.6.1` (build `8900f1d`), installed Desktop
+`4.81.0.232925` at `C:/Program Files/Docker/Docker/Docker Desktop.exe`.
+
+Inspected the existing installation and runtime. Desktop was not running;
+`com.docker.service` was Stopped/Manual, while `vmcompute` and `WSLService`
+were running. `docker context ls` could not read Docker config/context metadata;
+`wsl --status` and `wsl --list --verbose` returned
+`Wsl/EnumerateDistros/Service/E_ACCESSDENIED`. Executed:
+
+```powershell
+Start-Process -FilePath 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -WindowStyle Hidden -PassThru
+docker info --format '{{.ServerVersion}}'
+Get-Content -LiteralPath "$env:LOCALAPPDATA\Docker\log\host\com.docker.backend.exe.log" -Tail 55
+docker --host npipe:////./pipe/dockerDesktopLinuxEngine info --format '{{.ServerVersion}}'
+Start-Service -Name com.docker.service
+Get-Service com.docker.service
+git diff --exit-code 0db69a2496f9fd46afd5037dffd4640250f00990 -- services/auth-service/prisma
+```
+
+The hidden launch created Desktop PID 23912 and backend processes 24508/7064.
+The startup log at `2026-10-23T16:59:51.833610000Z` reports **backend crashed**:
+credential-helper initialization cannot read
+`C:/Users/rohit/.docker/config.json` (Access is denied), and settings initialization
+cannot read `.docker/daemon.json` (Access is denied). It also reports failure
+saving settings and initializing CLI configuration. Both default `docker_engine`
+and explicit `dockerDesktopLinuxEngine` probes exited 1 with absent named pipes.
+`Start-Service` could not open `com.docker.service`; the service remains stopped.
+This is a concrete startup/permission blocker, not a PostgreSQL assertion failure.
+No ACL, Docker configuration or context was changed. No privilege escalation,
+installation, reset, WSL shutdown or unrelated resource deletion was attempted.
+
+**Required action:** outside this restricted agent session, start Docker Desktop
+as the normal Windows user with access to the existing `.docker/config.json` and
+`daemon.json`, resolve any startup prompt, and verify `docker info` succeeds.
+If Desktop requests its Windows service, an administrator must run
+`Start-Service com.docker.service`. The service denial alone does not establish
+that the service is required for this WSL-backed installation. Then run
+`docker image inspect postgres:16`; if absent, `docker pull postgres:16` is
+authorized for this disposable rehearsal. Resume with
+`node tools/explore-e10/rehearse.mjs` from this branch/checkpoint.
+
+Stopped after the fatal startup diagnosis instead of repeatedly probing the
+unchanged blocker. Image availability remains **unverified**, not missing;
+no image was pulled. The rehearsal was not invoked because its daemon prerequisite
+is known unavailable. All fresh-chain, populated historical upgrade/history,
+labelled empty/populated snapshot, real HTTP/DB concurrency/timeout/account,
+manifest/rotation, post-drop export/deletion and rollback checks remain
+**unexecuted**. No harness container, volume or DB was created; no harness cleanup
+was required. Docker Desktop was launched, but unrelated runtime resources were
+not stopped or removed. No harness or production defect has been established.
+The schema/migration comparison above exited 0; historical migrations remain exact.
+
+Only this report and the evidence JSON change in this continuation. Shared
+DBs, source lanes and application flags remain untouched. E2/E9 telemetry and
+integrated-app acceptance remain separate gates pending reviewed inputs.
+E8 Part 2 starts after the credential fix is approved; E11 execution waits for an
+accepted integrated E10 candidate. No merge, push or deployment occurred.
+
 ## Exact owned change set
 
 New E10 commit paths:
