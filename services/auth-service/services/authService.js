@@ -379,7 +379,10 @@ export async function deleteUserService(userId) {
     // account is untouched and the user can simply try again.
     await prisma.$transaction([
       prisma.refreshToken.deleteMany({ where: { userId } }),
-      prisma.collectibleFind.deleteMany({ where: { userId } }),
+      prisma.exploreClaim.deleteMany({ where: { userId } }),
+      prisma.exploreLocationReceipt.deleteMany({ where: { userId } }),
+      prisma.exploreRewardReceipt.deleteMany({ where: { userId } }),
+      prisma.exploreProgress.deleteMany({ where: { userId } }),
       prisma.savedAddress.deleteMany({ where: { userId } }),
       prisma.partnerBankAccount.deleteMany({ where: { userId } }),
       prisma.appModeHistory.deleteMany({ where: { userId } }),

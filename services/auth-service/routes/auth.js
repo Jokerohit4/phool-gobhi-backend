@@ -1,6 +1,7 @@
+import exploreRoutes from '../exploration/routes.js';
 import { Router } from 'express';
 const router = Router();
-import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -108,11 +109,8 @@ router.post('/fcm-token', verifyToken, updateFcmToken);
 // Per-gym attendance leaderboards (booking-service) are on by default; this
 // is the profile-side opt-out (no toggle on the board itself).
 router.put('/leaderboard-opt-in', verifyToken, updateLeaderboardOptIn);
-// Map collectibles (veggie pickups) -- standalone currency, no coins/gyms
-// involved. Spawn points are deterministic client-side; these just record
-// which ids this customer has found.
-router.get('/collectibles/mine', requireCustomer, listMyCollectibles);
-router.post('/collectibles/:collectibleId/collect', requireCustomer, collectCollectible);
+// Explore uses typed customer-auth errors and keeps rollback history available.
+router.use('/explore', exploreRoutes);
 
 // Pitch-deck access allowlist (moved off a hardcoded file in the website repo)
 router.post('/pitch-access/check', checkContact);

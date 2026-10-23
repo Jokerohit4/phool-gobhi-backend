@@ -7,6 +7,7 @@ import { dirname, join } from 'path';
 import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
@@ -85,7 +86,9 @@ export function authMiddleware(req, res, next) {
 
   if (isPublicRoute(req.method, req.path)) return next();
   const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const exploreAuthFailure = () => res.status(401).json({ error: { code: 'AUTH_REQUIRED', messageKey: 'explore.error.auth_required', retryable: false, requestId: randomUUID() } });
+  const isExplore = req.path === '/api/auth/explore' || req.path.startsWith('/api/auth/explore/');
+  if (!token) return isExplore ? exploreAuthFailure() : res.status(401).json({ error: 'Unauthorized' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.headers['x-user-id'] = String(payload.id);
@@ -96,6 +99,7 @@ export function authMiddleware(req, res, next) {
     // An expired/invalid token is an authentication failure (401), not an
     // authorization failure (403). Returning 401 lets clients trigger their
     // refresh-token flow; 403 is reserved for authenticated-but-not-permitted.
+    if (isExplore) return exploreAuthFailure();
     const expired = err.name === 'TokenExpiredError';
     return res.status(401).json({
       error: expired ? 'Token expired' : 'Invalid token',

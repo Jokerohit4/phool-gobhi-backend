@@ -13,10 +13,11 @@ const prisma = new PrismaClient();
 // returned WITH the gaps named, which serves the person better than an error
 // page that tells them nothing about anything.
 export async function buildFullExportService(userId) {
-  const [user, addresses, finds, platformReview, gymLinks, devices] = await Promise.all([
+  const [user, addresses, locations, rewards, platformReview, gymLinks, devices] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.savedAddress.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
-    prisma.collectibleFind.findMany({ where: { userId }, orderBy: { foundAt: 'asc' } }),
+    prisma.exploreLocationReceipt.findMany({ where: { userId }, orderBy: { acknowledgedAt: 'asc' } }),
+    prisma.exploreRewardReceipt.findMany({ where: { userId }, orderBy: { acknowledgedAt: 'asc' } }),
     prisma.platformReview.findUnique({ where: { customerId: userId } }),
     prisma.gymLink.findMany({ where: { userId }, orderBy: { linkedAt: 'asc' } }),
     prisma.userDevice.findMany({ where: { userId }, orderBy: { firstSeenAt: 'asc' } }),
@@ -87,7 +88,7 @@ export async function buildFullExportService(userId) {
     savedAddresses: addresses.map((a) => ({
       label: a.label, address: a.formattedAddress, lat: a.lat, lng: a.lng, savedAt: a.createdAt,
     })),
-    collectiblesFound: finds.map((f) => ({ collectibleId: f.collectibleId, foundAt: f.foundAt })),
+    exploration: { locationReceipts: locations.map(r => r.payload), rewardReceipts: rewards.map(r => r.payload) },
     platformReview: platformReview
       ? { rating: platformReview.rating, comment: platformReview.comment, at: platformReview.createdAt }
       : null,

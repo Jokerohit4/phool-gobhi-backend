@@ -1020,40 +1020,6 @@ const updateLeaderboardOptIn = async (req, res) => {
   }
 };
 
-// Map collectibles (veggie pickups) -- a standalone currency, deliberately
-// NOT coins and NOT tied to gyms/bookings/badges. Spawn points are
-// deterministic client-side (fixed grid, see the customer app's
-// VeggieCollectibleGrid); there's no server-side catalog, so this is purely
-// which ids a user has found.
-const listMyCollectibles = async (req, res) => {
-  try {
-    const finds = await prisma.collectibleFind.findMany({
-      where: { userId: req.user.id },
-      select: { collectibleId: true },
-    });
-    res.json({ data: finds.map((f) => f.collectibleId) });
-  } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
-  }
-};
-
-const collectCollectible = async (req, res) => {
-  try {
-    const { collectibleId } = req.params;
-    if (!collectibleId) return res.status(400).json({ error: 'collectibleId required' });
-    // Idempotent: walking near an already-found spawn point again (or a
-    // retried request) is a no-op, not an error.
-    await prisma.collectibleFind.upsert({
-      where: { userId_collectibleId: { userId: req.user.id, collectibleId } },
-      create: { userId: req.user.id, collectibleId },
-      update: {},
-    });
-    res.json({ ok: true, collectibleId });
-  } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
-  }
-};
-
-export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, validateFeaturePayload, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, countGymJoinedUsersByMonthInternal };
+export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, validateFeaturePayload, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, countGymJoinedUsersByMonthInternal };
 
 

@@ -6,6 +6,7 @@ connectDB();
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.js';
+import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
 import deviceRoutes from './routes/devices.js';
 import gymLinkRoutes from './routes/gymLinks.js';
@@ -46,6 +47,9 @@ app.get('/health', async (req, res) => {
 // upload failures return the same JSON shape as every other error path
 // instead of falling through to Express's default HTML response.
 app.use((err, req, res, next) => {
+  if (req.path === '/explore' || req.path.startsWith('/explore/')) {
+    return errorResponse(res, err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large' ? 'INVALID_REQUEST' : 'INTERNAL_ERROR');
+  }
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'File is too large' });
   }

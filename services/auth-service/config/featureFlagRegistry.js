@@ -47,7 +47,7 @@
 /** Bumped whenever the flag SET changes shape, so a client can tell a flag that
  * is off from a server that predates the flag existing. Emitted as
  * `schemaVersion` on GET /api/auth/app-config. */
-export const FLAG_SCHEMA_VERSION = 3;
+export const FLAG_SCHEMA_VERSION = 4;
 
 /**
  * Ordering within a group is only for the admin portal's render order. `deps`
@@ -56,6 +56,16 @@ export const FLAG_SCHEMA_VERSION = 3;
  * pretending it does something.
  */
 export const FEATURE_FLAGS = [
+  {
+    name: 'exploreFoodFinds',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'exploreFoodFindsEnabled',
+    group: 'exploration',
+    dataClass: 'collection',
+    blastRadius: 'Food Finds world issuance; collection history and published-epoch queue resolution remain available',
+    rationale: 'Enables the renewable Food Finds grid independently of Sprouts and coins. Defaults off until the Increment A pilot is ready; rollback preserves saved history and queued claims.',
+  },
   // ---------------------------------------------------------------- training
   {
     name: 'workoutTracking',

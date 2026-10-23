@@ -83,7 +83,7 @@ test('deletion removes auth-local rows and the user in one transaction', async (
   assert.equal(out.message, 'User deleted');
   assert.equal(txCalls, 1);
   const joined = ops.join('\n');
-  for (const m of ['refreshToken', 'collectibleFind', 'savedAddress', 'partnerBankAccount', 'appModeHistory']) {
+  for (const m of ['refreshToken', 'exploreClaim', 'exploreLocationReceipt', 'exploreRewardReceipt', 'exploreProgress', 'savedAddress', 'partnerBankAccount', 'appModeHistory']) {
     assert.match(joined, new RegExp(`${m}\\.deleteMany \\{"where":\\{"userId":42\\}\\}`));
   }
   assert.match(joined, /user\.updateMany \{"where":\{"referredByUserId":42\},"data":\{"referredByUserId":null\}\}/);

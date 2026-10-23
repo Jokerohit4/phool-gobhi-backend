@@ -264,3 +264,16 @@ test('eventsHandler: never throws even on a garbage body', () => {
   eventsHandler(eventsReq({ events: 'not-an-array' }, {}), res);
   assert.equal(res.statusCode, 202);
 });
+
+test('Explore endpoints remain private and emit typed auth errors before proxying', () => {
+  for (const [method,path] of [['GET','catalogue'],['GET','collection'],['GET','nearby'],['POST','pickups']]) {
+    const full='/api/auth/explore/'+path;
+    assert.equal(isPublicRoute(method,full),false);
+    for (const token of [null,'garbage',jwt.sign({id:42,role:'customer'},process.env.JWT_SECRET,{expiresIn:-1})]) {
+      const req={method,path:full,headers:{'x-user-id':'42','x-user-role':'customer',...(token?{authorization:'Bearer '+token}:{})}};
+      const res=makeRes();authMiddleware(req,res,()=>assert.fail('unauthenticated request reached proxy'));
+      assert.equal(res.statusCode,401);assert.equal(res.body.error.code,'AUTH_REQUIRED');assert.equal(res.body.error.messageKey,'explore.error.auth_required');
+      assert.equal(res.body.error.retryable,false);assert.equal(typeof res.body.error.requestId,'string');assert.equal(req.headers['x-user-id'],undefined);
+    }
+  }
+});
