@@ -1,4 +1,5 @@
 import { createHmac, randomUUID } from 'node:crypto';
+import { enqueuePickupOutcome } from './telemetry.js';
 import { clock, scanRadius, gridOccurrence, haversineMeters } from './generator.js';
 import { catalogueV1, canonical, hash, fail, queryKeys, integer, id, validateCommand, parseOccurrence, resolveGrid, timingReason, windowBounds, noDelta, summary, cursorCodec } from './contracts.js';
 
@@ -105,7 +106,10 @@ export function createExploreService({db, now=()=>new Date().toISOString(), rece
         if (previous.receiptId&&!receipt) fail('WORLD_UNAVAILABLE');
         return result(receipt,previous.reason);
       }
-      const remember=async(receipt,reason)=>tx.exploreClaim.create({data:{userId,claimId:command.claimId,fingerprint,receiptId:receipt?.receiptId??null,reason}});
+      const remember=async(receipt,reason)=>{
+        await tx.exploreClaim.create({data:{userId,claimId:command.claimId,fingerprint,receiptId:receipt?.receiptId??null,reason}});
+        if (reason) await enqueuePickupOutcome(tx,{userId,command,reason,receivedAt});
+      };
       const parsed=parseOccurrence(command.occurrenceId);
       // Only grid occurrences are issued in A. Anchors become resolvable in B1/B2.
       if (!parsed) { await remember(null,'UNKNOWN_OCCURRENCE'); return result(null,'UNKNOWN_OCCURRENCE'); }
@@ -127,6 +131,7 @@ export function createExploreService({db, now=()=>new Date().toISOString(), rece
       await tx.exploreLocationReceipt.create({data:{receiptId:receipt.receiptId,userId,occurrenceId:receipt.occurrenceId,epochManifestId:receipt.epochManifestId,revision,acknowledgedAt:new Date(receivedAt),payload:receipt}});
       await tx.exploreProgress.update({where:{userId},data:{revision}});
       await remember(receipt,null);
+      await enqueuePickupOutcome(tx,{userId,command,receipt,receivedAt});
       const delta={addedReceiptIds:[receipt.receiptId],newVarietyKeys:receipts.some(r=>r.itemKey===receipt.itemKey)?[]:[receipt.itemKey],newMilestones:after.milestones.filter(m=>!before.milestones.includes(m)),dailySetEpoch:null};
       return result(receipt,null,true,after,delta);
     });

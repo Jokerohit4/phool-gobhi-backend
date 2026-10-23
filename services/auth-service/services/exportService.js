@@ -13,7 +13,7 @@ const prisma = new PrismaClient();
 // returned WITH the gaps named, which serves the person better than an error
 // page that tells them nothing about anything.
 export async function buildFullExportService(userId) {
-  const [user, addresses, locations, rewards, platformReview, gymLinks, devices] = await Promise.all([
+  const [user, addresses, locations, rewards, platformReview, gymLinks, devices, receiptEvents] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.savedAddress.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
     prisma.exploreLocationReceipt.findMany({ where: { userId }, orderBy: { acknowledgedAt: 'asc' } }),
@@ -21,6 +21,7 @@ export async function buildFullExportService(userId) {
     prisma.platformReview.findUnique({ where: { customerId: userId } }),
     prisma.gymLink.findMany({ where: { userId }, orderBy: { linkedAt: 'asc' } }),
     prisma.userDevice.findMany({ where: { userId }, orderBy: { firstSeenAt: 'asc' } }),
+    prisma.exploreReceiptEvent.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
   ]);
 
   if (!user) {
@@ -88,7 +89,8 @@ export async function buildFullExportService(userId) {
     savedAddresses: addresses.map((a) => ({
       label: a.label, address: a.formattedAddress, lat: a.lat, lng: a.lng, savedAt: a.createdAt,
     })),
-    exploration: { locationReceipts: locations.map(r => r.payload), rewardReceipts: rewards.map(r => r.payload) },
+    exploration: { locationReceipts: locations.map(r => r.payload), rewardReceipts: rewards.map(r => r.payload),
+      receiptTelemetry: receiptEvents.map(({eventId,event,properties,createdAt,deliveredAt,attempts,nextAttemptAt})=>({eventId,event,properties,createdAt,deliveredAt,attempts,nextAttemptAt})) },
     platformReview: platformReview
       ? { rating: platformReview.rating, comment: platformReview.comment, at: platformReview.createdAt }
       : null,
@@ -98,7 +100,7 @@ export async function buildFullExportService(userId) {
     notIncluded: {
       credentials: 'your password hash and login/refresh tokens are security material, not personal data we would ever hand back',
       otpCodes: 'one-time codes are short-lived and are not retained',
-      internalTelemetry: 'aggregate analytics events are not keyed to your account in a form we return here',
+      internalTelemetry: 'Explore receipt delivery records are included in exploration.receiptTelemetry; other analytics retain the existing separate sink conventions',
     },
     // If anything failed, the document says so at the top level rather than
     // quietly presenting itself as complete.

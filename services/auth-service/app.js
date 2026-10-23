@@ -10,6 +10,8 @@ import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
 import deviceRoutes from './routes/devices.js';
 import gymLinkRoutes from './routes/gymLinks.js';
+import { startPickupDelivery } from './exploration/telemetry.js';
+import { deliverReceiptEvent } from './utils/analytics.js';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -60,5 +62,6 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || process.env.AUTH_SERVICE_PORT || 5001;
 app.listen(PORT, () => {
+  startPickupDelivery({db:prisma,send:deliverReceiptEvent});
   console.log(`🚀 Auth Service running on port ${PORT}`);
 });

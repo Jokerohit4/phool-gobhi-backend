@@ -30,6 +30,8 @@ async function getPool() {
     connectionString: url,
     ssl: { rejectUnauthorized: false },
     max: 2,
+    connectionTimeoutMillis: 3000,
+    query_timeout: 5000,
   });
   return _pool;
 }
@@ -157,6 +159,38 @@ export function track(event, distinctId, properties = {}) {
  */
 export function ingest({ event, distinctId, properties = {}, source = 'client' }) {
   emit(event, distinctId, properties, source);
+}
+
+// Awaited outbox transport. Deliberately fail closed for providers without a
+// demonstrated durable deduplication contract; none/console are not delivery.
+export async function deliverReceiptEvent(row) {
+  if (PROVIDER !== 'postgres') throw new Error('durable analytics requires postgres');
+  const pool = await getPool();
+  if (!pool) throw new Error('analytics database unavailable');
+  await ensureTable(pool);
+  return insertReceiptEvent(pool, row);
+}
+
+export async function insertReceiptEvent(pool, row) {
+  const client = await pool.connect();
+  let broken = false;
+  try {
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    // Opaque random delivery identity, unrelated to occurrence/claim/receipt.
+    // All receipt dispatchers use this lock before checking/inserting. Hash
+    // collisions only serialize unrelated events; equality uses the full UUID.
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`explore-receipt:${row.eventId}`]);
+    await client.query(`INSERT INTO analytics_events(event, distinct_id, properties, source, service, ts)
+      SELECT $1, $2, $3::jsonb, 'server', 'auth-service', $4
+      WHERE NOT EXISTS (SELECT 1 FROM analytics_events
+        WHERE source = 'server' AND service = 'auth-service' AND event = $1
+          AND properties->>'_delivery_id' = $5)`,
+    [row.event, String(row.userId), JSON.stringify({...row.properties,_delivery_id:row.eventId}), row.createdAt, row.eventId]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(()=>{broken=true;});
+    throw err;
+  } finally { client.release(broken); }
 }
 
 export default { track, ingest };

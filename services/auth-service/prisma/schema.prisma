@@ -137,6 +137,7 @@ model User {
   exploreRewards ExploreRewardReceipt[]
   exploreClaims ExploreClaim[]
   exploreProgress ExploreProgress?
+  exploreReceiptEvents ExploreReceiptEvent[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -199,6 +200,25 @@ model ExploreRewardReceipt {
   @@unique([userId, rewardKey])
   @@unique([userId, revision])
   @@index([userId, acknowledgedAt, receiptId])
+  @@schema("auth")
+}
+
+// Durable account-scoped receipt telemetry, committed with its terminal outcome.
+model ExploreReceiptEvent {
+  eventId String @id @db.Uuid
+  userId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receiptId String? @unique
+  claimId String?
+  event String
+  properties Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz(3)
+  attempts Int @default(0)
+  deliveredAt DateTime? @db.Timestamptz(3)
+  @@unique([userId, claimId])
+  @@index([deliveredAt, nextAttemptAt])
+  @@index([userId])
   @@schema("auth")
 }
 

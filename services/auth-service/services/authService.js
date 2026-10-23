@@ -378,6 +378,7 @@ export async function deleteUserService(userId) {
     // now-deleted person is cleared. All-or-nothing: if any step fails the
     // account is untouched and the user can simply try again.
     await prisma.$transaction([
+      prisma.exploreReceiptEvent.deleteMany({ where: { userId } }),
       prisma.refreshToken.deleteMany({ where: { userId } }),
       prisma.exploreClaim.deleteMany({ where: { userId } }),
       prisma.exploreLocationReceipt.deleteMany({ where: { userId } }),

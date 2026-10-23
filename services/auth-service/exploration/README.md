@@ -113,3 +113,57 @@ For an application rollback, switch exploreFoodFinds off while retaining these
 history/queue endpoints and all published data. Do not restore code which queries
 the dropped table, reverse applied migrations or delete receipts/configurations.
 A later schema change must be another forward migration.
+
+## Receipt telemetry (Increment A)
+
+`telemetry.js` creates one `ExploreReceiptEvent` for each newly saved receipt,
+and one for each new terminal rejected claim, inside the existing pickup
+transaction. Replay creates no new outcome. Unique receipt/claim keys add a
+database guard. The new forward migration is
+`20261023170000_explore_receipt_telemetry`; historical migrations are unchanged.
+This is prospective telemetry, with no retrospective backfill of older receipts
+or rejected claims. Daily-set telemetry remains B1.
+
+Auth startup polls the durable queue every 15 seconds, up to 25 events per pass.
+Workers use `FOR UPDATE SKIP LOCKED`, await delivery, then acknowledge the row.
+Failures retain it with exponential backoff capped at one hour. Process death or
+an ambiguous sink commit can repeat delivery. The auth-local analytics adapter
+uses the existing PostgreSQL pool/table/configuration, a transaction advisory lock
+on a random delivery UUID, and a separate READ COMMITTED conditional insert to
+deduplicate repeats in the sink. `_delivery_id` is transport metadata, unrelated
+to claim, receipt or occurrence identity. Existing `track`/`ingest` remain as-is.
+No new sink schema, gateway route or shared infrastructure is required.
+
+Only `ANALYTICS_PROVIDER=postgres` with the existing `ANALYTICS_DATABASE_URL`
+acknowledges durable delivery. `none`, `console`, `posthog`, missing configuration
+and sink errors retain pending records; they are not successful delivery. A live
+process with CPU time and a reachable sink is necessary for eventual delivery;
+a suspended or stopped instance retains backlog for the next running instance.
+Deployment/runtime scheduling and throughput verification remain release gates.
+
+Saved properties are `source=location`, `occurrence_kind=grid`, and E9's
+`duration_bucket`, derived from canonical encounter start/completion (not network
+latency or client visible-session duration). Rejections contain `source=location`,
+nullable `occurrence_kind` (`grid` for parsed grid IDs, null for unknown IDs), and
+the server's terminal `reason`. No item/food identity, coordinates, proof,
+fingerprint, exact encounter times or claim/occurrence/receipt IDs enter analytics
+properties. The standard distinct account ID and event timestamp remain envelope
+fields, following the existing PostgreSQL analytics convention.
+
+Account export adds `exploration.receiptTelemetry` with coarse event properties
+and delivery state, excluding internal receipt/claim keys. Deletion removes these
+rows first in the existing local transaction, coordinating with dispatcher row
+locks; a cascading User FK is an additional guard. Delivered records remain
+until account deletion so replay cannot lose its deduplication marker. The
+separate analytics sink retains the existing pseudonymous account-ID convention;
+this change does not add a new sink erasure/export architecture.
+
+Run the normal auth suite and `test/exploreReceiptTelemetry.test.js`. The opt-in
+`test/exploreReceiptTelemetry.postgres.test.js` requires
+`EXPLORE_TELEMETRY_TEST_DATABASE_URL` pointing to a disposable loopback database
+named `explore_telemetry_test` (optionally followed by lowercase letters, digits
+or underscores). It creates/drops only a random test schema, executes the exact
+new DDL there against a minimal User table, and verifies native constraints,
+rollback/cascade and actual concurrent sink SQL deduplication. It is a focused
+SQL test, not a historical migration-chain or complete service/HTTP rehearsal.
+See `docs/explore-receipt-telemetry-report.md` for evidence and remaining gates.

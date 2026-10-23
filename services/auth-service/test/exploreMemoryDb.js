@@ -1,9 +1,9 @@
 // A transactional in-memory Prisma substitute, following auth-service's module-mock pattern.
 // This exercises service/HTTP behavior, not PostgreSQL isolation or SQL constraints.
 export function memoryDb() {
-  let tables=Object.fromEntries(['exploreCatalogue','exploreEpochManifest','exploreProgress','exploreLocationReceipt','exploreRewardReceipt','exploreClaim','appVersionSetting'].map(n=>[n,[]]));
+  let tables=Object.fromEntries(['exploreReceiptEvent','exploreCatalogue','exploreEpochManifest','exploreProgress','exploreLocationReceipt','exploreRewardReceipt','exploreClaim','appVersionSetting'].map(n=>[n,[]]));
   let tail=Promise.resolve(),failure=null;
-  const keyFields={exploreCatalogue:['version'],exploreEpochManifest:['epochManifestId'],exploreProgress:['userId'],exploreLocationReceipt:['receiptId'],exploreRewardReceipt:['receiptId'],exploreClaim:['userId','claimId'],appVersionSetting:['id']};
+  const keyFields={exploreReceiptEvent:['eventId'],exploreCatalogue:['version'],exploreEpochManifest:['epochManifestId'],exploreProgress:['userId'],exploreLocationReceipt:['receiptId'],exploreRewardReceipt:['receiptId'],exploreClaim:['userId','claimId'],appVersionSetting:['id']};
   const matches=(row,where={})=>Object.entries(where).every(([k,v])=>{
     if (v&&typeof v==='object'&&!(v instanceof Date)) {
       if ('lte' in v) return row[k]<=v.lte;
@@ -31,9 +31,9 @@ export function memoryDb() {
         await db[name].create({data:row});
       }
     },
-    async update({where,data}) {const r=tables[name].find(r=>matches(r,where));Object.assign(r,structuredClone(data));return structuredClone(r);},
+    async update({where,data}) {if(failure===name+'Update'){failure=null;throw new Error('simulated update failure');} const r=tables[name].find(r=>matches(r,where));Object.assign(r,structuredClone(data));return structuredClone(r);},
   };
-  db.$queryRaw=async()=>[];
+  db.$queryRaw=async strings=>strings.join('').includes('ExploreReceiptEvent')?structuredClone(tables.exploreReceiptEvent.filter(r=>!r.deliveredAt && r.nextAttemptAt<=new Date()).sort((a,b)=>a.nextAttemptAt-b.nextAttemptAt).slice(0,1)):[];
   db.$transaction=async fn=>{
     const before=tail;let release;tail=new Promise(r=>{release=r;});await before;
     const snapshot=structuredClone(tables);
