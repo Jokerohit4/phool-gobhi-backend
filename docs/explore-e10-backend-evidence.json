@@ -109,5 +109,63 @@
     "E2/E9 receipt telemetry emission and deduplication",
     "integrated app and host baseline",
     "E11 device acceptance"
+  ],
+  "continuationCheckpoints": [
+    {
+      "recordedAt": "2026-10-23T16:39:31.617700+00:00",
+      "reviewedCheckpoint": "a8da057d808a84a5155bdd2141dab02e82462c2c",
+      "branch": "feature/explore-e10-backend",
+      "initialGitStatus": "clean",
+      "parentReview": {
+        "source": "user-supplied reviewed checkpoint results; not rerun this session",
+        "relevantTestsPassed": 656,
+        "skipped": 7,
+        "registryAndSyntax": "passed"
+      },
+      "tools": [
+        {
+          "path": "tools/explore-e10/rehearse.mjs",
+          "sourceCommit": "a8da057d808a84a5155bdd2141dab02e82462c2c",
+          "gitBlob": "88a3168f9e891134fd017e27e877f7ea70a4477e",
+          "rawFileSha256": "aa376f893108db4b3f8368c30ccf358dc2ccf3c9f93eb634bc7cbdb007a783b2"
+        },
+        {
+          "path": "tools/explore-e10/postgres.test.mjs",
+          "sourceCommit": "a8da057d808a84a5155bdd2141dab02e82462c2c",
+          "gitBlob": "aae8e87a58fa0ea15690521efbd7b4f7d3089068",
+          "rawFileSha256": "6814ed4a2cb26531171e8ebefdd322c5d5b2e9ec40a0fd6932e8c208980c4d92"
+        }
+      ],
+      "prerequisiteChecks": [
+        {
+          "command": "docker info --format '{{.ServerVersion}}'",
+          "exitCode": 1,
+          "result": "daemon unavailable"
+        },
+        {
+          "command": "docker image inspect postgres:16 --format '{{.Id}}'",
+          "exitCode": 1,
+          "result": "image availability unverifiable without daemon"
+        }
+      ],
+      "diagnostic": "docker_engine named pipe does not exist; Docker config file access also denied",
+      "rehearsalExecuted": false,
+      "realDbChecksExecuted": false,
+      "newPostgresCheckResults": [],
+      "resourcesCreated": [],
+      "cleanup": {
+        "required": false,
+        "reason": "no container, volume or database created; prerequisite-only probe"
+      },
+      "passingSuitesRerun": false,
+      "harnessChanged": false,
+      "reviewedOwnerCommitsIncorporated": [],
+      "result": "checkpointed: local Docker prerequisite unavailable",
+      "remaining": [
+        "all PostgreSQL migration/upgrade/history, real HTTP/DB, export/deletion and rollback acceptance checks",
+        "E2/E9 reviewed receipt telemetry implementation and evidence",
+        "integrated-app acceptance"
+      ]
+    }
   ]
 }

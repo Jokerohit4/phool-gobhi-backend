@@ -16,8 +16,9 @@ to dev/parent, push, deployment, shared flag change or external message occurred
 | Read-only app/contract checkout HEAD during inspection | `393789532448f3c5e97f561822ae03291d8941f1` |
 | Candidate | `C:/Users/rohit/Phool-Gobhi/wt/backend-e10`, `feature/explore-e10-backend` |
 
-The final artifact commit is the commit containing this report; resolve it with
-`git rev-parse HEAD` in this worktree. Its parent is the E4 cherry-pick above.
+The approved preparation checkpoint is
+`a8da057d808a84a5155bdd2141dab02e82462c2c`; its parent is the E4 cherry-pick
+above. Later session checkpoints update this report without changing those inputs.
 
 Inspected existing worktrees/branches first. Neither requested path nor branch
 existed. Created a new worktree at the approved core, verified the branch and
@@ -185,6 +186,50 @@ non-mutation claim is made.
 4. Actual food/workout/coin/One Plan invariants across the integrated app/services,
    and E11 phone, location, accessibility and pilot gates. B1/B2 acceptance is not
    implied by this Increment A backend candidate.
+
+## Continuation checkpoint: 2026-10-23, approximately 16:39 UTC
+
+Verified `feature/explore-e10-backend` at approved preparation checkpoint
+`a8da057d808a84a5155bdd2141dab02e82462c2c` with a clean tracked/untracked Git
+status before work. The parent review supplied 656 relevant passing tests,
+7 skipped, and successful registry/syntax checks. Those are attributed review
+results, not new executions in this session; the earlier validation table remains
+historical evidence from preparation.
+
+Executed once from this candidate:
+
+```powershell
+git -c safe.directory=C:/Users/rohit/Phool-Gobhi/wt/backend-e10 status --short --branch
+git -c safe.directory=C:/Users/rohit/Phool-Gobhi/wt/backend-e10 rev-parse HEAD
+docker info --format '{{.ServerVersion}}'
+docker image inspect postgres:16 --format '{{.Id}}'
+```
+
+Both Docker commands exited 1. The daemon's `docker_engine` named pipe was absent;
+Docker also reported denied access to its config file. The image cannot be
+verified while the daemon is unavailable; this is not evidence that the image is
+missing. Following the requested prerequisite stop, **the rehearsal was not run**.
+No container, volume or database was created, and no cleanup action was necessary.
+There are no new migration/HTTP/DB check results or cleanup receipts to inspect.
+No passing mock, registry or syntax suite was rerun. No harness or production code
+was changed, and no E2/E9 or app commit was supplied or incorporated.
+
+Tool identities at that checkpoint (raw file SHA-256; Git blob identities are also
+recorded in the evidence JSON):
+
+- `tools/explore-e10/rehearse.mjs`:
+  `aa376f893108db4b3f8368c30ccf358dc2ccf3c9f93eb634bc7cbdb007a783b2`
+- `tools/explore-e10/postgres.test.mjs`:
+  `6814ed4a2cb26531171e8ebefdd322c5d5b2e9ec40a0fd6932e8c208980c4d92`
+
+All PostgreSQL acceptance checks remain unexecuted: fresh historical chain,
+populated historical upgrade with applied history retained, labelled empty and
+populated snapshot upgrades, native concurrency/timeout/account isolation,
+manifest-bound delayed first claim/rotation, export/deletion after drop, and
+receipt-preserving rollback with pending resolution. The separate E2/E9 telemetry
+and integrated-app acceptance gates remain open. This continuation commits only
+the report and evidence JSON. Source lanes, shared infrastructure and historical
+migrations remain untouched; nothing is merged, pushed or deployed.
 
 ## Exact owned change set
 
