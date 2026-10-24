@@ -19,6 +19,19 @@ test('history mismatches, failed, missing and unknown migrations block compatibi
   assert.ok(partial.issues.some(i => i.kind === 'partial_forward_application'));
 });
 
+test('shared ledger recognizes only checksum-verified foreign migrations and superseded rollback attempts', () => {
+  const active = row();
+  const retired = { ...row(), id: 'retired', checksum: 'retired-sql', finished_at: null, rolled_back_at: '2026-01-01T12:00:00Z' };
+  const other = { ...row(), id: 'other-id', migration_name: 'other-service', checksum: 'other-hash' };
+  const known = [{ name: 'other-service', checksums: ['other-hash'] }];
+  const result = classifyHistory([retired, active, other], historical, forward, known);
+  assert.deepEqual(result.issues, []);
+  assert.equal(result.recognizedForeignRows, 1);
+  assert.deepEqual(result.retiredAttempts, [{ name: 'old', retiredId: 'retired', successfulId: 'old-id' }]);
+  assert.ok(classifyHistory([retired, { ...active, checksum: 'wrong' }], historical, forward, known).issues.length);
+  assert.ok(classifyHistory([active, { ...other, checksum: 'wrong' }], historical, forward, known).issues.length);
+});
+
 function fixture({ failAt, readOnly = 'on', ledgerSchemas = ['auth'] } = {}) {
   const queries = [];
   return { queries, async query(sql) {

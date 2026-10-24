@@ -11,18 +11,37 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const quote = name => `"${name.replaceAll('"', '""')}"`;
 const timestamp = value => value instanceof Date ? value.toISOString() : value;
 
-export function classifyHistory(rows, historical, forward) {
+export function classifyHistory(rows, historical, forward, foreign = []) {
   const issues = [];
   const expected = new Map([...historical, ...forward].map(row => [row.name, row]));
+  const foreignInputs = new Map(foreign.map(row => [row.name, row]));
   const successful = new Set();
+  const retiredAttempts = [];
+  let recognizedForeignRows = 0;
+  const matchesKnown = row => [expected.get(row.migration_name), foreignInputs.get(row.migration_name)]
+    .some(source => source?.checksums.includes(row.checksum));
   for (const row of rows) {
     const source = expected.get(row.migration_name);
+    if (row.rolled_back_at) {
+      const replacement = rows.find(other => other.migration_name === row.migration_name &&
+        other.finished_at && !other.rolled_back_at && matchesKnown(other) &&
+        new Date(other.finished_at) >= new Date(row.rolled_back_at));
+      if (replacement) retiredAttempts.push({ name: row.migration_name, retiredId: row.id, successfulId: replacement.id });
+      else issues.push({ kind: 'rolled_back_history_requires_review', name: row.migration_name });
+      continue;
+    }
+    if (!row.finished_at) {
+      issues.push({ kind: 'unfinished_migration', name: row.migration_name });
+      continue;
+    }
+    if (!source?.checksums.includes(row.checksum) && foreignInputs.get(row.migration_name)?.checksums.includes(row.checksum)) {
+      recognizedForeignRows++;
+      continue;
+    }
     if (!source) issues.push({ kind: 'unrecognized_migration', name: row.migration_name });
     else if (!source.checksums.includes(row.checksum)) {
       issues.push({ kind: 'checksum_mismatch', name: row.migration_name });
     }
-    if (!row.finished_at && !row.rolled_back_at) issues.push({ kind: 'unfinished_migration', name: row.migration_name });
-    if (row.rolled_back_at) issues.push({ kind: 'rolled_back_history_requires_review', name: row.migration_name });
     if (row.finished_at && !row.rolled_back_at) {
       if (successful.has(row.migration_name)) issues.push({ kind: 'duplicate_success', name: row.migration_name });
       successful.add(row.migration_name);
@@ -33,7 +52,7 @@ export function classifyHistory(rows, historical, forward) {
   }
   const appliedForward = forward.filter(row => successful.has(row.name)).map(row => row.name);
   if (appliedForward.length && appliedForward.length !== forward.length) issues.push({ kind: 'partial_forward_application' });
-  return { issues, appliedForward, pendingForward: forward.filter(row => !successful.has(row.name)).map(row => row.name) };
+  return { issues, retiredAttempts, recognizedForeignRows, appliedForward, pendingForward: forward.filter(row => !successful.has(row.name)).map(row => row.name) };
 }
 
 export function pinnedInputs(repositoryRoot = root) {
@@ -47,14 +66,53 @@ export function pinnedInputs(repositoryRoot = root) {
     if (result.status !== 0) throw new Error('Pinned source unavailable');
     return result.stdout;
   };
+  const foreignInputs = new Map();
+  const paths = git(['ls-tree', '-r', '--name-only', 'HEAD', '--', 'services']).toString().trim().split('\n');
+  for (const path of paths.filter(p => /^services\/[^/]+\/prisma\/migrations\/[^/]+\/migration\.sql$/.test(p) && !p.startsWith('services/auth-service/'))) {
+    const name = path.split('/').at(-2);
+    const bytes = git(['show', `HEAD:${path}`]);
+    const current = foreignInputs.get(name) ?? { name, checksums: [], paths: [] };
+    current.paths.push(path);
+    current.checksums = [...new Set([...current.checksums, ...entry(name, bytes).checksums])];
+    foreignInputs.set(name, current);
+  }
   return {
     historical: sql.map(file => entry(file.path.split('/')[0], file.bytes)),
     forward: forwardMigrations.map(name => entry(name, git(['show', `HEAD:services/auth-service/prisma/migrations/${name}/migration.sql`]))),
     sourceCommit: git(['rev-parse', 'HEAD']).toString().trim(),
+    foreign: [...foreignInputs.values()],
   };
 }
 
-export async function inventoryDev(client, { schema, historical, forward }) {
+export function resolveForeignHistory(repositoryRoot, foreign, rows) {
+  const result = foreign.map(source => ({ ...source, checksums: [...source.checksums] }));
+  const proofs = [];
+  const git = args => {
+    const value = spawnSync('git', ['-c', `safe.directory=${repositoryRoot.replaceAll('\\', '/').replace(/\/$/, '')}`, ...args], { cwd: repositoryRoot });
+    if (value.status !== 0) throw new Error('Historical foreign source unavailable');
+    return value.stdout;
+  };
+  for (const row of rows.filter(row => row.finished_at && !row.rolled_back_at)) {
+    const source = result.find(s => s.name === row.migration_name);
+    if (!source || source.checksums.includes(row.checksum)) continue;
+    for (const path of source.paths ?? []) {
+      const commits = git(['log', '--all', '--format=%H', '--', path]).toString().trim().split('\n').filter(Boolean);
+      for (const commit of commits) {
+        const value = spawnSync('git', ['-c', `safe.directory=${repositoryRoot.replaceAll('\\', '/').replace(/\/$/, '')}`, 'show', `${commit}:${path}`], { cwd: repositoryRoot });
+        if (value.status !== 0) continue;
+        const text = value.stdout.toString('utf8').replaceAll('\r\n', '\n');
+        if (![digest(value.stdout), digest(text), digest(text.replaceAll('\n', '\r\n'))].includes(row.checksum)) continue;
+        source.checksums.push(row.checksum);
+        proofs.push({ name: row.migration_name, checksum: row.checksum, commit, path });
+        break;
+      }
+      if (source.checksums.includes(row.checksum)) break;
+    }
+  }
+  return { foreign: result, proofs };
+}
+
+export async function inventoryDev(client, { schema, historical, forward, foreign = [], repositoryRoot }) {
   if (!schema || schema.includes('\0')) throw new Error('Invalid schema');
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   try {
@@ -66,7 +124,9 @@ export async function inventoryDev(client, { schema, historical, forward }) {
     const ledgerSchemas = ledgers.rows.map(row => row.schema);
     const rows = ledgerSchemas.includes(schema)
       ? (await client.query(`SELECT * FROM ${quote(schema)}."_prisma_migrations" ORDER BY started_at,id`)).rows : [];
-    const history = classifyHistory(rows, historical, forward);
+    const resolved = repositoryRoot ? resolveForeignHistory(repositoryRoot, foreign, rows) : { foreign, proofs: [] };
+    const history = classifyHistory(rows, historical, forward, resolved.foreign);
+    history.foreignHistoricalSourceProofs = resolved.proofs;
     if (!ledgerSchemas.includes(schema)) history.issues.push({ kind: 'configured_ledger_absent', schema });
     // Logs can contain sensitive SQL/error context. Retain hashes only.
     const ledger = rows.map(row => {
@@ -130,7 +190,7 @@ async function main() {
     const { default: pg } = await import('pg');
     client = new pg.Client({ connectionString: url, connectionTimeoutMillis: 8000, query_timeout: 15000, application_name: 'explore_dev_merge_readonly_audit' });
     await client.connect();
-    Object.assign(receipt, await inventoryDev(client, { schema, ...receipt }));
+    Object.assign(receipt, await inventoryDev(client, { schema, ...receipt, repositoryRoot: root }));
   } catch (error) {
     const known = ['dev_secret_access_unavailable', 'dev_secret_database_url_invalid'];
     receipt.blocker = known.includes(error.message) ? error.message : 'readonly_connection_or_inventory_unavailable';

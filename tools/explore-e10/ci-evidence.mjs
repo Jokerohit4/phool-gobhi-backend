@@ -11,6 +11,7 @@ const runtime = resolve(root, 'tools/explore-e10/.runtime');
 const output = resolve(root, 'tools/explore-e10/ci-evidence');
 mkdirSync(output, { recursive: true });
 const files = [
+  'dev-lineage-evidence.json', 'dev-lineage-forward.local.log', 'postgres-e10_dev_lineage.local.log', 'telemetry-e10_dev_lineage.local.json',
   'bootstrap-input-manifest.json', 'bootstrap-provenance.json', 'bootstrap-parent.rendered.sql',
   'bootstrap-baseline.migration.sql', 'bootstrap-render.local.log',
   ...['e10_bootstrap_empty', 'e10_bootstrap_populated'].flatMap(db => [
@@ -37,6 +38,7 @@ const git = args => {
   return result.stdout.trim();
 };
 const sourcePaths = [
+  'tools/explore-e10/dev-lineage.mjs', 'tools/explore-e10/dev-lineage.test.mjs', 'tools/explore-e10/capture-dev-lineage.mjs',
   'tools/explore-e10/dev-baseline-audit.mjs', 'tools/explore-e10/dev-baseline-audit.test.mjs',
   'index.js', 'package.json', 'utils/analytics.js', 'utils/exploreQueueDiagnosticSchema.js',
   'docs/analytics-events.json', 'test/gateway.test.js', 'test/exploreQueueDiagnosticSchema.test.js',

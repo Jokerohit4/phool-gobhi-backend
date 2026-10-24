@@ -46,7 +46,7 @@ jobs:
           } 2>&1 | tee tools/explore-e10/.runtime/ci-install.local.log
       - name: Verify diagnostic ingestion boundaries
         run: |
-          node --experimental-test-module-mocks --test test/gateway.test.js test/exploreQueueDiagnosticSchema.test.js test/queueDiagnosticProvider.test.js tools/explore-e10/http.test.mjs tools/explore-e10/dev-baseline-audit.test.mjs 2>&1 | tee tools/explore-e10/.runtime/ci-client-diagnostics.local.log
+          node --experimental-test-module-mocks --test test/gateway.test.js test/exploreQueueDiagnosticSchema.test.js test/queueDiagnosticProvider.test.js tools/explore-e10/http.test.mjs tools/explore-e10/dev-baseline-audit.test.mjs tools/explore-e10/dev-lineage.test.mjs 2>&1 | tee tools/explore-e10/.runtime/ci-client-diagnostics.local.log
       - name: Obtain disposable PostgreSQL image
         run: |
           {
@@ -55,6 +55,9 @@ jobs:
             docker image inspect postgres:16 --format '{{.Id}} {{json .RepoDigests}}'
           } 2>&1 | tee tools/explore-e10/.runtime/ci-image.local.log
       - name: Execute real migration and HTTP DB rehearsal
+        env:
+          # Compressed schema/history metadata only; no DB URL or account rows.
+          E10_DEV_LINEAGE_FIXTURE: ${{ secrets.EXPLORE_E10_DEV_LINEAGE_FIXTURE }}
         run: node tools/explore-e10/rehearse.mjs 2>&1 | tee tools/explore-e10/.runtime/ci-rehearsal.local.log
       # No continue-on-error: bash pipefail retains any prerequisite/rehearsal failure.
       - name: Collect redacted evidence even on failure

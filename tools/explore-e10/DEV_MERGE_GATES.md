@@ -1,3 +1,5 @@
+> Access-restored follow-up: [actual dev lineage review](../../docs/explore-dev-lineage-review.md) supersedes the earlier restricted-session status. A temporary schema/history fixture may be supplied to the disposable runner; it contains no dev DB credential or account rows.
+
 # Dev merge validation
 
 The app combined with local dev is tested separately in the app review branch.

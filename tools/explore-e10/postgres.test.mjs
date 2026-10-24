@@ -17,7 +17,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
   assert.match(process.env.E10_OWNED_DATABASE ?? '', /^explore-e10-[0-9a-f]{12}$/);
   const uri = new URL(process.env.DATABASE_URL);
   assert.equal(uri.hostname, '127.0.0.1');
-  assert.ok(['/e10_runtime', '/e10_upgrade', '/e10_upgrade_empty', '/e10_bootstrap_empty', '/e10_bootstrap_populated'].includes(uri.pathname));
+  assert.ok(['/e10_runtime', '/e10_upgrade', '/e10_upgrade_empty', '/e10_bootstrap_empty', '/e10_bootstrap_populated', '/e10_dev_lineage'].includes(uri.pathname));
   const { PrismaClient: AuthClient } = await import('./.runtime/auth-client/index.js');
   const { PrismaClient: BookingClient } = await import('./.runtime/booking-client/index.js');
   const db = new AuthClient({ datasourceUrl: uri.href });

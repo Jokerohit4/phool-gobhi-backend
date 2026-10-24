@@ -7,6 +7,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import pg from 'pg';
 import { redact } from './redact.mjs';
 import { rehearseBootstrap } from './bootstrap.mjs';
+import { rehearseDevLineage } from './dev-lineage.mjs';
 import { bootstrapDatabases } from './bootstrap-inputs.mjs';
 import { baselineFiles, parentCommit, forwardMigrations, telemetryOutcomeConstraint } from './migration-inputs.mjs';
 
@@ -55,7 +56,7 @@ try {
   if (!ready) throw new Error('Disposable PostgreSQL did not become ready');
   const admin = new pg.Client({ connectionString: adminUrl });
   await admin.connect();
-  try { for (const database of ['e10_fresh', 'e10_old_chain', 'e10_upgrade', 'e10_upgrade_empty', 'e10_runtime', 'e10_sink', ...bootstrapDatabases]) await admin.query(`CREATE DATABASE ${database}`); }
+  try { for (const database of ['e10_fresh', 'e10_old_chain', 'e10_upgrade', 'e10_upgrade_empty', 'e10_runtime', 'e10_sink', 'e10_dev_lineage', ...bootstrapDatabases]) await admin.query(`CREATE DATABASE ${database}`); }
   finally { await admin.end(); }
   const sinkAdmin = new pg.Client({ connectionString: adminUrl });
   await sinkAdmin.connect();
@@ -175,7 +176,9 @@ try {
 
   // Additional parent-approved disposable lineage; raw replay checks above stay authoritative.
   const bootstrapped = await rehearseBootstrap({ root, runtime, container: name, prisma, env: cleanEnv, urlFor, password, checks: evidence.checks });
-  const nativeDatabases = ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty', ...bootstrapped];
+  const devLineage = await rehearseDevLineage({ root, runtime, container: name, prisma, env: cleanEnv, urlFor, password, checks: evidence.checks,
+    encoded: process.env.E10_DEV_LINEAGE_FIXTURE });
+  const nativeDatabases = ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty', ...bootstrapped, ...(devLineage ? ['e10_dev_lineage'] : [])];
   for (const database of bootstrapDatabases.filter(db => !bootstrapped.includes(db))) {
     evidence.checks.push({ check: `${database}: native Explore/telemetry suite`, result: 'not-executed', reason: 'disposable bootstrap lineage failed' });
   }
