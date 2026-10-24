@@ -26,7 +26,10 @@ changed during this review. No dev merge or deployment is approved by this recor
 The gh request to list E10 runs failed at the socket with a Windows network
 access denial. gh also reported an invalid stored token, but that cannot establish
 credential validity while connectivity is denied. No re-authentication or token
-replacement was performed.
+replacement was performed. A normal, non-force push of a70e901 to the isolated
+feature/explore-e10-backend branch also failed to connect to GitHub port 443.
+The push log is tools/explore-e10/.runtime/dev-merge/feature-push-attempt.log.
+No remote write or hosted run occurred.
 
 gcloud could identify a configured account locally. The dev-only Secret Manager
 attempt failed. The audit stopped before connecting to PostgreSQL; its immutable
@@ -54,3 +57,5 @@ report records the final full-suite and analysis results. Device acceptance and
 the diary follow a future default-off dev merge. Delivered-data retention/erasure
 remains an activation gate for queue diagnostics. No Docker, local DB server,
 install, native build, generation, flag activation or deployment occurred here.
+
+Exact source and artifact identities: [dev merge evidence](explore-dev-merge-evidence.json).
