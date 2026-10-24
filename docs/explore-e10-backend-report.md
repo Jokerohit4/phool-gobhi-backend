@@ -1,6 +1,6 @@
 # Explore E10 backend candidate and migration rehearsal
 
-2026-10-24. **Combined backend/telemetry candidate prepared; hosted PostgreSQL remains unexecuted.**
+2026-10-24. **Approved combined candidate verified; hosted publication blocked by session network permissions. PostgreSQL remains unexecuted/unverified.**
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
 to dev/parent, push, deployment, shared flag change or external message occurred.
@@ -483,6 +483,77 @@ Additional E10 paths in this continuation:
 
 The approved cherry-pick adds exactly the 15 production/report/test paths listed
 under **Exact intended paths** in `docs/explore-receipt-telemetry-report.md`.
+
+## Authorized hosted execution attempt: 2026-10-24, 03:03 UTC
+
+Verified branch `feature/explore-e10-backend`, exact approved HEAD
+`2bb36125e65d5b431b8557b94152296e6b889ce7`, clean tracked/untracked status and
+origin fetch/push URL `https://github.com/Jokerohit4/phool-gobhi-backend.git`.
+There is no separate pushurl override. Read the latest combined E10 report and
+dedicated workflow. User authorization covers publishing this exact SHA to this
+feature branch and its dedicated PostgreSQL workflow; it remains valid. No dev/main
+push, deployment workflow, merge or infrastructure action is authorized here.
+
+The required remote inspection failed before publication:
+
+```powershell
+git ls-remote --heads origin feature/explore-e10-backend
+gh auth status
+gh api repos/Jokerohit4/phool-gobhi-backend --jq '{full_name: .full_name, default_branch: .default_branch}'
+```
+
+Git reported `Failed to connect to github.com port 443 ... Couldn't connect to
+server`. The API probe reported `dial tcp 20.207.73.85:443: connectex: An attempt
+was made to access a socket in a way forbidden by its access permissions.` This
+establishes a session transport/permission prerequisite failure. `gh auth status`
+also labelled the default account token invalid; credential validity cannot be
+established until GitHub connectivity works. No credential was printed, changed
+or removed. No further unchanged network probes were attempted.
+
+Remote branch existence, tip and ancestry remain **unverified**. To preserve
+remote work, no push was attempted, and no workflow was dispatched. No hosted
+run can be identified from this session, so run ID/URL and tested SHA are null.
+This does not establish that no run exists elsewhere. No hosted artifacts were
+downloaded; artifact source identities, completeness, redaction and hosted cleanup
+remain unverified. Old local preparation receipts are not treated as CI artifacts.
+
+| Required hosted evidence | Actual outcome in this attempt |
+| --- | --- |
+| Fresh historical migrations | Unexecuted/unverified; no receipt |
+| Populated historical upgrade and unchanged history | Unexecuted/unverified; no receipt |
+| Empty/populated snapshot upgrades | Unexecuted/unverified; no receipt |
+| Real HTTP/DB save/replay/concurrency/isolation/rollback | Unexecuted/unverified; no receipt |
+| Original-manifest delayed first claim and rotation | Unexecuted/unverified; no receipt |
+| Native telemetry creation/retry/dedup/workers/deletion ordering | Unexecuted/unverified; no receipt |
+| Harness-owned cleanup | Unverified; no identified run |
+
+There is no CI pass/fail assertion result and no established workflow/harness or
+production/schema defect to patch. The earliest actionable cause is permitted
+GitHub transport from the execution session, followed by verified authentication.
+Use a session permitted to access `github.com:443` and `api.github.com:443`, verify
+`gh auth status`, and authenticate only if still required. Then inspect the remote
+branch and ancestry before publishing. Preserve any remote divergence instead of
+incorporating unreviewed work or force-pushing. Publish the **approved SHA**, not
+the later local report commit:
+
+```powershell
+git push origin 2bb36125e65d5b431b8557b94152296e6b889ce7:refs/heads/feature/explore-e10-backend
+```
+
+That command has not been executed. After publication, identify the run by exact
+SHA, branch and `.github/workflows/explore-e10-postgres.yml`, then inspect its
+original artifacts and every required check/cleanup field before acceptance.
+
+The local preflight diagnostic receipt, copied from tool output rather than
+presented as a hosted artifact, is ignored at
+`tools/explore-e10/.runtime/hosted-preflight-20261024T030304Z.json`, SHA-256
+`c719fb2df6c32b7a7aaa46f31bcf19117e1a3e1fdc7026a8cc3bf48cc1531012`.
+Its structured contents and identity are retained in the evidence JSON. No
+container, volume or database was created by this attempt; local cleanup was
+unnecessary. Docker, DB execution, installations and builds stayed off the laptop.
+This continuation changes only the report/evidence, committed locally with no
+automatic follow-up push. All PostgreSQL, E9/integrated-app, actual sink/runtime,
+E8 credential and E11 acceptance gates remain as previously recorded.
 
 ## Exact owned change set
 

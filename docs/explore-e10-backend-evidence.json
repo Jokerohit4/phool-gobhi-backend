@@ -527,5 +527,115 @@
       "E8 Part 2 after approved credential fix"
     ],
     "publication": "no push, merge, deployment or shared infrastructure/flag changes"
-  }
+  },
+  "hostedExecutionAttempts": [
+    {
+      "recordedAt": "2026-10-24T03:03:04.370145+00:00",
+      "candidateSha": "2bb36125e65d5b431b8557b94152296e6b889ce7",
+      "branch": "feature/explore-e10-backend",
+      "initialHead": "2bb36125e65d5b431b8557b94152296e6b889ce7",
+      "initialGitStatus": "clean",
+      "originFetchUrl": "https://github.com/Jokerohit4/phool-gobhi-backend.git",
+      "originPushUrl": "https://github.com/Jokerohit4/phool-gobhi-backend.git (inherits fetch URL; no pushurl configured)",
+      "workflowPath": ".github/workflows/explore-e10-postgres.yml",
+      "checks": [
+        {
+          "command": "git status --short --branch; git branch --show-current; git rev-parse HEAD; git remote -v",
+          "result": "passed; expected branch, clean worktree, exact approved HEAD and GitHub origin"
+        },
+        {
+          "command": "git ls-remote --heads origin feature/explore-e10-backend",
+          "result": "remote branch unverified; network failure",
+          "diagnostic": "fatal: unable to access 'https://github.com/Jokerohit4/phool-gobhi-backend.git/': Failed to connect to github.com port 443 after 38 ms: Couldn't connect to server",
+          "exitCodeRecordedSeparately": false
+        },
+        {
+          "command": "gh auth status",
+          "exitCode": 1,
+          "result": "CLI reports invalid default token; cannot distinguish credential failure from blocked connectivity in this session",
+          "diagnostic": "Failed to log in to github.com account Jokerohit4 (default); Active account: true; The token in default is invalid."
+        },
+        {
+          "command": "gh api repos/Jokerohit4/phool-gobhi-backend --jq '{full_name: .full_name, default_branch: .default_branch}'",
+          "result": "API transport blocked by socket permissions",
+          "diagnostic": "Get \"https://api.github.com/repos/Jokerohit4/phool-gobhi-backend\": dial tcp 20.207.73.85:443: connectex: An attempt was made to access a socket in a way forbidden by its access permissions.",
+          "exitCodeRecordedSeparately": false
+        },
+        {
+          "command": "git rev-parse --verify '2bb36125e65d5b431b8557b94152296e6b889ce7^{commit}'",
+          "exitCode": 0,
+          "result": "exact approved commit exists locally"
+        }
+      ],
+      "diagnosticSource": "tool output transcript; diagnostics copied, not a hosted artifact",
+      "remoteBranchState": "unverified; neither absence nor ancestry established",
+      "pushAttempted": false,
+      "workflowDispatched": false,
+      "reasonPushNotAttempted": "Remote work cannot be inspected. Preserve remote work; never force-push.",
+      "hostedRunIdentified": false,
+      "runId": null,
+      "runUrl": null,
+      "testedSha": null,
+      "artifactDownloads": [],
+      "artifactIdentityValidation": "not performed; no hosted artifact available",
+      "artifactCompletenessValidation": "not performed; missing receipts are not passes",
+      "artifactRedactionValidation": "not performed; no hosted artifact available; no credentials recorded in this local receipt",
+      "postgresResults": [
+        {
+          "check": "fresh historical migrations",
+          "result": "unexecuted/unverified; no hosted receipt"
+        },
+        {
+          "check": "populated historical upgrade and unchanged applied history",
+          "result": "unexecuted/unverified; no hosted receipt"
+        },
+        {
+          "check": "empty/populated snapshot upgrades",
+          "result": "unexecuted/unverified; no hosted receipt"
+        },
+        {
+          "check": "real HTTP/DB save/replay/concurrency/account isolation/rollback",
+          "result": "unexecuted/unverified; no hosted receipt"
+        },
+        {
+          "check": "manifest-bound delayed first claim and rotation",
+          "result": "unexecuted/unverified; no hosted receipt"
+        },
+        {
+          "check": "native telemetry creation/retries/sink deduplication/workers/deletion ordering",
+          "result": "unexecuted/unverified; no hosted receipt"
+        },
+        {
+          "check": "harness-owned cleanup",
+          "result": "unexecuted/unverified; no hosted receipt"
+        }
+      ],
+      "cleanup": {
+        "resourcesCreatedByThisAttempt": [],
+        "localCleanupRequired": false,
+        "hostedCleanup": "unverified; no run identified"
+      },
+      "causeClassification": "session network/permission prerequisite; not a workflow/harness failure or production/schema failure",
+      "scopedCodeFixPrepared": false,
+      "fixReason": "No CI ran or was identified; no code defect established. Restore authorized GitHub connectivity and verify authentication before remote inspection.",
+      "dockerDatabaseInstallOrBuildExecutedLocally": false,
+      "authorization": "Existing user authorization persists for exact candidate push to feature branch and dedicated CI only; no new permission requested",
+      "resumeCommandAfterRemoteInspection": "git push origin 2bb36125e65d5b431b8557b94152296e6b889ce7:refs/heads/feature/explore-e10-backend",
+      "remainingGates": [
+        "authorized GitHub network access and verified authentication",
+        "remote branch inspection and non-force publication of approved SHA",
+        "identify exact-SHA/branch/workflow run; inspect downloaded original artifacts",
+        "all PostgreSQL/native telemetry evidence",
+        "E9 integrated-app and actual sink/runtime acceptance",
+        "E8 Part 2 after approved credential fix",
+        "E11 after accepted integrated E10 candidate"
+      ],
+      "result": "blocked before publication; no remote mutation attempted",
+      "localPreflightReceipt": {
+        "path": "tools/explore-e10/.runtime/hosted-preflight-20261024T030304Z.json",
+        "sha256": "c719fb2df6c32b7a7aaa46f31bcf19117e1a3e1fdc7026a8cc3bf48cc1531012",
+        "evidenceClass": "local preflight only; not hosted/DB evidence"
+      }
+    }
+  ]
 }
