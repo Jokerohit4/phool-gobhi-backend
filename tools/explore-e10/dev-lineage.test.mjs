@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { decodeDevFixture } from './dev-lineage.mjs';
+import { decodeDevFixture, restoreCapturedIndexDefinitions } from './dev-lineage.mjs';
 import { parentCommit } from './migration-inputs.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -17,6 +17,14 @@ const fixture = () => {
   return value;
 };
 const encode = value => gzipSync(JSON.stringify(value)).toString('base64');
+
+test('GIN indexes restore exact captured DDL rather than invalid rendered sort options', () => {
+  const rendered = 'CREATE INDEX "User_equipment_idx" ON "auth"."User" USING GIN ("equipment" ASC);';
+  const indexdef = 'CREATE INDEX "User_equipment_idx" ON auth."User" USING gin (equipment)';
+  assert.deepEqual(restoreCapturedIndexDefinitions(rendered, [{ indexname: 'User_equipment_idx', indexdef }]),
+    { sql: indexdef + ';', replacements: 1 });
+  assert.throws(() => restoreCapturedIndexDefinitions(rendered, []));
+});
 
 test('metadata clone preserves complete history fields and validates capture hashes', () => {
   const value = fixture();

@@ -11,6 +11,20 @@ import { pinnedInputs, classifyHistory, resolveForeignHistory } from './dev-base
 import { parentCommit, forwardMigrations } from './migration-inputs.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
+export function restoreCapturedIndexDefinitions(sql, indexes) {
+  const definitions = new Map(indexes.map(index => [index.indexname, index.indexdef]));
+  let replacements = 0;
+  const restored = sql.replace(/^CREATE (?:UNIQUE )?INDEX "((?:[^"]|"")+)"[^\n]*;$/gm, (_, quotedName) => {
+    const definition = definitions.get(quotedName.replaceAll('""', '"'));
+    if (!definition) throw new Error('Rendered index lacks a captured database definition');
+    replacements++;
+    return definition.replace(/;$/, '') + ';';
+  });
+  const renderedCount = (sql.match(/^CREATE (?:UNIQUE )?INDEX /gm) || []).length;
+  assert.equal(replacements, renderedCount, 'all rendered indexes must have exact source DDL');
+  return { sql: restored, replacements };
+}
+
 export function decodeDevFixture(encoded) {
   if (!encoded || encoded.length > 47000) throw new Error('Missing or oversized metadata fixture');
   const text = gunzipSync(Buffer.from(encoded, 'base64'), { maxOutputLength: 1000000 }).toString();

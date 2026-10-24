@@ -9,6 +9,7 @@ import pg from 'pg';
 import { readDevSecret, pinnedInputs, inventoryDev } from './dev-baseline-audit.mjs';
 import { parentCommit } from './migration-inputs.mjs';
 import { redact } from './redact.mjs';
+import { restoreCapturedIndexDefinitions } from './dev-lineage.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const sha = value => createHash('sha256').update(value).digest('hex');
@@ -47,9 +48,13 @@ try {
   const parent = run(['git', '-c', `safe.directory=${root.replaceAll('\\', '/').replace(/\/$/, '')}`, 'show', `${parentCommit}:services/auth-service/prisma/schema.prisma`]);
   const datasource = resolve(output, 'parent.prisma');
   writeFileSync(datasource, parent, { flag: 'wx' });
-  const sql = run([process.execPath, resolve(root, 'services/auth-service/node_modules/prisma/build/index.js'),
+  const renderedSql = run([process.execPath, resolve(root, 'services/auth-service/node_modules/prisma/build/index.js'),
     'migrate', 'diff', '--from-empty', '--to-schema-datasource', datasource, '--script'],
     { ...process.env, DATABASE_URL: readonly.href });
+  // Prisma 6 renders illegal ASC options on captured GIN indexes. Restore exact
+  // pg_indexes definitions for every index, preserving the actual schema.
+  const capturedIndexes = restoreCapturedIndexDefinitions(renderedSql, inventory.metadata.indexes);
+  const sql = capturedIndexes.sql;
   if (!sql.includes('CREATE SCHEMA IF NOT EXISTS "auth"') || !sql.includes('"auth"."CollectibleFind"') || sql.includes('"auth"."Explore')) {
     throw new Error('Unexpected pre-feature auth schema capture');
   }
@@ -66,6 +71,8 @@ try {
     throw new Error('Capture contains credential-shaped diagnostics; refused export');
   }
   const fixture = { kind: 'captured-dev-auth-schema-and-shared-history', capturedAt: new Date().toISOString(),
+    indexDdlSource: 'exact pg_indexes.indexdef', indexDefinitionsRestored: capturedIndexes.replacements,
+    rawRenderedSqlSha256: sha(renderedSql), capturedIndexDefinitionsSha256: sha(JSON.stringify(inventory.metadata.indexes)),
     parentCommit, sourceCommit: inputs.sourceCommit, historySchema: schema,
     schemaSql: sql, schemaSqlSha256: sha(sql), historyRows: before,
     historySha256: sha(JSON.stringify(before)), sequences,
