@@ -1,9 +1,10 @@
 # Explore E10 backend candidate and migration rehearsal
 
-2026-10-24. **Approved combined candidate verified; hosted publication blocked by session network permissions. PostgreSQL remains unexecuted/unverified.**
+2026-10-24. **Approved combined candidate executed on hosted CI; failed historical replay and three native assertions per DB. Snapshot upgrades and cleanup passed.**
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
-to dev/parent, push, deployment, shared flag change or external message occurred.
+to dev/parent, deployment, shared flag change or external message occurred. Only
+the exact reviewed candidate was pushed to its feature branch as recorded below.
 
 ## Source identity and isolation
 
@@ -181,11 +182,10 @@ non-mutation claim is made.
 
 ## Remaining acceptance gates
 
-1. Execute the dedicated hosted E10 workflow after parent review and separately
-   authorized publication; retain successful migration/history,
-   populated/empty upgrade, constraint/race, delayed-first-save, rotation,
-   account-export/deletion and rollback receipts. All these real DB checks are
-   currently unexecuted, not failed assertions or mock evidence.
+1. Resolve the failed historical replay and native timeout/failure-rollback gates
+   from run 40057075433, then rerun an approved candidate on hosted CI. Snapshot
+   upgrades and many native cases passed; these do not replace the failed chain
+   or incomplete rollback proofs. Exact observed outcomes are in the hosted receipt.
 2. Approved backend receipt telemetry is incorporated. Native delivery/deduplication,
    lifecycle and E9 integrated-app payload evidence still require reviewed receipts.
 3. Integrated app source/build/config identities, implementation-level Dart
@@ -555,6 +555,145 @@ This continuation changes only the report/evidence, committed locally with no
 automatic follow-up push. All PostgreSQL, E9/integrated-app, actual sink/runtime,
 E8 credential and E11 acceptance gates remain as previously recorded.
 
+## First hosted execution receipt: 2026-10-24, 03:08-03:09 UTC
+
+The user enabled full access and existing feature-branch/CI authorization was
+resumed. Local branch/status were verified clean at report-only checkpoint
+`320a7ac39805c69ef3f26ce2ce2c9b31f5f0e01a`; the approved executable source
+remained `2bb36125e65d5b431b8557b94152296e6b889ce7`. `gh auth status` and the
+repository API succeeded. Git required the known ownership exception after the
+user-context change; only per-command `-c safe.directory=...` was used. No global
+configuration or credential change was made. This supersedes the previous network
+blocker; that preflight history is retained above.
+
+`git ls-remote --heads origin feature/explore-e10-backend` succeeded with no ref:
+the remote branch was absent. Executed only the authorized publication:
+
+```powershell
+git -c safe.directory=C:/Users/rohit/Phool-Gobhi/wt/backend-e10 push origin 2bb36125e65d5b431b8557b94152296e6b889ce7:refs/heads/feature/explore-e10-backend
+```
+
+Push created the feature branch without force and excluded the report-only
+checkpoint. Remote tip was checked again after execution and is still the exact
+approved SHA. No dev/main ref, source lane, PR, merge, manual workflow dispatch,
+deployment workflow or cloud/shared DB configuration was changed.
+
+Identified and monitored [run 40057075433, attempt 1](https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40057075433):
+API identity confirms `event=push`, exact approved SHA/feature branch and path
+`.github/workflows/explore-e10-postgres.yml`. Job `rehearse`, ID `120762297795`,
+finished **failure** after 49 seconds. Checkout, Node setup, historical-input
+verification, all locked installs and image acquisition passed. Rehearsal exited
+1; `always()` collection/upload succeeded, preserving the failure status.
+
+Hosted tool identities: Node `v24.21.0`, npm `11.19.0`, Docker `28.0.4` build
+`b8034c0`; installed auth Prisma `6.8.2`, booking Prisma `6.19.3`. The harness
+uses auth CLI `6.8.2` to generate both isolated clients. Image `postgres:16` resolved
+to ID `sha256:066167ff39c2a612402ce99b734ea1cff92a9d1f2ac52f697a5f0384f0d88d6b`,
+repository digest `sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97`.
+
+Actual receipts, not just job status:
+
+| Gate | Observed outcome |
+| --- | --- |
+| Fresh full historical chain (39 migrations discovered) | **Failed** at the fourth migration, `20260704000000_add_user_onboarding_fields`: Prisma P3018, PostgreSQL 3F000, schema `auth` does not exist |
+| Frozen pre-feature historical chain (36 migrations discovered) | **Failed** at that same unchanged migration/error |
+| Populated historical forward upgrade/history retention | **Not executed** because baseline deployment failed; no claim of retained historical applied rows |
+| Populated parent-schema snapshot + all three forward migrations | **Passed**, baseline row unchanged and legacy table dropped |
+| Empty parent-schema snapshot + all three forward migrations | **Passed**, baseline row unchanged and legacy table dropped |
+| Runtime DB native suite | 18 leaf passes, 3 leaf failures |
+| Populated snapshot DB native suite | 18 leaf passes, 3 leaf failures |
+| Empty snapshot DB native suite | 18 leaf passes, 3 leaf failures |
+| Telemetry subset in each native suite | 7 passed, 1 failed out of 8; none skipped |
+| Harness cleanup | **Passed per receipt:** `explore-e10-a868c893b7ca` container and its volumes removed by `finally` |
+
+Combined native totals are **54/63 leaf checks passed, 9 failed**, no skips.
+Node includes the failed parent in each suite, so its raw totals are 66 tests,
+54 passed and 12 failed. Telemetry's 21/24 passes are a subset, not extra tests.
+
+All three native DBs passed JWT/role/spoof gates, cold immutable publication races,
+next-window rotation, original-manifest delayed first claim after C2 publication,
+same/different claim concurrency, receipt/revision uniqueness and account isolation,
+HTTP proof/grace boundaries, native constraints/pagination, mixed-source attendance,
+flag-off pending resolution/receipt retention, non-Explore snapshot invariants and
+legacy removal/account export/deletion. They also passed telemetry save/rejection
+creation/replay/privacy, separate auth/sink connections, actual concurrent sink SQL,
+native sink failure/backoff/retry, sink-commit/local-ack ambiguity, competing native
+workers and PostgreSQL-observed dispatcher/deletion ordering.
+
+The same three leaf failures occurred on every DB:
+
+1. **E10 timeout harness defect:** the expected client rejection did not occur;
+   fetch returned in about 13ms. Source review diagnoses the hold predicate's
+   mount-relative `req.path` during nested `/explore` routing; that path is
+   `/pickups` inside the router. The proposed stable `req.originalUrl` predicate
+   still needs hosted validation; request paths were not logged. Timeout/replay
+   assertions were not reached; the run does not prove timeout replay.
+2. **Native claim failure:** HTTP 500 was returned where the test expects 503.
+   This assertion occurs before rollback row queries, so those queries were not
+   executed and rollback is not established by this failed test.
+3. **Native outbox failure:** the saved-branch injection likewise returned 500
+   instead of 503. Rollback queries and the rejected-branch injection were not
+   reached; ordinary rejection creation passing elsewhere does not close this gate.
+
+The earliest actionable failure is the historical schema chain: **E2/schema owner
+handoff**, with original migration bytes/logs preserved. A reviewed recovery or
+bootstrap strategy must respect the untouched history; E10 does not pre-create
+objects, resolve migrations or replace replay with snapshots to bypass failure.
+The two native status failures require **E2/backend receipt-telemetry owner review**:
+the production route maps Prisma errors with P-codes to WORLD_UNAVAILABLE/503 and
+unexpected/no-P-code exceptions to INTERNAL_ERROR/500 (also retryable). Determine
+the correct native exception/fault-injection semantics and error classification;
+do not silently change expected 503 to 500. No production defect fix was applied.
+These owner handoffs are local review records; no external messages were sent.
+
+A scoped E10 patch is prepared **only for parent review**, under the ignored path
+`tools/explore-e10/.runtime/hosted/40057075433/proposals/e10-harness-diagnostics.patch`,
+SHA-256 `4e0d1982a4f2e502954da661c9f083d14a6fd6628359dd6d65e17bbcf67ae1d2`.
+It changes the timeout predicate to `originalUrl`, moves claim rollback queries
+ahead of the preserved 503 assertion, and executes both outbox branches/rollback
+queries before checking the preserved 503 assertions. It does not alter migrations
+or production code. `git apply --check` and `node --check` on both proposed files
+passed. The patch is **not applied, committed, pushed or DB-validated**. Existing
+source/CI failure assertions remain unchanged in the worktree and approved SHA.
+
+Original artifact and verification:
+
+- Artifact ID `12545927187`, name
+  `explore-e10-postgres-2bb36125e65d5b431b8557b94152296e6b889ce7-1`.
+  Archive SHA-256 `54d773af7537bd0941d60508df2f4969e2f2da2f90391ec606de408a7c65726e`
+  matches GitHub's artifact digest. Retention expires 2026-11-07.
+- Download root: `tools/explore-e10/.runtime/hosted/40057075433/`; original ZIP,
+  `original-run.log`, run/jobs/artifact API JSON, extracted artifact directory,
+  `verification.json` and proposal are preserved there. Original logs/artifact
+  bytes were not edited. File hashes and structured receipts are retained in the
+  committed evidence JSON.
+- All **56 source blob/raw SHA-256 identities** match the approved Git objects;
+  all **13 manifest log hashes** match downloaded bytes; all **37 frozen-baseline
+  files** match the exact parent Git objects. SHA/ref/workflow/run/attempt match.
+- The extracted set is exactly **14 files**, with all eight telemetry checks per
+  DB represented. `old-forward.local.log` is correctly absent because that step
+  was not executed. Missing checks and failed/short-circuited assertions are not
+  passes; artifact presence does not imply acceptance completeness.
+- Targeted scanning of all 14 artifact files plus original run log found no DB
+  URIs, bearer/JWT/GitHub tokens, known local fixture secret or standalone random
+  48-hex container password. This is a targeted redaction check, not a proof
+  against every possible secret format. No environment files/clients/dependencies
+  appeared in the artifact.
+
+The cleanup receipt is positive; no shared DB/flag/infra was touched. The same
+substitutions remain: external erasure/export fan-out, generic analytics capture,
+loopback sink table/pool rather than production provider/TLS/ensureTable, injected
+clock/faults and due dates. Scheduler, real process/network loss, actual platform
+fan-out and deployed sink permissions/throughput remain release gates.
+
+Only report/evidence changes are committed locally in this continuation. No
+follow-up push or unreviewed fix execution occurred. Remaining blockers: E2
+historical migration strategy, parent review/hosted validation of the scoped
+harness patch, native status classification and completed rollback proofs,
+then a passing approved-candidate rerun. E9/integrated-app, actual sink/runtime,
+E8 credential and E11 gates remain separate; E11 waits for an accepted integrated
+E10 candidate. No Docker, DB, install, generation or build ran on this laptop.
+
 ## Exact owned change set
 
 New E10 commit paths:
@@ -581,4 +720,5 @@ The earlier E4 cherry-pick additionally changes exactly:
 
 Ignored logs, generated clients, schemas, dependency junctions and temporary
 rehearsal output are local-only and are not staged. No parent integration merge
-or external publication is authorized or performed by this receipt.
+or dev/main publication is authorized or performed by this receipt. The reviewed
+feature SHA was published only as explicitly recorded in the hosted receipt.
