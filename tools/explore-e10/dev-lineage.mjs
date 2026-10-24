@@ -65,22 +65,36 @@ export async function rehearseDevLineage({ root, runtime, container, prisma, env
       resolvedRetiredAttempts: classification.retiredAttempts,
       foreignHistoricalSourceProofs: resolved.proofs, originalCounts: fixture.originalCounts });
     await client.connect();
-    receipt.stage = 'restore-schema-and-genuine-ledger';
+    receipt.stage = 'create-captured-auth-schema';
     await client.query("SET TIME ZONE 'UTC'");
     await client.query(fixture.schemaSql);
+    receipt.stage = 'verify-empty-auth-schema';
     assert.equal((await client.query('SELECT count(*)::int AS count FROM auth."User"')).rows[0].count, 0);
+    receipt.stage = 'create-shared-ledger';
     await client.query(`CREATE TABLE public._prisma_migrations (
       id varchar(36) PRIMARY KEY, checksum varchar(64) NOT NULL, finished_at timestamptz,
       migration_name varchar(255) NOT NULL, logs text, rolled_back_at timestamptz,
       started_at timestamptz NOT NULL DEFAULT now(), applied_steps_count integer NOT NULL DEFAULT 0)`);
+    receipt.stage = 'restore-genuine-ledger';
     await client.query('INSERT INTO public._prisma_migrations SELECT * FROM jsonb_populate_recordset(NULL::public._prisma_migrations,$1::jsonb)', [JSON.stringify(fixture.historyRows)]);
+    receipt.stage = 'verify-restored-genuine-ledger';
     const before = await history();
+    receipt.restoredHistorySha256 = sha(JSON.stringify(before));
+    if (JSON.stringify(before) !== JSON.stringify(fixture.historyRows)) {
+      const index = before.findIndex((row, i) => JSON.stringify(row) !== JSON.stringify(fixture.historyRows[i]));
+      receipt.firstHistoryDifference = { index, fields: index < 0 ? [] : Object.keys(before[index]).filter(key => before[index][key] !== fixture.historyRows[index]?.[key]) };
+    }
     assert.deepEqual(before, fixture.historyRows, 'every field of every genuine shared ledger row must be preserved in the clone');
     for (const sequence of fixture.sequences) {
+      receipt.stage = 'restore-sequence-state';
+      receipt.sequence = sequence.name;
       await client.query('SELECT setval($1::regclass,$2::bigint,$3::boolean)', [`auth."${sequence.name.replaceAll('"', '""')}"`, sequence.last_value, sequence.is_called]);
     }
+    receipt.stage = 'seed-synthetic-auth-data';
+    delete receipt.sequence;
     await client.query(`INSERT INTO auth."User" (id,role,type,"updatedAt") VALUES (9001,'customer','general',now());
       INSERT INTO auth."CollectibleFind" ("userId","collectibleId") VALUES (9001,'e10-dev-lineage-synthetic')`);
+    receipt.stage = 'capture-before-upgrade-state';
     const beforeState = await state();
     receipt.stage = 'prisma-existing-lineage-forward-deploy';
     const deployed = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', 'services/auth-service/prisma/schema.prisma'],
@@ -109,6 +123,7 @@ export async function rehearseDevLineage({ root, runtime, container, prisma, env
   } catch (error) {
     // Assertion messages can contain original migration logs; retain stage only.
     receipt.error = 'dev_lineage_validation_failed';
+    if (/^(?:[A-Z0-9]{5}|ERR_ASSERTION)$/.test(error.code ?? '')) receipt.errorCode = error.code;
     return false;
   } finally {
     await client.end().catch(() => {});
