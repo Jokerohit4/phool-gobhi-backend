@@ -37,6 +37,7 @@ const git = args => {
   return result.stdout.trim();
 };
 const sourcePaths = [
+  'tools/explore-e10/dev-baseline-audit.mjs', 'tools/explore-e10/dev-baseline-audit.test.mjs',
   'index.js', 'package.json', 'utils/analytics.js', 'utils/exploreQueueDiagnosticSchema.js',
   'docs/analytics-events.json', 'test/gateway.test.js', 'test/exploreQueueDiagnosticSchema.test.js',
   'test/queueDiagnosticProvider.test.js', 'tools/explore-e10/http.test.mjs',

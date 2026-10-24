@@ -46,7 +46,7 @@ jobs:
           } 2>&1 | tee tools/explore-e10/.runtime/ci-install.local.log
       - name: Verify diagnostic ingestion boundaries
         run: |
-          node --experimental-test-module-mocks --test test/gateway.test.js test/exploreQueueDiagnosticSchema.test.js test/queueDiagnosticProvider.test.js tools/explore-e10/http.test.mjs 2>&1 | tee tools/explore-e10/.runtime/ci-client-diagnostics.local.log
+          node --experimental-test-module-mocks --test test/gateway.test.js test/exploreQueueDiagnosticSchema.test.js test/queueDiagnosticProvider.test.js tools/explore-e10/http.test.mjs tools/explore-e10/dev-baseline-audit.test.mjs 2>&1 | tee tools/explore-e10/.runtime/ci-client-diagnostics.local.log
       - name: Obtain disposable PostgreSQL image
         run: |
           {
