@@ -1,6 +1,6 @@
 # Explore E10 backend candidate and migration rehearsal
 
-2026-10-23. **Local backend candidate prepared; real PostgreSQL rehearsal blocked.**
+2026-10-24. **Hosted CI path prepared; real PostgreSQL rehearsal remains unexecuted.**
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
 to dev/parent, push, deployment, shared flag change or external message occurred.
@@ -174,8 +174,8 @@ non-mutation claim is made.
 
 ## Remaining acceptance gates
 
-1. Run `node tools/explore-e10/rehearse.mjs` with an available local Docker daemon
-   and already-local postgres image; retain successful migration/history,
+1. Execute the dedicated hosted E10 workflow after parent review and separately
+   authorized publication; retain successful migration/history,
    populated/empty upgrade, constraint/race, delayed-first-save, rotation,
    account-export/deletion and rollback receipts. All these real DB checks are
    currently unexecuted, not failed assertions or mock evidence.
@@ -299,6 +299,79 @@ integrated-app acceptance remain separate gates pending reviewed inputs.
 E8 Part 2 starts after the credential fix is approved; E11 execution waits for an
 accepted integrated E10 candidate. No merge, push or deployment occurred.
 
+## Hosted runner preparation: 2026-10-24
+
+Verified `feature/explore-e10-backend` clean at
+`9686c23091ab68b42cdc701d744a12d878909b93` before editing. Read the existing
+workflows (including deployment triggers/permissions/DB job), report and harness.
+The laptop Docker limitation supersedes the earlier local-start instructions;
+Docker/build/DB execution must stay off this laptop. No Docker command, package
+installation, Prisma generation, build, rehearsal or CI dispatch ran this session.
+
+Added only `.github/workflows/explore-e10-postgres.yml`: Ubuntu 24.04, Node 24,
+read-only `contents` permission, no persisted checkout token, cloud credentials,
+service environment or deployment dependency. Push trigger is restricted to
+`feature/explore-e10-backend`; a matching job ref guard also constrains manual
+dispatch. Full-history checkout and explicit `git cat-file -e` verify the frozen
+parent schema. That parent is an ancestor of the current candidate (verified
+locally). Locked root/auth/booking installs use runner-owned directories; the
+workflow pulls `postgres:16`, records its ID/digests and runs the existing command.
+Existing workflows remain byte-for-byte unchanged.
+
+Narrow harness changes select a directory symlink on Linux (Windows retains its
+junction), retain HOME in the filtered tool environment, record Docker server
+version, and create the container before starting it so `finally` can remove a
+created container after startup failure. The random name/label/password,
+loopback-only random port, five disposable DBs, environment-file rejection,
+no caller DB URL, exact historical migration bytes, labelled snapshot baselines
+and real HTTP/DB assertion suite are preserved. The misleading comment preceding
+the independent old-chain replay now correctly labels historical replay.
+`postgres.test.mjs` itself is unchanged. No production/schema defect was fixed.
+
+The harness now redacts all persisted subprocess logs, final receipt and console
+receipt, not only the top-level error. `redact.mjs` removes the known random
+password, DB URIs, bearer/JWT tokens and synthetic fixture secrets. New
+`ci-evidence.mjs` collects an explicit file allowlist, reapplies redaction and
+records exact source/tool/log identities. Generated code, schemas, dependencies
+and environment files cannot enter this artifact through a directory wildcard.
+Bash pipefail and explicit command chaining preserve failures; `always()`
+collection/upload does not turn a failed prerequisite/rehearsal green. A missing
+receipt is explicitly marked unavailable. Forced runner loss/cancellation can
+prevent cleanup/upload; only a reviewed receipt can establish those outcomes.
+The ephemeral hosted VM is not a shared database or source lane.
+
+Validation executed locally (tooling only):
+
+- `node --check tools/explore-e10/rehearse.mjs` and
+  `node --check tools/explore-e10/ci-evidence.mjs`: passed.
+- `node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs`:
+  2 passed, 0 failed. Synthetic failure/no-receipt fixtures verify redaction,
+  retained failure/cleanup fields, source hashes and exclusion of runtime assets;
+  the temporary Git fixture was removed.
+- Python/PyYAML BaseLoader parsing plus assertions: YAML structure, exact branch
+  guards, Ubuntu/Node version, read-only permission, full checkout, lockfile
+  presence, always-upload and absence of credential/deploy hooks passed.
+- Git Bash `-n` parsed every workflow shell block; a synthetic grouped-command
+  failure with `-eo pipefail` retained a nonzero exit through a pipe. No workflow
+  Docker/install/rehearsal command was executed by this syntax check.
+- `git diff --check`: passed. Comparison to approved core for
+  `services/auth-service/prisma`: empty, exit 0. Existing workflow and production
+  paths are unchanged.
+
+This is **CI preparation only**, with no new PostgreSQL results or harness-owned
+container/volume/DB cleanup claim. The report/evidence retain all prior local
+blocker history rather than presenting it as a hosted run. Following parent
+review, a separately authorized push to this feature branch supplies the first
+execution path; manual dispatch requires default-branch registration as documented
+in the README. No push, merge or deployment was performed here.
+
+All real migration/HTTP/DB/export/deletion/rollback acceptance gates remain open
+until the hosted receipt is executed and reviewed. E2/E9 telemetry and integrated
+app acceptance still require separately reviewed inputs. E8 Part 2 waits for the
+approved credential fix; E11 execution waits for an accepted integrated E10
+candidate. Shared dev/production DBs, application flags and source lanes were
+untouched.
+
 ## Exact owned change set
 
 New E10 commit paths:
@@ -311,6 +384,11 @@ New E10 commit paths:
 - `tools/explore-e10/http.test.mjs`
 - `tools/explore-e10/postgres.test.mjs`
 - `tools/explore-e10/rehearse.mjs`
+- `.github/workflows/explore-e10-postgres.yml`
+- `tools/explore-e10/redact.mjs`
+- `tools/explore-e10/redact.test.mjs`
+- `tools/explore-e10/ci-evidence.mjs`
+- `tools/explore-e10/ci-evidence.test.mjs`
 
 The earlier E4 cherry-pick additionally changes exactly:
 

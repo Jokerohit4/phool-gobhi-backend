@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import pg from 'pg';
+import { redact } from './redact.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runtime = resolve(root, 'tools/explore-e10/.runtime');
@@ -13,7 +14,7 @@ const name = `explore-e10-${randomBytes(6).toString('hex')}`;
 const password = randomBytes(24).toString('hex');
 const evidence = { startedAt: new Date().toISOString(), container: name, image: 'postgres:16', checks: [] };
 const cleanEnv = { ...Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-  /^(path|pathext|systemroot|windir|comspec|temp|tmp|userprofile|appdata|localappdata|programdata)$/i.test(key))),
+  /^(home|path|pathext|systemroot|windir|comspec|temp|tmp|userprofile|appdata|localappdata|programdata)$/i.test(key))),
   NODE_ENV: 'test', SECRETS_JSON: '', K_SERVICE: '',
   JWT_SECRET: 'e10-local-only', INTERNAL_API_KEY: 'e10-local-only', ANALYTICS_DATABASE_URL: '',
   ANALYTICS_PROVIDER: 'none', DATABASE_URL: 'postgresql://invalid:invalid@127.0.0.1:1/invalid' };
@@ -22,6 +23,7 @@ function run(bin, args, env = cleanEnv) {
   if (result.error || result.status !== 0) throw new Error(`${bin} ${args.slice(0, 3).join(' ')} failed: ${result.error?.message ?? result.stderr}`);
   return result.stdout.trim();
 }
+function log(file, text) { writeFileSync(resolve(runtime, file), redact(text, [password])); }
 function mark(check, detail = {}) { evidence.checks.push({ check, result: 'passed', ...detail }); }
 let owned = false;
 try {
@@ -29,13 +31,14 @@ try {
     'services/booking-service/.env', 'services/booking-service/prisma/.env', 'tools/explore-e10/.runtime/.env']) {
     if (existsSync(resolve(root, file))) throw new Error(`Use an isolated candidate without environment files: ${file}`);
   }
-  run('docker', ['info', '--format', '{{.ServerVersion}}']);
+  evidence.dockerServerVersion = run('docker', ['info', '--format', '{{.ServerVersion}}']);
   // A missing image is an explicit prerequisite; never pulls or accesses a registry.
   evidence.imageId = run('docker', ['image', 'inspect', 'postgres:16', '--format', '{{.Id}}']);
-  run('docker', ['run', '--pull=never', '--detach', '--name', name,
+  run('docker', ['create', '--pull=never', '--name', name,
     '--label', 'purpose=explore-e10-disposable', '-e', `POSTGRES_PASSWORD=${password}`,
     '-p', '127.0.0.1::5432', 'postgres:16']);
   owned = true;
+  run('docker', ['start', name]);
   const port = run('docker', ['port', name, '5432/tcp']).match(/^127\.0\.0\.1:(\d+)$/)?.[1];
   if (!port) throw new Error('Container did not expose a loopback-only PostgreSQL port');
   const adminUrl = `postgresql://postgres:${password}@127.0.0.1:${port}/postgres`;
@@ -59,12 +62,12 @@ try {
   // Full historical chain is deliberately attempted as-is; never rewrite/resolve old migrations.
   const fresh = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', authPath],
     { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_fresh') }, encoding: 'utf8', timeout: 180000 });
-  writeFileSync(resolve(runtime, 'fresh-migrate.local.log'), fresh.stdout + fresh.stderr);
+  log('fresh-migrate.local.log', (fresh.stdout ?? '') + (fresh.stderr ?? '') + (fresh.error?.message ?? ''));
   evidence.checks.push({ check: 'fresh historical migration chain', result: fresh.status === 0 ? 'passed' : 'failed',
     log: '.runtime/fresh-migrate.local.log' });
 
-  // Independent old-table upgrade: exact parent schema, baseline with Prisma, then only forward E2 SQL.
-  // This is a schema-snapshot baseline, explicitly distinct from the fresh historical-chain check.
+  // Historical old-table replay is independent of the labelled snapshot baselines below.
+  // Preserve every historical migration byte and previously applied history row.
   const parentSchema = run('git', ['-c', `safe.directory=${root.replaceAll('\\', '/').replace(/\/$/, '')}`,
     'show', '5214fa8dd8242093e542bd89a169dcf9321753b2:services/auth-service/prisma/schema.prisma']);
   const parentFile = resolve(runtime, 'parent.prisma');
@@ -78,7 +81,7 @@ try {
   }
   const oldDeploy = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', resolve(oldChain, 'schema.prisma')],
     { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
-  writeFileSync(resolve(runtime, 'old-chain.local.log'), oldDeploy.stdout + oldDeploy.stderr);
+  log('old-chain.local.log', (oldDeploy.stdout ?? '') + (oldDeploy.stderr ?? '') + (oldDeploy.error?.message ?? ''));
   evidence.checks.push({ check: 'old historical chain before E2', result: oldDeploy.status === 0 ? 'passed' : 'failed', log: '.runtime/old-chain.local.log' });
   if (oldDeploy.status === 0) {
     const old = new pg.Client({ connectionString: urlFor('e10_old_chain') }); await old.connect();
@@ -130,7 +133,7 @@ try {
 
   // Generate isolated clients, never write a source lane's node_modules/.prisma.
   const dependencyLink = resolve(root, 'tools/explore-e10/node_modules');
-  if (!existsSync(dependencyLink)) symlinkSync(resolve(root, 'services/auth-service/node_modules'), dependencyLink, 'junction');
+  if (!existsSync(dependencyLink)) symlinkSync(resolve(root, 'services/auth-service/node_modules'), dependencyLink, process.platform === 'win32' ? 'junction' : 'dir');
   for (const service of ['auth', 'booking']) {
     const schema = readFileSync(resolve(root, `services/${service}-service/prisma/schema.prisma`), 'utf8')
       .replace('provider        = "prisma-client-js"', `provider        = "prisma-client-js"\n  output = "./${service}-client"`);
@@ -158,7 +161,7 @@ try {
     const result = spawnSync(process.execPath, ['--experimental-test-module-mocks', '--test', 'tools/explore-e10/postgres.test.mjs'],
       { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor(database), E10_OWNED_DATABASE: name }, encoding: 'utf8', timeout: 180000 });
     const log = `.runtime/postgres-${database}.local.log`;
-    writeFileSync(resolve(root, 'tools/explore-e10', log), result.stdout + result.stderr);
+    writeFileSync(resolve(root, 'tools/explore-e10', log), redact((result.stdout ?? '') + (result.stderr ?? '') + (result.error?.message ?? ''), [password]));
     evidence.checks.push({ check: `${database}: real HTTP/PostgreSQL integration including export/erasure`, result: result.status === 0 ? 'passed' : 'failed', log });
   }
   if (evidence.checks.some(check => check.result !== 'passed')) throw new Error('Rehearsal has failing checks; inspect local logs');
@@ -166,7 +169,7 @@ try {
 } catch (error) {
   evidence.result = 'blocked-or-failed';
   // Do not persist container credentials or a connection URI from diagnostics.
-  evidence.error = String(error.message).replaceAll(password, '[redacted]').replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted-db-uri]');
+  evidence.error = redact(error.message, [password]);
   process.exitCode = 1;
 } finally {
   if (owned) {
@@ -174,6 +177,6 @@ try {
     catch { evidence.cleanup = `FAILED: remove owned container ${name}`; process.exitCode = 1; }
   } else evidence.cleanup = 'no container created';
   evidence.finishedAt = new Date().toISOString();
-  writeFileSync(resolve(runtime, 'rehearsal-result.json'), JSON.stringify(evidence, null, 2) + '\n');
-  console.log(JSON.stringify(evidence, null, 2));
+  writeFileSync(resolve(runtime, 'rehearsal-result.json'), redact(JSON.stringify(evidence, null, 2), [password]) + '\n');
+  console.log(redact(JSON.stringify(evidence, null, 2), [password]));
 }

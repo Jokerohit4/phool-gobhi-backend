@@ -1,3 +1,4 @@
 *.local.log
 .runtime/
 node_modules/
+ci-evidence/

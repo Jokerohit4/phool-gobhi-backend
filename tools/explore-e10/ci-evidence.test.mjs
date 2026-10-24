@@ -1,0 +1,63 @@
+// Local tooling test only: synthetic logs in an isolated Git fixture, no Docker/build/DB.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, cpSync } from 'node:fs';
+import { resolve, relative, isAbsolute } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+
+test('CI collector retains failed/not-started status, redacts logs and excludes runtime assets', () => {
+  const source = fileURLToPath(new URL('../../', import.meta.url));
+  const runtime = resolve(source, 'tools/explore-e10/.runtime');
+  mkdirSync(runtime, { recursive: true });
+  const fixture = mkdtempSync(resolve(runtime, 'ci-collector-test-'));
+  const run = (bin, args, env = process.env) => {
+    const result = spawnSync(bin, args, { cwd: fixture, encoding: 'utf8', env });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  try {
+    for (const file of [
+      '.github/workflows/explore-e10-postgres.yml',
+      ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs'].map(f => `tools/explore-e10/${f}`),
+      ...['', 'services/auth-service/', 'services/booking-service/'].map(p => `${p}package-lock.json`),
+      'services/auth-service/prisma/migrations/20261023000000_exploration_core/migration.sql',
+    ]) {
+      const target = resolve(fixture, file);
+      mkdirSync(resolve(target, '..'), { recursive: true });
+      cpSync(resolve(source, file), target);
+    }
+    run('git', ['init', '--quiet']);
+    run('git', ['add', '.']);
+    run('git', ['-c', 'user.name=E10 fixture', '-c', 'user.email=e10@example.invalid',
+      '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'synthetic evidence fixture']);
+    const local = resolve(fixture, 'tools/explore-e10/.runtime');
+    const output = resolve(fixture, 'tools/explore-e10/ci-evidence');
+    mkdirSync(local);
+    writeFileSync(resolve(local, 'ci-install.local.log'), 'failed install; Bearer synthetic-token\n');
+    writeFileSync(resolve(local, 'private-client.js'), 'must never be uploaded');
+    const env = { ...process.env, E10_JOB_STATUS: 'failure' };
+    run(process.execPath, ['tools/explore-e10/ci-evidence.mjs'], env);
+    let metadata = JSON.parse(readFileSync(resolve(output, 'ci-source.json')));
+    assert.equal(metadata.jobStatusBeforeCollection, 'failure');
+    assert.equal(metadata.rehearsalReceiptAvailable, false);
+    assert.deepEqual(readdirSync(output).sort(), ['ci-install.local.log', 'ci-source.json']);
+    assert.ok(!readFileSync(resolve(output, 'ci-install.local.log'), 'utf8').includes('synthetic-token'));
+    writeFileSync(resolve(local, 'rehearsal-result.json'), JSON.stringify({
+      result: 'blocked-or-failed', error: 'postgresql://user:password@127.0.0.1/db refused',
+      cleanup: 'owned container and volumes removed',
+    }));
+    run(process.execPath, ['tools/explore-e10/ci-evidence.mjs'], env);
+    metadata = JSON.parse(readFileSync(resolve(output, 'ci-source.json')));
+    assert.equal(metadata.rehearsalReceiptAvailable, true);
+    const receipt = JSON.parse(readFileSync(resolve(output, 'rehearsal-result.json')));
+    assert.equal(receipt.result, 'blocked-or-failed');
+    assert.equal(receipt.error, '[redacted-db-uri] refused');
+    assert.equal(receipt.cleanup, 'owned container and volumes removed');
+    assert.ok(metadata.sourceFiles.every(f => /^[0-9a-f]{40}$/.test(f.gitBlob) && /^[0-9a-f]{64}$/.test(f.rawSha256)));
+  } finally {
+    const owned = relative(runtime, fixture);
+    assert.ok(owned.startsWith('ci-collector-test-') && !isAbsolute(owned) && !owned.includes('..'));
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});

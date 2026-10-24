@@ -1,4 +1,4 @@
-# E10 local backend rehearsal
+# E10 backend rehearsal
 
 Run from this candidate's root. No command below deploys, sends messages, reads
 shared DB credentials or changes a source lane. Never use a shared database URL.
@@ -18,13 +18,77 @@ loopback auth router, with an **in-memory Prisma substitute** and captured
 analytics. It is not PostgreSQL evidence. Existing E4 tests use real loopback
 booking HTTP with in-memory attendance rows and substituted metadata responses.
 
-## Disposable PostgreSQL rehearsal
+## Hosted CI execution (prepared, not yet executed)
+
+The laptop cannot support Docker. Keep Docker, dependency installation, client
+generation and DB/build execution on the hosted runner. The dedicated workflow
+is `.github/workflows/explore-e10-postgres.yml`, separate from deployment. It
+triggers on pushes only to `feature/explore-e10-backend`; its job also checks the
+exact branch ref, including for manual dispatch. There is no PR, schedule or
+deployment trigger, cloud authentication, repository write permission or shared
+DB credential. Checkout uses `fetch-depth: 0` and disables persisted credentials.
+Preflight verifies parent schema commit
+`5214fa8dd8242093e542bd89a169dcf9321753b2` is available.
+
+After parent review and a separately authorized push, inspect the **E10 disposable
+PostgreSQL rehearsal** Actions run for that exact source SHA. This preparation
+does not push or dispatch anything. Manual dispatch is optional only if the
+workflow is registered on the default branch; it cannot replace the feature-branch
+push trigger for first execution. See [GitHub workflow dispatch documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatch).
+
+The job uses Ubuntu 24.04 and Node 24, runs `npm ci --include=dev --no-audit
+--no-fund` at root and with `--prefix services/auth-service` and
+`--prefix services/booking-service`, then `docker pull postgres:16` and
+`node tools/explore-e10/rehearse.mjs`. All dependencies live in the runner
+checkout; Prisma postinstall generation is disabled, and the harness generates
+its own isolated clients. The runner obtains the image; the harness still uses
+`--pull=never`. No shared database or host bind mount is accepted.
+
+Bash pipefail and explicit dependency command chaining preserve the first failed
+prerequisite or rehearsal status. There is no `continue-on-error`. Collection and
+upload use `always()` so failed checks still produce the artifact
+`explore-e10-postgres-<source SHA>-<run attempt>` (14-day retention).
+`ci-evidence.mjs` copies only an explicit list of logs and the rehearsal JSON into
+ignored `ci-evidence/`. It never uploads `.runtime/`, dependencies, generated
+clients, schemas or environment files wholesale. Logs are redacted at write time
+inside the harness, including its random password, and again on collection.
+`ci-source.json` records source commit, workflow/run identity, Node/Prisma versions,
+Git blob/raw SHA-256 identities for harness/workflow/lockfiles/migrations and
+SHA-256 identities for uploaded redacted logs. Tool/image identities are also in
+CI preflight/image logs and the harness receipt. Missing rehearsal receipts are
+labelled unavailable, never passes. Review both CI status and every receipt check
+and cleanup field. Artifacts/cleanup are best effort after runner loss or forced
+cancellation; absence of a receipt proves no acceptance result.
+
+The normal harness `finally` removes only its named disposable container and
+volumes, including when startup fails after creation. Container creation precedes
+start so ownership is recorded before start can fail. Cleanup failure remains a
+nonzero exit with the exact owned name. No broad Docker cleanup is performed.
+
+CI preparation is **not executed PostgreSQL evidence**. Fresh historical replay,
+populated historical upgrade/history retention, labelled snapshot upgrades and
+all real HTTP/DB assertions still await a reviewed hosted receipt. Historical
+migration failures remain schema-owner gates; never rewrite or resolve them in
+the harness. E2/E9 telemetry and integrated-app acceptance remain separate.
+
+Local tooling-only validation (no Docker/build/DB):
+
+```powershell
+node --check tools/explore-e10/rehearse.mjs
+node --check tools/explore-e10/ci-evidence.mjs
+node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs
+```
+
+The collector test uses synthetic failure logs in a temporary Git fixture and
+removes that fixture. It supplies no PostgreSQL or hosted Actions evidence.
+
+## Disposable PostgreSQL rehearsal on the runner
 
 Prerequisites: Node 24 (experimental module mocks), installed lockfile dependencies
 at root/auth/booking, Docker daemon, and an already-local `postgres:16` image.
-Install dependencies into this candidate's own directories if needed. During this
-session ignored junctions reuse existing dependencies read-only for offline tests;
-do not run package installation/client generation through those junctions.
+Install dependencies into the runner checkout's own directories. Earlier local
+preparation reused ignored dependency junctions read-only for offline tests;
+do not run package installation/client generation through those local junctions.
 The runner writes generated Prisma clients into its own ignored `.runtime/`.
 
 ```powershell

@@ -1,0 +1,69 @@
+name: E10 disposable PostgreSQL rehearsal
+
+on:
+  push:
+    branches: [feature/explore-e10-backend]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    if: github.ref == 'refs/heads/feature/explore-e10-backend'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Client generation belongs to the isolated harness, not npm postinstall.
+      PRISMA_SKIP_POSTINSTALL_GENERATE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify historical input and record runner tools
+        run: |
+          mkdir -p tools/explore-e10/.runtime
+          {
+            git rev-parse HEAD &&
+            git cat-file -e 5214fa8dd8242093e542bd89a169dcf9321753b2:services/auth-service/prisma/schema.prisma &&
+            node --version &&
+            npm --version &&
+            docker --version
+          } 2>&1 | tee tools/explore-e10/.runtime/ci-preflight.local.log
+      - name: Install locked dependencies in runner checkout
+        run: |
+          {
+            npm ci --include=dev --no-audit --no-fund &&
+            npm ci --prefix services/auth-service --include=dev --no-audit --no-fund &&
+            npm ci --prefix services/booking-service --include=dev --no-audit --no-fund
+          } 2>&1 | tee tools/explore-e10/.runtime/ci-install.local.log
+      - name: Obtain disposable PostgreSQL image
+        run: |
+          {
+            docker info --format '{{.ServerVersion}}' &&
+            docker pull postgres:16 &&
+            docker image inspect postgres:16 --format '{{.Id}} {{json .RepoDigests}}'
+          } 2>&1 | tee tools/explore-e10/.runtime/ci-image.local.log
+      - name: Execute real migration and HTTP DB rehearsal
+        run: node tools/explore-e10/rehearse.mjs 2>&1 | tee tools/explore-e10/.runtime/ci-rehearsal.local.log
+      # No continue-on-error: bash pipefail retains any prerequisite/rehearsal failure.
+      - name: Collect redacted evidence even on failure
+        if: always()
+        env:
+          E10_JOB_STATUS: ${{ job.status }}
+        run: node tools/explore-e10/ci-evidence.mjs
+      - name: Upload only redacted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explore-e10-postgres-${{ github.sha }}-${{ github.run_attempt }}
+          path: tools/explore-e10/ci-evidence/
+          if-no-files-found: error
+          retention-days: 14

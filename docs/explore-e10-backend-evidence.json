@@ -259,5 +259,96 @@
         "E8 Part 2 waits for approved credential fix"
       ]
     }
-  ]
+  ],
+  "ciPreparation": {
+    "recordedAt": "2026-10-24T02:31:04.703206+00:00",
+    "baseCheckpoint": "9686c23091ab68b42cdc701d744a12d878909b93",
+    "branch": "feature/explore-e10-backend",
+    "initialGitStatus": "clean",
+    "workflow": ".github/workflows/explore-e10-postgres.yml",
+    "runner": "ubuntu-24.04",
+    "nodeMajor": 24,
+    "permissions": {
+      "contents": "read"
+    },
+    "existingWorkflowsChanged": false,
+    "sourceFiles": [
+      {
+        "path": ".github/workflows/explore-e10-postgres.yml",
+        "rawSha256": "50568b10a1a23b0c30505c49eb667de07c35ad3ea504b4ddd16e00cf29413641"
+      },
+      {
+        "path": "tools/explore-e10/rehearse.mjs",
+        "rawSha256": "0050b728a13d2b3726b3f8ac83c119364dd6213ccdb93b9b41cee33506192925"
+      },
+      {
+        "path": "tools/explore-e10/postgres.test.mjs",
+        "rawSha256": "6814ed4a2cb26531171e8ebefdd322c5d5b2e9ec40a0fd6932e8c208980c4d92"
+      },
+      {
+        "path": "tools/explore-e10/redact.mjs",
+        "rawSha256": "da4a23ee5acdbb5907dab13ccec81af04d0a041ed8cde03f5564c0ce7b352e0a"
+      },
+      {
+        "path": "tools/explore-e10/redact.test.mjs",
+        "rawSha256": "bf6037e1b4477172bf2926b76da55fb6b59f6b7013c3b900a138d18254755922"
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence.mjs",
+        "rawSha256": "52033ad38f31ebb75b80fca65a037a64156ced0f108d70ce052ce6df1afb345c"
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence.test.mjs",
+        "rawSha256": "d7db8ebc9285b9f846156d4ddb1612059dc6ddff04bd5008bb94d46e4b0e66ee"
+      }
+    ],
+    "validation": [
+      {
+        "command": "node --check tools/explore-e10/rehearse.mjs",
+        "result": "passed"
+      },
+      {
+        "command": "node --check tools/explore-e10/ci-evidence.mjs",
+        "result": "passed"
+      },
+      {
+        "command": "node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs",
+        "result": "2 passed, 0 failed; synthetic local tooling fixtures only; fixture cleaned"
+      },
+      {
+        "command": "Python/PyYAML BaseLoader parse and workflow invariants",
+        "result": "passed branch, Ubuntu/Node, permission, history, lockfiles, failure/upload and credential restrictions; not actionlint or hosted execution"
+      },
+      {
+        "command": "git diff --check",
+        "result": "passed"
+      },
+      {
+        "command": "git merge-base --is-ancestor 5214fa8dd8242093e542bd89a169dcf9321753b2 HEAD",
+        "result": "exit 0"
+      },
+      {
+        "command": "git diff --exit-code 0db69a2496f9fd46afd5037dffd4640250f00990 -- services/auth-service/prisma",
+        "result": "empty, exit 0"
+      },
+      {
+        "command": "Git Bash -n for each workflow run block; synthetic false command piped to cat under -eo pipefail",
+        "result": "all blocks parsed; grouped failure retained nonzero exit; no Docker/build/DB execution"
+      }
+    ],
+    "hostedRunExecuted": false,
+    "realDbChecksExecuted": false,
+    "localDockerBuildOrDbExecution": false,
+    "passingMockSuitesRerun": false,
+    "productionPathsChanged": false,
+    "resourcesCreated": "temporary synthetic Git fixture only; removed; no container/volume/DB",
+    "nextAction": "parent review followed by separately authorized feature-branch push; first hosted receipt still pending",
+    "remaining": [
+      "all PostgreSQL historical/snapshot migration and real HTTP/DB/export/deletion/rollback evidence",
+      "E2/E9 telemetry reviewed inputs",
+      "integrated app acceptance",
+      "E8 Part 2 waits for approved credential fix",
+      "E11 execution waits for accepted integrated E10 candidate"
+    ]
+  }
 }
