@@ -60,6 +60,39 @@ Unresolved limitations:
 - Both events appear in `CLIENT_EVENT_ALLOWLIST` after rebuild from `analytics-events.json`.
 - Commit prepared in worktree `feature/explore-queue-diagnostic-registry`.
 
+### Validation
+
+Drift check `scripts/check-analytics-events.cjs`:
+```
+Loaded 201 known event names from docs/analytics-events.json
+✓ No drift — every event name found in code is in the registry.
+```
+
+Diff `22259ad636e00670aa3ba7278003b9d6fd7833a0..702d634`:
+```diff
+diff --git a/docs/analytics-events.json b/docs/analytics-events.json
+index 7a2cf39..3526079 100644
+@@ -364,6 +364,18 @@
+     "since": "2026-10-23",
+     "notes": "E9: durable account outbox insertion; occurrence_kind and connectivity. No candidate ID, proof or saved claim."
+   },
++  "explore_pickup_queue_issue": {
++    "source": "client",
++    "apps": ["phool_gobhi"],
++    "since": "2026-10-24",
++    "notes": "E9 queue diagnostic: client-side queue issue observation. Seven fields: measurement_version, occurrence_kind, queue_age_bucket, queue_age_basis, failure_reason, upload_attempts_bucket, phase (enqueue/pending). No IDs, proof, coordinates, free-text. Diagnostic only."
++  },
++  "explore_pickup_queue_resolved": {
++    "source": "client",
++    "apps": ["phool_gobhi"],
++    "since": "2026-10-24",
++    "notes": "E9 queue diagnostic: client-side queue resolution observation. Seven fields: measurement_version, occurrence_kind, queue_age_bucket, queue_age_basis, failure_reason, upload_attempts_bucket, resolution (receipt_observed/server_rejection_observed/client_terminal). No IDs, proof, coordinates, free-text. Diagnostic only."
++  },
+   "explore_collection_viewed": {
+     "source": "client",
+     "apps": ["phool_gobhi"],
+```
+
 ## References
 
 - E9 contract: `C:\Users\rohit\Phool-Gobhi\wt\explore-e9-integration-review\lib\core\analytics\explore\QUEUE_DIAGNOSTICS_HANDOFF.md` at commit `f22298d`
