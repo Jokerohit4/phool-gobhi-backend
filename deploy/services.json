@@ -29,6 +29,7 @@
             "NODE_ENV": "development",
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "gateway",
+            "EXPLORE_QUEUE_DIAGNOSTICS": "true",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
