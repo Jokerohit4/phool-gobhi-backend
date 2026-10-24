@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
+import { QUEUE_DIAGNOSTIC_EVENTS, validQueueDiagnostic } from './utils/exploreQueueDiagnosticSchema.js';
 import { withGoogleIdToken } from './utils/googleIdToken.js';
 
 export const app = express();
@@ -188,6 +189,17 @@ export function eventsHandler(req, res) {
       if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
       const properties = e.properties;
       if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
+
+      if (QUEUE_DIAGNOSTIC_EVENTS.has(e.event)) {
+        // Separate default-off activation gate: schema registration is not
+        // approval of deployed retention/erasure or device acceptance.
+        if (process.env.EXPLORE_QUEUE_DIAGNOSTICS !== 'true' ||
+            typeof e.distinct_id !== 'string' || !e.distinct_id.trim() ||
+            !validQueueDiagnostic(e.event, properties)) continue;
+        // Preserve exactly the coarse seven fields. No IP/UA/device enrichment.
+        ingest({ event: e.event, distinctId: e.distinct_id, properties: { ...properties }, source: 'client' });
+        continue;
+      }
 
       const enriched = { ...(properties || {}) };
       if (userAgent && enriched.user_agent == null) enriched.user_agent = userAgent;

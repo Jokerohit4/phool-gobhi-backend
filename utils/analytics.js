@@ -11,6 +11,8 @@
 //   - track()/ingest() NEVER throw and NEVER block the request path (fire-and-forget).
 //   - We send userId as distinct_id and avoid PII (no phone/email/name in properties).
 //   - Adding/removing a sink is a change here only; no call site changes.
+import { QUEUE_DIAGNOSTIC_EVENTS } from './exploreQueueDiagnosticSchema.js';
+
 const PROVIDER = (process.env.ANALYTICS_PROVIDER || 'none').toLowerCase();
 const POSTHOG_HOST = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
 const POSTHOG_KEY = process.env.POSTHOG_API_KEY || '';
@@ -124,6 +126,9 @@ async function sendToPostHog(event, distinctId, properties, source) {
 // ---- dispatch --------------------------------------------------------------
 function emit(event, distinctId, properties, source) {
   try {
+    // Queue diagnostics were reviewed only for the owned first-party sink.
+    // Never fall back to payload logging or an external analytics provider.
+    if (QUEUE_DIAGNOSTIC_EVENTS.has(event) && PROVIDER !== 'postgres') return;
     if (PROVIDER === 'none') return;
     if (PROVIDER === 'console') {
       console.log(

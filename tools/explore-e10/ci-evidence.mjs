@@ -21,7 +21,7 @@ const files = [
   'telemetry-e10_runtime.local.json', 'telemetry-e10_upgrade.local.json', 'telemetry-e10_upgrade_empty.local.json',
   'postgres-e10_runtime.local.log', 'postgres-e10_upgrade.local.log',
   'postgres-e10_upgrade_empty.local.log', 'ci-preflight.local.log',
-  'ci-install.local.log', 'ci-image.local.log', 'ci-rehearsal.local.log',
+  'ci-install.local.log', 'ci-image.local.log', 'ci-rehearsal.local.log', 'ci-client-diagnostics.local.log',
 ];
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const logs = [];
@@ -37,6 +37,9 @@ const git = args => {
   return result.stdout.trim();
 };
 const sourcePaths = [
+  'index.js', 'package.json', 'utils/analytics.js', 'utils/exploreQueueDiagnosticSchema.js',
+  'docs/analytics-events.json', 'test/gateway.test.js', 'test/exploreQueueDiagnosticSchema.test.js',
+  'test/queueDiagnosticProvider.test.js', 'tools/explore-e10/http.test.mjs',
   '.github/workflows/explore-e10-postgres.yml',
   ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs', 'telemetry-postgres.mjs', 'migration-inputs.mjs', 'migration-inputs.test.mjs', 'response-hold.mjs', 'response-hold.test.mjs', 'error-envelope.mjs', 'error-envelope.test.mjs', 'bootstrap-inputs.mjs', 'bootstrap-inputs.test.mjs', 'bootstrap.mjs'].map(f => `tools/explore-e10/${f}`),
   ...['exploration/routes.js', 'exploration/contracts.js', 'test/exploration.test.js', 'exploration/service.js', 'exploration/telemetry.js', 'utils/analytics.js', 'services/authService.js', 'services/exportService.js', 'prisma/schema.prisma'].map(f => `services/auth-service/${f}`),

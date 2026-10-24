@@ -93,6 +93,26 @@ test('E10 JWT/gateway/auth integration and E9 ingestion ownership (memory DB)', 
     for (const name of serverOnly) assert.ok(!CLIENT_EVENT_ALLOWLIST.has(name));
     await request('/api/events', null, { events: [...names, ...serverOnly].map(event => ({ event, distinct_id: 'e10-disposable', properties: {} })) });
     assert.deepEqual(ingested.map(e => e.event).sort(), names.sort());
+    const previous = process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    try {
+      ingested.length = 0;
+      const diagnostic = { event: 'explore_pickup_queue_resolved', distinct_id: 'A', properties: {
+        measurement_version: 1, occurrence_kind: 'grid', queue_age_bucket: 'under_10s',
+        queue_age_basis: 'wall_estimate', failure_reason: 'none', upload_attempts_bucket: '1',
+        resolution: 'receipt_observed',
+      } };
+      delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+      assert.equal((await request('/api/events', null, diagnostic)).status, 202);
+      assert.equal(ingested.length, 0);
+      process.env.EXPLORE_QUEUE_DIAGNOSTICS = 'true';
+      assert.equal((await request('/api/events', null, diagnostic, { 'user-agent': 'private-device' })).status, 202);
+      assert.deepEqual(ingested, [{ event: diagnostic.event, distinctId: 'A', properties: diagnostic.properties, source: 'client' }]);
+      await request('/api/events', null, { ...diagnostic, properties: { ...diagnostic.properties, proof: 'forbidden' } });
+      assert.equal(ingested.length, 1);
+    } finally {
+      if (previous === undefined) delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+      else process.env.EXPLORE_QUEUE_DIAGNOSTICS = previous;
+    }
   } finally {
     await Promise.all([new Promise(r => gateway.close(r)), new Promise(r => server.close(r)), new Promise(r => bookingServer.close(r))]);
   }

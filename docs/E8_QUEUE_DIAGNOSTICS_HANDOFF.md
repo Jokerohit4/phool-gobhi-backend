@@ -1,102 +1,95 @@
-# E8 Queue Diagnostics Backend Handoff
+# Queue diagnostics: parent integration handoff
 
-Date: 2026-10-24
-Worktree: C:\Users\rohit\Phool-Gobhi\wt\backend-queue-diagnostics
-Branch: feature/explore-queue-diagnostic-registry
-Base commit: 22259ad636e00670aa3ba7278003b9d6fd7833a0
+This document supersedes the inaccurate authentication/enrichment claims in
+702d634 and f574f74. Those source commits remain preserved in Git.
 
-## Accepted event names
+## Source and scope
 
-Two client-ingested analytics events are now registered in `docs/analytics-events.json` and therefore permitted by the gateway `/api/events` allowlist:
+Backend base: E10 evidence checkpoint 22259ad636e00670aa3ba7278003b9d6fd7833a0.
+Registry source: 702d634, with validation addendum f574f74, incorporated as
+19a6118 and ab4997c on feature/explore-parent-backend.
+App base: reviewed E8 combined candidate 6657ab4, including E5 1127d6d and
+E9 contracts f22298d. Parent changes implement account-bound delivery.
 
-- `explore_pickup_queue_issue`
-- `explore_pickup_queue_resolved`
+The two registered client observations are explore_pickup_queue_issue and
+explore_pickup_queue_resolved. Neither is an authoritative saved/rejected
+outcome. The existing nine Explore event contracts and receipt outbox remain
+unchanged.
 
-Both are `source: client`, `apps: ["phool_gobhi"]`, `since: 2026-10-24`.
+## Actual trust boundary
 
-No other queue-diagnostic names are accepted. Registration follows the existing client/app pattern used for `explore_*` events.
+POST /api/events is public. authMiddleware strips client identity headers and
+bypasses JWT verification for this route. distinct_id is supplied by the client,
+not derived from a verified JWT. The app binds it to its coherent originating
+account, but a caller can forge it. Do not use these events as proof of account
+activity, unique pickups, awards, saves or eligibility.
 
-## Client ingestion route
+The handler now validates all seven property names, types, enum values and
+cross-field rules using utils/exploreQueueDiagnosticSchema.js. Extra fields,
+missing fields, unknown names and inconsistent age/resolution/phase combinations
+are dropped. The queue-specific path requires a nonblank account distinct_id
+of at most 200 characters. Invalid events still return the existing 202 response;
+202 proves neither persistence nor query availability.
 
-Gateway ingestion path is unchanged.
+## Complete metadata behavior
 
-- Route: `POST /api/events`
-- File: `index.js` line 205
-- Allowlist built at lines 26-30 from `analytics-events.json` entries where `source === 'client'` and key does not start with `$`.
-- Handler: `utils/analytics.js` `ingest`
-- Client events are validated against name allowlist only; property schema enforcement is not performed by the gateway.
+Queue events bypass gateway IP/user-agent/OS/browser/device enrichment. Exactly
+the seven sanitized property fields reach ingest. The first-party PostgreSQL
+sink adds its normal event/distinct_id/source/service/server-ts columns; it does
+not add app/platform/session properties. Ordinary analytics retains its existing
+request enrichment and provider behavior.
 
-## Standard metadata added by pipeline
+The app uses a private Dio per immutable account handle, never the mutable
+analytics facade, global ApiClient, current-token lookup or location interceptor.
+No Authorization, traits, anonymous/session ID, client timestamp, proof,
+coordinates, occurrence/claim ID or raw elapsed values are attached. The only
+account identity in the JSON body is distinct_id. Requests time out after five
+seconds, with no retries, persistent delivery queue or payload/error logging.
 
-The analytics pipeline adds common identity/device/request metadata to every ingested event. The exact fields are defined by `utils/analytics.js` and the first-party Postgres sink, not by this handoff.
+## Lifecycle and independent activation gates
 
-- `app`, `platform`, `session_id`, `user_agent`, etc., are appended server-side.
-- The client must not send proof, coordinates, IDs, free-text, entry_source, world_state, or raw elapsed values.
+The root owner suspends dispatch immediately during credential changes. Coherent
+same-account refresh resumes the same handle/coordinator. Logout, matching
+conditional expiry, deletion/global end and account replacement revoke old
+handles permanently and cancel their requests. A stale A rejection cannot revoke
+B. An old closure stays revoked even after A signs in again. Exclusion cancels
+in-flight sends and drops new work; disabling exclusion does not replay samples.
+Cancellation cannot retract a request already received by the server.
 
-## Identity override / validation
+Both activation gates default off and have not been changed:
 
-- Events are accepted only from authenticated sessions via the gateway's Bearer token verification in `index.js`.
-- The gateway strips `x-user-*` and `x-internal-key` headers before proxying.
-- Identity override is not supported for client events; the user identity is derived from the validated JWT.
-- Validation limitations:
-  - Gateway enforces name allowlist only.
-  - Property schema validation for the seven-field diagnostic contract is client-side via `ExploreQueueDiagnosticSanitizer`.
-  - Backend does not enforce the seven-field contract or cross-field rules.
-  - No server-side rejection of malformed payloads beyond name check.
+- App build define EXPLORE_QUEUE_DIAGNOSTICS=true, with ANALYTICS_PROVIDER=firstparty.
+- Gateway EXPLORE_QUEUE_DIAGNOSTICS=true. Its sink must use ANALYTICS_PROVIDER=postgres.
 
-## Reset / retention / erasure behavior
+The sink explicitly drops these two events for none/console/PostHog, with no
+fallback logging or external provider. Existing feature flags also remain off.
+Do not enable delivery until the gates below have executed evidence.
 
-Unresolved limitations:
+## Retention and erasure: unresolved deployment gate
 
-- Analytics events are stored in the dedicated first-party Postgres analytics DB via `ANALYTICS_PROVIDER=postgres`.
-- `ANALYTICS_DATABASE_URL` is present in service secrets; retention policies are not defined in this handoff.
-- Account reset/erasure flows clear operational data via auth-service/wallet-service etc., but analytics event rows are not explicitly purged by the existing cleaners.
-- No documented GDPR erasure hook for analytics events in the current backend.
-- Event timestamps are set by ingestion time; client-supplied timestamps are not used.
+The existing analytics sink has no delivered-data retention policy or account
+analytics erasure hook. Clearing the device sidecar or resetting analytics
+identity does not delete already-ingested rows. No secret value or deployed
+provider configuration was read or inferred during this review.
 
-## Registration evidence
+Delivery therefore remains disabled pending an approved retention policy,
+account-erasure implementation and execution against the intended analytics
+store, plus exact sink/query/runtime identities. Client sample loss and crash
+uncertainty remain documented in E5. Device suspend-inclusive elapsed timing is
+unverified; the app continues to use wall_estimate/unknown.
 
-- `docs/analytics-events.json` updated with `explore_pickup_queue_issue` and `explore_pickup_queue_resolved` entries.
-- Both events appear in `CLIENT_EVENT_ALLOWLIST` after rebuild from `analytics-events.json`.
-- Commit prepared in worktree `feature/explore-queue-diagnostic-registry`.
+## Validation and historical evidence
 
-### Validation
+Parent tests cover exact serialized envelopes/headers, held dispatch, in-flight
+cancellation, refresh, replacement, re-login, matching/stale expiry, no mounted
+flow, exclusion, schema rejection and provider boundaries. See the parent
+completion report for final commands/counts and candidate commits.
 
-Drift check `scripts/check-analytics-events.cjs`:
-```
-Loaded 201 known event names from docs/analytics-events.json
-✓ No drift — every event name found in code is in the registry.
-```
-
-Diff `22259ad636e00670aa3ba7278003b9d6fd7833a0..702d634`:
-```diff
-diff --git a/docs/analytics-events.json b/docs/analytics-events.json
-index 7a2cf39..3526079 100644
-@@ -364,6 +364,18 @@
-     "since": "2026-10-23",
-     "notes": "E9: durable account outbox insertion; occurrence_kind and connectivity. No candidate ID, proof or saved claim."
-   },
-+  "explore_pickup_queue_issue": {
-+    "source": "client",
-+    "apps": ["phool_gobhi"],
-+    "since": "2026-10-24",
-+    "notes": "E9 queue diagnostic: client-side queue issue observation. Seven fields: measurement_version, occurrence_kind, queue_age_bucket, queue_age_basis, failure_reason, upload_attempts_bucket, phase (enqueue/pending). No IDs, proof, coordinates, free-text. Diagnostic only."
-+  },
-+  "explore_pickup_queue_resolved": {
-+    "source": "client",
-+    "apps": ["phool_gobhi"],
-+    "since": "2026-10-24",
-+    "notes": "E9 queue diagnostic: client-side queue resolution observation. Seven fields: measurement_version, occurrence_kind, queue_age_bucket, queue_age_basis, failure_reason, upload_attempts_bucket, resolution (receipt_observed/server_rejection_observed/client_terminal). No IDs, proof, coordinates, free-text. Diagnostic only."
-+  },
-   "explore_collection_viewed": {
-     "source": "client",
-     "apps": ["phool_gobhi"],
-```
-
-## References
-
-- E9 contract: `C:\Users\rohit\Phool-Gobhi\wt\explore-e9-integration-review\lib\core\analytics\explore\QUEUE_DIAGNOSTICS_HANDOFF.md` at commit `f22298d`
-- E5 implementation report: `C:\Users\rohit\Phool-Gobhi\wt\explore-e5-queue-diagnostics` commit `1127d6de9998163c8052a44b5cd3a4e57ad90326`
-- Gateway allowlist logic: `index.js` lines 26-30, 205
-
-No backend schema changes, migrations, sink timestamp columns, or receipt-service changes are included.
+The E10 hosted run 40077401208 tested source 7915189: 105 native checks passed,
+two snapshots and both disposable bootstrap lanes passed. Raw historical replay
+still failed on the missing auth schema; genuine historical upgrade and
+production lineage remain unproved. The parent additions have only local
+lightweight/Flutter validation until a new exact-source hosted run is recorded.
+No historical migration, original artifact or existing deployment workflow was
+changed. No database, container, native build, install, push or deployment ran
+as part of these parent changes.

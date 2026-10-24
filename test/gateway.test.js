@@ -265,6 +265,61 @@ test('eventsHandler: never throws even on a garbage body', () => {
   assert.equal(res.statusCode, 202);
 });
 
+const queueProperties = () => ({
+  measurement_version: 1, occurrence_kind: 'grid',
+  queue_age_bucket: '10s_to_1m', queue_age_basis: 'wall_estimate',
+  failure_reason: 'none', upload_attempts_bucket: '1', resolution: 'receipt_observed',
+});
+
+test('queue diagnostics are default-off, require identity and preserve exactly coarse properties', () => {
+  const previous = process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+  try {
+    const e = { event: 'explore_pickup_queue_resolved', distinct_id: 'A', properties: queueProperties() };
+    delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    ingestCalls.length = 0;
+    eventsHandler(eventsReq(e), makeRes());
+    assert.equal(ingestCalls.length, 0);
+    process.env.EXPLORE_QUEUE_DIAGNOSTICS = 'true';
+    const req = eventsReq(e, { 'user-agent': 'sensitive-device', authorization: 'Bearer not-verified-here' });
+    eventsHandler(req, makeRes());
+    assert.deepEqual(ingestCalls, [{ event: e.event, distinctId: 'A', properties: queueProperties(), source: 'client' }]);
+    for (const distinct_id of [undefined, '', ' ', 2, 'x'.repeat(201)]) {
+      eventsHandler(eventsReq({ ...e, distinct_id }), makeRes());
+    }
+    assert.equal(ingestCalls.length, 1);
+  } finally {
+    if (previous === undefined) delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    else process.env.EXPLORE_QUEUE_DIAGNOSTICS = previous;
+  }
+});
+
+test('queue diagnostic malformed properties are dropped; ordinary events retain enrichment', () => {
+  const previous = process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+  process.env.EXPLORE_QUEUE_DIAGNOSTICS = 'true';
+  try {
+    ingestCalls.length = 0;
+    const e = { event: 'explore_pickup_queue_resolved', distinct_id: 'A', properties: queueProperties() };
+    const invalid = [
+      null, [], {}, { ...queueProperties(), ip: '1.2.3.4' },
+      { ...queueProperties(), claim_id: 'secret' },
+      { ...queueProperties(), measurement_version: '1' },
+      { ...queueProperties(), queue_age_basis: 'unknown' },
+      { ...queueProperties(), failure_reason: 'timeout' },
+    ];
+    eventsHandler(eventsReq({ events: [
+      ...invalid.map((properties) => ({ ...e, properties })),
+      { event: 'screen_viewed', distinct_id: 'B', properties: {} },
+    ] }, { 'user-agent': 'normal-UA' }), makeRes());
+    assert.equal(ingestCalls.length, 1);
+    assert.equal(ingestCalls[0].event, 'screen_viewed');
+    assert.equal(ingestCalls[0].properties.ip, '10.20.30.40');
+    assert.equal(ingestCalls[0].properties.user_agent, 'normal-UA');
+  } finally {
+    if (previous === undefined) delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    else process.env.EXPLORE_QUEUE_DIAGNOSTICS = previous;
+  }
+});
+
 test('Explore endpoints remain private and emit typed auth errors before proxying', () => {
   for (const [method,path] of [['GET','catalogue'],['GET','collection'],['GET','nearby'],['POST','pickups']]) {
     const full='/api/auth/explore/'+path;
