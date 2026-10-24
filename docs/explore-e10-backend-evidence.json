@@ -105,10 +105,11 @@
     "integratedApp": false
   },
   "remaining": [
-    "parent review of implemented harness correction",
-    "reviewed E2 historical provisioning and native error classification",
-    "separately authorized hosted rerun; timeout/rollback assertions still require real DB receipts",
-    "E9 integrated app and actual sink/runtime acceptance",
+    "parent review of combined preparation before any push or hosted execution",
+    "failed raw historical replay remains open and unwaived",
+    "genuine historical applied-row preservation and production/deployment lineage safety remain unproved",
+    "hosted bootstrap plus native timeout/rollback/envelope/recovery/replay and telemetry acceptance",
+    "integrated app/E9 and actual sink/runtime operational acceptance",
     "E8 credential prerequisite; E11 after accepted integrated E10 candidate"
   ],
   "continuationCheckpoints": [
@@ -2213,6 +2214,231 @@
         "reviewed E2 historical provisioning and native error classification",
         "separately authorized hosted rerun; timeout/rollback assertions still require real DB receipts",
         "E9 integrated app and actual sink/runtime acceptance",
+        "E8 credential prerequisite; E11 after accepted integrated E10 candidate"
+      ]
+    }
+  ],
+  "e2HandoffPreparations": [
+    {
+      "recordedAt": "2026-10-24T08:00:59.483074+00:00",
+      "startingCheckpoint": "4e2d5d3c4def159d6332ecec750638543dfa10bf",
+      "initialBranch": "feature/explore-e10-backend",
+      "initialStatus": "clean",
+      "approvedE2Commit": "c9f95f39caf40d89c5a6a2ad81f9f31f0b99a984",
+      "cherryPick": "dd95019ef37b14687e175ccbca613b8fac70b92f",
+      "sourceE2Worktree": "C:/Users/rohit/Phool-Gobhi/wt/backend-e2-rehearsal-fixes",
+      "sourceE2Status": "clean; read only; exact approved report/exporter reviewed",
+      "approvedE2FilesRemainExact": true,
+      "sourceFiles": [
+        {
+          "path": "tools/explore-e10/error-envelope.mjs",
+          "gitBlobForWorkingBytes": "20722808557f2f74b128b92aaf2265c5d279dda7",
+          "rawSha256": "1e86c8ff9cf34f7a74fba8fca3f3dec97d3bdbb430f4990bd48884b49bf2c0a1"
+        },
+        {
+          "path": "tools/explore-e10/error-envelope.test.mjs",
+          "gitBlobForWorkingBytes": "eeb3f5058df90f3325186b1c6c1d3bfb7df2f580",
+          "rawSha256": "689d53a2f62b7df39d67d91a97b7135476f8b2db76794fc9c67436e82c3802ee"
+        },
+        {
+          "path": "tools/explore-e10/bootstrap.mjs",
+          "gitBlobForWorkingBytes": "5cc4fee191f416e64c8898495c9ab3bd6f0c6493",
+          "rawSha256": "ef8da0a6e1388bfad2cd2b8cad41c052d912d82b11ac4fbbc0d01fed844404f7"
+        },
+        {
+          "path": "tools/explore-e10/bootstrap-inputs.mjs",
+          "gitBlobForWorkingBytes": "175c939dafc4caea669d81a93733fb2850d4c096",
+          "rawSha256": "01dd47b2c2bbb34a18afc9b5ab2bc48697c1021754865ca0a1455db55c1aa804"
+        },
+        {
+          "path": "tools/explore-e10/bootstrap-inputs.test.mjs",
+          "gitBlobForWorkingBytes": "a24f6e06557a82ca184a1339c09ea05e0a965edd",
+          "rawSha256": "e3d91dad8eda7a97aecf609df54b54bf3cb2dd9c886f57444bcdad102b491108"
+        },
+        {
+          "path": "tools/explore-e10/postgres.test.mjs",
+          "gitBlobForWorkingBytes": "b7bb5bfcaad9c8c401d205d18d7079bd78e4ad74",
+          "rawSha256": "7d463cfeffe5f60e33352e63d023cbe73b5e4daa95f8b53bf8736786980f92e3"
+        },
+        {
+          "path": "tools/explore-e10/telemetry-postgres.mjs",
+          "gitBlobForWorkingBytes": "b5f7eeeb7eb1c531e23e92b5b749e3ff8aa959ae",
+          "rawSha256": "56098f09381b799f389dcb9d559f2cf7e8f6a155b7d87c467fbee3278bf6e960"
+        },
+        {
+          "path": "tools/explore-e10/rehearse.mjs",
+          "gitBlobForWorkingBytes": "2d3bc3d406ddd60295e91240c1e61de5e27c549d",
+          "rawSha256": "953a77f2429d89dbbdd61f9beae767924bacd56e0b318a304daeb092418546b1"
+        },
+        {
+          "path": "tools/explore-e10/ci-evidence.mjs",
+          "gitBlobForWorkingBytes": "06ca7c3e01610eb5b64e78dba5c410ffcfced4bf",
+          "rawSha256": "00846f7546809cd675b451bb9c742f4606ac0da00349d392a11b34a982a7e0f0"
+        },
+        {
+          "path": "tools/explore-e10/ci-evidence.test.mjs",
+          "gitBlobForWorkingBytes": "32874f38c68dc74fb482bd292d1ce471aa33231f",
+          "rawSha256": "ea40683c58ad5c8a5876ab5bcff973cb24b50737002ff88953098b33055104f5"
+        },
+        {
+          "path": "tools/explore-e2/provisioning-inputs.mjs",
+          "gitBlobForWorkingBytes": "ef99fa6ff115312b14e295c1e52249243760ab61",
+          "rawSha256": "57f9abcec6a1aa602c985c1da9c8544bfe1dc6da6f78c52cc14fdcd9bed3b305"
+        },
+        {
+          "path": "tools/explore-e2/provisioning-inputs.test.mjs",
+          "gitBlobForWorkingBytes": "151043a3f59d4057da85001a1aa4c16a99ca0dfd",
+          "rawSha256": "663ab815d18395b7fae4bf12945d3af53f504da2626a14c07ac5ea431eca40e2"
+        },
+        {
+          "path": "services/auth-service/test/exploration.test.js",
+          "gitBlobForWorkingBytes": "1fc632fdbf787ba73972372911176964be891be4",
+          "rawSha256": "f51a1cf356a0c00d584b46514a064415dd7df754c05a96f5b4ec159017bf1bd2"
+        },
+        {
+          "path": "services/auth-service/prisma/schema.prisma",
+          "gitBlobForWorkingBytes": "65168dfb763d697d3e3e5629302db1d8842d5f16",
+          "rawSha256": "a8d85c70778ee5e7e2486a498841f9f1be6a84b2e65ffbabdfe423dc22e46fa5"
+        },
+        {
+          "path": "services/auth-service/package-lock.json",
+          "gitBlobForWorkingBytes": "067d608dc916766dda37c8695807b386cbd88991",
+          "rawSha256": "255eebbb0f45dfaee1227a45adde0c717bb675be4cf2fbd1a9e6407b4b4dee83"
+        }
+      ],
+      "genericTriggerExpectation": {
+        "status": 500,
+        "code": "INTERNAL_ERROR",
+        "messageKey": "explore.error.internal_error",
+        "retryable": true,
+        "requestId": "fresh UUID v4",
+        "Retry-After": "absent",
+        "extraEnvelopeKeys": "forbidden"
+      },
+      "knownOutageCoverage": {
+        "status": 503,
+        "code": "WORLD_UNAVAILABLE",
+        "retryable": true,
+        "Retry-After": "5",
+        "cases": [
+          "P1001",
+          "P1002",
+          "P1008",
+          "P1017",
+          "P2024",
+          "typed WORLD_UNAVAILABLE"
+        ],
+        "approvedRouteTestsPreserved": true
+      },
+      "nativeRecoveryPrepared": {
+        "rollbackBeforeEnvelope": true,
+        "bothOutboxBranchesBeforeEnvelope": true,
+        "dropFaultInFinally": true,
+        "retryIdenticalCommands": true,
+        "replayCountPerCommand": 3,
+        "saved": "save once; already_saved replays; one receipt/claim/progress/event, revision 1",
+        "rejected": "FIX_INACCURATE and identical replay; zero receipts, one claim/progress/event, revision 0",
+        "duplicateAndMutationChecks": "full native state comparison after every replay",
+        "executed": false
+      },
+      "additionalBootstrap": {
+        "authorization": "parent-approved additional disposable rehearsal only; does not replace/waive raw replay gate",
+        "kind": "additional-disposable-bootstrap-baseline",
+        "databases": [
+          "e10_bootstrap_empty",
+          "e10_bootstrap_populated"
+        ],
+        "totalOwnedDatabases": 8,
+        "parentCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+        "parentSchemaSha256": "c9b520c9a62d2bd3458eb1c82557875b7f265070daffa487a315da8d527a71d9",
+        "forwardInputCommit": "5c18daf262a5d2941f5b4964d279d47ec9635e33",
+        "forwardFiles": [
+          {
+            "name": "20261023000000_exploration_core",
+            "sha256": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028"
+          },
+          {
+            "name": "20261023000100_drop_unreleased_collectible_find",
+            "sha256": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b"
+          },
+          {
+            "name": "20261023170000_explore_receipt_telemetry",
+            "sha256": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0"
+          }
+        ],
+        "requiredPrismaVersion": "6.8.2; installed package and lock must match",
+        "newBaselineName": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+        "execution": "verified empty owned database; actually deploy rendered parent baseline then stage/deploy exact forward files",
+        "history": "complete rows before bootstrap/after baseline/before and after upgrade/at failure; PostgreSQL JSON preserves all timestamp precision; real baseline unchanged; final four checksums verified",
+        "data": "non-legacy auth data and sequences compared unchanged; populated synthetic User/legacy predecessor; legacy table and owned sequence removal allowed",
+        "nativeChecks": "same full native Explore/telemetry suite after successful bootstrap on both DBs, separate auth/sink connections",
+        "historicalFiles": "audit inputs only, not staged executable migrations",
+        "manualHistoryInsertOrResolve": false,
+        "rawHistoricalReplayWaived": false,
+        "genuineHistoricalRowsPreserved": false,
+        "productionLineageSafetyEstablished": false,
+        "renderedSqlSha256": null,
+        "renderedSqlReason": "not rendered locally; exact rendered/wrapped SQL and tool/input hashes will be preserved by hosted path",
+        "executed": false,
+        "additionalArtifacts": [
+          "bootstrap-input-manifest.json",
+          "bootstrap-provenance.json",
+          "bootstrap-parent.rendered.sql",
+          "bootstrap-baseline.migration.sql",
+          "bootstrap-render.local.log",
+          "bootstrap-<DB>-baseline.local.log",
+          "bootstrap-<DB>-forward.local.log",
+          "bootstrap-<DB>.local.json",
+          "postgres-<DB>.local.log",
+          "telemetry-<DB>.local.json"
+        ]
+      },
+      "validation": [
+        {
+          "command": "node --test tools/explore-e2/provisioning-inputs.test.mjs tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs tools/explore-e10/response-hold.test.mjs tools/explore-e10/error-envelope.test.mjs tools/explore-e10/bootstrap-inputs.test.mjs",
+          "result": "10 passed, 0 failed, 0 skipped; subprocess-only Git safe.directory setting for local ownership mismatch",
+          "evidenceClass": "Git/filesystem staging with synthetic SQL, loopback Express and tooling only"
+        },
+        {
+          "command": "node --disable-warning=ExperimentalWarning --experimental-test-module-mocks --test --test-name-pattern='setup: mock Prisma|route error' services/auth-service/test/exploration.test.js",
+          "result": "9 passed, 0 failed, 0 skipped; setup plus 8 exception cases across 4 routes",
+          "evidenceClass": "loopback/substituted errors; no native DB outage proof"
+        },
+        {
+          "command": "node --check for all 10 added/changed E10 modules/tests; PyYAML workflow invariants and Git Bash -n",
+          "result": "passed; no workflow shell command executed"
+        },
+        {
+          "command": "git diff --check; exact E2 source and unchanged production/Prisma/lock/workflow comparisons",
+          "result": "passed"
+        },
+        {
+          "command": "SHA-256 original hosted file comparison",
+          "result": "25 unchanged; original run 40057075433 preserved"
+        }
+      ],
+      "initialValidationDiagnostics": [
+        {
+          "result": "8 tooling passes/2 failures",
+          "cause": "E2 Git ownership exception with trailing root slash under changed local user; process-scoped exact safe.directory fixed invocation without editing approved source or global config"
+        },
+        {
+          "result": "8 route passes/1 failure",
+          "cause": "Node async ExperimentalWarning captured by privacy console assertion; disabling only that loader warning yields 9 passes; application log assertions unchanged"
+        }
+      ],
+      "allPriorHostedFilesPreserved": true,
+      "newHostedExecution": false,
+      "newNativeResults": [],
+      "localDockerDbInstallGenerationRenderBuild": false,
+      "localTemporaryFixtureCleanup": "passed",
+      "publication": "none; parent review required before push/hosted execution; no merge/deployment",
+      "remainingGates": [
+        "parent review of combined preparation before any push or hosted execution",
+        "failed raw historical replay remains open and unwaived",
+        "genuine historical applied-row preservation and production/deployment lineage safety remain unproved",
+        "hosted bootstrap plus native timeout/rollback/envelope/recovery/replay and telemetry acceptance",
+        "integrated app/E9 and actual sink/runtime operational acceptance",
         "E8 credential prerequisite; E11 after accepted integrated E10 candidate"
       ]
     }

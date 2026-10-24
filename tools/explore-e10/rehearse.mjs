@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import pg from 'pg';
 import { redact } from './redact.mjs';
+import { rehearseBootstrap } from './bootstrap.mjs';
+import { bootstrapDatabases } from './bootstrap-inputs.mjs';
 import { baselineFiles, parentCommit, forwardMigrations, telemetryOutcomeConstraint } from './migration-inputs.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -53,7 +55,7 @@ try {
   if (!ready) throw new Error('Disposable PostgreSQL did not become ready');
   const admin = new pg.Client({ connectionString: adminUrl });
   await admin.connect();
-  try { for (const database of ['e10_fresh', 'e10_old_chain', 'e10_upgrade', 'e10_upgrade_empty', 'e10_runtime', 'e10_sink']) await admin.query(`CREATE DATABASE ${database}`); }
+  try { for (const database of ['e10_fresh', 'e10_old_chain', 'e10_upgrade', 'e10_upgrade_empty', 'e10_runtime', 'e10_sink', ...bootstrapDatabases]) await admin.query(`CREATE DATABASE ${database}`); }
   finally { await admin.end(); }
   const sinkAdmin = new pg.Client({ connectionString: adminUrl });
   await sinkAdmin.connect();
@@ -171,6 +173,13 @@ try {
   } finally { await upgrade.end(); }
   }
 
+  // Additional parent-approved disposable lineage; raw replay checks above stay authoritative.
+  const bootstrapped = await rehearseBootstrap({ root, runtime, container: name, prisma, env: cleanEnv, urlFor, password, checks: evidence.checks });
+  const nativeDatabases = ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty', ...bootstrapped];
+  for (const database of bootstrapDatabases.filter(db => !bootstrapped.includes(db))) {
+    evidence.checks.push({ check: `${database}: native Explore/telemetry suite`, result: 'not-executed', reason: 'disposable bootstrap lineage failed' });
+  }
+
   // Generate isolated clients, never write a source lane's node_modules/.prisma.
   const dependencyLink = resolve(root, 'tools/explore-e10/node_modules');
   if (!existsSync(dependencyLink)) symlinkSync(resolve(root, 'services/auth-service/node_modules'), dependencyLink, process.platform === 'win32' ? 'junction' : 'dir');
@@ -182,7 +191,7 @@ try {
     run(process.execPath, [prisma, 'generate', '--schema', file]);
     // Current-schema runtime DB is separate from both migration rehearsal DBs.
     const sql = run(process.execPath, [prisma, 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', file, '--script']);
-    for (const database of service === 'booking' ? ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty'] : ['e10_runtime']) {
+    for (const database of service === 'booking' ? nativeDatabases : ['e10_runtime']) {
       const runtimeDb = new pg.Client({ connectionString: urlFor(database) });
       await runtimeDb.connect();
       try { await runtimeDb.query(sql); } finally { await runtimeDb.end(); }
@@ -199,12 +208,13 @@ try {
     await runtimeDb.query(telemetryOutcomeConstraint(telemetrySql));
     await runtimeDb.query(coreSql.slice(coreSql.indexOf('CREATE FUNCTION')));
   } finally { await runtimeDb.end(); }
-  for (const database of ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty']) {
+  for (const database of nativeDatabases) {
     const result = spawnSync(process.execPath, ['--experimental-test-module-mocks', '--test', 'tools/explore-e10/postgres.test.mjs'],
       { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor(database), E10_OWNED_DATABASE: name, E10_SINK_DATABASE_URL: urlFor('e10_sink') }, encoding: 'utf8', timeout: 180000 });
     const log = `.runtime/postgres-${database}.local.log`;
     writeFileSync(resolve(root, 'tools/explore-e10', log), redact((result.stdout ?? '') + (result.stderr ?? '') + (result.error?.message ?? ''), [password]));
-    evidence.checks.push({ check: `${database}: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure`, result: result.status === 0 ? 'passed' : 'failed', log });
+    evidence.checks.push({ check: `${database}: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure`, result: result.status === 0 ? 'passed' : 'failed',
+      evidenceClass: database.startsWith('e10_bootstrap_') ? 'additional explicit bootstrap/baseline; not historical replay' : 'existing runtime/snapshot setup', log });
   }
   if (evidence.checks.some(check => check.result !== 'passed')) throw new Error('Rehearsal has failing checks; inspect local logs');
   evidence.result = 'passed';

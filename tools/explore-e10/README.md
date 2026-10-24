@@ -109,7 +109,7 @@ before worker selection and another account/global-manifest retention are checke
 its own pg pool and a repeatable-read session default; the production adapter must
 explicitly establish READ COMMITTED and deduplicate 24 concurrent deliveries.
 The sink table is a local fixture with production columns, reset between the
-three sequential DB suites. Provider selection, TLS/remote sink configuration,
+sequential DB suites. Provider selection, TLS/remote sink configuration,
 `ensureTable`, the interval scheduler and external account-service fan-out remain
 substituted/unexercised. Faults use native triggers and a deliberately thrown
 error after a real sink COMMIT. Backoff eligibility is explicitly advanced for
@@ -130,7 +130,7 @@ Local tooling-only validation (no Docker/build/DB):
 ```powershell
 node --check tools/explore-e10/rehearse.mjs
 node --check tools/explore-e10/ci-evidence.mjs
-node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs tools/explore-e10/response-hold.test.mjs
+node --test tools/explore-e2/provisioning-inputs.test.mjs tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs tools/explore-e10/response-hold.test.mjs tools/explore-e10/error-envelope.test.mjs tools/explore-e10/bootstrap-inputs.test.mjs
 ```
 
 The collector test uses synthetic failure logs in a temporary Git fixture and
@@ -155,9 +155,9 @@ closed after both tests. This fixture imports no DB clients, production services
 or gateway and supplies **harness evidence only**, not post-commit DB acceptance.
 
 Claim rollback assertions (including claim, receipt, progress and outbox absence)
-now run before the retained HTTP 503 assertion. Both saved/rejected outbox failure
-branches and their row assertions execute before status checks. The native 503
-assertions are unchanged pending E2's reviewed classification decision; the frozen
+run before envelope assertions. Both saved/rejected outbox failure branches and
+their row assertions execute before envelope checks. At that preparation checkpoint,
+503 assertions remained pending E2's decision, now superseded below; the frozen
 contract permits retryable INTERNAL_ERROR/500 and WORLD_UNAVAILABLE/503. No
 production behavior, fault injection or historical migration is changed here.
 The new helper/regression identities are included in future CI source manifests.
@@ -165,6 +165,66 @@ The new helper/regression identities are included in future CI source manifests.
 Original hosted artifacts/logs are preserved unchanged. No CI rerun or new DB
 result accompanies this fix. Historical provisioning and native error classification
 remain with E2; parent review and explicit rerun authorization are still required.
+
+## Approved E2 handoff and additional disposable baseline (not yet executed)
+
+Approved E2 input `c9f95f39caf40d89c5a6a2ad81f9f31f0b99a984` is incorporated as
+`dd95019ef37b14687e175ccbca613b8fac70b92f`. See
+`docs/explore-e2-rehearsal-fixes-report.md`. Generic claim/outbox trigger failures
+now require the exact retryable INTERNAL_ERROR/500 envelope, UUID request ID and
+absent Retry-After. `error-envelope.mjs` asserts every envelope key, not just status.
+After fault removal, the identical claim/saved/rejected commands must recover,
+then replay three times without changing receipt/progress/claim/event state.
+Both outbox rollback branches still run before either envelope assertion.
+The separately reviewed route tests preserve known-outage WORLD_UNAVAILABLE/503,
+Retry-After 5 and privacy assertions. No production error behavior changed.
+
+`bootstrap.mjs` prepares **additional** `e10_bootstrap_empty` and
+`e10_bootstrap_populated` databases inside the owned container. It uses the E2
+review exporter to pin the parent schema at `5214fa8dd8242093e542bd89a169dcf9321753b2`
+and forward SQL at `5c18daf262a5d2941f5b4964d279d47ec9635e33`; those forward bytes
+must also equal the current candidate. The parent historical files are audit
+inputs only and never enter the staged executable migration directory.
+
+On hosted CI, auth's lockfile-pinned Prisma 6.8.2 must render the parent SQL. A new
+directory stages the parent datasource, copied lock and one distinct migration
+`00000000000000_e2_parent_5214fa8_schema_bootstrap`, with rendered SQL wrapped in
+BEGIN/COMMIT. Prisma migrate deploy actually executes and records this baseline
+against a verified empty DB. Empty/populated predecessor cases then stage exactly
+the three approved forward migrations and run migrate deploy again. No manual
+history row insert or migration resolve occurs in this additional lane.
+
+Receipts retain complete history at bootstrap/upgrade boundaries, preserving all
+fields and timestamp precision via PostgreSQL JSON. The one executed baseline row
+must be unchanged after upgrade, and all four completed migration rows/checksums
+must match executed files. Non-legacy auth rows and owned sequences must remain
+unchanged; CollectibleFind and its owned sequence may be removed intentionally.
+Both bootstrap DBs run the same native Explore/telemetry/export/deletion suite
+using isolated clients, booking schema and separate sink connections.
+
+Artifacts explicitly allowlist rendered SQL, wrapped baseline SQL, input manifest,
+tool/input/SQL provenance hashes, per-lane baseline/forward logs, complete
+history/data/sequence receipts and native PostgreSQL/telemetry logs. Generated
+clients and staged directories are not uploaded wholesale. Existing redaction,
+nonzero failure propagation and owned-container/volume cleanup remain in force.
+
+**Raw historical replay remains a separate failed/open gate.** Adding this
+disposable lane does not waive it, establish production lineage compatibility or
+prove preservation of genuine historically applied rows. The unchanged-history
+check here concerns only this newly executed, explicitly named baseline. Original
+run 40057075433 and all its bytes remain unchanged. No new DB result or hosted
+run exists for this combined preparation; stop for parent review before push/CI.
+
+For local Git ownership mismatch only, scope a safe.directory exception to the
+test process (no global config). The focused reviewed route checks use:
+
+```powershell
+node --disable-warning=ExperimentalWarning --experimental-test-module-mocks --test --test-name-pattern='setup: mock Prisma|route error' services/auth-service/test/exploration.test.js
+```
+
+This suppresses the asynchronous module-loader warning, not application logging;
+it supplies loopback/substituted-error evidence only. No Prisma/client generation,
+SQL rendering, DB execution, installation or build runs locally.
 
 ## Disposable PostgreSQL rehearsal on the runner
 
@@ -180,7 +240,7 @@ node tools/explore-e10/rehearse.mjs
 ```
 
 The runner never pulls an image. It creates a randomly named, labelled container
-with a loopback-only random PostgreSQL port, a random password and six uniquely
+with a loopback-only random PostgreSQL port, a random password and eight uniquely
 isolated databases. It never accepts a database URL from the caller. It filters
 inherited environment, uses test-only credentials, and does not load `.env`.
 It always attempts removal of its own container and volumes in `finally`;
@@ -201,7 +261,9 @@ The databases deliberately represent different claims:
 | `e10_upgrade` | Parent schema **snapshot baseline**, populated predecessor, exact E2/telemetry SQL in transactions, baseline migration record retained |
 | `e10_upgrade_empty` | Same snapshot baseline, empty predecessor |
 | `e10_runtime` | Current auth/booking schema-diff setup plus production hand-authored check/triggers; real HTTP/DB cases independent of historical-chain readiness |
-| `e10_sink` | Separate native analytics sink used sequentially by all three HTTP/DB suites |
+| `e10_sink` | Separate native analytics sink used sequentially by all prepared HTTP/DB suites |
+| `e10_bootstrap_empty` | Additional actually executed parent-schema baseline plus three exact forward migrations, empty predecessor; not raw history |
+| `e10_bootstrap_populated` | Same additional baseline lineage with seeded predecessor and data/sequence/history retention; not genuine historical-row proof |
 
 Snapshot setup is never described as replay of historical migrations. The runner
 does not resolve failed migrations, alter migration files or restore collectibles.

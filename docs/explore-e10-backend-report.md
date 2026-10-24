@@ -3,6 +3,8 @@
 2026-10-24. **Approved combined candidate executed on hosted CI; failed historical replay and three native assertions per DB. Snapshot upgrades and cleanup passed.**
 The approved harness correction is now implemented and regression-tested locally;
 no new hosted run or database acceptance result accompanies that correction.
+Approved E2 classification/recovery handoffs and an additional disposable
+bootstrap/baseline lane are also prepared, unexecuted and awaiting parent review.
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
 to dev/parent, deployment, shared flag change or external message occurred. Only
@@ -15,6 +17,8 @@ the exact reviewed candidate was pushed to its feature branch as recorded below.
 | Approved backend core | `0db69a2496f9fd46afd5037dffd4640250f00990` |
 | Approved E4 | `199337004f88464f374fc387800b67bd75926059` |
 | Approved E10 CI preparation | `6198594243847b1c52861db8272b133b28a20e8b` |
+| Approved E2 rehearsal handoff | `c9f95f39caf40d89c5a6a2ad81f9f31f0b99a984` |
+| E2 cherry-pick on current candidate | `dd95019ef37b14687e175ccbca613b8fac70b92f` |
 | Approved backend receipt telemetry | `c2f0c81a2dccc4896f09a2bb522807ffeaf35314` |
 | Telemetry cherry-pick in combined candidate | `4a5d136c52149e4c920010600d4a6e1d4ec7a419` |
 | E4 cherry-pick on candidate | `1b221610b204c5bcf97e08dd041b6a61c82c2941` |
@@ -780,6 +784,135 @@ reviewed E2 provisioning/classification inputs; then explicitly authorized hoste
 validation of timeout/rollback and the full candidate. Existing E9/integrated-app,
 actual sink/runtime, E8 credential and E11 gates remain. No current assertion is
 relaxed to accept 500, and historical migrations remain untouched.
+
+## Approved E2 handoff and additional bootstrap preparation: 2026-10-24
+
+Verified clean `feature/explore-e10-backend` at exact requested checkpoint
+`4e2d5d3c4def159d6332ecec750638543dfa10bf`. Read
+`docs/explore-e2-rehearsal-fixes-report.md` and its offline exporter/tests from the
+E2 worktree at `c9f95f39caf40d89c5a6a2ad81f9f31f0b99a984`; source E2 worktree
+remains clean and untouched. Cherry-picked that exact reviewed commit cleanly as
+`dd95019ef37b14687e175ccbca613b8fac70b92f`. The six approved E2 files remain
+exact to that input; this adds documentation, route regression coverage and the
+offline provisioning exporter, with no production error/schema behavior change.
+
+The new owner decision supersedes the earlier retained-503 requirement **only for
+generic trigger faults**. E10's HTTP helper now retains Retry-After. A shared
+assertion requires exactly INTERNAL_ERROR/500, message key
+`explore.error.internal_error`, `retryable=true`, a UUID v4 request ID, no extra
+envelope fields and absent Retry-After. Claim and both saved/rejected outbox row
+rollback checks remain before envelope assertions; both outbox responses are
+collected before status/envelope assertions, with distinct server request IDs.
+Faults remain plain generic trigger exceptions, not disguised connection failures.
+
+After each trigger is removed in finally, the **identical command** retries: the
+claim/saved cases must save once and subsequently return already_saved with the
+original receipt; rejection must return FIX_INACCURATE and replay that rejection.
+Three replays compare all receipt/progress/claim/outcome rows with their original
+post-recovery state: exactly one progress/claim/event, revision 1 and one receipt
+for saved; revision 0 and no receipt for rejected. These are prepared native
+assertions, not newly executed DB proofs. Separate known-outage/typed-world 503,
+Retry-After 5 and privacy coverage remains in the exact reviewed E2 route tests.
+
+Parent explicitly authorized an **additional disposable bootstrap/baseline lane**.
+This approval does not replace or waive the failed raw historical replay gate or
+adopt this lineage for production. The older E2 proposal's acceptance-change
+discussion does not enlarge this authorization. Existing raw fresh/old replay and
+snapshot/runtime lanes remain; raw failures continue to make the overall runner
+exit nonzero even if every additional bootstrap/native check passes.
+
+Two new DBs, `e10_bootstrap_empty` and `e10_bootstrap_populated`, are owned by the
+same disposable container (eight DBs total). `bootstrap.mjs` uses the unchanged
+E2 exporter to read exact Git inputs: parent schema
+`5214fa8dd8242093e542bd89a169dcf9321753b2`, forward SQL pinned at
+`5c18daf262a5d2941f5b4964d279d47ec9635e33`, copied migration lock and historical
+audit hashes. Current forward bytes must equal those pins. Historical audit files
+never enter the executable staged directory. No existing failed DB is reset,
+reused or marked resolved to create this lane.
+
+On hosted execution only, locked/installed auth Prisma must both be **6.8.2**.
+Render the parent-only schema to SQL, preserve exact stdout and its hash, and
+stage it wrapped in BEGIN/COMMIT as the single distinct migration
+`00000000000000_e2_parent_5214fa8_schema_bootstrap`. After verifying a new DB has
+no user objects/history, run migrate deploy against that stage. This actually
+executes/records the baseline; no manual applied rows are inserted. Seed only
+the populated predecessor (synthetic User/CollectibleFind and User sequence),
+then stage the three exact approved forward files and run migrate deploy again.
+
+Each lane records complete native history before bootstrap, after baseline,
+before upgrade, after upgrade and at failure if applicable. PostgreSQL JSON keeps
+every field, including sub-millisecond timestamp precision. The one real baseline
+row must remain unchanged; the final four completed names/checksums must match
+executed SQL. Non-legacy auth data and sequence state must remain unchanged while
+CollectibleFind and its owned sequence are intentionally removed. Only successful
+bootstrap DBs receive the isolated booking schema and full native Explore,
+telemetry, timeout/recovery, export/deletion and rollback suite. Failed bootstrap
+leaves its native suite explicitly unexecuted, never passed.
+
+This proves, if later successful, only a **new explicit snapshot-derived baseline
+lineage**. It cannot prove preservation of genuine historical applied rows,
+production schema/data lineage safety or deployment-lineage compatibility. Those
+gates stay visibly open. Existing manual snapshot-upgrade history remains labelled
+as that distinct prior evidence class; none is reclassified as historical replay.
+
+CI artifact collection adds an explicit allowlist for rendered/wrapped SQL,
+input manifest, tool/input/SQL provenance hashes, per-lane deployment logs and
+complete history/data/sequence receipts, plus both additional native/telemetry
+logs. Source identities include the new helpers/tests and reviewed E2 exporter.
+Prisma CLI/package/lock hashes, Node version and exact runtime render/deploy
+commands are recorded when hosted. No SQL was rendered locally; those output
+identities are **pending hosted execution**, not invented current receipts.
+No staged directory, client or environment file is uploaded wholesale. Redaction,
+loopback ownership guards, failure propagation and final container/volume cleanup
+remain. No deployment workflow is modified.
+
+Lightweight validation actually executed:
+
+- Tooling tests: E2 provisioning inputs plus E10 redaction, collector, baseline
+  selection, response hold, exact envelope and staging tests: **10 passed, 0 failed,
+  0 skipped**. Bootstrap staging uses synthetic SQL text only, never Prisma/DBs.
+  An initial 8/10 pass exposed only the local Git ownership exception's trailing
+  slash mismatch. The passing invocation scoped GIT_CONFIG_COUNT/KEY/VALUE to its
+  subprocess environment with the exact safe.directory; no global config changed.
+- Focused reviewed route command:
+  `node --disable-warning=ExperimentalWarning --experimental-test-module-mocks --test --test-name-pattern='setup: mock Prisma|route error' services/auth-service/test/exploration.test.js`:
+  **9 passed**, comprising setup and eight exception cases across all four routes.
+  An initial focused invocation caught Node's asynchronous module-loader warning
+  in the console privacy assertion (8 passed, 1 failed). Only that Node warning
+  category was disabled for rerun; application console assertions remain intact.
+  This is loopback/substituted-error evidence, not native outage evidence.
+- Syntax checks for every added/changed E10 module/test passed. YAML permissions,
+  exact branch/full checkout/Node/always-upload guards and Bash syntax passed;
+  no workflow command was executed. Diff checks passed. Production exploration/
+  Prisma, migration bytes, package locks and existing workflows remain unchanged.
+- All **25 original hosted files** from run 40057075433 still match their recorded
+  SHA-256 values, including archive, logs, extracted artifacts and proposal.
+  Original hosted failure results and tested SHA are retained unchanged.
+
+No Docker, DB, install, Prisma/client generation, SQL rendering or build ran
+locally. Temporary tooling fixtures were cleaned. No push, merge, CI rerun or
+deployment occurred. Stop for parent review: this combined preparation has no
+new hosted receipt. Required gates remain raw historical replay, genuine-history
+preservation and production-lineage review; actual hosted bootstrap/recovery/
+timeout/native acceptance; integrated app/E9, actual sink/runtime, E8 and E11.
+
+Exact additional E10 preparation paths:
+
+- `tools/explore-e10/error-envelope.mjs`
+- `tools/explore-e10/error-envelope.test.mjs`
+- `tools/explore-e10/bootstrap-inputs.mjs`
+- `tools/explore-e10/bootstrap-inputs.test.mjs`
+- `tools/explore-e10/bootstrap.mjs`
+- `tools/explore-e10/postgres.test.mjs`
+- `tools/explore-e10/telemetry-postgres.mjs`
+- `tools/explore-e10/rehearse.mjs`
+- `tools/explore-e10/ci-evidence.mjs`
+- `tools/explore-e10/ci-evidence.test.mjs`
+- `tools/explore-e10/README.md`
+- `docs/explore-e10-backend-report.md`
+- `docs/explore-e10-backend-evidence.json`
+
+The separate approved cherry-pick's exact six paths are recorded in its E2 report.
 
 ## Exact owned change set
 

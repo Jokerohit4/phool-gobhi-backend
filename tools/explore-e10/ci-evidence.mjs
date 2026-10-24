@@ -11,6 +11,12 @@ const runtime = resolve(root, 'tools/explore-e10/.runtime');
 const output = resolve(root, 'tools/explore-e10/ci-evidence');
 mkdirSync(output, { recursive: true });
 const files = [
+  'bootstrap-input-manifest.json', 'bootstrap-provenance.json', 'bootstrap-parent.rendered.sql',
+  'bootstrap-baseline.migration.sql', 'bootstrap-render.local.log',
+  ...['e10_bootstrap_empty', 'e10_bootstrap_populated'].flatMap(db => [
+    `bootstrap-${db}.local.json`, `bootstrap-${db}-baseline.local.log`, `bootstrap-${db}-forward.local.log`,
+    `postgres-${db}.local.log`, `telemetry-${db}.local.json`,
+  ]),
   'rehearsal-result.json', 'fresh-migrate.local.log', 'old-chain.local.log', 'old-forward.local.log',
   'telemetry-e10_runtime.local.json', 'telemetry-e10_upgrade.local.json', 'telemetry-e10_upgrade_empty.local.json',
   'postgres-e10_runtime.local.log', 'postgres-e10_upgrade.local.log',
@@ -32,8 +38,9 @@ const git = args => {
 };
 const sourcePaths = [
   '.github/workflows/explore-e10-postgres.yml',
-  ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs', 'telemetry-postgres.mjs', 'migration-inputs.mjs', 'migration-inputs.test.mjs', 'response-hold.mjs', 'response-hold.test.mjs'].map(f => `tools/explore-e10/${f}`),
-  ...['exploration/service.js', 'exploration/telemetry.js', 'utils/analytics.js', 'services/authService.js', 'services/exportService.js', 'prisma/schema.prisma'].map(f => `services/auth-service/${f}`),
+  ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs', 'telemetry-postgres.mjs', 'migration-inputs.mjs', 'migration-inputs.test.mjs', 'response-hold.mjs', 'response-hold.test.mjs', 'error-envelope.mjs', 'error-envelope.test.mjs', 'bootstrap-inputs.mjs', 'bootstrap-inputs.test.mjs', 'bootstrap.mjs'].map(f => `tools/explore-e10/${f}`),
+  ...['exploration/routes.js', 'exploration/contracts.js', 'test/exploration.test.js', 'exploration/service.js', 'exploration/telemetry.js', 'utils/analytics.js', 'services/authService.js', 'services/exportService.js', 'prisma/schema.prisma'].map(f => `services/auth-service/${f}`),
+  ...['provisioning-inputs.mjs', 'provisioning-inputs.test.mjs'].map(f => `tools/explore-e2/${f}`),
   ...['', 'services/auth-service/', 'services/booking-service/'].map(p => `${p}package-lock.json`),
   ...readdirSync(resolve(root, 'services/auth-service/prisma/migrations'), { withFileTypes: true })
     .filter(d => d.isDirectory()).map(d => `services/auth-service/prisma/migrations/${d.name}/migration.sql`),

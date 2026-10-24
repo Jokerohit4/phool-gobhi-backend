@@ -1,5 +1,6 @@
 // Hosted-only native cases. Imported before router analytics mocks: these are production functions.
 import assert from 'node:assert/strict';
+import { assertRetryableError, verifyRecoveryReplay } from './error-envelope.mjs';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { writeFileSync } from 'node:fs';
@@ -99,18 +100,22 @@ export async function verifyReceiptTelemetry({ t, db, workerDb, sql, uri, pickup
       await sql.query(`CREATE FUNCTION auth.e10_fail_outbox() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         IF NEW."userId" IN (23,24) THEN RAISE EXCEPTION 'injected outbox failure'; END IF; RETURN NEW; END $$;
         CREATE TRIGGER e10_fail_outbox BEFORE INSERT ON auth."ExploreReceiptEvent" FOR EACH ROW EXECUTE FUNCTION auth.e10_fail_outbox()`);
+      const responses = [];
       try {
-        const responses = [];
         for (const user of [23, 24]) {
           const body = user === 23 ? command : { ...command, position: { ...command.position, accuracyMeters: 31 } };
           const response = await pickup(body, user);
-          responses.push({ user, response });
+          responses.push({ user, response, body });
           for (const model of ['exploreReceiptEvent', 'exploreClaim', 'exploreLocationReceipt', 'exploreProgress']) {
             assert.equal(await db[model].count({ where: { userId: user } }), 0, `${model}/${user}`);
           }
         }
-        for (const { user, response } of responses) assert.equal(response.status, 503, `user ${user}: ${response.body.error?.code}`);
+        for (const { response } of responses) assertRetryableError(response);
+        assert.notEqual(responses[0].response.body.error.requestId, responses[1].response.body.error.requestId);
       } finally { await sql.query('DROP TRIGGER e10_fail_outbox ON auth."ExploreReceiptEvent"; DROP FUNCTION auth.e10_fail_outbox()'); }
+      for (const { user, body } of responses) {
+        await verifyRecoveryReplay({ db, pickup, userId: user, command: body, rejected: user === 24 });
+      }
     });
 
     // Drain prior HTTP cases through the production adapter; these are prospective

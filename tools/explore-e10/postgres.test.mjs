@@ -1,6 +1,7 @@
 // Run ONLY through rehearse.mjs. DB/auth/routers/proxy are real; time/catalogue are injected.
 // External export/erasure and generic analytics are substituted; receipt delivery uses native sink SQL.
 import { test } from 'node:test';
+import { assertRetryableError, verifyRecoveryReplay } from './error-envelope.mjs';
 import { createPostCommitResponseHold } from './response-hold.mjs';
 import { verifyReceiptTelemetry } from './telemetry-postgres.mjs';
 import assert from 'node:assert/strict';
@@ -16,7 +17,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
   assert.match(process.env.E10_OWNED_DATABASE ?? '', /^explore-e10-[0-9a-f]{12}$/);
   const uri = new URL(process.env.DATABASE_URL);
   assert.equal(uri.hostname, '127.0.0.1');
-  assert.ok(['/e10_runtime', '/e10_upgrade', '/e10_upgrade_empty'].includes(uri.pathname));
+  assert.ok(['/e10_runtime', '/e10_upgrade', '/e10_upgrade_empty', '/e10_bootstrap_empty', '/e10_bootstrap_populated'].includes(uri.pathname));
   const { PrismaClient: AuthClient } = await import('./.runtime/auth-client/index.js');
   const { PrismaClient: BookingClient } = await import('./.runtime/booking-client/index.js');
   const db = new AuthClient({ datasourceUrl: uri.href });
@@ -75,7 +76,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
         ...(bearer ? { authorization: `Bearer ${bearer}` } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
       const text = await response.text(); let payload;
       try { payload = JSON.parse(text); } catch { payload = text; }
-      return { status: response.status, body: payload };
+      return { status: response.status, body: payload, retryAfter: response.headers.get('retry-after') };
     };
     const fixtures = JSON.parse(readFileSync(new URL('../../services/auth-service/exploration/contract/api-fixtures.json', import.meta.url)));
     const command = structuredClone(fixtures.httpCases.find(c => c.name === 'pickup-delayed-first-claim-C1-after-C2').request.body);
@@ -212,8 +213,9 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
         assert.equal(await db.exploreClaim.count({ where: { userId: 30 } }), 0);
         assert.equal(await db.exploreProgress.count({ where: { userId: 30 } }), 0);
         assert.equal(await db.exploreReceiptEvent.count({ where: { userId: 30 } }), 0);
-        assert.equal(response.status, 503, response.body.error?.code);
+        assertRetryableError(response);
       } finally { await sql.query('DROP TRIGGER e10_fail_claim ON auth."ExploreClaim"; DROP FUNCTION auth.e10_fail_claim()'); }
+      await verifyRecoveryReplay({ db, pickup, userId: 30, command });
     });
     await t.test('native uniqueness/FK/immutability and snapshot pagination under a concurrent insert', async () => {
       timestamp = '2026-10-20T01:30:00Z';
