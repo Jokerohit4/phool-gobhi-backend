@@ -1,6 +1,7 @@
 // Run ONLY through rehearse.mjs. DB/auth/routers/proxy are real; time/catalogue are injected.
 // External export/erasure and generic analytics are substituted; receipt delivery uses native sink SQL.
 import { test } from 'node:test';
+import { createPostCommitResponseHold } from './response-hold.mjs';
 import { verifyReceiptTelemetry } from './telemetry-postgres.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -24,7 +25,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
   const sql = new pg.Client({ connectionString: uri.href }); await sql.connect();
   const servers = [], downstream = [], analytics = [];
   let timestamp = '2026-10-19T05:29:00Z', currentCatalogue = catalogueV1;
-  let holdAfterCommit = false, releaseHeldResponse;
+  const responseHold = createPostCommitResponseHold();
   const serve = async app => {
     const server = app.listen(0, '127.0.0.1'); servers.push(server);
     await new Promise(r => server.once('listening', r));
@@ -62,19 +63,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
     const { default: authRoutes } = await import('../../services/auth-service/routes/auth.js');
     const { default: bookingRoutes } = await import('../../services/booking-service/routes/booking.js');
     const auth = express(); auth.use(express.json());
-    auth.use((req, res, next) => {
-      const json = res.json.bind(res);
-      res.json = body => {
-        // Router receives a result only after the real Prisma transaction commits.
-        if (holdAfterCommit && req.path === '/explore/pickups' && body.data?.result === 'saved') {
-          holdAfterCommit = false;
-          releaseHeldResponse = () => { if (!res.destroyed) json(body); };
-          return res;
-        }
-        return json(body);
-      };
-      next();
-    });
+    auth.use(responseHold.middleware);
     auth.use('/', authRoutes);
     const booking = express(); booking.use(express.json()); booking.use('/', bookingRoutes);
     process.env.AUTH_SERVICE_URL = await serve(auth);
@@ -172,14 +161,14 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
       assert.equal(spoofed.body.data.summary.savedFindCount, 0);
     });
     await t.test('real HTTP timeout after DB commit replays original receipt once', async () => {
-      holdAfterCommit = true;
+      responseHold.arm();
       try {
         await assert.rejects(fetch(base + '/api/auth/explore/pickups', {
           method: 'POST', signal: AbortSignal.timeout(1000),
           headers: { authorization: `Bearer ${token(5)}`, 'content-type': 'application/json' }, body: JSON.stringify(command),
         }), error => error.name === 'TimeoutError');
-        assert.equal(typeof releaseHeldResponse, 'function', 'timeout must follow committed save, not precede it');
-      } finally { holdAfterCommit = false; releaseHeldResponse?.(); releaseHeldResponse = undefined; }
+        assert.equal(responseHold.pending, true, 'timeout must follow committed save, not precede it');
+      } finally { responseHold.release(); }
       const stored = await db.exploreLocationReceipt.findFirst({ where: { userId: 5 } }); assert.ok(stored);
       const retry = await pickup(command, 5); assert.equal(retry.body.data.result, 'already_saved');
       assert.equal(retry.body.data.receipt.receiptId, stored.receiptId);
@@ -218,10 +207,12 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
         IF NEW."userId" = 30 THEN RAISE EXCEPTION 'injected local failure'; END IF; RETURN NEW; END $$;
         CREATE TRIGGER e10_fail_claim BEFORE INSERT ON auth."ExploreClaim" FOR EACH ROW EXECUTE FUNCTION auth.e10_fail_claim()`);
       try {
-        assert.equal((await pickup(command, 30)).status, 503);
+        const response = await pickup(command, 30);
         assert.equal(await db.exploreLocationReceipt.count({ where: { userId: 30 } }), 0);
+        assert.equal(await db.exploreClaim.count({ where: { userId: 30 } }), 0);
         assert.equal(await db.exploreProgress.count({ where: { userId: 30 } }), 0);
         assert.equal(await db.exploreReceiptEvent.count({ where: { userId: 30 } }), 0);
+        assert.equal(response.status, 503, response.body.error?.code);
       } finally { await sql.query('DROP TRIGGER e10_fail_claim ON auth."ExploreClaim"; DROP FUNCTION auth.e10_fail_claim()'); }
     });
     await t.test('native uniqueness/FK/immutability and snapshot pagination under a concurrent insert', async () => {
@@ -303,6 +294,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
     await verifyReceiptTelemetry({ t, db, workerDb, sql, uri, pickup, command,
       setTime: value => { timestamp = value; }, exportUser: buildFullExportService, deleteUser: deleteUserService });
   } finally {
+    responseHold.release();
     await Promise.all(servers.map(server => new Promise(r => server.close(r))));
     await Promise.all([db.$disconnect(), workerDb.$disconnect(), bookingDb.$disconnect(), sql.end()]);
   }

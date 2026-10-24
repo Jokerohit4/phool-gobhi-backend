@@ -130,11 +130,41 @@ Local tooling-only validation (no Docker/build/DB):
 ```powershell
 node --check tools/explore-e10/rehearse.mjs
 node --check tools/explore-e10/ci-evidence.mjs
-node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs
+node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs tools/explore-e10/response-hold.test.mjs
 ```
 
 The collector test uses synthetic failure logs in a temporary Git fixture and
 removes that fixture. It supplies no PostgreSQL or hosted Actions evidence.
+
+## Approved response-hold/diagnostic fix after run 40057075433
+
+The parent-approved patch from that run is implemented. `response-hold.mjs` shares
+the actual hold middleware between the native DB harness and a lightweight Express
+regression. Its predicate uses `req.originalUrl`, which remains `/explore/pickups`
+when the nested router's `req.path` is `/pickups`. Only an armed `saved` response
+is held. Release is idempotent, clears state, avoids sending on a destroyed
+response, and runs on the native harness cleanup path as well.
+
+`response-hold.test.mjs` uses real loopback HTTP with the same Express mount chain
+as the auth harness (`app -> '/' auth router -> '/explore' router -> '/pickups'`).
+It proves the saved response reaches the hold before a real client timeout,
+cleanup works after disconnect, subsequent requests complete, unrelated URLs and
+`already_saved` responses are not held, and manual release returns the original
+successful body while the client is still connected. Servers/connections are
+closed after both tests. This fixture imports no DB clients, production services
+or gateway and supplies **harness evidence only**, not post-commit DB acceptance.
+
+Claim rollback assertions (including claim, receipt, progress and outbox absence)
+now run before the retained HTTP 503 assertion. Both saved/rejected outbox failure
+branches and their row assertions execute before status checks. The native 503
+assertions are unchanged pending E2's reviewed classification decision; the frozen
+contract permits retryable INTERNAL_ERROR/500 and WORLD_UNAVAILABLE/503. No
+production behavior, fault injection or historical migration is changed here.
+The new helper/regression identities are included in future CI source manifests.
+
+Original hosted artifacts/logs are preserved unchanged. No CI rerun or new DB
+result accompanies this fix. Historical provisioning and native error classification
+remain with E2; parent review and explicit rerun authorization are still required.
 
 ## Disposable PostgreSQL rehearsal on the runner
 

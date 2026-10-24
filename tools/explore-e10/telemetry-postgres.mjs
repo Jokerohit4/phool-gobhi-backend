@@ -100,13 +100,16 @@ export async function verifyReceiptTelemetry({ t, db, workerDb, sql, uri, pickup
         IF NEW."userId" IN (23,24) THEN RAISE EXCEPTION 'injected outbox failure'; END IF; RETURN NEW; END $$;
         CREATE TRIGGER e10_fail_outbox BEFORE INSERT ON auth."ExploreReceiptEvent" FOR EACH ROW EXECUTE FUNCTION auth.e10_fail_outbox()`);
       try {
+        const responses = [];
         for (const user of [23, 24]) {
           const body = user === 23 ? command : { ...command, position: { ...command.position, accuracyMeters: 31 } };
-          assert.equal((await pickup(body, user)).status, 503);
+          const response = await pickup(body, user);
+          responses.push({ user, response });
           for (const model of ['exploreReceiptEvent', 'exploreClaim', 'exploreLocationReceipt', 'exploreProgress']) {
             assert.equal(await db[model].count({ where: { userId: user } }), 0, `${model}/${user}`);
           }
         }
+        for (const { user, response } of responses) assert.equal(response.status, 503, `user ${user}: ${response.body.error?.code}`);
       } finally { await sql.query('DROP TRIGGER e10_fail_outbox ON auth."ExploreReceiptEvent"; DROP FUNCTION auth.e10_fail_outbox()'); }
     });
 

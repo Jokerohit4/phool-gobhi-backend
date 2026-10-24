@@ -1,6 +1,8 @@
 # Explore E10 backend candidate and migration rehearsal
 
 2026-10-24. **Approved combined candidate executed on hosted CI; failed historical replay and three native assertions per DB. Snapshot upgrades and cleanup passed.**
+The approved harness correction is now implemented and regression-tested locally;
+no new hosted run or database acceptance result accompanies that correction.
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
 to dev/parent, deployment, shared flag change or external message occurred. Only
@@ -693,6 +695,91 @@ harness patch, native status classification and completed rollback proofs,
 then a passing approved-candidate rerun. E9/integrated-app, actual sink/runtime,
 E8 credential and E11 gates remain separate; E11 waits for an accepted integrated
 E10 candidate. No Docker, DB, install, generation or build ran on this laptop.
+
+## Parent-approved harness correction: 2026-10-24
+
+Verified clean `feature/explore-e10-backend` at exact requested checkpoint
+`5c18daf262a5d2941f5b4964d279d47ec9635e33`. Verified the approved patch hash
+`4e0d1982a4f2e502954da661c9f083d14a6fd6628359dd6d65e17bbcf67ae1d2`, ran
+`git apply --check`, then applied the patch from the preserved hosted proposal.
+Its earlier status as unapplied in the historical run receipt is superseded by
+this implementation record; the original proposal/logs/artifact bytes are unchanged.
+
+The post-commit response hold now uses `req.originalUrl`. Its small middleware is
+extracted to `tools/explore-e10/response-hold.mjs` and shared by the native harness
+and the new regression, so the test exercises the actual hold implementation.
+It still intercepts only the armed `saved` pickup response after the native route
+returns its result. `arm`, `pending` and idempotent `release` replace the previous
+inline state; release clears state and sends only if the response is not destroyed.
+The native test retains its TimeoutError, committed-result/pending check, stored
+receipt/replay and single-revision/outbox assertions, and releases in both local
+and outer cleanup. No production middleware or API behavior changed.
+
+Claim-failure native row assertions now run before status checking: receipt,
+claim, progress and outbox must all be absent. The explicit claim-row assertion
+also closes the prior test's omission. For outbox failure, both saved/rejected
+requests and their four row-absence assertions execute before the status checks.
+Both original **503 expectations remain**. The frozen error contract permits
+retryable INTERNAL_ERROR/500 and WORLD_UNAVAILABLE/503; this patch supplies no
+classification decision. E2 is handling historical provisioning and native error
+classification in its separate session. No unreviewed E2 change was incorporated.
+
+`response-hold.test.mjs` uses preinstalled Express 5.1.0 and real loopback HTTP,
+with the same nested auth mounting topology (`app -> '/' auth router -> '/explore'
+router -> '/pickups'`). Its synthetic handler imports no Prisma/service/gateway
+code and makes no DB commit. Two regressions passed:
+
+- The router observes `path=/pickups`, `baseUrl=/explore`, and stable
+  `originalUrl=/explore/pickups`; the saved response is pending before a real
+  1000ms client timeout. Release is safe and repeatable after disconnect, and a
+  subsequent request succeeds. Cleanup closes the server/connections and clears
+  armed/pending state.
+- Other URLs and `already_saved` responses pass through while armed. A matching
+  saved response is held and manual release returns its original 200/body before
+  client timeout; repeated release and cleanup succeed.
+
+This establishes **harness behavior only**, not database timeout/replay acceptance
+or completed native rollback proofs. No CI rerun occurred. Run 40057075433 and
+its tested SHA/results remain the latest actual hosted evidence, unchanged.
+
+Executed lightweight validation with Node `v24.16.0`:
+
+```powershell
+node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs tools/explore-e10/response-hold.test.mjs
+```
+
+**6 passed, 0 failed, 0 skipped.** `node --check` passed for the native test,
+telemetry helper, shared hold/regression and collector/collector test. The final
+additional claim-row assertion was syntax-checked after insertion. YAML branch,
+read-only permission, full checkout, Node/Ubuntu, always-upload/failure invariants
+and Bash syntax checks passed; no workflow shell command was executed. Existing
+workflow and all production/schema/migration paths are unchanged. `git diff --check`
+passed. SHA-256 comparison of **all 25 previously preserved hosted files** passed,
+including the original ZIP/run log/extracted artifacts/proposal. No hosted file
+was rewritten and no downloaded evidence was re-labelled as a passing rerun.
+
+Collector source identities and its fixture now include the shared helper and
+regression; README validation instructions include the loopback test. Synthetic
+collector fixture cleanup passed. No Docker, DB, install, generation or build ran
+on the laptop; no push, merge, CI dispatch or rerun occurred.
+
+Exact intended continuation paths:
+
+- `tools/explore-e10/postgres.test.mjs`
+- `tools/explore-e10/telemetry-postgres.mjs`
+- `tools/explore-e10/response-hold.mjs`
+- `tools/explore-e10/response-hold.test.mjs`
+- `tools/explore-e10/ci-evidence.mjs`
+- `tools/explore-e10/ci-evidence.test.mjs`
+- `tools/explore-e10/README.md`
+- `docs/explore-e10-backend-report.md`
+- `docs/explore-e10-backend-evidence.json`
+
+Remaining gates: parent review of this implemented harness change; separately
+reviewed E2 provisioning/classification inputs; then explicitly authorized hosted
+validation of timeout/rollback and the full candidate. Existing E9/integrated-app,
+actual sink/runtime, E8 credential and E11 gates remain. No current assertion is
+relaxed to accept 500, and historical migrations remain untouched.
 
 ## Exact owned change set
 

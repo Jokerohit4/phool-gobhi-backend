@@ -105,12 +105,11 @@
     "integratedApp": false
   },
   "remaining": [
-    "E2 historical chain repair strategy without rewriting/resolving historical migrations",
-    "parent review and authorized validation of scoped timeout/diagnostic patch",
-    "E2/telemetry review of native failure status and completed saved/rejected rollback proofs",
-    "passing exact-candidate hosted rerun after approved fixes",
-    "E9 integrated-app telemetry and actual sink/runtime operations",
-    "integrated app and E11 acceptance; E8 credential prerequisite"
+    "parent review of implemented harness correction",
+    "reviewed E2 historical provisioning and native error classification",
+    "separately authorized hosted rerun; timeout/rollback assertions still require real DB receipts",
+    "E9 integrated app and actual sink/runtime acceptance",
+    "E8 credential prerequisite; E11 after accepted integrated E10 candidate"
   ],
   "continuationCheckpoints": [
     {
@@ -2094,5 +2093,128 @@
   ],
   "latestHostedRunId": 40057075433,
   "latestTestedSha": "2bb36125e65d5b431b8557b94152296e6b889ce7",
-  "latestHostedConclusion": "failure"
+  "latestHostedConclusion": "failure",
+  "approvedHarnessCorrections": [
+    {
+      "recordedAt": "2026-10-24T06:26:34.425750+00:00",
+      "startingCheckpoint": "5c18daf262a5d2941f5b4964d279d47ec9635e33",
+      "branch": "feature/explore-e10-backend",
+      "initialStatus": "clean",
+      "approvedPatch": {
+        "path": "tools/explore-e10/.runtime/hosted/40057075433/proposals/e10-harness-diagnostics.patch",
+        "sha256": "4e0d1982a4f2e502954da661c9f083d14a6fd6628359dd6d65e17bbcf67ae1d2",
+        "action": "git apply --check then git apply; implemented"
+      },
+      "additionalImplementation": [
+        "hold middleware extracted to response-hold.mjs and shared by native/regression tests",
+        "explicit absent-claim assertion added before native status assertion",
+        "collector source identities and fixture include shared helper/regression"
+      ],
+      "holdPredicate": "armed && req.originalUrl === '/explore/pickups' && body.data?.result === 'saved'",
+      "rollbackOrdering": "claim/receipt/progress/outbox row checks before status; both saved/rejected outbox branches checked before statuses",
+      "statusAssertions": {
+        "expected": 503,
+        "preserved": true,
+        "frozenContract": "INTERNAL_ERROR/500 retryable and WORLD_UNAVAILABLE/503 retryable both permitted",
+        "decisionOwner": "separate E2 session; no production classification change here"
+      },
+      "sourceFiles": [
+        {
+          "path": "tools/explore-e10/postgres.test.mjs",
+          "rawSha256": "a5ebc4fb6b6d377e0e08ca787ffbf21721cbcc2cec5bdd3ee6cf2cf017b0ff26",
+          "gitBlobForWorkingBytes": "eb62aa0492bf1c4bce975b52554414fd74192361"
+        },
+        {
+          "path": "tools/explore-e10/telemetry-postgres.mjs",
+          "rawSha256": "8e602ba216f25bdb6f11207abe8dbecf998973cc5958de4b1151c6d5cca86d78",
+          "gitBlobForWorkingBytes": "39a6936aeabca17a7eda7aaf24d42354ba7d05d3"
+        },
+        {
+          "path": "tools/explore-e10/response-hold.mjs",
+          "rawSha256": "b1574a03b8a33f52a2c859480e4b436587dc89084d46f08bcd4d8f8ed4ffc9cd",
+          "gitBlobForWorkingBytes": "86b8b94a1a8ac22b075cb5729d9c74e5ac1179cc"
+        },
+        {
+          "path": "tools/explore-e10/response-hold.test.mjs",
+          "rawSha256": "c3a483769ac1ea53f90fa9fa5e74db5f2ef425c83c43c7efe0c855ce18f81e1e",
+          "gitBlobForWorkingBytes": "ceb6800b91dd540379640a85f07206aed83732d1"
+        },
+        {
+          "path": "tools/explore-e10/ci-evidence.mjs",
+          "rawSha256": "aa1ed4303b6c2b9443599875659e6d3f16271689138b4aa91b70a3cc9eb7b452",
+          "gitBlobForWorkingBytes": "871948dbf3863c5bfba69213b61a1445cc506afb"
+        },
+        {
+          "path": "tools/explore-e10/ci-evidence.test.mjs",
+          "rawSha256": "1be83a4b3b83ba804405ca5c61ae2875b6787cfb51590034f01dc2ae5878f9ca",
+          "gitBlobForWorkingBytes": "68e71b225ab6f8c5b64f7bbee318fb25a3893ae4"
+        }
+      ],
+      "localTools": {
+        "node": "v24.16.0",
+        "express": "5.1.0 (preinstalled)"
+      },
+      "validation": [
+        {
+          "command": "node --test tools/explore-e10/response-hold.test.mjs",
+          "result": "2 passed, 0 failed; real loopback Express/client timeout; harness only"
+        },
+        {
+          "command": "node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs tools/explore-e10/response-hold.test.mjs",
+          "result": "6 passed, 0 failed, 0 skipped"
+        },
+        {
+          "command": "node --check for postgres.test.mjs, telemetry-postgres.mjs, response-hold.mjs, response-hold.test.mjs, ci-evidence.mjs, ci-evidence.test.mjs",
+          "result": "passed; final added native claim-row assertion syntax checked"
+        },
+        {
+          "command": "PyYAML branch/permission/history/Node24/Ubuntu/failure/upload invariants plus Git Bash -n for workflow run blocks",
+          "result": "passed; workflow shell commands not executed"
+        },
+        {
+          "command": "SHA-256 comparison of prior hosted directory file snapshot",
+          "result": "25 files unchanged; originals preserved"
+        },
+        {
+          "command": "git diff --exit-code HEAD -- services .github/workflows",
+          "result": "empty; no production/schema/migration/workflow changes"
+        },
+        {
+          "command": "git diff --check",
+          "result": "passed"
+        }
+      ],
+      "loopbackObservations": {
+        "path": "/pickups",
+        "baseUrl": "/explore",
+        "originalUrl": "/explore/pickups",
+        "clientTimeoutMs": 1000,
+        "pendingBeforeTimeout": true,
+        "safeReleaseAfterDisconnect": true,
+        "manualReleaseReturnsOriginalBody": true,
+        "nonPickupAndAlreadySavedPassThrough": true,
+        "serverConnectionsClosed": true,
+        "armedAndPendingCleared": true
+      },
+      "evidenceClass": "harness regression only; synthetic successful handler, real Express/HTTP; no database, service, gateway or JWT acceptance claim",
+      "hostedRun40057075433": {
+        "originalFilesVerified": 25,
+        "allOriginalHashesPreserved": true,
+        "newCiRun": false,
+        "latestTestedShaUnchanged": "2bb36125e65d5b431b8557b94152296e6b889ce7",
+        "latestConclusionUnchanged": "failure"
+      },
+      "newNativeDatabaseResults": [],
+      "nativeTimeoutAndRollbackForThisFix": "unexecuted",
+      "localDockerDbInstallBuildOrGeneration": false,
+      "pushMergeOrCiExecution": false,
+      "remainingGates": [
+        "parent review of implemented harness correction",
+        "reviewed E2 historical provisioning and native error classification",
+        "separately authorized hosted rerun; timeout/rollback assertions still require real DB receipts",
+        "E9 integrated app and actual sink/runtime acceptance",
+        "E8 credential prerequisite; E11 after accepted integrated E10 candidate"
+      ]
+    }
+  ]
 }
