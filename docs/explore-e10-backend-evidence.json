@@ -105,12 +105,12 @@
     "integratedApp": false
   },
   "remaining": [
-    "parent review of combined preparation before any push or hosted execution",
-    "failed raw historical replay remains open and unwaived",
-    "genuine historical applied-row preservation and production/deployment lineage safety remain unproved",
-    "hosted bootstrap plus native timeout/rollback/envelope/recovery/replay and telemetry acceptance",
-    "integrated app/E9 and actual sink/runtime operational acceptance",
-    "E8 credential prerequisite; E11 after accepted integrated E10 candidate"
+    "failed raw historical replay remains an open unwaived owner gate",
+    "genuine historical applied-row preservation and production/deployment-lineage safety remain unproved",
+    "parent acceptance of scoped hosted bootstrap/native evidence",
+    "E8/E9 fixes, integrated-app journeys and device/accessibility/location/pilot acceptance remain separate pending work",
+    "actual analytics provider/TLS/permissions, scheduler/backlog and sink/runtime operating acceptance",
+    "E11 only after accepted integrated E10 candidate"
   ],
   "continuationCheckpoints": [
     {
@@ -2090,10 +2090,3351 @@
         "integrated app and E11 acceptance; E8 credential prerequisite"
       ],
       "followupPublication": "report/evidence committed locally only; no unreviewed fix or report push, no merge or deployment"
+    },
+    {
+      "recordedAt": "2026-10-24T08:23:19.712448+00:00",
+      "candidateSha": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+      "testedSha": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+      "localStartingHead": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+      "initialWorktreeStatus": "clean",
+      "branch": "feature/explore-e10-backend",
+      "origin": "https://github.com/Jokerohit4/phool-gobhi-backend.git",
+      "remoteBeforePush": "2bb36125e65d5b431b8557b94152296e6b889ce7; verified ancestor of approved candidate",
+      "pushCommand": "git -c safe.directory=C:/Users/rohit/Phool-Gobhi/wt/backend-e10 push origin 7915189104fa8559c32ee487f7491b9e73c4ac56:refs/heads/feature/explore-e10-backend",
+      "publication": "feature branch fast-forward only, no force, no duplicate dispatch",
+      "remoteAfterRun": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+      "run": {
+        "id": 40077401208,
+        "run_attempt": 1,
+        "head_sha": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+        "head_branch": "feature/explore-e10-backend",
+        "path": ".github/workflows/explore-e10-postgres.yml",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40077401208",
+        "created_at": "2026-10-24T08:16:35Z",
+        "updated_at": "2026-10-24T08:17:42Z"
+      },
+      "job": {
+        "id": 120823631947,
+        "name": "rehearse",
+        "conclusion": "failure",
+        "started_at": "2026-10-24T08:16:37Z",
+        "completed_at": "2026-10-24T08:17:41Z",
+        "runner_name": "GitHub Actions 1000004059",
+        "runner_group_name": "GitHub Actions"
+      },
+      "jobStepOutcomes": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify historical input and record runner tools",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install locked dependencies in runner checkout",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Obtain disposable PostgreSQL image",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Execute real migration and HTTP DB rehearsal",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Collect redacted evidence even on failure",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload only redacted evidence",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "toolIdentities": {
+        "node": "v24.21.0",
+        "platform": "linux",
+        "authPrisma": "6.8.2",
+        "bookingPrisma": "6.19.3"
+      },
+      "additionalTools": {
+        "npm": "11.19.0",
+        "docker": "28.0.4 build b8034c0",
+        "generatedClients": "both generated on hosted runner by auth Prisma CLI 6.8.2"
+      },
+      "image": {
+        "tag": "postgres:16",
+        "id": "sha256:066167ff39c2a612402ce99b734ea1cff92a9d1f2ac52f697a5f0384f0d88d6b",
+        "digest": "sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97"
+      },
+      "artifact": {
+        "id": 12553767541,
+        "node_id": "MDg6QXJ0aWZhY3QxMjU1Mzc2NzU0MQ==",
+        "name": "explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1",
+        "size_in_bytes": 44205,
+        "url": "https://api.github.com/repos/Jokerohit4/phool-gobhi-backend/actions/artifacts/12553767541",
+        "archive_download_url": "https://api.github.com/repos/Jokerohit4/phool-gobhi-backend/actions/artifacts/12553767541/zip",
+        "expired": false,
+        "digest": "sha256:2dea8f50e15965406838ac642d80ed560b6bf28f33e3afedbfb0bed8051b4560",
+        "created_at": "2026-10-24T08:17:38Z",
+        "updated_at": "2026-10-24T08:17:38Z",
+        "expires_at": "2026-11-07T08:17:37Z",
+        "workflow_run": {
+          "id": 40077401208,
+          "repository_id": 1227104775,
+          "head_repository_id": 1227104775,
+          "head_branch": "feature/explore-e10-backend",
+          "head_sha": "7915189104fa8559c32ee487f7491b9e73c4ac56"
+        }
+      },
+      "downloadRoot": "tools/explore-e10/.runtime/hosted/40077401208",
+      "artifactDirectory": "tools/explore-e10/.runtime/hosted/40077401208/artifacts/explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1",
+      "originalArchive": {
+        "path": "tools/explore-e10/.runtime/hosted/40077401208/original-artifact.zip",
+        "sha256": "2dea8f50e15965406838ac642d80ed560b6bf28f33e3afedbfb0bed8051b4560",
+        "matchesGitHubDigest": true
+      },
+      "originalJobLog": {
+        "path": "tools/explore-e10/.runtime/hosted/40077401208/original-run.log",
+        "sha256": "7cbe8dfa8de58a495180565d4738527238f2930ada84ecf5e04fee57e6adfb25"
+      },
+      "sourceManifest": {
+        "recordedAt": "2026-10-24T08:17:37.617Z",
+        "sourceCommit": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+        "parentSchemaCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+        "node": "v24.21.0",
+        "platform": "linux",
+        "authPrisma": "6.8.2",
+        "bookingPrisma": "6.19.3",
+        "workflow": "E10 disposable PostgreSQL rehearsal",
+        "ref": "refs/heads/feature/explore-e10-backend",
+        "runId": "40077401208",
+        "runAttempt": "1",
+        "jobStatusBeforeCollection": "failure",
+        "rehearsalReceiptAvailable": true,
+        "command": "node tools/explore-e10/rehearse.mjs",
+        "sourceFiles": [
+          {
+            "path": ".github/workflows/explore-e10-postgres.yml",
+            "gitBlob": "da01600cac13fdeddcf556495bd9e09b262bb273",
+            "rawSha256": "2c2c7ef0629407bbc44396b6db2528222224f0a547134e6288a6fc773749e186"
+          },
+          {
+            "path": "tools/explore-e10/rehearse.mjs",
+            "gitBlob": "2d3bc3d406ddd60295e91240c1e61de5e27c549d",
+            "rawSha256": "03a7842554c808506d877c0fe6ca1797e19ad90f19fcf8ddda54302580692177"
+          },
+          {
+            "path": "tools/explore-e10/postgres.test.mjs",
+            "gitBlob": "b7bb5bfcaad9c8c401d205d18d7079bd78e4ad74",
+            "rawSha256": "bbd60f74e09434c7392654aed0b8759057c969ecd4064a3ed5306e354692003a"
+          },
+          {
+            "path": "tools/explore-e10/redact.mjs",
+            "gitBlob": "9fb33debc1acffa57682d1a243d789ffd74713ea",
+            "rawSha256": "da4a23ee5acdbb5907dab13ccec81af04d0a041ed8cde03f5564c0ce7b352e0a"
+          },
+          {
+            "path": "tools/explore-e10/ci-evidence.mjs",
+            "gitBlob": "06ca7c3e01610eb5b64e78dba5c410ffcfced4bf",
+            "rawSha256": "3418dab0d04ea237d24e9a0a557c56a5a34a10ebd625f927700210c4c53852bc"
+          },
+          {
+            "path": "tools/explore-e10/telemetry-postgres.mjs",
+            "gitBlob": "b5f7eeeb7eb1c531e23e92b5b749e3ff8aa959ae",
+            "rawSha256": "914cfd4a68c53a56187f79bfc2819f32e26768512e6c96ee908d578c14ada741"
+          },
+          {
+            "path": "tools/explore-e10/migration-inputs.mjs",
+            "gitBlob": "9fd24901aa9ee27e9c58726c22c27d195a5df389",
+            "rawSha256": "f00923baa757f78b6beb2340f3b3d397b31e299524d87749dd8c47c6b3389102"
+          },
+          {
+            "path": "tools/explore-e10/migration-inputs.test.mjs",
+            "gitBlob": "61b962ca8b0a919cf7abb734191d56e7f6209092",
+            "rawSha256": "a0c51d14d694ad1da2270a0ca32ba9871fdf98eb73b0cb25eda629fd4103af02"
+          },
+          {
+            "path": "tools/explore-e10/response-hold.mjs",
+            "gitBlob": "86b8b94a1a8ac22b075cb5729d9c74e5ac1179cc",
+            "rawSha256": "b1574a03b8a33f52a2c859480e4b436587dc89084d46f08bcd4d8f8ed4ffc9cd"
+          },
+          {
+            "path": "tools/explore-e10/response-hold.test.mjs",
+            "gitBlob": "ceb6800b91dd540379640a85f07206aed83732d1",
+            "rawSha256": "c3a483769ac1ea53f90fa9fa5e74db5f2ef425c83c43c7efe0c855ce18f81e1e"
+          },
+          {
+            "path": "tools/explore-e10/error-envelope.mjs",
+            "gitBlob": "20722808557f2f74b128b92aaf2265c5d279dda7",
+            "rawSha256": "1e86c8ff9cf34f7a74fba8fca3f3dec97d3bdbb430f4990bd48884b49bf2c0a1"
+          },
+          {
+            "path": "tools/explore-e10/error-envelope.test.mjs",
+            "gitBlob": "eeb3f5058df90f3325186b1c6c1d3bfb7df2f580",
+            "rawSha256": "689d53a2f62b7df39d67d91a97b7135476f8b2db76794fc9c67436e82c3802ee"
+          },
+          {
+            "path": "tools/explore-e10/bootstrap-inputs.mjs",
+            "gitBlob": "175c939dafc4caea669d81a93733fb2850d4c096",
+            "rawSha256": "01dd47b2c2bbb34a18afc9b5ab2bc48697c1021754865ca0a1455db55c1aa804"
+          },
+          {
+            "path": "tools/explore-e10/bootstrap-inputs.test.mjs",
+            "gitBlob": "a24f6e06557a82ca184a1339c09ea05e0a965edd",
+            "rawSha256": "c334b8a244401ffdae0a0b320de162d95e93617c1de378a78ed7b371bf3ae934"
+          },
+          {
+            "path": "tools/explore-e10/bootstrap.mjs",
+            "gitBlob": "5cc4fee191f416e64c8898495c9ab3bd6f0c6493",
+            "rawSha256": "72fafd3440c81664660caf9bf7c65ef55efcb7aa4941c169152bd012cf040401"
+          },
+          {
+            "path": "services/auth-service/exploration/routes.js",
+            "gitBlob": "1c1d9e1463b60b35a6d39097039540dff01e66c6",
+            "rawSha256": "e4baef3eccf5129c802863a83e9218bd27c8eae1e2d0dd248f402b9786f74fbc"
+          },
+          {
+            "path": "services/auth-service/exploration/contracts.js",
+            "gitBlob": "12a8fd91fe38b38d9e9a93b074680d990c097525",
+            "rawSha256": "330b37f80c928b43b422df69c4389ea34fe1faddc2f2057188a37582227b81ed"
+          },
+          {
+            "path": "services/auth-service/test/exploration.test.js",
+            "gitBlob": "1fc632fdbf787ba73972372911176964be891be4",
+            "rawSha256": "8c01e25894db645662d1f5491bd505088d4ac50a8a757111e0a66f7731d53b0f"
+          },
+          {
+            "path": "services/auth-service/exploration/service.js",
+            "gitBlob": "277edc4fe6dd08821b47afd088bbaa9b1244cd49",
+            "rawSha256": "43ac8a7fe517b01d1e24c506761baa6c6e51c74e0e51d71163016fbb9f0fdf35"
+          },
+          {
+            "path": "services/auth-service/exploration/telemetry.js",
+            "gitBlob": "bf3d0c90175ee76f9c37d6ba40f8380898d4d3cc",
+            "rawSha256": "9d493578c5eb3eeb9b1a8006b9441a0716a21f9a33268be3dcaa82a3fdc146db"
+          },
+          {
+            "path": "services/auth-service/utils/analytics.js",
+            "gitBlob": "10eb0dfc2c5826222a40d46b04eb4591a2400470",
+            "rawSha256": "4081d6cfc8b2a1ad481d7e3dd602157c5545756c78aec173ccdb798c9a44079c"
+          },
+          {
+            "path": "services/auth-service/services/authService.js",
+            "gitBlob": "b390174799c9ab2c9e1fd7807a9255e920e74926",
+            "rawSha256": "26bb3f2a3a1dcb786a1a1df821bda622d3e70c5bc52836a3b1f176cc9716d54e"
+          },
+          {
+            "path": "services/auth-service/services/exportService.js",
+            "gitBlob": "683c43dd3cf6b62342848efa1aff168fd6eaba6a",
+            "rawSha256": "c971d123012fd0f3a5ae2f998f5ab701638ec31226d73cbf76d06269de3c56be"
+          },
+          {
+            "path": "services/auth-service/prisma/schema.prisma",
+            "gitBlob": "65168dfb763d697d3e3e5629302db1d8842d5f16",
+            "rawSha256": "98b13d57327730cdb9afaad8cdfb69234a7220e85640c11b06ca2de3d24495b2"
+          },
+          {
+            "path": "tools/explore-e2/provisioning-inputs.mjs",
+            "gitBlob": "ef99fa6ff115312b14e295c1e52249243760ab61",
+            "rawSha256": "60ad5c4c3d4413d84100148766d5b62009cfbfb4dccb451ed652c45556fd4d07"
+          },
+          {
+            "path": "tools/explore-e2/provisioning-inputs.test.mjs",
+            "gitBlob": "151043a3f59d4057da85001a1aa4c16a99ca0dfd",
+            "rawSha256": "289c742a581c8f34ca8352f14907da0d2eff237772c71aa0be908a8d681dfebc"
+          },
+          {
+            "path": "package-lock.json",
+            "gitBlob": "a9a353f33b3f446e66bcb232128d6138a53a20ce",
+            "rawSha256": "58549fd69099ae2b4eb1f36db3c5de0b1dfc424a544e64eb11b3f2431de5203b"
+          },
+          {
+            "path": "services/auth-service/package-lock.json",
+            "gitBlob": "067d608dc916766dda37c8695807b386cbd88991",
+            "rawSha256": "1f67fa958be90d63ef6f62c2a39f22835b939d06123b5ed94570f800d5c48699"
+          },
+          {
+            "path": "services/booking-service/package-lock.json",
+            "gitBlob": "a50f2965f75a816a4d5d5fe2e1223fbca8793066",
+            "rawSha256": "82dabd6278d4f42ca811814617b6a0c1f7a4d9574a2ac7b3cdf5bdd3c23603fc"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20250510154921_auth_setup/migration.sql",
+            "gitBlob": "fde7035afa41167d2e4c23251a21aa47d18c1fc9",
+            "rawSha256": "9485cac8ba26c7146bd41ce1558dc73b792f13e587fb645925185606238bdb4d"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20250527191712_add_user_name/migration.sql",
+            "gitBlob": "80f06a7bc761dd14c9d2540f184bd8681a0326b8",
+            "rawSha256": "631f36a5110b04a9c3170f9922a162a415b3605c518cb44982596dec86fde3af"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260524053640_init/migration.sql",
+            "gitBlob": "145b64d249c70e85f51bdd1486df6baa7eac5e5e",
+            "rawSha256": "c5450b6b0c23b2c1e90993f6619a50fa097f990a628196c92c695d438863cca6"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260704000000_add_user_onboarding_fields/migration.sql",
+            "gitBlob": "96d9ae5b83adf517de31259aa5ab5e2b0280d6d0",
+            "rawSha256": "6657e20666a3233751646499f0e98045d18996bdd3850c9bca00d27c33ab9c0d"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260717000000_add_saved_address_index_and_otp_table/migration.sql",
+            "gitBlob": "64b128ad320e8ec7e51127587f815e5092a14139",
+            "rawSha256": "8f51bbc1e9eeba44c21f4d896f5e0ed87e82ed9a84724389598b4bb0b429c464"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260720000000_add_contact_message/migration.sql",
+            "gitBlob": "f1f0d8e8025573612db54c1d6c003aca9e378886",
+            "rawSha256": "f0ccff01ba344a5cf42f1d101ba69bae83a750b3a6e93027df926e16e7d07126"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260721000000_add_job_opening/migration.sql",
+            "gitBlob": "d2ce471037a2309e6fc4e6d3743ace6d18987514",
+            "rawSha256": "1170104cc0499b9f7b169f4d1c80e1d79e9b20bb1f38ce40efeadbe7c43558ed"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260721010000_add_job_application/migration.sql",
+            "gitBlob": "63be8e9d8afa6e8225516cd57d4aba6d776febc2",
+            "rawSha256": "42354bb6df75805581c5376cefcee66449f4353ea1336d6cc6532dc99b33bd2e"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260721020000_add_job_application_resume_url/migration.sql",
+            "gitBlob": "2e65abfdc91fef83fc505c97bf7c304944ff41ca",
+            "rawSha256": "f6e428ba42b7b555eaf53df866f51308128ca2184117116f787ffe3ce7b9ad34"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260721030000_rename_resume_url_to_path/migration.sql",
+            "gitBlob": "c1f522df75dbc651e68c49d8b83caecd6af91ead",
+            "rawSha256": "e41af002366a7ad2140b000c230228311e16890aff473c72d5867ec09daffde5"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260721040000_add_job_application_contact_fields/migration.sql",
+            "gitBlob": "95cc5374708bdb69aa52808c23b57e516a9cc683",
+            "rawSha256": "5454870cd18bcc0bbbdd8b98f2ab7aaa83aa6ac46e6de6aee95404cb9eaae1b8"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260725000000_make_user_name_nullable/migration.sql",
+            "gitBlob": "609fa38d5f43deb659941bdc15b1ae5d9a877267",
+            "rawSha256": "9e84b4fc3224e998b9dad84c05b1baa46019260b377fc91ef24968eb25146243"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260729120000_add_app_version_setting/migration.sql",
+            "gitBlob": "2fab309141547dc861a9fc5c81714246990a4bae",
+            "rawSha256": "6ed1b2f755829d06238c1a1846074f8dfbfe4834fcb97b9e0233d9e3a35e356b"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260730000000_add_refresh_token_rotation/migration.sql",
+            "gitBlob": "fcc1f94afc6745112ecf2c54c8533b44e7d465d9",
+            "rawSha256": "b0c77a24e2d49950ab25a443f323bb855d2be44a0c8641d8233e62a823524932"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260802000000_add_launch_gate_setting/migration.sql",
+            "gitBlob": "8068124e8af09ba00d1a4ebb6540656559c5cd53",
+            "rawSha256": "4fb0a466cb84548c0c6e476974a9e34b190fc3e7724cfa3533ae8e622b5b65ab"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260802020000_add_platform_review/migration.sql",
+            "gitBlob": "303e871c73717d32b6fe3f35320b2259eef54ec0",
+            "rawSha256": "f432c38f7c9f968de6474d562d6397c0252b23547b75f4d8453119a24afad762"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260803020000_add_referral_program/migration.sql",
+            "gitBlob": "6e0b559db4b6b5de5e486690fab52144d4ce3b24",
+            "rawSha256": "b57c608e1f4ab52bdc0a3ff8f61b38b50690e8f383f37d1cffd80d2a5b2b852b"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260803030000_add_otp_provider_setting/migration.sql",
+            "gitBlob": "852d0ef5d71bfd4ad4222756e3578af1a64e8843",
+            "rawSha256": "948a3e2e568ba9c97e889f4ef2857dcfb1259e61533a00f1f79b97afdf18dc64"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260804000000_otp_provider_default_firebase/migration.sql",
+            "gitBlob": "7f0846a7d8f0c618deec6bbddbcf875c41646536",
+            "rawSha256": "ba150c6e4a74c456e12365109fb8a058ab0ee4b6d83e889399459bac09624013"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260805000000_add_otp_attempt_counter/migration.sql",
+            "gitBlob": "463437be2dd25db64e99b72d0faefe7ab1614b7e",
+            "rawSha256": "20cab4f9140743de2edd882f246224de6b6abe60eae4c5da32d7019407cfaf6f"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260811000000_add_profile_completion_bonus_setting/migration.sql",
+            "gitBlob": "30759988f5bb8b30514184f2ee0685673ad3f2d6",
+            "rawSha256": "6e2f4bd3ca160f06639531e468575ae0c02ff3effb5bb2f7710e37138cbb94c1"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260815000000_add_experience_level_and_frequency/migration.sql",
+            "gitBlob": "e0488534d036b2925bce9eefacdc8214ea826a02",
+            "rawSha256": "ce1430b2820dcff2c2c64e96d8563993f200982071dc45a63198aa548e9df6e0"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260820010000_add_user_linked_gym_id/migration.sql",
+            "gitBlob": "90859009ccdefdf34bfe1d1136474c18f6729251",
+            "rawSha256": "b42fbf7c39a028d797bbb06e98d50ff4f8c70f7b0b762410471847d9251f4c77"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260820020000_add_user_reengagement_nudged_at/migration.sql",
+            "gitBlob": "f53510676037d0bd57d7a190dae2ae66621bc210",
+            "rawSha256": "cf26dee6cc5a98fc87a54c632e0df8c67979262f1de8efde0df8bddd42f47203"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260820030000_add_partner_bank_account/migration.sql",
+            "gitBlob": "7c627e473086cd7a12424a0ba5023498b1e9543f",
+            "rawSha256": "5f8338a60c615654c88963e4027f0e2d340c49f3759bba233a6597406d19e70c"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260821020000_add_trainer_role/migration.sql",
+            "gitBlob": "1232010e880c6849472de3041e65166071b398d7",
+            "rawSha256": "24d6d0d48c9f4c575006fd8761c699a769152c2b4adeff1d764288393ffe438f"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260904000000_add_user_leaderboard_opt_in/migration.sql",
+            "gitBlob": "d2cbc970a6d91222810adcf9830fd2bb6d1f5e9c",
+            "rawSha256": "06c74956a19e80a268838062abbbd33bc57985dce5f022fac68e5f8658c5ad7e"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260906000000_add_collectible_find/migration.sql",
+            "gitBlob": "f8210721f0ae5582e6505a4266b133ca2e703b22",
+            "rawSha256": "c695873ab019102787e88047de790681e68dc9f265d7583625a4f83ab161abd5"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260917000000_add_linked_gym_month_index/migration.sql",
+            "gitBlob": "697e9134a48bb8312c1037b573d91824c8632c80",
+            "rawSha256": "574317f0f09dc2a12adf2f84cb3a82409744b4e3577e1290cbd2a49aeaafdeb9"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260918000000_add_onboarding_branch_fields/migration.sql",
+            "gitBlob": "f35ef8cb71afc567c4c8b5044c562b93bde3278a",
+            "rawSha256": "3c31417a834cec98d931e27aebd516ab1ce146279689e202e3dc646879a60d15"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260918010000_add_app_mode_history/migration.sql",
+            "gitBlob": "96ff1df048b4f6f9fa14c380a2b9ddb082cc2520",
+            "rawSha256": "10845d370cee75078f7392144938af46eaf33a8c60673c63b194f01a7c718bf3"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20260923000000_leaderboard_opt_in_on_by_default/migration.sql",
+            "gitBlob": "1a6a6b47a98d2434d9628f6864105d51ba73bbfd",
+            "rawSha256": "a9a9a02f8f2edd0a3aff17e7fab335fd6f423777776af3e5d1b20067af9c8803"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261004000000_add_app_config_history/migration.sql",
+            "gitBlob": "b2b5bb57cb86c5d7cd95ee9587f717b00a5a3d01",
+            "rawSha256": "8959565fb0387fa469f6d1d9c4648a98ac31088afef4e703f9dbfffcdbbbf41a"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261011000000_add_recommended_equipment/migration.sql",
+            "gitBlob": "3148e68d06f0dba532ff5de93487fde63f2f2fbb",
+            "rawSha256": "57b2cf55e9d4cbf09a3a9af2a82a39757b5d9a3cda3f6993d38c858424addc4d"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261015120000_gender_change_limit/migration.sql",
+            "gitBlob": "9ae03257474aca83ef59f24ff48f4e30f3b623d5",
+            "rawSha256": "5bfae7eb47fa2c713ea68a3f0134834ccded432044574af854e9b6fb82cab50a"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261016000000_coach_journey_auth/migration.sql",
+            "gitBlob": "0e611f7aa02bb535da044c75566308ca8a1ce0f2",
+            "rawSha256": "1d371e37be1c82c87cc757066323cb706b4d335121779fba41922957a8705a36"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261023000000_exploration_core/migration.sql",
+            "gitBlob": "fbade3e6be13668c628c834471f0e1308bf6e4f3",
+            "rawSha256": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261023000100_drop_unreleased_collectible_find/migration.sql",
+            "gitBlob": "7692c99c7ff89751fe58a6051978e1093bd34ef0",
+            "rawSha256": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b"
+          },
+          {
+            "path": "services/auth-service/prisma/migrations/20261023170000_explore_receipt_telemetry/migration.sql",
+            "gitBlob": "cf6f61bba594a76de9fefc254a2f2d5f74bec3f6",
+            "rawSha256": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0"
+          }
+        ],
+        "logs": [
+          {
+            "file": "bootstrap-input-manifest.json",
+            "redactedSha256": "729d0e68ff39f2af237192023d9353feb8f2244a2f0e3def996c702597378b55"
+          },
+          {
+            "file": "bootstrap-provenance.json",
+            "redactedSha256": "b0c4363d5ff6d3f5ea2c5a167bf197ec00efd256ec4bc0de7d7531c7397b7665"
+          },
+          {
+            "file": "bootstrap-parent.rendered.sql",
+            "redactedSha256": "7e62e9bea8af1b585fc123fd556f36163f125d0414861201f07c9be9f8d17828"
+          },
+          {
+            "file": "bootstrap-baseline.migration.sql",
+            "redactedSha256": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030"
+          },
+          {
+            "file": "bootstrap-render.local.log",
+            "redactedSha256": "ed02c25fe0dde0fcdbefe0779c1c3863e864d5d1a073895915009b0007d2388f"
+          },
+          {
+            "file": "bootstrap-e10_bootstrap_empty.local.json",
+            "redactedSha256": "bdc49687f6ab9a8d7ac5068df9a9eac6864807ab700f6e69a76b8ce67eb3d4e6"
+          },
+          {
+            "file": "bootstrap-e10_bootstrap_empty-baseline.local.log",
+            "redactedSha256": "ff590917e984cdc50bddb86914083706553743b8fcc7ec5d2ff7d71a48703849"
+          },
+          {
+            "file": "bootstrap-e10_bootstrap_empty-forward.local.log",
+            "redactedSha256": "ad0cc0c4a67a080468d6ff3490140e3e1101d5638061e999c956b570799c85c3"
+          },
+          {
+            "file": "postgres-e10_bootstrap_empty.local.log",
+            "redactedSha256": "c58958fd48cf64e3fdc203af953b23c18aa443140452757c96184bd1229e15e6"
+          },
+          {
+            "file": "telemetry-e10_bootstrap_empty.local.json",
+            "redactedSha256": "50d9553927096aee619bddebc8aa1be781f429eeb5637331c3fc5dcdc577feb2"
+          },
+          {
+            "file": "bootstrap-e10_bootstrap_populated.local.json",
+            "redactedSha256": "2daf7fdb7a88ac7c3348fbcca1a1246d7acae2cb4da8da5af681267e2e1c128a"
+          },
+          {
+            "file": "bootstrap-e10_bootstrap_populated-baseline.local.log",
+            "redactedSha256": "a71e5dec866233d1f54acb23e3e9332696cf70ed38b890d6f5f81363d7ea085c"
+          },
+          {
+            "file": "bootstrap-e10_bootstrap_populated-forward.local.log",
+            "redactedSha256": "c64c4194c569b04018533fc84a3b4815ffd093365cb28145b07c523930dfdb5c"
+          },
+          {
+            "file": "postgres-e10_bootstrap_populated.local.log",
+            "redactedSha256": "352b8228f5c9bfb33884243a80ed94ce6603cc0e42cd1d0b95c589815d3211ee"
+          },
+          {
+            "file": "telemetry-e10_bootstrap_populated.local.json",
+            "redactedSha256": "2dc7a443ac92fed32822c23189f1062945887640395d13f88ecc97e8585ed233"
+          },
+          {
+            "file": "rehearsal-result.json",
+            "redactedSha256": "826a8899e3ff72cf13bb81e049e4edd05d9bc3130f8913c3ae2d98e663886376"
+          },
+          {
+            "file": "fresh-migrate.local.log",
+            "redactedSha256": "2f45a60e3d903e4ee10e015d46cf1c2404d5891df387160269142f7f5989296a"
+          },
+          {
+            "file": "old-chain.local.log",
+            "redactedSha256": "453315531d52f77c9e3db03bdffa8edbf812ded4ccd5235c715fed5e1752e111"
+          },
+          {
+            "file": "telemetry-e10_runtime.local.json",
+            "redactedSha256": "587b7d15b701b19d271037537f6180b19d66530a6c7644b41f62f1b3cd63b190"
+          },
+          {
+            "file": "telemetry-e10_upgrade.local.json",
+            "redactedSha256": "fb580c0ed2cc2df3b5436541246adb778d06aaccf9599ce365546c6fb6ef4e06"
+          },
+          {
+            "file": "telemetry-e10_upgrade_empty.local.json",
+            "redactedSha256": "1cb45966afd83c573bc6d3433423e52b58ca2d262c846aa115fa892b1534def1"
+          },
+          {
+            "file": "postgres-e10_runtime.local.log",
+            "redactedSha256": "0cbbdb6d04947e030a44ef11591238ae9d35d5d138ce5d0479834783798afc00"
+          },
+          {
+            "file": "postgres-e10_upgrade.local.log",
+            "redactedSha256": "563e4bcadf91dbd76d5fc62ada93d6551b257d8e1b69d694226ce49268848d4b"
+          },
+          {
+            "file": "postgres-e10_upgrade_empty.local.log",
+            "redactedSha256": "d19b5a75c9ba823608fd23ad541ffbcd983b8b864f1a28ceb5112e583b169683"
+          },
+          {
+            "file": "ci-preflight.local.log",
+            "redactedSha256": "c429625372bfbe396fc14222e1aea5051dce6eac73bcff8e0d5137e92db4cb44"
+          },
+          {
+            "file": "ci-install.local.log",
+            "redactedSha256": "0fac028fd06c20631898fd3d19e462fa0e165319608f61fdf66ab33c53134903"
+          },
+          {
+            "file": "ci-image.local.log",
+            "redactedSha256": "72435e69eb6c005b9da0bfb6a020c9a77d658a14b58b829eda45a3af41397b42"
+          },
+          {
+            "file": "ci-rehearsal.local.log",
+            "redactedSha256": "826a8899e3ff72cf13bb81e049e4edd05d9bc3130f8913c3ae2d98e663886376"
+          }
+        ]
+      },
+      "rehearsalReceipt": {
+        "startedAt": "2026-10-24T08:17:05.165Z",
+        "container": "explore-e10-c982643832cb",
+        "image": "postgres:16",
+        "checks": [
+          {
+            "check": "fresh historical migration chain",
+            "result": "failed",
+            "log": ".runtime/fresh-migrate.local.log"
+          },
+          {
+            "check": "old historical chain before E2",
+            "result": "failed",
+            "log": ".runtime/old-chain.local.log"
+          },
+          {
+            "check": "populated old-table forward upgrade/history retention",
+            "result": "not-executed",
+            "reason": "historical baseline deployment failed"
+          },
+          {
+            "check": "e10_upgrade: old-table snapshot upgrade; baseline migration row unchanged",
+            "result": "passed",
+            "baselineSqlHash": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+            "forwardMigrations": [
+              "20261023000000_exploration_core",
+              "20261023000100_drop_unreleased_collectible_find",
+              "20261023170000_explore_receipt_telemetry"
+            ],
+            "before": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.371Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.371Z",
+                "applied_steps_count": 1
+              }
+            ],
+            "after": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.371Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.371Z",
+                "applied_steps_count": 1
+              }
+            ]
+          },
+          {
+            "check": "e10_upgrade_empty: old-table snapshot upgrade; baseline migration row unchanged",
+            "result": "passed",
+            "baselineSqlHash": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+            "forwardMigrations": [
+              "20261023000000_exploration_core",
+              "20261023000100_drop_unreleased_collectible_find",
+              "20261023170000_explore_receipt_telemetry"
+            ],
+            "before": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.474Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.474Z",
+                "applied_steps_count": 1
+              }
+            ],
+            "after": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.474Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.474Z",
+                "applied_steps_count": 1
+              }
+            ]
+          },
+          {
+            "check": "e10_bootstrap_empty: additional disposable bootstrap/baseline",
+            "result": "passed",
+            "evidenceClass": "executed snapshot baseline lineage, not historical replay",
+            "log": ".runtime/bootstrap-e10_bootstrap_empty.local.json"
+          },
+          {
+            "check": "e10_bootstrap_populated: additional disposable bootstrap/baseline",
+            "result": "passed",
+            "evidenceClass": "executed snapshot baseline lineage, not historical replay",
+            "log": ".runtime/bootstrap-e10_bootstrap_populated.local.json"
+          },
+          {
+            "check": "e10_runtime: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "existing runtime/snapshot setup",
+            "log": ".runtime/postgres-e10_runtime.local.log"
+          },
+          {
+            "check": "e10_upgrade: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "existing runtime/snapshot setup",
+            "log": ".runtime/postgres-e10_upgrade.local.log"
+          },
+          {
+            "check": "e10_upgrade_empty: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "existing runtime/snapshot setup",
+            "log": ".runtime/postgres-e10_upgrade_empty.local.log"
+          },
+          {
+            "check": "e10_bootstrap_empty: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "additional explicit bootstrap/baseline; not historical replay",
+            "log": ".runtime/postgres-e10_bootstrap_empty.local.log"
+          },
+          {
+            "check": "e10_bootstrap_populated: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "additional explicit bootstrap/baseline; not historical replay",
+            "log": ".runtime/postgres-e10_bootstrap_populated.local.log"
+          }
+        ],
+        "dockerServerVersion": "28.0.4",
+        "imageId": "sha256:066167ff39c2a612402ce99b734ea1cff92a9d1f2ac52f697a5f0384f0d88d6b",
+        "baseline": {
+          "parentCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+          "files": [
+            {
+              "path": "20250510154921_auth_setup/migration.sql",
+              "sha256": "9485cac8ba26c7146bd41ce1558dc73b792f13e587fb645925185606238bdb4d"
+            },
+            {
+              "path": "20250527191712_add_user_name/migration.sql",
+              "sha256": "631f36a5110b04a9c3170f9922a162a415b3605c518cb44982596dec86fde3af"
+            },
+            {
+              "path": "20260524053640_init/migration.sql",
+              "sha256": "c5450b6b0c23b2c1e90993f6619a50fa097f990a628196c92c695d438863cca6"
+            },
+            {
+              "path": "20260704000000_add_user_onboarding_fields/migration.sql",
+              "sha256": "6657e20666a3233751646499f0e98045d18996bdd3850c9bca00d27c33ab9c0d"
+            },
+            {
+              "path": "20260717000000_add_saved_address_index_and_otp_table/migration.sql",
+              "sha256": "8f51bbc1e9eeba44c21f4d896f5e0ed87e82ed9a84724389598b4bb0b429c464"
+            },
+            {
+              "path": "20260720000000_add_contact_message/migration.sql",
+              "sha256": "f0ccff01ba344a5cf42f1d101ba69bae83a750b3a6e93027df926e16e7d07126"
+            },
+            {
+              "path": "20260721000000_add_job_opening/migration.sql",
+              "sha256": "1170104cc0499b9f7b169f4d1c80e1d79e9b20bb1f38ce40efeadbe7c43558ed"
+            },
+            {
+              "path": "20260721010000_add_job_application/migration.sql",
+              "sha256": "42354bb6df75805581c5376cefcee66449f4353ea1336d6cc6532dc99b33bd2e"
+            },
+            {
+              "path": "20260721020000_add_job_application_resume_url/migration.sql",
+              "sha256": "f6e428ba42b7b555eaf53df866f51308128ca2184117116f787ffe3ce7b9ad34"
+            },
+            {
+              "path": "20260721030000_rename_resume_url_to_path/migration.sql",
+              "sha256": "e41af002366a7ad2140b000c230228311e16890aff473c72d5867ec09daffde5"
+            },
+            {
+              "path": "20260721040000_add_job_application_contact_fields/migration.sql",
+              "sha256": "5454870cd18bcc0bbbdd8b98f2ab7aaa83aa6ac46e6de6aee95404cb9eaae1b8"
+            },
+            {
+              "path": "20260725000000_make_user_name_nullable/migration.sql",
+              "sha256": "9e84b4fc3224e998b9dad84c05b1baa46019260b377fc91ef24968eb25146243"
+            },
+            {
+              "path": "20260729120000_add_app_version_setting/migration.sql",
+              "sha256": "6ed1b2f755829d06238c1a1846074f8dfbfe4834fcb97b9e0233d9e3a35e356b"
+            },
+            {
+              "path": "20260730000000_add_refresh_token_rotation/migration.sql",
+              "sha256": "b0c77a24e2d49950ab25a443f323bb855d2be44a0c8641d8233e62a823524932"
+            },
+            {
+              "path": "20260802000000_add_launch_gate_setting/migration.sql",
+              "sha256": "4fb0a466cb84548c0c6e476974a9e34b190fc3e7724cfa3533ae8e622b5b65ab"
+            },
+            {
+              "path": "20260802020000_add_platform_review/migration.sql",
+              "sha256": "f432c38f7c9f968de6474d562d6397c0252b23547b75f4d8453119a24afad762"
+            },
+            {
+              "path": "20260803020000_add_referral_program/migration.sql",
+              "sha256": "b57c608e1f4ab52bdc0a3ff8f61b38b50690e8f383f37d1cffd80d2a5b2b852b"
+            },
+            {
+              "path": "20260803030000_add_otp_provider_setting/migration.sql",
+              "sha256": "948a3e2e568ba9c97e889f4ef2857dcfb1259e61533a00f1f79b97afdf18dc64"
+            },
+            {
+              "path": "20260804000000_otp_provider_default_firebase/migration.sql",
+              "sha256": "ba150c6e4a74c456e12365109fb8a058ab0ee4b6d83e889399459bac09624013"
+            },
+            {
+              "path": "20260805000000_add_otp_attempt_counter/migration.sql",
+              "sha256": "20cab4f9140743de2edd882f246224de6b6abe60eae4c5da32d7019407cfaf6f"
+            },
+            {
+              "path": "20260811000000_add_profile_completion_bonus_setting/migration.sql",
+              "sha256": "6e2f4bd3ca160f06639531e468575ae0c02ff3effb5bb2f7710e37138cbb94c1"
+            },
+            {
+              "path": "20260815000000_add_experience_level_and_frequency/migration.sql",
+              "sha256": "ce1430b2820dcff2c2c64e96d8563993f200982071dc45a63198aa548e9df6e0"
+            },
+            {
+              "path": "20260820010000_add_user_linked_gym_id/migration.sql",
+              "sha256": "b42fbf7c39a028d797bbb06e98d50ff4f8c70f7b0b762410471847d9251f4c77"
+            },
+            {
+              "path": "20260820020000_add_user_reengagement_nudged_at/migration.sql",
+              "sha256": "cf26dee6cc5a98fc87a54c632e0df8c67979262f1de8efde0df8bddd42f47203"
+            },
+            {
+              "path": "20260820030000_add_partner_bank_account/migration.sql",
+              "sha256": "5f8338a60c615654c88963e4027f0e2d340c49f3759bba233a6597406d19e70c"
+            },
+            {
+              "path": "20260821020000_add_trainer_role/migration.sql",
+              "sha256": "24d6d0d48c9f4c575006fd8761c699a769152c2b4adeff1d764288393ffe438f"
+            },
+            {
+              "path": "20260904000000_add_user_leaderboard_opt_in/migration.sql",
+              "sha256": "06c74956a19e80a268838062abbbd33bc57985dce5f022fac68e5f8658c5ad7e"
+            },
+            {
+              "path": "20260906000000_add_collectible_find/migration.sql",
+              "sha256": "c695873ab019102787e88047de790681e68dc9f265d7583625a4f83ab161abd5"
+            },
+            {
+              "path": "20260917000000_add_linked_gym_month_index/migration.sql",
+              "sha256": "574317f0f09dc2a12adf2f84cb3a82409744b4e3577e1290cbd2a49aeaafdeb9"
+            },
+            {
+              "path": "20260918000000_add_onboarding_branch_fields/migration.sql",
+              "sha256": "3c31417a834cec98d931e27aebd516ab1ce146279689e202e3dc646879a60d15"
+            },
+            {
+              "path": "20260918010000_add_app_mode_history/migration.sql",
+              "sha256": "10845d370cee75078f7392144938af46eaf33a8c60673c63b194f01a7c718bf3"
+            },
+            {
+              "path": "20260923000000_leaderboard_opt_in_on_by_default/migration.sql",
+              "sha256": "a9a9a02f8f2edd0a3aff17e7fab335fd6f423777776af3e5d1b20067af9c8803"
+            },
+            {
+              "path": "20261004000000_add_app_config_history/migration.sql",
+              "sha256": "8959565fb0387fa469f6d1d9c4648a98ac31088afef4e703f9dbfffcdbbbf41a"
+            },
+            {
+              "path": "20261011000000_add_recommended_equipment/migration.sql",
+              "sha256": "57b2cf55e9d4cbf09a3a9af2a82a39757b5d9a3cda3f6993d38c858424addc4d"
+            },
+            {
+              "path": "20261015120000_gender_change_limit/migration.sql",
+              "sha256": "5bfae7eb47fa2c713ea68a3f0134834ccded432044574af854e9b6fb82cab50a"
+            },
+            {
+              "path": "20261016000000_coach_journey_auth/migration.sql",
+              "sha256": "1d371e37be1c82c87cc757066323cb706b4d335121779fba41922957a8705a36"
+            },
+            {
+              "path": "migration_lock.toml",
+              "sha256": "99836963713b4f5b269ad49af0ed3d7b0b2e336115c2f92dc9ac683d139d0900"
+            }
+          ]
+        },
+        "forwardMigrations": [
+          "20261023000000_exploration_core",
+          "20261023000100_drop_unreleased_collectible_find",
+          "20261023170000_explore_receipt_telemetry"
+        ],
+        "result": "blocked-or-failed",
+        "error": "Rehearsal has failing checks; inspect local logs",
+        "cleanup": "owned container and volumes removed",
+        "finishedAt": "2026-10-24T08:17:37.545Z"
+      },
+      "bootstrapProvenance": {
+        "kind": "additional-disposable-bootstrap-baseline",
+        "parentCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+        "forwardInputCommit": "5c18daf262a5d2941f5b4964d279d47ec9635e33",
+        "rawHistoricalGate": "independent; never waived or reclassified by this lane",
+        "genuineHistoricalRowsPreserved": false,
+        "productionLineageSafetyEstablished": false,
+        "node": "v24.21.0",
+        "bootstrapName": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+        "forwardNames": [
+          "20261023000000_exploration_core",
+          "20261023000100_drop_unreleased_collectible_find",
+          "20261023170000_explore_receipt_telemetry"
+        ],
+        "inputManifestSha256": "729d0e68ff39f2af237192023d9353feb8f2244a2f0e3def996c702597378b55",
+        "prismaVersion": "6.8.2",
+        "prismaCliSha256": "a384b7aeb9ef67f1848148515c0a90afbca5c243d0bbd1e6c13624e831b2f296",
+        "authLockSha256": "1f67fa958be90d63ef6f62c2a39f22835b939d06123b5ed94570f800d5c48699",
+        "prismaPackageJsonSha256": "fdae5e472dd65fb4c0a7b7c547415759532d855c9802a8c32069840b2bd25148",
+        "parentSchemaSha256": "c9b520c9a62d2bd3458eb1c82557875b7f265070daffa487a315da8d527a71d9",
+        "renderCommand": [
+          "/opt/hostedtoolcache/node/24.21.0/x64/bin/node",
+          "/home/runner/work/phool-gobhi-backend/phool-gobhi-backend/services/auth-service/node_modules/prisma/build/index.js",
+          "migrate",
+          "diff",
+          "--from-empty",
+          "--to-schema-datamodel",
+          "/home/runner/work/phool-gobhi-backend/phool-gobhi-backend/tools/explore-e10/.runtime/bootstrap-review-explore-e10-c982643832cb/parent.prisma",
+          "--script"
+        ],
+        "deployCommandTemplate": [
+          "/opt/hostedtoolcache/node/24.21.0/x64/bin/node",
+          "/home/runner/work/phool-gobhi-backend/phool-gobhi-backend/services/auth-service/node_modules/prisma/build/index.js",
+          "migrate",
+          "deploy",
+          "--schema",
+          "<recorded per-lane stage>/schema.prisma"
+        ],
+        "renderedSqlSha256": "7e62e9bea8af1b585fc123fd556f36163f125d0414861201f07c9be9f8d17828",
+        "executedBaselineSqlSha256": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+        "forwardSql": [
+          {
+            "name": "20261023000000_exploration_core",
+            "sha256": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028"
+          },
+          {
+            "name": "20261023000100_drop_unreleased_collectible_find",
+            "sha256": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b"
+          },
+          {
+            "name": "20261023170000_explore_receipt_telemetry",
+            "sha256": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0"
+          }
+        ],
+        "result": "inputs-and-render-prepared"
+      },
+      "bootstrapInputManifest": {
+        "kind": "review-inputs-only",
+        "parentCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+        "candidateCommit": "5c18daf262a5d2941f5b4964d279d47ec9635e33",
+        "historicalReplay": "failed in hosted run 40057075433; not repaired by this package",
+        "proposedFreshStrategy": "explicit parent-schema bootstrap plus distinct schema baseline, then three forward migrations; requires parent acceptance change",
+        "existingUpgrade": "preserve all applied rows; inspect schema/history before applying only pending forward migrations; no automatic resolve",
+        "historicalMigrationCount": 36,
+        "forwardNames": [
+          "20261023000000_exploration_core",
+          "20261023000100_drop_unreleased_collectible_find",
+          "20261023170000_explore_receipt_telemetry"
+        ],
+        "files": [
+          {
+            "path": "parent.prisma",
+            "sha256": "c9b520c9a62d2bd3458eb1c82557875b7f265070daffa487a315da8d527a71d9"
+          },
+          {
+            "path": "historical/20250510154921_auth_setup/migration.sql",
+            "sha256": "9485cac8ba26c7146bd41ce1558dc73b792f13e587fb645925185606238bdb4d"
+          },
+          {
+            "path": "historical/20250527191712_add_user_name/migration.sql",
+            "sha256": "631f36a5110b04a9c3170f9922a162a415b3605c518cb44982596dec86fde3af"
+          },
+          {
+            "path": "historical/20260524053640_init/migration.sql",
+            "sha256": "c5450b6b0c23b2c1e90993f6619a50fa097f990a628196c92c695d438863cca6"
+          },
+          {
+            "path": "historical/20260704000000_add_user_onboarding_fields/migration.sql",
+            "sha256": "6657e20666a3233751646499f0e98045d18996bdd3850c9bca00d27c33ab9c0d"
+          },
+          {
+            "path": "historical/20260717000000_add_saved_address_index_and_otp_table/migration.sql",
+            "sha256": "8f51bbc1e9eeba44c21f4d896f5e0ed87e82ed9a84724389598b4bb0b429c464"
+          },
+          {
+            "path": "historical/20260720000000_add_contact_message/migration.sql",
+            "sha256": "f0ccff01ba344a5cf42f1d101ba69bae83a750b3a6e93027df926e16e7d07126"
+          },
+          {
+            "path": "historical/20260721000000_add_job_opening/migration.sql",
+            "sha256": "1170104cc0499b9f7b169f4d1c80e1d79e9b20bb1f38ce40efeadbe7c43558ed"
+          },
+          {
+            "path": "historical/20260721010000_add_job_application/migration.sql",
+            "sha256": "42354bb6df75805581c5376cefcee66449f4353ea1336d6cc6532dc99b33bd2e"
+          },
+          {
+            "path": "historical/20260721020000_add_job_application_resume_url/migration.sql",
+            "sha256": "f6e428ba42b7b555eaf53df866f51308128ca2184117116f787ffe3ce7b9ad34"
+          },
+          {
+            "path": "historical/20260721030000_rename_resume_url_to_path/migration.sql",
+            "sha256": "e41af002366a7ad2140b000c230228311e16890aff473c72d5867ec09daffde5"
+          },
+          {
+            "path": "historical/20260721040000_add_job_application_contact_fields/migration.sql",
+            "sha256": "5454870cd18bcc0bbbdd8b98f2ab7aaa83aa6ac46e6de6aee95404cb9eaae1b8"
+          },
+          {
+            "path": "historical/20260725000000_make_user_name_nullable/migration.sql",
+            "sha256": "9e84b4fc3224e998b9dad84c05b1baa46019260b377fc91ef24968eb25146243"
+          },
+          {
+            "path": "historical/20260729120000_add_app_version_setting/migration.sql",
+            "sha256": "6ed1b2f755829d06238c1a1846074f8dfbfe4834fcb97b9e0233d9e3a35e356b"
+          },
+          {
+            "path": "historical/20260730000000_add_refresh_token_rotation/migration.sql",
+            "sha256": "b0c77a24e2d49950ab25a443f323bb855d2be44a0c8641d8233e62a823524932"
+          },
+          {
+            "path": "historical/20260802000000_add_launch_gate_setting/migration.sql",
+            "sha256": "4fb0a466cb84548c0c6e476974a9e34b190fc3e7724cfa3533ae8e622b5b65ab"
+          },
+          {
+            "path": "historical/20260802020000_add_platform_review/migration.sql",
+            "sha256": "f432c38f7c9f968de6474d562d6397c0252b23547b75f4d8453119a24afad762"
+          },
+          {
+            "path": "historical/20260803020000_add_referral_program/migration.sql",
+            "sha256": "b57c608e1f4ab52bdc0a3ff8f61b38b50690e8f383f37d1cffd80d2a5b2b852b"
+          },
+          {
+            "path": "historical/20260803030000_add_otp_provider_setting/migration.sql",
+            "sha256": "948a3e2e568ba9c97e889f4ef2857dcfb1259e61533a00f1f79b97afdf18dc64"
+          },
+          {
+            "path": "historical/20260804000000_otp_provider_default_firebase/migration.sql",
+            "sha256": "ba150c6e4a74c456e12365109fb8a058ab0ee4b6d83e889399459bac09624013"
+          },
+          {
+            "path": "historical/20260805000000_add_otp_attempt_counter/migration.sql",
+            "sha256": "20cab4f9140743de2edd882f246224de6b6abe60eae4c5da32d7019407cfaf6f"
+          },
+          {
+            "path": "historical/20260811000000_add_profile_completion_bonus_setting/migration.sql",
+            "sha256": "6e2f4bd3ca160f06639531e468575ae0c02ff3effb5bb2f7710e37138cbb94c1"
+          },
+          {
+            "path": "historical/20260815000000_add_experience_level_and_frequency/migration.sql",
+            "sha256": "ce1430b2820dcff2c2c64e96d8563993f200982071dc45a63198aa548e9df6e0"
+          },
+          {
+            "path": "historical/20260820010000_add_user_linked_gym_id/migration.sql",
+            "sha256": "b42fbf7c39a028d797bbb06e98d50ff4f8c70f7b0b762410471847d9251f4c77"
+          },
+          {
+            "path": "historical/20260820020000_add_user_reengagement_nudged_at/migration.sql",
+            "sha256": "cf26dee6cc5a98fc87a54c632e0df8c67979262f1de8efde0df8bddd42f47203"
+          },
+          {
+            "path": "historical/20260820030000_add_partner_bank_account/migration.sql",
+            "sha256": "5f8338a60c615654c88963e4027f0e2d340c49f3759bba233a6597406d19e70c"
+          },
+          {
+            "path": "historical/20260821020000_add_trainer_role/migration.sql",
+            "sha256": "24d6d0d48c9f4c575006fd8761c699a769152c2b4adeff1d764288393ffe438f"
+          },
+          {
+            "path": "historical/20260904000000_add_user_leaderboard_opt_in/migration.sql",
+            "sha256": "06c74956a19e80a268838062abbbd33bc57985dce5f022fac68e5f8658c5ad7e"
+          },
+          {
+            "path": "historical/20260906000000_add_collectible_find/migration.sql",
+            "sha256": "c695873ab019102787e88047de790681e68dc9f265d7583625a4f83ab161abd5"
+          },
+          {
+            "path": "historical/20260917000000_add_linked_gym_month_index/migration.sql",
+            "sha256": "574317f0f09dc2a12adf2f84cb3a82409744b4e3577e1290cbd2a49aeaafdeb9"
+          },
+          {
+            "path": "historical/20260918000000_add_onboarding_branch_fields/migration.sql",
+            "sha256": "3c31417a834cec98d931e27aebd516ab1ce146279689e202e3dc646879a60d15"
+          },
+          {
+            "path": "historical/20260918010000_add_app_mode_history/migration.sql",
+            "sha256": "10845d370cee75078f7392144938af46eaf33a8c60673c63b194f01a7c718bf3"
+          },
+          {
+            "path": "historical/20260923000000_leaderboard_opt_in_on_by_default/migration.sql",
+            "sha256": "a9a9a02f8f2edd0a3aff17e7fab335fd6f423777776af3e5d1b20067af9c8803"
+          },
+          {
+            "path": "historical/20261004000000_add_app_config_history/migration.sql",
+            "sha256": "8959565fb0387fa469f6d1d9c4648a98ac31088afef4e703f9dbfffcdbbbf41a"
+          },
+          {
+            "path": "historical/20261011000000_add_recommended_equipment/migration.sql",
+            "sha256": "57b2cf55e9d4cbf09a3a9af2a82a39757b5d9a3cda3f6993d38c858424addc4d"
+          },
+          {
+            "path": "historical/20261015120000_gender_change_limit/migration.sql",
+            "sha256": "5bfae7eb47fa2c713ea68a3f0134834ccded432044574af854e9b6fb82cab50a"
+          },
+          {
+            "path": "historical/20261016000000_coach_journey_auth/migration.sql",
+            "sha256": "1d371e37be1c82c87cc757066323cb706b4d335121779fba41922957a8705a36"
+          },
+          {
+            "path": "historical/migration_lock.toml",
+            "sha256": "99836963713b4f5b269ad49af0ed3d7b0b2e336115c2f92dc9ac683d139d0900"
+          },
+          {
+            "path": "forward/20261023000000_exploration_core/migration.sql",
+            "sha256": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028"
+          },
+          {
+            "path": "forward/20261023000100_drop_unreleased_collectible_find/migration.sql",
+            "sha256": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b"
+          },
+          {
+            "path": "forward/20261023170000_explore_receipt_telemetry/migration.sql",
+            "sha256": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0"
+          }
+        ]
+      },
+      "verification": {
+        "testedSha": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+        "runId": 40077401208,
+        "workflowPath": ".github/workflows/explore-e10-postgres.yml",
+        "runUrl": "https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40077401208",
+        "archiveSha256": "2dea8f50e15965406838ac642d80ed560b6bf28f33e3afedbfb0bed8051b4560",
+        "archiveDigestMatchesGitHub": true,
+        "artifactId": 12553767541,
+        "sourceFilesVerified": 68,
+        "redactedLogHashesVerified": 28,
+        "downloadedFiles": 29,
+        "downloadedFileSetMatchesManifest": true,
+        "pinnedInputFilesVerified": 41,
+        "baselineAuditFilesVerified": 37,
+        "renderedSqlSha256": "7e62e9bea8af1b585fc123fd556f36163f125d0414861201f07c9be9f8d17828",
+        "executedBaselineSqlSha256": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+        "bootstrapResults": {
+          "e10_bootstrap_empty": {
+            "kind": "additional-disposable-bootstrap-baseline",
+            "database": "e10_bootstrap_empty",
+            "rawHistoricalGate": "separate and still required",
+            "genuineHistoricalRowsPreserved": false,
+            "productionLineageSafetyEstablished": false,
+            "historyBeforeBootstrap": [],
+            "verifiedEmpty": true,
+            "stageDirectory": "/home/runner/work/phool-gobhi-backend/phool-gobhi-backend/tools/explore-e10/.runtime/bootstrap-stage-e10_bootstrap_empty-explore-e10-c982643832cb",
+            "historyAfterBootstrap": {
+              "table": "public._prisma_migrations",
+              "rows": [
+                {
+                  "id": "2e029f65-67c0-4c60-9f34-bad8628178fe",
+                  "logs": null,
+                  "checksum": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+                  "started_at": "2026-10-24T08:17:11.462956+00:00",
+                  "finished_at": "2026-10-24T08:17:11.521035+00:00",
+                  "migration_name": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                }
+              ]
+            },
+            "legacyRowsBefore": 0,
+            "authStateBefore": {
+              "data": {
+                "AppConfigHistory": [],
+                "AppModeHistory": [],
+                "AppVersionSetting": [],
+                "ContactMessage": [],
+                "GymLink": [],
+                "JobApplication": [],
+                "JobOpening": [],
+                "LaunchGateSetting": [],
+                "OtpCode": [],
+                "OtpProviderSetting": [],
+                "OtpSkipAllowlistEntry": [],
+                "PartnerBankAccount": [],
+                "PitchAccessContact": [],
+                "PlatformReview": [],
+                "ProfileCompletionBonusSetting": [],
+                "RefreshToken": [],
+                "SavedAddress": [],
+                "User": [],
+                "UserDevice": []
+              },
+              "sequences": [
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppConfigHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppModeHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "ContactMessage_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "GymLink_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobApplication_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobOpening_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpCode_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpSkipAllowlistEntry_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PartnerBankAccount_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PitchAccessContact_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PlatformReview_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "SavedAddress_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "UserDevice_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "User_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                }
+              ]
+            },
+            "historyBeforeUpgrade": {
+              "table": "public._prisma_migrations",
+              "rows": [
+                {
+                  "id": "2e029f65-67c0-4c60-9f34-bad8628178fe",
+                  "logs": null,
+                  "checksum": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+                  "started_at": "2026-10-24T08:17:11.462956+00:00",
+                  "finished_at": "2026-10-24T08:17:11.521035+00:00",
+                  "migration_name": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                }
+              ]
+            },
+            "historyAfterUpgrade": {
+              "table": "public._prisma_migrations",
+              "rows": [
+                {
+                  "id": "2e029f65-67c0-4c60-9f34-bad8628178fe",
+                  "logs": null,
+                  "checksum": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+                  "started_at": "2026-10-24T08:17:11.462956+00:00",
+                  "finished_at": "2026-10-24T08:17:11.521035+00:00",
+                  "migration_name": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                },
+                {
+                  "id": "148188f2-7f6d-4917-9e7f-1347e8dd2ba8",
+                  "logs": null,
+                  "checksum": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028",
+                  "started_at": "2026-10-24T08:17:12.398285+00:00",
+                  "finished_at": "2026-10-24T08:17:12.418638+00:00",
+                  "migration_name": "20261023000000_exploration_core",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                },
+                {
+                  "id": "c944693a-4201-4ed2-9e97-aa016b290c9b",
+                  "logs": null,
+                  "checksum": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b",
+                  "started_at": "2026-10-24T08:17:12.419275+00:00",
+                  "finished_at": "2026-10-24T08:17:12.422616+00:00",
+                  "migration_name": "20261023000100_drop_unreleased_collectible_find",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                },
+                {
+                  "id": "a06d068a-6bcc-41c6-9231-75042b4bc040",
+                  "logs": null,
+                  "checksum": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0",
+                  "started_at": "2026-10-24T08:17:12.42322+00:00",
+                  "finished_at": "2026-10-24T08:17:12.429975+00:00",
+                  "migration_name": "20261023170000_explore_receipt_telemetry",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                }
+              ]
+            },
+            "authStateAfter": {
+              "data": {
+                "AppConfigHistory": [],
+                "AppModeHistory": [],
+                "AppVersionSetting": [],
+                "ContactMessage": [],
+                "GymLink": [],
+                "JobApplication": [],
+                "JobOpening": [],
+                "LaunchGateSetting": [],
+                "OtpCode": [],
+                "OtpProviderSetting": [],
+                "OtpSkipAllowlistEntry": [],
+                "PartnerBankAccount": [],
+                "PitchAccessContact": [],
+                "PlatformReview": [],
+                "ProfileCompletionBonusSetting": [],
+                "RefreshToken": [],
+                "SavedAddress": [],
+                "User": [],
+                "UserDevice": []
+              },
+              "sequences": [
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppConfigHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppModeHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "ContactMessage_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "GymLink_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobApplication_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobOpening_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpCode_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpSkipAllowlistEntry_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PartnerBankAccount_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PitchAccessContact_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PlatformReview_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "SavedAddress_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "UserDevice_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "User_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                }
+              ]
+            },
+            "result": "passed"
+          },
+          "e10_bootstrap_populated": {
+            "kind": "additional-disposable-bootstrap-baseline",
+            "database": "e10_bootstrap_populated",
+            "rawHistoricalGate": "separate and still required",
+            "genuineHistoricalRowsPreserved": false,
+            "productionLineageSafetyEstablished": false,
+            "historyBeforeBootstrap": [],
+            "verifiedEmpty": true,
+            "stageDirectory": "/home/runner/work/phool-gobhi-backend/phool-gobhi-backend/tools/explore-e10/.runtime/bootstrap-stage-e10_bootstrap_populated-explore-e10-c982643832cb",
+            "historyAfterBootstrap": {
+              "table": "public._prisma_migrations",
+              "rows": [
+                {
+                  "id": "0cb83bbf-5450-4c23-8045-3daf28f95475",
+                  "logs": null,
+                  "checksum": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+                  "started_at": "2026-10-24T08:17:13.320749+00:00",
+                  "finished_at": "2026-10-24T08:17:13.375623+00:00",
+                  "migration_name": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                }
+              ]
+            },
+            "legacyRowsBefore": 1,
+            "authStateBefore": {
+              "data": {
+                "AppConfigHistory": [],
+                "AppModeHistory": [],
+                "AppVersionSetting": [],
+                "ContactMessage": [],
+                "GymLink": [],
+                "JobApplication": [],
+                "JobOpening": [],
+                "LaunchGateSetting": [],
+                "OtpCode": [],
+                "OtpProviderSetting": [],
+                "OtpSkipAllowlistEntry": [],
+                "PartnerBankAccount": [],
+                "PitchAccessContact": [],
+                "PlatformReview": [],
+                "ProfileCompletionBonusSetting": [],
+                "RefreshToken": [],
+                "SavedAddress": [],
+                "User": [
+                  {
+                    "id": 9001,
+                    "name": null,
+                    "role": "customer",
+                    "type": "general",
+                    "email": null,
+                    "phone": null,
+                    "gender": null,
+                    "appMode": null,
+                    "fcmToken": "",
+                    "isActive": true,
+                    "password": null,
+                    "createdAt": "2026-10-24T08:17:13.427",
+                    "gobhiType": null,
+                    "updatedAt": "2026-10-24T08:17:13.427",
+                    "dateOfBirth": null,
+                    "linkedGymId": null,
+                    "fitnessGoals": null,
+                    "referralCode": null,
+                    "trainerGymId": null,
+                    "gymLinkNotice": null,
+                    "freeTimeWindow": null,
+                    "experienceLevel": null,
+                    "genderChangedAt": null,
+                    "genderChangedTo": null,
+                    "profileImageUrl": "",
+                    "leaderboardOptIn": true,
+                    "referredByUserId": null,
+                    "currentlyWorksOut": null,
+                    "homeUnclaimedGymId": null,
+                    "recommendedEquipment": [],
+                    "reengagementNudgedAt": null,
+                    "trainingLocationPref": null,
+                    "pendingGymPromptGymId": null,
+                    "trainingLocationOther": null,
+                    "weeklyFrequencyIntent": null,
+                    "firstVisitBadgeConsent": false,
+                    "firstVisitBadgeConsentAt": null
+                  }
+                ],
+                "UserDevice": []
+              },
+              "sequences": [
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppConfigHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppModeHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "ContactMessage_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "GymLink_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobApplication_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobOpening_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpCode_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpSkipAllowlistEntry_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PartnerBankAccount_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PitchAccessContact_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PlatformReview_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "SavedAddress_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "UserDevice_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "User_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": "9001"
+                }
+              ]
+            },
+            "historyBeforeUpgrade": {
+              "table": "public._prisma_migrations",
+              "rows": [
+                {
+                  "id": "0cb83bbf-5450-4c23-8045-3daf28f95475",
+                  "logs": null,
+                  "checksum": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+                  "started_at": "2026-10-24T08:17:13.320749+00:00",
+                  "finished_at": "2026-10-24T08:17:13.375623+00:00",
+                  "migration_name": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                }
+              ]
+            },
+            "historyAfterUpgrade": {
+              "table": "public._prisma_migrations",
+              "rows": [
+                {
+                  "id": "0cb83bbf-5450-4c23-8045-3daf28f95475",
+                  "logs": null,
+                  "checksum": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030",
+                  "started_at": "2026-10-24T08:17:13.320749+00:00",
+                  "finished_at": "2026-10-24T08:17:13.375623+00:00",
+                  "migration_name": "00000000000000_e2_parent_5214fa8_schema_bootstrap",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                },
+                {
+                  "id": "133b0a64-498c-4719-9f97-d285676c3d6e",
+                  "logs": null,
+                  "checksum": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028",
+                  "started_at": "2026-10-24T08:17:14.24715+00:00",
+                  "finished_at": "2026-10-24T08:17:14.266956+00:00",
+                  "migration_name": "20261023000000_exploration_core",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                },
+                {
+                  "id": "52643dd2-8d22-4ec0-927a-1bc154f18cdc",
+                  "logs": null,
+                  "checksum": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b",
+                  "started_at": "2026-10-24T08:17:14.267688+00:00",
+                  "finished_at": "2026-10-24T08:17:14.271013+00:00",
+                  "migration_name": "20261023000100_drop_unreleased_collectible_find",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                },
+                {
+                  "id": "54fea9ef-50cf-4f47-85f3-f65dc90fb282",
+                  "logs": null,
+                  "checksum": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0",
+                  "started_at": "2026-10-24T08:17:14.271599+00:00",
+                  "finished_at": "2026-10-24T08:17:14.279919+00:00",
+                  "migration_name": "20261023170000_explore_receipt_telemetry",
+                  "rolled_back_at": null,
+                  "applied_steps_count": 1
+                }
+              ]
+            },
+            "authStateAfter": {
+              "data": {
+                "AppConfigHistory": [],
+                "AppModeHistory": [],
+                "AppVersionSetting": [],
+                "ContactMessage": [],
+                "GymLink": [],
+                "JobApplication": [],
+                "JobOpening": [],
+                "LaunchGateSetting": [],
+                "OtpCode": [],
+                "OtpProviderSetting": [],
+                "OtpSkipAllowlistEntry": [],
+                "PartnerBankAccount": [],
+                "PitchAccessContact": [],
+                "PlatformReview": [],
+                "ProfileCompletionBonusSetting": [],
+                "RefreshToken": [],
+                "SavedAddress": [],
+                "User": [
+                  {
+                    "id": 9001,
+                    "name": null,
+                    "role": "customer",
+                    "type": "general",
+                    "email": null,
+                    "phone": null,
+                    "gender": null,
+                    "appMode": null,
+                    "fcmToken": "",
+                    "isActive": true,
+                    "password": null,
+                    "createdAt": "2026-10-24T08:17:13.427",
+                    "gobhiType": null,
+                    "updatedAt": "2026-10-24T08:17:13.427",
+                    "dateOfBirth": null,
+                    "linkedGymId": null,
+                    "fitnessGoals": null,
+                    "referralCode": null,
+                    "trainerGymId": null,
+                    "gymLinkNotice": null,
+                    "freeTimeWindow": null,
+                    "experienceLevel": null,
+                    "genderChangedAt": null,
+                    "genderChangedTo": null,
+                    "profileImageUrl": "",
+                    "leaderboardOptIn": true,
+                    "referredByUserId": null,
+                    "currentlyWorksOut": null,
+                    "homeUnclaimedGymId": null,
+                    "recommendedEquipment": [],
+                    "reengagementNudgedAt": null,
+                    "trainingLocationPref": null,
+                    "pendingGymPromptGymId": null,
+                    "trainingLocationOther": null,
+                    "weeklyFrequencyIntent": null,
+                    "firstVisitBadgeConsent": false,
+                    "firstVisitBadgeConsentAt": null
+                  }
+                ],
+                "UserDevice": []
+              },
+              "sequences": [
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppConfigHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "AppModeHistory_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "ContactMessage_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "GymLink_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobApplication_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "JobOpening_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpCode_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "OtpSkipAllowlistEntry_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PartnerBankAccount_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PitchAccessContact_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "PlatformReview_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "SavedAddress_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "UserDevice_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": null
+                },
+                {
+                  "schemaname": "auth",
+                  "sequencename": "User_id_seq",
+                  "sequenceowner": "postgres",
+                  "data_type": "integer",
+                  "start_value": "1",
+                  "min_value": "1",
+                  "max_value": "2147483647",
+                  "increment_by": "1",
+                  "cycle": false,
+                  "cache_size": "1",
+                  "last_value": "9001"
+                }
+              ]
+            },
+            "result": "passed"
+          }
+        },
+        "httpResults": {
+          "e10_runtime": {
+            "countsIncludingParent": {
+              "tests": 22,
+              "pass": 22,
+              "fail": 0,
+              "skipped": 0,
+              "cancelled": 0
+            },
+            "leafTests": [
+              {
+                "result": "passed",
+                "check": "real JWT enforcement, role gates, spoof stripping and empty account"
+              },
+              {
+                "result": "passed",
+                "check": "native concurrent cold publishers with distinct candidate catalogues return one immutable winner"
+              },
+              {
+                "result": "passed",
+                "check": "real nearby publication and next-window rotation"
+              },
+              {
+                "result": "passed",
+                "check": "delayed FIRST claim after C2 publication retains M1/C1 item"
+              },
+              {
+                "result": "passed",
+                "check": "concurrent same/different command IDs yield one receipt/revision, account isolation and conflict"
+              },
+              {
+                "result": "passed",
+                "check": "real HTTP timeout after DB commit replays original receipt once"
+              },
+              {
+                "result": "passed",
+                "check": "HTTP window, freshness, speed, accuracy, encounter and inclusive grace boundaries"
+              },
+              {
+                "result": "passed",
+                "check": "native transaction failure leaves no partial receipt/progress/claim"
+              },
+              {
+                "result": "passed",
+                "check": "native uniqueness/FK/immutability and snapshot pagination under a concurrent insert"
+              },
+              {
+                "result": "passed",
+                "check": "mixed-source venue recognition, IST-day dedup, namespace collision, missing metadata and account filter"
+              },
+              {
+                "result": "passed",
+                "check": "flag-off rollback keeps receipts/history and resolves pending original-manifest claims"
+              },
+              {
+                "result": "passed",
+                "check": "all non-Explore auth/booking tables unchanged, no downstream mutation calls"
+              },
+              {
+                "result": "passed",
+                "check": "legacy endpoints absent; real account export/deletion retains other accounts and global manifests"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering"
+              }
+            ]
+          },
+          "e10_upgrade": {
+            "countsIncludingParent": {
+              "tests": 22,
+              "pass": 22,
+              "fail": 0,
+              "skipped": 0,
+              "cancelled": 0
+            },
+            "leafTests": [
+              {
+                "result": "passed",
+                "check": "real JWT enforcement, role gates, spoof stripping and empty account"
+              },
+              {
+                "result": "passed",
+                "check": "native concurrent cold publishers with distinct candidate catalogues return one immutable winner"
+              },
+              {
+                "result": "passed",
+                "check": "real nearby publication and next-window rotation"
+              },
+              {
+                "result": "passed",
+                "check": "delayed FIRST claim after C2 publication retains M1/C1 item"
+              },
+              {
+                "result": "passed",
+                "check": "concurrent same/different command IDs yield one receipt/revision, account isolation and conflict"
+              },
+              {
+                "result": "passed",
+                "check": "real HTTP timeout after DB commit replays original receipt once"
+              },
+              {
+                "result": "passed",
+                "check": "HTTP window, freshness, speed, accuracy, encounter and inclusive grace boundaries"
+              },
+              {
+                "result": "passed",
+                "check": "native transaction failure leaves no partial receipt/progress/claim"
+              },
+              {
+                "result": "passed",
+                "check": "native uniqueness/FK/immutability and snapshot pagination under a concurrent insert"
+              },
+              {
+                "result": "passed",
+                "check": "mixed-source venue recognition, IST-day dedup, namespace collision, missing metadata and account filter"
+              },
+              {
+                "result": "passed",
+                "check": "flag-off rollback keeps receipts/history and resolves pending original-manifest claims"
+              },
+              {
+                "result": "passed",
+                "check": "all non-Explore auth/booking tables unchanged, no downstream mutation calls"
+              },
+              {
+                "result": "passed",
+                "check": "legacy endpoints absent; real account export/deletion retains other accounts and global manifests"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering"
+              }
+            ]
+          },
+          "e10_upgrade_empty": {
+            "countsIncludingParent": {
+              "tests": 22,
+              "pass": 22,
+              "fail": 0,
+              "skipped": 0,
+              "cancelled": 0
+            },
+            "leafTests": [
+              {
+                "result": "passed",
+                "check": "real JWT enforcement, role gates, spoof stripping and empty account"
+              },
+              {
+                "result": "passed",
+                "check": "native concurrent cold publishers with distinct candidate catalogues return one immutable winner"
+              },
+              {
+                "result": "passed",
+                "check": "real nearby publication and next-window rotation"
+              },
+              {
+                "result": "passed",
+                "check": "delayed FIRST claim after C2 publication retains M1/C1 item"
+              },
+              {
+                "result": "passed",
+                "check": "concurrent same/different command IDs yield one receipt/revision, account isolation and conflict"
+              },
+              {
+                "result": "passed",
+                "check": "real HTTP timeout after DB commit replays original receipt once"
+              },
+              {
+                "result": "passed",
+                "check": "HTTP window, freshness, speed, accuracy, encounter and inclusive grace boundaries"
+              },
+              {
+                "result": "passed",
+                "check": "native transaction failure leaves no partial receipt/progress/claim"
+              },
+              {
+                "result": "passed",
+                "check": "native uniqueness/FK/immutability and snapshot pagination under a concurrent insert"
+              },
+              {
+                "result": "passed",
+                "check": "mixed-source venue recognition, IST-day dedup, namespace collision, missing metadata and account filter"
+              },
+              {
+                "result": "passed",
+                "check": "flag-off rollback keeps receipts/history and resolves pending original-manifest claims"
+              },
+              {
+                "result": "passed",
+                "check": "all non-Explore auth/booking tables unchanged, no downstream mutation calls"
+              },
+              {
+                "result": "passed",
+                "check": "legacy endpoints absent; real account export/deletion retains other accounts and global manifests"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering"
+              }
+            ]
+          },
+          "e10_bootstrap_empty": {
+            "countsIncludingParent": {
+              "tests": 22,
+              "pass": 22,
+              "fail": 0,
+              "skipped": 0,
+              "cancelled": 0
+            },
+            "leafTests": [
+              {
+                "result": "passed",
+                "check": "real JWT enforcement, role gates, spoof stripping and empty account"
+              },
+              {
+                "result": "passed",
+                "check": "native concurrent cold publishers with distinct candidate catalogues return one immutable winner"
+              },
+              {
+                "result": "passed",
+                "check": "real nearby publication and next-window rotation"
+              },
+              {
+                "result": "passed",
+                "check": "delayed FIRST claim after C2 publication retains M1/C1 item"
+              },
+              {
+                "result": "passed",
+                "check": "concurrent same/different command IDs yield one receipt/revision, account isolation and conflict"
+              },
+              {
+                "result": "passed",
+                "check": "real HTTP timeout after DB commit replays original receipt once"
+              },
+              {
+                "result": "passed",
+                "check": "HTTP window, freshness, speed, accuracy, encounter and inclusive grace boundaries"
+              },
+              {
+                "result": "passed",
+                "check": "native transaction failure leaves no partial receipt/progress/claim"
+              },
+              {
+                "result": "passed",
+                "check": "native uniqueness/FK/immutability and snapshot pagination under a concurrent insert"
+              },
+              {
+                "result": "passed",
+                "check": "mixed-source venue recognition, IST-day dedup, namespace collision, missing metadata and account filter"
+              },
+              {
+                "result": "passed",
+                "check": "flag-off rollback keeps receipts/history and resolves pending original-manifest claims"
+              },
+              {
+                "result": "passed",
+                "check": "all non-Explore auth/booking tables unchanged, no downstream mutation calls"
+              },
+              {
+                "result": "passed",
+                "check": "legacy endpoints absent; real account export/deletion retains other accounts and global manifests"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering"
+              }
+            ]
+          },
+          "e10_bootstrap_populated": {
+            "countsIncludingParent": {
+              "tests": 22,
+              "pass": 22,
+              "fail": 0,
+              "skipped": 0,
+              "cancelled": 0
+            },
+            "leafTests": [
+              {
+                "result": "passed",
+                "check": "real JWT enforcement, role gates, spoof stripping and empty account"
+              },
+              {
+                "result": "passed",
+                "check": "native concurrent cold publishers with distinct candidate catalogues return one immutable winner"
+              },
+              {
+                "result": "passed",
+                "check": "real nearby publication and next-window rotation"
+              },
+              {
+                "result": "passed",
+                "check": "delayed FIRST claim after C2 publication retains M1/C1 item"
+              },
+              {
+                "result": "passed",
+                "check": "concurrent same/different command IDs yield one receipt/revision, account isolation and conflict"
+              },
+              {
+                "result": "passed",
+                "check": "real HTTP timeout after DB commit replays original receipt once"
+              },
+              {
+                "result": "passed",
+                "check": "HTTP window, freshness, speed, accuracy, encounter and inclusive grace boundaries"
+              },
+              {
+                "result": "passed",
+                "check": "native transaction failure leaves no partial receipt/progress/claim"
+              },
+              {
+                "result": "passed",
+                "check": "native uniqueness/FK/immutability and snapshot pagination under a concurrent insert"
+              },
+              {
+                "result": "passed",
+                "check": "mixed-source venue recognition, IST-day dedup, namespace collision, missing metadata and account filter"
+              },
+              {
+                "result": "passed",
+                "check": "flag-off rollback keeps receipts/history and resolves pending original-manifest claims"
+              },
+              {
+                "result": "passed",
+                "check": "all non-Explore auth/booking tables unchanged, no downstream mutation calls"
+              },
+              {
+                "result": "passed",
+                "check": "legacy endpoints absent; real account export/deletion retains other accounts and global manifests"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once"
+              },
+              {
+                "result": "passed",
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering"
+              }
+            ]
+          }
+        },
+        "telemetryResults": {
+          "e10_runtime": {
+            "authDatabase": "e10_runtime",
+            "sinkDatabase": "e10_sink",
+            "plannedChecks": 8,
+            "checks": [
+              {
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering",
+                "result": "passed"
+              }
+            ],
+            "result": "passed",
+            "substitutions": [
+              "loopback sink table fixture",
+              "explicit pg pool bypasses provider/TLS setup",
+              "injected clock and faults",
+              "external export/erasure fan-out",
+              "scheduler not started"
+            ]
+          },
+          "e10_upgrade": {
+            "authDatabase": "e10_upgrade",
+            "sinkDatabase": "e10_sink",
+            "plannedChecks": 8,
+            "checks": [
+              {
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering",
+                "result": "passed"
+              }
+            ],
+            "result": "passed",
+            "substitutions": [
+              "loopback sink table fixture",
+              "explicit pg pool bypasses provider/TLS setup",
+              "injected clock and faults",
+              "external export/erasure fan-out",
+              "scheduler not started"
+            ]
+          },
+          "e10_upgrade_empty": {
+            "authDatabase": "e10_upgrade_empty",
+            "sinkDatabase": "e10_sink",
+            "plannedChecks": 8,
+            "checks": [
+              {
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering",
+                "result": "passed"
+              }
+            ],
+            "result": "passed",
+            "substitutions": [
+              "loopback sink table fixture",
+              "explicit pg pool bypasses provider/TLS setup",
+              "injected clock and faults",
+              "external export/erasure fan-out",
+              "scheduler not started"
+            ]
+          },
+          "e10_bootstrap_empty": {
+            "authDatabase": "e10_bootstrap_empty",
+            "sinkDatabase": "e10_sink",
+            "plannedChecks": 8,
+            "checks": [
+              {
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering",
+                "result": "passed"
+              }
+            ],
+            "result": "passed",
+            "substitutions": [
+              "loopback sink table fixture",
+              "explicit pg pool bypasses provider/TLS setup",
+              "injected clock and faults",
+              "external export/erasure fan-out",
+              "scheduler not started"
+            ]
+          },
+          "e10_bootstrap_populated": {
+            "authDatabase": "e10_bootstrap_populated",
+            "sinkDatabase": "e10_sink",
+            "plannedChecks": 8,
+            "checks": [
+              {
+                "check": "telemetry: separate auth/sink backends and stronger sink default isolation",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native HTTP save/reject races, exact/different-claim replays and privacy",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: native outbox insert failure rolls back saved and rejected transactions",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: actual concurrent sink SQL deduplicates under repeatable-read session default",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: real sink transaction failure persists backoff, then retries successfully",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: sink commit/lost reply and native local-ack failure replay one sink row",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: separate auth workers skip a locked pending row and deliver each event once",
+                "result": "passed"
+              },
+              {
+                "check": "telemetry: export projection/account scope and dispatcher-before-deletion lock ordering",
+                "result": "passed"
+              }
+            ],
+            "result": "passed",
+            "substitutions": [
+              "loopback sink table fixture",
+              "explicit pg pool bypasses provider/TLS setup",
+              "injected clock and faults",
+              "external export/erasure fan-out",
+              "scheduler not started"
+            ]
+          }
+        },
+        "checks": [
+          {
+            "check": "fresh historical migration chain",
+            "result": "failed",
+            "log": ".runtime/fresh-migrate.local.log"
+          },
+          {
+            "check": "old historical chain before E2",
+            "result": "failed",
+            "log": ".runtime/old-chain.local.log"
+          },
+          {
+            "check": "populated old-table forward upgrade/history retention",
+            "result": "not-executed",
+            "reason": "historical baseline deployment failed"
+          },
+          {
+            "check": "e10_upgrade: old-table snapshot upgrade; baseline migration row unchanged",
+            "result": "passed",
+            "baselineSqlHash": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+            "forwardMigrations": [
+              "20261023000000_exploration_core",
+              "20261023000100_drop_unreleased_collectible_find",
+              "20261023170000_explore_receipt_telemetry"
+            ],
+            "before": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.371Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.371Z",
+                "applied_steps_count": 1
+              }
+            ],
+            "after": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.371Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.371Z",
+                "applied_steps_count": 1
+              }
+            ]
+          },
+          {
+            "check": "e10_upgrade_empty: old-table snapshot upgrade; baseline migration row unchanged",
+            "result": "passed",
+            "baselineSqlHash": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+            "forwardMigrations": [
+              "20261023000000_exploration_core",
+              "20261023000100_drop_unreleased_collectible_find",
+              "20261023170000_explore_receipt_telemetry"
+            ],
+            "before": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.474Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.474Z",
+                "applied_steps_count": 1
+              }
+            ],
+            "after": [
+              {
+                "id": "e10-parent-snapshot",
+                "checksum": "fff3261022aede74956b579b2ea88876fe5a767e33cb869bb99cbd1a4b98d730",
+                "finished_at": "2026-10-24T08:17:09.474Z",
+                "migration_name": "e10_parent_5214fa8_schema_snapshot",
+                "logs": null,
+                "rolled_back_at": null,
+                "started_at": "2026-10-24T08:17:09.474Z",
+                "applied_steps_count": 1
+              }
+            ]
+          },
+          {
+            "check": "e10_bootstrap_empty: additional disposable bootstrap/baseline",
+            "result": "passed",
+            "evidenceClass": "executed snapshot baseline lineage, not historical replay",
+            "log": ".runtime/bootstrap-e10_bootstrap_empty.local.json"
+          },
+          {
+            "check": "e10_bootstrap_populated: additional disposable bootstrap/baseline",
+            "result": "passed",
+            "evidenceClass": "executed snapshot baseline lineage, not historical replay",
+            "log": ".runtime/bootstrap-e10_bootstrap_populated.local.json"
+          },
+          {
+            "check": "e10_runtime: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "existing runtime/snapshot setup",
+            "log": ".runtime/postgres-e10_runtime.local.log"
+          },
+          {
+            "check": "e10_upgrade: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "existing runtime/snapshot setup",
+            "log": ".runtime/postgres-e10_upgrade.local.log"
+          },
+          {
+            "check": "e10_upgrade_empty: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "existing runtime/snapshot setup",
+            "log": ".runtime/postgres-e10_upgrade_empty.local.log"
+          },
+          {
+            "check": "e10_bootstrap_empty: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "additional explicit bootstrap/baseline; not historical replay",
+            "log": ".runtime/postgres-e10_bootstrap_empty.local.log"
+          },
+          {
+            "check": "e10_bootstrap_populated: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure",
+            "result": "passed",
+            "evidenceClass": "additional explicit bootstrap/baseline; not historical replay",
+            "log": ".runtime/postgres-e10_bootstrap_populated.local.log"
+          }
+        ],
+        "cleanup": "owned container and volumes removed",
+        "originalRun40057075433FilesPreserved": 25,
+        "redactionScan": {
+          "filesChecked": 30,
+          "patterns": [
+            "databaseUri",
+            "bearerToken",
+            "jwt",
+            "githubToken",
+            "unredactedFixture",
+            "randomPassword48Hex"
+          ],
+          "findings": [],
+          "limit": "targeted known URI/credential formats, not proof against every possible secret format"
+        },
+        "unexecuted": [
+          {
+            "check": "populated genuine historical upgrade and applied-history preservation",
+            "reason": "raw pre-feature replay failed"
+          },
+          {
+            "artifact": "old-forward.local.log",
+            "reason": "that forward deploy was not executed"
+          }
+        ],
+        "fileHashes": [
+          {
+            "path": "artifacts.json",
+            "sha256": "b1e3170b67e1fec1573105d985d1fe1ca9c83e00931046b98ffaee0e240a3d89"
+          },
+          {
+            "path": "jobs.json",
+            "sha256": "41264e24c181a8b2aa400531fff13fc84940cb5756257e9aafe7efafb7ee50a8"
+          },
+          {
+            "path": "original-artifact.zip",
+            "sha256": "2dea8f50e15965406838ac642d80ed560b6bf28f33e3afedbfb0bed8051b4560"
+          },
+          {
+            "path": "original-run.log",
+            "sha256": "7cbe8dfa8de58a495180565d4738527238f2930ada84ecf5e04fee57e6adfb25"
+          },
+          {
+            "path": "run-initial.json",
+            "sha256": "87fcca14c81f97b53f574d217014141543302e4d5562859a1c74f731086ca8df"
+          },
+          {
+            "path": "run.json",
+            "sha256": "6aaf2093c7553785f9def8a449c00628b2fdd393e37cf2488176b092a933cbb0"
+          },
+          {
+            "path": "verify-hosted.py",
+            "sha256": "fbcdbe7a1f04f33f40d516c35fac38db135a29431f2a774daa5ce816de49a881"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-baseline.migration.sql",
+            "sha256": "90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-e10_bootstrap_empty-baseline.local.log",
+            "sha256": "ff590917e984cdc50bddb86914083706553743b8fcc7ec5d2ff7d71a48703849"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-e10_bootstrap_empty-forward.local.log",
+            "sha256": "ad0cc0c4a67a080468d6ff3490140e3e1101d5638061e999c956b570799c85c3"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-e10_bootstrap_empty.local.json",
+            "sha256": "bdc49687f6ab9a8d7ac5068df9a9eac6864807ab700f6e69a76b8ce67eb3d4e6"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-e10_bootstrap_populated-baseline.local.log",
+            "sha256": "a71e5dec866233d1f54acb23e3e9332696cf70ed38b890d6f5f81363d7ea085c"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-e10_bootstrap_populated-forward.local.log",
+            "sha256": "c64c4194c569b04018533fc84a3b4815ffd093365cb28145b07c523930dfdb5c"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-e10_bootstrap_populated.local.json",
+            "sha256": "2daf7fdb7a88ac7c3348fbcca1a1246d7acae2cb4da8da5af681267e2e1c128a"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-input-manifest.json",
+            "sha256": "729d0e68ff39f2af237192023d9353feb8f2244a2f0e3def996c702597378b55"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-parent.rendered.sql",
+            "sha256": "7e62e9bea8af1b585fc123fd556f36163f125d0414861201f07c9be9f8d17828"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-provenance.json",
+            "sha256": "b0c4363d5ff6d3f5ea2c5a167bf197ec00efd256ec4bc0de7d7531c7397b7665"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\bootstrap-render.local.log",
+            "sha256": "ed02c25fe0dde0fcdbefe0779c1c3863e864d5d1a073895915009b0007d2388f"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\ci-image.local.log",
+            "sha256": "72435e69eb6c005b9da0bfb6a020c9a77d658a14b58b829eda45a3af41397b42"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\ci-install.local.log",
+            "sha256": "0fac028fd06c20631898fd3d19e462fa0e165319608f61fdf66ab33c53134903"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\ci-preflight.local.log",
+            "sha256": "c429625372bfbe396fc14222e1aea5051dce6eac73bcff8e0d5137e92db4cb44"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\ci-rehearsal.local.log",
+            "sha256": "826a8899e3ff72cf13bb81e049e4edd05d9bc3130f8913c3ae2d98e663886376"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\ci-source.json",
+            "sha256": "088a904b606a6f77fd80d3b6ea3a6fdc4d1582c1a7b9aa17823d8c763cff4f8a"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\fresh-migrate.local.log",
+            "sha256": "2f45a60e3d903e4ee10e015d46cf1c2404d5891df387160269142f7f5989296a"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\old-chain.local.log",
+            "sha256": "453315531d52f77c9e3db03bdffa8edbf812ded4ccd5235c715fed5e1752e111"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\postgres-e10_bootstrap_empty.local.log",
+            "sha256": "c58958fd48cf64e3fdc203af953b23c18aa443140452757c96184bd1229e15e6"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\postgres-e10_bootstrap_populated.local.log",
+            "sha256": "352b8228f5c9bfb33884243a80ed94ce6603cc0e42cd1d0b95c589815d3211ee"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\postgres-e10_runtime.local.log",
+            "sha256": "0cbbdb6d04947e030a44ef11591238ae9d35d5d138ce5d0479834783798afc00"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\postgres-e10_upgrade.local.log",
+            "sha256": "563e4bcadf91dbd76d5fc62ada93d6551b257d8e1b69d694226ce49268848d4b"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\postgres-e10_upgrade_empty.local.log",
+            "sha256": "d19b5a75c9ba823608fd23ad541ffbcd983b8b864f1a28ceb5112e583b169683"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\rehearsal-result.json",
+            "sha256": "826a8899e3ff72cf13bb81e049e4edd05d9bc3130f8913c3ae2d98e663886376"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\telemetry-e10_bootstrap_empty.local.json",
+            "sha256": "50d9553927096aee619bddebc8aa1be781f429eeb5637331c3fc5dcdc577feb2"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\telemetry-e10_bootstrap_populated.local.json",
+            "sha256": "2dc7a443ac92fed32822c23189f1062945887640395d13f88ecc97e8585ed233"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\telemetry-e10_runtime.local.json",
+            "sha256": "587b7d15b701b19d271037537f6180b19d66530a6c7644b41f62f1b3cd63b190"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\telemetry-e10_upgrade.local.json",
+            "sha256": "fb580c0ed2cc2df3b5436541246adb778d06aaccf9599ce365546c6fb6ef4e06"
+          },
+          {
+            "path": "artifacts\\explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1\\telemetry-e10_upgrade_empty.local.json",
+            "sha256": "1cb45966afd83c573bc6d3433423e52b58ca2d262c846aa115fa892b1534def1"
+          }
+        ]
+      },
+      "verificationReceipt": {
+        "path": "tools/explore-e10/.runtime/hosted/40077401208/verification.json",
+        "sha256": "0dcc5ff7062f457ba1c2d83946a1c9118603fecdfa4a9cf06a2eca8b25b9f72d"
+      },
+      "nativeTotals": {
+        "databases": 5,
+        "leafTests": 105,
+        "leafPassed": 105,
+        "leafFailed": 0,
+        "skipped": 0,
+        "nodeCountsIncludingParents": {
+          "tests": 110,
+          "pass": 110,
+          "fail": 0
+        },
+        "telemetrySubset": {
+          "tests": 40,
+          "pass": 40,
+          "fail": 0
+        }
+      },
+      "executedNativeChecks": {
+        "timeoutAndCommittedReplay": "passed on all five DBs",
+        "genericClaimRollback500EnvelopeRecoveryReplay": "passed on all five DBs",
+        "savedAndRejectedOutboxRollback500EnvelopesRecoveryReplay": "both passed on all five DBs",
+        "receiptTelemetrySinkDedupRetriesAmbiguityWorkersAndDeletionOrdering": "passed on all five DBs"
+      },
+      "earliestActionableCause": {
+        "owner": "E2 historical migration/schema lineage owner",
+        "migration": "20260704000000_add_user_onboarding_fields",
+        "prismaCode": "P3018",
+        "postgresCode": "3F000",
+        "message": "schema \"auth\" does not exist",
+        "affected": [
+          "raw fresh full historical replay",
+          "raw pre-feature historical replay"
+        ]
+      },
+      "unexecuted": {
+        "populatedGenuineHistoricalForwardUpgrade": "blocked by raw baseline failure; no unchanged-genuine-applied-row evidence",
+        "knownNativeNetworkOutage": "not exercised; generic trigger faults do not prove it",
+        "integratedAppDeviceAndE8E9Fixes": "separate pending work"
+      },
+      "bootstrapMeaning": {
+        "empty": "passed explicit executed baseline plus three forward migrations",
+        "populated": "passed, seeded predecessor with unchanged nonlegacy auth/sequence state",
+        "priorExecutedBaselineRowUnchanged": true,
+        "finalMigrationRows": 4,
+        "rawReplayRelabelled": false,
+        "genuineHistoricalRowsPreserved": false,
+        "productionLineageSafetyEstablished": false
+      },
+      "cleanup": {
+        "container": "explore-e10-c982643832cb",
+        "result": "owned container and volumes removed",
+        "verifiedVia": "positive harness finally receipt after successful docker rm --force --volumes; hosted VM is ephemeral"
+      },
+      "originalRun40057075433": {
+        "filesHashCompared": 25,
+        "unchanged": true,
+        "originalResultsRetained": true
+      },
+      "failureHandling": "original logs preserved; no patch, automatic rerun or dispatch after failure",
+      "localExecution": "Git/gh publication and download plus Python identity/hash/receipt parsing only; no local Docker, DB, install, generation, SQL rendering or build",
+      "substitutions": [
+        "external account export/erasure fan-out",
+        "generic analytics capture",
+        "loopback sink table/pool rather than production provider/TLS/ensureTable",
+        "injected domain clock, trigger faults, lost-reply exception and due timestamps",
+        "scheduler, real process/network failure and production sink throughput/retention not exercised"
+      ],
+      "remaining": [
+        "failed raw historical replay remains an open unwaived owner gate",
+        "genuine historical applied-row preservation and production/deployment-lineage safety remain unproved",
+        "parent acceptance of scoped hosted bootstrap/native evidence",
+        "E8/E9 fixes, integrated-app journeys and device/accessibility/location/pilot acceptance remain separate pending work",
+        "actual analytics provider/TLS/permissions, scheduler/backlog and sink/runtime operating acceptance",
+        "E11 only after accepted integrated E10 candidate"
+      ],
+      "followupPublication": "report/evidence local commit only; no push, merge or deployment"
     }
   ],
-  "latestHostedRunId": 40057075433,
-  "latestTestedSha": "2bb36125e65d5b431b8557b94152296e6b889ce7",
+  "latestHostedRunId": 40077401208,
+  "latestTestedSha": "7915189104fa8559c32ee487f7491b9e73c4ac56",
   "latestHostedConclusion": "failure",
   "approvedHarnessCorrections": [
     {

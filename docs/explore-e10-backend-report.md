@@ -1,10 +1,9 @@
 # Explore E10 backend candidate and migration rehearsal
 
-2026-10-24. **Approved combined candidate executed on hosted CI; failed historical replay and three native assertions per DB. Snapshot upgrades and cleanup passed.**
-The approved harness correction is now implemented and regression-tested locally;
-no new hosted run or database acceptance result accompanies that correction.
-Approved E2 classification/recovery handoffs and an additional disposable
-bootstrap/baseline lane are also prepared, unexecuted and awaiting parent review.
+2026-10-24. **Latest hosted run: raw historical replay failed; both snapshot/bootstrap upgrades and all five native suites passed. Cleanup passed.**
+Tested source is `7915189104fa8559c32ee487f7491b9e73c4ac56`, run 40077401208.
+The raw historical, genuine-history-preservation and production-lineage gates
+remain open; scoped bootstrap/native passes do not waive them.
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
 to dev/parent, deployment, shared flag change or external message occurred. Only
@@ -188,12 +187,12 @@ non-mutation claim is made.
 
 ## Remaining acceptance gates
 
-1. Resolve the failed historical replay and native timeout/failure-rollback gates
-   from run 40057075433, then rerun an approved candidate on hosted CI. Snapshot
-   upgrades and many native cases passed; these do not replace the failed chain
-   or incomplete rollback proofs. Exact observed outcomes are in the hosted receipt.
-2. Approved backend receipt telemetry is incorporated. Native delivery/deduplication,
-   lifecycle and E9 integrated-app payload evidence still require reviewed receipts.
+1. Raw historical replay still fails in run 40077401208. Genuine historical
+   applied-row preservation and production/deployment-lineage safety remain
+   unproved. Snapshot/bootstrap and native successes do not replace those gates.
+2. Backend native timeout, generic-fault rollback/recovery and receipt telemetry
+   now pass on all five DBs for the exact tested candidate. Parent review and
+   separate E8/E9 fixes/integrated-app payload and operating-sink acceptance remain.
 3. Integrated app source/build/config identities, implementation-level Dart
    generator parity, current 35-test host coverage, DI/obsolete app-code removal,
    durable offline outbox/restart/account teardown and real app-to-backend journey.
@@ -913,6 +912,137 @@ Exact additional E10 preparation paths:
 - `docs/explore-e10-backend-evidence.json`
 
 The separate approved cherry-pick's exact six paths are recorded in its E2 report.
+
+## Approved candidate hosted execution: 2026-10-24, 08:16-08:17 UTC
+
+Verified clean `feature/explore-e10-backend` at exact parent-approved HEAD
+`7915189104fa8559c32ee487f7491b9e73c4ac56`, with the expected GitHub origin.
+Remote inspection returned `2bb36125e65d5b431b8557b94152296e6b889ce7`; verified
+it is an ancestor of the approved candidate. Executed only:
+
+```powershell
+git -c safe.directory=C:/Users/rohit/Phool-Gobhi/wt/backend-e10 push origin 7915189104fa8559c32ee487f7491b9e73c4ac56:refs/heads/feature/explore-e10-backend
+```
+
+This fast-forwarded the feature branch without force. Identified the resulting
+[run 40077401208, attempt 1](https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40077401208)
+using exact SHA, branch, `event=push` and
+`.github/workflows/explore-e10-postgres.yml`. No duplicate dispatch or rerun was
+issued. The `rehearse` job, ID `120823631947`, ran 08:16:37-08:17:41 UTC on the
+Ubuntu hosted runner. It concluded **failure**, preserving the raw replay gate;
+checkout/input verification, locked installs, image acquisition, evidence
+collection and artifact upload all succeeded. Remote tip after execution remains
+the approved SHA. No dev/main push, source-lane change, merge or deployment occurred.
+
+Actual results are separate evidence classes:
+
+| Gate | Observed result |
+| --- | --- |
+| Raw fresh historical replay | **Failed**: P3018 / PostgreSQL 3F000 at `20260704000000_add_user_onboarding_fields`, schema `auth` does not exist |
+| Raw pre-feature historical replay | **Failed**, same migration/error |
+| Populated genuine historical upgrade/applied-row retention | **Unexecuted**, blocked by the raw pre-feature failure |
+| Existing populated snapshot upgrade | **Passed**, all three forward SQL files applied; labelled snapshot baseline row unchanged |
+| Existing empty snapshot upgrade | **Passed**, same separate snapshot claim |
+| New empty bootstrap/baseline lineage | **Passed**, verified empty DB, one actually executed baseline then three exact forwards |
+| New populated bootstrap/baseline lineage | **Passed**, synthetic predecessor populated, non-legacy auth data/sequences retained |
+| Native suite on runtime, two snapshots and two bootstrap DBs | **All five passed**, 21 leaf checks each |
+| Harness-owned container/volume cleanup | **Passed per receipt**, `explore-e10-c982643832cb` and volumes removed |
+
+Native totals: **105/105 leaf checks passed**, no failures/skips/cancellations.
+Node includes one passing parent per DB: **110/110 tests passed**. Receipt telemetry
+is a subset: **40/40** (eight per DB), not 40 additional tests.
+
+The verified candidate exercised actual client timeout after commit and saved
+replay on every DB (about 1012-1014ms). Each claim trigger fault and both saved/
+rejected outbox faults proved no receipt/progress/claim/outcome residue before the
+exact INTERNAL_ERROR/500 envelope, UUID and absent Retry-After assertions. After
+each trigger was removed, the identical command recovered and replayed three
+times with unchanged post-recovery native state: save once/already_saved with one
+receipt/revision/event, or FIX_INACCURATE rejection with no receipt and one event.
+Both outbox branches executed. These passes close the earlier native test failures
+for this exact source; original failed results are not rewritten.
+
+All five DBs also passed original-manifest delayed first claim after C2, rotation,
+cold publication/claim races, account isolation, constraints/pagination, proof/
+grace boundaries, rollback pending resolution/receipt retention, export/deletion,
+and native outcome creation/privacy. Production delivery SQL passed separate
+auth/sink connections, repeatable-read sink-default independence, concurrent sink
+deduplication, native sink failure/backoff/retry, sink-commit/local-ack ambiguity,
+competing workers and dispatcher/deletion ordering. Generic trigger failures do
+not prove native connection loss; separate known-outage 503 route coverage was
+retained but that substituted unit suite was not executed by this hosted workflow.
+
+Bootstrap evidence was inspected independently of the main receipt. On each new
+DB, `public._prisma_migrations` progressed from no history to one actual baseline,
+then four executed records. Complete JSON rows preserve microsecond timestamps;
+the complete baseline record has identical field values before/after upgrade, all
+four finish successfully with no rolled-back marker, and all checksums match:
+
+| Executed SQL | SHA-256 |
+| --- | --- |
+| Raw rendered pinned-parent SQL | `7e62e9bea8af1b585fc123fd556f36163f125d0414861201f07c9be9f8d17828` |
+| Wrapped/executed `00000000000000_e2_parent_5214fa8_schema_bootstrap` | `90963e1149239e78c11f86cd0cd5856d89993e6f678d796c9d71b4b9e3c44030` |
+| `20261023000000_exploration_core` | `9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028` |
+| `20261023000100_drop_unreleased_collectible_find` | `40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b` |
+| `20261023170000_explore_receipt_telemetry` | `205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0` |
+
+The wrapped file equals BEGIN + exact rendered bytes + COMMIT; it was executed by
+Prisma, not marked applied manually. Input manifest hash
+`729d0e68ff39f2af237192023d9353feb8f2244a2f0e3def996c702597378b55`
+matches the pinned E2 package. Empty/populated predecessor counts are 0/1; full
+non-legacy auth/sequence snapshots match before/after. Historical SQL names are
+absent from the new four-row executable lineage. This is preservation of the
+**new explicit baseline**, not genuine historical applied rows or a production
+lineage safety/acceptance receipt. The failed raw DBs were not repaired or resolved.
+
+Hosted tool identities: Node `v24.21.0`, npm `11.19.0`, Docker `28.0.4` build
+`b8034c0`; auth Prisma `6.8.2`, installed booking Prisma `6.19.3`, both isolated
+clients generated by auth CLI `6.8.2`. Render/deploy commands, CLI/package hashes
+and auth lock hash are preserved in bootstrap provenance. `postgres:16` image ID
+is `sha256:066167ff39c2a612402ce99b734ea1cff92a9d1f2ac52f697a5f0384f0d88d6b`,
+repository digest `sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97`.
+
+Artifact verification:
+
+- New separate directory: `tools/explore-e10/.runtime/hosted/40077401208/`.
+  Original ZIP/job log and run/jobs/artifact API JSON are retained unchanged,
+  alongside extraction and an inspection-only `verification.json`/script.
+- Artifact ID **12553767541**, name
+  `explore-e10-postgres-7915189104fa8559c32ee487f7491b9e73c4ac56-1`;
+  archive SHA-256 **`2dea8f50e15965406838ac642d80ed560b6bf28f33e3afedbfb0bed8051b4560`**
+  matches GitHub's digest. Retention expires 2026-11-07.
+- **68 source blob/raw hashes**, **28 artifact hashes**, **41 pinned input hashes**
+  and **37 baseline audit files** match their exact Git/data identities. SHA,
+  branch, workflow, run and attempt match. Extracted file set is exactly the
+  manifest's **29 files**, including rendered SQL and both complete bootstrap
+  receipts. Old-forward log is correctly absent because that historical upgrade
+  was not executed; its missing proof remains open.
+- All eight telemetry cases appear and pass in each of five receipts. Targeted
+  credential/URI/token scanning of 29 artifact files plus original job log found
+  no matches; this is not a proof against every possible secret format.
+- All **25 original files for run 40057075433** still match their previous hashes.
+  No prior hosted receipt or artifact was edited or relabelled. The committed
+  evidence contains exact new receipts, source/log identities and verification.
+
+Earliest actionable failure remains **E2's raw historical schema/lineage gate**:
+the first unqualified migrations do not provision the later auth namespace/state.
+No new workflow/harness/native failure was observed. This session did not patch,
+retry, dispatch or waive anything after the red conclusion. Genuine historical
+upgrade preservation remains unexecuted; production/deployment lineage adoption
+requires owner review. Bootstrap success cannot authorize production use.
+
+Scoped runtime substitutions remain external export/erasure fan-out, generic
+analytics capture, loopback sink fixture/pool instead of deployed provider/TLS/
+ensureTable, and injected clocks/faults/due dates. Scheduler/backlog, actual process/
+network loss, deployed sink permissions/throughput and integrated-service side
+effects are not proved. E8/E9 fixes, integrated-app journeys and device/location/
+accessibility/pilot acceptance are separate pending work; none was incorporated
+or accepted by this backend run. E11 still requires an accepted integrated E10.
+
+Only this report/evidence update is committed locally. No follow-up push, merge,
+deployment, dev/main publication or shared DB/flag/source-lane change occurred.
+All Docker/DB/install/generation/build execution stayed on the hosted runner;
+local work was Git/gh and receipt/hash inspection only.
 
 ## Exact owned change set
 
