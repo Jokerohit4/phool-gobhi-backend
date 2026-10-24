@@ -1,5 +1,10 @@
 # Database Setup Guide for Auth Service
 
+For the incomplete historical chain and Explore upgrade, see the proposed strategy
+and review gates in [the E2 rehearsal report](../../docs/explore-e2-rehearsal-fixes-report.md).
+The generic conflict-resolution recipes below are not authority to mark a failed
+migration applied, reset an existing database, or use `db push` for this upgrade.
+
 ## How to Create/Ensure the User Table Exists
 
 ### Method 1: Using Prisma Migrations (Recommended for Production)

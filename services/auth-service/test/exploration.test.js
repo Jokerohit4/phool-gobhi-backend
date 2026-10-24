@@ -197,12 +197,35 @@ test('service customer auth errors use typed envelope and never accept a body ac
     assert.equal(r.status,status);assert.equal(r.body.error.code,code);
   }
 });
-test('unexpected/storage exceptions are redacted and infrastructure failures are retryable',async()=>{
-  for(const [error,code,status] of [[new Error('private proof in diagnostic'),'INTERNAL_ERROR',500],[Object.assign(new Error('private SQL'),{code:'P1001'}),'WORLD_UNAVAILABLE',503]]) {
-    const r=await http({catalogue:()=>{throw error;}},{method:'GET',path:'/api/auth/explore/catalogue',body:null});
-    assert.equal(r.status,status);assert.equal(r.body.error.code,code);assert.equal(r.body.error.retryable,true);assert.ok(!JSON.stringify(r.body).includes('private'));
-  }
-});
+// Model the no-Prisma-code unknown request shape consistent with E10's generic
+// trigger failure. Its native runtime class was not captured in that receipt.
+const privateDiagnostic='injected SQL; latitude=19.123; phone=9999999999; proof=private';
+const exceptionCases=[
+  [new Error(privateDiagnostic),'INTERNAL_ERROR',500],
+  [Object.assign(new Error(privateDiagnostic),{name:'PrismaClientUnknownRequestError',clientVersion:'6.8.2'}),'INTERNAL_ERROR',500],
+  ...['P1001','P1002','P1008','P1017','P2024'].map(code=>[
+    Object.assign(new Error(privateDiagnostic),{code,meta:{diagnostic:privateDiagnostic}}),'WORLD_UNAVAILABLE',503,
+  ]),
+  [new ExploreError('WORLD_UNAVAILABLE'),'WORLD_UNAVAILABLE',503],
+];
+for(const [index,[error,code,status]] of exceptionCases.entries()) {
+  test(`route error ${index}: ${error.name}/${error.code??'no-code'} keeps full retryable envelope private`,async t=>{
+    const logs=[];
+    for(const method of ['log','warn','error'])t.mock.method(console,method,(...args)=>logs.push(args));
+    for(const [method,path,operation] of [
+      ['GET','catalogue','catalogue'],['GET','collection','collection'],
+      ['GET','nearby','nearby'],['POST','pickups','pickup'],
+    ]) {
+      const service={[operation]:async()=>{throw error;}};
+      const r=await http(service,{method,path:'/api/auth/explore/'+path,body:method==='POST'?command:null});
+      assert.equal(r.status,status);
+      assert.match(r.body.error.requestId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      assert.deepEqual(r.body,{error:{code,messageKey:'explore.error.'+code.toLowerCase(),retryable:true,requestId:r.body.error.requestId}});
+      assert.equal(r.retryAfter,status===503?'5':null);
+    }
+    assert.deepEqual(logs,[],'route must not log raw exception or proof');
+  });
+}
 
 
 test('nearby/catalogue/collection requests enforce bounds, scalar queries and location headers',async()=>{
