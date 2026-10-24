@@ -1,6 +1,7 @@
 // Run ONLY through rehearse.mjs. DB/auth/routers/proxy are real; time/catalogue are injected.
-// External export/erasure fan-out and analytics sinks are explicit local substitutes.
+// External export/erasure and generic analytics are substituted; receipt delivery uses native sink SQL.
 import { test } from 'node:test';
+import { verifyReceiptTelemetry } from './telemetry-postgres.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -18,6 +19,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
   const { PrismaClient: AuthClient } = await import('./.runtime/auth-client/index.js');
   const { PrismaClient: BookingClient } = await import('./.runtime/booking-client/index.js');
   const db = new AuthClient({ datasourceUrl: uri.href });
+  const workerDb = new AuthClient({ datasourceUrl: uri.href });
   const bookingDb = new BookingClient({ datasourceUrl: uri.href });
   const sql = new pg.Client({ connectionString: uri.href }); await sql.connect();
   const servers = [], downstream = [], analytics = [];
@@ -183,6 +185,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
       assert.equal(retry.body.data.receipt.receiptId, stored.receiptId);
       assert.deepEqual(retry.body.data.delta.addedReceiptIds, []);
       assert.equal((await db.exploreProgress.findUnique({ where: { userId: 5 } })).revision, 1);
+      assert.equal(await db.exploreReceiptEvent.count({ where: { userId: 5 } }), 1);
     });
     await t.test('HTTP window, freshness, speed, accuracy, encounter and inclusive grace boundaries', async () => {
       const bounds = windowBounds('20261019', 1);
@@ -218,6 +221,7 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
         assert.equal((await pickup(command, 30)).status, 503);
         assert.equal(await db.exploreLocationReceipt.count({ where: { userId: 30 } }), 0);
         assert.equal(await db.exploreProgress.count({ where: { userId: 30 } }), 0);
+        assert.equal(await db.exploreReceiptEvent.count({ where: { userId: 30 } }), 0);
       } finally { await sql.query('DROP TRIGGER e10_fail_claim ON auth."ExploreClaim"; DROP FUNCTION auth.e10_fail_claim()'); }
     });
     await t.test('native uniqueness/FK/immutability and snapshot pagination under a concurrent insert', async () => {
@@ -285,16 +289,21 @@ test('E10 disposable PostgreSQL / JWT / real gateway proxies', { timeout: 150000
       assert.equal(exported.exploration.locationReceipts[0].receiptId, receipt.receiptId);
       assert.equal(exported.exploration.rewardReceipts[0].receiptId, reward.receiptId);
       assert.ok(!Object.hasOwn(exported, 'collectiblesFound'));
+      assert.equal(exported.exploration.receiptTelemetry.length, 1);
       for (const key of ['position', 'fixAt', 'capturedAt', 'fingerprint']) assert.ok(!JSON.stringify(exported.exploration).includes(key));
       const globals = await db.exploreEpochManifest.count(); const other = (await collection(2)).body.data;
       await deleteUserService(1);
-      for (const model of ['exploreClaim', 'exploreLocationReceipt', 'exploreRewardReceipt', 'exploreProgress']) assert.equal(await db[model].count({ where: { userId: 1 } }), 0);
+      for (const model of ['exploreReceiptEvent', 'exploreClaim', 'exploreLocationReceipt', 'exploreRewardReceipt', 'exploreProgress']) assert.equal(await db[model].count({ where: { userId: 1 } }), 0);
       assert.equal(await db.user.count({ where: { id: 1 } }), 0);
       assert.deepEqual((await collection(2)).body.data, other);
       assert.equal(await db.exploreEpochManifest.count(), globals);
     });
+    const { buildFullExportService } = await import('../../services/auth-service/services/exportService.js');
+    const { deleteUserService } = await import('../../services/auth-service/services/authService.js');
+    await verifyReceiptTelemetry({ t, db, workerDb, sql, uri, pickup, command,
+      setTime: value => { timestamp = value; }, exportUser: buildFullExportService, deleteUser: deleteUserService });
   } finally {
     await Promise.all(servers.map(server => new Promise(r => server.close(r))));
-    await Promise.all([db.$disconnect(), bookingDb.$disconnect(), sql.end()]);
+    await Promise.all([db.$disconnect(), workerDb.$disconnect(), bookingDb.$disconnect(), sql.end()]);
   }
 });

@@ -19,9 +19,11 @@ test('CI collector retains failed/not-started status, redacts logs and excludes 
   try {
     for (const file of [
       '.github/workflows/explore-e10-postgres.yml',
-      ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs'].map(f => `tools/explore-e10/${f}`),
+      ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs', 'telemetry-postgres.mjs', 'migration-inputs.mjs', 'migration-inputs.test.mjs'].map(f => `tools/explore-e10/${f}`),
+      ...['exploration/service.js', 'exploration/telemetry.js', 'utils/analytics.js', 'services/authService.js', 'services/exportService.js', 'prisma/schema.prisma'].map(f => `services/auth-service/${f}`),
       ...['', 'services/auth-service/', 'services/booking-service/'].map(p => `${p}package-lock.json`),
       'services/auth-service/prisma/migrations/20261023000000_exploration_core/migration.sql',
+      'services/auth-service/prisma/migrations/20261023170000_explore_receipt_telemetry/migration.sql',
     ]) {
       const target = resolve(fixture, file);
       mkdirSync(resolve(target, '..'), { recursive: true });
@@ -47,9 +49,14 @@ test('CI collector retains failed/not-started status, redacts logs and excludes 
       result: 'blocked-or-failed', error: 'postgresql://user:password@127.0.0.1/db refused',
       cleanup: 'owned container and volumes removed',
     }));
+    writeFileSync(resolve(local, 'telemetry-e10_runtime.local.json'), JSON.stringify({result: 'failed-or-incomplete', checks: []}));
+    writeFileSync(resolve(local, 'old-forward.local.log'), 'forward failed; postgresql://user:password@127.0.0.1/db');
     run(process.execPath, ['tools/explore-e10/ci-evidence.mjs'], env);
     metadata = JSON.parse(readFileSync(resolve(output, 'ci-source.json')));
     assert.equal(metadata.rehearsalReceiptAvailable, true);
+    assert.equal(JSON.parse(readFileSync(resolve(output, 'telemetry-e10_runtime.local.json'))).result, 'failed-or-incomplete');
+    assert.ok(!readFileSync(resolve(output, 'old-forward.local.log'), 'utf8').includes('password'));
+    assert.ok(metadata.sourceFiles.some(f => f.path.includes('20261023170000_explore_receipt_telemetry/migration.sql')));
     const receipt = JSON.parse(readFileSync(resolve(output, 'rehearsal-result.json')));
     assert.equal(receipt.result, 'blocked-or-failed');
     assert.equal(receipt.error, '[redacted-db-uri] refused');

@@ -11,7 +11,8 @@ const runtime = resolve(root, 'tools/explore-e10/.runtime');
 const output = resolve(root, 'tools/explore-e10/ci-evidence');
 mkdirSync(output, { recursive: true });
 const files = [
-  'rehearsal-result.json', 'fresh-migrate.local.log', 'old-chain.local.log',
+  'rehearsal-result.json', 'fresh-migrate.local.log', 'old-chain.local.log', 'old-forward.local.log',
+  'telemetry-e10_runtime.local.json', 'telemetry-e10_upgrade.local.json', 'telemetry-e10_upgrade_empty.local.json',
   'postgres-e10_runtime.local.log', 'postgres-e10_upgrade.local.log',
   'postgres-e10_upgrade_empty.local.log', 'ci-preflight.local.log',
   'ci-install.local.log', 'ci-image.local.log', 'ci-rehearsal.local.log',
@@ -31,7 +32,8 @@ const git = args => {
 };
 const sourcePaths = [
   '.github/workflows/explore-e10-postgres.yml',
-  ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs'].map(f => `tools/explore-e10/${f}`),
+  ...['rehearse.mjs', 'postgres.test.mjs', 'redact.mjs', 'ci-evidence.mjs', 'telemetry-postgres.mjs', 'migration-inputs.mjs', 'migration-inputs.test.mjs'].map(f => `tools/explore-e10/${f}`),
+  ...['exploration/service.js', 'exploration/telemetry.js', 'utils/analytics.js', 'services/authService.js', 'services/exportService.js', 'prisma/schema.prisma'].map(f => `services/auth-service/${f}`),
   ...['', 'services/auth-service/', 'services/booking-service/'].map(p => `${p}package-lock.json`),
   ...readdirSync(resolve(root, 'services/auth-service/prisma/migrations'), { withFileTypes: true })
     .filter(d => d.isDirectory()).map(d => `services/auth-service/prisma/migrations/${d.name}/migration.sql`),

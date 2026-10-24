@@ -86,7 +86,7 @@
       "lfSha256": "be263ad7807637839cb5810b94c23986a26d8a1249187141513c9838acad3455"
     }
   ],
-  "prismaFilesUnchangedFromCore": true,
+  "prismaFilesUnchangedFromCore": false,
   "rehearsal": {
     "startedAt": "2026-10-23T16:10:08.626Z",
     "container": "explore-e10-3707d238ef9f",
@@ -105,10 +105,11 @@
     "integratedApp": false
   },
   "remaining": [
-    "disposable PostgreSQL migration/history and real HTTP/DB execution",
-    "E2/E9 receipt telemetry emission and deduplication",
+    "hosted historical/snapshot migration and all native HTTP/DB/telemetry/export/deletion/rollback evidence",
+    "E9 integrated-app telemetry acceptance",
+    "production analytics configuration, permissions, scheduler/backlog and throughput review",
     "integrated app and host baseline",
-    "E11 device acceptance"
+    "E11 execution after accepted integrated E10 candidate"
   ],
   "continuationCheckpoints": [
     {
@@ -350,5 +351,181 @@
       "E8 Part 2 waits for approved credential fix",
       "E11 execution waits for accepted integrated E10 candidate"
     ]
+  },
+  "prismaChangeExplanation": "Approved telemetry adds schema/model and one new forward migration; every earlier migration remains unchanged. Original preparation checks remain historical.",
+  "combinedTelemetryPreparation": {
+    "recordedAt": "2026-10-24T02:46:32.178111+00:00",
+    "startingCheckpoint": "6198594243847b1c52861db8272b133b28a20e8b",
+    "approvedTelemetry": "c2f0c81a2dccc4896f09a2bb522807ffeaf35314",
+    "cherryPick": "4a5d136c52149e4c920010600d4a6e1d4ec7a419",
+    "initialBranch": "feature/explore-e10-backend",
+    "initialGitStatus": "clean",
+    "baselineCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+    "baselineSelection": "Exact files/bytes from frozen Git tree, container-specific directory; no current-tree date filtering",
+    "forwardMigrations": [
+      "20261023000000_exploration_core",
+      "20261023000100_drop_unreleased_collectible_find",
+      "20261023170000_explore_receipt_telemetry"
+    ],
+    "sourceFiles": [
+      {
+        "path": "tools/explore-e10/rehearse.mjs",
+        "rawSha256": "d52733430947f459fd4b071b053f6580eb9ce9bf5d37b3b34a188155524a1420",
+        "gitBlobForWorkingBytes": "78a09f8a1b38a162ad5644dbf1f0d8ab062a3cb1"
+      },
+      {
+        "path": "tools/explore-e10/postgres.test.mjs",
+        "rawSha256": "1a551ad3eb77530bb5234d653e651577010ebb64f282dd95bce0dd0d4e3d207b",
+        "gitBlobForWorkingBytes": "474b2db1490970d3f1bd82b669a36e4a5385e4c3"
+      },
+      {
+        "path": "tools/explore-e10/telemetry-postgres.mjs",
+        "rawSha256": "22ea715456ec5df833461ed13ea56fb72243c519a4b8336750240ff31601948a",
+        "gitBlobForWorkingBytes": "ae84059d62c3e63667826eb51e5c0a19da05a12d"
+      },
+      {
+        "path": "tools/explore-e10/migration-inputs.mjs",
+        "rawSha256": "f00923baa757f78b6beb2340f3b3d397b31e299524d87749dd8c47c6b3389102",
+        "gitBlobForWorkingBytes": "9fd24901aa9ee27e9c58726c22c27d195a5df389"
+      },
+      {
+        "path": "tools/explore-e10/migration-inputs.test.mjs",
+        "rawSha256": "a0c51d14d694ad1da2270a0ca32ba9871fdf98eb73b0cb25eda629fd4103af02",
+        "gitBlobForWorkingBytes": "61b962ca8b0a919cf7abb734191d56e7f6209092"
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence.mjs",
+        "rawSha256": "a130bfd8a29be6b9316f4e025f65062329329ea6cea6c5d81f1cdcc80767a2a1",
+        "gitBlobForWorkingBytes": "2a3819ac9bac585db08b99e245656880500b444d"
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence.test.mjs",
+        "rawSha256": "afbcd35a41a1b1c817dba9f2a3b5536b454ecf4da14497c931b0f10b1dc991f1",
+        "gitBlobForWorkingBytes": "ab41d2d9e24e9c3efd33836a9e5b2fd2a0af1f43"
+      },
+      {
+        "path": "services/auth-service/exploration/service.js",
+        "rawSha256": "f636805a9aed1ee5297d3830e51a134811c1b7b9fccd312c7d5973828848fa0d",
+        "gitBlobForWorkingBytes": "277edc4fe6dd08821b47afd088bbaa9b1244cd49"
+      },
+      {
+        "path": "services/auth-service/exploration/telemetry.js",
+        "rawSha256": "acce268b8e5dc58adb88bc0bbc374c1b540408a356d4ea8f982950bf997ae9a5",
+        "gitBlobForWorkingBytes": "bf3d0c90175ee76f9c37d6ba40f8380898d4d3cc"
+      },
+      {
+        "path": "services/auth-service/utils/analytics.js",
+        "rawSha256": "5355fdad871f3600b323d77c0dbe7858810f2546938fccae6ce41beec217a129",
+        "gitBlobForWorkingBytes": "10eb0dfc2c5826222a40d46b04eb4591a2400470"
+      },
+      {
+        "path": "services/auth-service/services/authService.js",
+        "rawSha256": "e9ab4a1ebd8ce52bdfe9e0c76ae730bcf12aea915ada1fbd1f24c82dd4e7b3f6",
+        "gitBlobForWorkingBytes": "b390174799c9ab2c9e1fd7807a9255e920e74926"
+      },
+      {
+        "path": "services/auth-service/services/exportService.js",
+        "rawSha256": "e6eadd3ba76570ae5b4150eb5843b72911e38d48e2110da9823da1eba5d87da6",
+        "gitBlobForWorkingBytes": "683c43dd3cf6b62342848efa1aff168fd6eaba6a"
+      },
+      {
+        "path": "services/auth-service/prisma/schema.prisma",
+        "rawSha256": "a8d85c70778ee5e7e2486a498841f9f1be6a84b2e65ffbabdfe423dc22e46fa5",
+        "gitBlobForWorkingBytes": "65168dfb763d697d3e3e5629302db1d8842d5f16"
+      },
+      {
+        "path": "services/auth-service/prisma/migrations/20261023170000_explore_receipt_telemetry/migration.sql",
+        "rawSha256": "3379bf0c119b7fce666f424014bcb588005d40fc39f73b11f06df631f2a2fde7",
+        "gitBlobForWorkingBytes": "cf6f61bba594a76de9fefc254a2f2d5f74bec3f6"
+      },
+      {
+        "path": ".github/workflows/explore-e10-postgres.yml",
+        "rawSha256": "50568b10a1a23b0c30505c49eb667de07c35ad3ea504b4ddd16e00cf29413641",
+        "gitBlobForWorkingBytes": "da01600cac13fdeddcf556495bd9e09b262bb273"
+      }
+    ],
+    "validation": [
+      {
+        "command": "git cherry-pick c2f0c81a2dccc4896f09a2bb522807ffeaf35314",
+        "result": "clean; 4a5d136c52149e4c920010600d4a6e1d4ec7a419"
+      },
+      {
+        "command": "node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs",
+        "result": "4 passed, 0 failed, 0 skipped; tooling only; synthetic Git fixture removed"
+      },
+      {
+        "command": "node --check tools/explore-e10/{rehearse.mjs,postgres.test.mjs,telemetry-postgres.mjs,ci-evidence.mjs,migration-inputs.mjs} (each individually)",
+        "result": "passed"
+      },
+      {
+        "command": "Python/PyYAML invariants and Git Bash syntax/pipefail probe",
+        "result": "passed branch/permissions/full-history/Node24/Ubuntu/failure/upload restrictions; no workflow build/Docker command executed"
+      },
+      {
+        "command": "git diff c2f0c81 -- services/auth-service",
+        "result": "empty; exact approved telemetry production/schema/tests"
+      },
+      {
+        "command": "git diff 6198594 -- .github/workflows services/booking-service",
+        "result": "empty"
+      },
+      {
+        "command": "git diff --name-status 6198594 -- services/auth-service/prisma/migrations",
+        "result": "only A: 20261023170000_explore_receipt_telemetry/migration.sql; earlier migrations unchanged"
+      },
+      {
+        "command": "git diff --check",
+        "result": "passed"
+      }
+    ],
+    "preparedNativeTelemetryChecksPerDatabase": 8,
+    "preparedNativeDatabases": [
+      "e10_runtime",
+      "e10_upgrade",
+      "e10_upgrade_empty"
+    ],
+    "sink": "e10_sink in the same disposable container; separate pg pool and native connections; default repeatable read",
+    "productionFunctionsExercisedByPreparedTests": [
+      "deliverPickupBatch",
+      "insertReceiptEvent",
+      "pickup through gateway/router",
+      "buildFullExportService",
+      "deleteUserService"
+    ],
+    "newArtifactLogs": [
+      "old-forward.local.log",
+      "telemetry-e10_runtime.local.json",
+      "telemetry-e10_upgrade.local.json",
+      "telemetry-e10_upgrade_empty.local.json"
+    ],
+    "substitutionsAndLimits": [
+      "loopback sink table fixture; provider selection/TLS/ensureTable not exercised",
+      "interval scheduler not started",
+      "external account export/deletion fan-out and generic analytics captured",
+      "injected domain clock and native fault triggers; local lost-reply exception after actual sink commit",
+      "initial backlog/retry due timestamps adjusted only in disposable DB",
+      "no real process crash, network loss, production sink configuration or throughput evidence"
+    ],
+    "hostedRunExecuted": false,
+    "realDbChecksExecuted": false,
+    "newPostgresResults": [],
+    "localDockerDbInstallOrBuildExecution": false,
+    "passingMockSuitesRerun": false,
+    "resourcesCreated": "synthetic tooling Git fixture only, removed; no container/volume/database",
+    "productionEditsBeyondApprovedCherryPick": false,
+    "historicalMigrationsUnchanged": true,
+    "ownerRouting": {
+      "historical/schema": "E2",
+      "receipt emitter/dispatcher/sink/lifecycle": "backend receipt-telemetry owner via E2/E9 handoff"
+    },
+    "remainingGates": [
+      "hosted historical/snapshot migration and all native HTTP/DB/telemetry/export/deletion/rollback evidence",
+      "E9 integrated-app telemetry acceptance",
+      "production analytics configuration, permissions, scheduler/backlog and throughput review",
+      "integrated app and host baseline",
+      "E11 execution after accepted integrated E10 candidate",
+      "E8 Part 2 after approved credential fix"
+    ],
+    "publication": "no push, merge, deployment or shared infrastructure/flag changes"
   }
 }

@@ -1,6 +1,6 @@
 # Explore E10 backend candidate and migration rehearsal
 
-2026-10-24. **Hosted CI path prepared; real PostgreSQL rehearsal remains unexecuted.**
+2026-10-24. **Combined backend/telemetry candidate prepared; hosted PostgreSQL remains unexecuted.**
 This is not an Increment A acceptance receipt. Full E10 also awaits the integrated
 app, actual generator implementation/device evidence and E11 acceptance. No merge
 to dev/parent, push, deployment, shared flag change or external message occurred.
@@ -11,6 +11,9 @@ to dev/parent, push, deployment, shared flag change or external message occurred
 | --- | --- |
 | Approved backend core | `0db69a2496f9fd46afd5037dffd4640250f00990` |
 | Approved E4 | `199337004f88464f374fc387800b67bd75926059` |
+| Approved E10 CI preparation | `6198594243847b1c52861db8272b133b28a20e8b` |
+| Approved backend receipt telemetry | `c2f0c81a2dccc4896f09a2bb522807ffeaf35314` |
+| Telemetry cherry-pick in combined candidate | `4a5d136c52149e4c920010600d4a6e1d4ec7a419` |
 | E4 cherry-pick on candidate | `1b221610b204c5bcf97e08dd041b6a61c82c2941` |
 | Parent schema used for optional snapshot baselines | `5214fa8dd8242093e542bd89a169dcf9321753b2` |
 | Read-only app/contract checkout HEAD during inspection | `393789532448f3c5e97f561822ae03291d8941f1` |
@@ -50,6 +53,10 @@ request permits the new artifacts and backend registry handoff; production
 authority remains with the source owners.
 
 ## Validation actually executed
+
+This table records the original preparation before the telemetry integration.
+Current combined-candidate tooling checks and unexecuted DB gates are recorded
+in the combined preparation section below.
 
 Commands below run from the candidate root unless another directory is named.
 Node was `v24.16.0`; Prisma client/CLI was `6.8.2`. Logs are ignored local files;
@@ -109,7 +116,7 @@ Registry notes describe coarse fields only; they are documentation, not a new
 gateway property validator. E9's app sanitizer remains responsible for its payload
 contract. No synthetic event was sent to a real analytics sink.
 
-**Handoff to E2/E9:** the approved `exploration/service.js` has no receipt-event
+**Historical handoff to E2/E9 (superseded by the combined candidate below):** the then-approved `exploration/service.js` had no receipt-event
 adapter/call sites. Registration does not implement authoritative saved/rejected
 emission, durable delivery or receipt-deduplicated analytics. Those owners must
 provide the scoped implementation and replay/concurrency evidence before E10 can
@@ -179,7 +186,8 @@ non-mutation claim is made.
    populated/empty upgrade, constraint/race, delayed-first-save, rotation,
    account-export/deletion and rollback receipts. All these real DB checks are
    currently unexecuted, not failed assertions or mock evidence.
-2. E2/E9 authoritative receipt telemetry implementation and deduplication evidence.
+2. Approved backend receipt telemetry is incorporated. Native delivery/deduplication,
+   lifecycle and E9 integrated-app payload evidence still require reviewed receipts.
 3. Integrated app source/build/config identities, implementation-level Dart
    generator parity, current 35-test host coverage, DI/obsolete app-code removal,
    durable offline outbox/restart/account teardown and real app-to-backend journey.
@@ -371,6 +379,110 @@ app acceptance still require separately reviewed inputs. E8 Part 2 waits for the
 approved credential fix; E11 execution waits for an accepted integrated E10
 candidate. Shared dev/production DBs, application flags and source lanes were
 untouched.
+
+## Combined backend/telemetry preparation: 2026-10-24
+
+Started clean on the requested branch at exact checkpoint
+`6198594243847b1c52861db8272b133b28a20e8b`. Read this report, the approved
+`docs/explore-receipt-telemetry-report.md`, workflow and harness. Executed
+`git cherry-pick c2f0c81a2dccc4896f09a2bb522807ffeaf35314`; it applied cleanly
+as `4a5d136c52149e4c920010600d4a6e1d4ec7a419`. No source lane or main checkout
+was edited. Production auth source/schema/tests are exact to the approved telemetry
+input, with its original report preserved. No additional production fix is made.
+
+The old date-prefix baseline selection would have leaked the new telemetry
+migration into the pre-feature replay. E10 now reads every baseline migration and
+lock file, byte-for-byte, from the frozen parent tree, writes a new isolated
+old-chain directory per container, and records path/SHA-256 identities. Fresh
+deploy and populated forward deploy include the telemetry migration; successful
+deploys additionally verify all three forward migration records and the native
+telemetry CHECK. Native history lookup discovers the one Prisma history table
+in auth/public rather than assuming a search path. Populated forward failure gets its own redacted log and failed
+receipt; a failed baseline leaves that forward check explicitly unexecuted.
+Independent snapshot/runtime checks still proceed after historical deploy failure.
+No migration is rewritten, marked resolved or skipped to manufacture acceptance.
+
+Both accurately labelled snapshot baselines now apply core, legacy drop and
+`20261023170000_explore_receipt_telemetry` in order. Their baseline history row
+remains unchanged. Current-schema setup generates the updated auth client and
+adds the SQL-only telemetry outcome CHECK extracted from the approved migration.
+Snapshot clients execute the actual forward-upgraded schema; generated outputs
+stay in the ignored runtime. The existing native HTTP timeout now asserts a
+single outcome, and export/deletion tests include the outbox. Generic analytics
+mocks remain; production dispatcher/adapter imports are retained before those
+mocks by the new `telemetry-postgres.mjs` helper.
+
+Eight prepared native telemetry subtests per runtime/snapshot DB cover:
+
+- Separate auth/sink databases and backend connections, separate auth worker pools,
+  and a repeatable-read sink default against production explicit READ COMMITTED SQL.
+- Saved/rejected outcome creation with actual HTTP races, claim/receipt/revision
+  linkage, replay after grace, different claim IDs, privacy and native SQLSTATE
+  uniqueness/outcome constraints; conflicts/malformed/retryable commands add none.
+- Native outbox-insert failure rolling back receipt/progress/claim on both terminal
+  branches, plus concurrent actual sink inserts deduplicated by delivery identity.
+- Native sink transaction failure/backoff/retry, injected lost reply after real
+  sink COMMIT, native local acknowledgement failure/rollback, then one-row replay.
+- Competing production workers with a deliberately held row and SKIP LOCKED, and
+  real account export/deletion: PostgreSQL-observed blocked DELETE, outbox-first
+  guard triggers, deletion before worker selection and other-account/global retention.
+
+The sink is a sixth disposable database, `e10_sink`, in the same harness container,
+with a distinct pg pool, fixture table and sequential reset between suites. The
+production `deliverPickupBatch` and `insertReceiptEvent` execute unchanged SQL.
+Provider selection, production TLS/sink configuration/permissions, `ensureTable`,
+interval scheduling, remote fan-out and actual process/network loss remain
+unexercised/substituted. Injected clock/faults and explicit next-attempt adjustment
+make the native ordering/retry tests deterministic; no real scheduler or throughput
+claim is made. Domain-fixture backlog is made due independently of the host date.
+Sink rows retain the approved separate pseudonymous retention convention after
+auth account erasure; this is not platform-wide analytics erasure acceptance.
+
+CI collects `old-forward.local.log`, three `telemetry-<DB>.local.json` summaries
+(eight planned checks; missing/incomplete is not passed), and existing PostgreSQL
+logs/receipt. Source hashes now include the new tests/baseline utility, emitter,
+adapter, lifecycle/schema and migration. Workflow permissions/triggers, failure
+propagation, redaction, isolated credentials/resources and final container/volume
+removal are retained. Existing workflows and booking source are unchanged.
+
+Local validation only:
+
+- `node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs`:
+  **4 passed, 0 failed**, no skips. These are tooling/fixture tests, not receipt
+  mock suites or DB evidence. Temporary synthetic Git fixture removed.
+- `node --check` for `rehearse.mjs`, `postgres.test.mjs`,
+  `telemetry-postgres.mjs`, `ci-evidence.mjs` and the baseline utility: passed.
+- Lightweight YAML/shell/ownership/source invariants and `git diff --check`:
+  passed. Production auth matches `c2f0c81`; workflow/booking match `6198594`.
+  The only migration added since `6198594` is the approved telemetry migration;
+  all earlier migration bytes are unchanged.
+
+No Docker command, DB execution, install, client generation or build ran locally.
+No hosted run exists for this combined candidate yet; all PostgreSQL checks are
+**unexecuted**, including the new telemetry assertions. E10 harness defects were
+fixed within ownership; no executed production defect has been established.
+Historical/schema failures belong to E2; emitter/dispatcher/sink or lifecycle
+defects go to the backend receipt-telemetry owner (E2/E9 handoff), with original
+assertions/logs preserved. E9 app inputs, actual sink/runtime operations,
+integrated-app acceptance and E11 remain separate gates. E8 Part 2 waits for the
+approved credential fix; E11 execution waits for an accepted integrated E10
+candidate. Nothing was pushed, merged, deployed or changed in shared infrastructure.
+
+Additional E10 paths in this continuation:
+
+- `tools/explore-e10/rehearse.mjs`
+- `tools/explore-e10/postgres.test.mjs`
+- `tools/explore-e10/telemetry-postgres.mjs`
+- `tools/explore-e10/migration-inputs.mjs`
+- `tools/explore-e10/migration-inputs.test.mjs`
+- `tools/explore-e10/ci-evidence.mjs`
+- `tools/explore-e10/ci-evidence.test.mjs`
+- `tools/explore-e10/README.md`
+- `docs/explore-e10-backend-report.md`
+- `docs/explore-e10-backend-evidence.json`
+
+The approved cherry-pick adds exactly the 15 production/report/test paths listed
+under **Exact intended paths** in `docs/explore-receipt-telemetry-report.md`.
 
 ## Exact owned change set
 

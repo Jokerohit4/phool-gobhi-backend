@@ -69,14 +69,68 @@ CI preparation is **not executed PostgreSQL evidence**. Fresh historical replay,
 populated historical upgrade/history retention, labelled snapshot upgrades and
 all real HTTP/DB assertions still await a reviewed hosted receipt. Historical
 migration failures remain schema-owner gates; never rewrite or resolve them in
-the harness. E2/E9 telemetry and integrated-app acceptance remain separate.
+the harness. The approved backend telemetry source is now included below;
+hosted delivery evidence, E9 app inputs and integrated-app acceptance remain gates.
+
+## Combined receipt telemetry candidate (PostgreSQL unexecuted)
+
+Inputs: CI preparation `6198594243847b1c52861db8272b133b28a20e8b` and approved
+backend telemetry `c2f0c81a2dccc4896f09a2bb522807ffeaf35314`, cherry-picked as
+`4a5d136c52149e4c920010600d4a6e1d4ec7a419`. The production implementation and
+migration are unchanged from that approved input.
+
+`migration-inputs.mjs` enumerates baseline files from frozen parent Git tree
+`5214fa8dd8242093e542bd89a169dcf9321753b2`, reads their exact bytes and writes
+a new container-specific old-chain directory. No current-tree date prefix can
+accidentally include telemetry in that baseline. Fresh/full and populated forward
+deploys include all three forward migrations; snapshot setup explicitly applies:
+
+1. `20261023000000_exploration_core`
+2. `20261023000100_drop_unreleased_collectible_find`
+3. `20261023170000_explore_receipt_telemetry`
+
+Current-schema setup includes the new Prisma model and additionally installs the
+exact SQL-only telemetry outcome CHECK extracted from the approved migration.
+Generated clients stay in `.runtime/`. The real HTTP harness binds those clients;
+it captures generic analytics while `telemetry-postgres.mjs`, imported before
+those mocks, retains the real `deliverPickupBatch` and `insertReceiptEvent`.
+
+Eight added native subtests run on each runtime/snapshot DB: separate auth/sink
+connections, transactional save/reject creation and replay/races, outbox failure
+rollback, actual concurrent sink SQL, retry/backoff, sink commit/lost reply and
+local-ack rollback, competing workers with a held row, and export/deletion ordering.
+The real HTTP timeout case also asserts one durable outbox outcome after replay.
+Native SQLSTATE assertions check the unique and outcome constraints. A blocked
+production account DELETE is observed through PostgreSQL lock state before the
+dispatcher is released; guard triggers assert outbox-first erasure. Deletion
+before worker selection and another account/global-manifest retention are checked.
+
+`e10_sink` is a sixth disposable database in the same harness container. It uses
+its own pg pool and a repeatable-read session default; the production adapter must
+explicitly establish READ COMMITTED and deduplicate 24 concurrent deliveries.
+The sink table is a local fixture with production columns, reset between the
+three sequential DB suites. Provider selection, TLS/remote sink configuration,
+`ensureTable`, the interval scheduler and external account-service fan-out remain
+substituted/unexercised. Faults use native triggers and a deliberately thrown
+error after a real sink COMMIT. Backoff eligibility is explicitly advanced for
+retry tests; initial fixture backlog is made due independently of injected domain
+dates. These are not process-crash, real network-loss, scheduler or throughput
+acceptance receipts. Historical failures remain failures and are never resolved
+or presented as successful snapshot replay.
+
+Artifacts add `old-forward.local.log` and `telemetry-<auth DB>.local.json` (eight
+planned checks, explicit failure/incomplete status), alongside the existing full
+PostgreSQL logs and rehearsal receipt. Source identities now include the telemetry
+test, baseline utility/tests, production emitter/adapter/lifecycle/schema and the
+new migration. Artifact allowlists, redaction, failure propagation and container
+cleanup remain in force. All these native checks are **prepared, unexecuted**.
 
 Local tooling-only validation (no Docker/build/DB):
 
 ```powershell
 node --check tools/explore-e10/rehearse.mjs
 node --check tools/explore-e10/ci-evidence.mjs
-node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs
+node --test tools/explore-e10/redact.test.mjs tools/explore-e10/ci-evidence.test.mjs tools/explore-e10/migration-inputs.test.mjs
 ```
 
 The collector test uses synthetic failure logs in a temporary Git fixture and
@@ -96,7 +150,7 @@ node tools/explore-e10/rehearse.mjs
 ```
 
 The runner never pulls an image. It creates a randomly named, labelled container
-with a loopback-only random PostgreSQL port, a random password and five uniquely
+with a loopback-only random PostgreSQL port, a random password and six uniquely
 isolated databases. It never accepts a database URL from the caller. It filters
 inherited environment, uses test-only credentials, and does not load `.env`.
 It always attempts removal of its own container and volumes in `finally`;
@@ -113,10 +167,11 @@ The databases deliberately represent different claims:
 | Database | Evidence produced |
 | --- | --- |
 | `e10_fresh` | Exact full historical auth `prisma migrate deploy`, untouched migration bytes |
-| `e10_old_chain` | Exact historical chain through the parent, populated predecessor, forward E2 deploy, byte-equivalent before/after rows for every previously applied migration |
-| `e10_upgrade` | Parent schema **snapshot baseline**, populated predecessor, exact E2 SQL in transactions, baseline migration record retained |
+| `e10_old_chain` | Exact frozen historical chain through the parent, populated predecessor, forward E2/telemetry deploy, byte-equivalent before/after rows for every previously applied migration |
+| `e10_upgrade` | Parent schema **snapshot baseline**, populated predecessor, exact E2/telemetry SQL in transactions, baseline migration record retained |
 | `e10_upgrade_empty` | Same snapshot baseline, empty predecessor |
 | `e10_runtime` | Current auth/booking schema-diff setup plus production hand-authored check/triggers; real HTTP/DB cases independent of historical-chain readiness |
+| `e10_sink` | Separate native analytics sink used sequentially by all three HTTP/DB suites |
 
 Snapshot setup is never described as replay of historical migrations. The runner
 does not resolve failed migrations, alter migration files or restore collectibles.

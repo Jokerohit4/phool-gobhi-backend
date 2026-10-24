@@ -1,11 +1,12 @@
 // Owns its container and databases. Never consumes DATABASE_URL or .env files.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, symlinkSync, existsSync, readdirSync, cpSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, symlinkSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { randomBytes, createHash } from 'node:crypto';
 import pg from 'pg';
 import { redact } from './redact.mjs';
+import { baselineFiles, parentCommit, forwardMigrations, telemetryOutcomeConstraint } from './migration-inputs.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runtime = resolve(root, 'tools/explore-e10/.runtime');
@@ -52,12 +53,36 @@ try {
   if (!ready) throw new Error('Disposable PostgreSQL did not become ready');
   const admin = new pg.Client({ connectionString: adminUrl });
   await admin.connect();
-  try { for (const database of ['e10_fresh', 'e10_old_chain', 'e10_upgrade', 'e10_upgrade_empty', 'e10_runtime']) await admin.query(`CREATE DATABASE ${database}`); }
+  try { for (const database of ['e10_fresh', 'e10_old_chain', 'e10_upgrade', 'e10_upgrade_empty', 'e10_runtime', 'e10_sink']) await admin.query(`CREATE DATABASE ${database}`); }
   finally { await admin.end(); }
+  const sinkAdmin = new pg.Client({ connectionString: adminUrl });
+  await sinkAdmin.connect();
+  try { await sinkAdmin.query("ALTER DATABASE e10_sink SET default_transaction_isolation TO 'repeatable read'"); }
+  finally { await sinkAdmin.end(); }
   const urlFor = database => adminUrl.replace(/postgres$/, database);
   const prisma = resolve(root, 'services/auth-service/node_modules/prisma/build/index.js');
   const authPath = 'services/auth-service/prisma/schema.prisma';
   const sqlHash = text => createHash('sha256').update(text).digest('hex');
+
+  async function migrationTable(client) {
+    const { rows } = await client.query(`SELECT format('%I.%I', schemaname, tablename) AS qualified
+      FROM pg_tables WHERE tablename='_prisma_migrations' AND schemaname IN ('public','auth')`);
+    if (rows.length !== 1) throw new Error('Expected one unambiguous native Prisma history table');
+    return rows[0].qualified;
+  }
+  async function verifyForward(database) {
+    const client = new pg.Client({ connectionString: urlFor(database) });
+    await client.connect();
+    try {
+      const table = await migrationTable(client);
+      const applied = (await client.query(`SELECT migration_name FROM ${table}
+        WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name`)).rows.map(r => r.migration_name);
+      if (forwardMigrations.some(m => !applied.includes(m))) throw new Error('Forward migration missing from applied history');
+      const constraints = (await client.query(`SELECT conname FROM pg_constraint WHERE conrelid='auth."ExploreReceiptEvent"'::regclass`)).rows.map(r => r.conname);
+      if (!constraints.includes('ExploreReceiptEvent_outcome_check')) throw new Error('Telemetry outcome CHECK absent');
+      mark(`${database}: all three forward migrations and native telemetry constraint present`, { applied });
+    } finally { await client.end(); }
+  }
 
   // Full historical chain is deliberately attempted as-is; never rewrite/resolve old migrations.
   const fresh = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', authPath],
@@ -65,19 +90,24 @@ try {
   log('fresh-migrate.local.log', (fresh.stdout ?? '') + (fresh.stderr ?? '') + (fresh.error?.message ?? ''));
   evidence.checks.push({ check: 'fresh historical migration chain', result: fresh.status === 0 ? 'passed' : 'failed',
     log: '.runtime/fresh-migrate.local.log' });
+  if (fresh.status === 0) await verifyForward('e10_fresh');
 
   // Historical old-table replay is independent of the labelled snapshot baselines below.
   // Preserve every historical migration byte and previously applied history row.
   const parentSchema = run('git', ['-c', `safe.directory=${root.replaceAll('\\', '/').replace(/\/$/, '')}`,
-    'show', '5214fa8dd8242093e542bd89a169dcf9321753b2:services/auth-service/prisma/schema.prisma']);
+    'show', `${parentCommit}:services/auth-service/prisma/schema.prisma`]);
   const parentFile = resolve(runtime, 'parent.prisma');
   writeFileSync(parentFile, parentSchema);
-  const oldChain = resolve(runtime, 'old-chain');
+  const oldChain = resolve(runtime, `old-chain-${name}`);
   mkdirSync(resolve(oldChain, 'migrations'), { recursive: true });
   writeFileSync(resolve(oldChain, 'schema.prisma'), parentSchema);
-  const migrationRoot = resolve(root, 'services/auth-service/prisma/migrations');
-  for (const entry of readdirSync(migrationRoot)) {
-    if (!entry.startsWith('20261023000')) cpSync(resolve(migrationRoot, entry), resolve(oldChain, 'migrations', entry), { recursive: true });
+  const baseline = baselineFiles(root);
+  evidence.baseline = { parentCommit, files: baseline.map(({path, bytes}) => ({path, sha256: sqlHash(bytes)})) };
+  evidence.forwardMigrations = forwardMigrations;
+  for (const {path, bytes} of baseline) {
+    const file = resolve(oldChain, 'migrations', path);
+    mkdirSync(resolve(file, '..'), {recursive: true});
+    writeFileSync(file, bytes);
   }
   const oldDeploy = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', resolve(oldChain, 'schema.prisma')],
     { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
@@ -86,16 +116,26 @@ try {
   if (oldDeploy.status === 0) {
     const old = new pg.Client({ connectionString: urlFor('e10_old_chain') }); await old.connect();
     try {
-      // Prisma's migration table lives in the connection's default schema (normally public).
-      const before = (await old.query('SELECT * FROM _prisma_migrations ORDER BY id')).rows;
+      // Discover Prisma's history schema rather than assume a connection search_path.
+      const table = await migrationTable(old);
+      const before = (await old.query(`SELECT * FROM ${table} ORDER BY id`)).rows;
       await old.query(`INSERT INTO auth."User" (id,role,type,"updatedAt") VALUES (9001,'customer','general',now());
         INSERT INTO auth."CollectibleFind" ("userId","collectibleId") VALUES (9001,'e10-old-chain')`);
-      run(process.execPath, [prisma, 'migrate', 'deploy', '--schema', authPath], { ...cleanEnv, DATABASE_URL: urlFor('e10_old_chain') });
+      const forward = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', authPath],
+        { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
+      log('old-forward.local.log', (forward.stdout ?? '') + (forward.stderr ?? '') + (forward.error?.message ?? ''));
+      if (forward.status !== 0) throw new Error('Populated old-table forward deployment failed; inspect old-forward.local.log');
+      await verifyForward('e10_old_chain');
       const ids = before.map(row => row.id);
-      const after = (await old.query('SELECT * FROM _prisma_migrations WHERE id = ANY($1::text[]) ORDER BY id', [ids])).rows;
+      const after = (await old.query(`SELECT * FROM ${table} WHERE id = ANY($1::text[]) ORDER BY id`, [ids])).rows;
       if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Historical applied migration rows changed');
       mark('populated old-table upgrade through Prisma deploy; all applied history rows unchanged', { before, after });
+    } catch (error) {
+      evidence.checks.push({ check: 'populated old-table forward upgrade/history retention', result: 'failed',
+        error: redact(error.message, [password]), log: '.runtime/old-forward.local.log' });
     } finally { await old.end(); }
+  } else {
+    evidence.checks.push({ check: 'populated old-table forward upgrade/history retention', result: 'not-executed', reason: 'historical baseline deployment failed' });
   }
   const baselineSql = run(process.execPath, [prisma, 'migrate', 'diff', '--from-empty', '--to-schema-datamodel', parentFile, '--script']);
   for (const upgradeDatabase of ['e10_upgrade', 'e10_upgrade_empty']) {
@@ -113,7 +153,7 @@ try {
     // Populate the predecessor using its real required columns.
     await upgrade.query(`INSERT INTO auth."User" (id, role, type, "updatedAt") VALUES (9001,'customer','general',now())`);
     if (upgradeDatabase === 'e10_upgrade') await upgrade.query(`INSERT INTO auth."CollectibleFind" ("userId", "collectibleId") VALUES (9001,'e10-disposable')`);
-    for (const migration of ['20261023000000_exploration_core', '20261023000100_drop_unreleased_collectible_find']) {
+    for (const migration of forwardMigrations) {
       const sql = readFileSync(resolve(root, 'services/auth-service/prisma/migrations', migration, 'migration.sql'), 'utf8');
       await upgrade.query('BEGIN');
       try {
@@ -127,7 +167,7 @@ try {
     if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Baseline migration history changed');
     const obsolete = (await upgrade.query(`SELECT to_regclass('auth."CollectibleFind"') AS old`)).rows[0].old;
     if (obsolete !== null) throw new Error('Legacy table survives upgrade');
-    mark(`${upgradeDatabase}: old-table snapshot upgrade; baseline migration row unchanged`, { baselineSqlHash: sqlHash(baselineSql), before, after });
+    mark(`${upgradeDatabase}: old-table snapshot upgrade; baseline migration row unchanged`, { baselineSqlHash: sqlHash(baselineSql), forwardMigrations, before, after });
   } finally { await upgrade.end(); }
   }
 
@@ -150,19 +190,21 @@ try {
   }
   // Schema diff does not include handwritten immutable triggers. Apply those exact production bytes.
   const coreSql = readFileSync(resolve(root, 'services/auth-service/prisma/migrations/20261023000000_exploration_core/migration.sql'), 'utf8');
+  const telemetrySql = readFileSync(resolve(root, 'services/auth-service/prisma/migrations', forwardMigrations[2], 'migration.sql'), 'utf8');
   const runtimeDb = new pg.Client({ connectionString: urlFor('e10_runtime') });
   await runtimeDb.connect();
   try {
     await runtimeDb.query(`ALTER TABLE auth."ExploreClaim" ADD CONSTRAINT "ExploreClaim_terminal_outcome"
       CHECK (("receiptId" IS NULL) <> ("reason" IS NULL))`);
+    await runtimeDb.query(telemetryOutcomeConstraint(telemetrySql));
     await runtimeDb.query(coreSql.slice(coreSql.indexOf('CREATE FUNCTION')));
   } finally { await runtimeDb.end(); }
   for (const database of ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty']) {
     const result = spawnSync(process.execPath, ['--experimental-test-module-mocks', '--test', 'tools/explore-e10/postgres.test.mjs'],
-      { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor(database), E10_OWNED_DATABASE: name }, encoding: 'utf8', timeout: 180000 });
+      { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor(database), E10_OWNED_DATABASE: name, E10_SINK_DATABASE_URL: urlFor('e10_sink') }, encoding: 'utf8', timeout: 180000 });
     const log = `.runtime/postgres-${database}.local.log`;
     writeFileSync(resolve(root, 'tools/explore-e10', log), redact((result.stdout ?? '') + (result.stderr ?? '') + (result.error?.message ?? ''), [password]));
-    evidence.checks.push({ check: `${database}: real HTTP/PostgreSQL integration including export/erasure`, result: result.status === 0 ? 'passed' : 'failed', log });
+    evidence.checks.push({ check: `${database}: real HTTP/PostgreSQL integration including telemetry delivery and export/erasure`, result: result.status === 0 ? 'passed' : 'failed', log });
   }
   if (evidence.checks.some(check => check.result !== 'passed')) throw new Error('Rehearsal has failing checks; inspect local logs');
   evidence.result = 'passed';
