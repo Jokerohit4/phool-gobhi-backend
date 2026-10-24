@@ -1,3 +1,5 @@
+> Completed: [dev promotion report](explore-dev-promotion-report.md). Earlier status below is historical.
+
 # Parent review: actual dev lineage rehearsal, 24 October 2026
 
 Access was restored. Backend source 63f5662 was pushed and tested in hosted run

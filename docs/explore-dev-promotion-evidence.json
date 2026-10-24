@@ -1,0 +1,236 @@
+{
+  "recordedAt": "2026-10-24T15:49:44.192754+00:00",
+  "userDecision": "Promote both to dev",
+  "app": {
+    "remoteDevCommit": "2ce53a7d7fca46e6fe61d777f662508165448c02",
+    "testedRuntimeMerge": "6a91fac2d9077b919abd06381f5d5353110bdf49",
+    "fullTestsPassed": 5209,
+    "wholeAppAnalysis": "clean"
+  },
+  "backend": {
+    "remoteDevCommit": "1dc60ce3990f467dba0293637f1cda49bb7c8697",
+    "hostedRehearsal": {
+      "run": "40107599517",
+      "source": "1dc60ce3990f467dba0293637f1cda49bb7c8697",
+      "verifiedSources": 82,
+      "verifiedArtifacts": 33,
+      "archives": [
+        {
+          "name": "explore-e10-postgres-1dc60ce3990f467dba0293637f1cda49bb7c8697-1",
+          "sha256": "f4ab47cb7057a906258885451e96aa6c714cc18d97276c1755829ad18dec2e0b"
+        }
+      ],
+      "nativeLeafCases": 126,
+      "nativeDatabases": 6,
+      "genuineLedgerRowsPreserved": 143,
+      "historySha256": "fda96d111370b54fa482e9fc8a5c0ecc1917b7d673ca911cb9f587ad1bcbe3f9",
+      "existingDevUpgradeAccepted": true,
+      "rawFreshHistoricalReplayAccepted": false,
+      "allowedPreExistingFailures": {
+        "fresh historical migration chain": "failed",
+        "old historical chain before E2": "failed",
+        "populated old-table forward upgrade/history retention": "not-executed"
+      },
+      "cleanup": "owned container and volumes removed"
+    },
+    "deployment": {
+      "runId": 40108102439,
+      "url": "https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40108102439",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "changes",
+          "conclusion": "success"
+        },
+        {
+          "name": "one-plan-dev-data",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "unit-tests (booking-service)",
+          "conclusion": "success"
+        },
+        {
+          "name": "unit-tests (auth-service)",
+          "conclusion": "success"
+        },
+        {
+          "name": "unit-tests (gateway)",
+          "conclusion": "success"
+        },
+        {
+          "name": "integration-tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "build-validate",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "preflight",
+          "conclusion": "success"
+        },
+        {
+          "name": "deploy (auth-service)",
+          "conclusion": "success"
+        },
+        {
+          "name": "deploy (booking-service)",
+          "conclusion": "success"
+        },
+        {
+          "name": "deploy (gateway)",
+          "conclusion": "success"
+        }
+      ]
+    },
+    "liveDatabaseVerification": {
+      "recordedAt": "2026-10-24T15:46:36.483Z",
+      "deploymentRun": "40108102439",
+      "sourceCommit": "1dc60ce3990f467dba0293637f1cda49bb7c8697",
+      "remoteDatabaseWritesByVerifier": false,
+      "retainedGenuineHistoryRows": 143,
+      "totalLedgerRows": 146,
+      "historyBeforeSha256": "fda96d111370b54fa482e9fc8a5c0ecc1917b7d673ca911cb9f587ad1bcbe3f9",
+      "retainedHistoryAfterSha256": "fda96d111370b54fa482e9fc8a5c0ecc1917b7d673ca911cb9f587ad1bcbe3f9",
+      "addedMigrations": [
+        {
+          "name": "20261023170000_explore_receipt_telemetry",
+          "checksum": "205d911e23fa15899296352f305b141429bde185f1c5a44cc33b8878d87b99e0",
+          "finished_at": "2026-10-24T15:43:12.388947+00:00"
+        },
+        {
+          "name": "20261023000000_exploration_core",
+          "checksum": "9bf9cc8a767ddf16213acc37a4fd32482b982a7022d9aedb41ec0b12f6ca4028",
+          "finished_at": "2026-10-24T15:43:09.221983+00:00"
+        },
+        {
+          "name": "20261023000100_drop_unreleased_collectible_find",
+          "checksum": "40c6ce53c201a1b9ed56c74e89ca719b2e6e12abd8cfdc9779c20f15e1b9ec3b",
+          "finished_at": "2026-10-24T15:43:10.803692+00:00"
+        }
+      ],
+      "legacyAbsent": true,
+      "explorePresent": true,
+      "authUserCountBefore": "129",
+      "authUserCountAfter": 129,
+      "exploreEnabled": false
+    },
+    "deployedServices": [
+      {
+        "service": "gateway-dev",
+        "revision": "gateway-dev-00058-5mr",
+        "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gateway-dev@sha256:73be68f2031da83c0ed2816901f86a513f5d8ffe4ce69ce6bb4de3359261d755",
+        "url": "https://gateway-dev-pwixdiy6va-el.a.run.app",
+        "traffic": [
+          {
+            "revision": "gateway-dev-00058-5mr",
+            "percent": 100,
+            "latestRevision": true
+          }
+        ],
+        "queueDiagnostics": "absent-default-off"
+      },
+      {
+        "service": "auth-service-dev",
+        "revision": "auth-service-dev-00104-nqw",
+        "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/auth-service-dev@sha256:2b9776a07e5f2ff88314ef96e0a09c09289bcb084f545ab5b8cf4273df86ae68",
+        "url": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+        "traffic": [
+          {
+            "revision": "auth-service-dev-00104-nqw",
+            "percent": 100,
+            "latestRevision": true
+          }
+        ],
+        "queueDiagnostics": "absent-default-off"
+      },
+      {
+        "service": "booking-service-dev",
+        "revision": "booking-service-dev-00092-kx9",
+        "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/booking-service-dev@sha256:c8410d8e1ae970af1643418560c9021aff8a4c0bf5b7de53ac989a8d43901619",
+        "url": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+        "traffic": [
+          {
+            "revision": "booking-service-dev-00092-kx9",
+            "percent": 100,
+            "latestRevision": true
+          }
+        ],
+        "queueDiagnostics": "absent-default-off"
+      }
+    ],
+    "smoke": [
+      {
+        "path": "/health",
+        "status": 200
+      },
+      {
+        "path": "/api/auth/app-config",
+        "status": 200,
+        "exploreFoodFinds": false
+      },
+      {
+        "path": "/api/auth/explore/catalogue",
+        "status": 401,
+        "errorCode": "AUTH_REQUIRED"
+      }
+    ]
+  },
+  "temporaryFixtureSecretDeleted": true,
+  "localDockerOrBuildExecution": false,
+  "flagsActivated": false,
+  "dirtyMainCheckoutsPreserved": true,
+  "remainingRolloutGates": [
+    "Physical Android/iOS acceptance and seven-day Checkpoint 1 diary",
+    "Delivered analytics retention/erasure before queue-diagnostic activation",
+    "Fresh-environment historical replay/bootstrap adoption remains separate from the accepted existing-dev migration path"
+  ],
+  "artifacts": [
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review/tools/explore-e10/.runtime/dev-merge/deployment-run.json",
+      "bytes": 35273,
+      "sha256": "81ab10b5058982bc44d4b68ad8d81ed7022532a7618072e9623ed5eef7875970"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review/tools/explore-e10/.runtime/dev-merge/live-post-promotion-verification.json",
+      "bytes": 1244,
+      "sha256": "65836eaf72fc9f754aa8b45891e5553fac43d3c28cca63b1b9547a627db9fb72"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review/tools/explore-e10/.runtime/dev-merge/deployed-services.json",
+      "bytes": 1827,
+      "sha256": "33049edecbbb18b2b2dac44e7b4961072b59ecfc46940abaeea4679492132ece"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review/tools/explore-e10/.runtime/dev-merge/temporary-fixture-cleanup.json",
+      "bytes": 146,
+      "sha256": "7e743cdd686822a292bf52acb7fa0b143e6c21243ffe9af2ebc4711b75547603"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review/tools/explore-e10/.runtime/dev-merge/lineage-final-unit-tests.log",
+      "bytes": 7362,
+      "sha256": "a4d4c51e7b6b70f9b0843599478c7877d13cecdc81cb30c802a6538cc7f8750c"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-e10/tools/explore-e10/.runtime/hosted/40107599517/parent-verification.json",
+      "bytes": 878,
+      "sha256": "43ce3ee7af41890348fcb0fb318664ef14d14295ce4d1170851aa5d27d561627"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/backend-e10/tools/explore-e10/.runtime/dev-merge/post-deployment-smoke.json",
+      "bytes": 341,
+      "sha256": "0c1353e8be690b4ab591adf34f454a980324aa48ea8fd3efd8ac2dfaa92dc1f7"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/explore-dev-merge-review/.dart_tool/dev-merge-full-suite.log",
+      "bytes": 1949102,
+      "sha256": "8c2f532de9b40d3189fd6189536fef9794eabd0a10d1207e4020978b5eb99324"
+    },
+    {
+      "path": "C:/Users/rohit/Phool-Gobhi/wt/explore-dev-merge-review/.dart_tool/dev-merge-analysis.log",
+      "bytes": 200,
+      "sha256": "fe718021b2b894c0b60965c49a5152331252994453ce0ccee2ff2358dedfa40f"
+    }
+  ]
+}

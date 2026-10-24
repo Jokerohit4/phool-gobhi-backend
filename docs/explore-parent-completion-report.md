@@ -1,3 +1,5 @@
+> Completed: [dev promotion report](explore-dev-promotion-report.md). Earlier status below is historical.
+
 # Parent backend completion review - 24 October 2026
 
 This candidate integrates the queue registry with E10, enforces the queue wire

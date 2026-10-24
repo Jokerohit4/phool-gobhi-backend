@@ -1,3 +1,5 @@
+> Completed: [dev promotion report](explore-dev-promotion-report.md). Earlier status below is historical.
+
 # Explore dev merge review - 24 October 2026
 
 Backend review is based on feature/explore-e10-backend at ec862f1, which includes
