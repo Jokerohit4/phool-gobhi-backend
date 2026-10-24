@@ -38,7 +38,7 @@ Using existing dependencies; no install, client generation, build, DB or Docker:
 
 Local logs are in tools/explore-e10/.runtime/parent (ignored). Final candidate
 identity and changed-file SHA-256 values are recorded in the parent evidence
-manifest after the source commit.
+[evidence manifest](explore-parent-completion-evidence.json) after the source commit.
 
 ## Executed hosted evidence and remaining gates
 

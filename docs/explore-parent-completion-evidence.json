@@ -1,0 +1,257 @@
+{
+  "recordedAt": "2026-10-24T13:40:43.539705+00:00",
+  "app": {
+    "base": "6657ab44d64c177004a42d2cdad90651df2e207a",
+    "sourceCommit": "6181e9d1c1c210a54700646ea0bc1d4b98a192cf",
+    "files": [
+      {
+        "path": "docs/explore-acceptance/README.md",
+        "rawSha256": "fada243f758f2f80de94c3b00e3c8abb937a95f8adcdf3ea1993b2bf4e6f9a53",
+        "gitBlob": "88032bbd4d21a90d1546fe8a9c381ca0f40e21fa"
+      },
+      {
+        "path": "docs/explore-acceptance/candidate-handoff.md",
+        "rawSha256": "63a48a27825757898c5e977e3a200be657625cfce0093b2fa728a11e228b4ae3",
+        "gitBlob": "a27757e27c1bc037e7b07de965368e1d9a0ae573"
+      },
+      {
+        "path": "docs/explore-acceptance/device-walkthrough.md",
+        "rawSha256": "29df1688b856408696957ed98a0aef5c5b0702454e841bf68e72b98be7ffc279",
+        "gitBlob": "e49462f3f6f9d0fa9f7f4043b6a55cdf16f72b61"
+      },
+      {
+        "path": "docs/explore-acceptance/diary-protocol.md",
+        "rawSha256": "ab3e517cdd244fa9faa7a33ca3b76468967132722916b2e5c7dfdad5199b3b23",
+        "gitBlob": "705608f2708f1b6a85ff6383794a2b8a1ac8247e"
+      },
+      {
+        "path": "docs/explore-acceptance/results-template.md",
+        "rawSha256": "c1b927986fde322d834f72c92b75af403663a17eb753772f704eac4e2a80f131",
+        "gitBlob": "d0d540be874a022122f74421a50ae87a6e76cb55"
+      },
+      {
+        "path": "docs/explore-e8-account-bound-diagnostic-delivery.md",
+        "rawSha256": "0f836815c152e267aebb9731362f1846a5812c36ca52638f2593c3f57510222d",
+        "gitBlob": "729832addf0c63fc251237301aa950bd4ff7d793"
+      },
+      {
+        "path": "docs/explore-e8-part2-report.md",
+        "rawSha256": "15bb31a5aca83942adfef912a010becbf10fdb43c559064acf7c57208b108c3c",
+        "gitBlob": "4c0c7e9896f5d62f8a0186e954178c3f507f6889"
+      },
+      {
+        "path": "docs/explore-parent-completion-report.md",
+        "rawSha256": "0aacc429a87872c5c1dcde3fcef992e8f0c683b64ccdc12fe2c782c52203e17e",
+        "gitBlob": "2dc40fdedb7d390c0ce8fa1a1990b9fdad9b1490"
+      },
+      {
+        "path": "docs/explore-world-plan.html",
+        "rawSha256": "90568c039993fa2105044cbd3d0e263887913c5d0ede98589e21c86c4b2b135a",
+        "gitBlob": "38dbfff1f6803f9ea607a3a47d757a9135ebfa6b"
+      },
+      {
+        "path": "docs/explore-world-plan.md",
+        "rawSha256": "ac58f29d28335ef307c2647c6c353b8b7e967712ed9f826fee4dd81163f9f4f1",
+        "gitBlob": "ebe4f4d94aa5dfcb52490ff65dca630feb32f83d"
+      },
+      {
+        "path": "lib/core/analytics/analytics_service.dart",
+        "rawSha256": "e59008a8ef9915fda67a56c78d1929c93c16d2cbd0dd2c0e578dc16f4ce89016",
+        "gitBlob": "3f4ef8da2f00da5e0b435a586b69c81038076a4f"
+      },
+      {
+        "path": "lib/core/analytics/explore/account_queue_diagnostic_transports.dart",
+        "rawSha256": "d131e8eb850f20e22ff84ef84de178b2d86db648b9c35be89e18ab19d5627f21",
+        "gitBlob": "6c7cdcb75ae80d1f35ab481471126850333b85d1"
+      },
+      {
+        "path": "lib/core/service_locator.dart",
+        "rawSha256": "b8fd761ae642a3b3fc8f9d4582b5fad2f2dcaf23496791cef79b8feb18d01be0",
+        "gitBlob": "09c9a8ecd936568631557d7ba04c8ca8cc8f7787"
+      },
+      {
+        "path": "lib/core/services/explore_session_owner.dart",
+        "rawSha256": "d915412e3a2512ebe6c73fcf166f71b914b7e0037e89076a0a2422c7294c90eb",
+        "gitBlob": "6d0e5387c537cc57bf2ef8ae4643b9b5092a2d88"
+      },
+      {
+        "path": "test/core/analytics/account_queue_diagnostic_transports_test.dart",
+        "rawSha256": "50fdf2ba92a4350deb37fc52127fdbe10305505811b8ea776ed39dd722a6fbef",
+        "gitBlob": "7de89519804d38c62c0902c8c00fd4b5cf8a7fc9"
+      },
+      {
+        "path": "test/core/services/explore_diagnostic_transport_lifecycle_test.dart",
+        "rawSha256": "95d4577ded3e1d6458b996ee85fbd96b433d193bc0616a4fd1176a53f9a5a894",
+        "gitBlob": "a2aefcff57ef1054a89d30dfc11a20fe25420b09"
+      }
+    ]
+  },
+  "backend": {
+    "base": "22259ad636e00670aa3ba7278003b9d6fd7833a0",
+    "sourceCommit": "aa86b716eb30cbbaf6d5844e0a70f11ed15b94db",
+    "files": [
+      {
+        "path": ".github/workflows/explore-e10-postgres.yml",
+        "rawSha256": "30d49f9d9071dcc01acbd3d2a6882731c40577af9390152a68f1a2ce50ebc8b0",
+        "gitBlob": "6afc545e44d4e98e83c32fbd0da6e0576b1643f5"
+      },
+      {
+        "path": "docs/E8_QUEUE_DIAGNOSTICS_HANDOFF.md",
+        "rawSha256": "1f28d89f537e9104cdad8f6ad350e4bef3fc8f901ba36ff938330684b8facba2",
+        "gitBlob": "0a54f08a3109a55c6cecbc1626aa7696ff1e60f1"
+      },
+      {
+        "path": "docs/analytics-events.json",
+        "rawSha256": "1dd0bfae2b9117c1b63cc8b7e0cc90ce3e7a2dacbc3242b0aa42d85bbb04718d",
+        "gitBlob": "3526079759789cbef932e108b0ab98e7d9cfca9a"
+      },
+      {
+        "path": "docs/explore-parent-completion-report.md",
+        "rawSha256": "5324fbdbccbc208d49a9ceef2404043286fa3bb4f7550d5afb36c68122c11761",
+        "gitBlob": "52df4ab05263eda12e3f9aa4b11b31501070fe34"
+      },
+      {
+        "path": "index.js",
+        "rawSha256": "d6bf2b7caaf8cbecc5b84828e6df4c04a5d07617eeca381abebd0898667ed995",
+        "gitBlob": "41255b3c184d3e06ab308a47927a28310a957310"
+      },
+      {
+        "path": "package.json",
+        "rawSha256": "011bf3f8944951315fecf778b6bb89bd6df77c77f0291e4966361b3d400af52f",
+        "gitBlob": "0ab0db9c4feedc756b3bda2e2acc40428d506abb"
+      },
+      {
+        "path": "test/exploreQueueDiagnosticSchema.test.js",
+        "rawSha256": "eb5e2ae1125d238c0f0ca502242a5e393f4db01ed9a2a525e7bf94a87ff9ab32",
+        "gitBlob": "85dd60458edb9837f94ae3972cbf36fd0a06dcfd"
+      },
+      {
+        "path": "test/gateway.test.js",
+        "rawSha256": "aa4438c6254db782e3d3867f7ad764c2d188cb6cc19879416e7ed32be47435f6",
+        "gitBlob": "415aa85a868a3d4cf18548571d93ebf9298b35b4"
+      },
+      {
+        "path": "test/queueDiagnosticProvider.test.js",
+        "rawSha256": "621e851a1a8a5ba2690091fdd465615fcf9b1462057f5c338f6b31ee22b7dc5e",
+        "gitBlob": "2878b12ea64826a33f3a684041ce27ff9712ceb8"
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence.mjs",
+        "rawSha256": "8cacfdaa63c841d7258b5c9de78da8996a0861448f7c50eef6419a4aa7e30814",
+        "gitBlob": "ee0e480fd1eca563697a3232e0ba62f86790ce09"
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence.test.mjs",
+        "rawSha256": "470696f1eb8967171b049dd295cffa909d83760c30c0a45f1165d8077aa4b94e",
+        "gitBlob": "7ac1e1a111a1b5cfecedee6f04004b0d57ee909a"
+      },
+      {
+        "path": "tools/explore-e10/http.test.mjs",
+        "rawSha256": "6b570303bdaaf88b099b5d1d18d88d2131772432ec4e989a7ae8d41c5f14c857",
+        "gitBlob": "8d2aa07af9c1f4cfe89c862f0a859fb3b1d24867"
+      },
+      {
+        "path": "utils/analytics.js",
+        "rawSha256": "7e0440a9a8ef9f1fbbefe32a2554919cef1fd5f02747a70374f05e2e4457d539",
+        "gitBlob": "756133db6afdd7aba8498bd43fa500a772327e18"
+      },
+      {
+        "path": "utils/exploreQueueDiagnosticSchema.js",
+        "rawSha256": "174d11f78e66b72df3229c33b095633c7900bc6fa2029483415774f2ed8fe735",
+        "gitBlob": "f76d5026eb03c7d4854b96e738360c3e2851bab3"
+      }
+    ]
+  },
+  "tests": [
+    {
+      "path": ".dart_tool/parent-full-suite.log",
+      "sha256": "e280435ced2df5a52f5f3e1f7e50dedeb523d68a00efa00ccadb405bf8fa7719",
+      "bytes": 1960352,
+      "passed": 5209,
+      "scope": "Full app working-tree run before final per-request cancellation correction; not a full run of the final source.",
+      "sourceCommit": null
+    },
+    {
+      "path": ".dart_tool/parent-final-lifecycle-tests.log",
+      "sha256": "5ad9cff2dfd944d14e9cd86ef98eed34a29ee897f70d34e5497b725682b192da",
+      "bytes": 21182,
+      "passed": 52,
+      "scope": "Final source: 17 transport, 4 real-owner, 1 metadata-drain, 18 refresh-rejection, 12 shared-widget tests.",
+      "sourceCommit": "6181e9d1c1c210a54700646ea0bc1d4b98a192cf"
+    },
+    {
+      "path": ".dart_tool/parent-final-analysis.log",
+      "sha256": "66ae9bb20ab0e5469bd4745641a4b22dcb0a99db47ee184f144c61e7c6b604ba",
+      "bytes": 200,
+      "passed": true,
+      "scope": "Final whole-app analysis: no issues.",
+      "sourceCommit": "6181e9d1c1c210a54700646ea0bc1d4b98a192cf"
+    },
+    {
+      "path": "tools/explore-e10/.runtime/parent/lightweight-tests.log",
+      "sha256": "8e10e5380c0dd22d53794e5bbb5d0a4191b6d83e3c8ee511268c7b5b32eb335e",
+      "bytes": 2564,
+      "passed": 10,
+      "scope": "Rehearsal tooling and real HTTP with a memory DB, before collector/HTTP additions.",
+      "sourceCommit": null
+    },
+    {
+      "path": "tools/explore-e10/.runtime/parent/final-diagnostics-tests.log",
+      "sha256": "fc7c090f98ac8d71612d06a883e8c8b697822c94674ed79152cf8fa33aebb252",
+      "bytes": 5468,
+      "passed": 27,
+      "scope": "Final gateway/schema/provider tests plus affected collector and real-loopback HTTP tests; no PostgreSQL.",
+      "sourceCommit": "aa86b716eb30cbbaf6d5844e0a70f11ed15b94db"
+    }
+  ],
+  "staticChecks": {
+    "clientEventRegistryParity": 11,
+    "serverOnlyReceiptNames": [
+      "explore_pickup_saved",
+      "explore_pickup_rejected"
+    ],
+    "workflowScopeAndFailureInvariants": "passed",
+    "historicalMigrationDiff": "empty",
+    "acceptancePacketLocalLinks": "passed",
+    "gitWhitespace": "passed"
+  },
+  "localCollector": {
+    "path": "tools/explore-e10/ci-evidence/ci-source.json",
+    "sha256": "66858b8a136c66cb708e77581f049bbb7b10ad82e7f357062be09301b56234a3",
+    "sourceFiles": 77,
+    "hosted": false,
+    "postgresReceiptAvailable": false
+  },
+  "historicalHostedEvidence": {
+    "runId": "40077401208",
+    "sourceCommit": "7915189104fa8559c32ee487f7491b9e73c4ac56",
+    "nativePassed": 105,
+    "snapshotUpgradesPassed": 2,
+    "bootstrapPassed": [
+      "empty",
+      "populated"
+    ],
+    "rawHistoricalReplay": "failed: missing auth schema",
+    "genuineHistoricalUpgrade": "unexecuted",
+    "acceptsParentSource": false
+  },
+  "remainingGates": [
+    "Approved delivered-analytics retention and erasure implementation plus executed sink/query/erasure evidence before diagnostics activation.",
+    "Exact parent-source hosted validation and genuine historical/deployment-lineage resolution.",
+    "Accepted integrated app/backend/build/config and save/rotation/delayed-first-claim runtime receipt.",
+    "Physical Android/iOS acceptance, agreed budgets and consented seven-day Checkpoint 1 diary."
+  ],
+  "actionsNotPerformed": [
+    "push",
+    "deployment",
+    "native build",
+    "dependency install",
+    "client generation",
+    "local Docker",
+    "local database execution",
+    "flag activation",
+    "participant contact",
+    "device acceptance",
+    "diary execution"
+  ]
+}

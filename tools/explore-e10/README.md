@@ -1,3 +1,5 @@
+> Current parent integration status and exact validation scope: [parent completion report](../../docs/explore-parent-completion-report.md). Earlier preparation statements below are historical; hosted source 7915189 passed native checks, while new parent ingestion changes await their own hosted run.
+
 # E10 backend rehearsal
 
 Run from this candidate's root. No command below deploys, sends messages, reads
