@@ -124,6 +124,11 @@ export async function rehearseDevLineage({ root, runtime, container, prisma, env
     // Assertion messages can contain original migration logs; retain stage only.
     receipt.error = 'dev_lineage_validation_failed';
     if (/^(?:[A-Z0-9]{5}|ERR_ASSERTION)$/.test(error.code ?? '')) receipt.errorCode = error.code;
+    if (receipt.stage === 'create-captured-auth-schema') {
+      // No ledger/account data has been restored at this stage: this is a DDL
+      // error about the captured schema, not a historical migration log.
+      receipt.schemaError = redact(error.message, [password]).slice(0, 400);
+    }
     return false;
   } finally {
     await client.end().catch(() => {});
