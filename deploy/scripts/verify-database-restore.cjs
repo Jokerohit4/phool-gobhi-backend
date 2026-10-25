@@ -2,7 +2,7 @@
 // is restored only into an owned local Docker database, and is never uploaded.
 const { execFileSync, spawnSync } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
-const { mkdtempSync, writeFileSync, readFileSync, rmSync, openSync, closeSync } = require('node:fs');
+const { mkdtempSync, writeFileSync, rmSync, openSync, closeSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { Client } = require('pg');
@@ -19,7 +19,11 @@ const receipt = { environment, startedAt: new Date().toISOString(), sourceReadOn
 let source, owned = false;
 function run(binary, args, options = {}) {
   const result = spawnSync(binary, args, { encoding: 'utf8', timeout: 180000, ...options });
-  if (result.error || result.status !== 0) throw Error(`${binary} operation failed (${result.status ?? result.error?.code})`);
+  if (result.error || result.status !== 0) {
+    const firstLine = String(result.stderr || result.error?.message || '').split('\n')[0]
+      .replace(/postgres(?:ql)?:\/\/\S+/g, '[redacted]').slice(0, 250);
+    throw Error(`${receipt.stage || 'setup'}: ${binary} failed (${result.status ?? result.error?.code}): ${firstLine}`);
+  }
   return result.stdout?.trim();
 }
 const quote = value => '"' + value.replaceAll('"', '""') + '"';
@@ -47,6 +51,7 @@ const digestQuery = (schema, table) => `SELECT count(*)::text AS count,
   const expected = [];
   for (const table of tables) expected.push({ ...table,
     ...(await source.query(digestQuery(table.schemaname, table.tablename))).rows[0] });
+  receipt.stage = 'creating disposable target';
   run('docker', ['create', '--pull=never', '--name', container,
     '--label', 'purpose=backend-restore-drill', '-e', 'POSTGRES_PASSWORD', 'postgres:17'],
   { env: { ...process.env, POSTGRES_PASSWORD: password } });
@@ -60,19 +65,22 @@ const digestQuery = (schema, table) => `SELECT count(*)::text AS count,
   }
   const liveEnv = { ...process.env, PGHOST: uri.hostname, PGPORT: uri.port || '5432',
     PGUSER: decodeURIComponent(uri.username), PGPASSWORD: decodeURIComponent(uri.password),
-    PGDATABASE: uri.pathname.slice(1), PGSSLMODE: 'verify-full', PGCONNECT_TIMEOUT: '15' };
+    PGDATABASE: uri.pathname.slice(1), PGSSLMODE: 'verify-full', PGSSLROOTCERT: 'system', PGCONNECT_TIMEOUT: '15' };
   const dumpFile = path.join(work, 'backup.dump');
   const fd = openSync(dumpFile, 'wx', 0o600);
   try {
-    run('docker', ['exec', ...['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE', 'PGCONNECT_TIMEOUT'].flatMap(k => ['-e', k]),
+    receipt.stage = 'dumping read-only snapshot';
+    run('docker', ['exec', ...['PGHOST', 'PGPORT', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGSSLMODE', 'PGSSLROOTCERT', 'PGCONNECT_TIMEOUT'].flatMap(k => ['-e', k]),
       container, 'pg_dump', '--format=custom', '--no-owner', '--no-acl', '--snapshot=' + snapshot],
     { env: liveEnv, stdio: ['ignore', fd, 'pipe'] });
   } finally { closeSync(fd); }
   await source.query('ROLLBACK');
   await source.end(); source = null;
+  receipt.stage = 'restoring disposable target';
   run('docker', ['cp', dumpFile, container + ':/tmp/backup.dump']);
   run('docker', ['exec', container, 'pg_restore', '--exit-on-error', '--no-owner', '--no-acl',
     '--username=postgres', '--dbname=postgres', '/tmp/backup.dump']);
+  receipt.stage = 'verifying complete table contents';
   for (const table of expected) {
     const sql = `SET TIME ZONE 'UTC'; SELECT row_to_json(result) FROM (${digestQuery(table.schemaname, table.tablename)}) result;`;
     const result = JSON.parse(run('docker', ['exec', container, 'psql', '-X', '-q', '-t', '-A', '-U', 'postgres', '-d', 'postgres', '-c', sql]));
