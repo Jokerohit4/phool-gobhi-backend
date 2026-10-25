@@ -55,6 +55,8 @@ redacted receipt is uploaded. Dumps, credentials and restored data are deleted;
 the source database is never restored or modified.
 
 Successful drill: [40197772078](https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40197772078).
+Dev: 146 tables / 15,991 rows. Production: 98 tables / 951 rows. All content
+hashes matched, both sources remained read-only, and cleanup succeeded.
 This verifies logical recovery, not recurring backup retention. Neon management
 access is also required to inspect the application's point-in-time recovery
 window. The analytics project has six hours of history; its historical clone
@@ -68,6 +70,9 @@ with permission denied. It now uses OIDC as
 on `booking-service-dev`. Its existing internal header and schedule are retained.
 Do not manually invoke the briefing endpoint for a health check: it sends pushes.
 Inspect the next scheduled execution to verify delivery.
+A separate temporary scheduler job successfully invoked booking `/health` with
+that same OIDC identity and was then removed. The real internal header also
+matches the current booking-service secret. No briefing was manually sent.
 
 ## Historical auth replay
 
@@ -79,3 +84,7 @@ ordered before its historical consumers. It creates missing foundations and
 is a no-op for already provisioned objects. The rehearsal stages this repair
 alongside the exact frozen old migration bytes and records its own checksum.
 Every existing strict replay, upgrade and native HTTP/PostgreSQL gate remains.
+The [repaired hosted rehearsal](https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40198394482)
+passed all 14 checks and removed its owned container and volumes before the
+repair was promoted to `dev`. The dev branch's independent rerun passed too:
+[40198557388](https://github.com/Jokerohit4/phool-gobhi-backend/actions/runs/40198557388).
