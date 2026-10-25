@@ -1,0 +1,43 @@
+name: Verify database backup restoration
+on:
+  push:
+    branches: [gym-hardening-continue]
+    paths:
+      - .github/workflows/verify-database-restore.yml
+      - deploy/scripts/verify-database-restore.cjs
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: docker pull postgres:17
+      - name: Read-only snapshot, disposable restore and complete table integrity check
+        env:
+          RESTORE_RECEIPT: ${{ runner.temp }}/restore-receipt.json
+        run: node deploy/scripts/verify-database-restore.cjs '${{ matrix.environment }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: restore-receipt-${{ matrix.environment }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/restore-receipt.json
+          if-no-files-found: error
+          retention-days: 30
