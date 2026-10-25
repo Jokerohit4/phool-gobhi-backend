@@ -63,6 +63,10 @@ try {
   try { await sinkAdmin.query("ALTER DATABASE e10_sink SET default_transaction_isolation TO 'repeatable read'"); }
   finally { await sinkAdmin.end(); }
   const urlFor = database => adminUrl.replace(/postgres$/, database);
+  // The oldest auth migrations use unqualified names. Prisma's default public
+  // search_path creates User in public, while later migrations address auth.User.
+  // Replay their original bytes against the service's declared auth namespace.
+  const historicalUrlFor = database => `${urlFor(database)}?schema=auth`;
   const prisma = resolve(root, 'services/auth-service/node_modules/prisma/build/index.js');
   const authPath = 'services/auth-service/prisma/schema.prisma';
   const sqlHash = text => createHash('sha256').update(text).digest('hex');
@@ -89,7 +93,7 @@ try {
 
   // Full historical chain is deliberately attempted as-is; never rewrite/resolve old migrations.
   const fresh = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', authPath],
-    { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_fresh') }, encoding: 'utf8', timeout: 180000 });
+    { cwd: root, env: { ...cleanEnv, DATABASE_URL: historicalUrlFor('e10_fresh') }, encoding: 'utf8', timeout: 180000 });
   log('fresh-migrate.local.log', (fresh.stdout ?? '') + (fresh.stderr ?? '') + (fresh.error?.message ?? ''));
   evidence.checks.push({ check: 'fresh historical migration chain', result: fresh.status === 0 ? 'passed' : 'failed',
     log: '.runtime/fresh-migrate.local.log' });
@@ -113,7 +117,7 @@ try {
     writeFileSync(file, bytes);
   }
   const oldDeploy = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', resolve(oldChain, 'schema.prisma')],
-    { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
+    { cwd: root, env: { ...cleanEnv, DATABASE_URL: historicalUrlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
   log('old-chain.local.log', (oldDeploy.stdout ?? '') + (oldDeploy.stderr ?? '') + (oldDeploy.error?.message ?? ''));
   evidence.checks.push({ check: 'old historical chain before E2', result: oldDeploy.status === 0 ? 'passed' : 'failed', log: '.runtime/old-chain.local.log' });
   if (oldDeploy.status === 0) {
@@ -122,10 +126,10 @@ try {
       // Discover Prisma's history schema rather than assume a connection search_path.
       const table = await migrationTable(old);
       const before = (await old.query(`SELECT * FROM ${table} ORDER BY id`)).rows;
-      await old.query(`INSERT INTO auth."User" (id,role,type,"updatedAt") VALUES (9001,'customer','general',now());
+      await old.query(`INSERT INTO auth."User" (id,email,password,role,type,"updatedAt") VALUES (9001,'e10-old-chain@example.invalid','synthetic-not-a-login','customer','general',now());
         INSERT INTO auth."CollectibleFind" ("userId","collectibleId") VALUES (9001,'e10-old-chain')`);
       const forward = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', authPath],
-        { cwd: root, env: { ...cleanEnv, DATABASE_URL: urlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
+        { cwd: root, env: { ...cleanEnv, DATABASE_URL: historicalUrlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });
       log('old-forward.local.log', (forward.stdout ?? '') + (forward.stderr ?? '') + (forward.error?.message ?? ''));
       if (forward.status !== 0) throw new Error('Populated old-table forward deployment failed; inspect old-forward.local.log');
       await verifyForward('e10_old_chain');

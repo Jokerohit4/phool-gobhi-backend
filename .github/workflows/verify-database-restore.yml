@@ -1,7 +1,7 @@
 name: Verify database backup restoration
 on:
   push:
-    branches: [gym-hardening-continue]
+    branches: [gym-hardening-continue, dev]
     paths:
       - .github/workflows/verify-database-restore.yml
       - deploy/scripts/verify-database-restore.cjs

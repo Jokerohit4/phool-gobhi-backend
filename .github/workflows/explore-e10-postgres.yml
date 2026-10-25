@@ -2,7 +2,12 @@ name: E10 disposable PostgreSQL rehearsal
 
 on:
   push:
-    branches: [feature/explore-e10-backend]
+    branches: [feature/explore-e10-backend, gym-hardening-continue, dev]
+    paths:
+      - .github/workflows/explore-e10-postgres.yml
+      - tools/explore-e10/**
+      - tools/explore-e2/**
+      - services/auth-service/prisma/**
   workflow_dispatch: {}
 
 permissions:
@@ -10,7 +15,7 @@ permissions:
 
 jobs:
   rehearse:
-    if: github.ref == 'refs/heads/feature/explore-e10-backend'
+    if: github.ref == 'refs/heads/feature/explore-e10-backend' || github.ref == 'refs/heads/gym-hardening-continue' || github.ref == 'refs/heads/dev'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
