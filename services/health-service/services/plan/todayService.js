@@ -153,12 +153,13 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   }
 
   // Load the journey once, then pass its on layers into the resolver.
-  const [layers, onLayerKeys, scoreOpen, pauseState] = await Promise.all([
+  const [layers, scoreOpen, pauseState, sessions] = await Promise.all([
     getLayers(prisma, userId, { journey }),
-    getOnLayerKeys(prisma, userId, { journey }),
     previousClose(prisma, { userId, localDate: resolvedDate }),
     getPauseState(prisma, userId, resolvedDate),
+    getSessions(prisma, userId, resolvedDate),
   ]);
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers });
   const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys });
   const showedUpDays = journey.showedUpDates ?? [];
 
@@ -168,9 +169,6 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   // Check easy start
   const easyStartUntil = journey.easyStartUntil ? todayIST() <= journey.easyStartUntil ? journey.easyStartUntil : null : null;
   const noMisses = easyStartUntil !== null || journey.easeBack === true;
-
-  // Get session info
-  const sessions = await getSessions(prisma, userId, resolvedDate);
 
   // Determine if today's workout is done
   const todayWorkoutRow = rows.find((r) => r.kind === 'workout');
@@ -246,15 +244,15 @@ export async function buildPlanDefinition(prisma, userId) {
   }
 
   // Load data in parallel
-  const [prescription, weeklyGoal, healthGoal, target, onLayerKeys, layers, templates] = await Promise.all([
+  const [prescription, weeklyGoal, healthGoal, target, layers, templates] = await Promise.all([
     prisma.prescription.findUnique({ where: { userId } }),
     prisma.weeklyGoal.findUnique({ where: { userId } }),
     prisma.healthGoal.findUnique({ where: { userId } }),
     prisma.nutritionTarget.findFirst({ where: { userId }, orderBy: { effectiveFrom: 'desc' } }),
-    getOnLayerKeys(prisma, userId, { journey }),
     getLayers(prisma, userId, { journey }),
     listTemplatesService(userId),
   ]);
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers });
 
   // Build settings
   const settings = {

@@ -16,6 +16,7 @@ mock.module('../services/ledger/ledgerConsentService.js', {
     getMedicalRecordsConsentService: async () => ({ granted: true }),
     hasNutritionScopeService: async () => true,
     hasMedicalRecordsScopeService: async () => true,
+    hasMedicalRecordsConsentService: async () => true,
   },
 });
 import { getLayers, getOnLayerKeys } from '../services/plan/layerState.js';
@@ -23,6 +24,20 @@ import { getLayers, getOnLayerKeys } from '../services/plan/layerState.js';
 test('layerState exports exist', async () => {
   assert.equal(typeof getLayers, 'function');
   assert.equal(typeof getOnLayerKeys, 'function');
+});
+
+test('on-layer keys use the supplied consent snapshot without loading another journey', async () => {
+  // No DB or journey is available: the already-resolved snapshot must suffice.
+  const keys = await getOnLayerKeys({}, 1, { layers: [
+    { layer: 1, state: 'on' },
+    { layer: 2, state: 'needs_consent' },
+    { layer: 3, state: 'locked' },
+  ] });
+  assert.ok(keys.includes('workout'));
+  assert.ok(keys.includes('water'));
+  assert.ok(keys.includes('own'));
+  assert.ok(!keys.includes('food'));
+  assert.ok(!keys.includes('steps'));
 });
 
 test('getLayers returns array with 5 layers for a new user', async () => {

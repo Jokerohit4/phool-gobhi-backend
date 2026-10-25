@@ -9,7 +9,7 @@ import { redact } from './redact.mjs';
 import { rehearseBootstrap } from './bootstrap.mjs';
 import { rehearseDevLineage } from './dev-lineage.mjs';
 import { bootstrapDatabases } from './bootstrap-inputs.mjs';
-import { baselineFiles, parentCommit, forwardMigrations, telemetryOutcomeConstraint } from './migration-inputs.mjs';
+import { baselineFiles, parentCommit, forwardMigrations, replayPrerequisites, telemetryOutcomeConstraint } from './migration-inputs.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runtime = resolve(root, 'tools/explore-e10/.runtime');
@@ -115,6 +115,16 @@ try {
     const file = resolve(oldChain, 'migrations', path);
     mkdirSync(resolve(file, '..'), {recursive: true});
     writeFileSync(file, bytes);
+  }
+  // Keep the frozen historical files exact, adding the independently versioned
+  // prerequisite repair that makes their originally external foundation real.
+  evidence.replayPrerequisites = [];
+  for (const migration of replayPrerequisites) {
+    const bytes = readFileSync(resolve(root, 'services/auth-service/prisma/migrations', migration, 'migration.sql'));
+    const directory = resolve(oldChain, 'migrations', migration);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(resolve(directory, 'migration.sql'), bytes);
+    evidence.replayPrerequisites.push({ migration, sha256: sqlHash(bytes) });
   }
   const oldDeploy = spawnSync(process.execPath, [prisma, 'migrate', 'deploy', '--schema', resolve(oldChain, 'schema.prisma')],
     { cwd: root, env: { ...cleanEnv, DATABASE_URL: historicalUrlFor('e10_old_chain') }, encoding: 'utf8', timeout: 180000 });

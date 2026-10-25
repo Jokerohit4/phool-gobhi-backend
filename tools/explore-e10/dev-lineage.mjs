@@ -122,7 +122,8 @@ export async function rehearseDevLineage({ root, runtime, container, prisma, env
     const oldIds = new Set(before.map(row => row.id));
     assert.deepEqual(after.filter(row => oldIds.has(row.id)), before, 'all 143 genuine rows, including superseded attempts and foreign services, must remain unchanged');
     const added = after.filter(row => !oldIds.has(row.id));
-    assert.deepEqual(added.map(row => row.migration_name).sort(), [...forwardMigrations].sort());
+    const pending = inputs.forward.filter(input => !before.some(row => row.migration_name === input.name && row.finished_at && !row.rolled_back_at));
+    assert.deepEqual(added.map(row => row.migration_name).sort(), pending.map(input => input.name).sort());
     for (const row of added) {
       assert.ok(row.finished_at && !row.rolled_back_at);
       assert.ok(inputs.forward.find(f => f.name === row.migration_name).checksums.includes(row.checksum));

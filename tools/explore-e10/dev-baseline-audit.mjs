@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parentCommit, forwardMigrations, baselineFiles } from './migration-inputs.mjs';
+import { parentCommit, forwardMigrations, replayPrerequisites, baselineFiles } from './migration-inputs.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -78,7 +78,7 @@ export function pinnedInputs(repositoryRoot = root) {
   }
   return {
     historical: sql.map(file => entry(file.path.split('/')[0], file.bytes)),
-    forward: forwardMigrations.map(name => entry(name, git(['show', `HEAD:services/auth-service/prisma/migrations/${name}/migration.sql`]))),
+    forward: [...replayPrerequisites, ...forwardMigrations].map(name => entry(name, git(['show', `HEAD:services/auth-service/prisma/migrations/${name}/migration.sql`]))),
     sourceCommit: git(['rev-parse', 'HEAD']).toString().trim(),
     foreign: [...foreignInputs.values()],
   };

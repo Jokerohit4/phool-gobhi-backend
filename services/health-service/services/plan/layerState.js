@@ -142,10 +142,11 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
  * @param {{journey?: object}} [options]
  * @returns {Promise<string[]>}
  */
-export async function getOnLayerKeys(prisma, userId, { journey } = {}) {
+export async function getOnLayerKeys(prisma, userId, { journey, layers: resolvedLayers } = {}) {
   const { JOURNEY } = await import('../journey/journeyConfig.js');
   const { hasMedicalRecordsConsentService } = await import('../ledger/ledgerConsentService.js');
-  const layers = await getLayers(prisma, userId, { journey });
+  // Callers assembling both views can reuse one consent/setup snapshot.
+  const layers = resolvedLayers ?? await getLayers(prisma, userId, { journey });
   const onKeys = [];
   for (const l of layers) {
     if (l.state === 'on') {

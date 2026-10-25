@@ -29,7 +29,8 @@ class Monitoring:
         self.token = cloud("auth", "print-access-token").strip()
 
     def request(self, collection, method="GET", data=None, query=None):
-        url = f"https://monitoring.googleapis.com/v3/projects/{PROJECT}/{collection}"
+        version = "v1" if collection.startswith("dashboards") else "v3"
+        url = f"https://monitoring.googleapis.com/{version}/projects/{PROJECT}/{collection}"
         if query:
             url += "?" + urlencode(query)
         req = Request(url, method=method, headers={
@@ -39,7 +40,10 @@ class Monitoring:
             with urlopen(req, timeout=45) as response:
                 return json.load(response)
         except HTTPError as error:
-            detail = json.loads(error.read()).get("error", {}).get("message", "request failed")
+            try:
+                detail = json.loads(error.read()).get("error", {}).get("message", "request failed")
+            except (ValueError, UnicodeError):
+                detail = "non-JSON API error"
             raise RuntimeError(f"Monitoring {method} {collection}: {error.code}: {detail}") from None
 
     def upsert(self, collection, payload):
@@ -47,6 +51,8 @@ class Monitoring:
         match = next((item for item in existing if item["displayName"] == payload["displayName"]), None)
         if match:
             payload = {**payload, "name": match["name"]}
+            if "etag" in match:
+                payload["etag"] = match["etag"]
             # Existing condition IDs must not be copied across different conditions.
             suffix = "/".join(match["name"].split("/")[-2:])
             result = self.request(suffix, "PATCH", payload)
@@ -121,6 +127,20 @@ def configure_monitoring(email):
                 "Keep internal services private and inspect the failing revision before rollback."},
             "userLabels": {"managed_by": "backend-operations"},
         })
+    tiles = []
+    for index, (title, metric, aligner) in enumerate([
+        ("Requests per second", "request_count", "ALIGN_RATE"),
+        ("Request latency p95 (ms)", "request_latencies", "ALIGN_PERCENTILE_95"),
+        ("Memory utilization p95", "container/memory/utilizations", "ALIGN_PERCENTILE_95"),
+        ("CPU utilization p95", "container/cpu/utilizations", "ALIGN_PERCENTILE_95"),
+    ]):
+        tiles.append({"xPos": (index % 2) * 6, "yPos": (index // 2) * 4, "width": 6, "height": 4,
+            "widget": {"title": title, "xyChart": {"dataSets": [{"plotType": "LINE", "timeSeriesQuery": {
+                "timeSeriesFilter": {"filter": f'resource.type="cloud_run_revision" AND metric.type="run.googleapis.com/{metric}"',
+                    "aggregation": {"alignmentPeriod": "300s", "perSeriesAligner": aligner,
+                        "crossSeriesReducer": "REDUCE_SUM" if metric == "request_count" else "REDUCE_MAX",
+                        "groupByFields": ["resource.labels.service_name"]}}}}]}}})
+    api.upsert("dashboards", {"displayName": "Backend operations", "mosaicLayout": {"columns": 12, "tiles": tiles}})
     print(json.dumps({"notificationChannelsAttached": len(channel_names), "policies": len(policies)}))
 
 

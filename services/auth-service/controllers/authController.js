@@ -364,7 +364,18 @@ const getAppConfig = async (req, res) => {
   // because the settings read threw.
   let social = { enabled: false };
   try {
-    const config = await loadAppVersionConfig();
+    // These independent reads previously took three database round trips on
+    // every app launch. Social failure still resolves to the fail-closed default.
+    const [config, otpProvider, bonusAmount, socialConfig] = await Promise.all([
+      loadAppVersionConfig(),
+      loadOtpProvider(),
+      loadProfileCompletionBonusAmount(),
+      socialConfigService.get().catch((err) => {
+        console.error('getAppConfig social error:', err);
+        return { enabled: false };
+      }),
+    ]);
+    social = socialConfig;
     entry = config?.[app]?.[platform] || entry;
     maintenance = resolveMaintenance(config);
     // Shallow-merge so a config blob that predates the features key (or only
@@ -381,19 +392,10 @@ const getAppConfig = async (req, res) => {
     // knew about — and the client's `?? false` made "deliberately off" and
     // "this server predates that flag" indistinguishable. flagsKnown below
     // makes the difference observable in one log line.
-    const [otpProvider, bonusAmount] = await Promise.all([
-      loadOtpProvider(),
-      loadProfileCompletionBonusAmount(),
-    ]);
     // Non-fatal: a social-config read failure leaves the seeded {enabled:false}
     // rather than aborting the whole app-config response, matching the
     // fail-open philosophy of this endpoint (a bad social read must not stop
     // the force-update check from reaching the app).
-    try {
-      social = await socialConfigService.get();
-    } catch (err) {
-      console.error('getAppConfig social error:', err);
-    }
     features = {
       ...DEFAULT_FEATURES,
       ...(config?.features || {}),

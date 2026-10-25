@@ -18,6 +18,7 @@ test('CI collector retains failed/not-started status, redacts logs and excludes 
   };
   try {
     for (const file of [
+      'services/auth-service/prisma/migrations/20260703000000_restore_auth_foundation/migration.sql',
       'tools/explore-e10/dev-lineage.mjs', 'tools/explore-e10/dev-lineage.test.mjs', 'tools/explore-e10/capture-dev-lineage.mjs',
       'tools/explore-e10/dev-baseline-audit.mjs', 'tools/explore-e10/dev-baseline-audit.test.mjs',
       'index.js', 'package.json', 'utils/analytics.js', 'utils/exploreQueueDiagnosticSchema.js',

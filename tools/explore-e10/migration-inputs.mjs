@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 export const parentCommit = '5214fa8dd8242093e542bd89a169dcf9321753b2';
 export const migrationPath = 'services/auth-service/prisma/migrations/';
+export const replayPrerequisites = ['20260703000000_restore_auth_foundation'];
 export const forwardMigrations = [
   '20261023000000_exploration_core',
   '20261023000100_drop_unreleased_collectible_find',
