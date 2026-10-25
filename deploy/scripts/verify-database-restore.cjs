@@ -57,6 +57,11 @@ const digestQuery = (schema, table) => `SELECT count(*)::text AS count,
   { env: { ...process.env, POSTGRES_PASSWORD: password } });
   owned = true;
   run('docker', ['start', container]);
+  // Use the same audited root set as this Node client, retaining hostname and
+  // certificate verification even when the PostgreSQL image's CA set is stale.
+  const roots = path.join(work, 'root-ca.pem');
+  writeFileSync(roots, require('node:tls').rootCertificates.join('\n') + '\n', { mode: 0o600 });
+  run('docker', ['cp', roots, container + ':/tmp/root-ca.pem']);
   for (let attempt = 0; ; attempt++) {
     const ready = spawnSync('docker', ['exec', container, 'pg_isready', '-U', 'postgres'], { stdio: 'ignore' });
     if (ready.status === 0) break;
@@ -65,7 +70,7 @@ const digestQuery = (schema, table) => `SELECT count(*)::text AS count,
   }
   const liveEnv = { ...process.env, PGHOST: uri.hostname, PGPORT: uri.port || '5432',
     PGUSER: decodeURIComponent(uri.username), PGPASSWORD: decodeURIComponent(uri.password),
-    PGDATABASE: uri.pathname.slice(1), PGSSLMODE: 'verify-full', PGSSLROOTCERT: 'system', PGCONNECT_TIMEOUT: '15' };
+    PGDATABASE: uri.pathname.slice(1), PGSSLMODE: 'verify-full', PGSSLROOTCERT: '/tmp/root-ca.pem', PGCONNECT_TIMEOUT: '15' };
   const dumpFile = path.join(work, 'backup.dump');
   const fd = openSync(dumpFile, 'wx', 0o600);
   try {
