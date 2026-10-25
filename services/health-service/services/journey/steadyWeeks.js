@@ -10,12 +10,12 @@ export function countSteadyWeeks(showedUpDays) {
   const weekMap = new Map();
 
   for (const dayStr of showedUpDays) {
-    const date = new Date(`${dayStr}T00:00:00`);
-    // Get Monday of this week (0 = Sunday, 1 = Monday, etc.)
-    const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const date = new Date(`${dayStr}T00:00:00Z`);
+    // Get Monday of this week (0 = Sunday, 1 = Monday, etc.) using UTC methods to avoid runtime TZ
+    const dayOfWeek = date.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Monday is 1
     const monday = new Date(date);
-    monday.setDate(date.getDate() + mondayOffset);
+    monday.setUTCDate(date.getUTCDate() + mondayOffset);
     const mondayStr = monday.toISOString().slice(0, 10);
 
     if (!weekMap.has(mondayStr)) {
@@ -43,11 +43,11 @@ export function getSteadyWeeksDetail(showedUpDays) {
   const weekMap = new Map();
 
   for (const dayStr of showedUpDays) {
-    const date = new Date(`${dayStr}T00:00:00`);
-    const dayOfWeek = date.getDay();
+    const date = new Date(`${dayStr}T00:00:00Z`);
+    const dayOfWeek = date.getUTCDay();
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monday = new Date(date);
-    monday.setDate(date.getDate() + mondayOffset);
+    monday.setUTCDate(date.getUTCDate() + mondayOffset);
     const mondayStr = monday.toISOString().slice(0, 10);
 
     if (!weekMap.has(mondayStr)) {

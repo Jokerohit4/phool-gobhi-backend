@@ -22,8 +22,8 @@ export async function checkAndTriggerHomeDaysReferral(userId, showedUpDays, prog
   // Check span >= 7 calendar days
   const firstDay = showedUpDays[showedUpDays.length - 1]; // oldest (days sorted newest first)
   const lastDay = showedUpDays[0]; // newest
-  const firstDate = new Date(`${firstDay}T00:00:00`);
-  const lastDate = new Date(`${lastDay}T00:00:00`);
+  const firstDate = new Date(`${firstDay}T00:00:00Z`);
+  const lastDate = new Date(`${lastDay}T00:00:00Z`);
   const spanDays = Math.floor((lastDate - firstDate) / (1000 * 60 * 60 * 24)) + 1;
   if (spanDays < 7) return;
 

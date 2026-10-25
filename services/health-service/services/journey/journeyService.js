@@ -48,7 +48,7 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
   if (showedUpDays.length >= foodUnlock.unlock.need) {
     // Find when the 3rd day was reached
     const thirdDay = showedUpDays[showedUpDays.length - foodUnlock.unlock.need];
-    unlocked.push({ layer: 2, at: new Date(`${thirdDay}T00:00:00`).toISOString(), via: 'showed_up' });
+    unlocked.push({ layer: 2, at: new Date(`${thirdDay}T00:00:00Z`).toISOString(), via: 'showed_up' });
   } else if (progress.foodEarlyAt) {
     unlocked.push({ layer: 2, at: progress.foodEarlyAt.toISOString(), via: 'early' });
   }
@@ -59,7 +59,7 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
     const detail = getSteadyWeeksDetail(showedUpDays);
     if (detail.length >= bodyUnlock.unlock.need) {
       const secondWeekStart = detail[detail.length - bodyUnlock.unlock.need].weekStart;
-      unlocked.push({ layer: 3, at: new Date(`${secondWeekStart}T00:00:00`).toISOString(), via: 'steady_weeks' });
+      unlocked.push({ layer: 3, at: new Date(`${secondWeekStart}T00:00:00Z`).toISOString(), via: 'steady_weeks' });
     }
   }
 
@@ -69,7 +69,7 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
     const detail = getSteadyWeeksDetail(showedUpDays);
     if (detail.length >= suppUnlock.unlock.need) {
       const fourthWeekStart = detail[detail.length - suppUnlock.unlock.need].weekStart;
-      unlocked.push({ layer: 4, at: new Date(`${fourthWeekStart}T00:00:00`).toISOString(), via: 'steady_weeks' });
+      unlocked.push({ layer: 4, at: new Date(`${fourthWeekStart}T00:00:00Z`).toISOString(), via: 'steady_weeks' });
     }
   }
 
@@ -79,7 +79,7 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
     const detail = getSteadyWeeksDetail(showedUpDays);
     if (detail.length >= healthUnlock.unlock.need) {
       const sixthWeekStart = detail[detail.length - healthUnlock.unlock.need].weekStart;
-      unlocked.push({ layer: 5, at: new Date(`${sixthWeekStart}T00:00:00`).toISOString(), via: 'steady_weeks' });
+      unlocked.push({ layer: 5, at: new Date(`${sixthWeekStart}T00:00:00Z`).toISOString(), via: 'steady_weeks' });
     }
   }
 
@@ -363,11 +363,11 @@ export async function getJourneySummary(userId) {
 
   // This week's showed-up days (Monday-start week)
   const today = todayLocalDate();
-  const todayDate = new Date(`${today}T00:00:00`);
-  const dayOfWeek = todayDate.getDay();
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  const dayOfWeek = todayDate.getUTCDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const monday = new Date(todayDate);
-  monday.setDate(todayDate.getDate() + mondayOffset);
+  monday.setUTCDate(todayDate.getUTCDate() + mondayOffset);
   const mondayStr = monday.toISOString().slice(0, 10);
   const showedUpThisWeek = showedUpDays.filter((d) => d >= mondayStr).length;
 

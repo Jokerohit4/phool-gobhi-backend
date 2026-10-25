@@ -85,13 +85,13 @@ async function getSessions(prisma, userId, today) {
   const slots = prescription?.workoutSlots ?? [];
   if (!slots.length) return { today: null, tomorrow: null };
 
-  const todayDate = new Date(`${today}T00:00:00`);
-  const todayWeekday = todayDate.getDay(); // 0 = Sunday
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  const todayWeekday = todayDate.getUTCDay(); // 0 = Sunday
   const todayISOWeekday = todayWeekday === 0 ? 6 : todayWeekday - 1; // 0 = Monday
 
   const tomorrowDate = new Date(todayDate);
-  tomorrowDate.setDate(todayDate.getDate() + 1);
-  const tomorrowWeekday = tomorrowDate.getDay();
+  tomorrowDate.setUTCDate(todayDate.getUTCDate() + 1);
+  const tomorrowWeekday = tomorrowDate.getUTCDay();
   const tomorrowISOWeekday = tomorrowWeekday === 0 ? 6 : tomorrowWeekday - 1;
 
   const todaySlot = slots.find((s) => Number(s.weekday) === todayISOWeekday);
