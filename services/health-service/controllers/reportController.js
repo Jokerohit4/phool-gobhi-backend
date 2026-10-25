@@ -34,7 +34,7 @@ import { isAllowedReportMimeType, saveDocument } from '../services/ledger/medica
 // length of one request.
 export const uploadReport = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.userId;
 
     if (!req.file) {
       return res.status(400).json({ error: 'No file received', code: 'NO_FILE' });
@@ -114,7 +114,7 @@ export const uploadReport = async (req, res) => {
 
 export const listReports = async (req, res) => {
   try {
-    const reports = await listReportsService(req.user.id);
+    const reports = await listReportsService(req.userId);
     res.json({ data: reports });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Internal server error' });
@@ -123,7 +123,7 @@ export const listReports = async (req, res) => {
 
 export const getPendingExtractions = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.userId;
     const extractions = await getPendingExtractionsService(userId);
     res.json({ data: extractions });
   } catch (err) {
@@ -134,7 +134,7 @@ export const getPendingExtractions = async (req, res) => {
 export const verifyExtraction = async (req, res) => {
   try {
     const { extractionId, confirmedValue } = req.body;
-    const userId = req.user.id;
+    const userId = req.userId;
 
     if (!extractionId || confirmedValue === undefined) {
       return res.status(400).json({ error: 'extractionId and confirmedValue are required' });
@@ -154,7 +154,7 @@ export const verifyExtraction = async (req, res) => {
 
 export const deleteReport = async (req, res) => {
   try {
-    const out = await deleteReportService({ reportId: req.params.id, userId: req.user.id });
+    const out = await deleteReportService({ reportId: req.params.id, userId: req.userId });
     res.json({ data: out });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Internal server error' });

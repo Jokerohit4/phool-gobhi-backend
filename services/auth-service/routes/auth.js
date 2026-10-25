@@ -1,7 +1,8 @@
 import exploreRoutes from '../exploration/routes.js';
 import { Router } from 'express';
+import { registerPushToken, unregisterPushToken } from '../controllers/pushTokenController.js';
 const router = Router();
-import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -105,7 +106,8 @@ router.patch('/gym/:gymId/trainers/:trainerId', verifyToken, updateTrainerStatus
 router.get('/bank-account', verifyToken, getBankAccount);
 router.put('/bank-account', verifyToken, updateBankAccount);
 router.get('/admin/bank-account/:userId', requireGobhi, getBankAccountAdmin);
-router.post('/fcm-token', verifyToken, updateFcmToken);
+router.post('/fcm-token', verifyToken, registerPushToken);
+router.delete('/fcm-token', verifyToken, unregisterPushToken);
 // Per-gym attendance leaderboards (booking-service) are on by default; this
 // is the profile-side opt-out (no toggle on the board itself).
 router.put('/leaderboard-opt-in', verifyToken, updateLeaderboardOptIn);

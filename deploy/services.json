@@ -313,6 +313,7 @@
             "ANALYTICS_PROVIDER": "postgres",
             "ANALYTICS_SERVICE_NAME": "health-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "MEDICAL_BUCKET_NAME": "phool-gobhi-medical-dev",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
             "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",

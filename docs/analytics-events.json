@@ -1265,5 +1265,50 @@
     "source": "client",
     "service": "auth-service",
     "experiment_variant": ""
+  },
+  "explore_visible": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Once per visible Explore session; entry source and supported-world state. See customer-app/docs/explore-world-plan.md C7."
+  },
+  "explore_session_ended": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Visible Explore duration and coarse outcome; duration is not a success measure."
+  },
+  "explore_find_nearby": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Once per visible session with a usable fresh fix; available uncollected finds within 150 m and distinct occurrence count, without coordinates."
+  },
+  "explore_target_presented": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Eligible Explore suggestion rendered, including location/coverage availability."
+  },
+  "explore_encounter_started": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Explore catch encounter opened; no coordinates."
+  },
+  "explore_encounter_result": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Explore catch result, attempt count and rarity tier; no coordinates."
+  },
+  "explore_pickup_pending": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Pickup candidate durably queued; occurrence kind and connectivity, without proof or coordinates."
+  },
+  "explore_collection_viewed": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Real Explore journal access, not a food or exercise outcome."
+  },
+  "explore_gym_opened": {
+    "source": "client",
+    "service": "customer-app",
+    "notes": "Explicit Explore map-to-gym-detail handoff with funnel attribution."
   }
 }

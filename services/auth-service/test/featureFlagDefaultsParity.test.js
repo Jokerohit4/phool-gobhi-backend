@@ -127,6 +127,11 @@ test('the client resolves a missing key the same way the registry defaults it', 
   for (const m of dart.matchAll(/(\w+Enabled):\s*\w+\['enabled'\]\s+as\s+bool\?\s*\?\?\s*(true|false)\s*,?/g)) {
     fromJson.set(m[1], m[2] === 'true');
   }
+  // Strict equality is another fail-closed decoder: a missing/null key can
+  // never equal true. Preserve the same comparison against registry defaults.
+  for (const m of dart.matchAll(/(\w+Enabled):\s*\w+\['enabled'\]\s*==\s*true\s*,/g)) {
+    fromJson.set(m[1], false);
+  }
 
   const divergence = [];
   for (const flag of FEATURE_FLAGS) {
@@ -175,6 +180,22 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
     cubitDefaults.set(m[1], m[2] === 'true');
   }
 
+  // Current cubits delegate to the one store rather than duplicating flags.
+  // Follow that exact fallback chain, then compare the model's parsed literal
+  // values below; a renamed getter or a different fallback must still fail.
+  const delegated = [...dart.matchAll(/bool\s+get\s+(\w+)\s*=>\s*_config\.(\w+)\s*;/g)];
+  if (delegated.length) {
+    assert.match(dart, /_failClosed\s*=\s*AppConfigModel\.notRequired\(\)/);
+    assert.match(dart, /AppConfigModel\s+get\s+_config\s*=>\s*_store\.config\s*\?\?\s*_failClosed/);
+    const fallback = readDartNotRequired();
+    assert.ok(fallback, 'cannot resolve the delegated model fallback');
+    for (const [, key, property] of delegated) {
+      assert.equal(key, property, 'a cubit flag delegates to a different model property');
+      assert.ok(fallback.has(property), `missing model fallback for ${property}`);
+      cubitDefaults.set(key, fallback.get(property));
+    }
+  }
+
   assert.ok(cubitDefaults.size > 0, 'found no bool flag fields in the cubit');
 
   // Flags the cubit deliberately does not carry. Each is read straight off
@@ -193,6 +214,7 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
     'selfLinkGymEnabled',
     'referralHomeTriggerEnabled',
     'coachAssistantEnabled',
+    'exploreFoodFindsEnabled',
   ]);
 
   const divergence = [];
