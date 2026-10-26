@@ -152,7 +152,8 @@ export function summariseAttendance(events) {
 const LOCATION_PHRASES = {
   home: 'at home',
   gym: 'at a gym',
-  fitness_centre: 'at a gym',
+  fitness_centre: 'at a fitness centre',
+  sports: 'playing sports',
   other: 'somewhere other than a gym or home',
 };
 const FREQUENCY_PHRASES = {

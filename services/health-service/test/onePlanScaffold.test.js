@@ -162,6 +162,7 @@ test('the always-on keys, row kinds and default targets are in place', () => {
   assert.equal(DEFAULT_STEPS, 6000);
   assert.equal(DEFAULT_SLEEP_MIN, 420);
   assert.equal(startLayerFor('new_to_gym'), 1);
+  assert.equal(startLayerFor('just_started'), 1);
   assert.equal(startLayerFor('restarting_after_break'), 2);
   assert.equal(startLayerFor('experienced'), 5);
   assert.equal(startLayerFor('unknown'), 1, 'unknown levels fall back to layer 1');

@@ -247,7 +247,7 @@ export async function getJourney(userId) {
 export async function startJourney(userId, { experienceLevel, goals, daysPerWeek, location, quitReason }) {
   const level = experienceLevel ?? DEFAULT_EXPERIENCE_LEVEL;
   const startLayer = JOURNEY.startLayer[level] ?? 1;
-  const easyStartUntil = (level === 'new_to_gym' || level === 'restarting_after_break')
+  const easyStartUntil = (level === 'new_to_gym' || level === 'just_started' || level === 'restarting_after_break')
     ? addDays(todayLocalDate(), JOURNEY.easyStartDays)
     : null;
 

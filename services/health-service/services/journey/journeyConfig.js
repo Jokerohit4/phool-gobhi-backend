@@ -20,7 +20,7 @@ export const JOURNEY = {
     { layer: 5, key: 'health',      layerKeys: ['health'],           unlock: { type: 'steady_weeks', need: 6 },
       consent: { scope: 'medical_records' }, flags: ['healthMetrics','healthLedger'] },
   ],
-  startLayer: { new_to_gym: 1, restarting_after_break: 2, experienced: 5 },
+  startLayer: { new_to_gym: 1, just_started: 1, restarting_after_break: 2, experienced: 5 },
   easyStartDays: 14,
   inactivePauseAfterDays: 7,
   steadyWeekMinDays: 2,

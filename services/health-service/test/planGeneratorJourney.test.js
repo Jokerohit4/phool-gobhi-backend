@@ -48,6 +48,7 @@ test('the layer map matches the Contracts', () => {
 test('the starting layers match the Contracts', () => {
   assert.deepEqual(JOURNEY.startLayer, {
     new_to_gym: 1,
+    just_started: 1,
     restarting_after_break: 2,
     experienced: 5,
   });

@@ -33,8 +33,8 @@ export async function startJourneyController(req, res) {
   try {
     const { experienceLevel, goals, daysPerWeek, location, quitReason } = req.body || {};
 
-    if (!experienceLevel || !['new_to_gym', 'restarting_after_break', 'experienced'].includes(experienceLevel)) {
-      return res.status(400).json({ error: 'experienceLevel must be one of: new_to_gym, restarting_after_break, experienced', code: 'INVALID_EXPERIENCE_LEVEL' });
+    if (!experienceLevel || !['new_to_gym', 'just_started', 'restarting_after_break', 'experienced'].includes(experienceLevel)) {
+      return res.status(400).json({ error: 'experienceLevel must be one of: new_to_gym, just_started, restarting_after_break, experienced', code: 'INVALID_EXPERIENCE_LEVEL' });
     }
     if (!Array.isArray(goals)) {
       return res.status(400).json({ error: 'goals must be an array', code: 'INVALID_GOALS' });
@@ -43,8 +43,8 @@ export async function startJourneyController(req, res) {
     if (!Number.isInteger(dpw) || dpw < 1 || dpw > 7) {
       return res.status(400).json({ error: 'daysPerWeek must be an integer between 1 and 7', code: 'INVALID_DAYS_PER_WEEK' });
     }
-    if (!location || !['gym', 'home'].includes(location)) {
-      return res.status(400).json({ error: 'location must be "gym" or "home"', code: 'INVALID_LOCATION' });
+    if (!location || !['gym', 'home', 'fitness_centre', 'sports', 'other'].includes(location)) {
+      return res.status(400).json({ error: 'location must be one of: gym, home, fitness_centre, sports, other', code: 'INVALID_LOCATION' });
     }
     if (quitReason && !['time', 'boredom', 'no_results', 'injury', 'alone'].includes(quitReason)) {
       return res.status(400).json({ error: 'quitReason must be one of: time, boredom, no_results, injury, alone', code: 'INVALID_QUIT_REASON' });

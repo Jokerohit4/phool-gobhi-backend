@@ -36,6 +36,7 @@ export const START_LAYER = JOURNEY.startLayer;
 // claims, because a target a beginner clears is the target a beginner keeps.
 const LEVEL_DEFAULTS = {
   new_to_gym: { stepsPerDay: 6000, sleepMinutes: DEFAULT_SLEEP_MINUTES },
+  just_started: { stepsPerDay: 6000, sleepMinutes: DEFAULT_SLEEP_MINUTES },
   restarting_after_break: { stepsPerDay: 8000, sleepMinutes: DEFAULT_SLEEP_MINUTES },
   experienced: { stepsPerDay: 8000, sleepMinutes: DEFAULT_SLEEP_MINUTES },
 };
@@ -52,6 +53,7 @@ function levelDefaults(experienceLevel) {
 // intermediate gym content this task does not own.
 const TEMPLATE_LEVEL_BY_EXPERIENCE = {
   new_to_gym: 'beginner',
+  just_started: 'beginner',
   restarting_after_break: 'beginner',
   experienced: 'intermediate',
 };
@@ -105,8 +107,27 @@ const HOME_TEMPLATE_POOL = {
   ],
 };
 
+// A fitness centre or sports preference does not mean the user wants a
+// weight-based gym routine. Begin with general movement and mobility work.
+const MOVEMENT_TEMPLATE_POOL = {
+  beginner: [
+    'Low-impact cardio (no jumping)',
+    'Mobility & stretch',
+    'Desk reset — 8 minute',
+  ],
+  intermediate: [
+    'Low-impact cardio (no jumping)',
+    'Mobility & stretch',
+    'Desk reset — 8 minute',
+  ],
+};
+
 function poolFor(location, requestedLevel) {
-  const pool = location === 'home' ? HOME_TEMPLATE_POOL : GYM_TEMPLATE_POOL;
+  const pool = location === 'home'
+    ? HOME_TEMPLATE_POOL
+    : location === 'gym'
+      ? GYM_TEMPLATE_POOL
+      : MOVEMENT_TEMPLATE_POOL;
   // A pool with nothing at the requested difficulty falls back to beginner
   // rather than producing a week of null templates: a plan that says
   // "Workout" tells nobody what to do.
@@ -184,8 +205,8 @@ export async function createStarterPlan(prisma, userId, {
   if (experienceLevel != null && !(level in LEVEL_DEFAULTS)) {
     throw badRequest(`experienceLevel must be one of: ${Object.keys(LEVEL_DEFAULTS).join(', ')}`);
   }
-  if (location !== 'gym' && location !== 'home') {
-    throw badRequest('location must be "gym" or "home"');
+  if (!['gym', 'home', 'fitness_centre', 'sports', 'other'].includes(location)) {
+    throw badRequest('location must be one of: gym, home, fitness_centre, sports, other');
   }
   const sessions = Number(daysPerWeek);
   if (!Number.isInteger(sessions) || sessions < 1 || sessions > 7) {
