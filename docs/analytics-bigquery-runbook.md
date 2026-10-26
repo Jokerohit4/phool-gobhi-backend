@@ -123,3 +123,20 @@ in the managed pipeline. Never delete a source database as part of rollback.
 Production migration images are based on provenance-verified live production source,
 with an audited analytics patch only. Do not deploy the current dev application to
 production merely to reproduce this migration.
+
+## Legacy compute and QA exception
+
+`analytics-neon-retirement.json` records that the dedicated production analytics
+endpoint is idle and uses the default five-minute suspension policy. Its source
+contents were unchanged across final snapshots, and no operational database URL
+references it. Retained source storage can still incur storage charges.
+
+The pre-existing `partner-auth-validation` tag on auth-service-dev has zero assigned
+traffic and keeps its own QA revision. It uses dev's shared database and cannot
+wake the dedicated production analytics compute. Retire or migrate that tag when
+its separate feature validation ends; do not promote its older analytics settings.
+
+The migration code/configuration is promoted through dev. A future normal production
+release must include this migration commit; the pre-migration main manifest still
+selects PostgreSQL. Current production images are the separately validated patches
+recorded in the deployment receipt, preserving its existing application version.

@@ -176,3 +176,26 @@ Pricing/reference sources:
   disables suspension. The dedicated analytics endpoint was observed idle. Moving
   analytics cannot eliminate transactional Neon charges; dev analytics shared the
   transactional database and that database stays running.
+
+## Final cutover evidence
+
+- Both serving environments now use BigQuery (16 service configurations); both
+  booking read providers are BigQuery. All sixteen deployment health checks passed.
+- Final consistent snapshots matched 10,096 dev rows and 8,330 production rows.
+  Source deletion reconciliation excludes 1,315 obsolete dev logical event IDs.
+- Production contents stayed unchanged across snapshots 1,378 seconds apart after
+  old writers stopped. The dedicated legacy analytics endpoint was verified idle,
+  with its five-minute default suspension policy; no operational URL uses it.
+  Source data remains available for rollback. The shared dev compute was unchanged.
+- Live synthetic HTTP replays preserved their original occurrence time, yielded one
+  logical report event, omitted new raw IP/user-agent fields, and wrote zero rows
+  to PostgreSQL. Synthetic probe rows were cleaned up with late-replay suppression.
+- The existing zero-traffic `partner-auth-validation` dev tag keeps its separate QA
+  revision and shared dev database. It is not used by production or normal gateway
+  traffic. Migrate/retire that validation tag before promoting it; its feature
+  validation was deliberately preserved.
+- Hosted PR checks passed all eight unit suites, all eight Docker builds, PostgreSQL
+  integration and preflight. The CLI entry points ran successfully in both
+  environments with no PostgreSQL URL provided.
+- Current audit, rollout, pipeline, report, cost and retirement receipts live beside
+  this document. See [operations and rollback](analytics-bigquery-runbook.md).
