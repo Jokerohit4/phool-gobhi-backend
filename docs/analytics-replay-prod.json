@@ -1,0 +1,8 @@
+{
+  "environment": "prod",
+  "existingEventReplayed": true,
+  "rawCopies": 2,
+  "reportCopies": 1,
+  "passed": true,
+  "payloadLogged": false
+}

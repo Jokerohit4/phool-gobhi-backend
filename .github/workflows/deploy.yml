@@ -206,6 +206,8 @@ jobs:
           else
             echo "deploy/scripts/check-undeclared-imports.cjs not present on this branch — skipping."
           fi
+      - name: Check canonical analytics modules
+        run: node tools/analytics/sync.mjs --check
 
   # PR events never deploy (the WIF provider's attribute-condition wouldn't
   # accept a PR merge ref anyway) — instead just prove each changed service's

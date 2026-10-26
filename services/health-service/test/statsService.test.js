@@ -19,7 +19,8 @@ let lastFindManyArgs = null;
 let getStatsService;
 
 function isoDay(offsetDays = 0) {
-  const d = new Date();
+  // The service groups IST calendar days; UTC yesterday can be a different week.
+  const d = new Date(Date.now() + 330 * 60 * 1000);
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCDate(d.getUTCDate() - offsetDays);
   return d.toISOString().slice(0, 10);

@@ -1,0 +1,190 @@
+{
+  "asOfUtc": "2026-10-26T09:27:03.383789+00:00",
+  "project": "phool-gobhi",
+  "region": "asia-south1",
+  "servingServices": 16,
+  "services": [
+    {
+      "service": "gateway-dev",
+      "revision": "gateway-dev-00064-vw7",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gateway-dev@sha256:7d4a5fa8946989b97ce960a28353ff8a2a98e720dca8f8be562a95ddba8787a6",
+      "buildId": "3fd1468c-beb1-43f7-ae7b-314a29e0cbbb",
+      "runtimeAccount": "gateway-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gateway-dev@sha256:2c006b3e5389bf56f04704456a1bd7e25042a92e1c46adf5360e79c0ed96ed8f",
+      "originalSourceArchiveSha256": "404c23fd828f035c31ac0808b30e4640895fcf369e4cb7c12669d456cd725c75"
+    },
+    {
+      "service": "auth-service-dev",
+      "revision": "auth-service-dev-00110-5ch",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/auth-service-dev@sha256:94e8627016ff2cf4f0885a52569dc8ef1c28732d381dc0db8fa397f19c5b3999",
+      "buildId": "5239e713-dbdf-44f9-ab34-ef3fdfd58917",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/auth-service-dev@sha256:33828f6a2959f4b9475ec64fbc6f471e100418b44038af02458696fab2190948",
+      "originalSourceArchiveSha256": "f06a917fd4fa00bdfc1573a7503982e4bcfa910e7bb2e8ca9296825e412490e4"
+    },
+    {
+      "service": "gym-service-dev",
+      "revision": "gym-service-dev-00070-x2r",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gym-service-dev@sha256:de4891b4785536f16875793dc302fabd261bf51aa4fec2e51c1617247ce769fa",
+      "buildId": "d92815cf-197d-4994-92fc-c01358152cdc",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gym-service-dev@sha256:55dbfb2ccbab6a8abebf510fb576a1754eeb84c4110ad568966cb6251ce534ea",
+      "originalSourceArchiveSha256": "d968bf8929da839c99c3c15640ba7b9bf1fd2624dd61fa08f32713c8ce49b242"
+    },
+    {
+      "service": "wallet-service-dev",
+      "revision": "wallet-service-dev-00060-x94",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/wallet-service-dev@sha256:704d649de749a9d37b3a5dd9f7ac5d5506301c9aca230813b145d54eb4272711",
+      "buildId": "5f04d1dc-f1f3-45a0-9d2c-0f07dce0e2bf",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/wallet-service-dev@sha256:991331a2653dac7f09167d1af2cc805787c38923830334a70cff65cf142cbcb2",
+      "originalSourceArchiveSha256": "2f47fedc339126e902eed3fe59648d380a869c430cf42037cb9f6289430b811b"
+    },
+    {
+      "service": "booking-service-dev",
+      "revision": "booking-service-dev-00094-2wd",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/booking-service-dev@sha256:0bc00074c7dd3d7b9334e4b2efa582feb3a873d74c16390d2ac3d1204840f567",
+      "buildId": "8a24fa27-5c17-4a6b-a994-ea503b3a4a7b",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": "bigquery",
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/booking-service-dev@sha256:c8410d8e1ae970af1643418560c9021aff8a4c0bf5b7de53ac989a8d43901619",
+      "originalSourceArchiveSha256": "21dfc1a97e0fdb6f8844e2601b9bf86326b5d4729bcb2e55d823175c28973751"
+    },
+    {
+      "service": "buddy-service-dev",
+      "revision": "buddy-service-dev-00049-25w",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/buddy-service-dev@sha256:777b7bb31224ad2aef9d73549d57c3c00fdcdc4d64f836cf3ea8dbc34c43d31c",
+      "buildId": "70a170b5-5a55-49ee-a3c2-93d9dccbeefd",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/buddy-service-dev@sha256:7caab813e67cc1197c3a7e90f9b21ea39157fc10f22e65e40981e40deb624b40",
+      "originalSourceArchiveSha256": "62959a0012a2028f94fdf1392ed39837a5694cd6efb00467f1bf7a52bfd5a985"
+    },
+    {
+      "service": "challenge-service-dev",
+      "revision": "challenge-service-dev-00029-nmk",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/challenge-service-dev@sha256:43d78f6d7284dc5961fc93d838bbebf60fe621007164e4e6071d0f1f847fa8ef",
+      "buildId": "9af09572-3a10-4d02-bac1-02d3af5f7d8a",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/challenge-service-dev@sha256:ff5170ff72494d52a4ee48b0137914ee9c76257071d5d07e4c4706a28da93418",
+      "originalSourceArchiveSha256": "2c10c54f74d157825f1a1144f8b87175d7779f0d8851dbc71e876066d6682c9b"
+    },
+    {
+      "service": "health-service-dev",
+      "revision": "health-service-dev-00098-78j",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/health-service-dev@sha256:157b1c27488b2abb005dc4b7e69f3d0ab9f89f36d451304209bc599333b5792d",
+      "buildId": "67ed125b-ebc9-46d5-8c93-28466ac19ee0",
+      "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/health-service-dev@sha256:805ae3ce3f533362a54d82144800db52121d409ed9270bde7aa1901bcdbffbb5",
+      "originalSourceArchiveSha256": "c3068743152cfd3b5bd9e8e570444780cc7509559aaecc7aa8d2d9a899963ad0"
+    },
+    {
+      "service": "gateway-prod",
+      "revision": "gateway-prod-00025-9gm",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gateway-prod@sha256:75193308c8e10fcfecaca0ef670e59447fe5e4382c360edd4d9d036f7c0b7337",
+      "buildId": "72da2d9d-b25c-4127-b3ee-17802ba25bc0",
+      "runtimeAccount": "gateway-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gateway-prod@sha256:2a2e5b46efdd2c1979a892548486b6137627514ebacd611127e5801e313e1fa0",
+      "originalSourceArchiveSha256": "e3e6914130f9b0e73cdbf19c6456e28c3b7840574c932fd20e6dc38b1048dd76"
+    },
+    {
+      "service": "auth-service-prod",
+      "revision": "auth-service-prod-00031-mch",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/auth-service-prod@sha256:d4e7ff628026a4cd02c8708c7b0b70ef7347c161acfb0475abe16099f0e66e35",
+      "buildId": "66c61373-5658-44d0-88ea-a240dca6337f",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/auth-service-prod@sha256:fc9f16e79ed5a166e47ed83f40336f7583345a35cb1f05b8e5ca2a8bb8b6f4ae",
+      "originalSourceArchiveSha256": "40631f5d547bd803235ce230cf0a7d1d332ce066fe187b74c4c92ce428b5657a"
+    },
+    {
+      "service": "gym-service-prod",
+      "revision": "gym-service-prod-00040-md5",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gym-service-prod@sha256:a2d938411f349c9a09e320e2c9a05b48c334b9214de6d159572d28f1454191dd",
+      "buildId": "a4df7b27-5fda-48d1-81ed-0bc3c739a3f8",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/gym-service-prod@sha256:6c649b90010d09db64699ba9eff0b2d043b597396551ebfefafa6e276dd6c0cf",
+      "originalSourceArchiveSha256": "19b5df3a82960ba8776c3d594343aa3b5417279aac3503a1906b61fcde9c36c7"
+    },
+    {
+      "service": "wallet-service-prod",
+      "revision": "wallet-service-prod-00027-cq6",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/wallet-service-prod@sha256:8ea2ab5b3eaf00f4d2f3bd9b5e85f2fad37e945363991faaaee50eefcb30f643",
+      "buildId": "8744b43c-bf98-46fb-8a37-1401a9430efe",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/wallet-service-prod@sha256:74e5e6ee71708c73660df37a58c6b216f638af6be3b540a6acdc4a818c23cab9",
+      "originalSourceArchiveSha256": "0f5ec5af91b4c4be9ee4725cfc45ee392519a5ad8ae36dd86bb427970cca3beb"
+    },
+    {
+      "service": "booking-service-prod",
+      "revision": "booking-service-prod-00039-69p",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/booking-service-prod@sha256:c2045fb45e83829986b105ef1a74d6219e746a1cb14be63a9feec9bdfc3dfc12",
+      "buildId": "4521c86e-6326-4e26-a5fa-88b03d46adc1",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": "bigquery",
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/booking-service-prod@sha256:783723d08044d1dec12be84dcab37c5de25e782d1cee114ae598177b964c49be",
+      "originalSourceArchiveSha256": "840d17820463a85d680c82faffe82a58f7f2d5e0eb41114ff0a02bdf18f12418"
+    },
+    {
+      "service": "buddy-service-prod",
+      "revision": "buddy-service-prod-00021-sj6",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/buddy-service-prod@sha256:d5f366b29096c8692ddeb63f37844db82b62b15d5ca7e0c4b4b062cf232de146",
+      "buildId": "541644d2-2e56-4440-b632-d3f595f4f66e",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/buddy-service-prod@sha256:501107f24e1488d04804244a07fe4b45098a0a82f1e55e0448b4957bf42acb8c",
+      "originalSourceArchiveSha256": "93c04e33202d86b57553d704f2ef61beb5f8f277d7d4c62be0109c2925a68c1a"
+    },
+    {
+      "service": "challenge-service-prod",
+      "revision": "challenge-service-prod-00004-95f",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/challenge-service-prod@sha256:09c1dcaa9cd8b3b06bd8b6b7d16e3cec09fe5313e89d0890ecefba456726e422",
+      "buildId": "869a4d43-fbf2-4317-be2a-f34470a03282",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/challenge-service-prod@sha256:a659852c19f66025c1f330a18dbed53efa81d0f39b939bce56a9621b092cc9b8",
+      "originalSourceArchiveSha256": "2986c861df6e987c9fcdd151aee5a13981cb6a3dc6560a699054a383f04328b1"
+    },
+    {
+      "service": "health-service-prod",
+      "revision": "health-service-prod-00005-4gq",
+      "image": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/health-service-prod@sha256:cce93c0ccb40d5e25a6482031faebe7850b00554c9e1903772826669bb84d043",
+      "buildId": "dab88b90-bd37-46bf-afce-bac46cedca44",
+      "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+      "analyticsProvider": "bigquery",
+      "readProvider": null,
+      "originalImage": "asia-south1-docker.pkg.dev/phool-gobhi/cloud-run-source-deploy/health-service-prod@sha256:8ec1433e6ef11f2caf7a03e70aaf21b05bc42d2086ebcbe72678ae6831ecfa4a",
+      "originalSourceArchiveSha256": "84d262367d6ed2796d72762f20f123de95258bef28b2f0494f1d9a5d74ee925f"
+    }
+  ],
+  "productionFeaturesPreserved": true,
+  "notes": [
+    "Production images use the exact pre-migration deployed source with analytics-only patches.",
+    "A pre-existing auth-service-dev partner-auth-validation tag has zero assigned traffic and retains its separate QA revision. It is not production analytics infrastructure.",
+    "Cloud Run image-only updates retain old build annotations. capture_sources.py uses the immutable image/build pair in this receipt when required."
+  ]
+}

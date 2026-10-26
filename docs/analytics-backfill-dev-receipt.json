@@ -1,0 +1,14 @@
+{
+  "environment": "dev",
+  "sourceId": "50b947cada199d37",
+  "rows": 10096,
+  "maximumLegacyId": "11413",
+  "earliestTimestamp": "2026-06-14T07:50:59.610707Z",
+  "asOf": "2026-10-26T09:17:39.547729Z",
+  "sourceSha256": "f88e3305b484233d77204f7367c23303257f67a9ddc8c49a5d9bcb1e8538416a",
+  "sourceReadOnly": true,
+  "dualSchemaPrepared": false,
+  "sourceDeletionTombstones": 1315,
+  "warehouseContentMatched": true,
+  "snapshotUploadedAsArtifact": false
+}

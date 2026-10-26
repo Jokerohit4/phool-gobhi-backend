@@ -1,4 +1,5 @@
 import './bootstrap-secrets.js';
+import { analyticsMiddleware } from './utils/analyticsTransport.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { readFileSync } from 'fs';
@@ -7,7 +8,7 @@ import { dirname, join } from 'path';
 import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
@@ -15,6 +16,7 @@ import { QUEUE_DIAGNOSTIC_EVENTS, validQueueDiagnostic } from './utils/exploreQu
 import { withGoogleIdToken } from './utils/googleIdToken.js';
 
 export const app = express();
+app.use(analyticsMiddleware());
 
 // Single source of truth for valid event names (docs/analytics-events.json,
 // checked for drift by scripts/check-analytics-events.cjs). Only the
@@ -189,6 +191,10 @@ export function eventsHandler(req, res) {
       if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
       const properties = e.properties;
       if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
+      if (e.event_id !== undefined && (typeof e.event_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e.event_id))) continue;
+      const occurrence = typeof e.occurred_at === 'string' ? Date.parse(e.occurred_at) : NaN;
+      if (e.event_id !== undefined && (!Number.isFinite(occurrence) || occurrence > Date.now()+300000 || occurrence < Date.now()-7*86400000)) continue;
+      const eventId = e.event_id ? 'client:' + createHash('sha256').update(JSON.stringify([e.distinct_id,e.event,e.event_id])).digest('hex') : undefined;
 
       if (QUEUE_DIAGNOSTIC_EVENTS.has(e.event)) {
         // Separate default-off activation gate: schema registration is not
@@ -197,7 +203,7 @@ export function eventsHandler(req, res) {
             typeof e.distinct_id !== 'string' || !e.distinct_id.trim() ||
             !validQueueDiagnostic(e.event, properties)) continue;
         // Preserve exactly the coarse seven fields. No IP/UA/device enrichment.
-        ingest({ event: e.event, distinctId: e.distinct_id, properties: { ...properties }, source: 'client' });
+        ingest({ event: e.event, distinctId: e.distinct_id, properties: { ...properties }, source: 'client', ...(eventId ? { eventId, timestamp: e.occurred_at } : {}) });
         continue;
       }
 
@@ -210,7 +216,7 @@ export function eventsHandler(req, res) {
       }
       if (ip && enriched.ip == null) enriched.ip = ip;
 
-      ingest({ event: e.event, distinctId: e.distinct_id, properties: enriched, source: 'client' });
+      ingest({ event: e.event, distinctId: e.distinct_id, properties: enriched, source: 'client', ...(eventId ? { eventId, timestamp: e.occurred_at } : {}) });
     }
   } catch (_) {
     // swallow — analytics never fails the client

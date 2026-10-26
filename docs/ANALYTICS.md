@@ -1,3 +1,5 @@
+> Warehouse migration (26 October 2026): BigQuery replaces the PostgreSQL analytics sink. See [audit and plan](analytics-bigquery-audit-and-plan.md) and [operations runbook](analytics-bigquery-runbook.md) for current architecture, configuration, validation and rollback. Earlier rollout notes below describe historical deployments.
+
 # Phool Gobhi — Eventing & Funnels
 
 How product events are captured across the Flutter apps and the Node backend, and

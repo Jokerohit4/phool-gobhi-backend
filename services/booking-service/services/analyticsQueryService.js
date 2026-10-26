@@ -1,6 +1,7 @@
 import pg from 'pg';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { queryBigQuery } from '../utils/bigQueryAnalytics.js';
 
 const { Pool } = pg;
 
@@ -24,6 +25,7 @@ function getPool() {
 }
 
 async function query(sql, params = []) {
+  if (process.env.ANALYTICS_READ_PROVIDER === 'bigquery') return queryBigQuery(sql, params);
   const pool = getPool();
   if (!pool) return { rows: [] };
   return pool.query(sql, params);
@@ -466,7 +468,7 @@ export async function getWebsiteTraffic(days, country, city) {
       WHERE event = 'session_started' AND properties->>'app' = 'website'
         AND properties->>'referrer_host' IS NOT NULL
         AND ts > now() - ($1 || ' days')::interval${geo}
-      GROUP BY 1 ORDER BY sessions DESC LIMIT 15`,
+      GROUP BY 1 ORDER BY sessions DESC, 1 ASC LIMIT 15`,
     params
   );
   const { rows: campaigns } = await query(
@@ -477,7 +479,7 @@ export async function getWebsiteTraffic(days, country, city) {
       WHERE event = 'session_started' AND properties->>'app' = 'website'
         AND properties->>'utm_source' IS NOT NULL
         AND ts > now() - ($1 || ' days')::interval${geo}
-      GROUP BY 1, 2 ORDER BY sessions DESC LIMIT 15`,
+      GROUP BY 1, 2 ORDER BY sessions DESC, 1 ASC, 2 ASC LIMIT 15`,
     params
   );
   const { rows: landingPages } = await query(
@@ -486,7 +488,7 @@ export async function getWebsiteTraffic(days, country, city) {
       WHERE event = 'session_started' AND properties->>'app' = 'website'
         AND properties->>'landing_path' IS NOT NULL
         AND ts > now() - ($1 || ' days')::interval${geo}
-      GROUP BY 1 ORDER BY sessions DESC LIMIT 15`,
+      GROUP BY 1 ORDER BY sessions DESC, 1 ASC LIMIT 15`,
     params
   );
 
@@ -657,7 +659,7 @@ export async function getLocationReach(days, limit) {
 export async function getKnownEvents(limit) {
   const cappedLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
   const { rows } = await query(
-    `SELECT event, count(*)::int AS n FROM analytics_events GROUP BY event ORDER BY n DESC LIMIT $1`,
+    `SELECT event, count(*)::int AS n FROM analytics_events GROUP BY event ORDER BY n DESC, event ASC LIMIT $1`,
     [cappedLimit]
   );
   return { events: rows };
@@ -707,7 +709,7 @@ export async function getKnownPropertyValues(event, key, limit, filterKey, filte
        FROM analytics_events
       WHERE event = $1 AND properties ->> $2 IS NOT NULL${scopeClauses}
       GROUP BY 1
-      ORDER BY n DESC
+      ORDER BY n DESC, value ASC
       LIMIT $${limitIdx}`,
     params
   );

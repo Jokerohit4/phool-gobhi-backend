@@ -1,3 +1,5 @@
+> Analytics migration: runtime analytics configuration now targets BigQuery/Pub/Sub; see [runbook](../docs/analytics-bigquery-runbook.md). PostgreSQL provider notes below are historical. Application transaction stores remain on Neon.
+
 # `deploy/services.json`
 
 Declarative source of truth for what each Cloud Run service deploys with. Replaces the

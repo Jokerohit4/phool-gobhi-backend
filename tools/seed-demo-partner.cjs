@@ -1,4 +1,10 @@
 const { Client } = require('pg');
+const { createHash } = require('node:crypto');
+const warehouseAnalytics=(process.env.ANALYTICS_PROVIDER || 'bigquery') === 'bigquery';
+if (warehouseAnalytics && process.env.ANALYTICS_ENVIRONMENT !== 'dev') {
+  throw Error('Warehouse demo seeding requires ANALYTICS_ENVIRONMENT=dev');
+}
+let warehouseEvents=[];
 
 const DATABASE_URL = process.env.SEED_DATABASE_URL;
 if (!DATABASE_URL) {
@@ -186,6 +192,24 @@ async function run() {
     await seedAnalytics();
 
     await client.query('commit');
+    if (warehouseAnalytics) {
+      // Publish only after operational commit. IDs make retries safe; this
+      // operator tool reports failure if the warehouse part needs retrying.
+      const warehouse=await require('../scripts/analytics-client.cjs').warehouseClient();
+      await warehouse.native(`MERGE \`phool-gobhi.analytics_dev.deleted_event_ids\` target USING (
+        SELECT DISTINCT event_id FROM \`phool-gobhi.analytics_dev.events_raw\`
+        WHERE ts BETWEEN TIMESTAMP('1970-01-01') AND @as_of AND p_gym_id=@gym
+      ) old ON target.event_id=old.event_id
+      WHEN NOT MATCHED THEN INSERT(event_id,deleted_at) VALUES(old.event_id,@as_of)`,
+      [{name:'gym',parameterType:{type:'STRING'},parameterValue:{value:String(gymId)}}]);
+      const {eventEnvelope}=await import('../utils/analyticsTransport.js');
+      const rows=warehouseEvents.map((e,index)=>eventEnvelope({event:e.event,distinctId:e.distinct_id,
+        properties:e.properties,source:'seed',service:'seed',timestamp:e.ts,
+        eventId:'seed:'+createHash('sha256').update(JSON.stringify([gymId,e.event,e.distinct_id,e.ts.toISOString(),index])).digest('hex')}));
+      await warehouse.publish(rows);
+      await warehouse.native('DELETE FROM `phool-gobhi.analytics_dev.deleted_event_ids` WHERE event_id IN UNNEST(@ids)',
+        [{name:'ids',parameterType:{type:'ARRAY',arrayType:{type:'STRING'}},parameterValue:{arrayValues:rows.map(row=>({value:row.event_id}))}}]);
+    }
     console.log('SEED COMPLETE. gym id =', gymId);
   } catch (e) {
     await client.query('rollback').catch(() => {});
@@ -207,7 +231,7 @@ async function cleanupGym(g) {
   await client.query('delete from gym."GymOperatingHours" where "gymId" = $1', [g]);
   await client.query('delete from gym."GymClass" where "gymId" = $1', [g]);
   await client.query(`delete from wallet."WalletTransaction" where "gymId" = $1 and "idempotencyKey" like 'seed-p9-%'`, [g]);
-  await client.query("delete from analytics_events where properties->>'gym_id' = $1", [String(g)]);
+  if (!warehouseAnalytics) await client.query("delete from analytics_events where properties->>'gym_id' = $1", [String(g)]);
   console.log('cleaned demo rows scoped to gym', g);
 }
 
@@ -632,6 +656,7 @@ async function seedAnalytics() {
   }
 
   const BATCH = 300;
+  if (warehouseAnalytics) { warehouseEvents=events; return; }
   for (let i = 0; i < events.length; i += BATCH) {
     const chunk = events.slice(i, i + BATCH);
     const vals = [];

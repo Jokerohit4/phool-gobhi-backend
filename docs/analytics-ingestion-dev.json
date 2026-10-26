@@ -1,0 +1,14 @@
+{
+  "environment": "dev",
+  "httpStatuses": [
+    202,
+    202
+  ],
+  "managedDeliveryPassed": true,
+  "rawIpAndUserAgentOmitted": true,
+  "httpRetryDeduplicated": true,
+  "originalOccurrencePreserved": true,
+  "legacyRows": 0,
+  "probeCleanedUp": true,
+  "passed": true
+}

@@ -27,7 +27,7 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "gateway",
             "EXPLORE_QUEUE_DIAGNOSTICS": "true",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
@@ -36,7 +36,13 @@
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
             "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
-            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "gateway-secrets"
@@ -45,7 +51,7 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "gateway",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
@@ -53,7 +59,13 @@
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
             "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
-            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "gateway-secrets"
@@ -74,14 +86,20 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "auth-service",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
             "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
             "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app",
-            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app"
+            "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "auth-service-secrets"
@@ -90,7 +108,7 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "auth-service",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
@@ -99,7 +117,13 @@
             "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
             "ALLOW_DEV_OTP": "false",
-            "OTP_PROVIDER": "firebase"
+            "OTP_PROVIDER": "firebase",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "auth-service-secrets"
@@ -120,10 +144,16 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "gym-service",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
-            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app"
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "gym-service-secrets"
@@ -132,10 +162,16 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "gym-service",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
-            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app"
+            "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "gym-service-secrets"
@@ -156,12 +192,18 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "wallet-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "wallet-service-secrets"
@@ -170,12 +212,18 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "wallet-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
-            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app"
+            "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "wallet-service-secrets"
@@ -196,13 +244,20 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "booking-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-dev-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
             "CHALLENGE_SERVICE_URL": "https://challenge-service-dev-pwixdiy6va-el.a.run.app",
-            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456",
+            "ANALYTICS_READ_PROVIDER": "bigquery"
           },
           "secrets": {
             "SECRETS_JSON": "booking-service-secrets"
@@ -211,13 +266,20 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "booking-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "GYM_SERVICE_URL": "https://gym-service-prod-pwixdiy6va-el.a.run.app",
             "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
             "CHALLENGE_SERVICE_URL": "https://challenge-service-prod-pwixdiy6va-el.a.run.app",
-            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456",
+            "ANALYTICS_READ_PROVIDER": "bigquery"
           },
           "secrets": {
             "SECRETS_JSON": "booking-service-secrets"
@@ -238,10 +300,16 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "buddy-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
-            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app"
+            "HEALTH_SERVICE_URL": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "buddy-service-secrets"
@@ -250,10 +318,16 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "buddy-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
-            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app"
+            "HEALTH_SERVICE_URL": "https://health-service-prod-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "buddy-service-secrets"
@@ -274,11 +348,17 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "challenge-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-dev-pwixdiy6va-el.a.run.app",
-            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app"
+            "BUDDY_SERVICE_URL": "https://buddy-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "challenge-service-secrets"
@@ -287,11 +367,17 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "challenge-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
-            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app"
+            "BUDDY_SERVICE_URL": "https://buddy-service-prod-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "challenge-service-secrets"
@@ -312,7 +398,7 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "health-service",
             "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
             "MEDICAL_BUCKET_NAME": "phool-gobhi-medical-dev",
@@ -321,7 +407,13 @@
             "WALLET_SERVICE_URL": "https://wallet-service-dev-pwixdiy6va-el.a.run.app",
             "ASSISTANT_PROVIDER": "hosted",
             "ASSISTANT_MAX_OUTPUT_TOKENS": "600",
-            "ASSISTANT_STRICTNESS": "full"
+            "ASSISTANT_STRICTNESS": "full",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"
@@ -330,7 +422,7 @@
         "prod": {
           "plain": {
             "NODE_ENV": "production",
-            "ANALYTICS_PROVIDER": "postgres",
+            "ANALYTICS_PROVIDER": "bigquery",
             "ANALYTICS_SERVICE_NAME": "health-service",
             "AUTH_SERVICE_URL": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "BOOKING_SERVICE_URL": "https://booking-service-prod-pwixdiy6va-el.a.run.app",
@@ -338,7 +430,13 @@
             "WALLET_SERVICE_URL": "https://wallet-service-prod-pwixdiy6va-el.a.run.app",
             "ASSISTANT_PROVIDER": "hosted",
             "ASSISTANT_MAX_OUTPUT_TOKENS": "600",
-            "ASSISTANT_STRICTNESS": "general_wellness"
+            "ASSISTANT_STRICTNESS": "general_wellness",
+            "ANALYTICS_ENVIRONMENT": "prod",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-prod",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"

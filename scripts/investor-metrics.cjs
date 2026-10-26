@@ -15,13 +15,10 @@
  */
 const { Pool } = require('pg');
 
-const url = process.env.ANALYTICS_DATABASE_URL || process.env.DATABASE_URL;
-if (!url) {
-  console.error('Set ANALYTICS_DATABASE_URL (or DATABASE_URL) to the analytics database.');
-  process.exit(1);
-}
-
-const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 1 });
+const warehouse = (process.env.ANALYTICS_READ_PROVIDER || 'bigquery') === 'bigquery';
+const url = process.env.ANALYTICS_DATABASE_URL;
+if (!warehouse && !url) throw Error('Set ANALYTICS_DATABASE_URL for an explicit postgres read.');
+const legacyPool = warehouse ? null : new Pool({connectionString:url,ssl:{rejectUnauthorized:true},max:1});
 
 const QUERIES = {
   // What is actually in the sink, and how far back does it go. This is the
@@ -143,6 +140,8 @@ function fmt(v) {
 }
 
 async function main() {
+  const pool = legacyPool || await require('./analytics-client.cjs').warehouseClient();
+  const nativeQueries = require('./investor-warehouse-queries.cjs');
   const only = process.argv[2];
   const names = only ? [only] : Object.keys(QUERIES);
   for (const n of names) {
@@ -153,7 +152,7 @@ async function main() {
     }
     let res;
     try {
-      res = await pool.query(q.sql);
+      res = warehouse ? await pool.native(nativeQueries[n]) : await pool.query(q.sql);
     } catch (err) {
       if (err.code === '42P01') {
         console.error(`\n== ${q.title} ==\nNo analytics_events table in this database yet (42P01).`);
@@ -176,7 +175,8 @@ async function main() {
   await pool.end();
 }
 
-main().catch((err) => {
+module.exports = QUERIES;
+if (require.main === module) main().catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

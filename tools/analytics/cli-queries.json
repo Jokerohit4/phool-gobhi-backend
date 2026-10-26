@@ -1,0 +1,64 @@
+[
+  {
+    "report": "investor_inventory",
+    "sql": "\n      SELECT event, service, source,\n             count(*)                          AS rows,\n             count(DISTINCT distinct_id)       AS users,\n             min(ts)                           AS first_ts,\n             max(ts)                           AS last_ts\n      FROM analytics_events\n      GROUP BY event, service, source\n      ORDER BY rows DESC",
+    "params": [],
+    "nativeSql": "SELECT event,service,source,COUNT(*) AS `rows`,COUNT(DISTINCT distinct_id) AS users,\n MIN(ts) AS first_ts,MAX(ts) AS last_ts FROM WAREHOUSE_EVENTS GROUP BY event,service,source ORDER BY `rows` DESC"
+  },
+  {
+    "report": "investor_dau",
+    "sql": "\n      WITH days AS (\n        SELECT generate_series(current_date - 29, current_date, interval '1 day')::date AS d\n      ),\n      per_day AS (\n        SELECT d, (\n          SELECT count(DISTINCT a.distinct_id)\n          FROM analytics_events a\n          WHERE a.ts::date = d.d AND a.distinct_id IS NOT NULL\n        ) AS dau\n        FROM days d\n      ),\n      mau AS (\n        SELECT count(DISTINCT distinct_id) AS users\n        FROM analytics_events\n        WHERE ts >= now() - interval '30 days' AND distinct_id IS NOT NULL\n      )\n      SELECT p.d AS day, p.dau, m.users AS mau_30d,\n             CASE WHEN m.users = 0 THEN NULL\n                  ELSE round(100.0 * p.dau / m.users, 1) END AS dau_pct_of_mau\n      FROM per_day p CROSS JOIN mau m\n      ORDER BY p.d",
+    "params": [],
+    "nativeSql": "WITH days AS (SELECT d FROM UNNEST(GENERATE_DATE_ARRAY(DATE_SUB(DATE(@as_of),INTERVAL 29 DAY),DATE(@as_of))) d),\n per_day AS (SELECT d.d AS d,(SELECT COUNT(DISTINCT a.distinct_id) FROM WAREHOUSE_EVENTS a WHERE DATE(a.ts)=d.d AND a.distinct_id IS NOT NULL) AS dau FROM days d),\n mau AS (SELECT COUNT(DISTINCT distinct_id) AS users FROM WAREHOUSE_EVENTS WHERE ts>=TIMESTAMP_SUB(@as_of,INTERVAL 30 DAY) AND distinct_id IS NOT NULL)\n SELECT p.d AS day,p.dau,m.users AS mau_30d,IF(m.users=0,NULL,ROUND(100.0*p.dau/m.users,1)) AS dau_pct_of_mau FROM per_day p CROSS JOIN mau m ORDER BY p.d"
+  },
+  {
+    "report": "investor_retention",
+    "sql": "\n      WITH first_seen AS (\n        SELECT distinct_id, min(ts)::date AS cohort_day\n        FROM analytics_events\n        WHERE distinct_id IS NOT NULL\n        GROUP BY distinct_id\n      )\n      SELECT f.cohort_day,\n             count(*) AS cohort_size,\n             count(*) FILTER (WHERE EXISTS (\n               SELECT 1 FROM analytics_events a\n               WHERE a.distinct_id = f.distinct_id AND a.ts::date = f.cohort_day + 1)) AS d1,\n             count(*) FILTER (WHERE EXISTS (\n               SELECT 1 FROM analytics_events a\n               WHERE a.distinct_id = f.distinct_id AND a.ts::date = f.cohort_day + 7)) AS d7,\n             count(*) FILTER (WHERE EXISTS (\n               SELECT 1 FROM analytics_events a\n               WHERE a.distinct_id = f.distinct_id AND a.ts::date = f.cohort_day + 30)) AS d30\n      FROM first_seen f\n      WHERE f.cohort_day >= current_date - 60\n      GROUP BY f.cohort_day\n      ORDER BY f.cohort_day",
+    "params": [],
+    "nativeSql": "WITH first_seen AS (SELECT distinct_id,DATE(MIN(ts)) AS cohort_day FROM WAREHOUSE_EVENTS WHERE distinct_id IS NOT NULL GROUP BY distinct_id)\n SELECT f.cohort_day,COUNT(*) AS cohort_size,\n COUNTIF(EXISTS(SELECT 1 FROM WAREHOUSE_EVENTS a WHERE a.distinct_id=f.distinct_id AND DATE(a.ts)=DATE_ADD(f.cohort_day,INTERVAL 1 DAY))) AS d1,\n COUNTIF(EXISTS(SELECT 1 FROM WAREHOUSE_EVENTS a WHERE a.distinct_id=f.distinct_id AND DATE(a.ts)=DATE_ADD(f.cohort_day,INTERVAL 7 DAY))) AS d7,\n COUNTIF(EXISTS(SELECT 1 FROM WAREHOUSE_EVENTS a WHERE a.distinct_id=f.distinct_id AND DATE(a.ts)=DATE_ADD(f.cohort_day,INTERVAL 30 DAY))) AS d30\n FROM first_seen f WHERE f.cohort_day>=DATE_SUB(DATE(@as_of),INTERVAL 60 DAY) GROUP BY f.cohort_day ORDER BY f.cohort_day"
+  },
+  {
+    "report": "investor_funnel",
+    "sql": "\n      SELECT\n        count(DISTINCT distinct_id) FILTER (WHERE event = 'booking_created')          AS booked,\n        count(DISTINCT distinct_id) FILTER (WHERE event = 'checkin_requested')        AS checkin_requested,\n        count(DISTINCT distinct_id) FILTER (WHERE event = 'independent_checkin')     AS self_checkin,\n        count(DISTINCT distinct_id) FILTER (WHERE event = 'trainer_checked_in')      AS trainer_checkin,\n        count(DISTINCT distinct_id) FILTER (WHERE event = 'booking_completed')       AS completed,\n        count(DISTINCT distinct_id) FILTER (WHERE event = 'health_consent_granted')  AS health_opted_in,\n        count(DISTINCT distinct_id)                                                AS any_activity\n      FROM analytics_events\n      WHERE ts >= now() - interval '90 days'",
+    "params": [],
+    "nativeSql": "SELECT COUNT(DISTINCT IF(event='booking_created',distinct_id,NULL)) AS booked,\n COUNT(DISTINCT IF(event='checkin_requested',distinct_id,NULL)) AS checkin_requested,\n COUNT(DISTINCT IF(event='independent_checkin',distinct_id,NULL)) AS self_checkin,\n COUNT(DISTINCT IF(event='trainer_checked_in',distinct_id,NULL)) AS trainer_checkin,\n COUNT(DISTINCT IF(event='booking_completed',distinct_id,NULL)) AS completed,\n COUNT(DISTINCT IF(event='health_consent_granted',distinct_id,NULL)) AS health_opted_in,\n COUNT(DISTINCT distinct_id) AS any_activity FROM WAREHOUSE_EVENTS WHERE ts>=TIMESTAMP_SUB(@as_of,INTERVAL 90 DAY)"
+  },
+  {
+    "report": "investor_gyms",
+    "sql": "\n      SELECT properties->>'gym_id' AS gym_id,\n             count(*)                                                          AS rows_90d,\n             count(DISTINCT distinct_id)                                       AS members_90d,\n             max(ts)                                                           AS last_activity,\n             current_date - max(ts)::date                                      AS days_since_activity,\n             count(*) FILTER (WHERE ts::date = current_date)                   AS today,\n             count(*) FILTER (WHERE ts >= now() - interval '7 days')           AS last_7d\n      FROM analytics_events\n      WHERE properties ? 'gym_id'\n        AND ts >= now() - interval '90 days'\n      GROUP BY 1\n      ORDER BY max(ts) DESC NULLS LAST\n      LIMIT 100",
+    "params": [],
+    "nativeSql": "SELECT p_gym_id AS gym_id,COUNT(*) AS rows_90d,COUNT(DISTINCT distinct_id) AS members_90d,\n MAX(ts) AS last_activity,DATE_DIFF(DATE(@as_of),DATE(MAX(ts)),DAY) AS days_since_activity,\n COUNTIF(DATE(ts)=DATE(@as_of)) AS today,COUNTIF(ts>=TIMESTAMP_SUB(@as_of,INTERVAL 7 DAY)) AS last_7d\n FROM WAREHOUSE_EVENTS WHERE JSON_QUERY(properties,'$.gym_id') IS NOT NULL AND ts>=TIMESTAMP_SUB(@as_of,INTERVAL 90 DAY)\n GROUP BY 1 ORDER BY MAX(ts) DESC NULLS LAST LIMIT 100"
+  },
+  {
+    "report": "digest_0",
+    "sql": "SELECT\r\n           count(*)                                            AS total_events,\r\n           count(*) FILTER (WHERE ts > now() - interval '24 hours') AS events_24h,\r\n           count(DISTINCT distinct_id) FILTER (WHERE ts > now() - interval '24 hours') AS users_24h\r\n         FROM analytics_events",
+    "params": []
+  },
+  {
+    "report": "digest_1",
+    "sql": "SELECT event, count(DISTINCT distinct_id) AS users\r\n           FROM analytics_events\r\n          WHERE event = ANY($1) AND ts > now() - interval '30 days'\r\n          GROUP BY event",
+    "params": [
+      [
+        "gym_viewed",
+        "slot_selected",
+        "book_tapped",
+        "booking_confirmed"
+      ]
+    ]
+  },
+  {
+    "report": "digest_2",
+    "sql": "SELECT event, count(*) AS n\r\n           FROM analytics_events\r\n          WHERE event IN ('otp_requested','signup_completed','login_completed')\r\n            AND ts > now() - interval '7 days'\r\n          GROUP BY event",
+    "params": []
+  },
+  {
+    "report": "digest_3",
+    "sql": "SELECT properties->>'step' AS step, count(*) AS completions\r\n           FROM analytics_events\r\n          WHERE event = 'onboarding_step_completed'\r\n          GROUP BY 1 ORDER BY 1",
+    "params": []
+  },
+  {
+    "report": "digest_4",
+    "sql": "SELECT event, count(*) AS n\r\n           FROM analytics_events\r\n          WHERE ts > now() - interval '24 hours'\r\n          GROUP BY event ORDER BY n DESC LIMIT 8",
+    "params": []
+  }
+]
