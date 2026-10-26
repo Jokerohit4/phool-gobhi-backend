@@ -18,18 +18,13 @@ test('unanswered stays null so existing accounts are untouched', () => {
   assert.equal(deriveAppMode(undefined), null);
 });
 
-test('does not work out -> gym_seeker, unless they would start at home', () => {
-  // PAYG is the proposition for someone who isn't training yet, so discovery
-  // leads — for every answer except "home", which has nothing to book, so the
-  // app itself becomes the product. This carve-out was added with the rule in
-  // appModeService.js (build-plan B1); this test still encoded the old
-  // gym_seeker-for-everyone behaviour and failed against correct code.
+test('does not work out -> gym_seeker only when gym discovery is the preference', () => {
+  // Explicit non-gym choices lead to the training product. An unanswered
+  // location retains the discovery default until the user chooses a path.
   for (const pref of [
     undefined,
     null,
     TRAINING_LOCATION_PREFS.GYM,
-    TRAINING_LOCATION_PREFS.FITNESS_CENTRE,
-    TRAINING_LOCATION_PREFS.OTHER,
   ]) {
     assert.equal(
       deriveAppMode({ currentlyWorksOut: false, trainingLocationPref: pref }),
@@ -41,6 +36,17 @@ test('does not work out -> gym_seeker, unless they would start at home', () => {
     deriveAppMode({ currentlyWorksOut: false, trainingLocationPref: TRAINING_LOCATION_PREFS.HOME }),
     APP_MODES.HOME_TRACK,
   );
+  for (const pref of [
+    TRAINING_LOCATION_PREFS.FITNESS_CENTRE,
+    TRAINING_LOCATION_PREFS.SPORTS,
+    TRAINING_LOCATION_PREFS.OTHER,
+  ]) {
+    assert.equal(
+      deriveAppMode({ currentlyWorksOut: false, trainingLocationPref: pref }),
+      APP_MODES.HOME_TRACK,
+      `currentlyWorksOut=false, pref=${pref}`,
+    );
+  }
 });
 
 test('trains at home -> home_track', () => {
@@ -50,10 +56,11 @@ test('trains at home -> home_track', () => {
   );
 });
 
-test('trains at a gym/centre/elsewhere -> home_track', () => {
+test('trains at a gym/centre/sports/elsewhere -> home_track', () => {
   for (const pref of [
     TRAINING_LOCATION_PREFS.GYM,
     TRAINING_LOCATION_PREFS.FITNESS_CENTRE,
+    TRAINING_LOCATION_PREFS.SPORTS,
     TRAINING_LOCATION_PREFS.OTHER,
   ]) {
     assert.equal(
