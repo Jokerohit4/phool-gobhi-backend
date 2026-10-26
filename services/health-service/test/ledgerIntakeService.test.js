@@ -419,15 +419,20 @@ test('a target date in the future is accepted where a measurement date would not
 
 test('a rejected target writes nothing', async () => {
   const prisma = fakePrisma();
+  // Keep the target in the future for date validation, while keeping the
+  // interval short enough to exercise the pace refusal. Fixed dates made this
+  // test start failing as soon as the calendar caught up with targetDate.
+  const targetDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const localDate = new Date(Date.now() - 27 * 24 * 60 * 60 * 1000);
   const r = await saveIntake({
     prisma,
     userId: 1,
-    localDate: TODAY,
+    localDate: localDate.toISOString().slice(0, 10),
     input: {
       goal: 'lose_fat',
       weightKg: 80,
       targetWeightKg: 70,
-      targetDate: '2026-10-26',
+      targetDate: targetDate.toISOString().slice(0, 10),
     },
   });
   assert.equal(r.written, false);

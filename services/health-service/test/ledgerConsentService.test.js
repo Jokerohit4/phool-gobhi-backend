@@ -34,11 +34,20 @@ test('setup: stub Prisma, import once', async (t) => {
     exports: {
       PrismaClient: class {
         constructor() {
-          this.healthConsent = {
+          this.ledgerConsent = {
             findUnique: async () => consent,
             update: async ({ data }) => {
               updates.push(data);
               consent = { ...consent, ...data };
+              return consent;
+            },
+            upsert: async ({ create, update }) => {
+              if (consent) {
+                updates.push(update);
+                consent = { ...consent, ...update };
+              } else {
+                consent = create;
+              }
               return consent;
             },
           };
@@ -94,14 +103,13 @@ test('setup: stub Prisma, import once', async (t) => {
     LEDGER_POLICY_VERSION, isScopeStale, NUTRITION_SCOPE, MEDICAL_RECORDS_SCOPE, PHOTO_SCOPE,
   } = await import('../services/ledger/ledgerConsentService.js'));
 
-  // A live device-level grant that predates the ledger scopes, which is the
-  // state nearly every real user is in.
+  // Ledger choices have their own record and can be granted without a
+  // device-health permission record.
   consent = {
     userId: 1,
     grantedAt: new Date('2026-01-01'),
     revokedAt: null,
-    policyVersion: 'health-2026-09-01',
-    scopes: ['logs'],
+    scopes: [],
     scopeVersions: {},
   };
   updates = [];
@@ -117,8 +125,7 @@ function resetConsent() {
     userId: 1,
     grantedAt: new Date('2026-01-01'),
     revokedAt: null,
-    policyVersion: 'health-2026-09-01',
-    scopes: ['logs'],
+    scopes: [],
     scopeVersions: {},
   };
   updates = [];
@@ -176,12 +183,12 @@ test('a stale app is told which version it needs', async () => {
   );
 });
 
-// --- per scope, not per device ----------------------------------------------
+// --- independent in-app scopes ----------------------------------------------
 
 test('the two scopes keep separate versions', async () => {
   resetConsent();
-  // One map, two prompts. Reporting the device-level version for both would tell
-  // a user their medical-records grant predates the medical-records screen.
+  // The two scopes have independent grants, even though the copy version is
+  // currently the same for both.
   await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
   await grantMedicalRecordsConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
 
@@ -189,9 +196,6 @@ test('the two scopes keep separate versions', async () => {
   const medical = await getMedicalRecordsConsentService(1);
   assert.equal(nutrition.privacyVersion, LEDGER_POLICY_VERSION);
   assert.equal(medical.privacyVersion, LEDGER_POLICY_VERSION);
-  // And specifically NOT the device-level version, which is what the old code
-  // fell back to.
-  assert.notEqual(nutrition.privacyVersion, consent.policyVersion);
 });
 
 test('revoking one scope leaves the other grant intact', async () => {
@@ -234,7 +238,7 @@ test('a scope granted before the column existed counts as stale', async () => {
   // the user saw, so they need to agree again — the opposite inference, treating
   // them as current, is what lets an unprovable grant stand forever.
   consent.scopeVersions = {};
-  consent.scopes = ['logs', NUTRITION_SCOPE];
+  consent.scopes = [NUTRITION_SCOPE];
   assert.equal(isScopeStale(consent, NUTRITION_SCOPE), true);
 
   const out = await getNutritionConsentService(1);
@@ -246,7 +250,7 @@ test('a scope granted before the column existed counts as stale', async () => {
 test('a scope under an older version is reported as needing consent again', async () => {
   resetConsent();
   // Granted, but under wording that has since been revised.
-  consent.scopes = ['logs', NUTRITION_SCOPE];
+  consent.scopes = [NUTRITION_SCOPE];
   consent.scopeVersions = { [NUTRITION_SCOPE]: 'ledger-2026-01-01' };
   const out = await getNutritionConsentService(1);
   assert.equal(out.granted, true);
@@ -299,7 +303,7 @@ test('granting over a string-valued map still writes a proper object', async () 
 
 test('the data gate refuses a scope granted under superseded wording', async () => {
   resetConsent();
-  consent.scopes = ['logs', NUTRITION_SCOPE];
+  consent.scopes = [NUTRITION_SCOPE];
   consent.scopeVersions = { [NUTRITION_SCOPE]: 'ledger-2026-01-01' };
   assert.equal(
     await hasNutritionConsentService(1),
@@ -310,7 +314,7 @@ test('the data gate refuses a scope granted under superseded wording', async () 
 
 test('the data gate refuses a scope with no recorded version at all', async () => {
   resetConsent();
-  consent.scopes = ['logs', MEDICAL_RECORDS_SCOPE];
+  consent.scopes = [MEDICAL_RECORDS_SCOPE];
   consent.scopeVersions = {};
   assert.equal(await hasMedicalRecordsConsentService(1), false);
 });
@@ -344,13 +348,13 @@ test('presence and currency are separately answerable', async () => {
   // even when the data gate is closed, so the two questions must not collapse
   // into one function.
   resetConsent();
-  consent.scopes = ['logs', NUTRITION_SCOPE];
+  consent.scopes = [NUTRITION_SCOPE];
   consent.scopeVersions = { [NUTRITION_SCOPE]: 'ledger-2026-01-01' };
   assert.equal(await hasNutritionScopeService(1), true, 'the grant is still on record');
   assert.equal(await hasNutritionConsentService(1), false, 'but it no longer authorises data');
 });
 
-test('a revoked health consent closes both gates', async () => {
+test('revoking ledger consent closes its data gate', async () => {
   resetConsent();
   await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
   consent.revokedAt = new Date();
@@ -366,7 +370,7 @@ test('a revoked health consent closes both gates', async () => {
 
 test('the photo scope exists under its own wire name', () => {
   // Read by the app as `LedgerConsentScope.photo` and stored on the same
-  // HealthConsent.scopes array. A rename here is a scope nobody can grant.
+  // LedgerConsent.scopes array. A rename here is a scope nobody can grant.
   assert.equal(PHOTO_SCOPE, 'photo');
   assert.notEqual(PHOTO_SCOPE, NUTRITION_SCOPE);
   assert.notEqual(PHOTO_SCOPE, MEDICAL_RECORDS_SCOPE);
@@ -404,7 +408,7 @@ test('nutrition consent does not open the photo gate', async () => {
 
 test('the data gate refuses a photo granted under superseded wording', async () => {
   resetConsent();
-  consent.scopes = ['logs', PHOTO_SCOPE];
+  consent.scopes = [PHOTO_SCOPE];
   consent.scopeVersions = { [PHOTO_SCOPE]: 'ledger-2026-01-01' };
   assert.equal(await hasPhotoScopeService(1), true, 'the grant is still on record');
   assert.equal(
