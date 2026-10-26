@@ -1,4 +1,5 @@
 import './bootstrap-secrets.js';
+import { analyticsMiddleware } from './utils/analyticsTransport.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { connectDB } from './db.js';
@@ -10,10 +11,11 @@ import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
 import deviceRoutes from './routes/devices.js';
 import gymLinkRoutes from './routes/gymLinks.js';
-import { startPickupDelivery } from './exploration/telemetry.js';
+import { startPickupDelivery, deliverPickupBatch } from './exploration/telemetry.js';
 import { deliverReceiptEvent } from './utils/analytics.js';
 
 const app = express();
+app.use(analyticsMiddleware({ beforeDrain: () => deliverPickupBatch({db:prisma,send:deliverReceiptEvent,limit:1}) }));
 const prisma = new PrismaClient();
 
 // Middleware

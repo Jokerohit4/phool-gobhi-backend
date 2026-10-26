@@ -1,0 +1,10 @@
+{
+  "environment": "dev",
+  "runtimeAccount": "1077801427223-compute@developer.gserviceaccount.com",
+  "publishedCopies": 2,
+  "rawCopies": 2,
+  "uniqueEventIds": 1,
+  "warehouseReadChecked": true,
+  "eventId": "pipeline-probe:af0e9913-aa54-45c3-a72b-76e382ded128",
+  "passed": true
+}

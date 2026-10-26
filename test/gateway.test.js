@@ -182,6 +182,24 @@ function eventsReq(body, headers = {}) {
   return { body, headers, ip: '10.20.30.40' };
 }
 
+test('client replay IDs require and preserve an immutable occurrence time', (t) => {
+  const now=Date.parse('2026-10-26T08:00:00Z');
+  t.mock.timers.enable({apis:['Date'],now});
+  ingestCalls.length=0;
+  const body={event:'otp_requested',distinct_id:'synthetic',event_id:'00000000-0000-4000-8000-000000000001',occurred_at:new Date(now-60000).toISOString()};
+  eventsHandler(eventsReq(body),makeRes());
+  t.mock.timers.tick(120000);
+  eventsHandler(eventsReq(body),makeRes());
+  assert.equal(ingestCalls.length,2);
+  assert.equal(ingestCalls[0].eventId,ingestCalls[1].eventId);
+  assert.equal(ingestCalls[0].timestamp,body.occurred_at);
+  assert.equal(ingestCalls[1].timestamp,body.occurred_at);
+  for(const occurred_at of [undefined,'invalid',new Date(now+600000).toISOString(),new Date(now-8*86400000).toISOString()]) {
+    eventsHandler(eventsReq({...body,occurred_at}),makeRes());
+  }
+  assert.equal(ingestCalls.length,2);
+});
+
 test('eventsHandler: single allowed event is ingested with enrichment', () => {
   ingestCalls.length = 0;
   const res = makeRes();

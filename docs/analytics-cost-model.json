@@ -1,0 +1,61 @@
+{
+  "asOfUtc": "2026-10-26T09:10:15.608117+00:00",
+  "region": "asia-south1",
+  "currency": "INR",
+  "catalogueSources": [
+    "https://cloudbilling.googleapis.com/v1/services/24E6-581D-38E5/skus?currencyCode=INR",
+    "https://cloudbilling.googleapis.com/v1/services/A1E8-BE35-7EBC/skus?currencyCode=INR"
+  ],
+  "observedHistoricalMeanWireBytes": 1115.1843273730951,
+  "rates": {
+    "longTermStorageInrPerGiBMonth": 1.535819999,
+    "analysisInrPerTiB": 719.91562499,
+    "activeStorageInrPerGiBMonth": 2.207741249,
+    "basicPublishInrPerTiB": 3839.549999948,
+    "managedDeliveryInrPerTiB": 4799.437499935
+  },
+  "scenarios": [
+    {
+      "eventsPerDay": 30300,
+      "monthlyWireGiB": 0.94,
+      "managedDeliveryInr": 4.42,
+      "basicPublishInrAfter10GiB": 0.0,
+      "conservativeMonthEndActiveStorageInrAfter10GiB": 0.0,
+      "subtotalExcludingQueriesAndOperationalOverheadInr": 4.42
+    },
+    {
+      "eventsPerDay": 415000,
+      "monthlyWireGiB": 12.93,
+      "managedDeliveryInr": 60.6,
+      "basicPublishInrAfter10GiB": 10.99,
+      "conservativeMonthEndActiveStorageInrAfter10GiB": 6.47,
+      "subtotalExcludingQueriesAndOperationalOverheadInr": 78.06
+    },
+    {
+      "eventsPerDay": 1000000,
+      "monthlyWireGiB": 31.16,
+      "managedDeliveryInr": 146.04,
+      "basicPublishInrAfter10GiB": 79.33,
+      "conservativeMonthEndActiveStorageInrAfter10GiB": 46.71,
+      "subtotalExcludingQueriesAndOperationalOverheadInr": 272.08
+    },
+    {
+      "eventsPerDay": 10000000,
+      "monthlyWireGiB": 311.58,
+      "managedDeliveryInr": 1460.35,
+      "basicPublishInrAfter10GiB": 1130.79,
+      "conservativeMonthEndActiveStorageInrAfter10GiB": 665.81,
+      "subtotalExcludingQueriesAndOperationalOverheadInr": 3256.95
+    }
+  ],
+  "notes": [
+    "30 days at a constant daily rate; not a growth forecast.",
+    "415000/day models 50 times the initial 8300 production rows arriving each day.",
+    "30300/day models 50 times the observed 606 combined daily events; user growth may exceed this.",
+    "Storage uses serialized wire size as a conservative proxy; BigQuery logical storage differs. Month-end size is charged for a whole month here; actual initial-month average is lower.",
+    "Storage grows with retained history. A 90-day or 400-day retention policy is not currently applied because first-ever cohort/identity facts must be preserved.",
+    "Queries are additional at catalogue analysis rate after available free allowances. 10 MiB minimum billing per table/query, cache, per-query caps and approximate project quota matter.",
+    "Excludes Cloud Run request overhead, monitoring/alert charges, failed-message retries, retention/backlog charges, taxes and shared free-allowance usage.",
+    "This is not a promise of a free service or a hard total-cost cap."
+  ]
+}

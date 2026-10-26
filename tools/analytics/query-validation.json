@@ -1,0 +1,266 @@
+[
+  {
+    "index": 0,
+    "report": "getActivation",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 1,
+    "report": "getApprovalSla",
+    "passed": true,
+    "estimatedBytes": "907309"
+  },
+  {
+    "index": 2,
+    "report": "getBadgeSummary",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 3,
+    "report": "getBadgeSummary",
+    "passed": true,
+    "estimatedBytes": "417795"
+  },
+  {
+    "index": 4,
+    "report": "getBuddyFunnel",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 5,
+    "report": "getCityBreakdown",
+    "passed": true,
+    "estimatedBytes": "417761"
+  },
+  {
+    "index": 6,
+    "report": "getCityBreakdown",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 7,
+    "report": "getConversionFunnel",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 8,
+    "report": "getConversionFunnel",
+    "passed": true,
+    "estimatedBytes": "417885"
+  },
+  {
+    "index": 9,
+    "report": "getCustomFunnel",
+    "passed": true,
+    "estimatedBytes": "461233"
+  },
+  {
+    "index": 10,
+    "report": "getCustomerOnboardingFunnel",
+    "passed": true,
+    "estimatedBytes": "467894"
+  },
+  {
+    "index": 11,
+    "report": "getCustomerOnboardingFunnel",
+    "passed": true,
+    "estimatedBytes": "461251"
+  },
+  {
+    "index": 12,
+    "report": "getCustomerOnboardingFunnel",
+    "passed": true,
+    "estimatedBytes": "461288"
+  },
+  {
+    "index": 13,
+    "report": "getFulfillmentFunnel",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 14,
+    "report": "getFulfillmentFunnel",
+    "passed": true,
+    "estimatedBytes": "417734"
+  },
+  {
+    "index": 15,
+    "report": "getGymFunnel",
+    "passed": true,
+    "estimatedBytes": "417795"
+  },
+  {
+    "index": 16,
+    "report": "getGymRetentionCohorts",
+    "passed": true,
+    "estimatedBytes": "907309"
+  },
+  {
+    "index": 17,
+    "report": "getGymRevenueTrend",
+    "passed": true,
+    "estimatedBytes": "417870"
+  },
+  {
+    "index": 18,
+    "report": "getKnownEvents",
+    "passed": true,
+    "estimatedBytes": "900865"
+  },
+  {
+    "index": 19,
+    "report": "getKnownPropertyKeys",
+    "passed": true,
+    "estimatedBytes": "4177590"
+  },
+  {
+    "index": 20,
+    "report": "getKnownPropertyValues",
+    "passed": true,
+    "estimatedBytes": "1039744"
+  },
+  {
+    "index": 21,
+    "report": "getLocationReach",
+    "passed": true,
+    "estimatedBytes": "417704"
+  },
+  {
+    "index": 22,
+    "report": "getLocationReach",
+    "passed": true,
+    "estimatedBytes": "2285474"
+  },
+  {
+    "index": 23,
+    "report": "getLocationReach",
+    "passed": true,
+    "estimatedBytes": "417691"
+  },
+  {
+    "index": 24,
+    "report": "getLocationReach",
+    "passed": true,
+    "estimatedBytes": "417709"
+  },
+  {
+    "index": 25,
+    "report": "getOnboardingFunnel",
+    "passed": true,
+    "estimatedBytes": "461233"
+  },
+  {
+    "index": 26,
+    "report": "getOnboardingFunnel",
+    "passed": true,
+    "estimatedBytes": "462057"
+  },
+  {
+    "index": 27,
+    "report": "getOnboardingFunnel",
+    "passed": true,
+    "estimatedBytes": "402913"
+  },
+  {
+    "index": 28,
+    "report": "getRecentAnonSessions",
+    "passed": true,
+    "estimatedBytes": "247617"
+  },
+  {
+    "index": 29,
+    "report": "getRetentionCohorts",
+    "passed": true,
+    "estimatedBytes": "900865"
+  },
+  {
+    "index": 30,
+    "report": "getRevenueTrend",
+    "passed": true,
+    "estimatedBytes": "417761"
+  },
+  {
+    "index": 31,
+    "report": "getSupplyHealth",
+    "passed": true,
+    "estimatedBytes": "907964"
+  },
+  {
+    "index": 32,
+    "report": "getTrend",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 33,
+    "report": "getUserJourney",
+    "passed": true,
+    "estimatedBytes": "4394753"
+  },
+  {
+    "index": 34,
+    "report": "getWalletFunnel",
+    "passed": true,
+    "estimatedBytes": "417686"
+  },
+  {
+    "index": 35,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461233"
+  },
+  {
+    "index": 36,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461233"
+  },
+  {
+    "index": 37,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "475793"
+  },
+  {
+    "index": 38,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461249"
+  },
+  {
+    "index": 39,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461233"
+  },
+  {
+    "index": 40,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461233"
+  },
+  {
+    "index": 41,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461239"
+  },
+  {
+    "index": 42,
+    "report": "getWebsiteTraffic",
+    "passed": true,
+    "estimatedBytes": "461275"
+  },
+  {
+    "index": 43,
+    "report": "searchEventUsers",
+    "passed": true,
+    "estimatedBytes": "461233"
+  }
+]

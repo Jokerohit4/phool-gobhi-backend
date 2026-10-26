@@ -1,0 +1,347 @@
+[
+  {
+    "report": "getActivation",
+    "sql": "SELECT event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users\n       FROM analytics_events\n      WHERE event IN ('otp_requested', 'otp_submitted', 'signup_completed', 'login_completed')\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getApprovalSla",
+    "sql": "WITH created AS (\n       SELECT properties->>'gym_id' AS gym_id, min(ts) AS created_ts\n         FROM analytics_events\n        WHERE event = 'gym_created' AND ts > now() - ($1 || ' days')::interval\n        GROUP BY 1\n     ),\n     resolved AS (\n       SELECT properties->>'gym_id' AS gym_id, min(ts) AS resolved_ts, min(event) AS outcome\n         FROM analytics_events\n        WHERE event IN ('gym_approved', 'gym_rejected')\n        GROUP BY 1\n     )\n     SELECT c.gym_id, c.created_ts, r.resolved_ts, r.outcome,\n            EXTRACT(EPOCH FROM (r.resolved_ts - c.created_ts)) / 3600.0 AS hours_to_resolve\n       FROM created c\n       LEFT JOIN resolved r ON r.gym_id = c.gym_id\n      ORDER BY c.created_ts DESC",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getBadgeSummary",
+    "sql": "SELECT count(*)::int AS total_badges,\n              count(DISTINCT distinct_id)::int AS unique_customers\n         FROM analytics_events\n        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getBadgeSummary",
+    "sql": "SELECT (properties->>'gym_id')::int AS gym_id,\n              COALESCE(properties->>'city', 'Unknown') AS city,\n              count(*)::int AS badges\n         FROM analytics_events\n        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval\n        GROUP BY 1, 2\n        ORDER BY badges ASC",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getBuddyFunnel",
+    "sql": "SELECT event, count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event IN ('buddy_profile_created', 'buddy_swiped', 'buddy_matched', 'buddy_message_sent',\n                       'buddy_unmatched', 'buddy_blocked')\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getCityBreakdown",
+    "sql": "SELECT COALESCE(properties->>'city', 'Unknown') AS city,\n            count(*)::int AS bookings,\n            COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv\n       FROM analytics_events\n      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getCityBreakdown",
+    "sql": "SELECT COALESCE(properties->>'city', 'Unknown') AS city,\n            count(*) FILTER (WHERE event = 'gym_created')::int AS gyms_created,\n            count(*) FILTER (WHERE event = 'gym_approved')::int AS gyms_approved\n       FROM analytics_events\n      WHERE event IN ('gym_created', 'gym_approved') AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getConversionFunnel",
+    "sql": "SELECT event, count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      [
+        "gym_viewed",
+        "slot_selected",
+        "book_tapped",
+        "booking_confirmed"
+      ],
+      30
+    ]
+  },
+  {
+    "report": "getConversionFunnel",
+    "sql": "SELECT properties->>'reason' AS reason, count(*)::int AS n\n       FROM analytics_events\n      WHERE event = 'booking_failed' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY n DESC",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getCustomFunnel",
+    "sql": "WITH step0 AS (\n        SELECT distinct_id, min(ts) AS ts0\n          FROM analytics_events e\n         WHERE e.event = $1 AND e.ts > now() - ($4 || ' days')::interval AND e.properties ->> $2 = $3\n         GROUP BY distinct_id\n      ),\nstep1 AS (\n      SELECT p.distinct_id, min(e.ts) AS ts1\n        FROM step0 p\n        JOIN analytics_events e ON e.distinct_id = p.distinct_id AND e.event = $5 AND e.ts > p.ts0\n       GROUP BY p.distinct_id\n    ) SELECT 0 AS step_index, count(*)::int AS users FROM step0 UNION ALL SELECT 1 AS step_index, count(*)::int AS users FROM step1 ORDER BY step_index",
+    "params": [
+      "screen_viewed",
+      "app",
+      "website",
+      30,
+      "book_tapped"
+    ]
+  },
+  {
+    "report": "getCustomerOnboardingFunnel",
+    "sql": "SELECT properties->>'step' AS step,\n            coalesce(properties->>'surface', 'signup') AS surface,\n            count(DISTINCT distinct_id) FILTER (WHERE event = 'onboarding_step_viewed')::int AS viewed,\n            count(DISTINCT distinct_id) FILTER (WHERE event = 'onboarding_step_completed')::int AS completed\n       FROM analytics_events\n      WHERE event IN ('onboarding_step_viewed', 'onboarding_step_completed')\n        AND properties->>'app' = 'phool_gobhi'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1, 2 ORDER BY 2, 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getCustomerOnboardingFunnel",
+    "sql": "SELECT properties->>'permission' AS permission,\n            count(*) FILTER (WHERE properties->>'granted' = 'true')::int AS granted,\n            count(*)::int AS asked\n       FROM analytics_events\n      WHERE event = 'onboarding_permission_result'\n        AND properties->>'app' = 'phool_gobhi'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getCustomerOnboardingFunnel",
+    "sql": "SELECT coalesce(properties->>'training_location', 'unanswered') AS training_location,\n            count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event = 'onboarding_completed'\n        AND properties->>'app' = 'phool_gobhi'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY 2 DESC",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getFulfillmentFunnel",
+    "sql": "SELECT event, count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event IN ('booking_confirmed', 'checkin_requested', 'attendance_verified', 'booking_completed')\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getFulfillmentFunnel",
+    "sql": "SELECT properties->>'method' AS method, count(*)::int AS n\n       FROM analytics_events\n      WHERE event = 'attendance_verified' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY n DESC",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getGymFunnel",
+    "sql": "SELECT event, count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event = ANY($1) AND properties->>'gym_id' = $2\n        AND ts > now() - ($3 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      [
+        "gym_viewed",
+        "book_tapped",
+        "booking_confirmed"
+      ],
+      "1",
+      30
+    ]
+  },
+  {
+    "report": "getGymRetentionCohorts",
+    "sql": "WITH first_booking AS (\n       SELECT distinct_id, date_trunc('week', min(ts)) AS cohort_week\n         FROM analytics_events\n        WHERE event = 'booking_confirmed' AND properties->>'gym_id' = $2\n        GROUP BY distinct_id\n     ),\n     activity AS (\n       SELECT distinct_id, date_trunc('week', ts) AS activity_week\n         FROM analytics_events\n        WHERE event = 'booking_confirmed' AND properties->>'gym_id' = $2\n        GROUP BY distinct_id, date_trunc('week', ts)\n     )\n     SELECT\n       fb.cohort_week,\n       count(DISTINCT fb.distinct_id)::int AS cohort_size,\n       floor(extract(epoch FROM (a.activity_week - fb.cohort_week)) / 604800)::int AS week_offset,\n       count(DISTINCT a.distinct_id)::int AS active_users\n     FROM first_booking fb\n     JOIN activity a ON a.distinct_id = fb.distinct_id AND a.activity_week >= fb.cohort_week\n    WHERE fb.cohort_week > now() - ($1 || ' weeks')::interval\n    GROUP BY fb.cohort_week, week_offset\n   ORDER BY fb.cohort_week, week_offset",
+    "params": [
+      12,
+      "1"
+    ]
+  },
+  {
+    "report": "getGymRevenueTrend",
+    "sql": "SELECT date_trunc('day', ts) AS day,\n            count(*)::int AS bookings,\n            COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv\n       FROM analytics_events\n      WHERE event = 'booking_confirmed' AND properties->>'gym_id' = $1\n        AND ts > now() - ($2 || ' days')::interval\n      GROUP BY 1 ORDER BY 1",
+    "params": [
+      "1",
+      30
+    ]
+  },
+  {
+    "report": "getKnownEvents",
+    "sql": "SELECT event, count(*)::int AS n FROM analytics_events GROUP BY event ORDER BY n DESC, event ASC LIMIT $1",
+    "params": [
+      100
+    ]
+  },
+  {
+    "report": "getKnownPropertyKeys",
+    "sql": "SELECT DISTINCT jsonb_object_keys(properties) AS key\n       FROM analytics_events\n      WHERE event = $1\n      LIMIT $2",
+    "params": [
+      "screen_viewed",
+      50
+    ]
+  },
+  {
+    "report": "getKnownPropertyValues",
+    "sql": "SELECT properties ->> $2 AS value, count(*)::int AS n\n       FROM analytics_events\n      WHERE event = $1 AND properties ->> $2 IS NOT NULL AND properties ->> $3 = $4\n      GROUP BY 1\n      ORDER BY n DESC, value ASC\n      LIMIT $5",
+    "params": [
+      "screen_viewed",
+      "screen_name",
+      "app",
+      "website",
+      20
+    ]
+  },
+  {
+    "report": "getLocationReach",
+    "sql": "SELECT properties->>'permission' AS permission,\n            count(*)::int AS n,\n            count(DISTINCT distinct_id)::int AS distinct_visitors\n       FROM analytics_events\n      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getLocationReach",
+    "sql": "SELECT count(*)::int AS n,\n            avg((properties->>'nearest_gym_distance_km')::numeric)::float AS avg_km,\n            percentile_cont(0.5) WITHIN GROUP (ORDER BY (properties->>'nearest_gym_distance_km')::numeric)::float AS median_km\n       FROM analytics_events\n      WHERE event = 'location_resolved'\n        AND properties->>'nearest_gym_distance_km' IS NOT NULL\n        AND ts > now() - ($1 || ' days')::interval",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getLocationReach",
+    "sql": "SELECT count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 0 AND (properties->>'nearest_gym_distance_km')::numeric < 1)::int AS bucket_0,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 1 AND (properties->>'nearest_gym_distance_km')::numeric < 2)::int AS bucket_1,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 2 AND (properties->>'nearest_gym_distance_km')::numeric < 3)::int AS bucket_2,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 3 AND (properties->>'nearest_gym_distance_km')::numeric < 4)::int AS bucket_3,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 4 AND (properties->>'nearest_gym_distance_km')::numeric < 5)::int AS bucket_4,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 5 AND (properties->>'nearest_gym_distance_km')::numeric < 6)::int AS bucket_5,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 6 AND (properties->>'nearest_gym_distance_km')::numeric < 10)::int AS bucket_6,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 10 AND (properties->>'nearest_gym_distance_km')::numeric < 30)::int AS bucket_7,\n            count(*) FILTER (WHERE (properties->>'nearest_gym_distance_km')::numeric >= 30)::int AS bucket_8\n       FROM analytics_events\n      WHERE event = 'location_resolved'\n        AND properties->>'nearest_gym_distance_km' IS NOT NULL\n        AND ts > now() - ($1 || ' days')::interval",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getLocationReach",
+    "sql": "SELECT distinct_id,\n            max(ts) AS last_seen,\n            (array_agg(properties->>'permission' ORDER BY ts DESC))[1] AS permission,\n            (array_agg((properties->>'nearest_gym_distance_km')::float ORDER BY ts DESC)\n              FILTER (WHERE properties->>'nearest_gym_distance_km' IS NOT NULL))[1] AS nearest_gym_distance_km\n       FROM analytics_events\n      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY distinct_id\n      ORDER BY last_seen DESC\n      LIMIT $2",
+    "params": [
+      30,
+      20
+    ]
+  },
+  {
+    "report": "getOnboardingFunnel",
+    "sql": "SELECT event, count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval\n        AND coalesce(properties->>'app', '') <> 'phool_gobhi'\n      GROUP BY event",
+    "params": [
+      [
+        "onboarding_started",
+        "onboarding_step_completed",
+        "gym_created",
+        "gym_approved",
+        "gym_rejected"
+      ],
+      30
+    ]
+  },
+  {
+    "report": "getOnboardingFunnel",
+    "sql": "SELECT properties->>'step' AS step, count(*)::int AS completions\n       FROM analytics_events\n      WHERE event = 'onboarding_step_completed' AND ts > now() - ($1 || ' days')::interval\n        AND coalesce(properties->>'app', '') <> 'phool_gobhi'\n      GROUP BY 1 ORDER BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getOnboardingFunnel",
+    "sql": "SELECT date_trunc('week', ts) AS week, count(*)::int AS approvals\n       FROM analytics_events\n      WHERE event = 'gym_approved' AND ts > now() - interval '28 days'\n      GROUP BY 1 ORDER BY 1",
+    "params": []
+  },
+  {
+    "report": "getRecentAnonSessions",
+    "sql": "SELECT distinct_id,\n            min(ts) AS first_seen,\n            max(ts) AS last_seen,\n            count(*)::int AS event_count,\n            count(DISTINCT properties->>'session_id')::int AS session_count,\n            (array_agg(properties->>'screen_name' ORDER BY ts DESC) FILTER (WHERE properties->>'screen_name' IS NOT NULL))[1] AS last_screen,\n            (array_agg(properties->>'app' ORDER BY ts DESC) FILTER (WHERE properties->>'app' IS NOT NULL))[1] AS app\n       FROM analytics_events\n      WHERE distinct_id LIKE 'anon_%' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY distinct_id\n      ORDER BY last_seen DESC\n      LIMIT $2",
+    "params": [
+      7,
+      25
+    ]
+  },
+  {
+    "report": "getRetentionCohorts",
+    "sql": "WITH first_booking AS (\n       SELECT distinct_id, date_trunc('week', min(ts)) AS cohort_week\n         FROM analytics_events\n        WHERE event = 'booking_confirmed'\n        GROUP BY distinct_id\n     ),\n     activity AS (\n       SELECT distinct_id, date_trunc('week', ts) AS activity_week\n         FROM analytics_events\n        WHERE event = 'booking_confirmed'\n        GROUP BY distinct_id, date_trunc('week', ts)\n     )\n     SELECT\n       fb.cohort_week,\n       count(DISTINCT fb.distinct_id)::int AS cohort_size,\n       floor(extract(epoch FROM (a.activity_week - fb.cohort_week)) / 604800)::int AS week_offset,\n       count(DISTINCT a.distinct_id)::int AS active_users\n     FROM first_booking fb\n     JOIN activity a ON a.distinct_id = fb.distinct_id AND a.activity_week >= fb.cohort_week\n    WHERE fb.cohort_week > now() - ($1 || ' weeks')::interval\n    GROUP BY fb.cohort_week, week_offset\n   ORDER BY fb.cohort_week, week_offset",
+    "params": [
+      12
+    ]
+  },
+  {
+    "report": "getRevenueTrend",
+    "sql": "SELECT date_trunc('day', ts) AS day,\n            count(*)::int AS bookings,\n            COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv\n       FROM analytics_events\n      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getSupplyHealth",
+    "sql": "WITH approved AS (\n       SELECT DISTINCT ON (properties->>'gym_id')\n              properties->>'gym_id' AS gym_id, ts AS approved_ts, properties->>'city' AS city\n         FROM analytics_events\n        WHERE event = 'gym_approved'\n        ORDER BY properties->>'gym_id', ts DESC\n     ),\n     bookings AS (\n       SELECT properties->>'gym_id' AS gym_id, count(*)::int AS booking_count, max(ts) AS last_booking_ts\n         FROM analytics_events\n        WHERE event = 'booking_confirmed'\n        GROUP BY 1\n     )\n     SELECT a.gym_id, a.approved_ts, a.city,\n            COALESCE(b.booking_count, 0) AS booking_count, b.last_booking_ts\n       FROM approved a\n       LEFT JOIN bookings b ON b.gym_id = a.gym_id\n      WHERE a.approved_ts < now() - interval '7 days'\n      ORDER BY booking_count ASC, a.approved_ts ASC",
+    "params": []
+  },
+  {
+    "report": "getTrend",
+    "sql": "SELECT date_trunc('day', ts) AS day, event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users\n       FROM analytics_events\n      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval\n      GROUP BY 1, 2 ORDER BY 1",
+    "params": [
+      [
+        "booking_confirmed",
+        "gym_viewed"
+      ],
+      30
+    ]
+  },
+  {
+    "report": "getUserJourney",
+    "sql": "WITH anon_ids AS (\n       SELECT DISTINCT properties->>'anon_distinct_id' AS anon_id\n         FROM analytics_events\n        WHERE event = 'identify' AND distinct_id = $1 AND properties->>'anon_distinct_id' IS NOT NULL\n     )\n       SELECT event, properties, source, service, ts\n         FROM analytics_events\n        WHERE (distinct_id = $1 OR distinct_id IN (SELECT anon_id FROM anon_ids))\n          AND ts > now() - ($2 || ' days')::interval\n        ORDER BY ts ASC",
+    "params": [
+      "1",
+      90
+    ]
+  },
+  {
+    "report": "getWalletFunnel",
+    "sql": "SELECT event, count(DISTINCT distinct_id)::int AS users\n       FROM analytics_events\n      WHERE event IN ('topup_tapped', 'wallet_topup_order_created', 'wallet_topup_succeeded', 'wallet_topup_failed')\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users\n       FROM analytics_events\n      WHERE event IN ('session_started', 'screen_viewed')\n        AND properties->>'app' = 'website'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY event",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT date_trunc('day', ts) AS day, event, count(*)::int AS n\n       FROM analytics_events\n      WHERE event IN ('session_started', 'screen_viewed')\n        AND properties->>'app' = 'website'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1, 2 ORDER BY 1",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT properties->>'screen_name' AS page, count(*)::int AS views\n       FROM analytics_events\n      WHERE event = 'screen_viewed' AND properties->>'app' = 'website'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY views DESC LIMIT 15",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT COALESCE(properties->>'channel', 'unknown') AS channel,\n            count(*)::int AS sessions,\n            count(DISTINCT distinct_id)::int AS distinct_visitors\n       FROM analytics_events\n      WHERE event = 'session_started' AND properties->>'app' = 'website'\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY sessions DESC",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT properties->>'referrer_host' AS referrer_host, count(*)::int AS sessions\n       FROM analytics_events\n      WHERE event = 'session_started' AND properties->>'app' = 'website'\n        AND properties->>'referrer_host' IS NOT NULL\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY sessions DESC, 1 ASC LIMIT 15",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT properties->>'utm_source' AS utm_source,\n            properties->>'utm_campaign' AS utm_campaign,\n            count(*)::int AS sessions\n       FROM analytics_events\n      WHERE event = 'session_started' AND properties->>'app' = 'website'\n        AND properties->>'utm_source' IS NOT NULL\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1, 2 ORDER BY sessions DESC, 1 ASC, 2 ASC LIMIT 15",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT properties->>'landing_path' AS landing_path, count(*)::int AS sessions\n       FROM analytics_events\n      WHERE event = 'session_started' AND properties->>'app' = 'website'\n        AND properties->>'landing_path' IS NOT NULL\n        AND ts > now() - ($1 || ' days')::interval\n      GROUP BY 1 ORDER BY sessions DESC, 1 ASC LIMIT 15",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "getWebsiteTraffic",
+    "sql": "SELECT count(*) FILTER (WHERE properties->>'geo_country' IS NOT NULL)::int AS tagged,\n            count(*) FILTER (WHERE properties->>'geo_country' IS NULL)::int AS untagged\n       FROM analytics_events\n      WHERE event = 'session_started' AND properties->>'app' = 'website'\n        AND ts > now() - ($1 || ' days')::interval",
+    "params": [
+      30
+    ]
+  },
+  {
+    "report": "searchEventUsers",
+    "sql": "SELECT distinct_id,\n            min(ts) AS first_seen,\n            max(ts) AS last_seen,\n            count(*)::int AS event_count\n       FROM analytics_events\n      WHERE event = $1 AND ts > now() - ($4 || ' days')::interval AND properties ->> $2 = $3\n      GROUP BY distinct_id\n      ORDER BY last_seen DESC\n      LIMIT $5",
+    "params": [
+      "screen_viewed",
+      "app",
+      "website",
+      30,
+      25
+    ]
+  }
+]
