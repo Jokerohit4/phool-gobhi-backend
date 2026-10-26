@@ -41,6 +41,7 @@ export const FITNESS_GOALS = {
 
 export const EXPERIENCE_LEVELS = {
   NEW_TO_GYM: 'new_to_gym',
+  JUST_STARTED: 'just_started',
   RESTARTING_AFTER_BREAK: 'restarting_after_break',
   EXPERIENCED: 'experienced',
 };
@@ -82,6 +83,7 @@ export const TRAINING_LOCATION_PREFS = {
   HOME: 'home',
   GYM: 'gym',
   FITNESS_CENTRE: 'fitness_centre',
+  SPORTS: 'sports',
   OTHER: 'other',
 };
 

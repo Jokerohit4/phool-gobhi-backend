@@ -25,14 +25,12 @@ export function deriveAppMode(user) {
   // marketplace: PAYG is the proposition, and a booked session with money
   // attached is a stronger commitment device than a plan.
   if (currentlyWorksOut === false) {
-    // ...but someone who says they'd start at home has nothing to book, so the
-    // app has to be the product (the workout/progress/habit tool). Home is the
-    // one "not training yet" answer that still leads with home_track rather
-    // than discovery (build-plan B1).
-    if (trainingLocationPref === TRAINING_LOCATION_PREFS.HOME) {
-      return APP_MODES.HOME_TRACK;
-    }
-    return APP_MODES.GYM_SEEKER;
+    // Only people who explicitly choose a gym should be sent into gym
+    // discovery. Home, fitness-centre, sports, and other preferences use the
+    // training product without defaulting to a gym marketplace.
+    return trainingLocationPref === TRAINING_LOCATION_PREFS.GYM
+      ? APP_MODES.GYM_SEEKER
+      : APP_MODES.HOME_TRACK;
   }
 
   // Already trains at home: nothing to book, so the app has to be the product.

@@ -562,6 +562,7 @@ enum FitnessGoal {
 
 enum ExperienceLevel {
   new_to_gym
+  just_started
   restarting_after_break
   experienced
 
@@ -584,6 +585,7 @@ enum TrainingLocationPref {
   home
   gym
   fitness_centre
+  sports
   other
 
   @@schema("auth")

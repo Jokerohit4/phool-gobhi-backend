@@ -1,0 +1,1 @@
+ALTER TYPE "auth"."ExperienceLevel" ADD VALUE IF NOT EXISTS 'just_started';

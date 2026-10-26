@@ -1,0 +1,1 @@
+ALTER TYPE "auth"."TrainingLocationPref" ADD VALUE IF NOT EXISTS 'sports';
