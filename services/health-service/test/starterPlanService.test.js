@@ -363,6 +363,7 @@ test('resolveUnlockedLayerKeys falls back when the journey service answers with 
 test('the starting layers match the Contracts', () => {
   assert.deepEqual(START_LAYER, {
     new_to_gym: 1,
+    just_started: 1,
     restarting_after_break: 2,
     experienced: 5,
   });
