@@ -298,6 +298,7 @@ export function createFakePrisma(tables) {
     };
   }
 
+  tables.buddyFollow ??= new Map();
   const client = {};
   for (const model of Object.keys(tables)) client[model] = delegate(model);
   client.$transaction = async (arg) => (typeof arg === 'function' ? arg(client) : Promise.all(arg));

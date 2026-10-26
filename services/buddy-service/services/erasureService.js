@@ -17,7 +17,7 @@ const prisma = new PrismaClient();
 export async function eraseUserService(userId) {
   const profile = await prisma.buddyProfile.findUnique({
     where: { userId },
-    include: { photos: true },
+    include: { photos: true, records: true },
   });
 
   // Cloudinary first: if a row is deleted but its image isn't, the image
@@ -34,6 +34,14 @@ export async function eraseUserService(userId) {
       photoFailures.push(photo.publicId);
     }
   }
+
+  for (const record of profile?.records ?? []) {
+    if (!record.mediaPublicId) continue;
+    try { await cloudinary.uploader.destroy(record.mediaPublicId, { resource_type: record.mediaType }); }
+    catch (err) { photoFailures.push(record.mediaPublicId); }
+  }
+  // Keep rows available for retry if any asset could not be removed.
+  if (photoFailures.length) throw { status: 502, error: 'Media erasure incomplete; retry required', cloudinaryFailures: photoFailures };
 
   const matches = await prisma.match.findMany({
     where: { OR: [{ userLowId: userId }, { userHighId: userId }] },

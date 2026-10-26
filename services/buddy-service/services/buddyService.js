@@ -222,6 +222,7 @@ function assertCanBrowse(profile) {
 function toPublicCandidate(profile, display) {
   return {
     userId: profile.userId,
+    publicCode: profile.publicCode,
     name: display?.name ?? 'Buddy',
     // Prefer the buddy profile's own curated photo over the account avatar
     // — every buddy profile has at least one (photos are required to save
@@ -875,6 +876,9 @@ export async function blockUser(userId, targetUserId, reason) {
     });
   }
 
+  await prisma.buddyFollow.deleteMany({ where: { OR: [
+    { followerId: userId, targetId: targetUserId }, { followerId: targetUserId, targetId: userId }
+  ] } });
   track('buddy_blocked', userId, { targetUserId });
   return { message: 'User blocked' };
 }

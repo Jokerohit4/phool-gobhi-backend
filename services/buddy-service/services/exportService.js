@@ -16,7 +16,7 @@ const prisma = new PrismaClient();
 export async function buildExportService(userId) {
   const profile = await prisma.buddyProfile.findUnique({
     where: { userId },
-    include: { photos: { orderBy: { order: 'asc' } }, filter: true },
+    include: { photos: { orderBy: { order: 'asc' } }, filter: true, records: true, following: true },
   });
 
   const matches = await prisma.match.findMany({
@@ -36,6 +36,10 @@ export async function buildExportService(userId) {
   return {
     profile: profile
       ? {
+          publicCode: profile.publicCode,
+          isShareable: profile.isShareable,
+          records: (profile.records || []).map(({ mediaPublicId, buddyProfileId, ...record }) => record),
+          following: (profile.following || []).map(({ targetId, createdAt }) => ({ targetId, createdAt })),
           bio: profile.bio,
           socialMediaUrl: profile.socialMediaUrl,
           gender: profile.gender,

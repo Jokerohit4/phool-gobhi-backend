@@ -7,6 +7,7 @@ connectDB();
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import buddyRoutes from './routes/buddy.js';
+import socialRoutes from './routes/social.js';
 
 const app = express();
 app.use(analyticsMiddleware());
@@ -30,6 +31,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Routes
+app.use('/', socialRoutes);
 app.use('/', buddyRoutes);
 
 // Global error handler — catches anything a route/middleware passes to

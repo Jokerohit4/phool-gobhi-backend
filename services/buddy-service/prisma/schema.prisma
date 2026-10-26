@@ -76,6 +76,11 @@ model BuddyProfile {
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  publicCode     String @unique @default(dbgenerated("upper(substr(md5(random()::text || clock_timestamp()::text), 1, 12))")) @db.VarChar(12)
+  isShareable    Boolean @default(false)
+  records        BuddyPersonalRecord[]
+  followers      BuddyFollow[] @relation("BuddyFollowTarget")
+  following      BuddyFollow[] @relation("BuddyFollowSource")
   photos         BuddyPhoto[]
   filter         BuddyFilter?
 
@@ -274,5 +279,34 @@ model Report {
   @@index([reportedUserId])
   // A reporter cannot spam the queue about one person.
   @@unique([reporterId, reportedUserId])
+  @@schema("buddy")
+}
+
+
+model BuddyPersonalRecord {
+  id             Int @id @default(autoincrement())
+  buddyProfileId Int
+  exerciseId     Int
+  exerciseName   String @db.VarChar(150)
+  weight         Float
+  unit           String @db.VarChar(2)
+  reps           Int
+  mediaUrl       String?
+  mediaPublicId  String?
+  mediaType      String?
+  createdAt      DateTime @default(now())
+  buddyProfile   BuddyProfile @relation(fields: [buddyProfileId], references: [id], onDelete: Cascade)
+  @@index([buddyProfileId, createdAt])
+  @@schema("buddy")
+}
+
+model BuddyFollow {
+  followerId Int
+  targetId   Int
+  createdAt  DateTime @default(now())
+  follower   BuddyProfile @relation("BuddyFollowSource", fields: [followerId], references: [userId], onDelete: Cascade)
+  target     BuddyProfile @relation("BuddyFollowTarget", fields: [targetId], references: [userId], onDelete: Cascade)
+  @@id([followerId, targetId])
+  @@index([targetId])
   @@schema("buddy")
 }
