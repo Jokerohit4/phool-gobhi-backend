@@ -23,10 +23,8 @@ const prisma = new PrismaClient();
 // screen was telling them the photo was private to their account while it
 // did so.
 //
-// Same shape as locationRoutesService.js: the scope lives on the existing
-// HealthConsent.scopes array (the field was built for exactly this — "a scope
-// is added when the surface needing it ships"), so revoking health consent
-// revokes all three of these too.
+// These are stored separately from HealthConsent, which is only for OS health
+// data access. In-app storage choices must not require HealthKit/Health Connect.
 export const NUTRITION_SCOPE = 'nutrition';
 export const MEDICAL_RECORDS_SCOPE = 'medical_records';
 export const PHOTO_SCOPE = 'photo';
@@ -78,7 +76,7 @@ export function isScopeStale(consent, scope) {
 }
 
 async function readConsent(userId) {
-  const consent = await prisma.healthConsent.findUnique({ where: { userId } });
+  const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
   if (!consent || consent.revokedAt) return null;
   return consent;
 }
@@ -106,19 +104,6 @@ async function hasCurrentScope(userId, scope) {
 }
 
 async function addScope(userId, scope, { privacyVersion } = {}) {
-  // Requires live health consent first: the scope lives on that record, so
-  // without it there is nowhere to record the grant. This is the same
-  // ordering health consent itself requires, and the app walks it in the same
-  // order — nutrition consent cannot be granted before device consent.
-  const consent = await readConsent(userId);
-  if (!consent) {
-    throw {
-      status: 409,
-      error: 'Health consent is required before this can be saved.',
-      code: 'HEALTH_CONSENT_REQUIRED',
-    };
-  }
-
   // The client sends the version it rendered. Refusing a mismatch is the whole
   // reason the column exists: it stops a stale app from recording agreement to
   // copy that was never on its screen.
@@ -134,15 +119,23 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
     };
   }
 
-  const scopes = new Set(consent.scopes || []);
+  const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
+  const scopes = new Set(consent?.scopes || []);
   scopes.add(scope);
   // Written together with the scope, in one update. Recording the scope without
   // the version is what left this unauditable in the first place: the grant
   // exists, and nothing says which wording it was given under.
   const scopeVersions = { ...scopeVersionsOf(consent), [scope]: privacyVersion };
-  await prisma.healthConsent.update({
+  await prisma.ledgerConsent.upsert({
     where: { userId },
-    data: { scopes: [...scopes], scopeVersions },
+    create: {
+      userId,
+      grantedAt: new Date(),
+      revokedAt: null,
+      scopes: [...scopes],
+      scopeVersions,
+    },
+    update: { revokedAt: null, scopes: [...scopes], scopeVersions },
   });
 
   // Rebuild plan after nutrition or medical records consent changes
@@ -190,7 +183,7 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
 // already stored is a separate, explicit request, so the destructive default
 // is gone from both here and the controller.
 async function removeScope(userId, scope, { purge = false } = {}) {
-  const consent = await prisma.healthConsent.findUnique({ where: { userId } });
+  const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
   if (consent) {
     // The recorded version goes with the scope. Leaving it behind would make a
     // later re-grant look like it had never needed consent, because the stale
@@ -198,7 +191,7 @@ async function removeScope(userId, scope, { purge = false } = {}) {
     // scope the user had already withdrawn.
     const scopeVersions = { ...scopeVersionsOf(consent) };
     delete scopeVersions[scope];
-    await prisma.healthConsent.update({
+    await prisma.ledgerConsent.update({
       where: { userId },
       data: {
         scopes: (consent.scopes || []).filter((s) => s !== scope),

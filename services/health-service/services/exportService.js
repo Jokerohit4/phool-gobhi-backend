@@ -338,9 +338,10 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent] =
+  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
+      prisma.ledgerConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
       prisma.weeklyGoal.findUnique({ where: { userId } }),
       prisma.userActivePlan.findUnique({ where: { userId }, include: { plan: { select: { key: true, name: true } } } }),
@@ -677,6 +678,14 @@ export async function buildFullExportService(userId) {
     },
     consent: consent
       ? { grantedAt: consent.grantedAt, revokedAt: consent.revokedAt, policyVersion: consent.policyVersion, platform: consent.platform }
+      : null,
+    ledgerConsent: ledgerConsent
+      ? {
+          grantedAt: ledgerConsent.grantedAt,
+          revokedAt: ledgerConsent.revokedAt,
+          scopes: ledgerConsent.scopes,
+          scopeVersions: ledgerConsent.scopeVersions,
+        }
       : null,
     personalisation: personalisation
       ? {

@@ -36,32 +36,27 @@ model HealthConsent {
   revokedAt     DateTime?
   policyVersion String
   platform      Platform
-  // FR-09. Which classes of health data the grant covers. Today the only
-  // one the product can act on is `logs` - nothing shares health data
-  // with a coach, a partner or a leaderboard, because none of those
-  // surfaces exist (FR-21 is deferred).
-  //
-  // So this is storage and a gate, not a settings screen: a scope is
-  // added when the surface needing it ships, and the app only offers a
-  // toggle for a scope that can change something. Offering "share with
-  // your coach" today would imply a data flow that cannot happen.
+  // Device-health access scopes only. In-app ledger scopes are stored in
+  // LedgerConsent and must not depend on this OS-level permission.
   scopes        String[]  @default(["logs"])
-  // Which privacy-policy wording each scope was granted under, keyed by scope
-  // name ('nutrition', 'medical_records').
-  //
-  // HealthConsent.policyVersion above is the DEVICE-level grant and is not
-  // enough on its own: the ledger surfaces were added later, after people had
-  // already consented to device access, and those two consent prompts describe
-  // different data. Without this column there is no way to answer "which text
-  // did this person actually agree to when they turned on medical records?" —
-  // the scope array records THAT they agreed, and to nothing about what.
-  //
-  // This is the ledger equivalent of assistantPolicy.CURRENT_POLICY_VERSION,
-  // which already stores its version per grant. The difference is that the
-  // assistant's is server-stamped; this one has to be comparable against the
-  // version the client says it displayed, or a stale app could record consent
-  // to wording that was never on its screen.
+  // Used by device-health scope migrations; ledger wording versions live in
+  // LedgerConsent.scopeVersions.
   scopeVersions Json       @default("{}")
+
+  @@schema("health")
+}
+
+// In-app ledger consent is independent from permission to read HealthKit or
+// Health Connect. These scopes describe data stored by this service and must
+// remain available even when device health access was never granted.
+model LedgerConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  scopes        String[]  @default([])
+  scopeVersions Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@schema("health")
 }

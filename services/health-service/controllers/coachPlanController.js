@@ -3,6 +3,7 @@ import * as todayService from '../services/plan/todayService.js';
 import { rebuildPlan } from '../services/plan/rebuildPlan.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
+import { getMedicalRecordsConsentService } from '../services/ledger/ledgerConsentService.js';
 import { getJourney, unlockFoodEarly } from '../services/journey/journeyService.js';
 import { track } from '../utils/analytics.js';
 
@@ -204,8 +205,8 @@ export const createItem = handle(async (req, res) => {
     }
 
     // Check medical_records consent
-    const consent = await prisma.healthConsent.findUnique({ where: { userId: req.userId } });
-    if (!consent || consent.revokedAt || !consent.scopes?.includes('medical_records')) {
+    const consent = await getMedicalRecordsConsentService(req.userId);
+    if (!consent.granted || consent.needsReconsent) {
       const err = new Error('Medical records consent required');
       err.status = 403;
       err.code = 'CONSENT_REQUIRED';
