@@ -65,16 +65,24 @@ function serialiseMedication(m) {
 }
 
 export async function getProfileService(userId) {
-  const [row, facts, medications, consent] = await Promise.all([
+  const [row, facts, medications, consent, conditions] = await Promise.all([
     prisma.healthProfile.findUnique({ where: { userId } }),
     bodyNumberFacts(userId),
     prisma.medicationReminder.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
     getHealthProfileConsentService(userId),
+    prisma.healthCondition.findMany({
+      where: { userId, source: 'user_stated' },
+      orderBy: { createdAt: 'asc' },
+      select: { label: true },
+    }),
   ]);
-  const answered = answeredKeys(row, facts);
+  const personalIssues = conditions.map((condition) => condition.label);
+  const answerRow = row ? { ...row, personalIssues } : (personalIssues.length ? { personalIssues } : null);
+  const answered = answeredKeys(answerRow, facts);
   const { coinKeys = [], createdAt, updatedAt, userId: _u, ...answers } = row || {};
+  if (answerRow) answers.personalIssues = personalIssues;
   return {
-    answers: row ? answers : null,
+    answers: answerRow ? answers : null,
     answered,
     completion: completion(answered),
     basicsComplete: basicsComplete(answered),
@@ -93,7 +101,9 @@ export async function getProfileService(userId) {
 /// Pays the one-time coin for every answered question not yet paid.
 /// Returns the keys paid on THIS call — what the app animates a coin for.
 async function payNewlyAnswered(userId, answered, alreadyPaid) {
-  const due = answered.filter((k) => !alreadyPaid.includes(k));
+  // Personal issue descriptions are sensitive free text, so they never earn a
+  // reward for disclosure. Only the established profile questions do.
+  const due = answered.filter((k) => QUESTION_KEYS.includes(k) && !alreadyPaid.includes(k));
   if (!due.length) return [];
   const results = await Promise.all(
     due.map(async (questionKey) => ((await creditProfileQuestionCoin({ userId, questionKey })) ? questionKey : null)),
@@ -109,7 +119,7 @@ async function payNewlyAnswered(userId, answered, alreadyPaid) {
 }
 
 export async function updateProfileService(userId, body) {
-  const { data, bodyNumbers, sensitive, errors } = validateProfilePatch(body);
+  const { data, bodyNumbers, personalIssues, sensitive, errors } = validateProfilePatch(body);
   if (errors.length) throw fail(400, errors.join('; '), 'VALIDATION_ERROR');
 
   // Consent is checked on WHAT IS BEING STORED, not on which screen sent it:
@@ -131,6 +141,16 @@ export async function updateProfileService(userId, body) {
     create: { userId, ...data },
     update: data,
   });
+  if (personalIssues !== undefined) {
+    await prisma.$transaction(async (tx) => {
+      await tx.healthCondition.deleteMany({ where: { userId, source: 'user_stated' } });
+      if (personalIssues.length) {
+        await tx.healthCondition.createMany({
+          data: personalIssues.map((label) => ({ userId, label, source: 'user_stated' })),
+        });
+      }
+    });
+  }
   if (bodyNumbers.weightKg != null) {
     // Through the one biometric write path, so the unit, the day and the
     // one-row-per-day rule are the same as everywhere else.
@@ -147,7 +167,13 @@ export async function updateProfileService(userId, body) {
   }
 
   const after = await prisma.healthProfile.findUnique({ where: { userId } });
-  const answered = answeredKeys(after, await bodyNumberFacts(userId));
+  const conditions = await prisma.healthCondition.findMany({
+    where: { userId, source: 'user_stated' }, select: { label: true },
+  });
+  const answered = answeredKeys(
+    { ...after, personalIssues: conditions.map((condition) => condition.label) },
+    await bodyNumberFacts(userId),
+  );
   if (basicsComplete(answered) && !after.basicsAnsweredAt) {
     await prisma.healthProfile.update({ where: { userId }, data: { basicsAnsweredAt: new Date() } });
   }
@@ -162,6 +188,7 @@ export async function deleteProfileService(userId) {
   await prisma.$transaction([
     prisma.medicationReminder.deleteMany({ where: { userId } }),
     prisma.healthProfile.deleteMany({ where: { userId } }),
+    prisma.healthCondition.deleteMany({ where: { userId, source: 'user_stated' } }),
   ]);
   return getProfileService(userId);
 }

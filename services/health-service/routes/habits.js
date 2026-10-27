@@ -31,6 +31,7 @@ const coachSupplements = [...coachBasic, requireCoachConsent('supplements')];
 
 router.get('/habits/today', ...coachBasic, habitsCtrl.getToday);
 
+router.post('/habits/rewards/retry', ...coachBasic, habitsCtrl.retryRoutineRewards);
 router.post('/habits/water', ...coachBasic, habitsCtrl.logWater);
 router.delete('/habits/water/:id', ...coachBasic, habitsCtrl.deleteWaterLog);
 

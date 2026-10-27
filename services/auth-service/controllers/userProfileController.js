@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
+import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, VALID_WORKOUT_INTENTS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
 import { normalizeFitnessGoals } from '../constants/userEnums.js';
 import { linkGym } from '../services/gymLinkService.js';
@@ -174,6 +174,7 @@ function formatUser(user) {
     // and `false || null` would collapse "no, I don't work out" — the answer
     // that routes someone into the gym_seeker experience — into "never asked".
     currentlyWorksOut: user.currentlyWorksOut ?? null,
+    workoutIntent: user.workoutIntent || null,
     trainingLocationPref: user.trainingLocationPref || null,
     trainingLocationOther: user.trainingLocationOther || null,
     appMode: user.appMode || null,
@@ -377,7 +378,7 @@ export const updateProfile = async (req, res) => {
     if (req.body && req.body.fitnessGoals !== undefined) req.body.fitnessGoals = normalizeFitnessGoals(req.body.fitnessGoals);
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
-      currentlyWorksOut, trainingLocationPref, trainingLocationOther, freeTimeWindow,
+      currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
       weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
       firstVisitBadgeConsent, recommendedEquipment,
     } = req.body;
@@ -406,6 +407,10 @@ export const updateProfile = async (req, res) => {
     if (currentlyWorksOut !== undefined && currentlyWorksOut !== null
         && typeof currentlyWorksOut !== 'boolean') {
       return res.status(400).json({ error: 'currentlyWorksOut must be a boolean' });
+    }
+    if (workoutIntent !== undefined && workoutIntent !== null
+        && !VALID_WORKOUT_INTENTS.includes(workoutIntent)) {
+      return res.status(400).json({ error: `Invalid workoutIntent. Must be one of: ${VALID_WORKOUT_INTENTS.join(', ')}` });
     }
     // Free text behind "Somewhere else". It's read by a human deciding the
     // next enum value, so it only needs to be a phrase — the cap stops it
@@ -555,6 +560,7 @@ export const updateProfile = async (req, res) => {
       }
     }
     if (currentlyWorksOut !== undefined) updates.currentlyWorksOut = currentlyWorksOut;
+    if (workoutIntent !== undefined) updates.workoutIntent = workoutIntent;
     if (trainingLocationPref !== undefined) updates.trainingLocationPref = trainingLocationPref;
     if (trainingLocationOther !== undefined) {
       updates.trainingLocationOther = trainingLocationOther ? trainingLocationOther.trim() : null;
@@ -583,6 +589,7 @@ export const updateProfile = async (req, res) => {
     // answers they didn't touch.
     const answerChanged =
       (currentlyWorksOut !== undefined && currentlyWorksOut !== before.currentlyWorksOut)
+      || (workoutIntent !== undefined && workoutIntent !== before.workoutIntent)
       || (trainingLocationPref !== undefined && trainingLocationPref !== before.trainingLocationPref);
     if (answerChanged) {
       updates.appMode = deriveAppMode({ ...before, ...updates });

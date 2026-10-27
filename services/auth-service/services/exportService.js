@@ -60,6 +60,7 @@ export async function buildFullExportService(userId) {
       // they gave us. Added here at the same time as the columns, rather than
       // left to be noticed later.
       currentlyWorksOut: user.currentlyWorksOut,
+      workoutIntent: user.workoutIntent,
       trainingLocationPref: user.trainingLocationPref,
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,

@@ -76,6 +76,7 @@ test('the gate arrays are shaped exactly as the contract orders them', () => {
 test('water and today ride coachBasic only — never the supplements scope', () => {
   for (const fragment of [
     "router.get('/habits/today'",
+    "router.post('/habits/rewards/retry'",
     "router.post('/habits/water'",
     "router.delete('/habits/water/:id'",
   ]) {
@@ -107,7 +108,7 @@ test('every supplement route rides coachSupplements — the scope is not optiona
       `${found[0].n} must sit behind the supplements scope, not coachBasic alone`,
     );
   }
-  assert.equal(all.length, 8, `expected the 8 contract routes, found ${all.length}`);
+  assert.equal(all.length, 9, `expected the 9 contract routes, found ${all.length}`);
 });
 
 test('the routes are the contract\'s routes, and nothing else', () => {
@@ -116,6 +117,7 @@ test('the routes are the contract\'s routes, and nothing else', () => {
   // makes adding one a deliberate edit here too.
   const paths = all.map((r) => r.line.match(/router\.\w+\('([^']*)'/)?.[1]).sort();
   assert.deepEqual(paths, [
+    '/habits/rewards/retry',
     '/habits/supplements',
     '/habits/supplements',
     '/habits/supplements/:id',

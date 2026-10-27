@@ -143,7 +143,7 @@ export async function sendMessageService(userId, { conversationId, message }) {
   }
 
   // The Gobhi coach (persona, journey guide, plan + content grounding) is the
-  // coachAssistant flag's. Off, or flags unreachable: the v5 assistant, as before.
+  // coachAssistant flag's. Off, or flags unreachable: the shared v7 assistant.
   const coach = await isFeatureEnabled('coachAssistant').catch(() => false);
   const promptVersion = coach ? COACH_PROMPT_VERSION : CURRENT_PROMPT_VERSION;
 

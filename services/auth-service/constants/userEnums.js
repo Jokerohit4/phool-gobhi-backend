@@ -95,6 +95,11 @@ export const APP_MODES = {
   HOME_TRACK: 'home_track',
 };
 
+export const WORKOUT_INTENTS = {
+  WORKOUT: 'workout',
+  WELLNESS_ONLY: 'wellness_only',
+};
+
 export const FREE_TIME_WINDOWS = {
   MORNING: 'morning',
   AFTERNOON: 'afternoon',
@@ -105,4 +110,5 @@ export const FREE_TIME_WINDOWS = {
 
 export const VALID_TRAINING_LOCATION_PREFS = Object.values(TRAINING_LOCATION_PREFS);
 export const VALID_APP_MODES = Object.values(APP_MODES);
+export const VALID_WORKOUT_INTENTS = Object.values(WORKOUT_INTENTS);
 export const VALID_FREE_TIME_WINDOWS = Object.values(FREE_TIME_WINDOWS);

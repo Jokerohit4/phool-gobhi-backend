@@ -2160,6 +2160,7 @@ model ReportExtraction {
 // overwritten; a row can be timestamped, undone, and summed on read the same
 // way the food log is. Summing is cheap and the row is the record.
 model WaterLog {
+  clientRequestId String? @unique
   id        Int      @id @default(autoincrement())
   userId    Int
   localDate String
@@ -2280,5 +2281,37 @@ model CoachArticle {
   updatedAt    DateTime  @updatedAt
 
   @@unique([slug, lang])
+  @@schema("health")
+}
+
+// First-run progress and reward eligibility survive reinstalls and journey resets.
+model RoutineJourneyState {
+  userId Int @id
+  accountCreatedAt DateTime
+  waterLoggedAt DateTime?
+  workoutCompletedAt DateTime?
+  createdAt DateTime @default(now())
+  @@schema("health")
+}
+
+model RoutineWaterDay {
+  userId Int
+  localDate String
+  targetMl Int
+  rewardedLogs Int @default(0)
+  lastRewardAt DateTime?
+  @@id([userId, localDate])
+  @@schema("health")
+}
+
+// Durable outbox. Never deleted by undoing activity; retries reuse the coin key.
+model RoutineRewardClaim {
+  key String @id
+  userId Int
+  amount Int
+  description String
+  createdAt DateTime @default(now())
+  paidAt DateTime?
+  @@index([userId, paidAt])
   @@schema("health")
 }

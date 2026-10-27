@@ -13,11 +13,11 @@ export const JOURNEY = {
       consent: { scope: 'coach.basic' }, flags: ['coachJourney'] },
     { layer: 2, key: 'food',        layerKeys: ['food'],             unlock: { type: 'showed_up_days', need: 3 }, earlyAllowed: true,
       consent: { scope: 'nutrition' }, flags: ['healthMetrics','healthLedger'], needsSetup: true },
-    { layer: 3, key: 'body',        layerKeys: ['steps','sleep'],    unlock: { type: 'steady_weeks', need: 2 },
+    { layer: 3, key: 'body',        layerKeys: ['steps','sleep'],    unlock: { type: 'elapsed_days', need: 7 },
       consent: null, flags: ['coachJourney'], optionalConsent: { scope: 'device_health' } },
-    { layer: 4, key: 'supplements', layerKeys: ['supplements'],      unlock: { type: 'steady_weeks', need: 4 },
+    { layer: 4, key: 'supplements', layerKeys: ['supplements'],      unlock: { type: 'elapsed_days', need: 10 },
       consent: { scope: 'coach.supplements' }, flags: ['coachJourney'] },
-    { layer: 5, key: 'health',      layerKeys: ['health'],           unlock: { type: 'steady_weeks', need: 6 },
+    { layer: 5, key: 'health',      layerKeys: ['health'],           unlock: { type: 'elapsed_days', need: 15 },
       consent: { scope: 'medical_records' }, flags: ['healthMetrics','healthLedger'] },
   ],
   startLayer: { new_to_gym: 1, just_started: 1, restarting_after_break: 2, experienced: 5 },
@@ -71,4 +71,8 @@ export const DEFAULT_SLEEP_MIN = 420;
 // read, not only at start; start layer only unlocks, consent is still required.
 export function startLayerFor(level) {
   return JOURNEY.startLayer[level] ?? 1;
+}
+export function elapsedJourneyDays(startedAt, now = new Date()) {
+  const day = date => new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return Math.max(0, Math.floor((Date.parse(day(now)) - Date.parse(day(startedAt))) / 86400000));
 }

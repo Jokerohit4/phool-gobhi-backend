@@ -14,7 +14,11 @@ import { APP_MODES, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 // may not even have as a partner — it is not; that user wants a workout,
 // progress and habit tool, and should merely be told PAYG exists.
 export function deriveAppMode(user) {
-  const { currentlyWorksOut, trainingLocationPref } = user || {};
+  const { currentlyWorksOut, trainingLocationPref, workoutIntent } = user || {};
+
+  // Explicit no-workout intent gets the wellness tracker even when no training
+  // location has been answered. This remains derived server-side.
+  if (workoutIntent === 'wellness_only') return APP_MODES.HOME_TRACK;
 
   // Never asked. Returning null (rather than defaulting to gym_seeker) is what
   // lets every pre-existing account keep the current Home untouched until it

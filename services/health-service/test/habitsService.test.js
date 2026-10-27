@@ -29,6 +29,7 @@ const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' 
 let svc;
 
 test('setup: import habitsService (pure imports - no prisma mock needed)', async (t) => {
+  t.mock.module('../services/routineJourneyService.js', { exports: { routineSnapshot: async () => null, recordRoutineWater: async () => ({ coinsAwarded: 0, pending: false }) } });
   t.mock.module('../services/plan/rebuildPlan.js', {
     exports: {
       rebuildPlan: async () => ({ created: 0, updated: 0, deactivated: 0, onLayerKeys: [] }),
@@ -59,6 +60,7 @@ function fakePrisma() {
   const prisma = {
     state,
     waterLog: {
+      findUnique: async ({ where }) => state.waterLogs.find(row => row.clientRequestId === where.clientRequestId) ?? null,
       findMany: async ({ where, orderBy } = {}) => {
         const rows = state.waterLogs.filter((r) => matches(where, r));
         if (orderBy?.id === 'asc') rows.sort((a, b) => a.id - b.id);
@@ -408,4 +410,15 @@ test('markTaken: a missing or foreign schedule is 404; a bad day is 400', async 
     (err) => err.status === 400 && err.code === 'INVALID_DATE',
   );
   assert.equal(prisma.state.logs.length, 0);
+});
+
+test('water request retries reuse the saved drink; changed payloads conflict', async () => {
+  const prisma = fakePrisma();
+  const request = { userId: 7, ml: 250, localDate: TODAY, requestId: 'aaaaaaaaaaaaaaaaaaaaaaaa' };
+  const first = await svc.logWater(prisma, request);
+  const retry = await svc.logWater(prisma, request);
+  assert.equal(retry.id, first.id);
+  assert.equal(retry.loggedMl, 250);
+  assert.equal(prisma.state.waterLogs.length, 1);
+  await assert.rejects(() => svc.logWater(prisma, { ...request, ml: 500 }), error => error.status === 409);
 });

@@ -367,13 +367,16 @@ export async function saveSettings({ prisma, userId, draft = {}, journey = null 
   let slots = ctx.saved?.workoutSlots ?? [];
   if (sessionsChanged) {
     const experienceLevel = journey?.startLevel ?? 'new_to_gym';
+    const homeRoutineHints = ['no equipment', 'bodyweight', '15 minute', '10 minute', 'no bar', 'mobility', 'desk reset', 'low-impact'];
     const location = slots.length > 0
-      ? (slots.some((s) => s.title?.includes('home') || s.title?.includes('Home')) ? 'home' : 'gym')
+      ? (slots.some((s) => homeRoutineHints.some((hint) => s.title?.toLowerCase().includes(hint))) ? 'home' : 'gym')
       : 'gym';
     slots = await buildWorkoutSlots(prisma, {
       experienceLevel,
       location,
       sessions: resolved.sessionsPerWeek,
+      goals: ctx.healthGoal?.goals ?? [],
+      userId,
     });
 
     await prisma.prescription.update({

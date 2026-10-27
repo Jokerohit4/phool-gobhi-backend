@@ -23,6 +23,7 @@ import { rebuildPlan } from '../plan/rebuildPlan.js';
 import { layerKeysUpTo, JOURNEY } from '../journey/journeyConfig.js';
 import { normaliseGoals } from './targetEngine.js';
 import { DEFAULT_SLEEP_MINUTES, PRESCRIPTION_RULES_VERSION } from './constants.js';
+import { equipmentFit } from '../homeSetup.js';
 
 // Aliases kept for callers/tests that import these names from here; the
 // values live in journeyConfig and must not drift from it.
@@ -45,6 +46,15 @@ const DEFAULT_EXPERIENCE_LEVEL = 'new_to_gym';
 
 function levelDefaults(experienceLevel) {
   return LEVEL_DEFAULTS[experienceLevel] ?? LEVEL_DEFAULTS[DEFAULT_EXPERIENCE_LEVEL];
+}
+
+function journeyExperienceForProfile(profile, fallback) {
+  return ({
+    none: 'new_to_gym',
+    lt_1_year: 'new_to_gym',
+    one_to_three_years: 'restarting_after_break',
+    over_three_years: 'experienced',
+  })[profile?.experienceLevel] ?? fallback;
 }
 
 // Which template difficulty each experience level's slots ask for. Nothing in
@@ -141,26 +151,120 @@ function poolFor(location, requestedLevel) {
  * Pure apart from the template lookup, so tests can pin the spread and the
  * count without a database.
  */
-export async function buildWorkoutSlots(prisma, { experienceLevel, location, sessions }) {
+function goalFit(template, goals = []) {
+  const groups = new Set((template.exercises ?? []).map((row) => row.exercise?.muscleGroup));
+  const name = template.name.toLowerCase();
+  let score = 0;
+  for (const [index, goal] of goals.entries()) {
+    const priority = Math.max(1, goals.length - index);
+    if (goal === 'build_muscle' || goal === 'recomp') {
+      if (groups.has('chest') || groups.has('back') || groups.has('legs') || groups.has('shoulders')) score += 3 * priority;
+      if (/strength|push|pull|legs|upper|full body/.test(name)) score += 2 * priority;
+    } else if (goal === 'endurance' || goal === 'lose_fat') {
+      if (groups.has('cardio')) score += 3 * priority;
+      if (/cardio|full body|conditioning|low-impact/.test(name)) score += 2 * priority;
+    } else if (goal === 'general_health') {
+      if (groups.has('fullBody') || groups.has('cardio')) score += 2 * priority;
+      if (/mobility|full body|low-impact/.test(name)) score += 2 * priority;
+    }
+  }
+  return score;
+}
+
+function injuryBias(template, profile) {
+  // Injury preferences affect recommendations only after the user opted into
+  // personalised programming. This is a gentle template ranking signal, not a
+  // diagnosis or a promise that an exercise is safe for a particular injury.
+  if (!profile?.consentAt || !profile.injuryZones?.length) return 0;
+  const groups = new Set((template.exercises ?? []).map((row) => row.exercise?.muscleGroup));
+  const affectedGroups = new Set();
+  for (const zone of profile.injuryZones) {
+    if (zone === 'knee') ['legs', 'cardio'].forEach((x) => affectedGroups.add(x));
+    if (['shoulder', 'wrist', 'neck'].includes(zone)) ['shoulders', 'chest', 'arms'].forEach((x) => affectedGroups.add(x));
+    if (zone === 'lower_back') ['back', 'core', 'legs'].forEach((x) => affectedGroups.add(x));
+  }
+  return [...groups].some((group) => affectedGroups.has(group)) ? -2 : 0;
+}
+
+function planWeekdays(sessions, preferredRestDay) {
+  // Profile uses Sunday=0; prescription slots use Monday=0.
+  if (sessions >= 7) return [...SLOT_WEEKDAY_PATTERN];
+  const restWeekday = preferredRestDay == null ? null : (preferredRestDay + 6) % 7;
+  const available = SLOT_WEEKDAY_PATTERN.filter((day) => day !== restWeekday);
+  const days = [];
+  for (let i = 0; i < sessions; i++) days.push(available[i % available.length]);
+  return days;
+}
+
+export async function buildWorkoutSlots(prisma, {
+  experienceLevel, location, sessions, goals = [], userId = null,
+}) {
   const count = Math.max(0, Math.floor(Number(sessions) || 0));
   if (count === 0) return [];
 
   const requestedLevel = TEMPLATE_LEVEL_BY_EXPERIENCE[experienceLevel] ?? 'beginner';
   const names = poolFor(location, requestedLevel);
 
-  const rows = await prisma.workoutTemplate.findMany({
+  const [rows, profile, recentSessions] = await Promise.all([
+    prisma.workoutTemplate.findMany({
     where: { isSystem: true, name: { in: [...new Set(names)] } },
-  });
+      include: { exercises: { include: { exercise: true } } },
+    }),
+    userId && prisma.personalisationProfile?.findUnique
+      ? prisma.personalisationProfile.findUnique({ where: { userId } }) : null,
+    userId && prisma.workoutSession?.findMany ? prisma.workoutSession.findMany({
+      where: { userId, templateId: { not: null }, endedAt: { not: null } },
+      orderBy: { startedAt: 'desc' }, take: 8, select: { templateId: true },
+    }) : [],
+  ]);
   const byName = new Map(rows.map((r) => [r.name, r]));
+  const recentIds = new Set(recentSessions.map((session) => session.templateId));
+  const rankedCandidates = [...byName.values()].map((template) => {
+    const fit = location === 'home' ? equipmentFit(template, profile) : null;
+    const lowImpactPreference = profile?.programmingMode === 'low_impact_recovery';
+    const lowImpact = /low-impact|mobility|stretch/i.test(template.name);
+    const smallSpaceFit = profile?.trainingSpace === 'small'
+      ? (/low-impact|mobility|desk reset|10 minute|15 minute/i.test(template.name) ? 4 : -2)
+      : 0;
+    return {
+      template,
+      equipmentFits: fit?.fits,
+      score: goalFit(template, goals)
+        + (fit?.fits === true ? 5 : fit?.fits === false ? -8 : 0)
+        + (lowImpactPreference && lowImpact ? 8 : 0)
+        + smallSpaceFit
+        + injuryBias(template, profile)
+        - (recentIds.has(template.id) ? 2 : 0),
+    };
+  }).sort((a, b) => b.score - a.score || a.template.id - b.template.id);
+  const fittingCandidates = location === 'home' && profile?.homeSetupAt
+    ? rankedCandidates.filter((candidate) => candidate.equipmentFits === true)
+    : [];
+  const candidates = fittingCandidates.length ? fittingCandidates : rankedCandidates;
+  const hasPersonalContext = goals.length > 0 || recentIds.size > 0 || Boolean(
+    profile?.experienceLevel || profile?.preferredRestDay != null || profile?.homeSetupAt
+      || profile?.trainingSpace || profile?.programmingMode === 'low_impact_recovery'
+      || (profile?.consentAt && profile?.injuryZones?.length),
+  );
 
   const slots = [];
+  const weekdays = planWeekdays(count, profile?.preferredRestDay);
   for (let i = 0; i < count; i++) {
+    // Cycle through the ranked catalog while avoiding consecutive duplicates
+    // whenever the selected pool contains alternatives.
     const name = names[i % names.length];
-    const template = byName.get(name);
+    const alternatives = hasPersonalContext ? candidates.filter((candidate) =>
+      i === 0 || candidate.template.id !== slots[i - 1].templateId,
+    ) : [];
+    const template = hasPersonalContext
+      ? (alternatives.length ? alternatives : candidates)[0]?.template
+      : byName.get(name);
+    const fallbackName = name;
     slots.push({
-      weekday: SLOT_WEEKDAY_PATTERN[i % SLOT_WEEKDAY_PATTERN.length],
+      weekday: weekdays[i],
+      location,
       templateId: template?.id ?? null,
-      title: template?.name ?? name,
+      title: template?.name ?? fallbackName,
       // The template's own difficulty, not the level that was asked for: a
       // slot that says "intermediate" while pointing at a beginner routine
       // would be a label the content does not match.
@@ -241,8 +345,16 @@ export async function createStarterPlan(prisma, userId, {
     update: { sessionsPerWeek: sessions, setByUser: true },
   });
 
-  const defaults = levelDefaults(level);
-  const slots = await buildWorkoutSlots(prisma, { experienceLevel: level, location, sessions });
+  const profile = await prisma.personalisationProfile?.findUnique?.({ where: { userId } });
+  const profileLevel = journeyExperienceForProfile(profile, level);
+  const defaults = levelDefaults(profileLevel);
+  const slots = await buildWorkoutSlots(prisma, {
+    experienceLevel: profileLevel,
+    location,
+    sessions,
+    goals: goalList,
+    userId,
+  });
   await prisma.prescription.upsert({
     where: { userId },
     create: {
@@ -277,6 +389,34 @@ export async function createStarterPlan(prisma, userId, {
     userId,
     journey: { unlockedLayerKeys: layerKeysUpTo(START_LAYER[level]) },
   });
+}
+
+// Rebuild workout slots when a user changes a training preference. Profile
+// changes never alter manually authored plan items; rebuildPlan only diffs
+// suggested rows.
+export async function refreshWorkoutSlotsForProfile(prisma, userId) {
+  if (!prisma.prescription?.findUnique || !prisma.prescription?.update) return false;
+  const [prescription, journey, goal, profile] = await Promise.all([
+    prisma.prescription.findUnique({ where: { userId } }),
+    prisma.journeyProgress?.findUnique?.({ where: { userId } }),
+    prisma.healthGoal.findUnique({ where: { userId } }),
+    prisma.personalisationProfile?.findUnique?.({ where: { userId } }),
+  ]);
+  if (!prescription?.workoutSlots?.length) return false;
+  const homeNames = new Set(Object.values(HOME_TEMPLATE_POOL).flat());
+  const location = prescription.workoutSlots[0]?.location
+    ?? (prescription.workoutSlots.some((slot) => homeNames.has(slot.title)) ? 'home' : 'gym');
+  const experienceLevel = journeyExperienceForProfile(profile, journey?.startLevel ?? DEFAULT_EXPERIENCE_LEVEL);
+  const slots = await buildWorkoutSlots(prisma, {
+    experienceLevel,
+    location,
+    sessions: prescription.workoutSlots.length,
+    goals: goal?.goals ?? [],
+    userId,
+  });
+  await prisma.prescription.update({ where: { userId }, data: { workoutSlots: slots } });
+  await rebuildPlan(prisma, userId, { reason: 'personalisation' });
+  return true;
 }
 
 // ---- Rebuilding ------------------------------------------------------------

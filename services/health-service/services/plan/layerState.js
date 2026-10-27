@@ -46,6 +46,7 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
       const unlock = cfg.unlock || {};
       const have = unlock.type === 'showed_up_days' ? journey?.showedUpDays ?? 0
                  : unlock.type === 'steady_weeks' ? journey?.steadyWeeks ?? 0
+                 : unlock.type === 'elapsed_days' ? journey?.elapsedDays ?? 0
                  : 0;
       layers.push({
         layer: cfg.layer,

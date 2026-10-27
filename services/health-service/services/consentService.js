@@ -192,6 +192,9 @@ export async function deleteAllDataService(userId) {
     //
     // SupplementLog.scheduleId has no FK by design (a tick outlives its
     // schedule), so both supplement tables are deleted explicitly.
+    prisma.routineRewardClaim.deleteMany({ where: { userId } }),
+    prisma.routineWaterDay.deleteMany({ where: { userId } }),
+    prisma.routineJourneyState.deleteMany({ where: { userId } }),
     prisma.waterLog.deleteMany({ where: { userId } }),
     prisma.supplementSchedule.deleteMany({ where: { userId } }),
     prisma.supplementLog.deleteMany({ where: { userId } }),

@@ -4,6 +4,7 @@ import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { tierOf, orderMemories } from './memoryService.js';
 import { summariseHomeSetup } from '../homeSetup.js';
 import { summariseForCoach } from '../healthProfile.js';
+import { HEALTH_PROFILE_POLICY_VERSION } from '../healthProfileConsentService.js';
 import { quoteUserText, QUOTE_NOTE } from './guardrails.js';
 
 const prisma = new PrismaClient();
@@ -24,8 +25,10 @@ const prisma = new PrismaClient();
 // +1,500 for the health profile (gamified onboarding v2, 2026-10-01): the
 // allergy safety line at its cap (12 x 40 chars + phrasing, ~560) and the
 // lifestyle line at its worst (every phrase plus a 60-char hometown, ~900).
+// +10,000 for up to 20 consented, user-stated concerns (500 characters each),
+// quoted as data so they cannot become prompt instructions.
 // +150 for the quoted-text note and the «» around each memory value (B16).
-const MAX_CONTEXT_CHARS = 5500;
+const MAX_CONTEXT_CHARS = 15500;
 const ATTENDANCE_WINDOW_HOURS = 24 * 30;
 const RECENT_SESSION_LIMIT = 10;
 
@@ -262,11 +265,25 @@ export async function buildUserContextService(userId) {
   // defensively: these tables are newer than every other read here, and a
   // missing row or a failed read costs the coach a line, never the answer.
   const optional = (q) => (q ? q.catch(() => null) : Promise.resolve(null));
-  const [healthProfile, medicationCount] = await Promise.all([
+  const [healthProfile, medicationCount, healthProfileConsent] = await Promise.all([
     optional(prisma.healthProfile?.findUnique({ where: { userId } })),
     optional(prisma.medicationReminder?.count({ where: { userId, active: true } })),
+    optional(prisma.healthProfileConsent?.findUnique({ where: { userId } })),
   ]);
   const profileLines = summariseForCoach(healthProfile, { medicationCount: medicationCount || 0 });
+  const mayShareHealthConcerns =
+    healthProfileConsent &&
+    !healthProfileConsent.revokedAt &&
+    healthProfileConsent.policyVersion === HEALTH_PROFILE_POLICY_VERSION;
+  const personalIssues = mayShareHealthConcerns
+    ? (await optional(
+        prisma.healthCondition?.findMany({
+          where: { userId, source: 'user_stated' },
+          orderBy: { createdAt: 'asc' },
+          select: { label: true },
+        }),
+      )) || []
+    : [];
 
   // Every memory, every turn — no retrieval step.
   //
@@ -297,6 +314,13 @@ export async function buildUserContextService(userId) {
   // memories, at the very front: a missed allergy is the one mistake here
   // that can hurt someone.
   if (profileLines.safety) parts.push(profileLines.safety);
+  if (personalIssues.length) {
+    parts.push(
+      `Long-term health concerns the user chose to share (unverified, not diagnoses): ${personalIssues
+        .map((issue) => quoteUserText(issue.label, 500))
+        .join('; ')}. Use this only as personal context; do not infer a diagnosis or recommend treatment.`,
+    );
+  }
   const training = summariseTrainingProfile(authProfile);
   if (training) parts.push(training);
   // Right after "how they train": both are stable facts, so both stay in the
@@ -327,9 +351,9 @@ export async function buildUserContextService(userId) {
     parts.push(`Things they have told the assistant:\n${renderMemories(rest)}`);
   }
 
-  // Stated once, before any quoted text, and fixed wording, so the cached
-  // prefix stays byte-identical.
-  if (memories.length) parts.unshift(QUOTE_NOTE);
+  // Stated once, before any quoted user text, and fixed wording, so the
+  // cached prefix stays byte-identical.
+  if (memories.length || personalIssues.length) parts.unshift(QUOTE_NOTE);
 
   let text = parts.join('\n');
   if (text.length > MAX_CONTEXT_CHARS) {
@@ -352,6 +376,7 @@ export async function buildUserContextService(userId) {
       onboardingProfile: training ? 1 : 0,
       homeSetup: homeSetup ? 1 : 0,
       healthProfile: (profileLines.safety ? 1 : 0) + (profileLines.lifestyle ? 1 : 0),
+      personalIssues: personalIssues.length,
       contextChars: text.length,
     },
   };

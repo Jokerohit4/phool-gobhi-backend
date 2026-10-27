@@ -19,11 +19,11 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // ledger, so a retry after a transient failure is safe. The receiving route
 // is gated behind the streaksCoins feature flag, so this is a harmless
 // no-op (403, swallowed -> not credited) until an admin turns that phase on.
-export async function notifyWorkoutFinished({ userId, sessionId, description, idempotencyKey }) {
+export async function notifyWorkoutFinished({ userId, sessionId, description, idempotencyKey, routinePolicy }) {
   try {
     const res = await axios.post(
       `${CHALLENGE_SERVICE_URL}/internal/workout-credit`,
-      { userId, sessionId, description, idempotencyKey },
+      { userId, sessionId, description, idempotencyKey, routinePolicy },
       {
         headers: {
           'x-internal-key': INTERNAL_API_KEY,

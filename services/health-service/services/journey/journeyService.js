@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { JOURNEY, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
+import { JOURNEY, elapsedJourneyDays, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
 import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
-import { countSteadyWeeks, getSteadyWeeksDetail } from './steadyWeeks.js';
+import { countSteadyWeeks } from './steadyWeeks.js';
 import { checkAndTriggerHomeDaysReferral } from './referralHomeTrigger.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
 
@@ -53,33 +53,12 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
     unlocked.push({ layer: 2, at: progress.foodEarlyAt.toISOString(), via: 'early' });
   }
 
-  // Layer 3 (body) - 2 steady weeks
-  const bodyUnlock = JOURNEY.layers.find((l) => l.key === 'body');
-  if (steadyWeeks >= bodyUnlock.unlock.need) {
-    const detail = getSteadyWeeksDetail(showedUpDays);
-    if (detail.length >= bodyUnlock.unlock.need) {
-      const secondWeekStart = detail[detail.length - bodyUnlock.unlock.need].weekStart;
-      unlocked.push({ layer: 3, at: new Date(`${secondWeekStart}T00:00:00Z`).toISOString(), via: 'steady_weeks' });
-    }
-  }
-
-  // Layer 4 (supplements) - 4 steady weeks
-  const suppUnlock = JOURNEY.layers.find((l) => l.key === 'supplements');
-  if (steadyWeeks >= suppUnlock.unlock.need) {
-    const detail = getSteadyWeeksDetail(showedUpDays);
-    if (detail.length >= suppUnlock.unlock.need) {
-      const fourthWeekStart = detail[detail.length - suppUnlock.unlock.need].weekStart;
-      unlocked.push({ layer: 4, at: new Date(`${fourthWeekStart}T00:00:00Z`).toISOString(), via: 'steady_weeks' });
-    }
-  }
-
-  // Layer 5 (health) - 6 steady weeks
-  const healthUnlock = JOURNEY.layers.find((l) => l.key === 'health');
-  if (steadyWeeks >= healthUnlock.unlock.need) {
-    const detail = getSteadyWeeksDetail(showedUpDays);
-    if (detail.length >= healthUnlock.unlock.need) {
-      const sixthWeekStart = detail[detail.length - healthUnlock.unlock.need].weekStart;
-      unlocked.push({ layer: 5, at: new Date(`${sixthWeekStart}T00:00:00Z`).toISOString(), via: 'steady_weeks' });
+  // Calendar time since the server-owned journey start; activity cannot
+  // fast-forward these dates. Existing/start-level unlocks remain available.
+  const elapsed = elapsedJourneyDays(progress.startedAt);
+  for (const cfg of JOURNEY.layers.filter(l => l.unlock.type === 'elapsed_days')) {
+    if (elapsed >= cfg.unlock.need) {
+      unlocked.push({ layer: cfg.layer, at: new Date(new Date(progress.startedAt).getTime() + cfg.unlock.need * 86400000).toISOString(), via: 'elapsed_days' });
     }
   }
 
@@ -89,18 +68,18 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
     prisma.foodLog.findFirst({ where: { userId }, select: { id: true } }),
     prisma.biometricEntry.findFirst({ where: { userId, metric: 'steps' }, select: { id: true } }),
     prisma.biometricEntry.findFirst({ where: { userId, metric: 'sleep_minutes' }, select: { id: true } }),
-    prisma.healthProfile.findUnique({ where: { userId }, select: { userId: true } }),
+    prisma.healthProfile.findUnique({ where: { userId }, select: { userId: true, createdAt: true } }),
     prisma.medicalDocument.findFirst({ where: { userId }, select: { id: true } }),
   ]);
 
   const existingUnlocks = [];
   if (foodLogs && !unlocked.some((u) => u.layer === 2)) existingUnlocks.push({ layer: 2, at: now, via: 'existing' });
   if ((stepLogs || sleepLogs) && !unlocked.some((u) => u.layer === 3)) existingUnlocks.push({ layer: 3, at: now, via: 'existing' });
-  if ((healthProfile || medicalDocs) && !unlocked.some((u) => u.layer === 5)) existingUnlocks.push({ layer: 5, at: now, via: 'existing' });
+  if (((healthProfile && new Date(healthProfile.createdAt) < new Date('2026-10-26T00:00:00+05:30')) || medicalDocs) && !unlocked.some((u) => u.layer === 5)) existingUnlocks.push({ layer: 5, at: now, via: 'existing' });
 
   // Merge, keeping the earliest unlock for each layer
   const merged = new Map();
-  for (const u of [...unlocked, ...existingUnlocks]) {
+  for (const u of [...(progress.unlocked ?? []), ...unlocked, ...existingUnlocks]) {
     if (!merged.has(u.layer) || new Date(u.at) < new Date(merged.get(u.layer).at)) {
       merged.set(u.layer, u);
     }
@@ -131,6 +110,8 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
     const unlock = unlockConfigForLayerKey(nextLocked.key);
     if (unlock && unlock.type === 'showed_up_days') {
       next = { layer: nextLocked.layer, type: 'showed_up_days', have: showedUpDays.length, need: unlock.need };
+    } else if (unlock && unlock.type === 'elapsed_days') {
+      next = { layer: nextLocked.layer, type: 'elapsed_days', have: elapsedJourneyDays(progress.startedAt), need: unlock.need };
     } else if (unlock && unlock.type === 'steady_weeks') {
       next = { layer: nextLocked.layer, type: 'steady_weeks', have: steadyWeeks, need: unlock.need };
     }
@@ -143,6 +124,7 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
     showedUpDates: showedUpDays,
     showedUpDays: showedUpDays.length,
     steadyWeeks,
+    elapsedDays: elapsedJourneyDays(progress.startedAt),
     easyStartUntil: progress.easyStartUntil ?? null,
     foodEarly: !!progress.foodEarlyAt,
     easeBack,
@@ -400,6 +382,8 @@ export async function getJourneySummary(userId) {
     const unlock = unlockConfigForLayerKey(nextLocked.key);
     if (unlock && unlock.type === 'showed_up_days') {
       nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: showedUpDays.length, need: unlock.need };
+    } else if (unlock && unlock.type === 'elapsed_days') {
+      next = { layer: nextLocked.layer, type: 'elapsed_days', have: elapsedJourneyDays(progress.startedAt), need: unlock.need };
     } else if (unlock && unlock.type === 'steady_weeks') {
       nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: steadyWeeks, need: unlock.need };
     }

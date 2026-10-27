@@ -47,7 +47,7 @@
 /** Bumped whenever the flag SET changes shape, so a client can tell a flag that
  * is off from a server that predates the flag existing. Emitted as
  * `schemaVersion` on GET /api/auth/app-config. */
-export const FLAG_SCHEMA_VERSION = 4;
+export const FLAG_SCHEMA_VERSION = 5;
 
 /**
  * Ordering within a group is only for the admin portal's render order. `deps`
@@ -380,6 +380,20 @@ export const FEATURE_FLAGS = [
       'home-track screen leads with workout/routine widgets that flag gates.',
   },
   // ------------------------------------------------------------------- coach
+  {
+    name: 'homeIntroduction',
+    defaultEnabled: false,
+    deps: ['coachJourney'],
+    clientKey: 'homeIntroductionEnabled',
+    group: 'coach',
+    dataClass: 'health-derived',
+    blastRadius: 'Progressive first-run Home presentation for newly enrolled customer accounts',
+    rationale:
+      'New accounts begin with water logging and a completed workout before Today. ' +
+      'The server persists completion and bounded activity coin claims; reminders are optional. ' +
+      'Journey layers open at 7/10/15 elapsed days with consent/setup still required. ' +
+      'Existing accounts retain full Home. Coach Journey must be enabled separately.',
+  },
   {
     name: 'coachJourney',
     defaultEnabled: false,

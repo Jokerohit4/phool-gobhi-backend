@@ -47,11 +47,16 @@ export async function upsertProfileService(userId, patch) {
       || patch.homeSetupAnswered === true) {
     data.homeSetupAt = new Date();
   }
-  return prisma.personalisationProfile.upsert({
+  const profile = await prisma.personalisationProfile.upsert({
     where: { userId },
     create: { userId, injuryZones: [], homeEquipment: [], ...data },
     update: data,
   });
+  if (['experienceLevel', 'preferredRestDay', 'homeEquipment', 'trainingSpace', 'injuryZones'].some((field) => patch[field] !== undefined)) {
+    const { refreshWorkoutSlotsForProfile } = await import('./ledger/starterPlanService.js');
+    await refreshWorkoutSlotsForProfile(prisma, userId);
+  }
+  return profile;
 }
 
 // FR-25/27's only write path for programming mode. Anything other than
@@ -69,11 +74,14 @@ export async function setProgrammingModeService(userId, mode, privacyVersion) {
   const data = mode === 'neutral'
     ? { programmingMode: 'neutral', consentAt: null, privacyVersion: null }
     : { programmingMode: mode, consentAt: new Date(), privacyVersion };
-  return prisma.personalisationProfile.upsert({
+  const profile = await prisma.personalisationProfile.upsert({
     where: { userId },
     create: { userId, injuryZones: [], ...data },
     update: data,
   });
+  const { refreshWorkoutSlotsForProfile } = await import('./ledger/starterPlanService.js');
+  await refreshWorkoutSlotsForProfile(prisma, userId);
+  return profile;
 }
 
 export async function deleteProfileService(userId) {

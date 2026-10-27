@@ -1,3 +1,4 @@
+import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater } from '../services/routineJourneyService.js';
 import { PrismaClient } from '@prisma/client';
 import * as habitsService from '../services/habitsService.js';
 
@@ -46,6 +47,7 @@ export const logWater = async (req, res) => {
     const data = await habitsService.logWater(prisma, {
       userId: req.userId,
       ml: req.body?.ml,
+      requestId: req.body?.requestId,
       localDate: req.body?.localDate,
     });
     return res.status(201).json({ data });
@@ -119,4 +121,23 @@ export const markTaken = async (req, res) => {
   } catch (err) {
     return fail(res, err, 'habits');
   }
+};
+
+export const retryRoutineRewards = async (req, res) => {
+  try {
+    const data = await payRoutineClaims(prisma, req.userId);
+    // Reconcile a crash between saving a drink and creating its coin claim.
+    // Original server timestamps preserve spacing on every retry.
+    const localDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const logs = await prisma.waterLog.findMany({ where: { userId: req.userId, localDate }, orderBy: { createdAt: 'asc' } });
+    const targetMl = await habitsService.waterTargetMl(prisma, req.userId);
+    for (const log of logs) {
+      const reward = await recordRoutineWater(prisma, { userId: req.userId, localDate, targetMl, now: log.createdAt });
+      data.coinsAwarded += reward.coinsAwarded;
+      data.pending ||= reward.pending;
+    }
+    data.coinsAwarded += await retryRoutineWorkouts(prisma, req.userId);
+    return res.json({ data });
+  }
+  catch (err) { return fail(res, err, 'routine-rewards'); }
 };

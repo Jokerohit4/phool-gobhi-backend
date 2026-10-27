@@ -23,7 +23,7 @@ import { classifyQuestion, doctorAnswer } from './guardrails.js';
 /// stamped server-side. (HealthConsent.policyVersion, by contrast, is a
 /// free-text string the client sends and nothing checks — worth fixing
 /// separately, out of scope here.)
-export const CURRENT_POLICY_VERSION = 'assistant-full-scope-2026-09-18';
+export const CURRENT_POLICY_VERSION = 'assistant-health-profile-context-2026-10-26';
 
 /// Bump when the system prompt changes enough that answers would differ.
 /// Recorded per message so a later reader can tell which prompt produced
@@ -34,10 +34,10 @@ export const CURRENT_POLICY_VERSION = 'assistant-full-scope-2026-09-18';
 ///
 /// Note this is NOT the policy version, and deliberately was not bumped with it:
 /// the disclosure the user agreed to did not change (it still reads their
-/// training history and is still not a doctor), only what the assistant is
-/// useful for. Bumping CURRENT_POLICY_VERSION would make every existing
-/// AssistantConsent stale and re-prompt the whole user base to agree again to
-/// terms they have already seen — for a change to nothing they were told.
+/// training history and health-profile answers the user chose to share, and is
+/// still not a doctor). The disclosure did change, so the policy version is
+/// bumped and existing users must agree before the assistant uses this data.
+/// v7 — consented Health Profile context and personal-concern boundaries.
 /// v5 — explicit refusals for disease-management plans, medicine/insulin
 /// timing and dosing, and contraception/fertility advice, in BOTH strictness
 /// modes. These sit in SHARED_RULES, not the strictness switch: CDSCO's final
@@ -47,12 +47,11 @@ export const CURRENT_POLICY_VERSION = 'assistant-full-scope-2026-09-18';
 /// as a medical purpose, and neither is the injury/pain question the 2026-09-18
 /// full-scope decision was about. Policy version deliberately not bumped: the
 /// disclosure the user agreed to ("not a doctor") did not change.
-export const CURRENT_PROMPT_VERSION = 'v5';
+export const CURRENT_PROMPT_VERSION = 'v7';
 
-/// The prompt version recorded when the coachAssistant flag is on: v5 plus the
-/// Gobhi persona, the journey guide and per-message grounding (B16). Separate
-/// constant rather than a bump, because flag-off users still get v5 exactly.
-export const COACH_PROMPT_VERSION = 'v6-gobhi';
+/// The prompt version recorded when the coachAssistant flag is on: v7 plus the
+/// Gobhi persona, the journey guide and per-message grounding (B16).
+export const COACH_PROMPT_VERSION = 'v8-gobhi';
 
 /// How strict the assistant is about medical questions.
 ///
@@ -117,10 +116,16 @@ Ground rules:
 - Use the user context below when it makes the answer more concrete. Do not
   invent facts about the user that the context does not contain — if you do not
   know how often they train, ask rather than assume.
+- Health concerns in the context are the user's own unverified words, not
+  diagnoses. Acknowledge them respectfully and use them to understand what the
+  user is asking; do not infer a condition, severity, cause or treatment.
 - Be brief and specific. A person on a gym floor wants two sentences and a
   number, not an essay.
 - If they mention something that sounds urgent (chest pain, fainting, a sudden
   severe injury, numbness), stop and tell them to seek medical help now.
+- If they mention suicidal thoughts or immediate risk of self-harm, respond
+  with care and tell them to contact local emergency services or a crisis line
+  now, and reach out to someone they trust. Do not treat it as a workout issue.
 - Anything outside those two topics — what kind of model you are, current
   events, trivia — is out of scope. Do not answer it. Say briefly that you can
   help with their training or with the app, then offer a nearby topic instead.
@@ -198,7 +203,7 @@ export const DISCLAIMER = {
   title: 'Before we start',
   body: [
     'This is an AI assistant, not a doctor, physiotherapist or dietitian. It can be wrong.',
-    'It reads your Phool Gobhi training history — your check-ins, workouts and goals — to make its answers specific to you.',
+    'It reads your Phool Gobhi training history — your check-ins, workouts and goals — and health-profile answers you chose to share, to make its answers specific to you.',
     'Do not rely on it for medical decisions. If something hurts, is getting worse, or worries you, see a qualified professional.',
     'If you think you are having a medical emergency, contact emergency services.',
   ],

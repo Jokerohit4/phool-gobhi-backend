@@ -684,6 +684,7 @@ const getMe = async (req, res) => {
       // it on /me (not only on the profile endpoint) is what lets the app
       // branch on the first call rather than after a second round trip.
       currentlyWorksOut: user.currentlyWorksOut ?? null,
+      workoutIntent: user.workoutIntent || null,
       trainingLocationPref: user.trainingLocationPref,
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,
@@ -737,6 +738,7 @@ const getUserInternal = async (req, res) => {
       // to freeTimeWindow. Same class as the preferences above — how someone
       // likes to train, not anything about their health.
       currentlyWorksOut: user.currentlyWorksOut ?? null,
+      workoutIntent: user.workoutIntent || null,
       trainingLocationPref: user.trainingLocationPref || null,
       appMode: user.appMode || null,
       freeTimeWindow: user.freeTimeWindow || null,

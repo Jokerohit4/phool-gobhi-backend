@@ -95,6 +95,8 @@ export const MEDICATION_NOTE =
 // "prefer not to say" is never sensitive — it discloses nothing. "None" and
 // "never" are: they are still facts about someone's health.
 const SENSITIVE_FIELDS = ['allergyStatus', 'allergies', 'drinking', 'smoking', 'greens', 'otherSubstances', 'medicationsStatus'];
+const MAX_PERSONAL_ISSUES = 20;
+const MAX_PERSONAL_ISSUE_CHARS = 500;
 
 // The questions, in the order the Profile section lists them. Each is worth
 // one coin, once, whatever the answer — including "prefer not to say".
@@ -268,6 +270,25 @@ export function validateProfilePatch(body = {}) {
   if (data.wearsSpectacles === false) data.spectaclesType = null;
   if (has(body.hometown)) data.hometown = cleanText(body.hometown, MAX_HOMETOWN_CHARS);
 
+  // Free text, deliberately kept in the user's own words. This is stored in
+  // HealthCondition (never coded or interpreted) and needs health-profile
+  // consent because it may disclose sensitive health information.
+  let personalIssues;
+  if (has(body.personalIssues)) {
+    if (body.personalIssues === null) {
+      personalIssues = [];
+    } else if (!Array.isArray(body.personalIssues)) {
+      errors.push('personalIssues must be a list of text answers');
+    } else {
+      personalIssues = [...new Set(body.personalIssues
+        .map((value) => cleanText(value, MAX_PERSONAL_ISSUE_CHARS))
+        .filter(Boolean))];
+      if (personalIssues.length > MAX_PERSONAL_ISSUES) {
+        errors.push(`at most ${MAX_PERSONAL_ISSUES} personal health issues`);
+      }
+    }
+  }
+
   // Any answer other than "prefer not to say" is a disclosure — including
   // "none" and "never", which are still facts about someone's health.
   const sensitive = SENSITIVE_FIELDS.some((f) => {
@@ -275,11 +296,12 @@ export function validateProfilePatch(body = {}) {
     const v = data[f];
     if (f === 'allergies') return v.length > 0;
     return v !== null && v !== 'prefer_not';
-  });
+  }) || (personalIssues?.length ?? 0) > 0;
 
   return {
     data,
     bodyNumbers,
+    personalIssues,
     sensitive,
     errors,
   };
@@ -310,6 +332,7 @@ export function answeredKeys(profile, { hasWeight = false, hasHeight = false } =
   add('medications', p.medicationsStatus != null);
   add('greens', p.greens != null);
   add('otherSubstances', p.otherSubstances != null);
+  add('personalIssues', (p.personalIssues || []).length > 0);
   return out;
 }
 

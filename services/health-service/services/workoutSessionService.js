@@ -1,3 +1,4 @@
+import { recordRoutineWorkout } from './routineJourneyService.js';
 import { PrismaClient } from '@prisma/client';
 import { computeProgression } from './progressionService.js';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
@@ -385,6 +386,9 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
     include: includeFull,
   });
 
+  let routinePolicy;
+  try { routinePolicy = await recordRoutineWorkout(prisma, updated); }
+  catch (error) { console.error('[routine] workout progress unavailable:', error.message); routinePolicy = { starterAmount: 0, verifiedAmount: 0 }; }
   let gamification = { verified: false, credited: false };
   // Empty sessions never feed the gamified layer (audit 2026-10-08, P1).
   // Dismissing the quick-log sheet finishes a session with zero completed
@@ -396,15 +400,16 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
     (total, ex) => total + ex.sets.filter((s) => s.completed).length,
     0,
   );
-  // Nothing to verify for a session with no completed set: finishing stays
-  // allowed, only the reward is skipped.
-  if (completedSets > 0 && !session.coinsAwarded) {
+  // Legacy credits require a completed set. Routine credits also allow a
+  // qualifying timed session of at least ten minutes, checked server-side.
+  if ((completedSets > 0 || (routinePolicy?.verifiedAmount ?? 0) > 0) && (!session.coinsAwarded || routinePolicy)) {
     const exerciseNames = updated.exercises.map((e) => e.exercise.name).slice(0, 1);
     gamification = await notifyWorkoutFinished({
       userId,
       sessionId,
-      description: `Verified workout${exerciseNames.length ? ` — ${exerciseNames[0]}` : ''}`,
+      description: `${routinePolicy ? 'Workout' : 'Verified workout'}${exerciseNames.length ? ` — ${exerciseNames[0]}` : ''}`,
       idempotencyKey: `workout-credit:${sessionId}`,
+      routinePolicy,
     });
     if (gamification.credited) {
       await prisma.workoutSession.update({ where: { id: sessionId }, data: { coinsAwarded: true } });

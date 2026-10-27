@@ -1,3 +1,4 @@
+import { routineSnapshot, recordRoutineWater } from './routineJourneyService.js';
 // The daily habits: water and supplements (B11).
 //
 // Two surfaces the coach journey's Plan tab and Home read every day, kept in
@@ -125,30 +126,53 @@ export async function getToday(prisma, { userId, localDate } = {}) {
     takenToday: dayLogs.some((l) => l.scheduleId === s.id),
   }));
 
-  return { water, supplements };
+  let routine = null;
+  try { routine = await routineSnapshot(prisma, userId); } catch (error) {
+    console.error('[routine] snapshot unavailable:', error.message);
+  }
+  return { water, supplements, routine };
 }
 
 /**
  * One drink. Returns the row id and the day's new total, so the client can
  * update the ring without a second read.
  */
-export async function logWater(prisma, { userId, ml, localDate } = {}) {
+export async function logWater(prisma, { userId, ml, localDate, requestId } = {}) {
   const amount = Number(ml);
   if (!Number.isInteger(amount) || amount < MIN_WATER_ML || amount > MAX_WATER_ML) {
     throw invalidWater();
   }
   const day = resolveDay(localDate);
 
-  const row = await prisma.waterLog.create({
-    data: { userId, localDate: day, ml: amount },
-  });
+  if (requestId != null && (typeof requestId !== 'string' || !/^[A-Za-z0-9_-]{20,64}$/.test(requestId))) {
+    throw { status: 400, error: 'Invalid requestId', code: 'INVALID_REQUEST_ID' };
+  }
+  const key = requestId ? `water:${userId}:${requestId}` : null;
+  let row = key ? await prisma.waterLog.findUnique({ where: { clientRequestId: key } }) : null;
+  if (row && (row.localDate !== day || row.ml !== amount)) {
+    throw { status: 409, error: 'Request already used for different water entry', code: 'REQUEST_CONFLICT' };
+  }
+  const replayed = !!row;
+  if (!row) {
+    try { row = await prisma.waterLog.create({ data: { userId, localDate: day, ml: amount,
+      ...(key ? { clientRequestId: key } : {}) } }); }
+    catch (error) {
+      if (error.code !== 'P2002' || !key) throw error;
+      row = await prisma.waterLog.findUnique({ where: { clientRequestId: key } });
+      if (!row || row.localDate !== day || row.ml !== amount) throw { status: 409, error: 'Request conflict' };
+    }
+  }
 
   const total = await prisma.waterLog.aggregate({
     _sum: { ml: true },
     where: { userId, localDate: day },
   });
 
-  return { id: row.id, loggedMl: Number(total._sum.ml || 0) };
+  let reward = { coinsAwarded: 0, pending: false };
+  try {
+    reward = await recordRoutineWater(prisma, { userId, localDate: day, replayed, now: row.createdAt, targetMl: await waterTargetMl(prisma, userId) });
+  } catch (error) { console.error('[routine] water reward pending:', error.message); reward.pending = true; }
+  return { id: row.id, loggedMl: Number(total._sum.ml || 0), reward };
 }
 
 /**

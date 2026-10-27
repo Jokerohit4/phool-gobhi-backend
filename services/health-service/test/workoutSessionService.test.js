@@ -21,6 +21,7 @@ let getOrCreateDraftForAttendanceService, getTodaySessionService, startSessionSe
 let notifyCalls = [];
 
 test('setup: mock dependencies once, import workoutSessionService once', async (t) => {
+  t.mock.module('../services/routineJourneyService.js', { exports: { recordRoutineWorkout: async () => null } });
   t.mock.module('@prisma/client', {
     exports: {
       PrismaClient: class {

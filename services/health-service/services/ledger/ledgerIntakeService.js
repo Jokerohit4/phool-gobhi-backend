@@ -38,6 +38,7 @@ import { validateLocalDate } from '../biometricService.js';
 import { SAFETY } from './constants.js';
 import { latestWeightKg, resolveInputs, recomputeTargets, MISSING_REASONS } from './targetService.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
+import { refreshWorkoutSlotsForProfile } from './starterPlanService.js';
 
 /**
  * The user's own calendar day, used only as a fallback when a caller omits one.
@@ -620,8 +621,11 @@ export async function saveIntake({ prisma, userId, input = {}, localDate }) {
   // that do not exist, which is the exact bug this replaced.
   const target = await recomputeTargets({ prisma, userId, localDate: day });
 
-  // Rebuild plan after intake targets recomputed
-  await rebuildPlan(prisma, userId, { reason: 'setup' });
+  // Goal changes also reshape workout recommendations. If a starter workout
+  // schedule exists, refreshWorkoutSlotsForProfile performs the shared plan
+  // rebuild; otherwise rebuild the nutrition and habit rows directly.
+  const workoutSlotsRefreshed = await refreshWorkoutSlotsForProfile(prisma, userId);
+  if (!workoutSlotsRefreshed) await rebuildPlan(prisma, userId, { reason: 'setup' });
 
   return {
     written: true,

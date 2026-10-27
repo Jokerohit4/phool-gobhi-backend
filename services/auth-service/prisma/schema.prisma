@@ -73,6 +73,7 @@ model User {
   // "Do you work out?" — null means never asked (pre-existing accounts, or
   // onboarding completed before this shipped), which is NOT the same as false.
   currentlyWorksOut Boolean?
+  workoutIntent WorkoutIntent?
   // Answers both phrasings of the same question ("where do you work out" for
   // an existing exerciser, "where would you prefer" for someone starting) —
   // one column, because the downstream behaviour is identical either way.
@@ -600,6 +601,13 @@ enum TrainingLocationPref {
 enum AppMode {
   gym_seeker
   home_track
+
+  @@schema("auth")
+}
+
+enum WorkoutIntent {
+  workout
+  wellness_only
 
   @@schema("auth")
 }

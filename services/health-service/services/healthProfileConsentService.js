@@ -2,8 +2,8 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Consent to hold the sensitive health-profile answers: allergies, drinking,
-// smoking, the two substance questions and medications.
+// Consent to hold sensitive health-profile answers: personal health issues,
+// allergies, drinking, smoking, the two substance questions and medications.
 //
 // Its own row, shaped like BiometricConsent and AssistantConsent, not a scope
 // on HealthConsent — that row is the device-access grant and needs a
@@ -20,7 +20,7 @@ export const HEALTH_PROFILE_CONSENT_SCOPE = 'health_profile';
 // Bump when the prompt describes different data or a new recipient — e.g. if
 // these answers ever went anywhere other than the user's own app and coach.
 // The app's kHealthProfilePolicyVersion states the same fact for display.
-export const HEALTH_PROFILE_POLICY_VERSION = 'health-profile-2026-10-01';
+export const HEALTH_PROFILE_POLICY_VERSION = 'health-profile-activity-context-2026-10-26';
 
 export async function getHealthProfileConsentService(userId) {
   const row = await prisma.healthProfileConsent.findUnique({ where: { userId } });
