@@ -73,9 +73,11 @@ test('the gate arrays are shaped exactly as the contract orders them', () => {
     'coachSupplements must be coachBasic plus the supplements scope, spread not restated');
 });
 
-test('water and today ride coachBasic only — never the supplements scope', () => {
+test('water, mood check-ins and today ride coachBasic only — never supplements scope', () => {
   for (const fragment of [
     "router.get('/habits/today'",
+    "router.get('/habits/mood-checkins'",
+    "router.post('/habits/mood-checkins'",
     "router.post('/habits/rewards/retry'",
     "router.post('/habits/water'",
     "router.delete('/habits/water/:id'",
@@ -108,7 +110,7 @@ test('every supplement route rides coachSupplements — the scope is not optiona
       `${found[0].n} must sit behind the supplements scope, not coachBasic alone`,
     );
   }
-  assert.equal(all.length, 9, `expected the 9 contract routes, found ${all.length}`);
+  assert.equal(all.length, 11, `expected the 11 contract routes, found ${all.length}`);
 });
 
 test('the routes are the contract\'s routes, and nothing else', () => {
@@ -117,6 +119,8 @@ test('the routes are the contract\'s routes, and nothing else', () => {
   // makes adding one a deliberate edit here too.
   const paths = all.map((r) => r.line.match(/router\.\w+\('([^']*)'/)?.[1]).sort();
   assert.deepEqual(paths, [
+    '/habits/mood-checkins',
+    '/habits/mood-checkins',
     '/habits/rewards/retry',
     '/habits/supplements',
     '/habits/supplements',
