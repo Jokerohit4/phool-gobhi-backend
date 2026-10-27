@@ -82,7 +82,7 @@ export async function createMoodCheckIn(prisma, { userId, ...input } = {}) {
   }
   const slotOpen = data.slot === 'morning'
     ? hour >= 5 && hour < 12
-    : hour >= 18 && hour < 23;
+    : hour >= 18 || hour < 5;
   if (!slotOpen) {
     throw problem(409, 'This check-in window has closed.', 'CHECKIN_WINDOW_CLOSED');
   }
