@@ -338,7 +338,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent] =
+  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent, moodCheckIns] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.ledgerConsent.findUnique({ where: { userId } }),
@@ -429,6 +429,7 @@ export async function buildFullExportService(userId) {
       prisma.supplementLog.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { takenAt: 'asc' }] }),
       prisma.journeyProgress.findUnique({ where: { userId } }),
       prisma.coachConsent.findUnique({ where: { userId } }),
+      prisma.wellnessMoodCheckIn.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }] }),
     ]);
 
   // Reuses the range builder with no range, so the session shape in a
@@ -837,6 +838,17 @@ export async function buildFullExportService(userId) {
           updatedAt: coachConsent.updatedAt,
         }
       : null,
+    // User-authored wellbeing reflections are sensitive personal data. They
+    // are included in the account export and deleted alongside the account.
+    wellnessMoodCheckIns: moodCheckIns.map((entry) => ({
+      localDate: entry.localDate,
+      slot: entry.slot,
+      mood: entry.mood,
+      factors: entry.factors,
+      support: entry.support,
+      note: entry.note,
+      createdAt: entry.createdAt,
+    })),
     // Included because it is per-user behavioural data we hold, even though
     // it exists only to be aggregated away - see retentionService bucket 1.
     // It is the one slice here that expires on a clock rather than with the

@@ -195,6 +195,9 @@ export async function deleteAllDataService(userId) {
     prisma.routineRewardClaim.deleteMany({ where: { userId } }),
     prisma.routineWaterDay.deleteMany({ where: { userId } }),
     prisma.routineJourneyState.deleteMany({ where: { userId } }),
+    // Mood check-ins may include personal mental-health context. They are
+    // user-authored records and must be erased with the rest of the account.
+    prisma.wellnessMoodCheckIn.deleteMany({ where: { userId } }),
     prisma.waterLog.deleteMany({ where: { userId } }),
     prisma.supplementSchedule.deleteMany({ where: { userId } }),
     prisma.supplementLog.deleteMany({ where: { userId } }),

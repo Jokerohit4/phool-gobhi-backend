@@ -30,6 +30,8 @@ const coachBasic = [requireAuth, requireCoachJourney, requireCoachConsent('basic
 const coachSupplements = [...coachBasic, requireCoachConsent('supplements')];
 
 router.get('/habits/today', ...coachBasic, habitsCtrl.getToday);
+router.get('/habits/mood-checkins', ...coachBasic, habitsCtrl.listMoodCheckIns);
+router.post('/habits/mood-checkins', ...coachBasic, habitsCtrl.saveMoodCheckIn);
 
 router.post('/habits/rewards/retry', ...coachBasic, habitsCtrl.retryRoutineRewards);
 router.post('/habits/water', ...coachBasic, habitsCtrl.logWater);

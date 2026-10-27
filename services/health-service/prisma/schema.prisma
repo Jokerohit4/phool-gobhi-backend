@@ -2156,6 +2156,13 @@ model ReportExtraction {
 // Coach journey (2026-10). The daily habits, the journey's own start-of-record,
 // the coach consent row, and the content tables the journey reads.
 
+enum WellnessMoodSlot {
+  morning
+  night
+
+  @@schema("health")
+}
+
 // One row per drink rather than a running daily total. A total can only be
 // overwritten; a row can be timestamped, undone, and summed on read the same
 // way the food log is. Summing is cheap and the row is the record.
@@ -2198,6 +2205,24 @@ model SupplementLog {
   localDate  String
   takenAt    DateTime @default(now())
 
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// One optional wellbeing check-in in each morning/night slot per account/day.
+// The database unique key is the authoritative cap across devices and retries.
+model WellnessMoodCheckIn {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  localDate String
+  slot      WellnessMoodSlot
+  mood      String
+  factors   String[]         @default([])
+  support   String?
+  note      String           @default("")
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, localDate, slot])
   @@index([userId, localDate])
   @@schema("health")
 }

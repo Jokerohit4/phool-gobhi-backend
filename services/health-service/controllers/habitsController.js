@@ -1,6 +1,7 @@
 import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater } from '../services/routineJourneyService.js';
 import { PrismaClient } from '@prisma/client';
 import * as habitsService from '../services/habitsService.js';
+import * as moodCheckInService from '../services/wellnessMoodCheckInService.js';
 
 const prisma = new PrismaClient();
 
@@ -39,6 +40,35 @@ export const getToday = async (req, res) => {
     return res.json({ data });
   } catch (err) {
     return fail(res, err, 'habits');
+  }
+};
+
+export const listMoodCheckIns = async (req, res) => {
+  try {
+    const data = await moodCheckInService.listMoodCheckIns(prisma, {
+      userId: req.userId,
+      localDate: req.query?.localDate,
+    });
+    return res.json({ data });
+  } catch (err) {
+    return fail(res, err, 'mood-checkins');
+  }
+};
+
+export const saveMoodCheckIn = async (req, res) => {
+  try {
+    const data = await moodCheckInService.createMoodCheckIn(prisma, {
+      userId: req.userId,
+      localDate: req.body?.localDate,
+      slot: req.body?.slot,
+      mood: req.body?.mood,
+      factors: req.body?.factors,
+      support: req.body?.support,
+      note: req.body?.note,
+    });
+    return res.status(201).json({ data });
+  } catch (err) {
+    return fail(res, err, 'mood-checkins');
   }
 };
 
