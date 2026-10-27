@@ -208,9 +208,9 @@ test('the journey guide matches journeyConfig.js thresholds', async () => {
   const { JOURNEY_GUIDE } = await import('../services/assistant/appKnowledge.js');
   const need = (key) => JOURNEY.layers.find((l) => l.key === key).unlock.need;
   assert.match(JOURNEY_GUIDE, new RegExp(`after ${need('food')} showed-up days`));
-  assert.match(JOURNEY_GUIDE, new RegExp(`Steps \\+ sleep — after ${need('body')} steady weeks`));
-  assert.match(JOURNEY_GUIDE, new RegExp(`Supplements — after ${need('supplements')} steady weeks`));
-  assert.match(JOURNEY_GUIDE, new RegExp(`Health reports — after ${need('health')} steady weeks`));
+  assert.match(JOURNEY_GUIDE, new RegExp(`Steps \\+ sleep — after ${need('body')} days`));
+  assert.match(JOURNEY_GUIDE, new RegExp(`Supplements — after ${need('supplements')} days`));
+  assert.match(JOURNEY_GUIDE, new RegExp(`Health reports — after ${need('health')} days`));
   assert.match(JOURNEY_GUIDE, new RegExp(`${JOURNEY.steadyWeekMinDays} or more showed-up days`));
   assert.match(JOURNEY_GUIDE, new RegExp(`first ${JOURNEY.easyStartDays} days`, 'i'));
 });

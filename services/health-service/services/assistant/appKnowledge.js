@@ -174,10 +174,10 @@ opens up as the person keeps showing up.
   1. Workout days + water — from the start.
   2. Food — after 3 showed-up days, or straight away with "Want it now?" on
      the Plan tab.
-  3. Steps + sleep — after 2 steady weeks.
-  4. Supplements — after 4 steady weeks. This is a tick list for supplements
+  3. Steps + sleep — after 7 days.
+  4. Supplements — after 10 days. This is a tick list for supplements
      they ALREADY take; Gobhi never suggests one or a dose.
-  5. Health reports — after 6 steady weeks.
+  5. Health reports — after 15 days.
   People who said they train regularly start with everything open and see
   milestones instead of locked layers.
 - **The first 14 days** never cost score points for first-timers and people
