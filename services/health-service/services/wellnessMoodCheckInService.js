@@ -50,8 +50,8 @@ function validateInput({ localDate, slot, mood, factors, support, note }) {
   if (support != null && !SUPPORT.has(support)) {
     throw problem(400, 'Choose a support option from the available list.', 'INVALID_MOOD_SUPPORT');
   }
-  if (typeof note !== 'string' || note.length > 500) {
-    throw problem(400, 'Your note must be 500 characters or fewer.', 'INVALID_MOOD_NOTE');
+  if (typeof note !== 'string' || note.trim().length === 0 || note.length > 500) {
+    throw problem(400, 'Add a note of up to 500 characters to complete your check-in.', 'INVALID_MOOD_NOTE');
   }
 }
 
