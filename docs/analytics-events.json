@@ -308,6 +308,28 @@
     "since": "2026-10-12",
     "notes": "names the section the person reached for (the shared action rows; the health cards and rails keep their own richer events). Registered in the backend's docs/analytics-events.json alongside `home_viewed`."
   },
+  "persona_switched": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-28",
+    "notes": "a user's persona changed (linked_gym / own_gym / wellness / home_training / explorer). Props from_persona, to_persona, source: settings | floating_prompt | onboarding for a user switch, gym_link | gym_leave | gym_removed when a gym link changed it. AppModeHistory holds the same rows."
+  },
+  "persona_switch_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-28",
+    "notes": "the user confirmed a switch in the persona switcher (from_persona, to_persona, entry). Paired with server persona_switched for success, persona_switch_failed for a refusal."
+  },
+  "persona_switch_failed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-28",
+    "notes": "the server refused a persona switch; prop code is the error code (SWITCH_COOLDOWN, GYM_REQUIRED, GYM_NOT_FOUND, FLAG_DISABLED, SELF_LINK_BLOCKED, SELF_LINK_LIMIT, or network)."
+  },
   "topup_tapped": {
     "source": "client",
     "apps": [

@@ -1,6 +1,18 @@
 import * as assistantService from '../services/assistant/assistantService.js';
 import * as memoryService from '../services/assistant/memoryService.js';
 import { DISCLAIMER } from '../services/assistant/assistantPolicy.js';
+import { getSuggestionsService } from '../services/assistant/suggestionService.js';
+
+export const getSuggestions = async (req, res) => {
+  try {
+    const { conversationId, draft } = req.body || {};
+    const data = await getSuggestionsService(req.userId, { conversationId, draft });
+    res.set('Cache-Control', 'no-store');
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
 
 function fail(res, err) {
   res.status(err.status || 500).json({

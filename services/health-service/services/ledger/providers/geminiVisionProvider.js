@@ -74,9 +74,25 @@ const RESPONSE_SCHEMA = {
           grams: { type: 'INTEGER' },
           confidence: { type: 'NUMBER' },
           nonVeg: { type: 'BOOLEAN' },
+          nutrition: {
+            type: 'OBJECT',
+            properties: {
+              ...Object.fromEntries(['kcal', 'proteinG', 'carbsG', 'fatG', 'fibreG']
+                .map((key) => [key, { type: 'NUMBER' }])),
+              ...Object.fromEntries(['ironMg', 'magnesiumMg', 'calciumMg', 'zincMg']
+                .map((key) => [key, { type: 'NUMBER', nullable: true }])),
+              aliases: { type: 'ARRAY', items: { type: 'STRING' } },
+              basis: { type: 'STRING', enum: ['raw', 'cooked', 'as_served'] },
+              servings: { type: 'ARRAY', items: {
+                type: 'OBJECT', properties: { label: { type: 'STRING' }, grams: { type: 'NUMBER' } },
+                required: ['label', 'grams'],
+              } },
+            },
+            required: ['kcal', 'proteinG', 'carbsG', 'fatG', 'fibreG', 'basis', 'servings'],
+          },
         },
-        required: ['name'],
-        propertyOrdering: ['name', 'catalogue', 'grams', 'confidence', 'nonVeg'],
+        required: ['name', 'nutrition'],
+        propertyOrdering: ['name', 'catalogue', 'grams', 'confidence', 'nonVeg', 'nutrition'],
       },
     },
     // One short line for the user when the photo is ambiguous. Not a

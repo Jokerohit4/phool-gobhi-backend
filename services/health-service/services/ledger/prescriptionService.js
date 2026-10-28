@@ -178,6 +178,15 @@ function buildPlan(ctx, resolved, journey = null) {
   plan.foodSetupNeeded = ctx.foodSetupNeeded;
   plan.bodyDataNeeded = ctx.bodyDataNeeded;
   plan.diet = ctx.healthGoal?.diet ?? null;
+  if (journey.wellnessOnly) {
+    plan.wellnessOnly = true;
+    plan.wellnessFocuses = journey.wellnessFocuses ?? [];
+    plan.wellnessDayPattern = journey.wellnessDayPattern ?? null;
+    plan.wellnessSleepPattern = journey.wellnessSleepPattern ?? null;
+    plan.sessionsPerWeek = 0;
+    plan.workoutSlots = [];
+    delete plan.workout;
+  }
 
   return plan;
 }

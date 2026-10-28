@@ -430,6 +430,21 @@ export const FEATURE_FLAGS = [
       'than part of coachJourney so the link surface can be held back independently.',
   },
   {
+    name: 'personaSwitch',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'personaSwitchEnabled',
+    group: 'coach',
+    dataClass: 'none',
+    blastRadius:
+      'PUT /users/:id/persona and the app\'s "How you use Phool Gobhi" switcher: a user moving ' +
+      'between linked gym, own gym, wellness, home training and explorer (leaving a gym included)',
+    rationale:
+      'Switching ends gym links, swaps the plan track and pauses challenges, so it ships dark ' +
+      'until the app build that shows the confirmation steps is the minimum. Moving onto a ' +
+      'partner gym additionally needs selfLinkGym, because that is a billed membership claim.',
+  },
+  {
     name: 'referralHomeTrigger',
     defaultEnabled: false,
     deps: ['coachJourney'],

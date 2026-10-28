@@ -48,12 +48,44 @@ function istDay(date) {
 //
 // `now` is injectable purely so tests can pin the clock; every caller uses
 // the default.
-export async function verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, now = new Date() }) {
+export async function verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, routinePolicy, now = new Date() }) {
   const day = istDay(now);
   const hasAttendanceToday = await prisma.attendanceEventLog.findFirst({
     where: { userId, attendedAt: { gte: day.start, lte: day.end } },
     select: { id: true },
   });
+  if (routinePolicy != null) {
+    if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: `workout-credit:${userId}:${day.key}` } })) {
+      return { verified: !!hasAttendanceToday, credited: false, amount: 0 };
+    }
+    // Internal health-service supplies server-validated activity and policy.
+    // Bound both amounts here as defense in depth; this is never a public API.
+    const starter = routinePolicy.starterAmount;
+    const verifiedTotal = routinePolicy.verifiedAmount;
+    if (![starter, verifiedTotal].every(n => Number.isInteger(n) && n >= 0 && n <= 4) || verifiedTotal < starter) {
+      throw Object.assign(new Error('Invalid routine reward policy'), { status: 400 });
+    }
+    let amount = 0;
+    const creditOnce = async (suffix, value) => {
+      if (value <= 0) return;
+      const key = `routine:workout:${userId}:${day.key}:${suffix}`;
+      if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: key } })) return;
+      await creditCoinsService(userId, value, description || 'Workout activity', key);
+      amount += value;
+    };
+    const start = new Date(routinePolicy.startedAt);
+    const end = new Date(routinePolicy.endedAt);
+    const validWindow = Number.isFinite(start.getTime()) && Number.isFinite(end.getTime()) &&
+      end - start >= 10 * 60000 && end <= now && now - end <= 86400000;
+    const locationAttendance = validWindow && routinePolicy.gymId ? await prisma.attendanceEventLog.findFirst({
+      where: { userId, gymId: routinePolicy.gymId,
+        attendedAt: { gte: new Date(Math.max(day.start.getTime(), start.getTime() - 2 * 3600000)), lte: end } },
+      select: { id: true },
+    }) : null;
+    await creditOnce('activity', starter);
+    if (locationAttendance) await creditOnce('location', verifiedTotal - starter);
+    return { verified: !!locationAttendance, credited: amount > 0, amount };
+  }
   if (!hasAttendanceToday) {
     track('workout_credited', userId, { verified: false, credited: false, amount: 0 });
     return { verified: false, credited: false, amount: 0 };
@@ -65,6 +97,11 @@ export async function verifyAndCreditWorkout({ userId, sessionId, description, i
     return { verified: true, credited: false, amount: 0 };
   }
 
+  for (const suffix of ['activity', 'location']) {
+    if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: `routine:workout:${userId}:${day.key}:${suffix}` } })) {
+      return { verified: !!hasAttendanceToday, credited: false, amount: 0 };
+    }
+  }
   const dailyKey = `workout-credit:${userId}:${day.key}`;
   const paidToday = await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: dailyKey } });
   if (paidToday && paidToday.userId === userId) {

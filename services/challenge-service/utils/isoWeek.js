@@ -14,6 +14,15 @@
 // the copy is duplicated the same way utils/analytics.js is.
 export const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
 
+// The IST calendar day containing `date`, as [start, end) instants.
+export function istDayBounds(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  ist.setUTCHours(0, 0, 0, 0);
+  const start = new Date(ist.getTime() - IST_OFFSET_MS);
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
 export function startOfIsoWeek(date = new Date()) {
   const d = date instanceof Date ? date : new Date(date);
   const ist = new Date(d.getTime() + IST_OFFSET_MS);

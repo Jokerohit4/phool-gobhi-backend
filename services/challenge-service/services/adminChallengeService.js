@@ -1,3 +1,4 @@
+import { AUDIENCES } from './challengeAudience.js';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
@@ -27,8 +28,12 @@ export async function createChallengeDefinitionAdminService(data) {
   if (!key || !type || !category || !title || !defaultVerificationMethod) {
     throw { status: 400, error: 'key, type, category, title and defaultVerificationMethod are required' };
   }
+  const audiences = data.audiences ?? [];
+  if (!Array.isArray(audiences) || audiences.some(value => !AUDIENCES.includes(value))) {
+    throw { status: 400, error: 'Unknown challenge audience' };
+  }
   return prisma.challengeDefinition.create({
-    data: { key, type, category, title, description: description ?? null, defaultVerificationMethod, requiresGeofenceWithQr: !!requiresGeofenceWithQr },
+    data: { key, type, category, title, audiences, description: description ?? null, defaultVerificationMethod, requiresGeofenceWithQr: !!requiresGeofenceWithQr },
   });
 }
 

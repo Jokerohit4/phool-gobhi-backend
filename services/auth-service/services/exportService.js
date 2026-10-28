@@ -49,6 +49,10 @@ export async function buildFullExportService(userId) {
       fitnessGoals: user.fitnessGoals,
       experienceLevel: user.experienceLevel,
       weeklyFrequencyIntent: user.weeklyFrequencyIntent,
+      wellnessFocuses: user.wellnessFocuses,
+      wellnessDayPattern: user.wellnessDayPattern,
+      wellnessSleepPattern: user.wellnessSleepPattern,
+      wellnessSetupCompleted: user.wellnessSetupCompleted,
       profileImageUrl: user.profileImageUrl,
       referralCode: user.referralCode,
       // Whether someone referred them is part of their own record; who that

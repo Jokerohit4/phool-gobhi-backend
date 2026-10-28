@@ -12,11 +12,16 @@ import {
   removeMemberFromGym,
   markGymCheckedIn,
   applyUnclaimedGymClaim,
+  acceptClaimPrompt,
+  dismissClaimPrompt,
   isSelfLinkGymEnabled,
   getActiveLink,
 } from '../services/gymLinkService.js';
 
 const DAY = 24 * 60 * 60 * 1000;
+
+// Links/leaves announce persona changes to other services (personaEvents.js).
+globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
 
 // --- a small in-memory Prisma -------------------------------------------------
 // Only the operators the service actually uses are interpreted: equality,
@@ -51,12 +56,13 @@ function order(rows, orderBy) {
   });
 }
 
-function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVersionSettings = [] } = {}) {
+function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVersionSettings = [], appModeHistory = [] } = {}) {
   const state = {
     users: users.map((u) => ({ ...u })),
     gymLinks: gymLinks.map((l) => ({ ...l })),
     userDevices: userDevices.map((d) => ({ ...d })),
     appVersionSettings: appVersionSettings.map((s) => ({ ...s })),
+    appModeHistory: appModeHistory.map((h) => ({ ...h })),
   };
   let nextLinkId = state.gymLinks.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1;
 
@@ -119,6 +125,21 @@ function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVers
         const row = state.appVersionSettings.find((s) => s.id === where.id);
         return row ? { ...row } : null;
       },
+    },
+  };
+  // Persona changes ride along with link/leave/removal (personaService).
+  api.appModeHistory = {
+    async findFirst({ where, orderBy }) {
+      const hit = order(state.appModeHistory.filter((h) => matches(where, h)), orderBy);
+      return hit[0] ? { ...hit[0] } : null;
+    },
+    async create({ data }) {
+      const row = { id: state.appModeHistory.length + 1, createdAt: new Date(), ...data };
+      state.appModeHistory.push(row);
+      return { ...row };
+    },
+    async count({ where }) {
+      return state.appModeHistory.filter((h) => matches(where, h)).length;
     },
   };
   // Interactive transactions run against the same state (the double is
@@ -372,4 +393,36 @@ test('getActiveLink returns the live link and null once removed', async () => {
   });
   const active = await getActiveLink(prisma, 1);
   assert.equal(active.gymId, 7);
+});
+
+// --- claim prompt accept / dismiss --------------------------------------------
+
+test('a claim prompt skips users already linked to another gym', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ id: 1, homeUnclaimedGymId: 400 }), baseUser({ id: 2, homeUnclaimedGymId: 400, linkedGymId: 55 })],
+  });
+  await applyUnclaimedGymClaim(prisma, { unclaimedGymId: 400, claimedGymId: 900, customerIds: [] });
+  assert.equal(state.users[0].pendingGymPromptGymId, 900);
+  assert.equal(state.users[1].pendingGymPromptGymId, null);
+});
+
+test('accepting the claim prompt links the user to the prompted gym and clears it', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser({ id: 1, pendingGymPromptGymId: 900 })] });
+  await acceptClaimPrompt(prisma, 1);
+  assert.equal(state.users[0].linkedGymId, 900);
+  assert.equal(state.users[0].pendingGymPromptGymId, null);
+  assert.equal(state.users[0].persona, 'linked_gym');
+});
+
+test('accepting with nothing pending, or while linked elsewhere, is refused', async () => {
+  const none = createFakePrisma({ users: [baseUser({ id: 1 })] });
+  await assert.rejects(acceptClaimPrompt(none.prisma, 1), { errorCode: 'NO_PENDING_PROMPT' });
+  const other = createFakePrisma({ users: [baseUser({ id: 1, pendingGymPromptGymId: 900, linkedGymId: 55 })] });
+  await assert.rejects(acceptClaimPrompt(other.prisma, 1), { errorCode: 'ALREADY_LINKED' });
+});
+
+test('dismissing the claim prompt clears it', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser({ id: 1, pendingGymPromptGymId: 900 })] });
+  await dismissClaimPrompt(prisma, 1);
+  assert.equal(state.users[0].pendingGymPromptGymId, null);
 });

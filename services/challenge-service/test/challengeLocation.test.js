@@ -71,12 +71,21 @@ let listActiveChallengesService;
 let getChallengeDetailService;
 let enrollService;
 
+function personalRow(id) {
+  return { ...challengeRow(id, 2, { city: 'Anywhere', lat: null, lng: null }),
+    challengeDefinition: { ...CHALLENGE_DEFINITION_QUEST, type: 'water_consistency',
+      category: 'personal_habit', defaultVerificationMethod: 'activity_log', audiences: ['wellness'] } };
+}
+
 test('setup: mock @prisma/client once, import the real services once', async (t) => {
   t.mock.module('@prisma/client', {
     exports: {
       PrismaClient: class {
         constructor() {
+          this.$transaction = async action => action(this);
+          this.$executeRawUnsafe = async () => 1;
           this.challengeDefinition = {
+            upsert: async ({ create }) => ({ id: 800, ...create }),
             findUnique: async ({ where: { key } }) =>
               [...db.definitions.values()].find((d) => d.key === key) ?? null,
             create: async ({ data }) => {
@@ -249,4 +258,22 @@ test('enroll rejects a challenge with no anchor even when the user has a locatio
       return true;
     }
   );
+});
+
+test('personal quests list, detail and enrollment work without location for their audience', async () => {
+  resetFakes();
+  db.listReturn = [personalRow(50), challengeRow(51, 1, { city: 'Gorakhpur', ...GORAKHPUR })];
+  db.challenges.set(50, personalRow(50));
+  assert.deepEqual((await listActiveChallengesService({ userId: 7, audience: 'wellness', ...NO_LOCATION })).map(row => row.id), [50]);
+  assert.equal((await getChallengeDetailService(50, { userId: 7, audience: 'wellness', ...NO_LOCATION })).id, 50);
+  assert.equal((await enrollService(7, 50, { audience: 'wellness', ...NO_LOCATION })).challengeId, 50);
+});
+
+test('another audience cannot discover, deep-link or join a personal quest', async () => {
+  resetFakes();
+  db.listReturn = [personalRow(50)];
+  db.challenges.set(50, personalRow(50));
+  assert.deepEqual(await listActiveChallengesService({ userId: 7, audience: 'home_training', ...NO_LOCATION }), []);
+  await assert.rejects(getChallengeDetailService(50, { userId: 7, audience: 'home_training', ...NO_LOCATION }), error => error.status === 404);
+  await assert.rejects(enrollService(7, 50, { audience: 'home_training', ...NO_LOCATION }), error => error.status === 403);
 });

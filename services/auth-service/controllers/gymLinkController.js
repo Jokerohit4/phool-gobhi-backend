@@ -11,6 +11,8 @@ import {
   applyUnclaimedGymClaim,
   isSelfLinkGymEnabled,
   getActiveLink,
+  acceptClaimPrompt,
+  dismissClaimPrompt,
 } from '../services/gymLinkService.js';
 import { assertPartnerOwnsGym } from '../services/authService.js';
 
@@ -122,6 +124,31 @@ export const gymLinkCheckedIn = async (req, res) => {
 export const unclaimedGymClaimed = async (req, res) => {
   try {
     await applyUnclaimedGymClaim(prisma, req.body ?? {});
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym-links/claim-prompt/accept — link to the gym the "your gym just
+// joined" prompt points at. 200 { linkedGymId }.
+export const acceptGymClaimPrompt = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await acceptClaimPrompt(prisma, userId);
+    res.json({ linkedGymId: user.linkedGymId ?? null });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym-links/claim-prompt/dismiss — "Not now". 204.
+export const dismissGymClaimPrompt = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    await dismissClaimPrompt(prisma, userId);
     res.status(204).end();
   } catch (err) {
     fail(res, err);

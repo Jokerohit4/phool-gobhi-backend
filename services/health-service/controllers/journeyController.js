@@ -2,6 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import {
   getJourney,
   startJourney,
+  startWellnessJourney,
+  switchJourneyTrack,
   getJourneySummary,
   getUnlockedLayerKeys,
   getScoringWindow,
@@ -26,6 +28,18 @@ export async function getJourneyController(req, res) {
       error: err.error || err.message || 'Server error',
       code: err.code,
     });
+  }
+}
+
+export async function startWellnessJourneyController(req, res) {
+  try {
+    const hasConsent = await hasCoachScopeService(req.userId, 'basic');
+    if (!hasConsent) return res.status(403).json({ error: 'Coach consent required', code: 'CONSENT_REQUIRED' });
+    const result = await startWellnessJourney(req.userId);
+    return res.json({ data: result });
+  } catch (err) {
+    console.error('[journey] POST /journey/wellness/start error:', err);
+    return res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
   }
 }
 
@@ -85,3 +99,20 @@ export async function journeySummaryController(req, res) {
 
 // Export the service functions for other services (B7, B10)
 export { getUnlockedLayerKeys, getScoringWindow };
+
+// auth-service's persona-switch fan-out (services/personaEvents.js there).
+// Only a journey that already exists is touched; see switchJourneyTrack.
+export async function personaChangedInternalController(req, res) {
+  try {
+    const userId = Number(req.body?.userId);
+    const toPersona = req.body?.toPersona;
+    if (!Number.isInteger(userId) || userId <= 0 || typeof toPersona !== 'string') {
+      return res.status(400).json({ error: 'userId and toPersona required' });
+    }
+    const result = await switchJourneyTrack(userId, toPersona);
+    return res.json({ data: result });
+  } catch (err) {
+    console.error('[journey] POST /internal/journey/persona-changed error:', err);
+    return res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
+  }
+}

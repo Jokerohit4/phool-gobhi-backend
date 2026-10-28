@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
-import { startOfIsoWeek } from '../utils/isoWeek.js';
+import { startOfIsoWeek, istDayBounds } from '../utils/isoWeek.js';
 const prisma = new PrismaClient();
 
 // Idempotent on idempotencyKey — booking-service's fire-and-forget call to
@@ -21,9 +21,29 @@ export async function recordAttendanceEvent({ userId, bookingId, memberAttendanc
     return { alreadyRecorded: true };
   }
 
+  // One showing-up per IST day counts, whatever the source. Without this, a
+  // user could create several unclaimed "gyms" at home and check in at each,
+  // earning coins per gym per day and qualifying a whole week in one day.
+  // Later same-day check-ins are still logged (attendance history, the
+  // unlogged-workout feed) but neither count towards the week nor pay.
+  const day = istDayBounds(attendedAt);
+  const earlierToday = await prisma.attendanceEventLog.findFirst({
+    where: { userId, attendedAt: { gte: day.start, lt: day.end } },
+    select: { id: true },
+  });
+
   await prisma.attendanceEventLog.create({
     data: { userId, bookingId: bookingId ?? null, memberAttendanceId: memberAttendanceId ?? null, gymId, attendedAt: new Date(attendedAt), source, idempotencyKey },
   });
+  if (earlierToday) {
+    track('attendance_recorded', userId, {
+      checkin_source: source, gym_id: gymId ?? null, booking_id: bookingId ?? null,
+      member_attendance_id: memberAttendanceId ?? null,
+      already_recorded: false, same_day_repeat: true, coins_awarded: 0,
+    });
+    return { alreadyRecorded: false, sameDayRepeat: true };
+  }
+
   const weekStart = startOfIsoWeek(attendedAt);
   await prisma.userStreakWeek.upsert({
     where: { userId_weekStart: { userId, weekStart } },
@@ -74,7 +94,9 @@ export async function closeWeek(weekStartDate) {
       update: {},
       create: { userId: week.userId, currentStreak: 0, longestStreak: 0 },
     });
-    const nextCurrent = qualified ? streak.currentStreak + 1 : 0;
+    // A grace week (the user switched persona during it, so the way they show
+    // up changed mid-week) neither extends nor breaks the streak.
+    const nextCurrent = qualified ? streak.currentStreak + 1 : (week.graceWeek ? streak.currentStreak : 0);
     const updated = await prisma.userStreak.update({
       where: { userId: week.userId },
       data: {
@@ -117,6 +139,20 @@ export async function closeWeek(weekStartDate) {
     broken: results.filter((r) => !r.qualified).length,
   });
   return results;
+}
+
+// auth-service tells us a user switched persona (POST /internal/persona-changed).
+// The week they switched in becomes a grace week: someone who moved from a gym
+// to training at home part-way through a week should not lose a streak they
+// earned under the old routine.
+export async function applyPersonaSwitchGrace(userId, at = new Date()) {
+  const weekStart = startOfIsoWeek(at);
+  await prisma.userStreakWeek.upsert({
+    where: { userId_weekStart: { userId, weekStart } },
+    update: { graceWeek: true },
+    create: { userId, weekStart, checkinCount: 0, graceWeek: true },
+  });
+  return { ok: true };
 }
 
 export async function getStreakService(userId) {

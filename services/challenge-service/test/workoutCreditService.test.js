@@ -52,7 +52,7 @@ test('setup: mock dependencies once, import workoutCreditService once', async (t
             findFirst: async ({ where }) => {
               const hit = attendance.find(
                 (a) =>
-                  a.userId === where.userId &&
+                  a.userId === where.userId && (where.gymId == null || a.gymId === where.gymId) &&
                   a.attendedAt >= where.attendedAt.gte &&
                   a.attendedAt <= where.attendedAt.lte,
               );
@@ -223,4 +223,35 @@ test('every outcome emits exactly one workout_credited event', async () => {
     'the second finish is tracked as already-credited, not as a second payment');
   assert.deepEqual(events.find((c) => c.userId === 8).props,
     { verified: false, credited: false, amount: 0 }, 'no attendance -> not verified');
+});
+
+test('starter workout reward is small, daily-capped and can be upgraded once at the matching location', async () => {
+  resetFakes();
+  const now = new Date('2026-10-26T06:00:00Z');
+  const routinePolicy = { starterAmount: 2, verifiedAmount: 4,
+    startedAt: '2026-10-26T05:00:00Z', endedAt: '2026-10-26T05:30:00Z', gymId: 9 };
+  const args = { userId: 7, sessionId: 1, idempotencyKey: 'session:1', routinePolicy, now };
+  assert.equal((await verifyAndCreditWorkout(args)).amount, 2);
+  assert.equal((await verifyAndCreditWorkout({ ...args, sessionId: 2 })).amount, 0);
+  attendance.push({ userId: 7, gymId: 10, attendedAt: new Date('2026-10-26T05:00:00Z') });
+  assert.equal((await verifyAndCreditWorkout(args)).amount, 0, 'another gym is not location verification');
+  attendance.push({ userId: 7, gymId: 9, attendedAt: new Date('2026-10-26T05:00:00Z') });
+  assert.equal((await verifyAndCreditWorkout(args)).amount, 2, 'only the difference is added');
+  assert.equal((await verifyAndCreditWorkout(args)).amount, 0);
+  assert.equal(creditCalls.reduce((n, c) => n + c.amount, 0), 4);
+});
+test('steady routine rewards require attendance during the session window at the same gym', async () => {
+  resetFakes();
+  const routinePolicy = { starterAmount: 0, verifiedAmount: 3,
+    startedAt: '2026-10-26T10:00:00Z', endedAt: '2026-10-26T11:00:00Z', gymId: 9 };
+  const args = { userId: 7, sessionId: 1, idempotencyKey: 'session:1', routinePolicy, now: new Date('2026-10-26T11:01:00Z') };
+  attendance.push({ userId: 7, gymId: 9, attendedAt: new Date('2026-10-26T04:00:00Z') });
+  assert.equal((await verifyAndCreditWorkout(args)).amount, 0);
+  attendance.push({ userId: 7, gymId: 9, attendedAt: new Date('2026-10-26T10:00:00Z') });
+  assert.equal((await verifyAndCreditWorkout(args)).amount, 3);
+});
+test('internal routine payout is bounded to four coins', async () => {
+  resetFakes();
+  await assert.rejects(() => verifyAndCreditWorkout({ userId: 7, sessionId: 1,
+    routinePolicy: { starterAmount: 100, verifiedAmount: 100 } }), error => error.status === 400);
 });

@@ -3472,20 +3472,10 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
 // (the app's toggle only offers "Check out" while checked in, so this is a
 // belt-and-braces guard against a stale/mismatched client).
 export async function memberCheckOut(gymId, customerId) {
-  // 1. Verify this customer is linked to this gym — same guard as check-in,
-  // so a user can't check out of a gym they never checked into today.
-  let user;
-  try {
-    const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
-    user = profileRes.data?.data || profileRes.data;
-  } catch (_) {
-    throw { status: 404, error: 'User not found' };
-  }
-  if (!user || user.linkedGymId !== gymId) {
-    throw { status: 403, error: 'This gym is not your linked gym', code: 'NOT_LINKED_GYM' };
-  }
-
-  // 2. Stamp checkedOutAt on today's attendance row.
+  // No "still linked to this gym" check: today's check-in row at this gym is
+  // the proof that matters, and requiring the link stranded anyone who left
+  // the gym (or switched persona) mid-session — checked in with no way out.
+  // Stamp checkedOutAt on today's attendance row.
   const todayString = todayDateStringIST();
   const existing = await prisma.memberAttendance.findUnique({
     where: { customerId_gymId_date: { customerId, gymId, date: todayString } },
@@ -3627,6 +3617,13 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
     return { window: validWindow, entries: [], me: { rank: null, checkIns: 0, optedIn: false } };
   }
 
+  // A gym's board ranks its current members. Reading it stays open (the gym
+  // detail screen shows it to anyone browsing, with other people as initials
+  // only). Older auth-services don't send linkedGymId on the batch — skip the
+  // rule then rather than emptying every board.
+  const membershipKnown = Object.values(userById).some((u) => 'linkedGymId' in u);
+  const isMember = (id) => !membershipKnown || Number(userById[id]?.linkedGymId) === Number(gymId);
+
   // Score feeds for the same window the board shows (weekly=7 / monthly=30 /
   // all=90), across everyone who could appear + the requester.
   const { startKey, startUtc } = scoreWindow(new Date(), validWindow);
@@ -3644,7 +3641,9 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
   });
 
   const ranked = allRows
-    .filter((r) => userById[r.customerId]?.leaderboardOptIn === true)
+    // Ex-members (left, removed, or switched persona) keep their attendance
+    // history but no longer rank on the gym's board.
+    .filter((r) => userById[r.customerId]?.leaderboardOptIn === true && isMember(r.customerId))
     .map((r) => {
       const s = scores[r.customerId] ?? { score: 0, attendance: 0, steps: 0, recent: 0 };
       return {

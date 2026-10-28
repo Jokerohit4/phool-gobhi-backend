@@ -93,6 +93,8 @@ export const APP_MODES = {
   // The user already trains somewhere we don't necessarily sell. The app is a
   // workout/progress/habit tool and PAYG is demoted to a single card.
   HOME_TRACK: 'home_track',
+  // The user does not want workouts; Home leads with daily wellbeing tracking.
+  WELLNESS: 'wellness',
 };
 
 export const WORKOUT_INTENTS = {
@@ -108,7 +110,36 @@ export const FREE_TIME_WINDOWS = {
   FLEXIBLE: 'flexible',
 };
 
+// Who the user is in the app (services/personaService.js). Stored once the
+// user switches or a gym link changes; until then it is derived from the
+// onboarding answers on read.
+export const PERSONAS = {
+  LINKED_GYM: 'linked_gym',
+  OWN_GYM: 'own_gym',
+  WELLNESS: 'wellness',
+  HOME_TRAINING: 'home_training',
+  EXPLORER: 'explorer',
+};
+
+// Where a persona change came from. The user-initiated sources count towards
+// the switch cooldown; the gym_* sources are side effects of a gym link
+// changing and never do.
+export const PERSONA_SWITCH_SOURCES = {
+  SETTINGS: 'settings',
+  FLOATING_PROMPT: 'floating_prompt',
+  ONBOARDING: 'onboarding',
+  GYM_LINK: 'gym_link',
+  GYM_LEAVE: 'gym_leave',
+  GYM_REMOVED: 'gym_removed',
+};
+
 export const VALID_TRAINING_LOCATION_PREFS = Object.values(TRAINING_LOCATION_PREFS);
 export const VALID_APP_MODES = Object.values(APP_MODES);
+export const VALID_PERSONAS = Object.values(PERSONAS);
+export const USER_PERSONA_SWITCH_SOURCES = [
+  PERSONA_SWITCH_SOURCES.SETTINGS,
+  PERSONA_SWITCH_SOURCES.FLOATING_PROMPT,
+  PERSONA_SWITCH_SOURCES.ONBOARDING,
+];
 export const VALID_WORKOUT_INTENTS = Object.values(WORKOUT_INTENTS);
 export const VALID_FREE_TIME_WINDOWS = Object.values(FREE_TIME_WINDOWS);

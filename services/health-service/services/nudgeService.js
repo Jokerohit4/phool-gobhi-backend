@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 import { notifyUser } from '../utils/notifyUser.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
+import { isWellnessProfile } from '../utils/persona.js';
 import { findUnloggedUsersService } from './unloggedService.js';
 import { getScoreTargetState } from './ledger/scoreTargetService.js';
 
@@ -217,6 +218,12 @@ export async function runNudgeSweepService(now = new Date()) {
     // them up. Best-effort read: an unreachable auth-service means "no
     // preference", not "no nudge".
     const profile = await fetchUserProfileInternal(userId);
+    // Candidates come from workout history. Someone who has since switched to
+    // wellness stopped working out on purpose; "come back" is the wrong push.
+    if (isWellnessProfile(profile)) {
+      results.suppressed += 1;
+      continue;
+    }
     if (!isWithinFreeTime(profile?.freeTimeWindow, now)) {
       results.deferred += 1;
       continue;

@@ -357,3 +357,31 @@ test('others appear as initials only -- no full name or photo anywhere in the pa
     assert.ok(!json.includes(leaked), `payload must not contain ${leaked}`);
   }
 });
+
+test('ex-members keep their history but drop off the board', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true, linkedGymId: GYM },
+    2: { id: 2, name: 'Bob', leaderboardOptIn: true, linkedGymId: null }, // left the gym
+    3: { id: 3, name: 'Carol', leaderboardOptIn: true, linkedGymId: GYM + 1 }, // moved gyms
+  };
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 3, gymId: GYM, date: TODAY },
+  ];
+  const result = await getGymLeaderboard(GYM, 'all', 1);
+  assert.deepEqual(result.entries.map((e) => e.customerId), [1]);
+});
+
+test('anyone can still read a board (gym detail shows it to browsers)', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true, linkedGymId: GYM },
+    42: { id: 42, name: 'Stranger', leaderboardOptIn: true, linkedGymId: null },
+  };
+  rows = [{ customerId: 1, gymId: GYM, date: TODAY }];
+  const result = await getGymLeaderboard(GYM, 'all', 42);
+  assert.deepEqual(result.entries.map((e) => e.customerId), [1]);
+});

@@ -8,17 +8,30 @@ import { APP_MODES, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 // a deliberate act we log — not a silent disagreement between two clients each
 // computing the rule slightly differently.
 //
-// The product argument behind it, from the onboarding flow's own annotations:
-// for someone who does not train yet, pay-per-session IS the proposition, so
-// Home should sell it. For someone already training — at home, or at a gym we
-// may not even have as a partner — it is not; that user wants a workout,
-// progress and habit tool, and should merely be told PAYG exists.
+// The user's explicit workout intent wins. Wellness is its own experience;
+// home_track remains the workout/progress product, and gym_seeker leads with
+// booking/PAYG for people who want to start at a gym.
 export function deriveAppMode(user) {
-  const { currentlyWorksOut, trainingLocationPref, workoutIntent } = user || {};
+  const {
+    currentlyWorksOut,
+    trainingLocationPref,
+    workoutIntent,
+    wellnessFocuses,
+    wellnessDayPattern,
+    wellnessSleepPattern,
+    wellnessSetupCompleted,
+  } = user || {};
 
-  // Explicit no-workout intent gets the wellness tracker even when no training
-  // location has been answered. This remains derived server-side.
-  if (workoutIntent === 'wellness_only') return APP_MODES.HOME_TRACK;
+  // Wellness-only answers can survive independently on older/incomplete
+  // profiles where workoutIntent was never written. Keep the separate mode
+  // derived from any explicit wellness setup signal.
+  if (
+    workoutIntent === 'wellness_only'
+    || wellnessSetupCompleted === true
+    || (Array.isArray(wellnessFocuses) && wellnessFocuses.length > 0)
+    || wellnessDayPattern != null
+    || wellnessSleepPattern != null
+  ) return APP_MODES.WELLNESS;
 
   // Never asked. Returning null (rather than defaulting to gym_seeker) is what
   // lets every pre-existing account keep the current Home untouched until it

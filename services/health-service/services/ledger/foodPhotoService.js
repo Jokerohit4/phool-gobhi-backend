@@ -1,47 +1,8 @@
-// Photo food logging: propose, then let the user confirm.
-//
-// The flow is deliberately two calls, not one. A single "photograph your meal
-// and it is logged" would put a model's guess into somebody's health record with
-// no way for them to see it first - and the enum this feature was designed
-// around is called `photo_confirmed`, not `photo`, which is the schema author
-// already having made that decision. So:
-//
-//   recognize  upload the image, ask the model what it sees, MATCH every answer
-//              to the real food catalogue, and hand back candidates. Nothing is
-//              written to the food log.
-//   confirm    the user accepts, corrects or drops each candidate, and only then
-//              are FoodLog rows written, carrying what the model proposed.
-//
-// Three rules run through the whole file:
-//
-//  1. THE MODEL NEVER SUPPLIES A NUMBER. It proposes NAMES, and every gram of
-//     nutrition comes from the FoodItem the name matched. If the model said
-//     "dal" and we have Dal Tadka, the log says Dal Tadka and the nutrients are
-//     ours. A vision model is good at naming a plate and has no idea what any
-//     of it weighs in iron, and a feature that let it answer would be inventing
-//     micronutrients - the exact numbers this ledger is built to be honest
-//     about.
-//
-//  2. UNMATCHED NAMES ARE REPORTED, NOT DROPPED. "We think this is a plate of
-//     upma, which is not in your catalogue" is information: it tells the user
-//     what the model saw, and a high unmatched rate is the signal that our
-//     catalogue is the bottleneck rather than the model. Silently discarding
-//     them would make the feature look like it under-performs for no reason.
-//
-//  3. ON CONFIRM, AN UNMATCHED ITEM IS LOGGED AS KNOWN-UNKNOWN, NOT LOST.
-//     The user looked at the photo and said "yes, this was on the plate", so
-//     the row is a real part of their day even though we cannot yet put numbers
-//     on it. It logs with source `photo_unmatched` and a {"unknown": true}
-//     snapshot - counted by the day totals, never summed - and the same name
-//     raises a missing-food request, so a repeatedly photographed dish becomes
-//     a demand signal a reviewer can actually triage. Rule 1 still holds: the
-//     item we cannot name never gets a number invented for it.
-//
-// The matching itself: the catalogue is now GIVEN to the model (a grounded
-// prompt, see providers/geminiVisionProvider.js) and the model answers with the
-// exact row name when it is confident of one. Genre-level candidates still fall
-// back to the shared free-text matcher, because a model that says "kuttu ki
-// chilla" has still told us the food even when it declines to name our row.
+// Photo recognition returns ordinary catalogue foods for the review and confirm
+// flow. Missing foods are added with validated AI estimates, never marked as
+// verified. Existing catalogue nutrition always takes precedence. Recognition
+// does not write a diary entry; confirm still records the user's reviewed meal.
+import { ensurePhotoFood } from './foodPhotoCatalogue.js';
 import * as nutritionService from './nutritionService.js';
 import * as foodPhotoStorage from './foodPhotoStorage.js';
 import * as foodRequestService from './foodRequestService.js';
@@ -183,7 +144,7 @@ export async function recognizePhoto(
   // resolution below trusts.
   const catalogueRows = await prisma.foodItem.findMany({
     where: { createdByUserId: null },
-    select: { id: true, name: true, aliases: true },
+    select: { id: true, name: true, aliases: true, nonVeg: true },
     orderBy: { name: 'asc' },
   });
   const catalogueText = buildCatalogueText(catalogueRows);
@@ -274,7 +235,7 @@ export async function recognizePhoto(
         proposedName: item.name,
         grams: item.grams,
         confidence: item.confidence,
-        nonVeg: item.nonVeg,
+        nonVeg: grounded.nonVeg ?? item.nonVeg,
         servings: grounded.servings ?? null,
       });
       continue;
@@ -293,10 +254,18 @@ export async function recognizePhoto(
     // previous `limit: 8` was a workaround for the unordered `take`, and it
     // actively lost matches: eight rows in arbitrary order, of which the right
     // one might not be among them.
-    const food = matchToCatalogue(rows, item.name);
+    let food = matchToCatalogue(rows, item.name);
     if (!food) {
-      unmatched.push({ name: item.name, confidence: item.confidence });
-      continue;
+      try {
+        food = await ensurePhotoFood(prisma, item, { model: proposal.model });
+      } catch (error) {
+        await recordRequest(prisma, {
+          userId, requestedAt: now, outcome: 'provider_error', photoPath,
+          latencyMs: Date.now() - startedAt, model: proposal.model,
+          tokensIn: proposal.tokensIn, tokensOut: proposal.tokensOut,
+        });
+        throw error;
+      }
     }
     candidates.push({
       foodItemId: food.id,
@@ -304,7 +273,7 @@ export async function recognizePhoto(
       proposedName: item.name,
       grams: item.grams,
       confidence: item.confidence,
-      nonVeg: item.nonVeg,
+      nonVeg: food.nonVeg,
       servings: food.servings ?? null,
     });
   }
@@ -317,7 +286,9 @@ export async function recognizePhoto(
   if (ids.length) {
     const nutrientRows = await prisma.foodItem.findMany({
       where: { id: { in: ids } },
-      select: { id: true, kcal: true, proteinG: true, carbsG: true, fatG: true, servings: true },
+      select: { id: true, kcal: true, proteinG: true, carbsG: true, fatG: true,
+        fibreG: true, ironMg: true, magnesiumMg: true, calciumMg: true, zincMg: true,
+        verified: true, servings: true },
     });
     const byId = new Map(nutrientRows.map((r) => [r.id, r]));
     for (const c of candidates) {
@@ -328,7 +299,14 @@ export async function recognizePhoto(
         proteinG: Number(r.proteinG),
         carbsG: Number(r.carbsG),
         fatG: Number(r.fatG),
+        fibreG: r.fibreG == null ? null : Number(r.fibreG),
+        ironMg: r.ironMg == null ? null : Number(r.ironMg),
+        magnesiumMg: r.magnesiumMg == null ? null : Number(r.magnesiumMg),
+        calciumMg: r.calciumMg == null ? null : Number(r.calciumMg),
+        zincMg: r.zincMg == null ? null : Number(r.zincMg),
+
       };
+      c.nutritionVerified = r.verified === true;
       if (c.servings == null) c.servings = r.servings ?? null;
     }
   }

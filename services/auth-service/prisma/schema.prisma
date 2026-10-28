@@ -74,6 +74,13 @@ model User {
   // onboarding completed before this shipped), which is NOT the same as false.
   currentlyWorksOut Boolean?
   workoutIntent WorkoutIntent?
+  // Optional onboarding context for people who choose daily wellbeing
+  // tracking instead of workouts. These answers help shape habit guidance;
+  // none is a medical diagnosis or exercise target.
+  wellnessFocuses String[] @default([])
+  wellnessDayPattern String?
+  wellnessSleepPattern String?
+  wellnessSetupCompleted Boolean @default(false)
   // Answers both phrasings of the same question ("where do you work out" for
   // an existing exerciser, "where would you prefer" for someone starting) —
   // one column, because the downstream behaviour is identical either way.
@@ -84,8 +91,16 @@ model User {
   trainingLocationOther String?
   // The derived, mutable field the app's Home tab branches on. Derivation
   // lives in authService (deriveAppMode) rather than being trusted from the
-  // client, so the rule stays in one place when it changes.
+  // client, so the rule stays in one place when it changes. Once `persona`
+  // is set, appMode follows it (appModeForPersona) and is kept only for
+  // older app builds.
   appMode AppMode?
+  // Who the user is in the app. Null until the user first switches or a gym
+  // link changes; null means "derive from the onboarding answers" (see
+  // services/personaService.js resolvePersona). Once set, only an explicit
+  // switch or a gym link/leave/removal changes it — editing an answer never
+  // does, which is what stops old answers trapping someone in a persona.
+  persona Persona?
   // Coarse "when are you usually free" bucket. Consumed for nudge send-time
   // and off-peak targeting — NOT collected for its own sake. If that consumer
   // ever goes away, delete the field rather than leaving it to rot the way
@@ -594,13 +609,14 @@ enum TrainingLocationPref {
 
 // Which experience the app leads with.
 //   gym_seeker — booking/PAYG is the proposition; Home leads with discovery.
-//   home_track — the user already trains; the app is a workout/progress/habit
-//                tool and PAYG is demoted to a single "try a gym" card.
-// Two values, not four: this drives one branch, and every extra value here is
-// another Home variant somebody has to build and maintain.
+//   home_track — the user trains or wants to train; the app is a
+//                workout/progress/habit tool.
+//   wellness — the user does not want workouts; Home leads with wellbeing
+//              tracking and should not sell gyms.
 enum AppMode {
   gym_seeker
   home_track
+  wellness
 
   @@schema("auth")
 }
@@ -608,6 +624,17 @@ enum AppMode {
 enum WorkoutIntent {
   workout
   wellness_only
+
+  @@schema("auth")
+}
+
+// See User.persona and services/personaService.js.
+enum Persona {
+  linked_gym
+  own_gym
+  wellness
+  home_training
+  explorer
 
   @@schema("auth")
 }
@@ -637,7 +664,12 @@ model AppModeHistory {
   // switching away from something.
   fromMode  AppMode?
   toMode    AppMode
-  // 'onboarding' | 'floating_prompt' | 'settings'
+  // Set on rows written by a persona change (personaService). Null on
+  // appMode-only rows from before personas were stored.
+  fromPersona Persona?
+  toPersona   Persona?
+  // 'onboarding' | 'floating_prompt' | 'settings' | 'gym_link' | 'gym_leave'
+  // | 'gym_removed' (PERSONA_SWITCH_SOURCES)
   source    String
   createdAt DateTime @default(now())
 
@@ -677,6 +709,10 @@ model GymLink {
   // self-re-link to this gym without coming back through the gym's QR.
   selfRelinkBlocked      Boolean       @default(false)
 
+  // At most one active link per user is enforced by a partial unique index
+  // (GymLink_userId_active_key, WHERE "removedAt" IS NULL) created in the
+  // 20261028170000_persona migration. Prisma cannot express partial indexes,
+  // so it lives only in SQL.
   @@index([gymId, linkedAt])
   @@index([userId])
   @@schema("auth")

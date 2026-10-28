@@ -5,6 +5,7 @@ import {
   getLinkedGym,
   updateProfile,
   updateAppMode,
+  updatePersona,
   uploadProfilePicture,
 } from '../controllers/userProfileController.js';
 import {
@@ -27,6 +28,8 @@ router.put('/:userId', updateProfile);
 // the onboarding answers, this is the user OVERRIDING that derivation, and
 // only the override is worth logging.
 router.put('/:userId/app-mode', updateAppMode);
+// The persona switch (newer builds). app-mode above maps onto it for older ones.
+router.put('/:userId/persona', updatePersona);
 router.post(
   '/:userId/profile-picture',
   uploadProfilePictureMiddleware.single('image'),

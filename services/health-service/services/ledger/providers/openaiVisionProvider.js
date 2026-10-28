@@ -32,7 +32,12 @@ const JSON_INSTRUCTION = [
   '',
   'Reply with ONLY a single JSON object and no prose before or after it, of the shape:',
   '{"isFood": <bool>, "items": [{"name": <string>, "catalogue": <string>,',
-  '"grams": <number>, "confidence": <number between 0 and 1>, "nonVeg": <bool>}],',
+  '"grams": <number>, "confidence": <number between 0 and 1>, "nonVeg": <bool>,',
+  '"nutrition": {"kcal": <number>, "proteinG": <number>, "carbsG": <number>,',
+  '"fatG": <number>, "fibreG": <number>, "ironMg": <number or null>,',
+  '"magnesiumMg": <number or null>, "calciumMg": <number or null>, "zincMg": <number or null>,',
+  '"aliases": [<string>], "basis": "raw|cooked|as_served",',
+  '"servings": [{"label": <string>, "grams": <number>}]}}],',
   '"note": <string or null>}.',
 ].join('\n');
 

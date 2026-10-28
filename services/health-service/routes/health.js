@@ -1,3 +1,4 @@
+import { getChallengeActivityInternal } from '../controllers/challengeActivityController.js';
 import { Router } from 'express';
 import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag, requireAnyFeatureFlag } from '../middleware/requireFeatureFlag.js';
@@ -221,6 +222,7 @@ router.post('/assistant/consent', ...assistantGated, requireAdult, assistantCtrl
 router.delete('/assistant/consent', ...assistantGated, assistantCtrl.revokeConsent);
 router.get('/assistant/conversations', ...assistantGated, requireAssistantConsent, assistantCtrl.listConversations);
 router.post('/assistant/messages', ...assistantGated, requireAssistantConsent, assistantCtrl.sendMessage);
+router.post('/assistant/suggestions', ...assistantGated, requireAssistantConsent, assistantCtrl.getSuggestions);
 // MUST stay below /assistant/conversations above — otherwise ":id" swallows
 // "conversations" on the collection route. Same one-path-segment footgun this
 // repo hits in gym-service's routes.
@@ -437,6 +439,7 @@ router.get('/internal/export/:userId', requireInternal, exportCtrl.exportUserInt
 // Multi-user daily-activity feed for booking-service's leaderboard score
 // (ids + from/to). Internal only — the public /daily-activity read stays
 // strictly per-user.
+router.get('/internal/challenge-activity', requireInternal, getChallengeActivityInternal);
 router.get('/internal/daily-activity', requireInternal, activityCtrl.getDailyActivityInternal);
 
 // ---- Account-wide deletion (called by the same flow that deletes the rest

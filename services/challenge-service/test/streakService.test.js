@@ -25,7 +25,7 @@ function resetFakes() {
   creditCalls = [];
 }
 
-let recordAttendanceEvent, closeWeek, getStreakService, listAttendanceSinceService;
+let recordAttendanceEvent, closeWeek, getStreakService, listAttendanceSinceService, applyPersonaSwitchGrace;
 
 test('setup: mock dependencies once, import the real module once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -46,14 +46,20 @@ test('setup: mock dependencies once, import the real module once', async (t) => 
                   (where.userId === undefined || r.userId === where.userId) &&
                   (where.gymId === undefined || r.gymId === where.gymId),
               ),
+            // The same-IST-day lookup behind the one-showing-up-a-day rule.
+            findFirst: async ({ where }) =>
+              [...db.attendanceEvents.values()].find(
+                (r) => r.userId === where.userId && r.attendedAt >= where.attendedAt.gte && r.attendedAt < where.attendedAt.lt,
+              ) ?? null,
           };
           this.userStreakWeek = {
             upsert: async ({ where, update, create }) => {
               const key = `${where.userId_weekStart.userId}|${where.userId_weekStart.weekStart.toISOString()}`;
               const existing = db.streakWeeks.get(key);
+              const { checkinCount, ...rest } = update;
               const row = existing
-                ? { ...existing, checkinCount: existing.checkinCount + (update.checkinCount?.increment ?? 0) }
-                : { id: nextId++, closedAt: null, ...create };
+                ? { ...existing, ...rest, checkinCount: existing.checkinCount + (checkinCount?.increment ?? 0) }
+                : { id: nextId++, closedAt: null, graceWeek: false, ...create };
               db.streakWeeks.set(key, row);
               return row;
             },
@@ -95,7 +101,7 @@ test('setup: mock dependencies once, import the real module once', async (t) => 
     exports: { loadEconomyConfig: async () => economyConfig },
   });
 
-  ({ recordAttendanceEvent, closeWeek, getStreakService, listAttendanceSinceService } = await import('../services/streakService.js'));
+  ({ recordAttendanceEvent, closeWeek, getStreakService, listAttendanceSinceService, applyPersonaSwitchGrace } = await import('../services/streakService.js'));
   assert.equal(typeof recordAttendanceEvent, 'function');
 });
 
@@ -175,8 +181,9 @@ test('closeWeek respects a non-default qualifyingCheckinsPerWeek (below threshol
   economyConfig.qualifyingCheckinsPerWeek = 3;
   economyConfig.milestones = { '2': 50 };
   const monday = '2026-08-24T09:00:00Z'; // an ISO Monday
+  const tuesday = '2026-08-25T09:00:00Z';
   await recordAttendanceEvent({ userId: 3, bookingId: 1, gymId: 9, attendedAt: monday, source: 'self_checkin', idempotencyKey: 'booking:1' });
-  await recordAttendanceEvent({ userId: 3, bookingId: 2, gymId: 9, attendedAt: monday, source: 'self_checkin', idempotencyKey: 'booking:2' });
+  await recordAttendanceEvent({ userId: 3, bookingId: 2, gymId: 9, attendedAt: tuesday, source: 'self_checkin', idempotencyKey: 'booking:2' });
   creditCalls.length = 0; // ignore per-checkin credits, only care about weekly-bonus below
 
   const results = await closeWeek(new Date(monday));
@@ -191,8 +198,8 @@ test('closeWeek qualifies once checkinCount reaches the configured threshold, pa
   economyConfig.milestones = { '1': 50 };
   const monday = '2026-08-24T09:00:00Z';
   await recordAttendanceEvent({ userId: 4, bookingId: 10, gymId: 9, attendedAt: monday, source: 'self_checkin', idempotencyKey: 'booking:10' });
-  await recordAttendanceEvent({ userId: 4, bookingId: 11, gymId: 9, attendedAt: monday, source: 'self_checkin', idempotencyKey: 'booking:11' });
-  await recordAttendanceEvent({ userId: 4, bookingId: 12, gymId: 9, attendedAt: monday, source: 'self_checkin', idempotencyKey: 'booking:12' });
+  await recordAttendanceEvent({ userId: 4, bookingId: 11, gymId: 9, attendedAt: '2026-08-25T09:00:00Z', source: 'self_checkin', idempotencyKey: 'booking:11' });
+  await recordAttendanceEvent({ userId: 4, bookingId: 12, gymId: 9, attendedAt: '2026-08-26T09:00:00Z', source: 'self_checkin', idempotencyKey: 'booking:12' });
   creditCalls.length = 0;
 
   const results = await closeWeek(new Date(monday));
@@ -272,4 +279,43 @@ test('getStreakService returns a zeroed default for a user with no streak row ye
   resetFakes();
   const streak = await getStreakService(999);
   assert.deepEqual(streak, { userId: 999, currentStreak: 0, longestStreak: 0, lastQualifiedWeekStart: null });
+});
+
+test('a second check-in on the same IST day is logged but neither counts nor pays', async () => {
+  // Several unclaimed "gyms" at home used to mean coins per gym per day and a
+  // qualified week from a single day.
+  resetFakes();
+  economyConfig.qualifyingCheckinsPerWeek = 2;
+  await recordAttendanceEvent({ userId: 8, gymId: 101, attendedAt: '2026-08-24T04:00:00Z', source: 'independent_gym_geofence', idempotencyKey: 'independent-1' });
+  const repeat = await recordAttendanceEvent({ userId: 8, gymId: 102, attendedAt: '2026-08-24T15:00:00Z', source: 'independent_gym_geofence', idempotencyKey: 'independent-2' });
+  assert.equal(repeat.sameDayRepeat, true);
+  assert.equal(db.attendanceEvents.size, 2, 'both visits stay in the attendance log');
+  assert.equal(creditCalls.length, 1, 'only the first visit of the day pays');
+  const [result] = await closeWeek(new Date('2026-08-24T09:00:00Z'));
+  assert.equal(result.qualified, false, 'one day of showing up is not a qualified week');
+});
+
+test('the IST day boundary, not UTC, separates two days', async () => {
+  // 23:00 IST Monday and 01:00 IST Tuesday are the same UTC day (Monday).
+  resetFakes();
+  await recordAttendanceEvent({ userId: 9, gymId: 1, attendedAt: '2026-08-24T17:30:00Z', source: 'booking', bookingId: 1, idempotencyKey: 'b:1' });
+  const next = await recordAttendanceEvent({ userId: 9, gymId: 1, attendedAt: '2026-08-24T19:30:00Z', source: 'booking', bookingId: 2, idempotencyKey: 'b:2' });
+  assert.notEqual(next.sameDayRepeat, true);
+  assert.equal(creditCalls.length, 2);
+});
+
+test('a persona-switch grace week keeps the streak where it was', async () => {
+  resetFakes();
+  economyConfig.qualifyingCheckinsPerWeek = 1;
+  economyConfig.milestones = {};
+  await recordAttendanceEvent({ userId: 10, bookingId: 50, gymId: 9, attendedAt: '2026-08-17T09:00:00Z', source: 'booking', idempotencyKey: 'booking:50' });
+  await closeWeek(new Date('2026-08-17T09:00:00Z'));
+  assert.equal(db.userStreaks.get(10).currentStreak, 1);
+
+  economyConfig.qualifyingCheckinsPerWeek = 2;
+  await recordAttendanceEvent({ userId: 10, bookingId: 51, gymId: 9, attendedAt: '2026-08-24T09:00:00Z', source: 'booking', idempotencyKey: 'booking:51' });
+  await applyPersonaSwitchGrace(10, new Date('2026-08-26T09:00:00Z'));
+  const [result] = await closeWeek(new Date('2026-08-24T09:00:00Z'));
+  assert.equal(result.qualified, false);
+  assert.equal(result.currentStreak, 1, 'not reset in the week the user switched');
 });

@@ -2242,6 +2242,17 @@ model JourneyProgress {
   // YYYY-MM-DD, set once, never reset.
   easyStartUntil   String?
   quitReason       String?
+  // A non-workout wellbeing plan snapshots the onboarding preferences used
+  // to choose its first tracking layers and conservative daily targets.
+  wellnessOnly     Boolean   @default(false)
+  wellnessFocuses  String[]  @default([])
+  wellnessDayPattern String?
+  wellnessSleepPattern String?
+  // The workout track set aside while the user is on a wellbeing plan:
+  // { unlocked, startLevel, workoutSlots, stepsPerDay, at }. Restored when
+  // they switch back (journeyService.switchJourneyTrack / startJourney), so a
+  // persona round trip loses nothing. Null when there is nothing to restore.
+  workoutSnapshot  Json?
   lastShowedUpDate String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

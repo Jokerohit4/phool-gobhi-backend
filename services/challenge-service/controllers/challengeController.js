@@ -1,3 +1,4 @@
+import { loadChallengeAudience } from '../services/challengeAudience.js';
 import * as coinLedgerService from '../services/coinLedgerService.js';
 import * as onboardingRewardService from '../services/onboardingRewardService.js';
 import * as erasureService from '../services/erasureService.js';
@@ -94,7 +95,7 @@ export const redeemCoinCatalogItem = async (req, res) => {
 
 export const getChallenges = async (req, res) => {
   try {
-    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, ...parseLocation(req) });
+    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, audience: await loadChallengeAudience(req.userId), ...parseLocation(req) });
     res.json({ data: challenges });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -103,7 +104,7 @@ export const getChallenges = async (req, res) => {
 
 export const getChallengeDetail = async (req, res) => {
   try {
-    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, ...parseLocation(req) });
+    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, audience: await loadChallengeAudience(req.userId), ...parseLocation(req) });
     res.json({ data: detail });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -112,7 +113,7 @@ export const getChallengeDetail = async (req, res) => {
 
 export const enrollInChallenge = async (req, res) => {
   try {
-    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id, parseLocation(req));
+    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id, { ...parseLocation(req), audience: await loadChallengeAudience(req.userId) });
     res.status(201).json({ data: enrollment });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -404,6 +405,21 @@ export const closeWeekInternal = async (req, res) => {
   }
 };
 
+// auth-service: a user switched persona. Personal challenges need nothing
+// here — they re-read the persona whenever progress is credited (see
+// challengeCatalogService), so ones for the old persona simply stop moving.
+// The streak needs the switch week marked as grace.
+export const personaChangedInternal = async (req, res) => {
+  try {
+    const userId = Number(req.body?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'userId required' });
+    await streakService.applyPersonaSwitchGrace(userId);
+    res.status(204).end();
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const creditCoinsInternal = async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
@@ -453,11 +469,11 @@ export const redeemCoinCatalogItemInternal = async (req, res) => {
 // correctly (it just never gets told it was rewarded).
 export const creditWorkoutInternal = async (req, res) => {
   try {
-    const { userId, sessionId, description, idempotencyKey } = req.body || {};
+    const { userId, sessionId, description, idempotencyKey, routinePolicy } = req.body || {};
     if (!userId || !sessionId || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, sessionId and idempotencyKey are required' });
     }
-    const result = await workoutCreditService.verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey });
+    const result = await workoutCreditService.verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, routinePolicy });
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

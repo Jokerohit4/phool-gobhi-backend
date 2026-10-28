@@ -100,6 +100,10 @@ model UserStreakWeek {
   weekStart    DateTime
   checkinCount Int       @default(0)
   qualified    Boolean   @default(false)
+  // The user switched persona this week (auth-service persona-changed): an
+  // unqualified grace week leaves the streak where it was instead of
+  // resetting it. See streakService.applyPersonaSwitchGrace.
+  graceWeek    Boolean   @default(false)
   closedAt     DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -278,6 +282,7 @@ model CoinRedemption {
 // client integration exists anywhere in this app.
 
 enum ChallengeCategory {
+  personal_habit
   gym_native
   outside_gym_city
   social
@@ -286,6 +291,9 @@ enum ChallengeCategory {
 }
 
 enum ChallengeType {
+  water_consistency
+  mood_consistency
+  workout_consistency
   off_peak_hunter
   city_gym_circuit
   poi_checkin_tour
@@ -298,6 +306,7 @@ enum ChallengeType {
 }
 
 enum VerificationMethod {
+  activity_log
   booking_attendance
   qr_scan
   gps_geofence
@@ -361,6 +370,7 @@ model ChallengeDefinition {
   category                  ChallengeCategory
   title                     String
   description               String?
+  audiences                 String[]            @default([])
   defaultVerificationMethod VerificationMethod
   // Off-peak-hunter style challenges pair booking_attendance with a time
   // window (see Challenge.offPeakWindows); city-quest style challenges pair

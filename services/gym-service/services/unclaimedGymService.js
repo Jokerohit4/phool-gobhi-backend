@@ -140,6 +140,8 @@ export async function resolvePlaceService(placeId, userId, sessionToken) {
 // which is weaker evidence than a Places-backed gym. Anything that grades
 // attendance (e.g. an insurer-grade score) must treat these as self-reported.
 export const MANUAL_PLACE_PREFIX = 'manual:';
+export const MANUAL_GYM_LIMIT = 3;
+const MANUAL_GYM_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Rough India bounding box. A manual pin outside it is a spoofed or broken
 // location, not a gym we can geofence.
@@ -187,6 +189,20 @@ export async function addManualGymService({ name, lat, lng }, userId) {
     (g) => distanceMeters(lat, lng, g.lat, g.lng) <= MATCH_RADIUS_M && namesLookAlike(cleanName, g.name)
   );
   if (existing) return { matchedGymId: null, unclaimedGym: existing };
+
+  // A handful of new manual gyms per user per month is plenty for someone
+  // naming the gym they actually go to. More is the pattern of minting
+  // check-in targets (several "gyms" at home), so it stops here.
+  const recentManual = await prisma.unclaimedGym.count({
+    where: {
+      addedByUserId: userId,
+      googlePlaceId: { startsWith: MANUAL_PLACE_PREFIX },
+      createdAt: { gte: new Date(Date.now() - MANUAL_GYM_WINDOW_MS) },
+    },
+  });
+  if (recentManual >= MANUAL_GYM_LIMIT) {
+    throw { status: 429, error: "You've added several gyms recently. Pick one from the list, or try again later.", code: 'MANUAL_GYM_LIMIT' };
+  }
 
   const unclaimedGym = await prisma.unclaimedGym.create({
     data: {

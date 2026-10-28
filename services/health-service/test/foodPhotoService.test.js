@@ -112,13 +112,22 @@ const FRIED_RICE = {
 };
 
 function mockPrisma(overrides = {}) {
-  const catalogue = overrides.catalogue ?? [DAL, RICE, FRIED_RICE];
+  const catalogue = [...(overrides.catalogue ?? [DAL, RICE, FRIED_RICE])];
   const created = [];
   return {
+    async $transaction(work) { return work(this); },
+    async $executeRaw() { return 1; },
     created,
     catalogue,
     foodItem: {
       findMany: async () => catalogue,
+      findFirst: async ({ where }) => catalogue.find((f) =>
+        f.name.toLowerCase() === where.name.equals.toLowerCase() && f.createdByUserId == null) ?? null,
+      create: async ({ data }) => {
+        const row = { id: 100 + catalogue.length, ...data };
+        catalogue.push(row);
+        return row;
+      },
       findUnique: async ({ where }) => catalogue.find((f) => f.id === where.id) ?? null,
     },
     foodPhotoRequestLog: {
@@ -196,28 +205,73 @@ test('an exact catalogue name beats a longer one that merely contains it', async
   assert.equal(out.items[0].foodItemId, DAL.id);
 });
 
-test('a name we do not stock is reported, not silently dropped', async () => {
-  recognizer.recognizeFood = async () => ({
-    isFood: true,
-    items: [
-      { name: 'dal', grams: 200, confidence: 0.9, nonVeg: false },
-      { name: 'kuttu ki chilla', grams: 90, confidence: 0.6, nonVeg: true },
-    ],
-    note: null,
-    model: 'm',
-    tokensIn: 1,
-    tokensOut: 1,
-  });
+const PHOTO_NUTRITION = {
+  kcal: 180, proteinG: 6, carbsG: 25, fatG: 6, fibreG: 3,
+  ironMg: 2, magnesiumMg: 30, calciumMg: 40, zincMg: null,
+  aliases: ['buckwheat pancake'], basis: 'cooked',
+  servings: [{ label: 'piece', grams: 90 }, { label: 'plate', grams: 180 }],
+};
 
-  // An empty catalogue is the honest "we stock nothing you photographed" case.
+test('a missing food is created with full options and returned as an ordinary candidate', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, model: 'vision-test', items: [{
+      name: 'kuttu ki chilla', grams: 180, confidence: 0.9, nonVeg: false,
+      nutrition: PHOTO_NUTRITION,
+    }],
+  });
   const prisma = mockPrisma({ catalogue: [] });
   const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.items.length, 1);
+  assert.deepEqual(out.unmatched, []);
+  const food = prisma.catalogue[0];
+  assert.equal(out.items[0].foodItemId, food.id);
+  assert.deepEqual(out.items[0].servings, PHOTO_NUTRITION.servings);
+  assert.deepEqual(out.items[0].per100g, { kcal: 180, proteinG: 6, carbsG: 25, fatG: 6,
+    fibreG: 3, ironMg: 2, magnesiumMg: 30, calciumMg: 40, zincMg: null });
+  assert.equal(out.items[0].nutritionVerified, false);
+  for (const [key, value] of Object.entries(PHOTO_NUTRITION)) assert.deepEqual(food[key], value);
+  assert.equal(food.source, 'estimate');
+  assert.equal(food.verified, false);
+  assert.equal(food.createdByUserId, null);
+  assert.equal(food.veg, true);
+  assert.match(food.searchText, /buckwheat pancake/);
+  assert.equal(prisma.created.length, 0);
 
-  assert.equal(out.items.length, 0);
-  assert.equal(out.unmatched.length, 2);
-  // A high unmatched rate is the signal that the CATALOGUE is the bottleneck,
-  // not the model, and it is only visible if the names are reported.
-  assert.equal(out.unmatched[0].name, 'dal');
+  const confirmed = await svc.confirmPhotoLog(prisma, {
+    userId: 7, photoPath: out.photoPath, localDate: '2026-10-28', slot: 'lunch',
+    lines: [{ foodItemId: food.id, grams: 180, proposedName: food.name, confidence: 0.9 }],
+  });
+  assert.equal(confirmed.logged, 1);
+  assert.equal(prisma.created[0].foodItemId, food.id);
+  assert.equal(prisma.created[0].source, 'photo_confirmed');
+  assert.equal(prisma.created[0].nutrients.kcal, 324);
+
+  const again = await svc.recognizePhoto(prisma, { userId: 8, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(again.items[0].foodItemId, food.id);
+  assert.equal(prisma.catalogue.length, 1, 'later photos reuse the new shared food');
+});
+
+test('existing catalogue nutrition is never overwritten by model estimates', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, items: [{ name: 'dal', grams: 100, confidence: 0.9, nutrition: PHOTO_NUTRITION }],
+  });
+  const prisma = mockPrisma();
+  const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.items[0].foodItemId, DAL.id);
+  assert.equal(out.items[0].per100g.kcal, DAL.kcal);
+  assert.equal(prisma.catalogue.length, 3);
+});
+
+test('missing nutrition is retryable rather than asking the user to resolve a catalogue gap', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, items: [{ name: 'new dish', grams: 100 }],
+  });
+  const prisma = mockPrisma({ catalogue: [] });
+  await assert.rejects(
+    svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    { status: 502, code: 'PROVIDER_FAILED' },
+  );
+  assert.equal(prisma.catalogue.length, 0);
 });
 
 test('a photo with no food is a 200-shaped answer, not a failure', async () => {
@@ -603,25 +657,14 @@ test('a low-confidence grounded row is not trusted and falls through to matching
   assert.equal(out.items[0].foodItemId, DAL.id);
 });
 
-test('an invented grounded name is reported as unmatched, never invented into a row', async () => {
-  // The catalogue assertion is only honoured for names WE sent. A model that
-  // invents "Paneer & greens" for a plate must not hand us a row that never
-  // existed - and with an empty catalogue it gets nothing for it.
+test('an invented grounded name cannot bypass nutrition validation', async () => {
   recognizer.recognizeFood = async () => ({
-    isFood: true,
-    items: [{ name: 'Paneer & greens', catalogue: 'Paneer & greens', grams: 120, confidence: 0.95, nonVeg: false }],
-    note: null,
-    model: 'm',
-    tokensIn: 1,
-    tokensOut: 1,
+    isFood: true, items: [{ name: 'Paneer & greens', catalogue: 'Made-up row', grams: 100 }],
   });
-
-  const out = await svc.recognizePhoto(
-    mockPrisma({ catalogue: [] }),
-    { userId: 7, ...PHOTO_ARGS, deps: deps() },
+  await assert.rejects(
+    svc.recognizePhoto(mockPrisma({ catalogue: [] }), { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    { code: 'PROVIDER_FAILED' },
   );
-  assert.equal(out.items.length, 0);
-  assert.equal(out.unmatched[0].name, 'Paneer & greens');
 });
 
 // --- matched-but-unknown confirm lines ---------------------------------------

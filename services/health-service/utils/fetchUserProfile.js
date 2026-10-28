@@ -4,9 +4,8 @@ import { googleIdTokenHeader } from './googleIdToken.js';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
-// Reads the onboarding answers auth-service owns. Today that's one field:
-// weeklyFrequencyIntent, which seeds a user's weekly goal (FR-04) the first
-// time they have one resolved.
+// Reads onboarding answers auth-service owns: training preferences seed a
+// weekly training goal, while wellness-only preferences ground the assistant.
 //
 // Best-effort by design. A user with no reachable auth-service still gets a
 // goal — the caller falls back to a neutral default — because failing to

@@ -11,6 +11,7 @@ import { notifyUser } from '../utils/notifyUser.js';
 import { eraseUserAcrossServices } from '../utils/eraseAcrossServices.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
 import { linkGym } from './gymLinkService.js';
+import { isLinkablePartnerGym } from './gymLookup.js';
 import redis from '../utils/redisClient.js';
 
 const SKIP_OTP_CODE = '123456';
@@ -167,7 +168,7 @@ export async function runAttendanceSaasReengagementSweepService() {
   return { candidates: candidates.length, nudged, alreadyActive };
 }
 
-// Attendance-SaaS monthly bill: count of GymLink rows for each of the given
+// Attendance-SaaS monthly bill: count of people (not GymLink rows) for each of the given
 // gyms whose *qualifying* date (in IST) falls in the month (YYYY-MM). A
 // `gym_qr` link qualifies the moment it is made; a `self` link only counts in
 // the month it becomes a real membership — the later of its first verified
@@ -178,6 +179,10 @@ export async function runAttendanceSaasReengagementSweepService() {
 // gym with no qualifiers is simply absent, so callers should default missing
 // keys to 0.
 const SELF_LINK_QUALIFY_MS = 7 * 24 * 60 * 60 * 1000;
+// A member who leaves and comes back to the same gym within this window is
+// the same membership, not a new join: persona switching makes leave/rejoin
+// cheap, and the bill must count people joining, not link rows.
+const REJOIN_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export async function countGymJoinedUsersByMonthService(gymIds, month) {
   const { start, end } = istMonthRange(month);
@@ -189,8 +194,21 @@ export async function countGymJoinedUsersByMonthService(gymIds, month) {
         { source: 'self', linkedAt: { lt: end }, firstVerifiedCheckinAt: { not: null } },
       ],
     },
-    select: { gymId: true, source: true, linkedAt: true, firstVerifiedCheckinAt: true, removedAt: true },
+    select: { userId: true, gymId: true, source: true, linkedAt: true, firstVerifiedCheckinAt: true, removedAt: true },
   });
+  // Earlier links of the same people to the same gyms, to spot a rejoin.
+  const userIds = [...new Set(links.map((l) => l.userId))];
+  const earlier = userIds.length
+    ? await prisma.gymLink.findMany({
+      where: { gymId: { in: gymIds }, userId: { in: userIds }, linkedAt: { gte: new Date(start.getTime() - REJOIN_GRACE_MS), lt: end } },
+      select: { userId: true, gymId: true, linkedAt: true, removedAt: true },
+    })
+    : [];
+  const isRejoin = (link) => earlier.some((e) => e.userId === link.userId && e.gymId === link.gymId
+    && e.linkedAt < link.linkedAt
+    && link.linkedAt.getTime() - (e.removedAt ?? e.linkedAt).getTime() <= REJOIN_GRACE_MS);
+
+  const counted = new Set();
   const counts = {};
   for (const link of links) {
     const qualifiesAt =
@@ -202,6 +220,9 @@ export async function countGymJoinedUsersByMonthService(gymIds, month) {
         : link.linkedAt;
     if (qualifiesAt < start || qualifiesAt >= end) continue;
     if (link.removedAt && link.removedAt < qualifiesAt) continue;
+    const person = `${link.gymId}:${link.userId}`;
+    if (counted.has(person) || isRejoin(link)) continue;
+    counted.add(person);
     counts[link.gymId] = (counts[link.gymId] || 0) + 1;
   }
   return counts;
@@ -692,7 +713,9 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     // Route the join-gym pointer through linkGym so the GymLink row (source
     // gym_qr) is written alongside User.linkedGymId, exactly as a self-link or
     // the existing-user backfill below does. Never throws for gym_qr.
-    if (resolvedLinkedGymId) {
+    // A join link must name a real, approved partner gym (a crafted id would
+    // otherwise put the user on — and bill — any gym id they like).
+    if (resolvedLinkedGymId && await isLinkablePartnerGym(resolvedLinkedGymId)) {
       const linked = await linkGym(prisma, user.id, resolvedLinkedGymId, 'gym_qr');
       if (linked) user = linked;
     }
@@ -707,7 +730,9 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     const resolvedLinkedGymId = Number.isInteger(Number(linkedGymId)) && Number(linkedGymId) > 0
       ? Number(linkedGymId)
       : null;
-    if (resolvedLinkedGymId) {
+    // A join link must name a real, approved partner gym (a crafted id would
+    // otherwise put the user on — and bill — any gym id they like).
+    if (resolvedLinkedGymId && await isLinkablePartnerGym(resolvedLinkedGymId)) {
       const linked = await linkGym(prisma, user.id, resolvedLinkedGymId, 'gym_qr');
       if (linked) user = linked;
     }

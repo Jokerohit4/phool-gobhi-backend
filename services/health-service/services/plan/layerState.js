@@ -152,7 +152,20 @@ export async function getOnLayerKeys(prisma, userId, { journey, layers: resolved
   for (const l of layers) {
     if (l.state === 'on') {
       const cfg = JOURNEY.layers.find(c => c.layer === l.layer);
-      if (cfg?.layerKeys) onKeys.push(...cfg.layerKeys);
+      if (cfg?.layerKeys) {
+        let keys = cfg.layerKeys;
+        if (journey?.wellnessOnly) {
+          const focuses = new Set(journey.wellnessFocuses ?? []);
+          keys = keys.filter((key) => {
+            if (key === 'workout') return false;
+            if (key === 'food') return focuses.has('balanced_eating');
+            if (key === 'steps') return focuses.has('daily_movement') || focuses.has('energy');
+            if (key === 'sleep') return focuses.has('sleep') || focuses.has('energy');
+            return true;
+          });
+        }
+        onKeys.push(...keys);
+      }
     }
   }
   onKeys.push('own');

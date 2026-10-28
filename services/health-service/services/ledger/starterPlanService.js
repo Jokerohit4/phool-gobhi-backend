@@ -304,6 +304,8 @@ export async function createStarterPlan(prisma, userId, {
   goals = [],
   daysPerWeek,
   location,
+  wellnessOnly = false,
+  wellnessProfile = null,
 } = {}) {
   const level = experienceLevel ?? DEFAULT_EXPERIENCE_LEVEL;
   if (experienceLevel != null && !(level in LEVEL_DEFAULTS)) {
@@ -313,7 +315,7 @@ export async function createStarterPlan(prisma, userId, {
     throw badRequest('location must be one of: gym, home, fitness_centre, sports, other');
   }
   const sessions = Number(daysPerWeek);
-  if (!Number.isInteger(sessions) || sessions < 1 || sessions > 7) {
+  if (!wellnessOnly && (!Number.isInteger(sessions) || sessions < 1 || sessions > 7)) {
     throw badRequest('daysPerWeek must be an integer between 1 and 7');
   }
   // normaliseGoals keeps the user's order, drops anything that is not a real
@@ -321,7 +323,7 @@ export async function createStarterPlan(prisma, userId, {
   // order". An empty set is accepted: onboarding's goal step is skippable,
   // and the plan still works; food simply stays "not set up" until they
   // answer it.
-  const goalList = normaliseGoals(goals);
+  const goalList = wellnessOnly ? [] : normaliseGoals(goals);
 
   const [existingGoal, target] = await Promise.all([
     prisma.healthGoal.findUnique({ where: { userId } }),
@@ -331,15 +333,17 @@ export async function createStarterPlan(prisma, userId, {
   // Goals only. Sex, age, height, diet and activity belong to their own
   // surfaces (bodyDataService, saveDiet, the intake); a starter plan that
   // clobbered any of them would be the number moving under the user.
-  await prisma.healthGoal.upsert({
-    where: { userId },
-    create: { userId, goals: goalList, startDate: existingGoal?.startDate ?? todayLocalDate() },
-    update: { goals: goalList },
-  });
+  if (!wellnessOnly) {
+    await prisma.healthGoal.upsert({
+      where: { userId },
+      create: { userId, goals: goalList, startDate: existingGoal?.startDate ?? todayLocalDate() },
+      update: { goals: goalList },
+    });
+  }
 
   // The session count is the user's own answer, so the ring and the plan
   // start from the same number.
-  await prisma.weeklyGoal.upsert({
+  if (!wellnessOnly) await prisma.weeklyGoal.upsert({
     where: { userId },
     create: { userId, sessionsPerWeek: sessions, setByUser: true },
     update: { sessionsPerWeek: sessions, setByUser: true },
@@ -348,7 +352,10 @@ export async function createStarterPlan(prisma, userId, {
   const profile = await prisma.personalisationProfile?.findUnique?.({ where: { userId } });
   const profileLevel = journeyExperienceForProfile(profile, level);
   const defaults = levelDefaults(profileLevel);
-  const slots = await buildWorkoutSlots(prisma, {
+  const focuses = new Set(wellnessProfile?.wellnessFocuses ?? []);
+  const stepsByPattern = { mostly_seated: 2500, mixed: 4000, mostly_on_feet: 6000, variable_schedule: 3000 };
+  const wellnessSteps = stepsByPattern[wellnessProfile?.wellnessDayPattern] ?? 3000;
+  const slots = wellnessOnly ? [] : await buildWorkoutSlots(prisma, {
     experienceLevel: profileLevel,
     location,
     sessions,
@@ -363,14 +370,14 @@ export async function createStarterPlan(prisma, userId, {
       // not a zero-calorie plan - it is the state where the plan can be
       // followed but its food numbers cannot.
       kcal: target ? Number(target.kcal) : null,
-      stepsPerDay: defaults.stepsPerDay,
+      stepsPerDay: wellnessOnly ? wellnessSteps : defaults.stepsPerDay,
       sleepMinutes: defaults.sleepMinutes,
       workoutSlots: slots,
       rulesVersion: PRESCRIPTION_RULES_VERSION,
     },
     update: {
       kcal: target ? Number(target.kcal) : null,
-      stepsPerDay: defaults.stepsPerDay,
+      stepsPerDay: wellnessOnly ? wellnessSteps : defaults.stepsPerDay,
       sleepMinutes: defaults.sleepMinutes,
       workoutSlots: slots,
       rulesVersion: PRESCRIPTION_RULES_VERSION,
@@ -387,7 +394,9 @@ export async function createStarterPlan(prisma, userId, {
   return prescriptionService.getPlan({
     prisma,
     userId,
-    journey: { unlockedLayerKeys: layerKeysUpTo(START_LAYER[level]) },
+    journey: wellnessOnly
+      ? { unlockedLayerKeys: ['water', ...(focuses.has('balanced_eating') ? ['food'] : []), ...((focuses.has('daily_movement') || focuses.has('energy')) ? ['steps'] : []), ...((focuses.has('sleep') || focuses.has('energy')) ? ['sleep'] : [])], wellnessOnly: true, wellnessFocuses: [...focuses] }
+      : { unlockedLayerKeys: layerKeysUpTo(START_LAYER[level]) },
   });
 }
 
@@ -402,6 +411,7 @@ export async function refreshWorkoutSlotsForProfile(prisma, userId) {
     prisma.healthGoal.findUnique({ where: { userId } }),
     prisma.personalisationProfile?.findUnique?.({ where: { userId } }),
   ]);
+  if (journey?.wellnessOnly) return false;
   if (!prescription?.workoutSlots?.length) return false;
   const homeNames = new Set(Object.values(HOME_TEMPLATE_POOL).flat());
   const location = prescription.workoutSlots[0]?.location

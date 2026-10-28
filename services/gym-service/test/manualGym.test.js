@@ -16,6 +16,7 @@ test('setup: stub Prisma and import the service', async (t) => {
           this.gym = { findMany: async () => db.partners };
           this.unclaimedGym = {
             findMany: async () => db.mine,
+            count: async () => db.recentManual ?? 0,
             create: async ({ data }) => {
               const row = { id: 100 + db.created.length, ...data };
               db.created.push(row);
@@ -34,6 +35,7 @@ function reset() {
   db.partners = [];
   db.mine = [];
   db.created = [];
+  db.recentManual = 0;
 }
 
 test('creates a manual gym pinned at the phone, marked with the manual: prefix', async () => {
@@ -77,4 +79,15 @@ test('isManualPlaceId only matches the prefix', () => {
   assert.equal(svc.isManualPlaceId('manual:123'), true);
   assert.equal(svc.isManualPlaceId('ChIJxyz'), false);
   assert.equal(svc.isManualPlaceId(null), false);
+});
+
+test('a user adding many new manual gyms in a month is stopped', async () => {
+  // Several "gyms" at home were check-in targets for coins.
+  reset();
+  db.recentManual = svc.MANUAL_GYM_LIMIT;
+  await assert.rejects(
+    svc.addManualGymService({ name: 'Yet Another Gym', ...AT }, 7),
+    (err) => { assert.equal(err.status, 429); assert.equal(err.code, 'MANUAL_GYM_LIMIT'); return true; },
+  );
+  assert.equal(db.created.length, 0);
 });

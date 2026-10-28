@@ -227,21 +227,21 @@ test('getMemberAttendance falls back to gymName: null when gym-name resolution f
 
 // ─── memberCheckOut ─────────────────────────────────────────────────────────
 
-test('memberCheckOut: customer profile lookup fails -> User not found', async () => {
+test('memberCheckOut: needs no profile lookup — an auth-service outage cannot strand a checked-in member', async () => {
   resetFakes();
+  const nearLat = GYM.lat + metersToLatOffset(10);
+  await memberCheckIn(GYM.id, 1, nearLat, GYM.lng);
   userLookupThrows = true;
-  await assert.rejects(
-    () => memberCheckOut(GYM.id, 1),
-    (err) => { assert.equal(err.status, 404); assert.equal(err.error, 'User not found'); return true; }
-  );
+  const result = await memberCheckOut(GYM.id, 1);
+  assert.equal(result.alreadyCheckedOut, false);
 });
 
-test('memberCheckOut: customer with no linkedGymId -> NOT_LINKED_GYM', async () => {
+test('memberCheckOut: someone never checked in here today still cannot check out', async () => {
   resetFakes();
   user = { id: 1, linkedGymId: null };
   await assert.rejects(
     () => memberCheckOut(GYM.id, 1),
-    (err) => { assert.equal(err.status, 403); assert.equal(err.code, 'NOT_LINKED_GYM'); return true; }
+    (err) => { assert.equal(err.status, 400); assert.equal(err.code, 'NOT_CHECKED_IN'); return true; }
   );
 });
 
@@ -279,16 +279,17 @@ test('memberCheckOut: checking out twice is idempotent — alreadyCheckedOut tru
   assert.equal(second.checkedOutAt.getTime(), first.checkedOutAt.getTime());
 });
 
-test('memberCheckOut: linked gym changed after check-in -> NOT_LINKED_GYM even though checked in', async () => {
+test('memberCheckOut: leaving the gym (or switching persona) mid-session still lets them check out', async () => {
+  // Used to be NOT_LINKED_GYM: a member who left while checked in had no way
+  // to close the visit.
   resetFakes();
   const nearLat = GYM.lat + metersToLatOffset(10);
   await memberCheckIn(GYM.id, 1, nearLat, GYM.lng); // checked in at GYM.id
-  user = { id: 1, linkedGymId: 12345 }; // link changes mid-day
+  user = { id: 1, linkedGymId: null }; // left the gym mid-day
 
-  await assert.rejects(
-    () => memberCheckOut(GYM.id, 1),
-    (err) => { assert.equal(err.status, 403); assert.equal(err.code, 'NOT_LINKED_GYM'); return true; }
-  );
+  const result = await memberCheckOut(GYM.id, 1);
+  assert.equal(result.alreadyCheckedOut, false);
+  assert.ok(result.checkedOutAt);
 });
 
 test('same-day re-entry after check-out: re-nulls checkedOutAt, alreadyCheckedIn false, no duplicate row/notify', async () => {

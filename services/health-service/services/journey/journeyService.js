@@ -4,6 +4,8 @@ import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
 import { countSteadyWeeks } from './steadyWeeks.js';
 import { checkAndTriggerHomeDaysReferral } from './referralHomeTrigger.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
+import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
+import { isWellnessProfile } from '../../utils/persona.js';
 
 const prisma = new PrismaClient();
 
@@ -35,6 +37,15 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
   const now = new Date().toISOString();
   const unlocked = [];
   const startLayer = startLayerFor(startLevel);
+
+  if (progress.wellnessOnly) {
+    const focuses = new Set(progress.wellnessFocuses ?? []);
+    unlocked.push({ layer: 1, at: progress.startedAt?.toISOString() ?? now, via: 'start_level' });
+    if (focuses.has('balanced_eating')) unlocked.push({ layer: 2, at: progress.startedAt?.toISOString() ?? now, via: 'wellness_focus' });
+    if (focuses.has('sleep') || focuses.has('daily_movement') || focuses.has('energy')) {
+      unlocked.push({ layer: 3, at: progress.startedAt?.toISOString() ?? now, via: 'wellness_focus' });
+    }
+  }
 
   // Layers up to startLayer unlocked via start_level on every read
   for (let layer = 1; layer <= startLayer; layer++) {
@@ -118,6 +129,10 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
   }
 
   return {
+    wellnessOnly: progress.wellnessOnly === true,
+    wellnessFocuses: progress.wellnessFocuses ?? [],
+    wellnessDayPattern: progress.wellnessDayPattern ?? null,
+    wellnessSleepPattern: progress.wellnessSleepPattern ?? null,
     startLevel,
     layers,
     next,
@@ -227,6 +242,13 @@ export async function getJourney(userId) {
  * Called by POST /journey/start.
  */
 export async function startJourney(userId, { experienceLevel, goals, daysPerWeek, location, quitReason }) {
+  const profile = await fetchUserProfileInternal(userId);
+  if (isWellnessProfile(profile)) {
+    const err = new Error('Wellness profiles must start a wellbeing journey');
+    err.status = 409;
+    err.code = 'WELLNESS_JOURNEY_REQUIRED';
+    throw err;
+  }
   const level = experienceLevel ?? DEFAULT_EXPERIENCE_LEVEL;
   const startLayer = JOURNEY.startLayer[level] ?? 1;
   const easyStartUntil = (level === 'new_to_gym' || level === 'just_started' || level === 'restarting_after_break')
@@ -246,9 +268,21 @@ export async function startJourney(userId, { experienceLevel, goals, daysPerWeek
     update: {
       startLevel: level,
       quitReason: quitReason ?? null,
+      wellnessOnly: false,
+      wellnessFocuses: [],
+      wellnessDayPattern: null,
+      wellnessSleepPattern: null,
       // Don't reset easyStartUntil or startedAt on re-run
     },
   });
+  // Back from wellness: bring back the workout unlocks (early food, earned
+  // layers) the wellbeing plan set aside.
+  if (progress.workoutSnapshot?.unlocked) {
+    await prisma.journeyProgress.update({
+      where: { userId },
+      data: { unlocked: progress.workoutSnapshot.unlocked, workoutSnapshot: null },
+    });
+  }
 
   // Call starterPlanService to create the starter plan
   const { createStarterPlan } = await import('../ledger/starterPlanService.js');
@@ -260,6 +294,118 @@ export async function startJourney(userId, { experienceLevel, goals, daysPerWeek
   });
 
   return { journey: await getJourney(userId), plan };
+}
+
+/** Starts a wellbeing plan from the saved onboarding preferences, without
+ * workout goals, workout slots, or a weekly workout goal.
+ *
+ * Non-destructive for someone moving over from a workout plan: their workout
+ * unlocks and slots are kept in JourneyProgress.workoutSnapshot (restored by
+ * switchJourneyTrack / startJourney), and their WeeklyGoal is left alone —
+ * the wellbeing reads already ignore it (todayService zeroes sessionsPerWeek
+ * for wellnessOnly), and deleting it only lost the target they had chosen. */
+export async function startWellnessJourney(userId) {
+  const profile = await fetchUserProfileInternal(userId);
+  if (!isWellnessProfile(profile)) {
+    const err = new Error('A wellbeing-only onboarding profile is required');
+    err.status = 400;
+    err.code = 'WELLNESS_PROFILE_REQUIRED';
+    throw err;
+  }
+  const focuses = Array.isArray(profile.wellnessFocuses) ? profile.wellnessFocuses : [];
+  const startedAt = new Date();
+  const at = startedAt.toISOString();
+  const unlocked = [{ layer: 1, at, via: 'start' }];
+  if (focuses.includes('balanced_eating')) unlocked.push({ layer: 2, at, via: 'wellness_focus' });
+  if (focuses.some((focus) => ['sleep', 'daily_movement', 'energy'].includes(focus))) {
+    unlocked.push({ layer: 3, at, via: 'wellness_focus' });
+  }
+  const easyStartUntil = addDays(todayLocalDate(), JOURNEY.easyStartDays);
+  const workoutSnapshot = await snapshotWorkoutTrack(userId);
+  await prisma.journeyProgress.upsert({
+    where: { userId },
+    create: {
+      userId, startLevel: 'new_to_gym', startedAt, unlocked, easyStartUntil,
+      wellnessOnly: true, wellnessFocuses: focuses,
+      wellnessDayPattern: profile.wellnessDayPattern ?? null,
+      wellnessSleepPattern: profile.wellnessSleepPattern ?? null,
+    },
+    update: {
+      startLevel: 'new_to_gym', wellnessOnly: true, wellnessFocuses: focuses,
+      wellnessDayPattern: profile.wellnessDayPattern ?? null,
+      wellnessSleepPattern: profile.wellnessSleepPattern ?? null,
+      unlocked,
+      ...(workoutSnapshot ? { workoutSnapshot } : {}),
+    },
+  });
+  const { createStarterPlan } = await import('../ledger/starterPlanService.js');
+  const plan = await createStarterPlan(prisma, userId, {
+    experienceLevel: 'new_to_gym', goals: [], location: 'home', daysPerWeek: 0,
+    wellnessOnly: true, wellnessProfile: profile,
+  });
+  return { journey: await getJourney(userId), plan };
+}
+
+// The workout side of a journey that a wellbeing plan is about to replace:
+// what was unlocked, the start level, and the prescription's workout slots and
+// step target. Null when there is no workout journey to keep (none yet, or
+// already wellness-only — never overwrite an existing snapshot with a
+// wellness one).
+async function snapshotWorkoutTrack(userId) {
+  const [progress, prescription] = await Promise.all([
+    prisma.journeyProgress.findUnique({ where: { userId } }),
+    prisma.prescription.findUnique({ where: { userId } }),
+  ]);
+  if (!progress || progress.wellnessOnly) return null;
+  return {
+    unlocked: progress.unlocked ?? [],
+    startLevel: progress.startLevel,
+    workoutSlots: prescription?.workoutSlots ?? null,
+    stepsPerDay: prescription?.stepsPerDay ?? null,
+    at: new Date().toISOString(),
+  };
+}
+
+/**
+ * auth-service: the user switched persona (POST /internal/journey/persona-changed).
+ * Swaps the plan between the workout and wellbeing tracks without losing
+ * either: into wellness snapshots the workout track and starts the wellbeing
+ * plan; out of it restores the snapshot. A user with no journey yet is left
+ * alone — the app starts one in their new persona.
+ */
+export async function switchJourneyTrack(userId, toPersona) {
+  const progress = await prisma.journeyProgress.findUnique({ where: { userId } });
+  if (!progress) return { changed: false, reason: 'no_journey' };
+  const toWellness = toPersona === 'wellness';
+  if (toWellness === progress.wellnessOnly) return { changed: false, reason: 'same_track' };
+
+  if (toWellness) {
+    await startWellnessJourney(userId);
+    return { changed: true, track: 'wellness' };
+  }
+
+  const snapshot = progress.workoutSnapshot;
+  await prisma.journeyProgress.update({
+    where: { userId },
+    data: {
+      wellnessOnly: false,
+      ...(snapshot ? { unlocked: snapshot.unlocked ?? progress.unlocked, startLevel: snapshot.startLevel ?? progress.startLevel } : {}),
+      workoutSnapshot: null,
+    },
+  });
+  // Without a snapshot this user never had a workout plan; the app offers to
+  // build one (POST /journey/start) instead of us inventing slots here.
+  if (snapshot?.workoutSlots) {
+    await prisma.prescription.updateMany({
+      where: { userId },
+      data: {
+        workoutSlots: snapshot.workoutSlots,
+        ...(snapshot.stepsPerDay != null ? { stepsPerDay: snapshot.stepsPerDay } : {}),
+      },
+    });
+  }
+  await rebuildPlan(prisma, userId, { reason: 'persona_switch' });
+  return { changed: true, track: 'workout', restored: Boolean(snapshot) };
 }
 
 /**

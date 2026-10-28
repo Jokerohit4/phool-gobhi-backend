@@ -1,3 +1,4 @@
+import { normaliseFoodEstimate } from '../foodPhotoCatalogue.js';
 import { ProviderError } from '../../../utils/providerError.js';
 
 // The half of the vision exchange that does not depend on which vendor is on
@@ -19,11 +20,19 @@ export const PROMPT = [
   'Identify the individual foods visible in this meal photo.',
   '',
   'For each one, return a plain English name of the food itself, without quantities,',
-  'plurals, brand names, preparation or garnish. "dal", "plain rice", "ghee", "roti".',
+  'plurals or garnish. Preserve preparation when it changes the nutrition. "dal", "plain rice", "ghee", "roti".',
   'A dish name is fine if the dish IS the food: "paneer bhurji", "chole".',
   '',
   'Estimate the cooked weight in grams of each item, as one number, not a range.',
   'confidence is your own probability, 0 to 1, that the name is right.',
+  'For EVERY identified food, also return nutrition for 100 grams of the food',
+  'as served (NOT for the photographed portion): kcal, proteinG, carbsG, fatG,',
+  'fibreG, ironMg, magnesiumMg, calciumMg and zincMg. Estimate typical recipe',
+  'values; use null for a micronutrient you cannot estimate. Never use zero',
+  'as a substitute for missing data. Include aliases (regional names), basis',
+  '(raw, cooked or as_served), nonVeg, and servings as [{label, grams}] for',
+  'common portions such as one piece, katori or cup. Include at least one',
+  'serving. These estimates fill catalogue gaps automatically.',
   '',
   'If this is not a photo of food, or nothing in it is identifiable, return isFood',
   'false and an empty items array. Do not guess. An empty answer costs the user',
@@ -39,6 +48,8 @@ export function buildPrompt(catalogueText) {
   const text = String(catalogueText || '').trim();
   if (!text) return PROMPT;
   return [
+    PROMPT,
+    '',
     'We maintain a catalogue of the foods we recognise. The most relevant rows',
     'are listed below.',
     '',
@@ -106,5 +117,6 @@ export function normaliseItem(item) {
         ? Math.min(Math.max(Number(rawConfidence), 0), 1)
         : null;
 
-  return { name, grams, confidence, nonVeg: item?.nonVeg === true, catalogue: typeof item?.catalogue === 'string' ? item.catalogue.trim().slice(0, 120) : '' };
+  const nutrition = normaliseFoodEstimate(item?.nutrition);
+  return { ...(nutrition ? { nutrition } : {}), name, grams, confidence, nonVeg: item?.nonVeg === true, catalogue: typeof item?.catalogue === 'string' ? item.catalogue.trim().slice(0, 120) : '' };
 }

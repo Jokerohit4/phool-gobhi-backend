@@ -1,6 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, VALID_WORKOUT_INTENTS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
+import { resolvePersona, switchPersona, personaForAppMode } from '../services/personaService.js';
+import { notifyPersonaChanged } from '../services/personaEvents.js';
+import { gymLookupDeps, isLinkablePartnerGym, isKnownUnclaimedGym } from '../services/gymLookup.js';
+import { isPersonaSwitchEnabled } from '../services/gymLinkService.js';
 import { normalizeFitnessGoals } from '../constants/userEnums.js';
 import { linkGym } from '../services/gymLinkService.js';
 import { normalizePhone } from '../services/authService.js';
@@ -175,10 +179,22 @@ function formatUser(user) {
     // that routes someone into the gym_seeker experience — into "never asked".
     currentlyWorksOut: user.currentlyWorksOut ?? null,
     workoutIntent: user.workoutIntent || null,
+    wellnessFocuses: user.wellnessFocuses || [],
+    wellnessDayPattern: user.wellnessDayPattern || null,
+    wellnessSleepPattern: user.wellnessSleepPattern || null,
+    wellnessSetupCompleted: user.wellnessSetupCompleted === true,
     trainingLocationPref: user.trainingLocationPref || null,
     trainingLocationOther: user.trainingLocationOther || null,
     appMode: user.appMode || null,
+    // Resolved, never null-for-unset-when-answers-exist: see personaService.
+    persona: resolvePersona(user),
     freeTimeWindow: user.freeTimeWindow || null,
+    // Same coach-journey gym-link fields /me returns. The app falls back to
+    // this endpoint when /me fails, and used to lose the user's own gym (and
+    // with it their persona) every time it did.
+    homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
+    pendingGymPromptGymId: user.pendingGymPromptGymId ?? null,
+    gymLinkNotice: user.gymLinkNotice ?? null,
   };
 }
 
@@ -330,6 +346,12 @@ export const uploadProfilePicture = async (req, res) => {
 // answers, whereas this is the user overriding that derivation. Keeping them
 // apart is what lets every override be logged without also logging every
 // incidental profile edit.
+//
+// Kept for app builds older than persona switching: the mode is mapped to the
+// persona it means and goes through the same switchPersona as PUT /persona,
+// so a chip tap on an old build can no longer leave appMode and persona
+// disagreeing. Linked members are refused — old builds have no "leave your
+// gym" confirmation, and a mode chip must not silently end a gym membership.
 export const updateAppMode = async (req, res) => {
   try {
     const requestingUserId = parseInt(req.headers['x-user-id']);
@@ -343,6 +365,9 @@ export const updateAppMode = async (req, res) => {
 
     const before = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!before) return res.status(404).json({ error: 'User not found' });
+    if (before.linkedGymId) {
+      return res.status(409).json({ error: 'Leave your gym first to change how you use the app.', code: 'LINKED_GYM' });
+    }
 
     // Switching to the mode you are already in is a no-op, not a log entry —
     // otherwise the switch-frequency signal this log exists to produce gets
@@ -351,23 +376,58 @@ export const updateAppMode = async (req, res) => {
       return res.json({ data: formatUser(before) });
     }
 
-    const [user] = await prisma.$transaction([
-      prisma.user.update({ where: { id: targetUserId }, data: { appMode } }),
-      prisma.appModeHistory.create({
-        data: {
-          userId: targetUserId,
-          fromMode: before.appMode,
-          toMode: appMode,
-          source: typeof source === 'string' && source ? source : 'floating_prompt',
-        },
-      }),
-    ]);
-
-    res.json({ data: formatUser(user) });
+    const result = await switchPersona(
+      prisma,
+      targetUserId,
+      personaForAppMode(appMode),
+      { source: typeof source === 'string' && source ? source : 'floating_prompt' },
+      gymLookupDeps,
+    );
+    announce(result);
+    res.json({ data: formatUser(result.user) });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    sendError(res, err);
   }
 };
+
+// PUT /users/:userId/persona — the user switching who they are in the app
+// (body: { persona, gymId?, source? }). The only route that moves a persona;
+// see services/personaService.js#switchPersona for what a switch does and
+// does not touch. Behind the personaSwitch flag.
+export const updatePersona = async (req, res) => {
+  try {
+    const requestingUserId = parseInt(req.headers['x-user-id']);
+    const targetUserId = parseInt(req.params.userId);
+    if (requestingUserId !== targetUserId) return res.status(403).json({ error: 'Forbidden' });
+    if (!(await isPersonaSwitchEnabled(prisma))) {
+      return res.status(404).json({ error: 'Not found', code: 'FLAG_DISABLED' });
+    }
+
+    const { persona, gymId, source } = req.body || {};
+    const result = await switchPersona(prisma, targetUserId, persona, { gymId, source }, gymLookupDeps);
+    announce(result);
+    res.json({ data: formatUser(result.user), changed: result.changed });
+  } catch (err) {
+    sendError(res, err);
+  }
+};
+
+function announce(result) {
+  if (!result?.changed) return;
+  notifyPersonaChanged({
+    userId: result.user.id,
+    fromPersona: result.fromPersona,
+    toPersona: result.toPersona,
+    source: result.source,
+  });
+}
+
+function sendError(res, err) {
+  res.status(err.status || 500).json({
+    error: err.error || err.message || 'Server error',
+    ...(err.errorCode ? { code: err.errorCode } : {}),
+  });
+}
 
 export const updateProfile = async (req, res) => {
   try {
@@ -380,6 +440,7 @@ export const updateProfile = async (req, res) => {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
       weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
+      wellnessFocuses, wellnessDayPattern, wellnessSleepPattern, wellnessSetupCompleted,
       firstVisitBadgeConsent, recommendedEquipment,
     } = req.body;
 
@@ -412,6 +473,34 @@ export const updateProfile = async (req, res) => {
         && !VALID_WORKOUT_INTENTS.includes(workoutIntent)) {
       return res.status(400).json({ error: `Invalid workoutIntent. Must be one of: ${VALID_WORKOUT_INTENTS.join(', ')}` });
     }
+    const validWellnessFocuses = new Set([
+      'sleep', 'energy', 'balanced_eating', 'hydration', 'mood_stress',
+      'digestion', 'daily_movement',
+    ]);
+    const validWellnessDayPatterns = new Set([
+      'mostly_seated', 'mixed', 'mostly_on_feet', 'variable_schedule',
+    ]);
+    const validWellnessSleepPatterns = new Set([
+      'under_five', 'five_to_six', 'six_to_seven', 'seven_to_nine',
+      'over_nine', 'varies', 'prefer_not_to_say',
+    ]);
+    if (wellnessFocuses !== undefined && wellnessFocuses !== null
+        && (!Array.isArray(wellnessFocuses)
+          || wellnessFocuses.length > validWellnessFocuses.size
+          || wellnessFocuses.some((focus) => !validWellnessFocuses.has(focus)))) {
+      return res.status(400).json({ error: 'Invalid wellnessFocuses' });
+    }
+    if (wellnessDayPattern !== undefined && wellnessDayPattern !== null
+        && !validWellnessDayPatterns.has(wellnessDayPattern)) {
+      return res.status(400).json({ error: 'Invalid wellnessDayPattern' });
+    }
+    if (wellnessSleepPattern !== undefined && wellnessSleepPattern !== null
+        && !validWellnessSleepPatterns.has(wellnessSleepPattern)) {
+      return res.status(400).json({ error: 'Invalid wellnessSleepPattern' });
+    }
+    if (wellnessSetupCompleted !== undefined && typeof wellnessSetupCompleted !== 'boolean') {
+      return res.status(400).json({ error: 'wellnessSetupCompleted must be a boolean' });
+    }
     // Free text behind "Somewhere else". It's read by a human deciding the
     // next enum value, so it only needs to be a phrase — the cap stops it
     // becoming a place to paste paragraphs (or anything we'd rather not hold).
@@ -434,6 +523,11 @@ export const updateProfile = async (req, res) => {
       const resolvedHomeUnclaimed = Number(homeUnclaimedGymId);
       if (!Number.isInteger(resolvedHomeUnclaimed) || resolvedHomeUnclaimed <= 0) {
         return res.status(400).json({ error: 'homeUnclaimedGymId must be a positive integer or null' });
+      }
+      // Must be a real UnclaimedGym: a made-up id would put this user on another
+      // gym's claim-prompt list (applyUnclaimedGymClaim keys on it).
+      if (!(await isKnownUnclaimedGym(resolvedHomeUnclaimed))) {
+        return res.status(400).json({ error: 'Unknown gym', code: 'UNKNOWN_GYM' });
       }
     }
     // First-visit badge consent — a plain boolean, collected once.
@@ -541,7 +635,7 @@ export const updateProfile = async (req, res) => {
     // issueSessionForUser, so a later save or a repeat scan of a different
     // poster can never reassign somebody to another gym. linkGym validates the
     // id, so an invalid value is simply ignored here.
-    if (linkedGymId != null && !before.linkedGymId) {
+    if (linkedGymId != null && !before.linkedGymId && await isLinkablePartnerGym(linkedGymId)) {
       await linkGym(prisma, targetUserId, linkedGymId, 'gym_qr');
     }
     if (experienceLevel !== undefined) updates.experienceLevel = experienceLevel;
@@ -561,6 +655,10 @@ export const updateProfile = async (req, res) => {
     }
     if (currentlyWorksOut !== undefined) updates.currentlyWorksOut = currentlyWorksOut;
     if (workoutIntent !== undefined) updates.workoutIntent = workoutIntent;
+    if (wellnessFocuses !== undefined) updates.wellnessFocuses = wellnessFocuses || [];
+    if (wellnessDayPattern !== undefined) updates.wellnessDayPattern = wellnessDayPattern;
+    if (wellnessSleepPattern !== undefined) updates.wellnessSleepPattern = wellnessSleepPattern;
+    if (wellnessSetupCompleted !== undefined) updates.wellnessSetupCompleted = wellnessSetupCompleted;
     if (trainingLocationPref !== undefined) updates.trainingLocationPref = trainingLocationPref;
     if (trainingLocationOther !== undefined) {
       updates.trainingLocationOther = trainingLocationOther ? trainingLocationOther.trim() : null;
@@ -590,8 +688,17 @@ export const updateProfile = async (req, res) => {
     const answerChanged =
       (currentlyWorksOut !== undefined && currentlyWorksOut !== before.currentlyWorksOut)
       || (workoutIntent !== undefined && workoutIntent !== before.workoutIntent)
-      || (trainingLocationPref !== undefined && trainingLocationPref !== before.trainingLocationPref);
-    if (answerChanged) {
+      || (trainingLocationPref !== undefined && trainingLocationPref !== before.trainingLocationPref)
+      || (wellnessSetupCompleted !== undefined && wellnessSetupCompleted !== before.wellnessSetupCompleted)
+      || (wellnessFocuses !== undefined
+        && JSON.stringify(wellnessFocuses) !== JSON.stringify(before.wellnessFocuses))
+      || (wellnessDayPattern !== undefined && wellnessDayPattern !== before.wellnessDayPattern)
+      || (wellnessSleepPattern !== undefined && wellnessSleepPattern !== before.wellnessSleepPattern);
+    // Only while no persona is stored. Once the user has switched (or a gym
+    // link changed), appMode follows the persona and answers are just
+    // answers: re-deriving here is exactly how an old wellness focus used to
+    // drag a switched user back into wellness.
+    if (answerChanged && !before.persona) {
       updates.appMode = deriveAppMode({ ...before, ...updates });
     }
 

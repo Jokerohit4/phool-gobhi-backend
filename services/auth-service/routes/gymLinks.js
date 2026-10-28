@@ -8,6 +8,8 @@ import {
   clearGymLinkNotice,
   gymLinkCheckedIn,
   unclaimedGymClaimed,
+  acceptGymClaimPrompt,
+  dismissGymClaimPrompt,
 } from '../controllers/gymLinkController.js';
 
 // Gym links (coach-journey B2) — mounted at '/' beside authRoutes/deviceRoutes
@@ -17,6 +19,8 @@ import {
 //   DELETE /gym-links/self                        (verifyToken, flag-gated)  -> 204
 //   DELETE /gym/:gymId/members/:userId            (verifyToken, partner-only) -> 204
 //   POST   /me/notice/clear                       (verifyToken)              -> 204
+//   POST   /gym-links/claim-prompt/accept         (verifyToken)              -> 200 { linkedGymId }
+//   POST   /gym-links/claim-prompt/dismiss        (verifyToken)              -> 204
 //   POST   /internal/gym-links/checked-in         (requireInternal)          -> 204
 //   POST   /internal/unclaimed-gym-claimed        (requireInternal)          -> 204
 //
@@ -31,6 +35,8 @@ router.post('/gym-links/self', verifyToken, selfLink);
 router.delete('/gym-links/self', verifyToken, leaveGymLink);
 router.delete('/gym/:gymId/members/:userId', verifyToken, removeGymMember);
 router.post('/me/notice/clear', verifyToken, clearGymLinkNotice);
+router.post('/gym-links/claim-prompt/accept', verifyToken, acceptGymClaimPrompt);
+router.post('/gym-links/claim-prompt/dismiss', verifyToken, dismissGymClaimPrompt);
 router.post('/internal/gym-links/checked-in', requireInternal, gymLinkCheckedIn);
 router.post('/internal/unclaimed-gym-claimed', requireInternal, unclaimedGymClaimed);
 

@@ -130,10 +130,26 @@ export async function searchGyms({ query, location } = {}) {
       };
     });
 
+  // Google treats location+radius on Text Search as a soft bias, so it can
+  // still return gyms from another city. When the caller supplied a selected
+  // location, enforce the same metro-sized radius locally before returning
+  // suggestions; otherwise a Gurugram search can still surface Pune results.
+  const scopedResults = hasLoc
+    ? results.filter(
+        (result) =>
+          result.distanceMeters !== null &&
+          result.distanceMeters <= GYM_SEARCH_RADIUS_M,
+      )
+    : results;
+
   // Nearest first when we know where the user is; otherwise keep Google's
   // relevance order.
-  if (hasLoc) results.sort((a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity));
-  return results.slice(0, 20);
+  if (hasLoc) {
+    scopedResults.sort(
+      (a, b) => (a.distanceMeters ?? Infinity) - (b.distanceMeters ?? Infinity),
+    );
+  }
+  return scopedResults.slice(0, 20);
 }
 
 export async function placeDetails(placeId, sessionToken) {

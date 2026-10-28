@@ -13,7 +13,7 @@ export const resolvePlace = async (req, res) => {
     );
     res.json({ data: result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
   }
 };
 
@@ -29,7 +29,7 @@ export const addManualGym = async (req, res) => {
     );
     res.status(201).json({ data: result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
   }
 };
 
@@ -39,7 +39,7 @@ export const getUnclaimedGymInternal = async (req, res) => {
     const gym = await unclaimedGymService.getUnclaimedGymService(parseInt(req.params.id));
     res.json({ data: gym });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
   }
 };
 
@@ -53,7 +53,7 @@ export const listUnclaimedGymsAdmin = async (req, res) => {
     });
     res.json({ data: gyms });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
   }
 };
 
@@ -66,6 +66,6 @@ export const updateClaimStatusAdmin = async (req, res) => {
     );
     res.json({ data: gym });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
   }
 };

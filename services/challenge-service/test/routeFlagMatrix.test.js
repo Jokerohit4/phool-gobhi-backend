@@ -118,6 +118,8 @@ const MATRIX = [
   // routes trigger, so gating one half only would leave the state mutable
   // while the UI reads it as switched off.
   ['POST', '/internal/streak/close-week', STREAKS],
+  // Persona-switch fan-out from auth-service; must land even with coins off.
+  ['POST', '/internal/persona-changed', null],
   ['POST', '/internal/coins/:userId/credit', STREAKS],
   ['POST', '/internal/coins/:userId/debit', STREAKS],
   ['POST', '/internal/workout-credit', STREAKS],

@@ -1,3 +1,4 @@
+import { challengeMatchesAudience, isPersonalChallenge } from './challengeAudience.js';
 import { PrismaClient } from '@prisma/client';
 import { creditCoinsService } from './coinLedgerService.js';
 import { isWithinMaxChallengeRange } from '../utils/location.js';
@@ -56,18 +57,18 @@ async function completeAndReward(enrollment, challenge, via) {
   return updated;
 }
 
-export async function enrollService(userId, challengeId, { userLat, userLng } = {}) {
-  const challenge = await prisma.challenge.findUnique({ where: { id: Number(challengeId) } });
+export async function enrollService(userId, challengeId, { userLat, userLng, audience } = {}) {
+  const challenge = await prisma.challenge.findUnique({ where: { id: Number(challengeId) }, include: { challengeDefinition: true } });
   if (!challenge || challenge.status !== 'active') throw { status: 404, error: 'Challenge not found or inactive' };
 
   // Location gate — the 20km radius is enforced at enrollment too, so the
   // list filter can't be bypassed by deep-linking a far challenge's id. Fails
   // closed: no location headers (client hasn't shared/resolved GPS) or no
   // challenge anchor both reject rather than assume in-range.
-  if (userLat == null || userLng == null) {
+  if (!isPersonalChallenge(challenge) && (userLat == null || userLng == null)) {
     throw { status: 400, error: 'Location is required to join this challenge' };
   }
-  if (!isWithinMaxChallengeRange(userLat, userLng, challenge)) {
+  if (!isPersonalChallenge(challenge) && !isWithinMaxChallengeRange(userLat, userLng, challenge)) {
     throw { status: 403, error: 'This challenge is only available within 20km of your location' };
   }
 
@@ -82,6 +83,7 @@ export async function enrollService(userId, challengeId, { userLat, userLng } = 
     return existing;
   }
 
+  if (!challengeMatchesAudience(challenge, audience)) throw { status: 403, error: 'This challenge is for a different training or wellbeing preference' };
   const created = await prisma.challengeEnrollment.create({ data: { userId, challengeId: challenge.id } });
   track('challenge_enrolled', userId, {
     challenge_id: challenge.id, already_enrolled: false,

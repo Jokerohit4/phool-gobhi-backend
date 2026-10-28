@@ -16,6 +16,9 @@ function fakeRes() {
 
 const DAY = 24 * 60 * 60 * 1000;
 
+// Links/leaves announce persona changes to other services (personaEvents.js).
+globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
+
 function matchValue(cond, value) {
   if (cond === null || typeof cond !== 'object' || cond instanceof Date) return value === cond;
   if ('not' in cond) return value !== cond.not;
@@ -103,6 +106,20 @@ function createFakePrisma() {
         return { id: where.id, config: { features: { selfLinkGym: { enabled: true } } } };
       },
     },
+    // Persona changes ride along with link/leave/removal (personaService).
+    appModeHistory: {
+      async findFirst({ where }) {
+        const hit = state.appModeHistory.filter((h) => matches(where, h));
+        return hit.length ? { ...hit[hit.length - 1] } : null;
+      },
+      async create({ data }) {
+        state.appModeHistory.push({ ...data });
+        return { ...data };
+      },
+      async count({ where }) {
+        return state.appModeHistory.filter((h) => matches(where, h)).length;
+      },
+    },
   };
   api.$transaction = async (fn) => fn(api);
   return api;
@@ -132,7 +149,7 @@ test('setup: mock @prisma/client and authService once, import the controller onc
 });
 
 function reset({ users = [], gymLinks = [], userDevices = [] } = {}) {
-  state = { users, gymLinks, userDevices };
+  state = { users, gymLinks, userDevices, appModeHistory: [] };
   flagEnabled = true;
   partnerOwnsBehavior = null;
 }

@@ -213,6 +213,7 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
     'coachJourneyEnabled',
     'homeIntroductionEnabled',
     'selfLinkGymEnabled',
+    'personaSwitchEnabled',
     'referralHomeTriggerEnabled',
     'coachAssistantEnabled',
     'exploreFoodFindsEnabled',

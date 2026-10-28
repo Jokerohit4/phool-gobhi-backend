@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import semver from 'semver';
 import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
+import { resolvePersona } from '../services/personaService.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
   loadOtpProvider,
@@ -685,9 +686,16 @@ const getMe = async (req, res) => {
       // branch on the first call rather than after a second round trip.
       currentlyWorksOut: user.currentlyWorksOut ?? null,
       workoutIntent: user.workoutIntent || null,
+      wellnessFocuses: user.wellnessFocuses || [],
+      wellnessDayPattern: user.wellnessDayPattern || null,
+      wellnessSleepPattern: user.wellnessSleepPattern || null,
+      wellnessSetupCompleted: user.wellnessSetupCompleted === true,
       trainingLocationPref: user.trainingLocationPref,
       trainingLocationOther: user.trainingLocationOther,
       appMode: user.appMode,
+      // Who the user is in the app — the one value Home, Progress and the
+      // challenge list should all branch on (services/personaService.js).
+      persona: resolvePersona(user),
       freeTimeWindow: user.freeTimeWindow,
       // Server-assigned experiment buckets (A1 hook, B14 owns the assignment).
       // Derived on every call rather than stored, so there is no per-user row
@@ -739,13 +747,21 @@ const getUserInternal = async (req, res) => {
       // likes to train, not anything about their health.
       currentlyWorksOut: user.currentlyWorksOut ?? null,
       workoutIntent: user.workoutIntent || null,
+      wellnessFocuses: user.wellnessFocuses || [],
+      wellnessDayPattern: user.wellnessDayPattern || null,
+      wellnessSleepPattern: user.wellnessSleepPattern || null,
+      wellnessSetupCompleted: user.wellnessSetupCompleted === true,
       trainingLocationPref: user.trainingLocationPref || null,
       appMode: user.appMode || null,
+      // challenge-service (audience), health-service (plan track, coach,
+      // nudges) read this instead of re-deriving it from the answers.
+      persona: resolvePersona(user),
       freeTimeWindow: user.freeTimeWindow || null,
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,
       linkedGymId: user.linkedGymId,
+      homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
       trainerGymId: user.trainerGymId,
       // Coach-journey B2: booking-service gates the partner "first visit"
       // badge on firstVisitBadgeConsent and needs createdAt for the prompt
@@ -787,7 +803,7 @@ const getUsersBatchInternal = async (req, res) => {
     if (!ids.length) return res.json({ data: [] });
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true, firstVisitBadgeConsent: true },
+      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true, firstVisitBadgeConsent: true, linkedGymId: true },
     });
     res.json({ data: users });
   } catch (err) {

@@ -1,3 +1,5 @@
+import { challengeMatchesAudience, isPersonalChallenge } from './challengeAudience.js';
+import { seedPersonalChallenges, refreshPersonalChallenge } from './personalChallengeService.js';
 import { PrismaClient } from '@prisma/client';
 import { MAX_CHALLENGE_DISTANCE_KM, distanceKmFromUser, isWithinMaxChallengeRange } from '../utils/location.js';
 
@@ -93,6 +95,7 @@ async function upsertChallenge({ definition, city, lat, lng, targetCount, reward
 }
 
 async function ensureSeeded() {
+  await seedPersonalChallenges();
   const offPeakDef = await upsertDefinition({
     key: OFF_PEAK_HUNTER_KEY,
     type: 'off_peak_hunter',
@@ -154,14 +157,15 @@ async function ensureSeeded() {
   });
 }
 
-export async function listActiveChallengesService({ userId, userLat, userLng }) {
+export async function listActiveChallengesService({ userId, userLat, userLng, audience }) {
   await ensureSeeded();
   const challenges = await prisma.challenge.findMany({
     where: { status: 'active' },
     include: { challengeDefinition: true, enrollments: { where: { userId } } },
     orderBy: { id: 'asc' },
   });
-  return challenges
+  const visible = challenges
+    .filter(challenge => challengeMatchesAudience(challenge, audience) || challenge.enrollments?.length)
     .map((challenge) => ({
       ...challenge,
       distanceKm: distanceKmFromUser(userLat, userLng, challenge),
@@ -169,13 +173,14 @@ export async function listActiveChallengesService({ userId, userLat, userLng }) 
     // The 20km radius is a hard rule, not a suggestion: no user location
     // (can't prove proximity) or no challenge anchor → excluded, exactly how
     // gym-service drops coordinate-less gyms once a location is attached.
-    .filter((challenge) => challenge.distanceKm != null && challenge.distanceKm <= MAX_CHALLENGE_DISTANCE_KM)
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .map(serializeChallenge);
+    .filter((challenge) => isPersonalChallenge(challenge) || (challenge.distanceKm != null && challenge.distanceKm <= MAX_CHALLENGE_DISTANCE_KM))
+    .sort((a, b) => (isPersonalChallenge(a) ? -1 : a.distanceKm) - (isPersonalChallenge(b) ? -1 : b.distanceKm));
+  const refreshed = await Promise.all(visible.map(challenge => isPersonalChallenge(challenge) ? refreshPersonalChallenge(challenge, userId, audience) : challenge));
+  return refreshed.map(serializeChallenge);
 }
 
-export async function getChallengeDetailService(challengeId, { userId, userLat, userLng }) {
-  const challenge = await prisma.challenge.findUnique({
+export async function getChallengeDetailService(challengeId, { userId, userLat, userLng, audience }) {
+  let challenge = await prisma.challenge.findUnique({
     where: { id: Number(challengeId) },
     include: {
       challengeDefinition: true,
@@ -187,9 +192,11 @@ export async function getChallengeDetailService(challengeId, { userId, userLat, 
   // Same geo-gate as the list: an out-of-range challenge — or one that can't
   // be proven within range (no anchor / no user location) — is treated as
   // non-existent, so the detail route can't enumerate far-away challenges.
-  if (!isWithinMaxChallengeRange(userLat, userLng, challenge)) {
+  if ((!challengeMatchesAudience(challenge, audience) && !challenge.enrollments?.length) ||
+      (!isPersonalChallenge(challenge) && !isWithinMaxChallengeRange(userLat, userLng, challenge))) {
     throw { status: 404, error: 'Challenge not found' };
   }
+  if (isPersonalChallenge(challenge)) challenge = await refreshPersonalChallenge(challenge, userId, audience);
   const enrollment = challenge.enrollments[0] || null;
   return {
     ...serializeChallenge({ ...challenge, distanceKm: distanceKmFromUser(userLat, userLng, challenge) }),
@@ -209,6 +216,11 @@ function serializeChallenge(challenge) {
   const enrollment = challenge.enrollments?.[0] || null;
   return {
     id: challenge.id,
+    audiences: challenge.challengeDefinition.audiences ?? [],
+    progressUnavailable: challenge.progressUnavailable ?? false,
+    rewardPending: challenge.rewardPending ?? false,
+    // Joined under another persona; resumes when the user switches back.
+    pausedForPersona: challenge.pausedForPersona ?? false,
     key: challenge.challengeDefinition.key,
     type: challenge.challengeDefinition.type,
     category: challenge.challengeDefinition.category,

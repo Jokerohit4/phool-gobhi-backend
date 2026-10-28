@@ -80,7 +80,11 @@ function buildWeek(showedUpDays, today) {
  * @param {string} today
  * @returns {Promise<{today: object|null, tomorrow: object|null}>}
  */
-async function getSessions(prisma, userId, today) {
+async function getSessions(prisma, userId, today, { wellnessOnly = false } = {}) {
+  // A prescription can outlive the journey branch that created it. Do not let
+  // stale workout slots leak back into the Home prompt for a wellbeing-only
+  // journey.
+  if (wellnessOnly) return { today: null, tomorrow: null };
   const prescription = await prisma.prescription.findUnique({ where: { userId } });
   const slots = prescription?.workoutSlots ?? [];
   if (!slots.length) return { today: null, tomorrow: null };
@@ -157,7 +161,9 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     getLayers(prisma, userId, { journey }),
     previousClose(prisma, { userId, localDate: resolvedDate }),
     getPauseState(prisma, userId, resolvedDate),
-    getSessions(prisma, userId, resolvedDate),
+    getSessions(prisma, userId, resolvedDate, {
+      wellnessOnly: journey.wellnessOnly === true,
+    }),
   ]);
   const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers });
   const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys });
@@ -184,6 +190,8 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
 
   // Build journey summary
   const journeySummary = {
+    wellnessOnly: journey.wellnessOnly === true,
+    wellnessFocuses: journey.wellnessFocuses ?? [],
     showedUpDays: showedUpDays.length,
     steadyWeeks: journey.steadyWeeks,
     easeBack: journey.easeBack,
@@ -193,6 +201,7 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
 
   const payload = {
     state: 'active',
+    wellnessOnly: journey.wellnessOnly === true,
     localDate: resolvedDate,
     paused: pauseState.paused,
     pausedUntil: pauseState.pausedUntil,
@@ -259,7 +268,7 @@ export async function buildPlanDefinition(prisma, userId) {
     kcal: target ? Number(target.kcal) : null,
     stepsPerDay: prescription?.stepsPerDay ?? 6000,
     sleepMinutes: prescription?.sleepMinutes ?? 420,
-    sessionsPerWeek: weeklyGoal?.sessionsPerWeek ?? 3,
+    sessionsPerWeek: journey?.wellnessOnly ? 0 : weeklyGoal?.sessionsPerWeek ?? 3,
   };
 
   // Build bounds (from prescriptionService)
@@ -310,6 +319,7 @@ export async function buildPlanDefinition(prisma, userId) {
 
   return {
     state: 'active',
+    wellnessOnly: journey?.wellnessOnly === true,
     settings,
     bounds,
     slots,

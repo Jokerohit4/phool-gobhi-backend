@@ -6,6 +6,7 @@ import { summariseHomeSetup } from '../homeSetup.js';
 import { summariseForCoach } from '../healthProfile.js';
 import { HEALTH_PROFILE_POLICY_VERSION } from '../healthProfileConsentService.js';
 import { quoteUserText, QUOTE_NOTE } from './guardrails.js';
+import { isWellnessProfile } from '../../utils/persona.js';
 
 const prisma = new PrismaClient();
 
@@ -195,6 +196,10 @@ const GOAL_PHRASES = {
 export function summariseTrainingProfile(profile) {
   if (!profile) return null;
   const bits = [];
+  if (isWellnessProfile(profile)) {
+    bits.push('Chose daily wellbeing tracking and does not want workout or gym plans unless they ask for them.');
+    return `How they want to use the app (from onboarding): ${bits.join(' ')}`;
+  }
   const where = LOCATION_PHRASES[profile.trainingLocationPref];
   if (profile.currentlyWorksOut === false) {
     bits.push(where ? `Not training yet; would rather train ${where}.` : 'Not training yet.');
@@ -214,6 +219,46 @@ export function summariseTrainingProfile(profile) {
   if (goals.length) bits.push(`Goals: ${goals.join(', ')}.`);
   if (!bits.length) return null;
   return `How they train (from onboarding): ${bits.join(' ')}`;
+}
+
+const WELLNESS_FOCUS_PHRASES = {
+  sleep: 'sleep',
+  energy: 'daytime energy',
+  balanced_eating: 'balanced meals',
+  hydration: 'hydration',
+  mood_stress: 'mood and stress check-ins',
+  digestion: 'digestion and gut comfort',
+  daily_movement: 'everyday movement',
+};
+const WELLNESS_DAY_PHRASES = {
+  mostly_seated: 'mostly seated',
+  mixed: 'a mix of sitting and moving',
+  mostly_on_feet: 'on their feet most of the day',
+  variable_schedule: 'a variable daily schedule',
+};
+const WELLNESS_SLEEP_PHRASES = {
+  under_five: 'under 5 hours',
+  five_to_six: '5–6 hours',
+  six_to_seven: '6–7 hours',
+  seven_to_nine: '7–9 hours',
+  over_nine: 'over 9 hours',
+  varies: 'varies',
+};
+
+/// Fixed, non-diagnostic summary of optional wellness onboarding answers.
+export function summariseWellnessProfile(profile) {
+  if (!isWellnessProfile(profile)) return null;
+  const bits = [];
+  const focuses = (profile.wellnessFocuses || [])
+    .map((focus) => WELLNESS_FOCUS_PHRASES[focus])
+    .filter(Boolean);
+  if (focuses.length) bits.push(`Focus areas: ${focuses.join(', ')}.`);
+  const day = WELLNESS_DAY_PHRASES[profile.wellnessDayPattern];
+  if (day) bits.push(`Typical day: ${day}.`);
+  const sleep = WELLNESS_SLEEP_PHRASES[profile.wellnessSleepPattern];
+  if (sleep) bits.push(`Self-reported usual sleep: ${sleep}.`);
+  if (!bits.length) return null;
+  return `Daily wellbeing context from onboarding (self-reported preferences, not diagnoses): ${bits.join(' ')}`;
 }
 
 /// Reduced by a deterministic formatter rather than a second model call.
@@ -323,6 +368,8 @@ export async function buildUserContextService(userId) {
   }
   const training = summariseTrainingProfile(authProfile);
   if (training) parts.push(training);
+  const wellness = summariseWellnessProfile(authProfile);
+  if (wellness) parts.push(wellness);
   // Right after "how they train": both are stable facts, so both stay in the
   // byte-identical (cached) front of the prompt. Fixed phrases only.
   const homeSetup = summariseHomeSetup(personalisation);
