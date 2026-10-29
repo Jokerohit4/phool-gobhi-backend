@@ -47,3 +47,19 @@ export async function hasCurrentNutritionTarget(prisma, userId) {
   const row = await currentNutritionTarget(prisma, userId);
   return Boolean(row);
 }
+
+/** Target effective on a calendar day; pre-history days use the oldest target. */
+export async function nutritionTargetOn(prisma, userId, localDate) {
+  return await prisma.nutritionTarget.findFirst({
+    where: { userId, effectiveFrom: { lte: localDate } },
+    orderBy: { effectiveFrom: 'desc' },
+  }) ?? await prisma.nutritionTarget.findFirst({
+    where: { userId }, orderBy: { effectiveFrom: 'asc' },
+  });
+}
+
+/** Resolve a fetched history without issuing a query for every day. */
+export function nutritionTargetFromHistory(history, localDate) {
+  const sorted = [...history].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  return sorted.filter(row => row.effectiveFrom <= localDate).at(-1) ?? sorted[0] ?? null;
+}
