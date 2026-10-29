@@ -402,7 +402,7 @@ export const FEATURE_FLAGS = [
     group: 'coach',
     dataClass: 'health-derived',
     blastRadius: 'Weekly habit summary read endpoint and client entry points',
-    rationale: 'Weekly food, water, plan and workout review; defaults off in production and is enabled for development dogfood only.',
+    rationale: 'Weekly food, water, plan and workout review; defaults off and uses the existing admin app-config override for development dogfood.',
   },
   {
     name: 'coachJourney',
@@ -507,9 +507,7 @@ export const flagNames = () => FEATURE_FLAGS.map((f) => f.name);
 export function defaultFeatures() {
   const out = {};
   for (const flag of FEATURE_FLAGS) {
-    out[flag.name] = { enabled: flag.name === 'weeklySummary'
-      ? (process.env.APP_ENV === 'dev' || /-dev$/.test(process.env.K_SERVICE ?? ''))
-      : flag.defaultEnabled };
+    out[flag.name] = { enabled: flag.defaultEnabled };
   }
   return out;
 }

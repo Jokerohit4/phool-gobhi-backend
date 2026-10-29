@@ -40,3 +40,21 @@ Database range tests require RUN_WEEK_SUMMARY_DB_TESTS=1 and an explicit,
 disposable TEST_DATABASE_URL. They are intentionally not run in this task.
 check:drift requires DEV_DATABASE_URL and cannot pass offline; static migration
 parity tests remain part of npm test. No real database may be queried here.
+
+
+## Enable in development through the existing admin override
+
+weeklySummary has defaultEnabled:false in every environment. As a gobhi admin,
+on the **dev auth-service** (not production):
+
+1. GET /app-config/admin and retain the entire response.data config object.
+2. Set config.features.weeklySummary = { "enabled": true }, preserving all other
+   config fields and feature entries. Ensure coachJourney is enabled through the
+   same existing override mechanism if it is not already on.
+3. PUT /app-config/admin with { "config": <the complete updated config>,
+   "note": "Enable weekly summary dev dogfood" }.
+4. Verify GET /app-config returns features.weeklySummary.enabled = true. Allow
+   the health-service feature cache (30 seconds) to refresh.
+
+The admin PUT replaces the whole stored config; it is not a partial update.
+These are operator instructions only. No admin request was sent in this task.
