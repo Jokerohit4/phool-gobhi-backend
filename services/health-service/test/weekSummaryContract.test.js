@@ -37,7 +37,7 @@ before(async (t) => {
   t.mock.module('../services/coachConsentService.js',{exports:{hasCoachScopeService:async()=>basic}});
   t.mock.module('../services/plan/layerState.js',{exports:{
     getLayers:async()=>[],
-    getOnLayerKeys:async()=>layers.filter(l=>l!=='food'||(flags.healthMetrics&&flags.healthLedger)),
+    getOnLayerKeys:async()=>layers,
   }});
   t.mock.module('../services/plan/rowProgress.js',{exports:{resolveDay:async(_db,{localDate})=>{assert.equal(localDate,'2026-10-30');return {counts:{done:1,total:3},earned:10,target:30};}}});
   t.mock.module('../services/goalService.js',{exports:{resolveGoalService:async(_id,options)=>{assert.equal(options.persist,false);return {sessionsPerWeek:4,source:'user'};}}});
@@ -109,4 +109,15 @@ test('service survives cache outage and retains pending photos as partial',async
   reset();logs[0].nutrients={unknown:true};
   const data=await getWeekSummary(prisma,{userId:7},{cache:{get:async()=>{throw Error('offline');},set:async()=>{throw Error('offline');}}});
   assert.equal(data.days[0].food.status,'partial');assert.equal(data.days[0].food.pendingCount,1);assert.equal(data.totals.food.daysComplete,3);
+});
+
+
+test('food flag withdrawal omits cached food and skips its range query for either flag',async()=>{
+  for(const flag of ['healthMetrics','healthLedger']) {
+    reset();await request();flags[flag]=false;calls=[];
+    const {status,body}=await request();assert.equal(status,200);
+    assert.ok(!body.data.layers.includes('food'),flag);assert.ok(!('food' in body.data.totals),flag);
+    for(const day of body.data.days)assert.ok(!('food' in day),flag);
+    assert.ok(!calls.some(c=>c[0]==='food'),flag);
+  }
 });

@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { isoDayIST, weekStartOf, weekDays, shiftDay, COUNTED_WORKOUT_WHERE } from '../utils/sessionDay.js';
 import { isIsoDay } from './ledger/isoDay.js';
 import { sumFoodLogs } from './ledger/nutritionService.js';
@@ -30,7 +31,12 @@ export async function weekSummaryAccess(prisma, userId) {
     layers: (progress.unlocked ?? []).map(u => ({ layer: u.layer, unlocked: true, unlockedAt: u.at })),
   };
   const state = await getLayers(prisma, userId, { journey });
-  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers: state });
+  const resolvedKeys = await getOnLayerKeys(prisma, userId, { journey, layers: state });
+  const [healthMetrics, healthLedger] = await Promise.all([
+    isFeatureEnabled('healthMetrics'), isFeatureEnabled('healthLedger'),
+  ]);
+  // Enforce the food gate here too, including keys passed to today's resolver.
+  const onLayerKeys = resolvedKeys.filter(key => key !== 'food' || (healthMetrics && healthLedger));
   const layers = ['plan'];
   if (onLayerKeys.includes('food')) layers.push('food');
   if (onLayerKeys.includes('water')) layers.push('water');
