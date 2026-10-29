@@ -619,6 +619,35 @@ export function mealSlotFor(now) {
   return 'dinner';
 }
 
+// How often each food is logged, across everyone, refreshed at most every ten
+// minutes: ordering the prompt does not need to be live, and a count over the
+// whole diary on every photo would not be free.
+const POPULARITY_TTL_MS = 10 * 60 * 1000;
+let popularity = { at: 0, counts: new Map() };
+
+async function popularFirst(prisma, catalogueRows, now) {
+  if (now.getTime() - popularity.at > POPULARITY_TTL_MS) {
+    try {
+      const rows = await prisma.foodLog.groupBy({
+        by: ['foodItemId'], where: { foodItemId: { not: null } }, _count: { foodItemId: true },
+      });
+      popularity = { at: now.getTime(), counts: new Map(rows.map((r) => [r.foodItemId, r._count?.foodItemId || 0])) };
+    } catch (err) {
+      // Ordering is an optimisation; a failed count must not fail the photo.
+      console.error('[foodPhoto] popularity count failed', err?.code);
+      return catalogueRows;
+    }
+  }
+  const count = (row) => popularity.counts.get(row.id) || 0;
+  // Stable sort: equal counts keep the catalogue's alphabetical order.
+  return [...catalogueRows].sort((a, b) => count(b) - count(a));
+}
+
+// Test seam: forget the cached counts.
+export function resetPopularityCache() {
+  popularity = { at: 0, counts: new Map() };
+}
+
 const SHORTLIST_PERSONAL = 30;
 const SHORTLIST_SLOT = 20;
 const SHORTLIST_POPULAR = 20;
@@ -630,10 +659,12 @@ const SHORTLIST_POPULAR = 20;
  * what we already know: this person's frequent foods, what people log in this
  * meal slot, and what is logged most overall. It is a hint, never a limit -
  * the model may name anything, and every proposed name still goes through the
- * full-catalogue search in findRow. Off (the default) sends the whole catalogue.
+ * full-catalogue search in findRow. Off (the default) sends the whole catalogue,
+ * most-logged first, so the prompt's character cap keeps the foods people
+ * actually eat rather than the alphabetically first ones.
  */
 export async function shortlistRows(prisma, { userId, catalogueRows, now = new Date(), enabled = false }) {
-  if (!enabled) return catalogueRows;
+  if (!enabled) return popularFirst(prisma, catalogueRows, now);
   const top = (where, take) => prisma.foodLog.groupBy({
     by: ['foodItemId'], where: { foodItemId: { not: null }, ...where },
     _count: { foodItemId: true }, orderBy: { _count: { foodItemId: 'desc' } }, take,

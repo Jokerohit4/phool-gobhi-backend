@@ -4,7 +4,9 @@ export const NUTRIENTS = ['kcal', 'proteinG', 'carbsG', 'fatG', 'fibreG',
   'ironMg', 'magnesiumMg', 'calciumMg', 'zincMg'];
 export const DIETARY_TYPES = ['veg', 'egg', 'non_veg', 'unknown'];
 const meat = /\b(chicken|mutton|meat|beef|pork|fish|rohu|prawn|shrimp|seafood|lamb|bacon|ham|gelatin)\b/i;
-const eggs = /\b(egg|eggs|omelette|omelet)\b/i;
+// "Mayonnaise without eggs", "Vegetarian egg kofta" and "egg-less" name the
+// absence of egg, so they do not make a food egg by name.
+const eggs = /(?<!\b(?:without|no|vegetarian|veg)\s)\b(egg|eggs|omelette|omelet)\b(?!-?less)/i;
 export const isGenericFoodName = (name) => /^(burger|sandwich|pizza|wrap|roll|curry)$/i.test(String(name).trim());
 const clean = (value, length = 80) => typeof value === 'string'
   ? value.trim().replace(/\s+/g, ' ').slice(0, length) : '';

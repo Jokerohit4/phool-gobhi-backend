@@ -111,6 +111,39 @@ def num(v):
         return None
 
 
+# Some INDB recipes are a family pot recorded as "serves 1", which makes one
+# "bowl" of kofta curry 700-800 g. A serving above this is replaced by INDB's
+# own typical weight for that unit (the median across its plausible recipes),
+# or dropped when the unit is too rare to have one. Unit-only labels ("1 gm")
+# are not portions at all.
+MAX_SERVING_G = 500
+NOT_A_PORTION = {'1 gm', '1 g', '1 ml'}
+
+
+def fix_servings(foods):
+    by_label = {}
+    for f in foods:
+        for s in f['servings']:
+            if s['grams'] <= MAX_SERVING_G:
+                by_label.setdefault(s['label'], []).append(s['grams'])
+    typical = {label: sorted(g)[len(g) // 2] for label, g in by_label.items() if len(g) >= 5}
+    adjusted = dropped = 0
+    for f in foods:
+        kept = []
+        for s in f['servings']:
+            if s['label'] in NOT_A_PORTION:
+                dropped += 1
+            elif s['grams'] <= MAX_SERVING_G:
+                kept.append(s)
+            elif s['label'] in typical:
+                kept.append({'label': s['label'], 'grams': typical[s['label']]})
+                adjusted += 1
+            else:
+                dropped += 1
+        f['servings'] = kept
+    print(f'servings: {adjusted} replaced by the typical weight for their unit, {dropped} dropped')
+
+
 def main(indb_path, recipes_path, sizes_path):
     ingredients = {}
     for r in rows(recipes_path):
@@ -161,6 +194,7 @@ def main(indb_path, recipes_path, sizes_path):
             'ingredients': [p for p in parts if p['grams']],
         })
 
+    fix_servings(foods)
     out = Path(__file__).with_name('indb.seed.json')
     out.write_text(json.dumps({'release': RELEASE, 'count': len(foods), 'foods': foods}, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     print(f'{len(foods)} foods -> {out}')

@@ -23,12 +23,15 @@ import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
 import { buildSearchText } from '../../services/ledger/foodMatch.js';
 import { compositionForFood, isGenericFoodName } from '../../services/ledger/foodComposition.js';
+import { FOODS } from './foods.seed.js';
 
 const data = JSON.parse(readFileSync(new URL('./indb/indb.seed.json', import.meta.url), 'utf8'));
 const SOURCE_PREFIX = `indb-${data.release}:`;
 const NOTE = `INDB ${data.release} (Anuvaad Solutions; Vijayakumar et al. 2024, Curr Dev Nutr 8(7):103790), ` +
   'used with permission. Values derived mainly from ICMR-NIN IFCT 2017. Standard recipe; home versions vary.';
 const apply = process.argv.includes('--apply');
+// Starter rows (foods.seed.js) keep their own portions when upgraded.
+const STARTER_NAMES = new Set(FOODS.map((f) => f.name.toLowerCase()));
 // Reviewed pairs: INDB code -> an existing starter row that is the same food.
 const MATCHES = JSON.parse(readFileSync(new URL('./indb/seed-matches.json', import.meta.url), 'utf8'));
 
@@ -71,10 +74,13 @@ function rowFor(food) {
   };
 }
 
+// A paired starter row keeps its own portions; INDB's serving is added, and
+// replaces an earlier INDB value with the same label on a re-run.
 function mergeServings(current, added) {
   const list = Array.isArray(current) ? [...current] : [];
   for (const s of added) {
-    if (!list.some((c) => String(c.label).toLowerCase() === String(s.label).toLowerCase())) list.push(s);
+    const i = list.findIndex((c) => String(c.label).toLowerCase() === String(s.label).toLowerCase());
+    if (i >= 0) list[i] = s; else list.push(s);
   }
   return list.slice(0, 8);
 }
@@ -96,7 +102,9 @@ try {
       await byName(row.name);
     // A paired starter row keeps the name people already search by; INDB's
     // name becomes one more alias.
-    if (existing && existing.name.toLowerCase() !== row.name.toLowerCase()) {
+    const renamed = Boolean(existing) && existing.name.toLowerCase() !== row.name.toLowerCase();
+    const starter = Boolean(existing) && STARTER_NAMES.has(existing.name.toLowerCase());
+    if (renamed) {
       row.aliases = [...new Set([...row.aliases, row.name.toLowerCase()])];
       row.name = existing.name;
     }
@@ -110,7 +118,8 @@ try {
           // Keep aliases and portion sizes people already use; INDB's serving
           // is added alongside, never in place of them.
           aliases: [...new Set([...(existing.aliases || []), ...row.aliases])],
-          servings: mergeServings(existing.servings, row.servings),
+          // A row INDB created takes INDB's servings as they stand now.
+          servings: starter ? mergeServings(existing.servings, row.servings) : row.servings,
           searchText: buildSearchText(row.name, [...new Set([...(existing.aliases || []), ...row.aliases])]),
         } });
       }

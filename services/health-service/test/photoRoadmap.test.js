@@ -4,7 +4,7 @@ import {geminiUsage,priceUsage,measuredCall} from '../services/ledger/photoMeasu
 import {duplicateKey,generationControls} from '../services/ledger/photoExperiments.js';
 import {wilson,report,validateDataset,passes} from '../services/ledger/photoEvaluation.js';
 import {initialLabel} from '../services/ledger/photoContribution.js';
-import {mealSlotFor,shortlistRows} from '../services/ledger/foodPhotoService.js';
+import {mealSlotFor,shortlistRows,resetPopularityCache} from '../services/ledger/foodPhotoService.js';
 test('missing usage differs from zero; thinking billed at output rate',()=>{
  assert.equal(geminiUsage({},'m').thinkingTokens,null);
  const u={tokensIn:100,tokensOut:20,thinkingTokens:30,cachedTokens:0};
@@ -106,7 +106,18 @@ test('meal slot follows IST, and the shortlist is a hint built from three signal
  const picked=await shortlistRows(db,{userId:5,catalogueRows:rows,now:new Date('2026-10-29T02:00:00Z'),enabled:true});
  assert.deepEqual(picked.map(r=>r.id),[1,2,3]);
  assert.equal(seen[1].slot,'breakfast');
- assert.equal(await shortlistRows(db,{userId:5,catalogueRows:rows,enabled:false}),rows);
+});
+test('with the shortlist off, the whole catalogue goes most-logged first, then alphabetical',async()=>{
+ resetPopularityCache();
+ const rows=[{id:1,name:'A'},{id:2,name:'B'},{id:3,name:'C'}];
+ const db={foodLog:{groupBy:async()=>[{foodItemId:3,_count:{foodItemId:9}},{foodItemId:2,_count:{foodItemId:1}}]}};
+ const ordered=await shortlistRows(db,{userId:5,catalogueRows:rows,now:new Date('2026-10-29T00:00:00Z'),enabled:false});
+ assert.deepEqual(ordered.map(r=>r.id),[3,2,1]);
+ assert.deepEqual(rows.map(r=>r.id),[1,2,3],'the input list is not reordered in place');
+ // A failed count falls back to the catalogue order instead of failing the photo.
+ resetPopularityCache();
+ const failing={foodLog:{groupBy:async()=>{throw new Error('down');}}};
+ assert.deepEqual((await shortlistRows(failing,{userId:5,catalogueRows:rows,enabled:false})).map(r=>r.id),[1,2,3]);
 });
 test('pass rule: not worse than the current setup on precision or unknown foods',()=>{
  const rules={precisionLower:.9,minCoverage:.3};
