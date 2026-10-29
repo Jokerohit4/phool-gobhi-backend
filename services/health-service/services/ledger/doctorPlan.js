@@ -1,7 +1,8 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 import { isIsoDay } from './isoDay.js';
 
 const invalid = message => Object.assign(new Error(message), { status: 400 });
-export function validateDoctorPlan(input, today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })) {
+export function validateDoctorPlan(input, today = isoDayIST()) {
   if (!input || typeof input !== 'object' || Array.isArray(input) || input.confirmed !== true)
     throw invalid('Confirm that these answers match your doctor’s instructions.');
   if (!isIsoDay(input.startsOn) || (input.endsOn != null && (!isIsoDay(input.endsOn) || input.endsOn < input.startsOn)))

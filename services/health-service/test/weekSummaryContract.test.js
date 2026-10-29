@@ -121,3 +121,11 @@ test('food flag withdrawal omits cached food and skips its range query for eithe
     assert.ok(!calls.some(c=>c[0]==='food'),flag);
   }
 });
+
+test('a day under a doctor plan is judged against the doctor kcal target',async()=>{
+  reset();
+  const doctorPlan=async(_p,_u,day)=>day===dates[0]?{id:5,startsOn:day,endsOn:day,targets:{kcal:4321}}:null;
+  const data=await getWeekSummary(prisma,{userId:7},{cache:{get:async()=>null,set:async()=>{}},doctorPlan});
+  assert.equal(data.days[0].food.targetKcal,4321);
+  assert.notEqual(data.days[1].food?.targetKcal,4321);
+});

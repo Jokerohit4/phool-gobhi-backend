@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import { lookupFood } from '../services/ledger/foodTextLookup.js';
 import { getSharingPreference, setSharingPreference, withdrawSharing, tryShareConfirmedPhoto } from '../services/ledger/photoSharingService.js';
 import { sweepContributions, contribute } from '../services/ledger/photoContribution.js';
@@ -1005,5 +1006,5 @@ export const lookupFoodByText = handle(async req => {
 
 export const previewFoodScores = handle(async req => scoreService.previewFoodScores(prisma, {
   userId: req.userId, localDate: req.body?.localDate, items: req.body?.items,
-  today: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+  today: isoDayIST(),
 }));

@@ -26,8 +26,9 @@
  * re-selecting the same six columns differently.
  */
 import { activeDoctorPlan, applyDoctorTargets } from './doctorPlan.js';
+import { isoDayIST } from '../../utils/sessionDay.js';
 export async function currentNutritionTarget(prisma, userId, localDate) {
-  const day = localDate || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const day = localDate || isoDayIST();
   const target = await prisma.nutritionTarget.findFirst({
     where: { userId },
     orderBy: { effectiveFrom: 'desc' },
@@ -50,12 +51,14 @@ export async function hasCurrentNutritionTarget(prisma, userId) {
 
 /** Target effective on a calendar day; pre-history days use the oldest target. */
 export async function nutritionTargetOn(prisma, userId, localDate) {
-  return await prisma.nutritionTarget.findFirst({
+  const base = await prisma.nutritionTarget.findFirst({
     where: { userId, effectiveFrom: { lte: localDate } },
     orderBy: { effectiveFrom: 'desc' },
   }) ?? await prisma.nutritionTarget.findFirst({
     where: { userId }, orderBy: { effectiveFrom: 'asc' },
   });
+  // Same doctor override the day's score used, so history agrees with it.
+  return applyDoctorTargets(base, await activeDoctorPlan(prisma, userId, localDate));
 }
 
 /** Resolve a fetched history without issuing a query for every day. */

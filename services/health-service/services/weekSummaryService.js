@@ -3,6 +3,7 @@ import { isoDayIST, weekStartOf, weekDays, shiftDay, COUNTED_WORKOUT_WHERE } fro
 import { isIsoDay } from './ledger/isoDay.js';
 import { sumFoodLogs } from './ledger/nutritionService.js';
 import { nutritionTargetFromHistory } from './ledger/currentTarget.js';
+import { activeDoctorPlan, applyDoctorTargets } from './ledger/doctorPlan.js';
 import { resolveDay } from './plan/rowProgress.js';
 import { getLayers, getOnLayerKeys } from './plan/layerState.js';
 import { hasCoachScopeService } from './coachConsentService.js';
@@ -72,6 +73,10 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
     layers.length ? prisma.healthGoal.findUnique({ where: { userId } }) : null,
     layers.length ? (deps.showedUp ?? ((id, from, to) => getShowedUpDays(id, from, { to, limit: 7 })))(userId, weekStart, weekEnd) : [],
   ]);
+  // The doctor override that applied on each day, as the score saw it.
+  const needsTargets = layers.some(l => l === 'food' || l === 'water');
+  const doctorPlans = new Map(needsTargets ? await Promise.all(dates.filter(d => d <= today)
+    .map(async d => [d, await (deps.doctorPlan ?? activeDoctorPlan)(prisma, userId, d)])) : []);
   const snapshotByDay = new Map(snapshots.map(s => [s.localDate, s]));
   const waterByDay = new Map(waterRows.map(r => [r.localDate, Number(r._sum.ml) || 0]));
   const showedUpDays = new Set(showedUp);
@@ -94,7 +99,7 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
         day.plan = { ...live.counts, targetHit: live.earned >= live.target, source: 'live' };
       }
     }
-    const target = nutritionTargetFromHistory(history, localDate);
+    const target = applyDoctorTargets(nutritionTargetFromHistory(history, localDate), doctorPlans.get(localDate) ?? null);
     if (layers.includes('food')) {
       if (isFuture) day.food = null;
       else {
