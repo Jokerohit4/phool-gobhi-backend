@@ -82,7 +82,7 @@ export function isQualifyingSession(session) {
  * Get showed-up days by combining booking-service checkin-days with qualifying workout days.
  * Returns distinct IST days (YYYY-MM-DD), newest first, capped at 90 days.
  */
-export async function getShowedUpDays(userId, from = null) {
+export async function getShowedUpDays(userId, from = null, { to = null, limit = 90 } = {}) {
   const [bookingDays, workoutDays] = await Promise.all([
     // booking-service internal endpoint returns {days: ["YYYY-MM-DD", ...]} distinct union
     // of Booking.attendedAt, MemberAttendance.date, IndependentCheckIn.date (IST)
@@ -93,10 +93,10 @@ export async function getShowedUpDays(userId, from = null) {
   ]);
 
   const allDays = new Set([...bookingDays, ...workoutDays]);
-  let daysArray = Array.from(allDays).sort().reverse(); // newest first
+  let daysArray = Array.from(allDays).filter(day => !to || day <= to).sort().reverse(); // newest first
 
-  if (daysArray.length > 90) {
-    daysArray = daysArray.slice(0, 90);
+  if (daysArray.length > limit) {
+    daysArray = daysArray.slice(0, limit);
   }
 
   return daysArray;

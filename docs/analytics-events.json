@@ -1287,5 +1287,30 @@
     "source": "client",
     "service": "auth-service",
     "experiment_variant": ""
+  },
+  "week_summary_viewed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_week_changed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_prompt_shown": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_prompt_tapped": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_prompt_dismissed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
   }
 }

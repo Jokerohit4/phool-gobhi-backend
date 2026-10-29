@@ -1941,6 +1941,8 @@ model ScoreDaySnapshot {
   close        Int
   // [{ key, label, kind, points, detail }] — every line, earned and lost.
   breakdown    Json
+  // Frozen plan counts/target decision; null for legacy days that cannot be reconstructed.
+  planSummary Json?
   rulesVersion String
   // A day inside a pause. The OHLC are all equal on such a day and the breakdown
   // is empty, so this flag is what separates "paused" from "a day where nothing

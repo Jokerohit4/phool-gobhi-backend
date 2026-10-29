@@ -1,0 +1,214 @@
+{
+  "data": {
+    "weekStart": "2026-10-26",
+    "weekEnd": "2026-11-01",
+    "isCurrentWeek": true,
+    "prevWeek": "2026-10-19",
+    "nextWeek": null,
+    "daysElapsed": 5,
+    "pausedDays": 2,
+    "layers": [
+      "plan",
+      "food",
+      "water",
+      "workouts"
+    ],
+    "days": [
+      {
+        "localDate": "2026-10-26",
+        "isToday": false,
+        "isFuture": false,
+        "paused": false,
+        "plan": {
+          "done": 2,
+          "total": 3,
+          "targetHit": false,
+          "source": "snapshot"
+        },
+        "food": {
+          "status": "on_target",
+          "logCount": 2,
+          "mealSlotsCovered": 2,
+          "kcal": 1800,
+          "targetKcal": 2000,
+          "pendingCount": 0
+        },
+        "water": {
+          "ml": 2200,
+          "targetMl": 2000,
+          "met": true
+        },
+        "workout": {
+          "counted": true
+        },
+        "showedUp": true
+      },
+      {
+        "localDate": "2026-10-27",
+        "isToday": false,
+        "isFuture": false,
+        "paused": true,
+        "plan": {
+          "done": 2,
+          "total": 3,
+          "targetHit": false,
+          "source": "snapshot"
+        },
+        "food": {
+          "status": "on_target",
+          "logCount": 2,
+          "mealSlotsCovered": 2,
+          "kcal": 1800,
+          "targetKcal": 2000,
+          "pendingCount": 0
+        },
+        "water": {
+          "ml": 2200,
+          "targetMl": 2000,
+          "met": true
+        },
+        "workout": {
+          "counted": false
+        },
+        "showedUp": false
+      },
+      {
+        "localDate": "2026-10-28",
+        "isToday": false,
+        "isFuture": false,
+        "paused": false,
+        "plan": {
+          "done": 2,
+          "total": 3,
+          "targetHit": false,
+          "source": "snapshot"
+        },
+        "food": {
+          "status": "on_target",
+          "logCount": 2,
+          "mealSlotsCovered": 2,
+          "kcal": 1800,
+          "targetKcal": 1800,
+          "pendingCount": 0
+        },
+        "water": {
+          "ml": 2200,
+          "targetMl": 2500,
+          "met": false
+        },
+        "workout": {
+          "counted": true
+        },
+        "showedUp": true
+      },
+      {
+        "localDate": "2026-10-29",
+        "isToday": false,
+        "isFuture": false,
+        "paused": false,
+        "plan": {
+          "done": 2,
+          "total": 3,
+          "targetHit": false,
+          "source": "snapshot"
+        },
+        "food": {
+          "status": "on_target",
+          "logCount": 2,
+          "mealSlotsCovered": 2,
+          "kcal": 1800,
+          "targetKcal": 1800,
+          "pendingCount": 0
+        },
+        "water": {
+          "ml": 2200,
+          "targetMl": 2500,
+          "met": false
+        },
+        "workout": {
+          "counted": false
+        },
+        "showedUp": false
+      },
+      {
+        "localDate": "2026-10-30",
+        "isToday": true,
+        "isFuture": false,
+        "paused": true,
+        "plan": {
+          "done": 1,
+          "total": 3,
+          "targetHit": false,
+          "source": "live"
+        },
+        "food": {
+          "status": "in_progress",
+          "logCount": 2,
+          "mealSlotsCovered": 2,
+          "kcal": 1800,
+          "targetKcal": 1800,
+          "pendingCount": 0
+        },
+        "water": {
+          "ml": 2200,
+          "targetMl": 2500,
+          "met": false
+        },
+        "workout": {
+          "counted": false
+        },
+        "showedUp": false
+      },
+      {
+        "localDate": "2026-10-31",
+        "isToday": false,
+        "isFuture": true,
+        "paused": false,
+        "plan": null,
+        "food": null,
+        "water": null,
+        "workout": null,
+        "showedUp": null
+      },
+      {
+        "localDate": "2026-11-01",
+        "isToday": false,
+        "isFuture": true,
+        "paused": false,
+        "plan": null,
+        "food": null,
+        "water": null,
+        "workout": null,
+        "showedUp": null
+      }
+    ],
+    "totals": {
+      "plan": {
+        "daysTargetHit": 0,
+        "done": 6,
+        "total": 9,
+        "denominatorDays": 3,
+        "source": "snapshot"
+      },
+      "food": {
+        "daysLogged": 3,
+        "daysComplete": 3,
+        "daysOnTarget": 3,
+        "weekKcal": 5400,
+        "weekTargetKcal": 5600,
+        "avgKcalCompleteDays": 1800,
+        "denominatorDays": 3
+      },
+      "water": {
+        "daysMet": 1,
+        "avgMl": 2200,
+        "denominatorDays": 3
+      },
+      "workouts": {
+        "completed": 3,
+        "goal": 4,
+        "source": "user"
+      }
+    }
+  }
+}

@@ -45,7 +45,7 @@ const INTENT_TO_SESSIONS = {
 
 /// Resolves the user's target, persisting a derived one the first time so
 /// the number doesn't move under them between renders.
-export async function resolveGoalService(userId) {
+export async function resolveGoalService(userId, { persist = true } = {}) {
   const existing = await prisma.weeklyGoal.findUnique({ where: { userId } });
   if (existing) {
     return {
@@ -62,7 +62,7 @@ export async function resolveGoalService(userId) {
   // doesn't silently move a target the user has been measuring against —
   // and so a transient auth-service failure can't hand them a different
   // number on the next render.
-  await prisma.weeklyGoal.create({
+  if (persist) await prisma.weeklyGoal.create({
     data: { userId, sessionsPerWeek, setByUser: false },
   });
 

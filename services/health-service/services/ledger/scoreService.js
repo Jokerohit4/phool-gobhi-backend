@@ -211,6 +211,10 @@ export async function closeDay(prisma, { userId, localDate, today }) {
         low: finalDay.low,
         close: finalDay.close,
         breakdown: finalDay.breakdown,
+        planSummary: {
+          done: resolved.counts.done, total: resolved.counts.total,
+          targetHit: earned >= target,
+        },
         paused: finalDay.paused === true,
         rulesVersion: finalDay.rulesVersion || RULES_VERSION,
       },

@@ -567,6 +567,11 @@ export async function getDayTotals(prisma, userId, localDate) {
     orderBy: [{ slot: 'asc' }, { createdAt: 'asc' }],
   });
 
+  return { localDate, ...sumFoodLogs(logs) };
+}
+
+// Shared snapshot summing for day and range readers, including pending photos.
+export function sumFoodLogs(logs) {
   const bySlot = {};
   for (const slot of MEAL_SLOTS) {
     bySlot[slot] = { totals: emptyTotals(), count: 0, pendingCount: 0 };
@@ -586,7 +591,7 @@ export async function getDayTotals(prisma, userId, localDate) {
     addInto(day, log.nutrients);
   }
 
-  return { localDate, totals: day, bySlot, logCount: logs.length, pendingCount, logs };
+  return { totals: day, bySlot, logCount: logs.length, pendingCount, logs };
 }
 
 /**
