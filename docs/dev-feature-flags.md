@@ -1,5 +1,20 @@
 # Dev feature flags enabled
 
+## Weekly habit summary activation, 30 October 2026
+
+At the owner's request, the dev config now enables `weeklySummary` (registered
+with a false default and a `coachJourney` dependency; `coachJourney` was already
+on). Only `weeklySummary` changed, written to the stored AppVersionSetting
+features with an AppConfigHistory row (changedBy null, note "Dev testing
+activation of weekly habit summary"). The public dev app-config verifies it
+enabled; the only flags still off in dev are `otp` and `profileCompletionBonus`.
+
+The same day, closed-day behavioral averaging (B0.7,
+`USE_CLOSED_DAY_BEHAVIORAL_AVERAGE`) was switched on in dev code for testing,
+without the prod four-week comparison. It is a code constant, so it reaches
+prod with the next dev->main merge: review it before that merge. Production
+config, services and data were untouched.
+
 ## First-run Home activation, 26 October 2026
 
 At the owner's request, the dev config now explicitly enables `homeIntroduction`
