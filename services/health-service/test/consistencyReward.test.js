@@ -49,10 +49,16 @@ test('setup: mock the coin credit and Prisma, import once', async (t) => {
   ({ evaluateUserReward, weekStartIST } = await import('../services/rewardService.js'));
 });
 
-test('average is over all seven days - missing days count as zero', async () => {
-  snapshots = week(USER, 500, 3); // three perfect days, four missing
+test('fewer than four closed days is not enough data, never a qualifying number', async () => {
+  snapshots = week(USER, 500, 3); // three perfect days, four never closed
   const avg = await behavioralAverages(fakePrisma, { userIds: [USER], today: TODAY });
-  assert.equal(avg.get(USER), 42.9);
+  assert.equal(avg.get(USER), null);
+});
+
+test('missing days are not counted as zero once four days closed', async () => {
+  snapshots = week(USER, 500, 4);
+  const avg = await behavioralAverages(fakePrisma, { userIds: [USER], today: TODAY });
+  assert.equal(avg.get(USER), 100);
 });
 
 test('a full week at close 400 averages exactly 80, today excluded', async () => {
@@ -105,14 +111,14 @@ test('a failed credit is reported, not swallowed as rewarded', async () => {
 });
 
 
-test('league responses include closed-day coverage without changing the old average', async () => {
+test('league responses average over closed days and include coverage', async () => {
   snapshots = week(USER, 500, 4);
   const result = await getBatchBehavioralConsistency(fakePrisma, { userIds: [USER], today: TODAY });
-  assert.deepEqual(result, [{ userId: USER, avgScore: 57.1, closedDays: 4 }]);
+  assert.deepEqual(result, [{ userId: USER, avgScore: 100, closedDays: 4 }]);
 });
 
 
-test('score card exposes closedDays while keeping the old average', async t => {
+test('score card exposes closedDays and reports too few closed days as null', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-08T10:00:00Z') });
   snapshots = week(USER, 500, 3);
   const { getBlendedScore } = await import('../services/ledger/scoreService.js');
@@ -122,5 +128,5 @@ test('score card exposes closedDays while keeping the old average', async t => {
   };
   const result = await getBlendedScore(db, { userId: USER });
   assert.equal(result.closedDays, 3);
-  assert.equal(result.behavioralAvg7Day, 42.9);
+  assert.equal(result.behavioralAvg7Day, null);
 });

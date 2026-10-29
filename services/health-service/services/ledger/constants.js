@@ -346,6 +346,8 @@ export const PRESCRIPTION_RULES_VERSION = 'v1';
 // (300-540) is in PRESCRIPTION_BOUNDS; this is only the starting point.
 export const DEFAULT_SLEEP_MINUTES = 420;
 
-// B0.7 rollout gate. Keep false until the four-week comparison is reviewed.
-// Changing this affects the consistency bar, weekly coins and buddy leagues.
-export const USE_CLOSED_DAY_BEHAVIORAL_AVERAGE = false;
+// B0.7 rollout gate. Enabled on dev for testing (owner decision 2026-10-30);
+// the prod four-week comparison has not been run. This is a code constant, so
+// it reaches prod with the next dev->main merge: review it before that merge.
+// Affects the consistency bar, weekly coins and buddy leagues.
+export const USE_CLOSED_DAY_BEHAVIORAL_AVERAGE = true;

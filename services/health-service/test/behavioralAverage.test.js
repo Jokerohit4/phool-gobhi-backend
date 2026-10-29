@@ -4,10 +4,11 @@ import { behavioralAverageForSnapshots } from '../services/ledger/behavioralAver
 import { USE_CLOSED_DAY_BEHAVIORAL_AVERAGE } from '../services/ledger/constants.js';
 import { compareBehavioralAverages, comparisonRange } from '../scripts/compare-behavioral-avg.mjs';
 const rows = (n,close=500) => Array.from({length:n},()=>({close}));
-test('rollout gate is off and missing days still count as zero by default',()=>{
-  assert.equal(USE_CLOSED_DAY_BEHAVIORAL_AVERAGE,false);
-  assert.deepEqual(behavioralAverageForSnapshots(rows(3)),{avgScore:42.9,closedDays:3});
-  assert.deepEqual(behavioralAverageForSnapshots([]),{avgScore:0,closedDays:0});
+test('rollout gate is on: closed days are the denominator, legacy rule still available',()=>{
+  assert.equal(USE_CLOSED_DAY_BEHAVIORAL_AVERAGE,true);
+  assert.deepEqual(behavioralAverageForSnapshots(rows(3)),{avgScore:null,closedDays:3});
+  assert.deepEqual(behavioralAverageForSnapshots([]),{avgScore:null,closedDays:0});
+  assert.deepEqual(behavioralAverageForSnapshots(rows(3),{useClosedDays:false}),{avgScore:42.9,closedDays:3});
 });
 test('proposed averaging needs four closed days and shares normalization/rounding',()=>{
   for(const n of [0,1,2,3])assert.deepEqual(behavioralAverageForSnapshots(rows(n),{useClosedDays:true}),{avgScore:null,closedDays:n});

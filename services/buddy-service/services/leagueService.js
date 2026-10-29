@@ -71,7 +71,8 @@ export async function getConsistencyLeague(userId) {
       return {
         userId: uid,
         name: nameById.get(uid) || 'Buddy',
-        score: s ? s.avgScore : 0,
+        // null = fewer than four closed days: ranks like no data.
+        score: s?.avgScore ?? 0,
         isMe: uid === userId,
       };
     }).sort((a, b) => b.score - a.score);
