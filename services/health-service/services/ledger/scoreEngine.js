@@ -512,9 +512,9 @@ export function checkForLowIntakeRun(snapshots) {
     const unlogged = breakdown.some(l => l.key === 'no_meals_logged');
     const low = breakdown.some(l => l.key === 'calories_off_target' && l.direction === 'low');
     if (unlogged) {
-      // Empty logs cannot start a low-intake claim. After logged low days they
-      // continue the concern rather than making it disappear.
-      if (run > 0) run++;
+      // Missing intake evidence bridges existing low days without adding
+      // another low day, and cannot start a run on its own.
+      continue;
     } else if (low) run++;
     else run = 0;
   }

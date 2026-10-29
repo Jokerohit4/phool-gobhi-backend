@@ -919,11 +919,25 @@ test('safety pause mid-run neither breaks nor extends five active calendar days'
   assert.equal(checkForLowIntakeRun(days.slice(0,5)),null);
   assert.equal(checkForLowIntakeRun(days).days,5);
 });
-test('safety unlogged days continue a logged low run; unlogged alone cannot start it', () => {
-  const days = ['2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24'].map((d,i)=>concernDay(d,i<2?'calories_off_target':'no_meals_logged'));
+test('safety one low day plus four unlogged days does not fire', () => {
+  const days = ['2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24']
+    .map((d,i)=>concernDay(d,i===0?'calories_off_target':'no_meals_logged'));
+  assert.equal(checkForLowIntakeRun(days),null);
+});
+test('safety five low days bridged by unlogged days reports actual low days', () => {
+  const days = Array.from({length:9},(_,i)=>concernDay(`2026-10-${20+i}`,
+    i%2===0?'calories_off_target':'no_meals_logged'));
+  assert.equal(checkForLowIntakeRun(days.slice(0,8)),null);
   assert.equal(checkForLowIntakeRun(days).days,5);
-  const empty = days.map(d=>({...d,breakdown:[{key:'no_meals_logged'},{key:'calories_off_target',direction:'low'}]}));
-  assert.equal(checkForLowIntakeRun(empty),null);
+});
+test('safety unlogged days before any low day do not start a run', () => {
+  const days = Array.from({length:8},(_,i)=>concernDay(`2026-10-${20+i}`,
+    i<4?'no_meals_logged':'calories_off_target'));
+  assert.equal(checkForLowIntakeRun(days.slice(0,4)),null);
+  assert.equal(checkForLowIntakeRun(days),null);
+  // Even a low-direction line on an otherwise unlogged day is not evidence.
+  for (const day of days.slice(0,4)) day.breakdown.push({key:'calories_off_target',direction:'low'});
+  assert.equal(checkForLowIntakeRun(days),null);
 });
 test('safety missing dates and adequate/high days break concern; input ordering is immaterial', () => {
   const days = ['2026-10-20','2026-10-21','2026-10-23','2026-10-24','2026-10-25'].map(d=>concernDay(d));
