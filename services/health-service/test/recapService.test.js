@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 // FR-13. The risky logic here is the week bucketing (Monday-start, matching
 // challenge-service's streak weeks) and the anonymity guarantee — the payload
 // must carry numbers only, never a name/gym/photo, since the card is meant to
@@ -13,7 +14,10 @@ test('setup: mock prisma once, import recapService once', async (t) => {
     exports: {
       PrismaClient: class {
         constructor() {
-          this.workoutSession = { findMany: async () => sessions };
+          this.workoutSession = { findMany: async ({ where }) => {
+            assert.ok(where.localDate); assert.ok(!where.OR);
+            return sessions.map(row => ({ ...row, localDate: row.localDate ?? isoDayIST(row.startedAt) }));
+          } };
         }
       },
       Prisma: {},

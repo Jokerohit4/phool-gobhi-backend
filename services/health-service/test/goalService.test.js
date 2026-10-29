@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 // FR-04. Two properties matter here and neither is obvious from the code:
 //
 //   1. A derived goal is PERSISTED the first time it's resolved. If it were
@@ -43,7 +44,8 @@ test('setup: mock prisma + auth-service, import goalService once', async (t) => 
               // date window is applied by the caller's own bucketing.
               assert.equal(where.endedAt.not, null);
               assert.deepEqual(where.NOT, { type: 'rest' });
-              return sessions;
+              assert.ok(where.localDate); assert.ok(!where.OR);
+              return sessions.map(row => ({ ...row, localDate: row.localDate ?? isoDayIST(row.startedAt) }));
             },
           };
         }

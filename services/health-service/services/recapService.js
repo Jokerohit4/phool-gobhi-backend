@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import {
-  istDateString, dayString, dayToDate, addDays, startOfIsoWeek, COUNTED_WORKOUT_WHERE,
+  dayString, dayToDate, addDays, startOfIsoWeek, COUNTED_WORKOUT_WHERE,
 } from '../utils/sessionDay.js';
 const prisma = new PrismaClient();
 
@@ -28,10 +28,7 @@ export async function getWeeklyRecapService(userId, weekParam) {
     where: {
       userId,
       ...COUNTED_WORKOUT_WHERE,
-      OR: [
-        { localDate: { gte: startStr, lt: endStr } },
-        { AND: [{ localDate: null }, { startedAt: { gte: start, lt: end } }] },
-      ],
+      localDate: { gte: startStr, lt: endStr },
     },
     include: {
       exercises: {
@@ -53,7 +50,7 @@ export async function getWeeklyRecapService(userId, weekParam) {
     if (s.endedAt) minutes += Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 60000);
     if (s.rpe) { rpeSum += s.rpe; rpeCount += 1; }
 
-    const day = s.localDate || istDateString(s.startedAt);
+    const day = s.localDate;
     const dayIndex = Math.round((dayToDate(day).getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
     if (dayIndex >= 0 && dayIndex < 7) activeDays[dayIndex] = true;
 

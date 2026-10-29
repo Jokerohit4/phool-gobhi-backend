@@ -98,9 +98,8 @@ export async function setGoalService(userId, sessionsPerWeek) {
 //
 // Keyed on localDate — the day the user experienced — rather than startedAt,
 // so a session logged just after midnight or backfilled while travelling
-// lands in the week they'd expect. Sessions predating the localDate column
-// fall back to startedAt so old history isn't silently dropped from the
-// count.
+// lands in the week they'd expect. B0.4 prerequisite: run and verify the
+// localDate backfill before deploying this reader.
 async function weeklyCountsService(userId, weeks = 3) {
   const thisWeekStart = startOfIsoWeek();
   const windowStart = addDays(thisWeekStart, -7 * (weeks - 1));
@@ -109,12 +108,9 @@ async function weeklyCountsService(userId, weeks = 3) {
     where: {
       userId,
       ...COUNTED_WORKOUT_WHERE,
-      OR: [
-        { localDate: { gte: dayString(windowStart) } },
-        { AND: [{ localDate: null }, { startedAt: { gte: windowStart } }] },
-      ],
+      localDate: { gte: dayString(windowStart) },
     },
-    select: { localDate: true, startedAt: true },
+    select: { localDate: true },
   });
 
   const counts = new Map();
@@ -123,9 +119,7 @@ async function weeklyCountsService(userId, weeks = 3) {
   }
 
   for (const session of sessions) {
-    const day = session.localDate
-      ? dayToDate(session.localDate)
-      : session.startedAt;
+    const day = dayToDate(session.localDate);
     const key = dayString(startOfIsoWeek(day));
     if (counts.has(key)) counts.set(key, counts.get(key) + 1);
   }
