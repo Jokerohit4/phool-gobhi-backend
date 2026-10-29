@@ -2360,43 +2360,43 @@ model RoutineRewardClaim {
 
 // Per paid call, including failed parses and enrichment. No image or prompt content.
 model FoodPhotoUsage {
- id Int @id @default(autoincrement())
- userId Int
- requestedAt DateTime @default(now())
- stage String
- outcome String
- latencyMs Int
- model String?
- tokensIn Int?
- tokensOut Int?
- thinkingTokens Int?
- totalTokens Int?
- cachedTokens Int?
- @@index([userId, requestedAt])
- @@schema("health")
+  id Int @id @default(autoincrement())
+  userId Int
+  requestedAt DateTime @default(now())
+  stage String
+  outcome String
+  latencyMs Int
+  model String?
+  tokensIn Int?
+  tokensOut Int?
+  thinkingTokens Int?
+  totalTokens Int?
+  cachedTokens Int?
+  @@index([userId, requestedAt])
+  @@schema("health")
 }
 
 model FoodPhotoRecognitionCache {
- key String @id
- userId Int
- proposal Json
- expiresAt DateTime
- @@index([userId])
- @@index([expiresAt])
- @@schema("health")
+  key String @id
+  userId Int
+  proposal Json
+  expiresAt DateTime
+  @@index([userId])
+  @@index([expiresAt])
+  @@schema("health")
 }
 
 model FoodPhotoContribution {
- id Int @id @default(autoincrement())
- userId Int
- path String @unique
- consentVersion String
- createdAt DateTime @default(now())
- expiresAt DateTime
- label Json?
- reviewer String?
- reviewedAt DateTime?
- @@index([userId])
- @@index([expiresAt])
- @@schema("health")
+  id Int @id @default(autoincrement())
+  userId Int
+  path String @unique
+  consentVersion String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  label Json?
+  reviewer String?
+  reviewedAt DateTime?
+  @@index([userId])
+  @@index([expiresAt])
+  @@schema("health")
 }
