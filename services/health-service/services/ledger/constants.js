@@ -165,8 +165,6 @@ export const SAFETY = {
   // A run of very-low-intake days gets a gentle check-in rather than a red
   // candle.
   lowIntakeRunDays: 5,
-  lowIntakeRatio: 0.6, // below 60% of target, which is also where the daily
-  // proteinShort rule fires
 };
 
 // The activity multipliers for the intake's guess, and for the measured

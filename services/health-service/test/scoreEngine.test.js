@@ -909,3 +909,35 @@ test('rulesVersion is v2 for all days', () => {
   });
   assert.equal(day.rulesVersion, 'v2');
 });
+
+const concernDay = (localDate, key = 'calories_off_target', extra = {}) => ({
+  localDate, breakdown: [{ key, direction: 'low' }], ...extra,
+});
+test('safety pause mid-run neither breaks nor extends five active calendar days', () => {
+  const days = ['2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24','2026-10-25'].map(d=>concernDay(d));
+  days[2].paused=true;
+  assert.equal(checkForLowIntakeRun(days.slice(0,5)),null);
+  assert.equal(checkForLowIntakeRun(days).days,5);
+});
+test('safety unlogged days continue a logged low run; unlogged alone cannot start it', () => {
+  const days = ['2026-10-20','2026-10-21','2026-10-22','2026-10-23','2026-10-24'].map((d,i)=>concernDay(d,i<2?'calories_off_target':'no_meals_logged'));
+  assert.equal(checkForLowIntakeRun(days).days,5);
+  const empty = days.map(d=>({...d,breakdown:[{key:'no_meals_logged'},{key:'calories_off_target',direction:'low'}]}));
+  assert.equal(checkForLowIntakeRun(empty),null);
+});
+test('safety missing dates and adequate/high days break concern; input ordering is immaterial', () => {
+  const days = ['2026-10-20','2026-10-21','2026-10-23','2026-10-24','2026-10-25'].map(d=>concernDay(d));
+  assert.equal(checkForLowIntakeRun(days),null);
+  days[2].localDate='2026-10-22';days[3].localDate='2026-10-23';days[4].localDate='2026-10-24';
+  assert.ok(checkForLowIntakeRun(days.toReversed()));
+  days[2].breakdown[0].direction='high';assert.equal(checkForLowIntakeRun(days),null);
+});
+test('safety uses strict below 75 percent, including 60-75 percent, without parsing labels', () => {
+  for (const [ratio,expected] of [[0.59,true],[0.60,true],[0.70,true],[0.749,true],[0.75,false],[0.9,false],[1.3,false]]) {
+    const snapshots=Array.from({length:5},(_,i)=>computeDay({
+      localDate:`2026-10-${20+i}`, targets:TARGETS, totals:{...ON_TARGET,kcal:TARGETS.kcal*ratio},
+      planItems:[],closed:true,unlockedLayerKeys:['food'],
+    }));
+    assert.equal(checkForLowIntakeRun(snapshots)!==null,expected,`${ratio}`);
+  }
+});

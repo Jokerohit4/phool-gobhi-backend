@@ -1,3 +1,4 @@
+import { shiftDay } from '../../utils/sessionDay.js';
 import {
   DAILY_MAX_GAIN,
   DAILY_MAX_LOSS,
@@ -494,23 +495,34 @@ export function computeDay({
 // about the person — which is what makes it safe to show to someone who has
 // not asked for it.
 export function checkForLowIntakeRun(snapshots) {
-  if (snapshots.length < SAFETY.lowIntakeRunDays) return null;
-
-  const recent = snapshots.slice(-SAFETY.lowIntakeRunDays);
-  const lowDays = recent.filter((s) => {
-    const kcal = s.breakdown?.find((l) => l.key === 'calories_off_target');
-    // Direction is a field on the line, not something recovered from the
-    // label. Only the LOW side counts: a run of days eating far too much is a
-    // different situation and must not produce a "you may be undereating"
-    // card.
-    return kcal && kcal.direction === 'low';
-  });
-
-  if (lowDays.length < SAFETY.lowIntakeRunDays) return null;
+  // Keep the existing <75% signal: it is persisted as direction=low by the
+  // POINTS.caloriesOffTargetRatio rule. Snapshots have no numeric intake ratio,
+  // so applying 60% would require guessing from display labels or rewriting
+  // frozen history. Neither is a reliable safety decision.
+  let run = 0;
+  let previousDay = null;
+  const ordered = [...snapshots].sort((a, b) => (a.localDate ?? '').localeCompare(b.localDate ?? ''));
+  for (const snapshot of ordered) {
+    // Missing calendar dates are unknown, not additional evidence. An explicit
+    // paused snapshot bridges dates without contributing a concern day.
+    if (previousDay && snapshot.localDate && shiftDay(previousDay, 1) !== snapshot.localDate) run = 0;
+    previousDay = snapshot.localDate ?? null;
+    if (snapshot.paused) continue;
+    const breakdown = snapshot.breakdown ?? [];
+    const unlogged = breakdown.some(l => l.key === 'no_meals_logged');
+    const low = breakdown.some(l => l.key === 'calories_off_target' && l.direction === 'low');
+    if (unlogged) {
+      // Empty logs cannot start a low-intake claim. After logged low days they
+      // continue the concern rather than making it disappear.
+      if (run > 0) run++;
+    } else if (low) run++;
+    else run = 0;
+  }
+  if (run < SAFETY.lowIntakeRunDays) return null;
 
   return {
     kind: 'check_in',
-    days: lowDays.length,
+    days: run,
     // Zero and isMiss false on purpose: this is an invitation, and it must not
     // be summable into a score by a caller that adds up every line. The plan's
     // guard is that undereating is never rewarded AND never punished into a
