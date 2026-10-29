@@ -102,7 +102,11 @@ async function seed() {
     });
 
     if (existing) {
-      if (existing.verified) {
+      // A row whose numbers came from a published table (import-indb.js sets
+      // `indb-…`) is protected like a verified one: re-seeding must not put the
+      // estimates back over sourced values.
+      const sourced = existing.source != null && existing.source !== 'estimate';
+      if (existing.verified || sourced) {
         // A row a nutritionist has signed off is left completely alone.
         //
         // Preserving just the verified flag, as this did before, was worse than
