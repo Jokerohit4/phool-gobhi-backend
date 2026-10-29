@@ -1,3 +1,4 @@
+import { weekDays, weekStartOf } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { resolveDay } from './rowProgress.js';
 import { getLayers, getOnLayerKeys } from './layerState.js';
@@ -51,26 +52,10 @@ async function getPauseState(prisma, userId, localDate) {
  * @returns {object[]} Week array with 7 entries Mon-Sun
  */
 function buildWeek(showedUpDays, today) {
-  // Calendar arithmetic on a date-only UTC anchor, independent of host zone.
-  const todayDate = new Date(`${today}T00:00:00Z`);
-  const dayOfWeek = todayDate.getUTCDay();
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(todayDate);
-  monday.setUTCDate(monday.getUTCDate() + mondayOffset);
-
   const showedUpSet = new Set(showedUpDays);
-  const week = [];
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(monday);
-    day.setUTCDate(monday.getUTCDate() + i);
-    const dayStr = day.toISOString().slice(0, 10);
-    week.push({
-      localDate: dayStr,
-      showedUp: showedUpSet.has(dayStr),
-      isToday: dayStr === today,
-    });
-  }
-  return week;
+  return weekDays(weekStartOf(today)).map(localDate => ({
+    localDate, showedUp: showedUpSet.has(localDate), isToday: localDate === today,
+  }));
 }
 
 /**

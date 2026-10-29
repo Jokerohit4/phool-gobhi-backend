@@ -1,3 +1,4 @@
+import { weekStartOf } from '../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { behavioralAverages, todayIST, shiftDay, CONSISTENCY_WINDOW_DAYS } from './ledger/scoreService.js';
 import { creditWeeklyConsistencyCoins } from '../utils/notifyChallengeService.js';
@@ -15,9 +16,7 @@ export const WEEKLY_REWARD_COINS = 50;
  * without a weekly key a user above the bar would be paid every night.
  */
 export function weekStartIST(localDate) {
-  const [y, m, d] = localDate.split('-').map(Number);
-  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
-  return shiftDay(localDate, -((weekday + 6) % 7));
+  return weekStartOf(localDate);
 }
 
 /**

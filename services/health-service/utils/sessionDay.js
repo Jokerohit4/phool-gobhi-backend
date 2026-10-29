@@ -70,3 +70,23 @@ export function countsAsSession(session) {
   if (typeof session.completedSets === 'number') return session.completedSets > 0;
   return true;
 }
+
+
+// String-only calendar helpers: date strings are days, never instants.
+export const isoDayIST = istDateString;
+export function shiftDay(localDate, days) {
+  return dayString(addDays(dayToDate(localDate), days));
+}
+export function weekStartOf(localDate) {
+  return shiftDay(localDate, -((dayToDate(localDate).getUTCDay() + 6) % 7));
+}
+export function weekDays(weekStart) {
+  return Array.from({ length: 7 }, (_, i) => shiftDay(weekStart, i));
+}
+
+/* B0.8: Before launching outside India, or when >2% of active users have
+ * non-IST device timezones in analytics metadata, add an IANA timezone field
+ * (default Asia/Kolkata) to the auth-service user; propagate it as x-user-tz.
+ * These helpers should then accept a zone argument. Do not infer the user's
+ * zone from the host or apply a device offset to stored calendar-day strings.
+ */
