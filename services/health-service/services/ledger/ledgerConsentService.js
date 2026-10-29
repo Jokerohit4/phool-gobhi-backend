@@ -189,8 +189,8 @@ async function removeScope(userId, scope, { purge = false } = {}) {
   // is also why the transactions below do not delete contribution rows.
   // Imported lazily so the image library only loads where it is used.
   if (scope === PHOTO_SCOPE || scope === NUTRITION_SCOPE) {
-    const { removeContributions } = await import('./photoContribution.js');
-    await removeContributions(prisma, userId);
+    const { withdrawSharing } = await import('./photoSharingService.js');
+    await withdrawSharing(prisma, userId);
     await prisma.foodPhotoRecognitionCache.deleteMany({ where: { userId } });
   }
   const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });

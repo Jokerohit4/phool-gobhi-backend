@@ -1,3 +1,4 @@
+import { foodQueryTerms, matchesFoodAlias } from './foodNames.js';
 import { compositionForFood, assertSpecificName, isGenericFoodName } from './foodComposition.js';
 // Nutrition: search the food table, log what was eaten, aggregate a day,
 // and repeat a meal from a saved one.
@@ -144,14 +145,14 @@ export async function searchFoods(prisma, userId, { query, includeUnverified = f
   // them lowercased; `mode: 'insensitive'` makes that redundant on searchText but
   // not on the array, which has no mode. Both together so a hand-inserted
   // capitalised alias still matches.
-  const needle = q.toLowerCase();
+  const terms = foodQueryTerms(q);
   const rows = await prisma.foodItem.findMany({
     where: {
-      OR: [
-        { name: { contains: q, mode: 'insensitive' } },
-        { searchText: { contains: needle, mode: 'insensitive' } },
-        { aliases: { has: needle } },
-      ],
+      OR: terms.flatMap(term => [
+        { name: { contains: term, mode: 'insensitive' } },
+        { searchText: { contains: term, mode: 'insensitive' } },
+        { aliases: { has: term } },
+      ]),
       AND: [
         // Never another user's custom food, whichever way the flag is set. The
         // includeUnverified branch used to drop this filter entirely, which was
@@ -167,7 +168,12 @@ export async function searchFoods(prisma, userId, { query, includeUnverified = f
 
   // Shared one-word rows ("Burger") are hidden so search steers to a variant.
   // A user's own row is theirs to name, so it is never filtered out.
-  return rankFoods(rows.filter((f) => f.createdByUserId != null || !isGenericFoodName(f.name)), q);
+  const allowed = rows.filter(f => (f.createdByUserId != null || !isGenericFoodName(f.name)) && matchesFoodAlias(f,q));
+  const seen = new Set();
+  return terms.flatMap(term => rankFoods(allowed,term)).filter(food => {
+    if(seen.has(food.id))return false;
+    seen.add(food.id);return true;
+  });
 }
 
 /**
@@ -634,7 +640,7 @@ export async function deleteLog(prisma, userId, logId) {
  * Returns the row, the same shape POST /food-logs and DELETE /food-logs/:id
  * already return, so a caller has one thing to parse.
  */
-export async function updateLog(prisma, userId, logId, { grams, servings, servingLabel, slot } = {}) {
+export async function updateLog(prisma, userId, logId, { grams, servings, servingLabel, slot, foodItemId } = {}) {
   const existing = await prisma.foodLog.findFirst({
     where: { id: Number(logId), userId },
   });
@@ -649,13 +655,17 @@ export async function updateLog(prisma, userId, logId, { grams, servings, servin
     changes.slot = slot;
   }
 
-  const wantsPortion = grams != null || servings != null;
+  const wantsFood = foodItemId != null;
+  if (wantsFood && (!Number.isSafeInteger(foodItemId) || foodItemId <= 0)) {
+    throw badRequest('foodItemId must be a positive integer');
+  }
+  const wantsPortion = grams != null || servings != null || wantsFood;
   const wantsLabel = servingLabel !== undefined;
 
   if (wantsPortion) {
     const food =
-      existing.foodItemId != null
-        ? await prisma.foodItem.findUnique({ where: { id: existing.foodItemId } })
+      (wantsFood ? foodItemId : existing.foodItemId) != null
+        ? await prisma.foodItem.findUnique({ where: { id: wantsFood ? foodItemId : existing.foodItemId } })
         : null;
     if (!food) {
       throw badRequest(
@@ -672,7 +682,7 @@ export async function updateLog(prisma, userId, logId, { grams, servings, servin
       throw notFound('That food is not in the catalogue');
     }
 
-    const resolvedGrams = toGrams(grams, servings, food);
+    const resolvedGrams = toGrams(grams ?? (servings == null && wantsFood ? Number(existing.grams) : undefined), servings, food);
     if (!(resolvedGrams > 0)) {
       throw badRequest('Provide grams, or a serving count for a food that has servings');
     }
@@ -680,6 +690,11 @@ export async function updateLog(prisma, userId, logId, { grams, servings, servin
       throw badRequest(`That is over ${GRAMS_MAX} g, which is more food than one meal`);
     }
 
+    if (wantsFood) {
+      changes.foodItemId = food.id;
+      changes.name = food.name;
+      changes.nonVeg = food.nonVeg;
+    }
     changes.grams = roundTo(resolvedGrams, DECIMAL_PLACES.grams);
     changes.servings = servings != null ? Number(servings) : null;
     changes.nutrients = computePortion(food, resolvedGrams);

@@ -67,7 +67,7 @@ test('setup: stub Prisma, import once', async (t) => {
               return { count: photoPaths.length };
             },
           };
-          for (const name of ['foodPhotoUsage','foodPhotoContribution','foodPhotoRecognitionCache']) this[name]={findMany:async()=>[],deleteMany:async()=>({count:0})};
+          for (const name of ['foodPhotoUsage','foodPhotoContribution','foodPhotoRecognitionCache','foodPhotoSharingPreference']) this[name]={upsert:async()=>({}),updateMany:async()=>({count:0}),findMany:async()=>[],deleteMany:async()=>({count:0})};
           this.foodPhotoRequestLog = {
             deleteMany: async () => {
               purgeLog.push(['foodPhotoRequestLog.deleteMany', null]);
@@ -89,7 +89,8 @@ test('setup: stub Prisma, import once', async (t) => {
           this.medicalDocument = { findMany: async () => [], deleteMany: async () => ({ count: 0 }) };
           this.doctorAppointment = { deleteMany: async () => ({ count: 0 }) };
           this.healthCondition = { deleteMany: async () => ({ count: 0 }) };
-          this.$transaction = async (ops) => Promise.all(ops);
+          this.$executeRaw = async () => 1;
+          this.$transaction = async (ops) => typeof ops === 'function' ? ops(this) : Promise.all(ops);
         }
       },
     },

@@ -14,8 +14,10 @@ const error = (message, status = 400) => Object.assign(new Error(message), { sta
 
 export function dietaryTypeOf(food) {
   const types = (Array.isArray(food.ingredients) ? food.ingredients : []).map((i) => i.dietaryType);
-  if (food.dietaryType === 'non_veg' || meat.test(food.name || '') || types.includes('non_veg')) return 'non_veg';
-  if (food.dietaryType === 'egg' || eggs.test(food.name || '') || types.includes('egg')) return 'egg';
+  // Personal edited recipes can retain a source name after removing its filling.
+  const label = food.createdByUserId != null && food.baseFoodItemId != null ? '' : food.name || '';
+  if (food.dietaryType === 'non_veg' || meat.test(label) || types.includes('non_veg')) return 'non_veg';
+  if (food.dietaryType === 'egg' || eggs.test(label) || types.includes('egg')) return 'egg';
   if (DIETARY_TYPES.includes(food.dietaryType)) return food.dietaryType;
   if (types.length) return types.every((type) => type === 'veg') ? 'veg' : 'unknown';
   return food.nonVeg === true ? 'non_veg' : food.veg === true ? 'veg' : 'unknown';
@@ -107,53 +109,108 @@ export function assertSpecificName(name) {
   if (isGenericFoodName(name)) throw error('Name the variant, such as Aloo burger, Chicken burger or Egg burger.');
 }
 
-export async function customizeFood(prisma, { userId, foodItemId, baseGrams, additions, name }) {
+// Re-estimate only when removed ingredient nutrients cannot be derived from a
+// server-owned catalogue reference. No caller-supplied nutrient values are used.
+async function estimateEditedNutrition(prisma, userId, ingredients) {
+  const [{recognizeFood}, {measuredCall}, {normaliseFoodEstimate}] = await Promise.all([
+    import('./providers/index.js'), import('./photoMeasurement.js'), import('./foodPhotoCatalogue.js'),
+  ]);
+  const calls = await prisma.foodPhotoUsage.count({where:{userId,stage:'recipe_edit',requestedAt:{gte:new Date(Date.now()-3600000)}}});
+  if (calls >= 20) throw error('Too many recipe estimates. Try again later.',429);
+  const recipe = 'Edited recipe made ONLY from these cooked/as-served ingredients: ' +
+    ingredients.map(i => `${i.grams.toFixed(4)} g ${i.name}`).join('; ') +
+    '. Estimate nutrition per 100 g of this finished mixture, with no other ingredients.';
+  try {
+    const result = await measuredCall(prisma,userId,'recipe_edit',()=>recognizeFood({enrichmentName:recipe}));
+    const nutrition = normaliseFoodEstimate(result.items?.[0]?.nutrition);
+    if (!result.isFood || !nutrition) throw new Error('invalid nutrition');
+    return nutrition;
+  } catch { throw error('Could not estimate the edited recipe nutrition. Please try again.',502); }
+}
+
+export async function customizeFood(prisma, {
+  userId, foodItemId, baseGrams, additions = [], removals = [], name,
+}, {estimateNutrition = estimateEditedNutrition} = {}) {
   const weight = Number(baseGrams);
   if (!Number.isSafeInteger(Number(foodItemId)) || !(weight > 0 && weight <= 5000) ||
-      !Array.isArray(additions) || !additions.length || additions.length > 20) throw error('Choose ingredients and their amounts.');
-  const selected = additions.map((a) => ({ id: Number(a.foodItemId), grams: Number(a.grams) }));
-  if (selected.some((a) => !Number.isSafeInteger(a.id) || a.id <= 0 || !Number.isFinite(a.grams) || a.grams <= 0 || a.grams > 5000)) {
+      !Array.isArray(additions) || additions.length > 20 || !Array.isArray(removals) ||
+      removals.length > 40 || (!additions.length && !removals.length)) throw error('Choose ingredients to add or remove.');
+  const selected = additions.map(a => ({id:Number(a.foodItemId),grams:Number(a.grams)}));
+  if (selected.some(a => !Number.isSafeInteger(a.id) || a.id <= 0 || !Number.isFinite(a.grams) || a.grams <= 0 || a.grams > 5000)) {
     throw error('Each ingredient needs a valid food and an amount in grams.');
   }
-  const total = weight + selected.reduce((sum, a) => sum + a.grams, 0);
-  if (total > 5000) throw error('That is more than 5000 g for one portion.');
-  return prisma.$transaction(async (tx) => {
-    const ids = [...new Set([Number(foodItemId), ...selected.map((a) => a.id)])];
-    const foods = await tx.foodItem.findMany({ where: {
-      id: { in: ids }, OR: [{ createdByUserId: null }, { createdByUserId: userId }],
-    } });
-    const byId = new Map(foods.map((f) => [f.id, f]));
-    if (ids.some((id) => !byId.has(id))) throw error('One of those foods is not available.', 404);
-    const base = byId.get(Number(foodItemId));
-    const parts = [{ food: base, grams: weight }, ...selected.map((a) => ({ food: byId.get(a.id), grams: a.grams }))];
-    const amounts = [];
-    for (const ingredient of compositionForFood(base).ingredients) amounts.push({
-      ...ingredient, grams: ingredient.grams * weight / 100,
-    });
-    // Keep each food the user added visible by its chosen name. For example,
-    // cheese remains "Cheese" rather than disappearing into milk and salt.
-    for (const part of parts.slice(1)) amounts.push({
-      foodItemId: part.food.id, name: part.food.name, grams: part.grams,
-      dietaryType: dietaryTypeOf(part.food),
-    });
-    if (amounts.length > 40) throw error('This recipe already has too many ingredients.');
-    const ingredients = normaliseIngredients(amounts);
-    const dietaryType = dietaryTypeOf({ ingredients });
-    const newName = clean(name) || clean(`${base.name} + ${selected.map((a) => byId.get(a.id).name).join(', ')}`);
-    assertSpecificName(newName);
-    const nutrients = Object.fromEntries(NUTRIENTS.map((key) => [key,
-      parts.some((p) => p.food[key] == null) ? null :
-        Math.round(parts.reduce((sum, p) => sum + Number(p.food[key]) * p.grams, 0) / total * 100) / 100,
+  // Only the final private-row insert writes. Do not hold a DB transaction
+  // while waiting for optional paid nutrition estimation.
+  const tx = prisma;
+  const owned = {OR:[{createdByUserId:null},{createdByUserId:userId}]};
+  const ids = [...new Set([Number(foodItemId),...selected.map(a=>a.id)])];
+  const foods = await tx.foodItem.findMany({where:{id:{in:ids},...owned}});
+  const byId = new Map(foods.map(f=>[f.id,f]));
+  if (ids.some(id=>!byId.has(id))) throw error('One of those foods is not available.',404);
+  const base = byId.get(Number(foodItemId));
+  const original = compositionForFood(base).ingredients;
+  const removed = new Set();
+  for (const item of removals) {
+    if (!Number.isInteger(item?.index) || item.index < 0 || item.index >= original.length ||
+        removed.has(item.index) || item.name !== original[item.index].name) {
+      throw error('The ingredient list changed. Reopen the recipe and try again.',409);
+    }
+    removed.add(item.index);
+  }
+  const removedAmounts = original.filter((_,i)=>removed.has(i)).map(i=>({...i,grams:i.grams*weight/100}));
+  const amounts = original.filter((_,i)=>!removed.has(i)).map(i=>({...i,grams:i.grams*weight/100}));
+  for (const a of selected) {
+    const food=byId.get(a.id);
+    amounts.push({foodItemId:food.id,name:food.name,grams:a.grams,dietaryType:dietaryTypeOf(food)});
+  }
+  if (!amounts.length) throw error('Keep at least one ingredient or add another.');
+  if (amounts.length > 40) throw error('This recipe already has too many ingredients.');
+  const removedWeight=removedAmounts.reduce((sum,i)=>sum+i.grams,0);
+  const total=weight-removedWeight+selected.reduce((sum,a)=>sum+a.grams,0);
+  if (!(total > 0 && total <= 5000)) throw error('Choose a portion between 0 and 5000 g.');
+  const ingredients=normaliseIngredients(amounts);
+  const dietaryType=dietaryTypeOf({ingredients});
+  const fallbackName = removals.length ? `${base.name} (my version)`
+    : `${base.name} + ${selected.map(a=>byId.get(a.id).name).join(', ')}`;
+  const newName=clean(name)||clean(fallbackName);
+  assertSpecificName(newName);
+  const removedIds=[...new Set(removedAmounts.map(i=>i.foodItemId).filter(Boolean))];
+  const missing=removedIds.filter(id=>!byId.has(id));
+  if (missing.length) {
+    const rows=await tx.foodItem.findMany({where:{id:{in:missing},...owned}});
+    for (const row of rows) byId.set(row.id,row);
+  }
+  const keptBase = original.some((_,i)=>!removed.has(i));
+  const exact = !removed.size || !keptBase || removedAmounts.every(i=>i.foodItemId && byId.has(i.foodItemId));
+  let nutrients;
+  if (exact) {
+    const parts=[...(keptBase?[{food:base,grams:weight}]:[]),...selected.map(a=>({food:byId.get(a.id),grams:a.grams})),
+      ...(keptBase?removedAmounts.map(i=>({food:byId.get(i.foodItemId),grams:-i.grams})):[])];
+    nutrients=Object.fromEntries(NUTRIENTS.map(key=>[key,
+      parts.some(p=>p.food[key]==null)?null:
+        Math.round(parts.reduce((sum,p)=>sum+Number(p.food[key])*p.grams,0)/total*100)/100,
     ]));
-    return tx.foodItem.create({ data: {
-      name: newName, aliases: [], basis: 'as_served', ...nutrients,
-      dietaryType, veg: dietaryType === 'veg', nonVeg: dietaryType === 'non_veg' || dietaryType === 'egg',
-      ingredients, ingredientsEstimated: true, baseFoodItemId: base.baseFoodItemId ?? base.id,
-      createdByUserId: userId, source: 'user-entered', verified: false,
-      servings: [{ label: 'My portion', grams: Math.round(total * 100) / 100 }],
-      searchText: buildVariantSearch(newName, ingredients),
-    } });
-  });
+    // Inconsistent source estimates must be re-estimated, never clamped to zero.
+    if (removed.size) {
+      const {normaliseFoodEstimate}=await import('./foodPhotoCatalogue.js');
+      if (!normaliseFoodEstimate({...nutrients,servings:[{label:'My portion',grams:total}]})) nutrients=null;
+    }
+  }
+  if (!nutrients) {
+    const estimate=await estimateNutrition(prisma,userId,ingredients);
+    const {normaliseFoodEstimate}=await import('./foodPhotoCatalogue.js');
+    const validated=normaliseFoodEstimate(estimate);
+    if (!validated) throw error('Could not estimate the edited recipe nutrition. Please try again.',502);
+    nutrients=Object.fromEntries(NUTRIENTS.map(key=>[key,validated[key]]));
+  }
+  return tx.foodItem.create({data:{
+    name:newName,aliases:[],basis:'as_served',...nutrients,
+    dietaryType,veg:dietaryType==='veg',nonVeg:['non_veg','egg'].includes(dietaryType),
+    ingredients,ingredientsEstimated:true,baseFoodItemId:base.baseFoodItemId??base.id,
+    createdByUserId:userId,source:'user-entered',verified:false,
+    servings:[{label:'My portion',grams:Math.round(total*100)/100}],
+    searchText:buildVariantSearch(newName,ingredients),
+  }});
 }
 
 const buildVariantSearch = (name, ingredients) => [name, ...ingredients.map((i) => i.name)].join(' ').toLowerCase();

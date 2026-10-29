@@ -656,3 +656,68 @@ test('ageFromDob counts whole years and handles the birthday itself', () => {
   assert.equal(ageFromDob(null, '2026-09-28'), null);
   assert.equal(ageFromDob('not a date', '2026-09-28'), null);
 });
+
+
+test('wellness setup reuses onboarding facts and asks only for goal and daily activity', async () => {
+  const prisma = fakePrisma({ goal: { userId: 1, goals: [] },
+    profile: { heightCm: 175 }, weight: { value: 72, localDate: TODAY } });
+  const result = await getSetupState({ prisma, userId: 1, localDate: TODAY,
+    fetchProfile: async () => ({ persona: 'wellness', dateOfBirth: '1990-01-01', gender: 'male' }) });
+  assert.equal(result.persona, 'wellness');
+  assert.equal(result.hasGoal, false, 'an empty placeholder is not a chosen goal');
+  assert.deepEqual(result.missing, ['goals', 'activity']);
+  assert.deepEqual(Object.keys(result.reasons), ['goals', 'activity']);
+  assert.equal(result.prefill.heightCm, 175);
+  assert.equal(result.prefill.age, 36);
+  assert.equal(result.prefill.weightKg, 72);
+  assert.equal(prisma.calls.goalUpdate.length + prisma.calls.goalCreate.length + prisma.calls.targetUpsert.length, 0);
+});
+
+test('explicit onboarding goals prefill the nutrition equivalents without replacing an intake snapshot', async () => {
+  const profile = { persona: 'home_training', fitnessGoals: ['weight_loss', 'muscle_gain', 'rehabilitation'] };
+  const fresh = await getSetupState({ prisma: fakePrisma(), userId: 1, localDate: TODAY, fetchProfile: async () => profile });
+  assert.deepEqual(fresh.goals, ['lose_fat', 'build_muscle']);
+  assert.equal(fresh.missing.includes('goals'), false);
+  const existing = await getSetupState({ prisma: fakePrisma({ goal: { goals: ['general_health'], age: 28, sex: 'female' } }),
+    userId: 1, localDate: TODAY, fetchProfile: async () => profile });
+  assert.deepEqual(existing.goals, ['general_health']);
+  assert.equal(existing.prefill.age, 28);
+});
+
+test('wellness does not infer a nutrition goal or sedentary activity, and a switched persona wins', async () => {
+  const result = await getSetupState({ prisma: fakePrisma(), userId: 1, localDate: TODAY,
+    fetchProfile: async () => ({ persona: 'own_gym', appMode: 'wellness', workoutIntent: 'wellness_only' }) });
+  assert.equal(result.persona, 'own_gym');
+  assert.deepEqual(result.prefill.goals, []);
+  assert.equal(result.prefill.activity, null);
+});
+
+test('wellness offers daily wellbeing, fat loss and doctor goals, without onboarding training goals', async () => {
+  const result = await getSetupState({ prisma: fakePrisma(), userId: 1, localDate: TODAY,
+    fetchProfile: async () => ({ persona: 'wellness', fitnessGoals: ['muscle_gain', 'sports_training'] }) });
+  assert.deepEqual(result.goals, []);
+  assert.deepEqual(result.options.goals.map(g => g.value).sort(), ['doctor_plan', 'general_health', 'lose_fat']);
+});
+
+test('wellness keeps saved training goals visible without silently replacing them', async () => {
+  const result = await getSetupState({ prisma: fakePrisma({ goal: { goals: ['endurance'] } }),
+    userId: 1, localDate: TODAY, fetchProfile: async () => ({ persona: 'wellness' }) });
+  assert.deepEqual(result.goals, ['endurance']);
+  assert.ok(result.options.goals.some(g => g.value === 'endurance'));
+  assert.ok(!result.options.goals.some(g => g.value === 'build_muscle'));
+});
+
+test('training personas continue to receive the full goal choices', async () => {
+  for (const persona of ['home_training', 'own_gym', 'linked_gym']) {
+    const result = await getSetupState({ prisma: fakePrisma(), userId: 1, localDate: TODAY,
+      fetchProfile: async () => ({ persona }) });
+    assert.equal(result.options.goals.length, 6);
+  }
+});
+
+
+test('explorers without a training routine receive everyday goals', async () => {
+  const result = await getSetupState({ prisma: fakePrisma(), userId: 1, localDate: TODAY,
+    fetchProfile: async () => ({ persona: 'explorer' }) });
+  assert.deepEqual(result.options.goals.map(g => g.value).sort(), ['doctor_plan', 'general_health', 'lose_fat']);
+});

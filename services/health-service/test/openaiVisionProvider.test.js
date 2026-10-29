@@ -235,3 +235,13 @@ test('unparseable JSON is a provider shape error, not a crash', async () => {
     (err) => err.code === 'PROVIDER_BAD_SHAPE',
   );
 });
+
+
+test('recipe enrichment sends only text and retains billable usage', async () => {
+  let body;
+  globalThis.fetch=async(_url,init)=>{body=JSON.parse(init.body);return openaiText(JSON.stringify({isFood:true,items:[]}));};
+  const result=await provider.recognizeFood({enrichmentName:'Edited recipe: 50 g potato; 5 g oil'},CONFIG);
+  assert.ok(body.messages[0].content.every(p=>p.type==='text'));
+  assert.match(body.messages[0].content[0].text,/50 g potato/);
+  assert.equal(result.tokensIn,2049);
+});

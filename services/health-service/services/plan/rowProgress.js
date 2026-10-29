@@ -36,7 +36,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
   ] = await Promise.all([
     getPlanForDate(prisma, { userId, localDate, today, onLayerKeys }),
     getDayTotals(prisma, userId, localDate),
-    currentNutritionTarget(prisma, userId),
+    currentNutritionTarget(prisma, userId, localDate),
     prisma.workoutSession.findMany({
       where: { userId, localDate, endedAt: { not: null }, type: { not: null, notIn: ['rest'] } },
       select: { id: true, type: true, startedAt: true, endedAt: true, exercises: { select: { sets: { select: { id: true, completed: true } } } } },

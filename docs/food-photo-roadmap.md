@@ -170,3 +170,51 @@ request shapes, both provider adapters, recognition/review, consent revocation, 
 Prisma Client generated; schema validated with placeholder local DATABASE_URL. Flutter targeted
 analysis passed; new contribution opt-in widget test passed. Migration and cross-instance locks
 still require a real PostgreSQL integration run. No deployment or paid call occurred.
+
+
+## Account sharing choice (v2)
+
+The sharing checkbox is directly below the meal preview. It is initially unticked; ticking it
+records account-wide permission for this and future confirmed meal photos. There is no separate
+agreement button. The recognition result omits model attribution. The decision is loaded from the
+server on each review, so it persists across devices/sign-ins and does not leak between accounts.
+Consent version `food-research-future-2026-10-29-v2` is separate from the old per-photo v1 grant;
+existing grants are never upgraded or used to backfill historical photos.
+
+Migration `20261029160000_photo_sharing_preference` adds FoodPhotoSharingPreference and a nullable
+source-photo field/unique index for idempotent contributions. GET /ledger/food-photos/sharing reads
+only the caller's choice. POST on the same route requires the existing photo gates, adult grant,
+boolean enabled and current consent version. Withdrawal uses the existing authenticated-only
+DELETE /ledger/food-photos/contributions endpoint, durably switches sharing off, then removes
+copies or marks failed deletions expired for retry. Nutrition/photo consent withdrawal disables
+automatic sharing too; account erasure removes the preference.
+
+After successful meal confirmation the server checks both the rollout flag and the account grant,
+then creates a cropped copy if none exists for that owned source photo. Per-account advisory locks
+serialize sharing, preference changes and duplicate confirmations. Storage/database failures return
+an optional contribution outcome and never turn a successful diary write into a failed meal log.
+There is no client-side per-photo contribution POST or background retention job tied to scrolling.
+
+Rollout: deploy the additive migration before code. FOOD_PHOTO_CONTRIBUTIONS must be true to
+accept grants or collect copies. Other optimisation/model settings need no changes. Rollback:
+turn that flag off to pause collection, retain withdrawal/deletion/sweep support, and keep the
+additive tables while any newer server still runs. Old clients may still make explicit per-photo
+grants; these do not create an account grant. Full suite: 1,717 passed, 15 skipped; five sharing
+widget tests and targeted Flutter analysis passed. No paid recognition benchmark was run.
+
+
+Dev v2 rollout, 29 October 2026: migration 20261029160000_photo_sharing_preference applied;
+health-service-dev-00137-xeg serves 100% of dev traffic (Cloud Build
+4c01a369-507f-4a39-83c2-388d79c19a41). FOOD_PHOTO_CONTRIBUTIONS=true is now declared for dev
+only. All other environment/secret references, runtime identity, model and recognition flags
+match the prior serving revision. Production was untouched. The feature still requires an
+explicit account checkbox grant; no historical photo scan or automatic grant ran.
+
+Database smoke checks passed for account isolation, duplicate-copy protection, switching off,
+and rollback of all test writes; no images or paid calls were sent. Tagged health returned 200;
+unauthenticated sharing reads/writes returned 401. All eight gateway read checks passed,
+including the authenticated sharing-preference read. Five app sharing widget tests and targeted
+analysis passed. These UI changes are source changes; the mobile app must be rebuilt/reloaded.
+Application rollback: route dev traffic to health-service-dev-00119-t5q (its contribution flag
+was off). Retain additive tables and deletion/sweep support. To pause collection on newer
+revisions, set the dev contribution flag false and redeploy; this never clears account choices.

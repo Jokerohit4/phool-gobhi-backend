@@ -107,6 +107,7 @@ router.put('/ledger/setup', ...nutrition, requireBiometricConsentForIntakeWeight
 
 // ---- Targets --------------------------------------------------------------
 
+router.post('/ledger/foods/score-preview', ...nutrition, ledgerCtrl.previewFoodScores);
 router.get('/ledger/targets', ...nutrition, ledgerCtrl.getTargets);
 // GET, and not a second POST, because this reads. It was previously served by
 // calling the recompute endpoint, which turned a screen load into a write.
@@ -122,6 +123,7 @@ router.get(
 // catalogue ships unverified pending nutritionist sign-off, and the alternative
 // is a food log with nothing in it.
 router.get('/ledger/foods', ...nutrition, ledgerCtrl.searchFoods);
+router.post('/ledger/foods/lookup', ...nutrition, ledgerCtrl.lookupFoodByText);
 // The picker's opening list, before a query is typed. Registered before the
 // parameterized food routes for the same reason the rest of this block is: a
 // literal segment that could be read as an :id must come first, or "recent"
@@ -214,6 +216,10 @@ router.post('/ledger/food-photos/confirm', ...photo, ledgerCtrl.confirmFoodPhoto
 // Opt-in research copy of a photo already sent for recognition. Same gates as
 // recognise: it is a copy of the same image, under the same consent.
 router.post('/ledger/food-photos/contribute', ...photo, ledgerCtrl.contributeFoodPhoto);
+// Account preference read remains reachable when collection is disabled.
+router.get('/ledger/food-photos/sharing', requireAuth, ledgerCtrl.getFoodPhotoSharing);
+router.post('/ledger/food-photos/sharing', ...photo, requireAdult, ledgerCtrl.setFoodPhotoSharing);
+
 // Withdrawal is authenticated only, never flag- or consent-gated: a user must
 // be able to take their copies back after switching either off.
 router.delete('/ledger/food-photos/contributions', requireAuth, ledgerCtrl.withdrawFoodPhotoContributions);
@@ -284,6 +290,7 @@ router.post('/internal/ledger/biometrics/batch-consistency', requireInternal, le
 // buffering an upload is the expensive part and a user who has not consented
 // should not make the server hold their file at all.
 router.get('/ledger/medical-documents', ...medical, ledgerCtrl.listMedicalDocuments);
+router.post('/ledger/medical-documents/plan-note', ...medical, ledgerCtrl.createDoctorPlanNote);
 router.post(
   '/ledger/medical-documents',
   ...medical,

@@ -25,11 +25,14 @@
  * kcal/inputs/source and picking fields here would mean every caller
  * re-selecting the same six columns differently.
  */
-export async function currentNutritionTarget(prisma, userId) {
-  return prisma.nutritionTarget.findFirst({
+import { activeDoctorPlan, applyDoctorTargets } from './doctorPlan.js';
+export async function currentNutritionTarget(prisma, userId, localDate) {
+  const day = localDate || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const target = await prisma.nutritionTarget.findFirst({
     where: { userId },
     orderBy: { effectiveFrom: 'desc' },
   });
+  return applyDoctorTargets(target, await activeDoctorPlan(prisma, userId, day));
 }
 
 /**

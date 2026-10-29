@@ -1887,6 +1887,9 @@ model MedicalDocument {
   title       String
   docDate     String?
   notes       String?
+  // Explicit user-confirmed instructions; legacy text notes remain records only.
+  structuredPlan Json?
+  supersededAt DateTime?
   mimeType    String?
   sizeBytes   Int?
   createdAt   DateTime @default(now())
@@ -2387,6 +2390,7 @@ model FoodPhotoRecognitionCache {
 }
 
 model FoodPhotoContribution {
+  sourcePhotoPath String?
   id Int @id @default(autoincrement())
   userId Int
   path String @unique
@@ -2396,7 +2400,17 @@ model FoodPhotoContribution {
   label Json?
   reviewer String?
   reviewedAt DateTime?
+  @@unique([userId, sourcePhotoPath])
   @@index([userId])
   @@index([expiresAt])
+  @@schema("health")
+}
+
+// Account-scoped permission for this and future confirmed meal photos.
+model FoodPhotoSharingPreference {
+  userId Int @id
+  enabled Boolean
+  consentVersion String
+  decidedAt DateTime @default(now())
   @@schema("health")
 }

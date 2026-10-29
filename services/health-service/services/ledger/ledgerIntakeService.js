@@ -36,7 +36,8 @@
 
 import { validateLocalDate } from '../biometricService.js';
 import { SAFETY } from './constants.js';
-import { latestWeightKg, resolveInputs, recomputeTargets, MISSING_REASONS } from './targetService.js';
+import { isWellnessProfile } from '../../utils/persona.js';
+import { latestWeightKg, recomputeTargets, MISSING_REASONS } from './targetService.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
 import { refreshWorkoutSlotsForProfile } from './starterPlanService.js';
 
@@ -351,7 +352,7 @@ function addDays(date, delta) {
  */
 export async function getSetupState({ prisma, userId, localDate, fetchProfile = null }) {
   const day = localDate || todayLocalDate();
-  const [goal, profile, weightKg, resolved, authUser] = await Promise.all([
+  const [goal, profile, weightKg, authUser] = await Promise.all([
     prisma.healthGoal.findUnique({ where: { userId } }),
     prisma.personalisationProfile.findUnique({
       where: { userId },
@@ -362,10 +363,6 @@ export async function getSetupState({ prisma, userId, localDate, fetchProfile = 
       select: { heightCm: true },
     }),
     latestWeightKg({ prisma, userId, localDate: day }),
-    // Called with no measurements on purpose: this is "what would the engine
-    // still be missing if the user answered nothing today", which is exactly
-    // the list the wizard should ask about.
-    resolveInputs({ prisma, userId, localDate: day, measured: null }),
     // The auth profile, for PREFILL ONLY — the DOB the user gave at signup and
     // their gender. Injected (the controller passes fetchUserProfileInternal)
     // so this service stays testable without a network, and best-effort: a
@@ -390,64 +387,49 @@ export async function getSetupState({ prisma, userId, localDate, fetchProfile = 
   const prefillAge = goal?.age ?? ageFromDob(authUser?.dateOfBirth, day);
   const prefillSex = goal?.sex ?? (SEXES.includes(authUser?.gender) ? authUser.gender : null);
 
-  const missing = resolved.ok ? [] : resolved.missing;
-
-  // resolveInputs short-circuits on a missing goal and reports only ['goal'],
-  // which is right for the engine — there is nothing to compute without one —
-  // and wrong for this screen. A first-run user has to answer goal, age, sex,
-  // height and weight, so a wizard that read this list literally would show one
-  // question ("what are you working towards?") and then stall with no number.
-  //
-  // So for a user with no goal the full set is reported. The field names come
-  // from MISSING_REASONS so this cannot drift from the engine's vocabulary.
-  // The full list for a first-run user; the engine's own list for everyone else.
-  // Both come from the same vocabulary, so the screen cannot drift.
-  const ALL_REQUIRED = ['goals', 'weight', 'height', 'age', 'sex', 'activity'];
-  const reportedMissing = goal ? missing : ALL_REQUIRED.slice();
+  // Reuse explicit onboarding goals only where their meaning is equivalent.
+  // Wellness status alone does not imply a nutrition goal or an activity band.
+  const onboardingGoals = {
+    weight_loss: 'lose_fat', muscle_gain: 'build_muscle',
+    general_fitness: 'general_health', sports_training: 'endurance',
+  };
+  const persona = authUser?.persona || (isWellnessProfile(authUser) ? 'wellness' : null);
+  const trainingGoals = ['build_muscle', 'recomp', 'endurance'];
+  const nonTraining = ['wellness', 'explorer'].includes(persona);
+  const goals = goal?.goals?.length ? goal.goals
+    : [...new Set((authUser?.fitnessGoals || []).map(g => onboardingGoals[g]).filter(g => g && (!nonTraining || !trainingGoals.includes(g))))].slice(0, MAX_GOALS);
+  const prefill = {
+    goals, primaryHint: goals[0] ?? null, weightKg,
+    heightCm: goal?.heightCm ?? profile?.heightCm ?? null,
+    age: prefillAge, sex: prefillSex, activity: goal?.activity ?? null,
+    diet: goal?.diet ?? null,
+    allergies: goal?.allergies?.length ? goal.allergies : profileAllergies,
+    targetWeightKg: goal?.targetWeightKg == null ? null : Number(goal.targetWeightKg),
+    targetDate: goal?.targetDate ?? null,
+  };
+  const values = { goals: goals.length ? goals : null, weight: weightKg,
+    height: prefill.heightCm, age: prefill.age, sex: prefill.sex, activity: prefill.activity };
+  const reportedMissing = Object.keys(values).filter(field => values[field] == null);
+  // Keep saved choices visible so changing account type never silently clears
+  // an existing goal. Wellness users are not offered new training goals.
+  const offeredGoals = GOAL_TYPES.filter(value => !nonTraining
+    || !trainingGoals.includes(value) || goals.includes(value));
 
   return {
-    hasGoal: Boolean(goal),
+    hasGoal: Boolean(goal?.goals?.length),
+    persona,
     // The full set, in the user's own order. `goal` was a scalar until the
     // intake stopped forcing a single choice; it is reported as an array
     // because two goals is the normal case now, and a scalar here is what made
     // the wizard render one chip row for what is really a set of choices.
-    goals: goal?.goals ?? [],
-    prefill: {
-      // Restated inside prefill as well, because a form control reads its
-      // initial value from one place. The top-level `goals` is for logic; this
-      // is for the picker.
-      goals: goal?.goals ?? [],
-      // What the wizard should light up first when the user has several goals
-      // and adds another: their first-listed goal. Not stored, derived — an
-      // explicit "primary" column would be a field that changes no number.
-      primaryHint: goal?.goals?.[0] ?? null,
-      weightKg,
-      heightCm: goal?.heightCm ?? profile?.heightCm ?? null,
-      // From HealthGoal only, per the snapshot contract. There is no fallback
-      // to read, so a user who has never answered has no prefill here and the
-      // screen asks rather than assuming.
-      age: prefillAge,
-      sex: prefillSex,
-      activity: goal?.activity ?? null,
-      diet: goal?.diet ?? null,
-      allergies: goal?.allergies?.length ? goal.allergies : profileAllergies,
-      targetWeightKg:
-        goal?.targetWeightKg == null ? null : Number(goal.targetWeightKg),
-      targetDate: goal?.targetDate ?? null,
-    },
-    // What still has to be answered before a number can be produced. Weight is
-    // included even when the scale has a reading, because the user may want to
-    // confirm it — but the screen is expected to pre-fill it, not demand it.
+    goals,
+    prefill,
+    // Only unanswered fields become questions. Prefill remains read-only until
+    // the user confirms setup, preserving historical target snapshots.
     missing: reportedMissing,
-    reasons: resolved.ok
-      ? {}
-      : Object.fromEntries(
-          reportedMissing
-            .filter((f) => MISSING_REASONS[f])
-            .map((f) => [f, MISSING_REASONS[f]]),
-        ),
+    reasons: Object.fromEntries(reportedMissing.map((f) => [f, MISSING_REASONS[f]])),
     options: {
-      goals: GOAL_TYPES.map((value) => ({ value, label: GOAL_LABELS[value] })),
+      goals: offeredGoals.map((value) => ({ value, label: GOAL_LABELS[value] })),
       sexes: SEXES,
       activities: ACTIVITY_LEVELS,
       diets: DIET_PATTERNS,

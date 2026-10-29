@@ -20,7 +20,7 @@ function database(rows = [base, egg]) {
     async create({ data }) { const food = { id: 100 + created.length, ...data }; created.push(food); return food; },
     async update() { assert.fail('a personal recipe must never update a catalogue row'); },
   } };
-  return { created, $transaction: async (work) => work(tx) };
+  return { created, foodItem: tx.foodItem, $transaction: async (work) => work(tx) };
 }
 
 test('every starter food has classification and a normalized ingredient division', () => {
@@ -96,4 +96,54 @@ test('generic names, invalid amounts and malformed recipes are refused', async (
     await assert.rejects(customizeFood(database(), { userId: 7, foodItemId: 1,
       baseGrams: 100, additions: [{ foodItemId: 2, grams }] }), { status: 400 });
   }
+});
+
+
+test('removing an original referenced egg recomputes a private veggie recipe and portion', async () => {
+  const recipe = {...base,id:10,name:'Egg burger',dietaryType:'egg',kcal:175,proteinG:9,carbsG:15.5,fatG:8.5,fibreG:1.5,
+    ingredients:[{foodItemId:2,name:'Egg',grams:50,dietaryType:'egg'}, {foodItemId:1,name:'Vegetable filling',grams:50,dietaryType:'veg'}]};
+  const before=structuredClone(recipe);const db=database([base,egg,recipe]);
+  const result=await customizeFood(db,{userId:7,foodItemId:10,baseGrams:100,removals:[{index:0,name:'Egg'}]},
+    {estimateNutrition:async()=>assert.fail('catalogue references suffice')});
+  assert.equal(result.kcal,200);assert.equal(result.proteinG,5);assert.equal(result.servings[0].grams,50);
+  assert.equal(result.dietaryType,'veg');assert.equal(dietaryTypeOf(result),'veg');assert.equal(compositionForFood(result).dietaryType,'veg');
+  assert.equal(result.ingredients.length,1);assert.equal(result.ingredients[0].name,'Vegetable filling');
+  assert.equal(result.createdByUserId,7);assert.equal(result.verified,false);assert.equal(result.zincMg,null);
+  assert.deepEqual(recipe,before);
+});
+
+test('unreferenced removals use validated remaining-recipe estimates, never unchanged nutrition', async () => {
+  const db=database();let remaining;
+  const result=await customizeFood(db,{userId:7,foodItemId:1,baseGrams:100,removals:[{index:4,name:'Onion'}]},
+    {estimateNutrition:async(_db,userId,ingredients)=>{assert.equal(userId,7);remaining=ingredients;return {
+      kcal:185,proteinG:5,carbsG:28,fatG:6,fibreG:2.5,servings:[{label:'portion',grams:95}],
+    };}});
+  assert.equal(result.kcal,185);assert.equal(result.servings[0].grams,95);
+  assert.ok(!remaining.some(i=>i.name==='Onion'));
+  assert.ok(Math.abs(remaining.reduce((sum,i)=>sum+i.grams,0)-100)<.01);
+  assert.equal(result.ironMg,null);
+});
+
+test('removal estimates fail explicitly without inserting a misleading food', async () => {
+  const db=database();
+  await assert.rejects(customizeFood(db,{userId:7,foodItemId:1,baseGrams:100,removals:[{index:4,name:'Onion'}]},
+    {estimateNutrition:async()=>({kcal:0})}),{status:502});
+  assert.equal(db.created.length,0);
+});
+
+test('all originals may be replaced, but an empty recipe and stale removals are refused', async () => {
+  const simple={...base,ingredients:[{name:'Filling',grams:100,dietaryType:'veg'}]};
+  const input={userId:7,foodItemId:1,baseGrams:100,removals:[{index:0,name:'Filling'}]};
+  await assert.rejects(customizeFood(database([simple,egg]),input),{status:400});
+  const result=await customizeFood(database([simple,egg]),{...input,additions:[{foodItemId:2,grams:30}]});
+  assert.equal(result.kcal,150);assert.equal(result.servings[0].grams,30);assert.equal(result.dietaryType,'egg');
+  for (const removals of [[{index:4,name:'Wrong name'}],[{index:-1,name:'Onion'}],[{index:4,name:'Onion'},{index:4,name:'Onion'}]]) {
+    await assert.rejects(customizeFood(database(),{userId:7,foodItemId:1,baseGrams:100,removals}),{status:409});
+  }
+});
+
+test('paid recipe estimation has a per-user hourly budget', async () => {
+  const db=database();db.foodPhotoUsage={count:async()=>20};
+  await assert.rejects(customizeFood(db,{userId:7,foodItemId:1,baseGrams:100,removals:[{index:4,name:'Onion'}]}),{status:429});
+  assert.equal(db.created.length,0);
 });

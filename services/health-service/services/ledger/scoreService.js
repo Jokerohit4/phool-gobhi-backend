@@ -25,6 +25,8 @@ import { isIsoDay } from './isoDay.js';
 import { resolveDay } from '../plan/rowProgress.js';
 import { getOnLayerKeys } from '../plan/layerState.js';
 import redis from '../../utils/redisClient.js';
+import { getDayTotals } from './nutritionService.js';
+import { currentNutritionTarget } from './currentTarget.js';
 import {
   blendedScoreCacheKey,
   invalidateBlendedScore,
@@ -184,6 +186,11 @@ export async function closeDay(prisma, { userId, localDate, today }) {
     noMisses: !scored || scoringFlags.noMisses,
     unlockedLayerKeys: onLayerKeys,
     foodNoPenalty: scoringFlags.foodNoPenalty,
+  });
+  if (scored && resolved.nutritionTarget?.doctorPlan?.targetFields?.length) finalDay.breakdown.push({
+    key: 'doctor_plan_targets', kind: 'nutrition', points: 0, label: 'User-confirmed doctor-plan targets',
+    documentId: resolved.nutritionTarget.doctorPlan.id, targetFields: resolved.nutritionTarget.doctorPlan.targetFields,
+    targets: Object.fromEntries(resolved.nutritionTarget.doctorPlan.targetFields.map(key => [key, Number(resolved.nutritionTarget[key])])),
   });
   const earned = scored ? resolved.earned : 0;
   const bonus = scored ? resolved.bonus : 0;
@@ -739,4 +746,47 @@ export async function weekDelta(prisma, { userId, today }) {
   const firstClose = Number(snapshots[0].close);
   const lastClose = Number(snapshots[snapshots.length - 1].close);
   return lastClose - firstClose;
+}
+
+
+// Read-only batch used by search, portion confirmation and the meal review.
+export async function previewFoodScores(prisma, { userId, localDate, items, today }) {
+  if (!isIsoDay(localDate) || !Array.isArray(items) || !items.length || items.length > 30)
+    throw Object.assign(new Error('Choose a date and 1 to 30 foods.'), { status: 400 });
+  for (const item of items) {
+    if (!item || (item.replaceLogId != null && (!Number.isSafeInteger(item.replaceLogId) || item.replaceLogId <= 0)) || (item.logId != null ? !Number.isSafeInteger(item.logId) || item.logId <= 0 :
+      !Number.isSafeInteger(item.foodItemId) || item.foodItemId <= 0 ||
+      typeof item.grams !== 'number' || !Number.isFinite(item.grams) || item.grams <= 0 || item.grams > 5000 ||
+      !['breakfast','lunch','snack','dinner'].includes(item.slot)))
+      throw Object.assign(new Error('Check the selected food and portion.'), { status: 400 });
+  }
+  const unavailable = reason => items.map(() => ({ status: 'unavailable', reason }));
+  if (localDate !== today) return unavailable('Score previews are available for today; closed scores stay frozen.');
+  // getJourney can sync unlocks and trigger referral work. A food preview must
+  // be read-only, so resolve layers from the persisted journey snapshot.
+  const progress = await prisma.journeyProgress?.findUnique({ where: { userId } });
+  const journey = progress ? {
+    wellnessOnly: progress.wellnessOnly, wellnessFocuses: progress.wellnessFocuses,
+    layers: (Array.isArray(progress.unlocked) ? progress.unlocked : []).map(u => ({ layer: u.layer, unlocked: true, unlockedAt: u.at })),
+  } : null;
+  const [window, layers, goal, frozen] = await Promise.all([
+    getScoringWindow(prisma, userId), getOnLayerKeys(prisma, userId, { journey }),
+    prisma.healthGoal.findUnique({ where: { userId } }),
+    prisma.scoreDaySnapshot.findUnique({ where: { userId_localDate: { userId, localDate } } }),
+  ]);
+  if (frozen) return unavailable('This day’s score is frozen.');
+  if (!window || isPausedOn(goal, localDate)) return unavailable('Scoring is not active for this day.');
+  if (!layers.includes('food')) return unavailable('Food scoring is not active yet.');
+  const [{ logs }, target, foods] = await Promise.all([
+    getDayTotals(prisma, userId, localDate), currentNutritionTarget(prisma, userId, localDate),
+    prisma.foodItem.findMany({ where: { id: { in: items.filter(i => !i.logId).map(i => i.foodItemId) },
+      OR: [{ createdByUserId: null }, { createdByUserId: userId }] } }),
+  ]);
+  if (!target) return unavailable('Set up daily nutrition targets to see the impact.');
+  const { foodScoreImpact } = await import('./foodScoreImpact.js');
+  return items.map(item => {
+    const food = foods.find(f => f.id === item.foodItemId);
+    if (!item.logId && !food) return { status: 'unavailable', reason: 'Food is not available.' };
+    return foodScoreImpact({ ...item, food, logs, target, localDate });
+  });
 }

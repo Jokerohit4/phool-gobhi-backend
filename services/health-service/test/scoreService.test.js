@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 // hoisted above any top-level mock.module call and would never see it).
 const ON_LAYERS = ['workout', 'water', 'food', 'steps', 'sleep', 'supplements', 'health', 'medicine', 'own'];
 
-let closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause;
+let previewFoodScores, closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause;
 
 test('setup: mock layerState + journey deps once, import scoreService once', async (t) => {
   t.mock.module(new URL('../services/plan/layerState.js', import.meta.url).href, {
@@ -42,7 +42,7 @@ test('setup: mock layerState + journey deps once, import scoreService once', asy
     },
   });
 
-  ({ closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause } =
+  ({ previewFoodScores, closeDay, getCalmSeries, getSafetyFlag, getScoreSeries, previewDay, setCalmMode, isPausedOn, getPauseState, setPause, clearPause } =
     await import('../services/ledger/scoreService.js'));
   assert.equal(typeof closeDay, 'function');
   assert.equal(typeof previewDay, 'function');
@@ -881,3 +881,37 @@ test('previewDay uses v2 scoring when date >= V2_FROM and journey service return
   assert.ok(typeof previewDay === 'function');
 });
 
+
+
+test('food previews use doctor targets and honour pause, snapshots and ownership', async () => {
+  const target={kcal:2000,proteinG:100};
+  const logs=[{userId:USER,id:9,localDate:TODAY,slot:'breakfast',grams:100,nutrients:{kcal:1450,proteinG:70}}];
+  const make=extra=>{
+    const p=mockPrisma({target,logs,...extra});
+    p.foodItem={findMany:async({where})=>{
+      assert.deepEqual(where.OR,[{createdByUserId:null},{createdByUserId:USER}]);
+      return [{id:5,kcal:500,proteinG:30}];
+    }};return p;
+  };
+  const input={userId:USER,localDate:TODAY,today:TODAY,items:[{foodItemId:5,grams:100,slot:'lunch'}]};
+  const normal=(await previewFoodScores(make(),input))[0];assert.equal(normal.status,'available');
+  const db=make();
+  db.ledgerConsent={findUnique:async()=>({scopes:['medical_records'],scopeVersions:{medical_records:'2026-09-27'}})};
+  db.medicalDocument={findMany:async()=>[{id:2,structuredPlan:{version:1,confirmed:true,startsOn:TODAY,targets:{kcal:1500,proteinG:75}}}]};
+  const doctor=(await previewFoodScores(db,input))[0];assert.equal(doctor.doctorPlanUsed,true);assert.notEqual(doctor.pointsDelta,normal.pointsDelta);
+  assert.equal((await previewFoodScores(make({goal:{pausedFrom:TODAY,pausedUntil:TODAY}}),input))[0].status,'unavailable');
+  assert.equal((await previewFoodScores(make({snapshots:[{userId:USER,localDate:TODAY}]}),input))[0].status,'unavailable');
+  assert.equal((await previewFoodScores(make(),{...input,items:[{logId:333}]}))[0].status,'unavailable');
+  assert.equal((await previewFoodScores(make(),{...input,items:[{foodItemId:111,grams:100,slot:'dinner'}]}))[0].status,'unavailable');
+  const frozen=await closeDay(db,{userId:USER,localDate:TODAY,today:'2026-09-29'});
+  const provenance=frozen.breakdown.find(l=>l.key==='doctor_plan_targets');
+  assert.deepEqual(provenance.targets,{kcal:1500,proteinG:75});assert.equal(provenance.documentId,2);
+});
+
+test('malformed previews fail before day resolution and historical previews never write',async()=>{
+  for(const items of [[],Array(31).fill({}),[{foodItemId:1,grams:-1,slot:'lunch'}],
+    [{foodItemId:1,grams:100,slot:'lunch',replaceLogId:-1}],[{logId:'5'}]]) {
+    await assert.rejects(previewFoodScores({},{userId:USER,localDate:TODAY,today:TODAY,items}),{status:400});
+  }
+  assert.equal((await previewFoodScores({},{userId:USER,localDate:TODAY,today:'2026-09-29',items:[{logId:1}]}))[0].status,'unavailable');
+});

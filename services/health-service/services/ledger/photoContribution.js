@@ -34,7 +34,7 @@ export function initialLabel(logs) {
 
 export async function contribute(prisma, userId, { photoPath, consentVersion } = {}) {
   if (process.env.FOOD_PHOTO_CONTRIBUTIONS !== 'true') throw fail('Contributions unavailable', 503);
-  if (consentVersion !== CONSENT_VERSION) throw fail('Current consent required', 400);
+  if (![CONSENT_VERSION, 'food-research-future-2026-10-29-v2'].includes(consentVersion)) throw fail('Current consent required', 400);
   if (typeof photoPath !== 'string' || !photoPath.startsWith(`food/${userId}/`)) throw fail('Photo unavailable', 404);
   // A swept photo no longer exists in the bucket; refuse it here rather than
   // fail on the download below.
@@ -51,7 +51,7 @@ export async function contribute(prisma, userId, { photoPath, consentVersion } =
   const path = await saveContribution({ buffer, userId });
   try {
     return await prisma.foodPhotoContribution.create({ data: {
-      userId, path, consentVersion, label: initialLabel(logs),
+      userId, path, sourcePhotoPath: photoPath, consentVersion, label: initialLabel(logs),
       expiresAt: new Date(Date.now() + days * 86400000),
     } });
   } catch (e) {

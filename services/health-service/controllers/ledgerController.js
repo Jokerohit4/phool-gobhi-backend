@@ -1,4 +1,6 @@
-import { sweepContributions, contribute, removeContributions } from '../services/ledger/photoContribution.js';
+import { lookupFood } from '../services/ledger/foodTextLookup.js';
+import { getSharingPreference, setSharingPreference, withdrawSharing, tryShareConfirmedPhoto } from '../services/ledger/photoSharingService.js';
+import { sweepContributions, contribute } from '../services/ledger/photoContribution.js';
 import { customizeFood as createFoodVariant, compositionForFood } from '../services/ledger/foodComposition.js';
 import * as nutritionService from '../services/ledger/nutritionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
@@ -11,6 +13,7 @@ import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
 import * as scoreTargetService from '../services/ledger/scoreTargetService.js';
 import * as medicalDocumentStorage from '../services/ledger/medicalDocumentStorage.js';
+import { saveDoctorPlanNote } from '../services/ledger/doctorPlanNoteService.js';
 import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import * as foodRequestService from '../services/ledger/foodRequestService.js';
 import * as foodAdminService from '../services/ledger/foodAdminService.js';
@@ -439,7 +442,7 @@ export const repeatFoodLogs = handle(async (req) => {
 export const getDayTotals = handle(async (req) => {
   const { localDate } = req.params;
   const day = await nutritionService.getDayTotals(prisma, req.userId, localDate);
-  const target = await currentNutritionTarget(prisma, req.userId);
+  const target = await currentNutritionTarget(prisma, req.userId, localDate);
   const targets = target
     ? {
         kcal: Number(target.kcal),
@@ -487,6 +490,7 @@ export const updateFoodLog = handle(async (req) => {
   const b = req.body || {};
   return nutritionService.updateLog(prisma, req.userId, req.params.id, {
     grams: isNum(b.grams) ? Number(b.grams) : null,
+    foodItemId: b.foodItemId,
     servings: isNum(b.servings) ? Number(b.servings) : null,
     servingLabel: b.servingLabel,
     slot: b.slot,
@@ -696,6 +700,12 @@ export const closeScoreDay = handle(async (req) => {
 
 const DOC_KINDS = ['prescription', 'lab_report', 'scan', 'other'];
 
+export const createDoctorPlanNote = handle(async (req) => saveDoctorPlanNote({
+  prisma, storage: medicalDocumentStorage, userId: req.userId,
+  description: req.body?.description,
+  plan: req.body?.plan,
+}));
+
 // `req.file` is populated by the multer middleware on the route.
 export const uploadMedicalDocument = handle(async (req) => {
   if (!req.file) {
@@ -881,6 +891,11 @@ export const confirmFoodPhoto = handle(async (req) => {
     lines: Array.isArray(b.lines) ? b.lines : [],
   });
 
+  // Collection failure must never turn a successful meal log into a retry.
+  if (out.logged > 0 || out.pending > 0) {
+    out.contribution = await tryShareConfirmedPhoto(prisma,req.userId,b.photoPath);
+  }
+
   // Reached the same foods-logged funnel as search and saved-meal repeat, with
   // the origin split already on that event's `source`. Splitting photo into its
   // own event would have made "how many foods does this app log" a sum across
@@ -962,7 +977,7 @@ export const getTargets = handle(async (req) => {
 export const customizeFood = handle(async (req) => {
   const food = await createFoodVariant(prisma, {
     userId: req.userId, foodItemId: req.params.id,
-    baseGrams: req.body?.baseGrams, additions: req.body?.additions, name: req.body?.name,
+    baseGrams: req.body?.baseGrams, additions: req.body?.additions, removals: req.body?.removals, name: req.body?.name,
   });
   return serializeFood(food);
 });
@@ -976,4 +991,19 @@ export const contributeFoodPhoto = handle(async (req) => {
 
 // Withdrawal of every research copy. Never blocked by storage; a copy whose
 // blob failed to delete comes back as `pending` and the sweep retries it.
-export const withdrawFoodPhotoContributions = handle(async (req) => removeContributions(prisma, req.userId));
+export const withdrawFoodPhotoContributions = handle(async (req) => withdrawSharing(prisma, req.userId));
+
+export const getFoodPhotoSharing = handle(async req => getSharingPreference(prisma,req.userId));
+export const setFoodPhotoSharing = handle(async req => setSharingPreference(prisma,req.userId,req.body));
+
+export const lookupFoodByText = handle(async req => {
+  if(typeof req.body?.query !== 'string') throw Object.assign(new Error('Enter a food name'),{status:400});
+  const rows=await lookupFood(prisma,req.userId,req.body.query);
+  return rows.map(serializeFood);
+});
+
+
+export const previewFoodScores = handle(async req => scoreService.previewFoodScores(prisma, {
+  userId: req.userId, localDate: req.body?.localDate, items: req.body?.items,
+  today: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+}));

@@ -1126,3 +1126,36 @@ test('a repeat copy only names columns the FoodLog model has', async () => {
   const unknown = Object.keys(created[0]).filter((k) => !fields.has(k));
   assert.deepEqual(unknown, [], `FoodLog has no column(s): ${unknown.join(', ')}`);
 });
+
+
+test('customising an added food replaces the same log with the owned recipe and server nutrition', async () => {
+  const recipe = { ...RICE, id: 99, name: 'My rice with clove', createdByUserId: 7,
+    kcal: 150, nonVeg: false, dietaryType: 'veg', ingredients: [{ name: 'Clove' }] };
+  let updates = 0;
+  const prisma = mockPrisma({ foodItem: { findUnique: async ({ where }) => { assert.equal(where.id, 99); return recipe; } },
+    foodLog: { findFirst: async ({ where }) => { assert.deepEqual(where, { id: 42, userId: 7 }); return { ...LOGGED }; },
+      update: async ({ where, data }) => { updates++; return { ...LOGGED, ...where, ...data }; },
+      create: async () => { throw Error('must never add a duplicate'); } } });
+  const row = await updateLog(prisma, 7, 42, { foodItemId: 99, grams: 200, servingLabel: 'My bowl' });
+  assert.equal(row.id, 42);
+  assert.equal(row.foodItemId, 99);
+  assert.equal(row.name, recipe.name);
+  assert.equal(row.nutrients.kcal, 300);
+  assert.deepEqual(row.nutrients.ingredients, recipe.ingredients);
+  assert.equal(row.servingLabel, 'My bowl');
+  assert.equal(updates, 1);
+  const unchangedPortion = await updateLog(prisma, 7, 42, { foodItemId: 99 });
+  assert.equal(unchangedPortion.grams, 150);
+});
+
+test('a replacement food cannot cross ownership or bypass validation', async () => {
+  let writes = 0;
+  const prisma = mockPrisma({ foodItem: { findUnique: async () => ({ ...RICE, createdByUserId: 8 }) },
+    foodLog: { findFirst: async () => ({ ...LOGGED }), update: async () => { writes++; } } });
+  await assert.rejects(() => updateLog(prisma, 7, 42, { foodItemId: 9 }), e => e.status === 404);
+  for (const foodItemId of [0, -1, 1.5, '9']) {
+    await assert.rejects(() => updateLog(prisma, 7, 42, { foodItemId }), /positive integer/);
+  }
+  await assert.rejects(() => updateLog(mockPrisma(), 7, 42, { foodItemId: 9 }), /No such food log/);
+  assert.equal(writes, 0);
+});

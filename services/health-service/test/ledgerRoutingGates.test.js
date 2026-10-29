@@ -45,6 +45,12 @@ function routeLines() {
 }
 
 const all = routeLines();
+test('written doctor plans require the medical records gate, not nutrition alone', () => {
+  const route = all.find(r => r.line.includes("'/ledger/medical-documents/plan-note'"));
+  assert.ok(route);
+  assert.match(route.line, /\.\.\.medical\b/);
+  assert.doesNotMatch(route.line, /\.\.\.nutrition\b/);
+});
 assert.ok(all.length > 20, `expected the ledger routes, found ${all.length}`);
 
 function planRouteLines() {
@@ -73,7 +79,7 @@ const planAll = planRouteLines();
 // same way routeSplitGates.test.js accounts for its ungated deletes, so the
 // exception is a visible, argued line instead of a regex widened to let
 // anything through.
-const UNGATED_BY_DESIGN = ["router.delete('/coach-consent/:scope'", "router.delete('/ledger/food-photos/contributions'"];
+const UNGATED_BY_DESIGN = ["router.delete('/coach-consent/:scope'", "router.delete('/ledger/food-photos/contributions'", "router.get('/ledger/food-photos/sharing'"];
 
 test('every ledger route is authenticated', () => {
   // Each of these spreads `...nutrition`, `...medical`, `...consentGated`,
@@ -201,7 +207,7 @@ test('the photo routes are on the photo gate, and the photo gate is a fourth fla
   // photo route, so it is not on the photo gate.
   const photoRoutes = all.filter((r) => r.line.includes("'/ledger/food-photos") &&
     !UNGATED_BY_DESIGN.some((p) => r.line.startsWith(p)));
-  assert.equal(photoRoutes.length, 4, 'expected recognise, upload, confirm and explicit contribution');
+  assert.equal(photoRoutes.length, 5, 'expected recognise, upload, confirm, contribution and sharing choice');
 
   for (const r of photoRoutes) {
     assert.match(r.line, /\.\.\.photo\b/, `${r.n}: ${r.line} is not on the photo gate`);
@@ -434,7 +440,7 @@ test('the upload middleware runs after the consent gate, not before', () => {
   // Ordering is load-bearing. multer buffers the file in memory, so a consent
   // check that ran after it would mean a user who has not consented to medical
   // records could still make the server read their file off the socket.
-  const upload = all.find((r) => r.line.startsWith('router.post') && r.line.includes('/ledger/medical-documents'));
+  const upload = all.find((r) => r.line.startsWith('router.post') && r.line.includes("'/ledger/medical-documents'"));
   assert.ok(upload, 'no upload route found');
   // Positions are compared within the one route statement, so a stray
   // '...medical' elsewhere in the file cannot satisfy the check.

@@ -105,9 +105,23 @@ export async function saveDocument({ buffer, mimeType, userId }) {
     throw Object.assign(new Error('File is larger than 10 MB'), { status: 400 });
   }
 
+  return savePrivateBuffer({ buffer, mimeType, userId });
+}
+
+// Only server-created, validated plan notes use text/plain. File uploads retain
+// the existing PDF/image allow-list.
+export async function savePlanNote({ buffer, userId }) {
+  if (!buffer?.length || buffer.length > 64000) {
+    throw Object.assign(new Error('Invalid plan note size'), { status: 400 });
+  }
+  return savePrivateBuffer({ buffer, mimeType: 'text/plain', userId });
+}
+
+async function savePrivateBuffer({ buffer, mimeType, userId }) {
+
   // userId is a path segment, not a filename. It is an internal integer, and it
   // is what makes a per-user listing possible without a database query.
-  const objectName = `medical/${userId}/${randomUUID()}.${extensionFor(mimeType)}`;
+  const objectName = `medical/${userId}/${randomUUID()}.${mimeType === 'text/plain' ? 'txt' : extensionFor(mimeType)}`;
 
   await getBucket().file(objectName).save(buffer, {
     contentType: mimeType,
