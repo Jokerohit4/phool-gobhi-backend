@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, symlinkSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { redact } from './redact.mjs';
 import { rehearseBootstrap } from './bootstrap.mjs';
@@ -214,8 +214,10 @@ try {
         await client.query('BEGIN');
         try {
           await client.query(sql);
+          // id is a UUID, as Prisma writes it: a native history table's id is
+          // varchar(36), too short for a migration name.
           await client.query(`INSERT INTO ${table}(id,checksum,migration_name,finished_at,applied_steps_count)
-            VALUES ($1,$2,$1,now(),1)`, [migration, sqlHash(sql)]);
+            VALUES ($1,$2,$3,now(),1)`, [randomUUID(), sqlHash(sql), migration]);
           await client.query('COMMIT');
         } catch (error) { await client.query('ROLLBACK'); throw error; }
       }
