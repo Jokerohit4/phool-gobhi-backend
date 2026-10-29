@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater } from '../services/routineJourneyService.js';
 import { PrismaClient } from '@prisma/client';
 import * as habitsService from '../services/habitsService.js';
@@ -158,7 +159,7 @@ export const retryRoutineRewards = async (req, res) => {
     const data = await payRoutineClaims(prisma, req.userId);
     // Reconcile a crash between saving a drink and creating its coin claim.
     // Original server timestamps preserve spacing on every retry.
-    const localDate = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const localDate = isoDayIST(new Date());
     const logs = await prisma.waterLog.findMany({ where: { userId: req.userId, localDate }, orderBy: { createdAt: 'asc' } });
     const targetMl = await habitsService.waterTargetMl(prisma, req.userId);
     for (const log of logs) {

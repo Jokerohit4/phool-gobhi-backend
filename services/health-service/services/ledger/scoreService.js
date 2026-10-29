@@ -1,3 +1,4 @@
+import { isoDayIST, shiftDay } from '../../utils/sessionDay.js';
 // Freezing a day into a ScoreDaySnapshot, and reading the chain back.
 //
 // A snapshot is written once, at day close, and never recomputed. That is the
@@ -349,13 +350,10 @@ export async function getScoreSeries(prisma, { userId, limit = 90 }) {
 export const CONSISTENCY_WINDOW_DAYS = 7;
 
 export function todayIST(now = new Date()) {
-  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(now);
 }
 
-export function shiftDay(localDate, days) {
-  const [y, m, d] = localDate.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-}
+export { shiftDay } from '../../utils/sessionDay.js';
 
 /**
  * The 7-day behavioural average, 0-100, for each user: the mean of the last
@@ -728,7 +726,7 @@ export async function previousClose(prisma, { userId, localDate }) {
  * Returns null if there aren't enough snapshots to compute.
  */
 export async function weekDelta(prisma, { userId, today }) {
-  const todayStr = today ?? new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const todayStr = today ?? isoDayIST(new Date());
   const from = new Date(Date.UTC(
     ...todayStr.split('-').map(Number)
   ));

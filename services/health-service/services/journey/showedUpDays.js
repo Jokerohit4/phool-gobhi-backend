@@ -1,13 +1,14 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { fetchInternal } from '../../utils/fetchInternal.js';
 
 const prisma = new PrismaClient();
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 
 function istDayOf(instant) {
-  return new Date(new Date(instant).getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+  return isoDayIST(instant);
 }
 
 /**

@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 // Plan items: what the plan says, who said it, and whether it happened today.
 //
 // The single most important rule in this file is that `origin: 'doctor'` is
@@ -152,7 +153,7 @@ export function isDueOn(item, localDate, today) {
 function istDateString(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(d);
 }
 
 // A tick for a future date is always wrong: a timezone mistake upstream must

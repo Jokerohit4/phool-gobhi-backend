@@ -1,3 +1,4 @@
+import { SESSION_TIME_ZONE, isoDayIST } from '../../utils/sessionDay.js';
 // The insurer-grade adherence summary, ig-v1.
 //
 // This is NOT the ledger score, and it deliberately never reads a
@@ -56,7 +57,7 @@ export const IG_RULES_VERSION = 'ig-v1';
 export const MAX_RANGE_DAYS = 366;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TZ = 'Asia/Kolkata';
+
 
 // booking-service AttendanceMethod -> evidence level. Anything not in this map,
 // including null, is unknown_provenance: a method we have never seen must not
@@ -90,7 +91,7 @@ export const EXCLUSIONS = [
 ];
 
 export function localDateIST(date) {
-  return new Date(date).toLocaleDateString('en-CA', { timeZone: TZ });
+  return isoDayIST(date);
 }
 
 function addDays(localDate, n) {
@@ -254,7 +255,7 @@ export function computeInsurerGrade({
 
   return {
     rulesVersion: IG_RULES_VERSION,
-    period: { from, to, days, timeZone: TZ },
+    period: { from, to, days, timeZone: SESSION_TIME_ZONE },
     gymVisits: {
       total: visits.length,
       verified: verifiedVisits,

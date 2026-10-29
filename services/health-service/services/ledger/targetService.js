@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 // Resolving the body inputs a target calculation needs, apart from the
 // calculation itself.
 //
@@ -192,7 +193,7 @@ function shiftLocalDate(localDate, deltaDays) {
  * defaults once, at the top, rather than at each use.
  */
 function todayLocalDate() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date());
 }
 
 /**

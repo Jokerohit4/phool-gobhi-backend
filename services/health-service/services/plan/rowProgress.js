@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 /**
  * Resolves one localDate into the full row list (the single "done" resolver
  * shared by todayService and the score engine).
@@ -21,7 +22,7 @@ import { computeEarns } from '../ledger/scoreEngine.js';
 const ROW_KIND_BY_LAYER = { water: 'water', steps: 'steps', sleep: 'sleep' };
 
 export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}) {
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const today = isoDayIST(new Date());
   onLayerKeys ??= await getOnLayerKeys(prisma, userId);
 
   const [

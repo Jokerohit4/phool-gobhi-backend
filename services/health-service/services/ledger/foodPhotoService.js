@@ -1,3 +1,4 @@
+import { hourIST } from '../../utils/sessionDay.js';
 import { cachedRecognition, experimentConfig } from './photoExperiments.js';
 import { candidates as providerCandidates } from './providers/index.js';
 import { normaliseFoodEstimate } from './foodPhotoCatalogue.js';
@@ -612,7 +613,7 @@ async function enrichItem(item, { prisma, userId, recognize, attempt }) {
 
 // Meal slot from the IST hour, matching the slots the diary itself uses.
 export function mealSlotFor(now) {
-  const hour = new Date(now.getTime() + 330 * 60 * 1000).getUTCHours();
+  const hour = hourIST(now);
   if (hour >= 4 && hour < 11) return 'breakfast';
   if (hour >= 11 && hour < 16) return 'lunch';
   if (hour >= 16 && hour < 19) return 'snack';

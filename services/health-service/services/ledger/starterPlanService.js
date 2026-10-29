@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 // The coach journey's plan engine (B7): the starter plan a new member gets
 // on day one, and the rebuild that keeps it honest afterwards.
 //
@@ -285,7 +286,7 @@ function badRequest(message) {
 // The day a plan is built on, as the user's IST day string - the same
 // convention HealthGoal.startDate and BiometricEntry.localDate carry.
 function todayLocalDate() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date());
 }
 
 // ---- The starter plan ------------------------------------------------------

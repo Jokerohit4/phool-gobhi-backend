@@ -1,6 +1,7 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 // Small, deterministic activity rewards. Dates are server-owned IST days.
 export const ROUTINE_REWARD_LAUNCH = new Date('2026-10-26T00:00:00+05:30');
-export const istDay = (date = new Date()) => new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+export const istDay = (date = new Date()) => isoDayIST(date);
 export function routineRewardPolicy(createdAt, now = new Date()) {
   const age = Math.floor((Date.parse(istDay(now)) - Date.parse(istDay(createdAt))) / 86400000);
   const eligible = Number.isFinite(age) && age >= 0 && new Date(createdAt) >= ROUTINE_REWARD_LAUNCH;

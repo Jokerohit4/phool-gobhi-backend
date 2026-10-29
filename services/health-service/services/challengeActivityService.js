@@ -1,7 +1,8 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 const METRICS = ['water_consistency', 'mood_consistency', 'workout_consistency'];
 
 function dayOf(value) {
-  return new Date(new Date(value).getTime() + 5.5 * 3600000).toISOString().slice(0, 10);
+  return isoDayIST(value);
 }
 
 // Only counts and timestamps cross the service boundary, never moods or notes.

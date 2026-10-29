@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
@@ -57,7 +58,7 @@ export const METRIC_BOUNDS = {
 export const MEASURED_ONLY_METRICS = ['steps'];
 
 function localDateIST(date) {
-  return new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date(date));
 }
 
 // A "YYYY-MM-DD" string that is also a real calendar date, in the user's own

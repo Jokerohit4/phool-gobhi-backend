@@ -90,3 +90,14 @@ export function weekDays(weekStart) {
  * These helpers should then accept a zone argument. Do not infer the user's
  * zone from the host or apply a device offset to stored calendar-day strings.
  */
+
+export const SESSION_TIME_ZONE = 'Asia/Kolkata';
+export function hourIST(value = new Date()) {
+  return new Date(new Date(value).getTime() + IST_OFFSET_MS).getUTCHours();
+}
+export function calendarPartsIST(value) {
+  return { ymd: isoDayIST(value), dow: dayToDate(isoDayIST(value)).getUTCDay(), hour: hourIST(value) };
+}
+export function calendarDayNumberIST(value) {
+  return dayToDate(isoDayIST(value)).getTime() / 86400000;
+}

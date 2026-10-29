@@ -1,3 +1,4 @@
+import { hourIST, isoDayIST } from '../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 
 import { notifyUser } from '../utils/notifyUser.js';
@@ -52,13 +53,7 @@ const COMEBACK_UNTIL_DAYS = 60;
 /// function so the quiet-hours rule has a single definition to change when
 /// that stops being true.
 export function localHour(now = new Date()) {
-  return Number(
-    new Intl.DateTimeFormat('en-GB', {
-      hour: '2-digit',
-      hour12: false,
-      timeZone: 'Asia/Kolkata',
-    }).format(now),
-  );
+  return hourIST(now);
 }
 
 export function isQuietHours(now = new Date()) {
@@ -70,7 +65,7 @@ export function isQuietHours(now = new Date()) {
 /// expressed in these strings, so picking candidates means comparing the same
 /// kind of value the card does. Same one-function reasoning as [localHour].
 export function localDateIST(now = new Date()) {
-  return new Date(now).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date(now));
 }
 
 /// IST hours [from, to) each onboarding "when are you usually free" answer

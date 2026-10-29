@@ -97,7 +97,7 @@ export async function buildRangeSeriesService(userId, { from, to } = {}, { inclu
 }
 
 // Day bounds in IST for tables that key on an instant rather than a
-// 'YYYY-MM-DD' localDate. The server already treats Asia/Kolkata as "the
+// 'YYYY-MM-DD' localDate. The server already treats the platform timezone as "the
 // user's day" (biometricService/ledgerIntakeService), so a range means the
 // same calendar days here as it does for the localDate-keyed tables.
 function istDayBounds({ from, to }) {

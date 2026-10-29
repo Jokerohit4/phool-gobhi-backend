@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 // Journey thresholds — single source of truth for the coach journey.
 // Matches the Contracts section of phool-gobhi-build-plan.html exactly.
 
@@ -73,6 +74,6 @@ export function startLayerFor(level) {
   return JOURNEY.startLayer[level] ?? 1;
 }
 export function elapsedJourneyDays(startedAt, now = new Date()) {
-  const day = date => new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const day = date => isoDayIST(new Date(date));
   return Math.max(0, Math.floor((Date.parse(day(now)) - Date.parse(day(startedAt))) / 86400000));
 }

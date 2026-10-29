@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 // Intake for the health ledger: the "About you" and "Your routine" steps from
 // the plan, and the thing that makes target setup possible at all.
 //
@@ -52,7 +53,7 @@ import { refreshWorkoutSlotsForProfile } from './starterPlanService.js';
  * no default at all.
  */
 function todayLocalDate() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date());
 }
 
 export const GOAL_TYPES = [

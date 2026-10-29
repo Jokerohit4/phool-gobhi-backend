@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 // Who decides which day it is, and the server's nightly close.
 //
 // Before this, closing a day was entirely client-driven: the app pressed
@@ -33,11 +34,11 @@ import { closeDay } from './scoreService.js';
 import { BASIC_SCOPE } from '../coachConsentService.js';
 import { evaluateUserReward } from '../rewardService.js';
 
-const TZ = 'Asia/Kolkata';
+
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function localDateIST(date) {
-  return new Date(date).toLocaleDateString('en-CA', { timeZone: TZ });
+  return isoDayIST(date);
 }
 
 export function serverTodayIST(now = new Date()) {

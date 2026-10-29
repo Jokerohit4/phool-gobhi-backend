@@ -1,3 +1,4 @@
+import { hourIST, isoDayIST } from '../utils/sessionDay.js';
 import { isIsoDay } from './ledger/isoDay.js';
 
 const MOODS = new Set([
@@ -17,19 +18,7 @@ function problem(status, error, code) {
 }
 
 function istParts(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  const hour = Number(new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    hour: '2-digit',
-    hourCycle: 'h23',
-  }).format(now));
-  return { day: `${values.year}-${values.month}-${values.day}`, hour };
+  return { day: isoDayIST(now), hour: hourIST(now) };
 }
 
 function validateInput({ localDate, slot, mood, factors, support, note }) {

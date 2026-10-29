@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { JOURNEY, elapsedJourneyDays, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
 import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
@@ -12,7 +13,7 @@ const prisma = new PrismaClient();
 const DEFAULT_EXPERIENCE_LEVEL = 'new_to_gym';
 
 function todayLocalDate() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date());
 }
 
 function addDays(dateStr, days) {

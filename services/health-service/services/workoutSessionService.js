@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import { recordRoutineWorkout } from './routineJourneyService.js';
 import { PrismaClient } from '@prisma/client';
 import { computeProgression } from './progressionService.js';
@@ -90,11 +91,11 @@ async function attachPreviousPerformance(session) {
 }
 
 // Derives the user-local 'YYYY-MM-DD' this attendance/session belongs to.
-// Fixed to Asia/Kolkata for now (the platform's only launched market) —
+// Fixed to the platform timezone for now (the platform's only launched market) —
 // see the BRD's edge-case note on travelling users for why this becomes a
 // per-user tz lookup later, not a hardcoded offset forever.
 function localDateIST(date) {
-  return new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date(date));
 }
 
 // Starting from a template pre-populates every SessionExercise/WorkoutSet

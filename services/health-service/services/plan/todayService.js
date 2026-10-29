@@ -1,3 +1,4 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
 import { weekDays, weekStartOf } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { resolveDay } from './rowProgress.js';
@@ -13,7 +14,7 @@ import { track } from '../../utils/analytics.js';
  * @returns {string} YYYY-MM-DD in IST
  */
 function todayIST() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date());
 }
 
 /**

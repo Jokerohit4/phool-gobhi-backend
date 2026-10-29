@@ -1,3 +1,4 @@
+import { calendarDayNumberIST, calendarPartsIST } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
 import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
@@ -41,7 +42,7 @@ function pluralise(n, one, many) {
 // the user's own wall clock. A 7am IST session is 01:30 UTC — read as UTC it
 // lands in "late night" AND on the previous weekday, so both halves of the
 // pattern would be wrong. Everything below is computed from IST parts.
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Below this many distinct days, a day-of-week or time-of-day "pattern" is
 // noise, and stating it as fact makes the coach confidently wrong about the
@@ -49,12 +50,7 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MIN_DAYS_FOR_PATTERN = 6;
 
 function istParts(value) {
-  const d = new Date(new Date(value).getTime() + IST_OFFSET_MS);
-  return {
-    ymd: d.toISOString().slice(0, 10),
-    dow: d.getUTCDay(),
-    hour: d.getUTCHours(),
-  };
+  return calendarPartsIST(value);
 }
 
 function timeBucket(hour) {
@@ -144,7 +140,7 @@ export function summariseAttendance(events) {
   // the pattern above. Elapsed hours told the coach a 7am-yesterday session
   // was "today" for anyone asking between midnight and 7am IST (found
   // 2026-10-01 at 00:12 IST, when the recency test failed on the clock).
-  const istDay = (ms) => Math.floor((ms + IST_OFFSET_MS) / 86400000);
+  const istDay = (ms) => calendarDayNumberIST(ms);
   const daysAgo = Math.max(0, istDay(Date.now()) - istDay(lastVisit.getTime()));
   const when =
     daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;

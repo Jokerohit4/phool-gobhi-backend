@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import { routineSnapshot, recordRoutineWater } from './routineJourneyService.js';
 // The daily habits: water and supplements (B11).
 //
@@ -47,7 +48,7 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 // IST is hardcoded for the same reason it is everywhere else in this service:
 // every user is in India today (see dayCloseService.js for the standing note).
 function todayLocalDate() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  return isoDayIST(new Date());
 }
 
 function invalidDate() {
