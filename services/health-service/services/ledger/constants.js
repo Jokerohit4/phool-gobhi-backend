@@ -345,3 +345,7 @@ export const PRESCRIPTION_RULES_VERSION = 'v1';
 // an adult, and a number nobody has to be talked into. The slider's own range
 // (300-540) is in PRESCRIPTION_BOUNDS; this is only the starting point.
 export const DEFAULT_SLEEP_MINUTES = 420;
+
+// B0.7 rollout gate. Keep false until the four-week comparison is reviewed.
+// Changing this affects the consistency bar, weekly coins and buddy leagues.
+export const USE_CLOSED_DAY_BEHAVIORAL_AVERAGE = false;

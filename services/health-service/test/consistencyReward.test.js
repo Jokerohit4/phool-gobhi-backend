@@ -103,3 +103,24 @@ test('a failed credit is reported, not swallowed as rewarded', async () => {
     creditSucceeds = true;
   }
 });
+
+
+test('league responses include closed-day coverage without changing the old average', async () => {
+  snapshots = week(USER, 500, 4);
+  const result = await getBatchBehavioralConsistency(fakePrisma, { userIds: [USER], today: TODAY });
+  assert.deepEqual(result, [{ userId: USER, avgScore: 57.1, closedDays: 4 }]);
+});
+
+
+test('score card exposes closedDays while keeping the old average', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-08T10:00:00Z') });
+  snapshots = week(USER, 500, 3);
+  const { getBlendedScore } = await import('../services/ledger/scoreService.js');
+  const db = {
+    scoreDaySnapshot: { ...fakePrisma.scoreDaySnapshot, findFirst: async () => snapshots[0] },
+    biometricEntry: { findMany: async () => [] },
+  };
+  const result = await getBlendedScore(db, { userId: USER });
+  assert.equal(result.closedDays, 3);
+  assert.equal(result.behavioralAvg7Day, 42.9);
+});

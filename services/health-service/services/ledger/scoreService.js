@@ -1,3 +1,5 @@
+import { behavioralAverageForSnapshots } from './behavioralAverage.js';
+import { USE_CLOSED_DAY_BEHAVIORAL_AVERAGE } from './constants.js';
 import { isoDayIST, shiftDay } from '../../utils/sessionDay.js';
 // Freezing a day into a ScoreDaySnapshot, and reading the chain back.
 //
@@ -293,7 +295,7 @@ export async function getBlendedScore(prisma, { userId }) {
       // localDate is 'YYYY-MM-DD', so string order is date order.
       orderBy: [{ localDate: 'desc' }, { createdAt: 'desc' }],
     }),
-    behavioralAverages(prisma, { userIds: [userId] }),
+    behavioralAverageStats(prisma, { userIds: [userId] }),
   ]);
 
   const ledgerClose = latestSnapshot ? Number(latestSnapshot.close) : 0;
@@ -326,7 +328,8 @@ export async function getBlendedScore(prisma, { userId }) {
     // What the weekly-bonus bar shows, and the exact figure rewardService pays
     // on. The app has always read this field; nothing ever sent it, so the bar
     // sat at 0.0% for everyone.
-    behavioralAvg7Day: averages.get(userId) ?? 0,
+    behavioralAvg7Day: averages.get(userId)?.avgScore ?? (USE_CLOSED_DAY_BEHAVIORAL_AVERAGE ? null : 0),
+    closedDays: averages.get(userId)?.closedDays ?? 0,
   };
 
   await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
@@ -368,31 +371,32 @@ export { shiftDay } from '../../utils/sessionDay.js';
  * card, the weekly coin reward, and buddy-service's consistency leagues - so
  * the bar can never say "unlocked" for a number the reward does not pay on.
  *
- * Divided by 7, not by the days present, on purpose: "keep it up for 7 days"
- * has to mean all seven. Averaging only the days that exist would let a single
- * great day read as a perfect week.
+ * Default remains division by 7. USE_CLOSED_DAY_BEHAVIORAL_AVERAGE gates
+ * division by closed days with at least four days; fewer means unknown.
+ * The comparison script must be reviewed before enabling that rule.
  *
  * This replaces reads of a `dailyScore` model that never existed in the
  * schema, which made every reward evaluation and every league request throw.
  */
-export async function behavioralAverages(prisma, { userIds, today = todayIST() }) {
+export async function behavioralAverageStats(prisma, { userIds, today = todayIST() }) {
   const from = shiftDay(today, -CONSISTENCY_WINDOW_DAYS);
   const snapshots = await prisma.scoreDaySnapshot.findMany({
     where: { userId: { in: userIds }, localDate: { gte: from, lt: today } },
     select: { userId: true, close: true },
   });
-
-  const sums = new Map();
+  const byUser = new Map();
   for (const s of snapshots) {
-    const pct = computeBlendedHealthScore(Number(s.close), null);
-    sums.set(s.userId, (sums.get(s.userId) ?? 0) + pct);
+    if (!byUser.has(s.userId)) byUser.set(s.userId, []);
+    byUser.get(s.userId).push(s);
   }
+  return new Map([...byUser].map(([id, rows]) => [id, behavioralAverageForSnapshots(rows)]));
+}
 
-  const result = new Map();
-  for (const [userId, sum] of sums) {
-    result.set(userId, Math.round((sum / CONSISTENCY_WINDOW_DAYS) * 10) / 10);
-  }
-  return result;
+// Preserve the numeric-map API used by rewards. The gated null means not
+// enough data and must never qualify for coins.
+export async function behavioralAverages(prisma, options) {
+  const stats = await behavioralAverageStats(prisma, options);
+  return new Map([...stats].map(([id, value]) => [id, value.avgScore]));
 }
 
 /**
@@ -400,11 +404,10 @@ export async function behavioralAverages(prisma, { userIds, today = todayIST() }
  * Used by the buddy-service to build consistency leagues.
  */
 export async function getBatchBehavioralConsistency(prisma, { userIds, today }) {
-  const averages = await behavioralAverages(
-    prisma,
-    today == null ? { userIds } : { userIds, today },
+  const stats = await behavioralAverageStats(
+    prisma, today == null ? { userIds } : { userIds, today },
   );
-  return [...averages].map(([userId, avgScore]) => ({ userId, avgScore }));
+  return [...stats].map(([userId, value]) => ({ userId, ...value }));
 }
 
 /**

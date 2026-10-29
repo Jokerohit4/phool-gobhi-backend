@@ -30,7 +30,7 @@ export async function evaluateUserReward(userId, { today = todayIST() } = {}) {
   try {
     const averages = await behavioralAverages(prisma, { userIds: [userId], today });
     const average = averages.get(userId);
-    if (average === undefined) return { userId, status: 'ignored', reason: 'no scores' };
+    if (average == null) return { userId, status: 'ignored', reason: 'no scores' };
     if (average < CONSISTENCY_THRESHOLD) return { userId, status: 'ignored', score: average };
 
     const weekStart = weekStartIST(today);
