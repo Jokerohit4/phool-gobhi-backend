@@ -1,3 +1,4 @@
+import { compositionForFood, assertSpecificName } from './foodComposition.js';
 // The ONE sanctioned FoodItem write in this service.
 //
 // foodRequestService exists to keep "a request is not a food" true: nothing
@@ -71,10 +72,13 @@ export async function createFood(
     verified = false,
     verifiedBy,
     reviewNote,
+    dietaryType,
+    ingredients,
   },
 ) {
   const cleanName = clamp(name, NAME_MAX);
   if (!cleanName) throw badRequest('Name the food', 'NAME_REQUIRED');
+  assertSpecificName(cleanName);
 
   const cleanAliases = (aliases || [])
     .map((a) => clamp(a, 80))
@@ -121,9 +125,11 @@ export async function createFood(
           .slice(0, 8)
       : null;
 
+  const composition = compositionForFood({ name: cleanName, dietaryType, ingredients, nonVeg, veg: veg !== false });
   const food = await prisma.foodItem.create({
     data: {
       name: cleanName,
+      ...composition,
       aliases: cleanAliases,
       basis: cleanBasis,
       kcal: num(kcal),
@@ -136,8 +142,8 @@ export async function createFood(
       calciumMg: num(calciumMg),
       zincMg: num(zincMg),
       servings: cleanServings,
-      veg: veg !== false && nonVeg !== true,
-      nonVeg: nonVeg === true,
+      veg: composition.dietaryType === 'veg',
+      nonVeg: ['egg', 'non_veg'].includes(composition.dietaryType),
       createdByUserId: null,
       source: cleanSource,
       verified: cleanVerified,

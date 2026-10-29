@@ -1,3 +1,5 @@
+import { experimentConfig, generationControls } from '../photoExperiments.js';
+import { geminiUsage } from '../photoMeasurement.js';
 import { ProviderError } from '../../../utils/providerError.js';
 import { buildPrompt, parseJson, normaliseItem } from './visionShared.js';
 
@@ -73,6 +75,12 @@ const RESPONSE_SCHEMA = {
           catalogue: { type: 'STRING' },
           grams: { type: 'INTEGER' },
           confidence: { type: 'NUMBER' },
+          dietaryType: { type: 'STRING', enum: ['veg', 'egg', 'non_veg', 'unknown'] },
+          ingredients: { type: 'ARRAY', items: {
+            type: 'OBJECT', properties: { name: { type: 'STRING' }, grams: { type: 'NUMBER' },
+              dietaryType: { type: 'STRING', enum: ['veg', 'egg', 'non_veg', 'unknown'] } },
+            required: ['name', 'grams', 'dietaryType'],
+          } },
           nonVeg: { type: 'BOOLEAN' },
           nutrition: {
             type: 'OBJECT',
@@ -91,8 +99,8 @@ const RESPONSE_SCHEMA = {
             required: ['kcal', 'proteinG', 'carbsG', 'fatG', 'fibreG', 'basis', 'servings'],
           },
         },
-        required: ['name', 'nutrition'],
-        propertyOrdering: ['name', 'catalogue', 'grams', 'confidence', 'nonVeg', 'nutrition'],
+        required: ['name', 'nutrition', 'dietaryType', 'ingredients'],
+        propertyOrdering: ['name', 'catalogue', 'grams', 'confidence', 'nonVeg', 'dietaryType', 'ingredients', 'nutrition'],
       },
     },
     // One short line for the user when the photo is ambiguous. Not a
@@ -122,7 +130,7 @@ export function isConfigured(config = {}) {
  * response that fails to parse is an error rather than an empty result.
  */
 export async function recognizeFood(
-  { imageBase64, mimeType, catalogueText = '', timeoutMs = 20000 },
+  { imageBase64, mimeType, catalogueText = '', timeoutMs = 20000, enrichmentName = null },
   config = {},
 ) {
   const { baseUrl, apiKey, model } = currentConfig(config);
@@ -132,10 +140,27 @@ export async function recognizeFood(
       code: 'PROVIDER_NOT_CONFIGURED',
     });
   }
-  if (!imageBase64) {
+  if (!imageBase64 && !enrichmentName) {
     throw new ProviderError('No image supplied', { retryable: false, code: 'NO_IMAGE' });
   }
 
+  // Cost experiments (photoExperiments.js), all off by default. Only the
+  // nutrition requirement and its paragraph of the prompt change, so a
+  // benchmark measures one thing at a time. An enrichment request carries no
+  // image and asks for nutrition for exactly one named food.
+  const experiment = experimentConfig();
+  const schema = structuredClone(RESPONSE_SCHEMA);
+  let prompt;
+  if (enrichmentName) {
+    prompt = buildPrompt('', { nutrition: 'all' }) +
+      '\nThere is no photo. Return exactly one item, for the food named ' + JSON.stringify(enrichmentName) + '.';
+  } else if (experiment.mode === 'baseline') {
+    prompt = buildPrompt(catalogueText);
+  } else {
+    schema.properties.items.items.required = ['name', 'dietaryType'];
+    prompt = buildPrompt(catalogueText, { nutrition: experiment.mode === 'same_call' ? 'unfamiliar' : 'none' });
+  }
+  const controls = generationControls(model, experiment);
   const url = `${baseUrl}/models/${encodeURIComponent(model)}:generateContent`;
 
   let res;
@@ -150,13 +175,14 @@ export async function recognizeFood(
         contents: [
           {
             role: 'user',
-            parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: buildPrompt(catalogueText) }],
+            parts: [...(enrichmentName ? [] : [{ inlineData: { mimeType, data: imageBase64 } }]), { text: prompt }],
           },
         ],
         generationConfig: {
           temperature: 0,
           responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
+          responseSchema: schema,
+          ...controls,
         },
       }),
       signal: AbortSignal.timeout(timeoutMs),
@@ -191,17 +217,17 @@ export async function recognizeFood(
   // app would offer to retry.
   const blocked = body?.candidates?.[0]?.finishReason;
   if (!text) {
-    return { isFood: false, items: [], note: null, model: body?.modelVersion || model, tokensIn: null, tokensOut: null, blockedReason: blocked || null };
+    return { isFood: false, items: [], note: null, model: body?.modelVersion || model, ...geminiUsage(body, model), blockedReason: blocked || null };
   }
 
-  const parsed = parseJson(text);
+  let parsed;
+  try { parsed = parseJson(text); } catch (error) { error.usage = geminiUsage(body, model); throw error; }
 
   return {
     isFood: parsed.isFood !== false,
     items: Array.isArray(parsed.items) ? parsed.items.map(normaliseItem).filter(Boolean) : [],
     note: typeof parsed.note === 'string' ? parsed.note.slice(0, 200) : null,
     model: body?.modelVersion || model,
-    tokensIn: body?.usageMetadata?.promptTokenCount ?? null,
-    tokensOut: body?.usageMetadata?.candidatesTokenCount ?? null,
+    ...geminiUsage(body, model),
   };
 }

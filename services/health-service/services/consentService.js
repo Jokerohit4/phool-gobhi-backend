@@ -145,6 +145,9 @@ export async function deleteAllDataService(userId) {
     prisma.foodItem.deleteMany({ where: { createdByUserId: userId } }),
     prisma.scoreDaySnapshot.deleteMany({ where: { userId } }),
     prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+    prisma.foodPhotoUsage.deleteMany({ where: { userId } }),
+    prisma.foodPhotoContribution.deleteMany({ where: { userId } }),
+    prisma.foodPhotoRecognitionCache.deleteMany({ where: { userId } }),
     // Which foods this person could not find, and what they typed instead. A
     // record of what somebody eats is health data like any other, and the
     // backlog view has no userId precisely because this delete exists.

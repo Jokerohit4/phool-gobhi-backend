@@ -1,4 +1,6 @@
-﻿import * as nutritionService from '../services/ledger/nutritionService.js';
+import { sweepContributions, contribute, removeContributions } from '../services/ledger/photoContribution.js';
+import { customizeFood as createFoodVariant, compositionForFood } from '../services/ledger/foodComposition.js';
+import * as nutritionService from '../services/ledger/nutritionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
@@ -160,6 +162,9 @@ function serializeFood(f) {
     basis: f.basis,
     servings: f.servings,
     nonVeg: f.nonVeg,
+    ...compositionForFood(f),
+    isPersonal: f.createdByUserId != null,
+    baseFoodItemId: f.baseFoodItemId ?? null,
     // Carried to the client so it can say "approximate, not verified" rather
     // than implying a precision the data does not have.
     verified: f.verified,
@@ -170,6 +175,9 @@ function serializeFood(f) {
     fatG: Number(f.fatG),
     fibreG: Number(f.fibreG),
     ironMg: f.ironMg == null ? null : Number(f.ironMg),
+    magnesiumMg: f.magnesiumMg == null ? null : Number(f.magnesiumMg),
+    calciumMg: f.calciumMg == null ? null : Number(f.calciumMg),
+    zincMg: f.zincMg == null ? null : Number(f.zincMg),
   };
 }
 
@@ -196,6 +204,8 @@ export const createCustomFood = handle(async (req) => {
     servingGrams: b.servingGrams,
     servingLabel: b.servingLabel,
     nonVeg: b.nonVeg === true,
+    dietaryType: b.dietaryType,
+    ingredients: b.ingredients,
   });
   track('health_custom_food_created', req.userId, {});
   return serializeFood(food);
@@ -324,6 +334,8 @@ export const createFoodItem = handle(async (req) => {
   const b = req.body || {};
   const out = await foodAdminService.createFood(prisma, {
     name: b.name,
+    dietaryType: b.dietaryType,
+    ingredients: b.ingredients,
     aliases: b.aliases,
     basis: b.basis,
     kcal: b.kcal,
@@ -905,9 +917,14 @@ export const getFoodPhotoLink = handle(async (req) => {
 // admin surface rather than run by a scheduler, because this fleet has no cron
 // and an unset interval in Cloud Run is a job that silently never runs. The
 // endpoint is deliberately not part of the customer app's routes.
-export const sweepFoodPhotos = handle(async () =>
-  foodPhotoService.sweepUnconfirmedPhotos(prisma, { olderThanHours: 24 }),
-);
+// Also expires research photo copies and duplicate-cache entries. Served both
+// here (admin, on demand) and on the internal route the daily
+// sweep-food-photos.yml workflow calls.
+export const sweepFoodPhotos = handle(async () => {
+  const research = await sweepContributions(prisma);
+  const unconfirmed = await foodPhotoService.sweepUnconfirmedPhotos(prisma, { olderThanHours: 24 });
+  return { ...unconfirmed, research };
+});
 
 // Nightly: freeze yesterday for every ledger user who has not. Internal only,
 // fired by .github/workflows/close-ledger-days.yml. Returns counts so the run
@@ -941,3 +958,22 @@ export const getTargets = handle(async (req) => {
   };
 });
 
+
+export const customizeFood = handle(async (req) => {
+  const food = await createFoodVariant(prisma, {
+    userId: req.userId, foodItemId: req.params.id,
+    baseGrams: req.body?.baseGrams, additions: req.body?.additions, name: req.body?.name,
+  });
+  return serializeFood(food);
+});
+
+// Opt-in research copy of a photo the user already sent (roadmap Step 1).
+// Logging never depends on it; see photoContribution.js.
+export const contributeFoodPhoto = handle(async (req) => {
+  const row = await contribute(prisma, req.userId, req.body || {});
+  return { id: row.id, expiresAt: row.expiresAt };
+});
+
+// Withdrawal of every research copy. Never blocked by storage; a copy whose
+// blob failed to delete comes back as `pending` and the sweep retries it.
+export const withdrawFoodPhotoContributions = handle(async (req) => removeContributions(prisma, req.userId));

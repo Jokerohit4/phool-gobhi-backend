@@ -1,3 +1,8 @@
+import { cachedRecognition, experimentConfig } from './photoExperiments.js';
+import { candidates as providerCandidates } from './providers/index.js';
+import { normaliseFoodEstimate } from './foodPhotoCatalogue.js';
+import { measuredCall } from './photoMeasurement.js';
+import { compositionForFood, dietaryTypeOf, isGenericFoodName } from './foodComposition.js';
 // Photo recognition returns ordinary catalogue foods for the review and confirm
 // flow. Missing foods are added with validated AI estimates, never marked as
 // verified. Existing catalogue nutrition always takes precedence. Recognition
@@ -48,6 +53,7 @@ export function buildCatalogueText(rows) {
   const lines = [];
   let chars = 0;
   for (const row of rows) {
+    if (isGenericFoodName(row.name)) continue;
     const line = row.name + ((row.aliases || []).length ? ` — ${row.aliases.join(', ')}` : '');
     if (chars + line.length > CATALOGUE_TEXT_MAX_CHARS) break;
     lines.push(line);
@@ -144,20 +150,73 @@ export async function recognizePhoto(
   // resolution below trusts.
   const catalogueRows = await prisma.foodItem.findMany({
     where: { createdByUserId: null },
-    select: { id: true, name: true, aliases: true, nonVeg: true },
+    select: { id: true, name: true, aliases: true, nonVeg: true, veg: true, dietaryType: true },
     orderBy: { name: 'asc' },
   });
-  const catalogueText = buildCatalogueText(catalogueRows);
+  const config = experimentConfig();
+  const promptRows = await shortlistRows(prisma, { userId, catalogueRows, now, enabled: config.shortlist });
+  const catalogueText = buildCatalogueText(promptRows);
   const byCatalogueName = new Map(
-    catalogueRows.map((r) => [String(r.name).trim().toLowerCase(), r]),
+    catalogueRows.filter((r) => !isGenericFoodName(r.name)).map((r) => [String(r.name).trim().toLowerCase(), r]),
   );
+
+  // One catalogue search per distinct proposed name, shared by the enrichment
+  // pass inside the cached call and the matching loop below.
+  const searches = new Map();
+  const findRow = async (item) => {
+    const grounded = resolveCatalogueRow(item, byCatalogueName);
+    if (grounded && sameDiet(item, grounded)) return grounded;
+    const key = item.name.trim().toLowerCase();
+    if (!searches.has(key)) {
+      searches.set(key, await nutritionService.searchFoods(prisma, userId, {
+        query: item.name,
+        // The seeded catalogue is all `verified: false` (prisma/seed/foods.seed.js),
+        // and the Flutter food picker already passes includeUnverified so logging
+        // works at all. Refusing to match unverified rows here would mean the
+        // photo feature silently recognises nothing on a fresh database.
+        includeUnverified: true,
+      }));
+    }
+    // The ranking is the service's job, so the whole matching candidate set
+    // comes back and the best one is chosen from it.
+    return matchToCatalogue(searches.get(key).filter((f) => sameDiet(item, f)), item.name);
+  };
 
   let proposal;
   try {
-    proposal = await recognize(
-      { imageBase64: buffer.toString('base64'), mimeType, catalogueText },
-      { attempt },
-    );
+    const configuration = {
+      ...config, mimeType, attempt, catalogueText,
+      providers: providerCandidates().map((c) => ({
+        provider: c.provider, model: c.config.model || process.env.FOOD_PHOTO_PROVIDER_MODEL, baseUrl: c.config.baseUrl,
+      })),
+      defaultBaseUrl: process.env.FOOD_PHOTO_PROVIDER_BASE_URL,
+      assistantModel: process.env.ASSISTANT_PROVIDER_MODEL,
+    };
+    proposal = await cachedRecognition(prisma, { userId, buffer, now, configuration }, async () => {
+      const result = await measuredCall(prisma, userId, 'recognition',
+        () => recognize({ imageBase64: buffer.toString('base64'), mimeType, catalogueText }, { attempt }));
+      // Every new food needs nutrition before it can become a loggable row.
+      // A proposal still missing some is a retryable failure, thrown here so
+      // it is never cached: the retry gets a fresh call instead of the same gap.
+      for (const item of (result.items || []).slice(0, MAX_ITEMS)) {
+        if (isGenericFoodName(item.name) || await findRow(item)) continue;
+        if (!normaliseFoodEstimate(item.nutrition) && config.mode !== 'baseline') {
+          await enrichItem(item, { prisma, userId, recognize, attempt });
+        }
+        if (!normaliseFoodEstimate(item.nutrition)) {
+          throw Object.assign(new Error('Could not read all food details. Try again.'), {
+            status: 502, code: 'PROVIDER_FAILED',
+          });
+        }
+      }
+      return result;
+    });
+    if (proposal.cacheHit) {
+      await prisma.foodPhotoUsage.create({ data: {
+        userId, stage: 'recognition', outcome: 'cache_hit', latencyMs: Date.now() - startedAt,
+        model: proposal.model, tokensIn: 0, tokensOut: 0, thinkingTokens: 0, totalTokens: 0, cachedTokens: 0,
+      } });
+    }
   } catch (err) {
     await recordRequest(prisma, {
       userId,
@@ -169,7 +228,7 @@ export async function recognizePhoto(
     // A provider failure is re-thrown as a 502 rather than passed through raw:
     // the caller must not learn, or be able to log, a provider's error text.
     if (isProviderError(err)) {
-      console.error('[foodPhoto] provider failed', err.code, err.message);
+      console.error('[foodPhoto] provider failed', err.code);
       throw Object.assign(new Error('Could not read that photo. Try again.'), {
         status: 502,
         code: 'PROVIDER_FAILED',
@@ -227,34 +286,11 @@ export async function recognizePhoto(
     // Only an exact name match is honoured, and only against names we actually
     // sent - a model that invents "Paneer & greens" gets nothing for it, and
     // the name falls through to the ordinary matcher below.
-    const grounded = resolveCatalogueRow(item, byCatalogueName);
-    if (grounded) {
-      candidates.push({
-        foodItemId: grounded.id,
-        name: grounded.name,
-        proposedName: item.name,
-        grams: item.grams,
-        confidence: item.confidence,
-        nonVeg: grounded.nonVeg ?? item.nonVeg,
-        servings: grounded.servings ?? null,
-      });
+    if (isGenericFoodName(item.name)) {
+      unmatched.push({ name: item.name, confidence: item.confidence, reason: 'choose_variant', grams: item.grams });
       continue;
     }
-
-    const rows = await nutritionService.searchFoods(prisma, userId, {
-      query: item.name,
-      // The seeded catalogue is all `verified: false` (prisma/seed/foods.seed.js),
-      // and the Flutter food picker already passes includeUnverified so logging
-      // works at all. Refusing to match unverified rows here would mean the
-      // photo feature silently recognises nothing on a fresh database.
-      includeUnverified: true,
-    });
-    // The ranking is now the service's job, not this file's, so the whole
-    // matching candidate set comes back and the best one is chosen from it. The
-    // previous `limit: 8` was a workaround for the unordered `take`, and it
-    // actively lost matches: eight rows in arbitrary order, of which the right
-    // one might not be among them.
-    let food = matchToCatalogue(rows, item.name);
+    let food = await findRow(item);
     if (!food) {
       try {
         food = await ensurePhotoFood(prisma, item, { model: proposal.model });
@@ -273,7 +309,7 @@ export async function recognizePhoto(
       proposedName: item.name,
       grams: item.grams,
       confidence: item.confidence,
-      nonVeg: food.nonVeg,
+      nonVeg: food.nonVeg ?? item.nonVeg,
       servings: food.servings ?? null,
     });
   }
@@ -288,7 +324,7 @@ export async function recognizePhoto(
       where: { id: { in: ids } },
       select: { id: true, kcal: true, proteinG: true, carbsG: true, fatG: true,
         fibreG: true, ironMg: true, magnesiumMg: true, calciumMg: true, zincMg: true,
-        verified: true, servings: true },
+        verified: true, servings: true, name: true, dietaryType: true, ingredients: true, ingredientsEstimated: true, nonVeg: true, veg: true },
     });
     const byId = new Map(nutrientRows.map((r) => [r.id, r]));
     for (const c of candidates) {
@@ -306,6 +342,7 @@ export async function recognizePhoto(
         zincMg: r.zincMg == null ? null : Number(r.zincMg),
 
       };
+      Object.assign(c, compositionForFood(r));
       c.nutritionVerified = r.verified === true;
       if (c.servings == null) c.servings = r.servings ?? null;
     }
@@ -315,11 +352,13 @@ export async function recognizePhoto(
     userId,
     requestedAt: now,
     outcome: 'ok',
-    latencyMs,
+    latencyMs: Date.now() - startedAt,
     photoPath,
     model: proposal.model,
-    tokensIn: proposal.tokensIn,
-    tokensOut: proposal.tokensOut,
+    // A cache hit cost nothing; its stored proposal still carries the original
+    // call's token counts, which would double-count that spend.
+    tokensIn: proposal.cacheHit ? 0 : proposal.tokensIn,
+    tokensOut: proposal.cacheHit ? 0 : proposal.tokensOut,
     unmatchedCount: unmatched.length,
   });
 
@@ -538,6 +577,75 @@ function resolveCatalogueRow(item, byCatalogueName) {
   }
 
   return byCatalogueName.get(name) || null;
+}
+
+// A row is only a match when it agrees with the model on veg / egg / non-veg.
+// An item the model could not classify ('unknown' or absent) matches any row.
+function sameDiet(item, row) {
+  return !item.dietaryType || item.dietaryType === 'unknown' || dietaryTypeOf(row) === item.dietaryType;
+}
+
+/**
+ * Fills in nutrition for one unfamiliar food with a text-only call.
+ *
+ * The enrichment prompt asks for exactly one food, so its first item IS the
+ * answer: requiring the model to echo the name back character for character
+ * turned any rewording ("Aloo tikki burger" for "Aloo burger") into a failed
+ * photo. Never throws on a bad answer - the caller decides what a food without
+ * nutrition means.
+ */
+async function enrichItem(item, { prisma, userId, recognize, attempt }) {
+  try {
+    const enriched = await measuredCall(prisma, userId, 'enrichment',
+      () => recognize({ enrichmentName: item.name, catalogueText: '' }, { attempt }));
+    const estimate = enriched.items?.[0];
+    if (!estimate || !normaliseFoodEstimate(estimate.nutrition)) return;
+    Object.assign(item, {
+      nutrition: estimate.nutrition,
+      ...(estimate.ingredients?.length ? { ingredients: estimate.ingredients } : {}),
+      ...(estimate.dietaryType ? { dietaryType: estimate.dietaryType } : {}),
+    });
+  } catch (err) {
+    if (!isProviderError(err)) throw err;
+  }
+}
+
+// Meal slot from the IST hour, matching the slots the diary itself uses.
+export function mealSlotFor(now) {
+  const hour = new Date(now.getTime() + 330 * 60 * 1000).getUTCHours();
+  if (hour >= 4 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 16) return 'lunch';
+  if (hour >= 16 && hour < 19) return 'snack';
+  return 'dinner';
+}
+
+const SHORTLIST_PERSONAL = 30;
+const SHORTLIST_SLOT = 20;
+const SHORTLIST_POPULAR = 20;
+
+/**
+ * The catalogue names offered to the model as hints.
+ *
+ * There is no image signal before the call, so the shortlist is built from
+ * what we already know: this person's frequent foods, what people log in this
+ * meal slot, and what is logged most overall. It is a hint, never a limit -
+ * the model may name anything, and every proposed name still goes through the
+ * full-catalogue search in findRow. Off (the default) sends the whole catalogue.
+ */
+export async function shortlistRows(prisma, { userId, catalogueRows, now = new Date(), enabled = false }) {
+  if (!enabled) return catalogueRows;
+  const top = (where, take) => prisma.foodLog.groupBy({
+    by: ['foodItemId'], where: { foodItemId: { not: null }, ...where },
+    _count: { foodItemId: true }, orderBy: { _count: { foodItemId: 'desc' } }, take,
+  });
+  const [personal, slot, popular] = await Promise.all([
+    top({ userId }, SHORTLIST_PERSONAL),
+    top({ slot: mealSlotFor(now) }, SHORTLIST_SLOT),
+    top({}, SHORTLIST_POPULAR),
+  ]);
+  const ids = new Set([...personal, ...slot, ...popular].map((r) => r.foodItemId));
+  const rows = catalogueRows.filter((r) => ids.has(r.id));
+  return rows.length ? rows : catalogueRows;
 }
 
 /**

@@ -73,7 +73,7 @@ const planAll = planRouteLines();
 // same way routeSplitGates.test.js accounts for its ungated deletes, so the
 // exception is a visible, argued line instead of a regex widened to let
 // anything through.
-const UNGATED_BY_DESIGN = ["router.delete('/coach-consent/:scope'"];
+const UNGATED_BY_DESIGN = ["router.delete('/coach-consent/:scope'", "router.delete('/ledger/food-photos/contributions'"];
 
 test('every ledger route is authenticated', () => {
   // Each of these spreads `...nutrition`, `...medical`, `...consentGated`,
@@ -197,8 +197,11 @@ test('every ledger route is behind the healthLedger flag, except the coach surfa
 // third party, so their gating is asserted separately and in full rather than
 // inferred from a shared array.
 test('the photo routes are on the photo gate, and the photo gate is a fourth flag', () => {
-  const photoRoutes = all.filter((r) => r.line.includes('/ledger/food-photos'));
-  assert.equal(photoRoutes.length, 3, 'expected recognise, upload and confirm');
+  // The internal sweep is service-to-service (requireInternal), not a user
+  // photo route, so it is not on the photo gate.
+  const photoRoutes = all.filter((r) => r.line.includes("'/ledger/food-photos") &&
+    !UNGATED_BY_DESIGN.some((p) => r.line.startsWith(p)));
+  assert.equal(photoRoutes.length, 4, 'expected recognise, upload, confirm and explicit contribution');
 
   for (const r of photoRoutes) {
     assert.match(r.line, /\.\.\.photo\b/, `${r.n}: ${r.line} is not on the photo gate`);

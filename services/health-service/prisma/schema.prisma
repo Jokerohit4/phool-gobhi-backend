@@ -1549,6 +1549,11 @@ model FoodItem {
   // A custom food the user created. Never shared, never seeded over, and
   // erased with the account.
   createdByUserId Int?
+  dietaryType     String   @default("unknown")
+  ingredients     Json     @default("[]")
+  ingredientsEstimated Boolean @default(true)
+  baseFoodItemId   Int?
+
   // Where the nutrient numbers came from: 'ifct2017', 'usda', 'label-scan',
   // 'user-entered', 'estimate'. Provenance, not authority — a row can be
   // perfectly traceable and still unverified.
@@ -1583,6 +1588,7 @@ model FoodItem {
 
   @@index([name])
   @@index([createdByUserId])
+  @@index([baseFoodItemId])
   @@index([searchText])
   @@schema("health")
 }
@@ -2350,4 +2356,47 @@ model RoutineRewardClaim {
   paidAt DateTime?
   @@index([userId, paidAt])
   @@schema("health")
+}
+
+// Per paid call, including failed parses and enrichment. No image or prompt content.
+model FoodPhotoUsage {
+ id Int @id @default(autoincrement())
+ userId Int
+ requestedAt DateTime @default(now())
+ stage String
+ outcome String
+ latencyMs Int
+ model String?
+ tokensIn Int?
+ tokensOut Int?
+ thinkingTokens Int?
+ totalTokens Int?
+ cachedTokens Int?
+ @@index([userId, requestedAt])
+ @@schema("health")
+}
+
+model FoodPhotoRecognitionCache {
+ key String @id
+ userId Int
+ proposal Json
+ expiresAt DateTime
+ @@index([userId])
+ @@index([expiresAt])
+ @@schema("health")
+}
+
+model FoodPhotoContribution {
+ id Int @id @default(autoincrement())
+ userId Int
+ path String @unique
+ consentVersion String
+ createdAt DateTime @default(now())
+ expiresAt DateTime
+ label Json?
+ reviewer String?
+ reviewedAt DateTime?
+ @@index([userId])
+ @@index([expiresAt])
+ @@schema("health")
 }

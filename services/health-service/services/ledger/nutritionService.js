@@ -1,4 +1,5 @@
-﻿// Nutrition: search the food table, log what was eaten, aggregate a day,
+import { compositionForFood, assertSpecificName, isGenericFoodName } from './foodComposition.js';
+// Nutrition: search the food table, log what was eaten, aggregate a day,
 // and repeat a meal from a saved one.
 //
 // Two invariants run through the whole file:
@@ -77,6 +78,8 @@ export function computePortion(food, grams) {
     const value = food[field];
     out[field] = value == null ? null : roundTo(num(value) * factor, DECIMAL_PLACES.nutrients);
   }
+  if (food.dietaryType) out.dietaryType = food.dietaryType;
+  if (Array.isArray(food.ingredients) && food.ingredients.length) out.ingredients = food.ingredients;
   return out;
 }
 
@@ -162,7 +165,9 @@ export async function searchFoods(prisma, userId, { query, includeUnverified = f
     orderBy: [{ name: 'asc' }],
   });
 
-  return rankFoods(rows, q);
+  // Shared one-word rows ("Burger") are hidden so search steers to a variant.
+  // A user's own row is theirs to name, so it is never filtered out.
+  return rankFoods(rows.filter((f) => f.createdByUserId != null || !isGenericFoodName(f.name)), q);
 }
 
 /**
@@ -394,10 +399,11 @@ export function isUnknownSnapshot(nutrients) {
  */
 export async function createCustomFood(
   prisma,
-  { userId, name, kcal, proteinG, carbsG, fatG, servingGrams = 100, servingLabel, nonVeg = false },
+  { userId, name, kcal, proteinG, carbsG, fatG, servingGrams = 100, servingLabel, nonVeg = false, dietaryType, ingredients },
 ) {
   const cleanName = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 80);
   if (!cleanName) throw badRequest('Name the food', 'NAME_REQUIRED');
+  assertSpecificName(cleanName);
 
   const calories = Number(kcal);
   if (!(calories > 0)) throw badRequest('Enter the approximate calories', 'KCAL_REQUIRED');
@@ -432,13 +438,15 @@ export async function createCustomFood(
   }
 
   const label = String(servingLabel || '').trim().slice(0, 40) || '1 serving';
+  const composition = compositionForFood({ name: cleanName, dietaryType, ingredients, nonVeg, veg: dietaryType === 'veg' });
   const data = {
     ...per100,
+    ...composition,
     fibreG: 0,
     basis: 'as_served',
     servings: [{ label, grams: roundTo(grams, DECIMAL_PLACES.grams) }],
-    nonVeg: nonVeg === true,
-    veg: nonVeg !== true,
+    nonVeg: ['egg', 'non_veg'].includes(composition.dietaryType),
+    veg: composition.dietaryType === 'veg',
     source: 'user-entered',
     verified: false,
     searchText: buildSearchText(cleanName, []),

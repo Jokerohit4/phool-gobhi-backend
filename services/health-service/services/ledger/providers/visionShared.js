@@ -1,3 +1,4 @@
+import { normaliseIngredients, dietaryTypeOf } from '../foodComposition.js';
 import { normaliseFoodEstimate } from '../foodPhotoCatalogue.js';
 import { ProviderError } from '../../../utils/providerError.js';
 
@@ -21,6 +22,10 @@ export const PROMPT = [
   '',
   'For each one, return a plain English name of the food itself, without quantities,',
   'plurals or garnish. Preserve preparation when it changes the nutrition. "dal", "plain rice", "ghee", "roti".',
+  'Return specific variants such as Chicken burger, Aloo burger or Egg burger, never just burger.',
+  'Include dietaryType (veg, egg, non_veg or unknown) and ingredients as an array',
+  'of {name, grams, dietaryType}, with weights summing to 100 g of the finished food.',
+  'Do not infer hidden meat or egg from shape alone; use unknown when uncertain.',
   'A dish name is fine if the dish IS the food: "paneer bhurji", "chole".',
   '',
   'Estimate the cooked weight in grams of each item, as one number, not a range.',
@@ -44,11 +49,23 @@ export const PROMPT = [
 // exact rows; giving it the names once means it answers both halves of the
 // question in the same response. `maxItems` is sent with the catalogue so the
 // model need not infer how many answers to give.
-export function buildPrompt(catalogueText) {
+//
+// `nutrition` controls only the nutrition paragraph, so a cost experiment
+// changes one thing: 'all' (today's behaviour), 'unfamiliar' (only for foods
+// that are not one of the catalogue rows) or 'none' (identification only).
+const NUTRITION_ALL = 'For EVERY identified food, also return nutrition';
+const NUTRITION_UNFAMILIAR = 'ONLY for an identified food that is NOT one of the catalogue rows, also return nutrition';
+export function buildPrompt(catalogueText, { nutrition = 'all' } = {}) {
   const text = String(catalogueText || '').trim();
-  if (!text) return PROMPT;
+  let prompt = PROMPT;
+  if (nutrition === 'unfamiliar') prompt = prompt.replace(NUTRITION_ALL, NUTRITION_UNFAMILIAR);
+  if (nutrition === 'none') {
+    prompt = prompt.slice(0, prompt.indexOf(NUTRITION_ALL)) +
+      'Do NOT return nutrition, servings or aliases.' + prompt.slice(prompt.indexOf('serving. These estimates') + 'serving. These estimates fill catalogue gaps automatically.'.length);
+  }
+  if (!text) return prompt;
   return [
-    PROMPT,
+    prompt,
     '',
     'We maintain a catalogue of the foods we recognise. The most relevant rows',
     'are listed below.',
@@ -118,5 +135,7 @@ export function normaliseItem(item) {
         : null;
 
   const nutrition = normaliseFoodEstimate(item?.nutrition);
-  return { ...(nutrition ? { nutrition } : {}), name, grams, confidence, nonVeg: item?.nonVeg === true, catalogue: typeof item?.catalogue === 'string' ? item.catalogue.trim().slice(0, 120) : '' };
+  const ingredients = normaliseIngredients(item?.ingredients);
+  const composition = { ...(item?.dietaryType ? { dietaryType: dietaryTypeOf({ ...item, ingredients }), ingredients } : {}) };
+  return { ...composition, ...(nutrition ? { nutrition } : {}), name, grams, confidence, nonVeg: item?.nonVeg === true, catalogue: typeof item?.catalogue === 'string' ? item.catalogue.trim().slice(0, 120) : '' };
 }

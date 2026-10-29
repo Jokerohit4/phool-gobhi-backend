@@ -131,6 +131,7 @@ router.get('/ledger/foods/recent', ...nutrition, ledgerCtrl.recentFoods);
 // Unlike a food request (below), this is usable immediately: it is searchable
 // and loggable by its owner, and by nobody else.
 router.post('/ledger/foods', ...nutrition, ledgerCtrl.createCustomFood);
+router.post('/ledger/foods/:id/customize', ...nutrition, ledgerCtrl.customizeFood);
 // The empty state's escape hatch. Same gate as search itself, for the same
 // reason: it lives inside the picker, so a user who cannot reach the picker
 // cannot reach this.
@@ -210,6 +211,13 @@ router.post(
 // no new capability to gate.
 router.get('/ledger/food-logs/:id/photo', ...nutrition, ledgerCtrl.getFoodPhotoLink);
 router.post('/ledger/food-photos/confirm', ...photo, ledgerCtrl.confirmFoodPhoto);
+// Opt-in research copy of a photo already sent for recognition. Same gates as
+// recognise: it is a copy of the same image, under the same consent.
+router.post('/ledger/food-photos/contribute', ...photo, ledgerCtrl.contributeFoodPhoto);
+// Withdrawal is authenticated only, never flag- or consent-gated: a user must
+// be able to take their copies back after switching either off.
+router.delete('/ledger/food-photos/contributions', requireAuth, ledgerCtrl.withdrawFoodPhotoContributions);
+
 
 // ---- Appointments ---------------------------------------------------------
 //
@@ -287,5 +295,8 @@ router.delete('/ledger/medical-documents/:id', ...medical, ledgerCtrl.deleteMedi
 
 // ---- Nightly sweep (internal) --------------------------------------------
 router.post('/internal/ledger/close-days', requireInternal, ledgerCtrl.runDayCloseSweepInternal);
+// Daily photo sweep: unconfirmed photos past 24 h, expired research copies and
+// cache entries. Fired by .github/workflows/sweep-food-photos.yml.
+router.post('/internal/ledger/food-photos/sweep', requireInternal, ledgerCtrl.sweepFoodPhotos);
 
 export default router;

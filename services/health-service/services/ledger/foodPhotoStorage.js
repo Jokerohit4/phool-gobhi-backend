@@ -250,3 +250,10 @@ export async function deleteUserPhotos(userId) {
 
   return { deleted, failed };
 }
+
+export async function readPhoto(path) { const [bytes]=await getBucket().file(path).download(); return bytes; }
+export async function saveContribution({buffer,userId}) {
+ const path=`food/${userId}/contributions/${randomUUID()}.jpg`;
+ await getBucket().file(path).save(buffer,{contentType:'image/jpeg',resumable:false,metadata:{cacheControl:'private, no-store'}});
+ return path;
+}

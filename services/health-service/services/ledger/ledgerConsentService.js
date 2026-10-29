@@ -183,6 +183,16 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
 // already stored is a separate, explicit request, so the destructive default
 // is gone from both here and the controller.
 async function removeScope(userId, scope, { purge = false } = {}) {
+  // Research copies and cached proposals go with the photo consent. Withdrawal
+  // never waits on storage: a copy whose blob fails to delete is left marked
+  // expired for the retention sweep to retry (see removeContributions), which
+  // is also why the transactions below do not delete contribution rows.
+  // Imported lazily so the image library only loads where it is used.
+  if (scope === PHOTO_SCOPE || scope === NUTRITION_SCOPE) {
+    const { removeContributions } = await import('./photoContribution.js');
+    await removeContributions(prisma, userId);
+    await prisma.foodPhotoRecognitionCache.deleteMany({ where: { userId } });
+  }
   const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
   if (consent) {
     // The recorded version goes with the scope. Leaving it behind would make a
@@ -229,6 +239,8 @@ async function removeScope(userId, scope, { purge = false } = {}) {
       // sent a photo, this model read it, this is what it cost" is itself a
       // record of the user's food logging habits.
       prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+      prisma.foodPhotoUsage.deleteMany({ where: { userId } }),
+      prisma.foodPhotoRecognitionCache.deleteMany({ where: { userId } }),
       // And the foods this person could not find. Same reason: the request is
       // a list of what they eat and what the catalogue lacked, and it is in
       // this transaction because a revoked scope must not leave a free-text
@@ -274,6 +286,8 @@ async function removeScope(userId, scope, { purge = false } = {}) {
       // A row recording "this user sent a photo, this model read it, this is
       // what it cost" is a record of what they ate and how it was recognised.
       prisma.foodPhotoRequestLog.deleteMany({ where: { userId } }),
+      prisma.foodPhotoUsage.deleteMany({ where: { userId } }),
+      prisma.foodPhotoRecognitionCache.deleteMany({ where: { userId } }),
     ]);
 
     if (photos.length) {

@@ -1,3 +1,4 @@
+import { FOOD_VARIANTS } from './food-variants.seed.js';
 // Starter food seed.
 //
 // READ THIS BEFORE ADDING TO IT.
@@ -629,11 +630,11 @@ export const FOODS = [
   // from a stall and called by one word. Momos and kachori were the two the
   // request flow would otherwise have collected on day one: a search for momos
   // returning nothing is not a nutrition question, it is a catalogue hole.
-  { name: 'Momos, steamed', aliases: ['momos', 'momo', 'dumpling', 'steamed momos'], basis: 'cooked', veg: true,
+  { name: 'Momos, vegetable, steamed', previousNames: ['Momos, steamed'], aliases: ['momos', 'momo', 'dumpling', 'steamed momos'], basis: 'cooked', veg: true,
     kcal: 190, proteinG: 9.0, carbsG: 22.0, fatG: 8.0, fibreG: 1.5,
     ironMg: 1.8, magnesiumMg: 28, calciumMg: 40, zincMg: 1.2,
     servings: [{ label: '6 pieces', grams: 150 }] },
-  { name: 'Momos, fried', aliases: ['fried momos', 'tandoori momos'], basis: 'cooked', veg: true,
+  { name: 'Momos, vegetable, fried', previousNames: ['Momos, fried'], aliases: ['fried momos', 'tandoori momos'], basis: 'cooked', veg: true,
     // The same food in deep oil is roughly double the calories and four times
     // the fat. Rolling it up under "momos" would quietly erase the
     // distinction between the version somebody is trying to eat and the version
@@ -787,6 +788,10 @@ export const FOODS = [
 const REQUIRED = [
   'name', 'basis', 'kcal', 'proteinG', 'carbsG', 'fatG', 'fibreG',
 ];
+
+// Named variants (burgers and their parts) go through the same checks as
+// every other seed row: macro consistency and no duplicate names.
+FOODS.push(...FOOD_VARIANTS);
 
 for (const food of FOODS) {
   for (const field of REQUIRED) {

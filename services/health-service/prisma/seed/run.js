@@ -1,3 +1,4 @@
+import { compositionForFood } from '../../services/ledger/foodComposition.js';
 // Idempotent seeder for the food table.
 //
 //   node prisma/seed/run.js
@@ -50,6 +51,7 @@ async function seed() {
 
   for (const food of FOODS) {
     const data = {
+      ...compositionForFood(food),
       aliases: food.aliases || [],
       // The haystack search runs against. Derived here rather than in the seed
       // array so there is exactly one definition of what goes into it, shared
@@ -87,9 +89,12 @@ async function seed() {
     // user's own row and the update below rewrote it. One user naming a food
     // "Rice, cooked (white)" would have their entry replaced by the seeder's
     // estimates on the next run.
+    // A renamed seed row lists its old names in `previousNames`, so a re-seed
+    // renames the existing row instead of creating a duplicate beside it.
+    const names = [food.name, ...(food.previousNames || [])];
     const existing = await prisma.foodItem.findFirst({
       where: {
-        name: { equals: food.name, mode: 'insensitive' },
+        OR: names.map((name) => ({ name: { equals: name, mode: 'insensitive' } })),
         basis: food.basis,
         createdByUserId: null,
       },
@@ -119,7 +124,7 @@ async function seed() {
         }
         continue;
       }
-      await prisma.foodItem.update({ where: { id: existing.id }, data });
+      await prisma.foodItem.update({ where: { id: existing.id }, data: { name: food.name, ...data } });
       updated += 1;
     } else {
       await prisma.foodItem.create({ data: { name: food.name, ...data } });

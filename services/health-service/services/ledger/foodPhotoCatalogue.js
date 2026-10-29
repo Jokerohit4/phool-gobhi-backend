@@ -1,3 +1,4 @@
+import { compositionForFood, assertSpecificName } from './foodComposition.js';
 import { buildSearchText } from './foodMatch.js';
 
 const MACROS = ['proteinG', 'carbsG', 'fatG', 'fibreG'];
@@ -33,6 +34,7 @@ export function normaliseFoodEstimate(value) {
 
 export async function ensurePhotoFood(prisma, item, { model } = {}) {
   const name = clean(item.name, 80);
+  assertSpecificName(name);
   return prisma.$transaction(async (tx) => {
     // No schema migration is needed. Serialize simultaneous photographs of the
     // same dish across service instances, then recheck before inserting.
@@ -51,8 +53,9 @@ export async function ensurePhotoFood(prisma, item, { model } = {}) {
     return tx.foodItem.create({ data: {
       name,
       ...nutrition,
-      veg: item.nonVeg !== true,
-      nonVeg: item.nonVeg === true,
+      ...compositionForFood(item),
+      veg: compositionForFood(item).dietaryType === 'veg',
+      nonVeg: ['egg', 'non_veg'].includes(compositionForFood(item).dietaryType),
       createdByUserId: null,
       source: 'estimate',
       verified: false,

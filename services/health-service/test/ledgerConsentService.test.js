@@ -67,6 +67,7 @@ test('setup: stub Prisma, import once', async (t) => {
               return { count: photoPaths.length };
             },
           };
+          for (const name of ['foodPhotoUsage','foodPhotoContribution','foodPhotoRecognitionCache']) this[name]={findMany:async()=>[],deleteMany:async()=>({count:0})};
           this.foodPhotoRequestLog = {
             deleteMany: async () => {
               purgeLog.push(['foodPhotoRequestLog.deleteMany', null]);

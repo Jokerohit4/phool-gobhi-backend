@@ -32,6 +32,7 @@ const JSON_INSTRUCTION = [
   '',
   'Reply with ONLY a single JSON object and no prose before or after it, of the shape:',
   '{"isFood": <bool>, "items": [{"name": <string>, "catalogue": <string>,',
+  '"dietaryType": "veg|egg|non_veg|unknown", "ingredients": [{"name": <string>, "grams": <number>, "dietaryType": <string>}],',
   '"grams": <number>, "confidence": <number between 0 and 1>, "nonVeg": <bool>,',
   '"nutrition": {"kcal": <number>, "proteinG": <number>, "carbsG": <number>,',
   '"fatG": <number>, "fibreG": <number>, "ironMg": <number or null>,',
@@ -129,6 +130,7 @@ export async function recognizeFood(
 
   const body = await res.json();
   const message = body?.choices?.[0]?.message;
+  const usage = {model:body?.model || model, tokensIn:body?.usage?.prompt_tokens ?? null, tokensOut:body?.usage?.completion_tokens == null ? null : body.usage.completion_tokens-(body?.usage?.completion_tokens_details?.reasoning_tokens ?? 0), thinkingTokens:body?.usage?.completion_tokens_details?.reasoning_tokens ?? null, totalTokens:body?.usage?.total_tokens ?? null, cachedTokens:body?.usage?.prompt_tokens_details?.cached_tokens ?? null};
   const text = typeof message?.content === 'string' ? message.content : '';
   const finishReason = body?.choices?.[0]?.finish_reason ?? null;
 
@@ -141,7 +143,7 @@ export async function recognizeFood(
   // move on to the next candidate.
   if (!text) {
     if (finishReason === 'content_filter') {
-      return { isFood: false, items: [], note: null, model: body?.model || model, tokensIn: null, tokensOut: null, blockedReason: finishReason };
+      return { isFood: false, items: [], note: null, model: body?.model || model, ...usage, blockedReason: finishReason };
     }
     throw new ProviderError('Food photo provider returned an empty response', {
       retryable: true,
@@ -149,14 +151,13 @@ export async function recognizeFood(
     });
   }
 
-  const parsed = parseJson(text);
+  let parsed; try { parsed=parseJson(text); } catch(e) {e.usage=usage;throw e;}
 
   return {
     isFood: parsed.isFood !== false,
     items: Array.isArray(parsed.items) ? parsed.items.map(normaliseItem).filter(Boolean) : [],
     note: typeof parsed.note === 'string' ? parsed.note.slice(0, 200) : null,
     model: body?.model || model,
-    tokensIn: body?.usage?.prompt_tokens ?? null,
-    tokensOut: body?.usage?.completion_tokens ?? null,
+    ...usage,
   };
 }

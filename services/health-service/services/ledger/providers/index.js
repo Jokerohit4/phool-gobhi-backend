@@ -140,10 +140,16 @@ export async function recognizeFood(payload, { attempt = 1 } = {}) {
   const n = Math.trunc(Number(attempt));
   const index = ((Number.isFinite(n) && n >= 1 ? n : 1) - 1) % chain.length;
   const candidate = chain[index];
-  if (candidate.provider === 'gemini') {
-    return geminiVisionProvider.recognizeFood(payload, candidate.config);
+  try {
+    return candidate.provider === 'gemini'
+      ? await geminiVisionProvider.recognizeFood(payload, candidate.config)
+      : await openaiVisionProvider.recognizeFood(payload, candidate.config);
+  } catch (error) {
+    // The model that was actually asked, for the usage row. Unknown is null,
+    // never a guessed default that would misattribute the spend.
+    error.usage = { model: candidate.config.model || process.env.FOOD_PHOTO_PROVIDER_MODEL || null, ...error.usage };
+    throw error;
   }
-  return openaiVisionProvider.recognizeFood(payload, candidate.config);
 }
 
 /// Whether at least one candidate has an API key, a model and a base URL.

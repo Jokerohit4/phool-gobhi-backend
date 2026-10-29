@@ -130,6 +130,7 @@ function mockPrisma(overrides = {}) {
       },
       findUnique: async ({ where }) => catalogue.find((f) => f.id === where.id) ?? null,
     },
+    foodPhotoUsage: {create:async ({data}) => data},
     foodPhotoRequestLog: {
       count: async () => overrides.requestCount ?? 0,
       create: async (args) => ({ id: 1, ...args.data }),
@@ -249,6 +250,34 @@ test('a missing food is created with full options and returned as an ordinary ca
   const again = await svc.recognizePhoto(prisma, { userId: 8, ...PHOTO_ARGS, deps: deps() });
   assert.equal(again.items[0].foodItemId, food.id);
   assert.equal(prisma.catalogue.length, 1, 'later photos reuse the new shared food');
+});
+
+test('separate enrichment accepts a reworded name and never caches a gap', async () => {
+  const old = process.env.FOOD_PHOTO_NUTRITION_MODE;
+  process.env.FOOD_PHOTO_NUTRITION_MODE = 'separate';
+  const payloads = [];
+  let enrichmentAnswer = { name: 'Kuttu chilla (buckwheat)', grams: 100, nutrition: PHOTO_NUTRITION };
+  recognizer.recognizeFood = async (payload) => {
+    payloads.push(payload);
+    if (payload.enrichmentName) return { isFood: true, model: 'vision-test', items: enrichmentAnswer ? [enrichmentAnswer] : [] };
+    return { isFood: true, model: 'vision-test', items: [{ name: 'kuttu ki chilla', grams: 180, confidence: 0.9 }] };
+  };
+  try {
+    const prisma = mockPrisma({ catalogue: [] });
+    const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+    // The model reworded the name; the single answer is still the answer.
+    assert.equal(out.items.length, 1);
+    assert.equal(prisma.catalogue[0].name, 'kuttu ki chilla');
+    assert.equal(payloads.filter((p) => p.enrichmentName).length, 1);
+
+    enrichmentAnswer = null;
+    await assert.rejects(
+      svc.recognizePhoto(mockPrisma({ catalogue: [] }), { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+      (e) => e.status === 502 && e.code === 'PROVIDER_FAILED',
+    );
+  } finally {
+    if (old == null) delete process.env.FOOD_PHOTO_NUTRITION_MODE; else process.env.FOOD_PHOTO_NUTRITION_MODE = old;
+  }
 });
 
 test('existing catalogue nutrition is never overwritten by model estimates', async () => {
