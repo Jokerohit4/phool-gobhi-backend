@@ -9,7 +9,7 @@ import { redact } from './redact.mjs';
 import { rehearseBootstrap } from './bootstrap.mjs';
 import { rehearseDevLineage } from './dev-lineage.mjs';
 import { bootstrapDatabases } from './bootstrap-inputs.mjs';
-import { baselineFiles, parentCommit, forwardMigrations, replayPrerequisites, telemetryOutcomeConstraint } from './migration-inputs.mjs';
+import { baselineFiles, parentCommit, forwardMigrations, replayPrerequisites, telemetryOutcomeConstraint, laterMigrations, migrationPath } from './migration-inputs.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const runtime = resolve(root, 'tools/explore-e10/.runtime');
@@ -195,6 +195,34 @@ try {
   const nativeDatabases = ['e10_runtime', 'e10_upgrade', 'e10_upgrade_empty', ...bootstrapped, ...(devLineage ? ['e10_dev_lineage'] : [])];
   for (const database of bootstrapDatabases.filter(db => !bootstrapped.includes(db))) {
     evidence.checks.push({ check: `${database}: native Explore/telemetry suite`, result: 'not-executed', reason: 'disposable bootstrap lineage failed' });
+  }
+
+  // E10 is verified at its own point above. Bring every migrated database on to
+  // the current auth schema before the suite, whose client is generated from it.
+  // Recorded in each database's own Prisma history, like the forward set above.
+  const later = laterMigrations(root);
+  evidence.laterMigrations = later;
+  for (const database of nativeDatabases.filter(db => db !== 'e10_runtime')) {
+    const client = new pg.Client({ connectionString: urlFor(database) });
+    await client.connect();
+    try {
+      const table = await migrationTable(client);
+      const applied = new Set((await client.query(`SELECT migration_name FROM ${table}
+        WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)).rows.map(r => r.migration_name));
+      for (const migration of later.filter(m => !applied.has(m))) {
+        const sql = readFileSync(resolve(root, migrationPath, migration, 'migration.sql'), 'utf8');
+        await client.query('BEGIN');
+        try {
+          await client.query(sql);
+          await client.query(`INSERT INTO ${table}(id,checksum,migration_name,finished_at,applied_steps_count)
+            VALUES ($1,$2,$1,now(),1)`, [migration, sqlHash(sql)]);
+          await client.query('COMMIT');
+        } catch (error) { await client.query('ROLLBACK'); throw error; }
+      }
+      mark(`${database}: later auth migrations applied`, { later });
+    } catch (error) {
+      evidence.checks.push({ check: `${database}: later auth migrations`, result: 'failed', error: redact(error.message, [password]) });
+    } finally { await client.end(); }
   }
 
   // Generate isolated clients, never write a source lane's node_modules/.prisma.
