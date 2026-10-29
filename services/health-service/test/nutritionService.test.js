@@ -1159,3 +1159,19 @@ test('a replacement food cannot cross ownership or bypass validation', async () 
   await assert.rejects(() => updateLog(mockPrisma(), 7, 42, { foodItemId: 9 }), /No such food log/);
   assert.equal(writes, 0);
 });
+
+test('logFood rejects malformed and distant future local dates before reading or writing', async () => {
+  for (const localDate of [undefined, '', '2026-02-30', '2026-13-01', '30-10-2026', '9999-12-31', 20261030]) {
+    await assert.rejects(logFood({}, { userId: 7, localDate, slot: 'lunch' }),
+      { status: 400, code: 'INVALID_LOCAL_DATE' });
+  }
+});
+
+test('logFood permits IST tomorrow across the UTC day boundary', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-30T19:00:00Z') });
+  const prisma = mockPrisma({ foodItem: { findUnique: async () => RICE } });
+  const out = await logFood(prisma, { userId: 7, localDate: '2026-11-01', slot: 'lunch', foodItemId: 1, grams: 100 });
+  assert.equal(out.localDate, '2026-11-01');
+  await assert.rejects(logFood(prisma, { userId: 7, localDate: '2026-11-02', slot: 'lunch' }),
+    { status: 400, code: 'INVALID_LOCAL_DATE' });
+});

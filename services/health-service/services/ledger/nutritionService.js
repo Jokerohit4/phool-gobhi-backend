@@ -24,6 +24,7 @@ import {
 
 import { rankFoods, buildSearchText } from './foodMatch.js';
 import { isIsoDay } from './isoDay.js';
+import { istDateString, addDays, dayToDate, dayString } from '../../utils/sessionDay.js';
 
 const GRAMS_MAX = 5000;
 const SERVINGS_MAX = 50;
@@ -246,6 +247,11 @@ export async function recentFoods(prisma, userId, { limit = 8 } = {}) {
  * parameters that every caller would have to know to leave undefined.
  */
 export async function logFood(prisma, { userId, localDate, slot, foodItemId, grams, servings, servingLabel, source = DEFAULT_FOOD_LOG_SOURCE, photoCorrections = 0, photo = null }) {
+  if (typeof localDate !== 'string' || !isIsoDay(localDate) || localDate > dayString(addDays(dayToDate(istDateString()), 1))) {
+    const err = badRequest('localDate must be a real ISO day no later than IST tomorrow');
+    err.code = 'INVALID_LOCAL_DATE';
+    throw err;
+  }
   if (!MEAL_SLOTS.includes(slot)) {
     throw badRequest(`slot must be one of: ${MEAL_SLOTS.join(', ')}`);
   }
