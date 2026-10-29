@@ -34,3 +34,28 @@ test('unknown plan history and no eligible food are not invented zeros', () => {
   assert.equal(out.food.avgKcalCompleteDays,null);
   assert.deepEqual(summarizeDays([],[],null,0),{});
 });
+
+
+test('closedDays denominators and averages exclude today even if it already meets every target', () => {
+  const day = { plan:{done:1,total:1,targetHit:true,source:'snapshot'},
+    food:{status:'on_target',logCount:2,kcal:1800,targetKcal:2000},water:{ml:2000,met:true} };
+  const today = {...day,isToday:true,food:{...day.food,kcal:5000},water:{ml:9000,met:true}};
+  const days = [day, today, {...day,paused:true}, {...day,isFuture:true}];
+  const totals = summarizeDays(days,['plan','food','water','workouts'],{sessionsPerWeek:3,source:'user'},1);
+  for (const layer of ['plan','food','water','workouts']) assert.equal(totals[layer].closedDays,1,layer);
+  for (const layer of ['plan','food','water']) assert.equal(totals[layer].denominatorDays,2,layer);
+  assert.equal(totals.plan.daysTargetHit,1);
+  assert.equal(totals.food.daysComplete,1); assert.equal(totals.food.daysOnTarget,1);
+  assert.equal(totals.food.avgKcalCompleteDays,1800); assert.equal(totals.water.avgMl,2000);
+  assert.equal(totals.water.daysMet,1);
+  const onlyToday = summarizeDays([today],['plan','food','water'],null,0);
+  assert.equal(onlyToday.food.closedDays,0); assert.equal(onlyToday.plan.daysTargetHit,0);
+  assert.equal(onlyToday.water.avgMl,null); assert.equal(onlyToday.food.avgKcalCompleteDays,null);
+});
+test('past-week closedDays equal eligible elapsed days', () => {
+  const day = {plan:{done:0,total:1,targetHit:false},food:{status:'unlogged',logCount:0},water:{ml:0,met:false}};
+  const totals=summarizeDays([...Array(7)].map(()=>({...day})),['plan','food','water'],null,0);
+  for(const layer of ['plan','food','water']) {
+    assert.equal(totals[layer].closedDays,7); assert.equal(totals[layer].denominatorDays,7);
+  }
+});

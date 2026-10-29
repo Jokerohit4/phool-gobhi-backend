@@ -188,6 +188,7 @@
         "done": 6,
         "total": 9,
         "denominatorDays": 3,
+        "closedDays": 3,
         "source": "snapshot"
       },
       "food": {
@@ -197,17 +198,20 @@
         "weekKcal": 5400,
         "weekTargetKcal": 5600,
         "avgKcalCompleteDays": 1800,
-        "denominatorDays": 3
+        "denominatorDays": 3,
+        "closedDays": 3
       },
       "water": {
         "daysMet": 1,
         "avgMl": 2200,
-        "denominatorDays": 3
+        "denominatorDays": 3,
+        "closedDays": 3
       },
       "workouts": {
         "completed": 3,
         "goal": 4,
-        "source": "user"
+        "source": "user",
+        "closedDays": 3
       }
     }
   }

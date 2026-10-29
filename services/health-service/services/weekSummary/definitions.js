@@ -17,30 +17,32 @@ export const average = values => values.length ? Math.round(values.reduce((a,b) 
 export function summarizeDays(days, layers, workoutGoal, completedWorkouts) {
   const eligible = days.filter(isDenominatorDay);
   const denominatorDays = eligible.length;
+  const closed = eligible.filter(d => !d.isToday);
+  const closedDays = closed.length;
   const knownPlan = eligible.every(d => d.plan?.done != null && d.plan?.total != null);
   const totals = {};
   if (layers.includes('plan')) totals.plan = {
-    daysTargetHit: eligible.filter(d => d.plan?.targetHit === true).length,
+    daysTargetHit: closed.filter(d => d.plan?.targetHit === true).length,
     done: knownPlan ? eligible.reduce((n,d) => n+d.plan.done, 0) : null,
     total: knownPlan ? eligible.reduce((n,d) => n+d.plan.total, 0) : null,
-    denominatorDays,
+    denominatorDays, closedDays,
     source: eligible.some(d => d.plan?.source === 'snapshot') ? 'snapshot' : 'live',
   };
   if (layers.includes('food')) {
-    const complete = eligible.filter(d => isCompleteFoodDay(d.food.status));
+    const complete = closed.filter(d => isCompleteFoodDay(d.food.status));
     totals.food = {
       daysLogged: eligible.filter(d => d.food.logCount > 0).length,
       daysComplete: complete.length,
       daysOnTarget: complete.filter(d => d.food.status === 'on_target').length,
       weekKcal: complete.reduce((n,d) => n+d.food.kcal, 0),
       weekTargetKcal: complete.reduce((n,d) => n+(d.food.targetKcal ?? 0), 0),
-      avgKcalCompleteDays: average(complete.map(d => d.food.kcal)), denominatorDays,
+      avgKcalCompleteDays: average(complete.map(d => d.food.kcal)), denominatorDays, closedDays,
     };
   }
   if (layers.includes('water')) totals.water = {
-    daysMet: eligible.filter(d => !d.isToday && d.water.met).length,
-    avgMl: average(eligible.map(d => d.water.ml)), denominatorDays,
+    daysMet: closed.filter(d => d.water.met).length,
+    avgMl: average(closed.map(d => d.water.ml)), denominatorDays, closedDays,
   };
-  if (layers.includes('workouts')) totals.workouts = { completed: completedWorkouts, goal: workoutGoal.sessionsPerWeek, source: workoutGoal.source };
+  if (layers.includes('workouts')) totals.workouts = { completed: completedWorkouts, goal: workoutGoal.sessionsPerWeek, source: workoutGoal.source, closedDays };
   return totals;
 }

@@ -23,6 +23,10 @@ Food and water targets resolve from one history fetch, using the oldest target
 for dates before history. Missing targets stay null. Today is in_progress for
 food; water met is false until tomorrow, and today never contributes to daysMet.
 Paused days and future days do not enter daily denominators or food sums.
+Each totals block exposes closedDays (eligible elapsed days excluding today).
+Use closedDays for food daysComplete/daysOnTarget, water daysMet and plan
+daysTargetHit; denominatorDays still includes today for compatibility. Water
+avgMl and food avgKcalCompleteDays exclude today.
 Workouts count actual counted sessions (including multiple sessions per day),
 with the current goal; past goals are not historical promises. ShowedUp follows
 the existing journey check-in/qualifying-workout definition, range-filtered

@@ -224,6 +224,7 @@
         "done": null,
         "total": null,
         "denominatorDays": 7,
+        "closedDays": 7,
         "source": "snapshot"
       },
       "food": {
@@ -233,17 +234,20 @@
         "weekKcal": 0,
         "weekTargetKcal": 0,
         "avgKcalCompleteDays": null,
-        "denominatorDays": 7
+        "denominatorDays": 7,
+        "closedDays": 7
       },
       "water": {
         "daysMet": 0,
         "avgMl": 0,
-        "denominatorDays": 7
+        "denominatorDays": 7,
+        "closedDays": 7
       },
       "workouts": {
         "completed": 0,
         "goal": 4,
-        "source": "user"
+        "source": "user",
+        "closedDays": 7
       }
     }
   }

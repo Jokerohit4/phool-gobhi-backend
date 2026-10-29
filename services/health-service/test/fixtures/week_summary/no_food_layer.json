@@ -145,17 +145,20 @@
         "done": 9,
         "total": 15,
         "denominatorDays": 5,
+        "closedDays": 4,
         "source": "snapshot"
       },
       "water": {
         "daysMet": 2,
         "avgMl": 2200,
-        "denominatorDays": 5
+        "denominatorDays": 5,
+        "closedDays": 4
       },
       "workouts": {
         "completed": 3,
         "goal": 4,
-        "source": "user"
+        "source": "user",
+        "closedDays": 4
       }
     }
   }
