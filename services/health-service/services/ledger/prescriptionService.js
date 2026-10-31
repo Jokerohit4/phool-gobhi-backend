@@ -386,6 +386,8 @@ export async function saveSettings({ prisma, userId, draft = {}, journey = null 
       sessions: resolved.sessionsPerWeek,
       goals: ctx.healthGoal?.goals ?? [],
       userId,
+      // Changing the count adds or drops days around the ones already planned.
+      keepWeekdays: slots.map((slot) => slot.weekday),
     });
 
     await prisma.prescription.update({

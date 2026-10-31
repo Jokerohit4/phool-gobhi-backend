@@ -187,10 +187,22 @@ function injuryBias(template, profile) {
   return [...groups].some((group) => affectedGroups.has(group)) ? -2 : 0;
 }
 
-function planWeekdays(sessions, preferredRestDay, startWeekday = null) {
+function planWeekdays(sessions, preferredRestDay, startWeekday = null, keepWeekdays = []) {
   // Profile uses Sunday=0; prescription slots use Monday=0.
   if (sessions >= 7) return [...SLOT_WEEKDAY_PATTERN];
   const restWeekday = preferredRestDay == null ? null : (preferredRestDay + 6) % 7;
+  // A rebuild keeps the weekdays the user already has: re-laying the week from
+  // the fixed pattern would move their workout days (and turn today into a
+  // rest day) every time a profile or setting change refreshes the plan. Only
+  // a named rest weekday can take a kept day away.
+  const kept = [...new Set(keepWeekdays)]
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6 && day !== restWeekday);
+  if (kept.length >= sessions) return kept.slice(0, sessions);
+  if (kept.length > 0) {
+    // More sessions than before: keep what exists, add from the usual spread.
+    const extra = SLOT_WEEKDAY_PATTERN.filter((day) => day !== restWeekday && !kept.includes(day));
+    return [...kept, ...extra.slice(0, sessions - kept.length)];
+  }
   // A first plan anchors the same spread on the day it is built, so day one is
   // a workout day (unless the user named that weekday their rest day) rather
   // than a rest day the pattern happened to put there.
@@ -205,6 +217,7 @@ function planWeekdays(sessions, preferredRestDay, startWeekday = null) {
 
 export async function buildWorkoutSlots(prisma, {
   experienceLevel, location, sessions, goals = [], userId = null, startWeekday = null,
+  keepWeekdays = [],
 }) {
   const count = Math.max(0, Math.floor(Number(sessions) || 0));
   if (count === 0) return [];
@@ -255,7 +268,7 @@ export async function buildWorkoutSlots(prisma, {
   );
 
   const slots = [];
-  const weekdays = planWeekdays(count, profile?.preferredRestDay, startWeekday);
+  const weekdays = planWeekdays(count, profile?.preferredRestDay, startWeekday, keepWeekdays);
   for (let i = 0; i < count; i++) {
     // Cycle through the ranked catalog while avoiding consecutive duplicates
     // whenever the selected pool contains alternatives.
@@ -436,6 +449,8 @@ export async function refreshWorkoutSlotsForProfile(prisma, userId) {
     sessions: prescription.workoutSlots.length,
     goals: goal?.goals ?? [],
     userId,
+    // Same number of sessions: refresh the routines, keep the days.
+    keepWeekdays: prescription.workoutSlots.map((slot) => slot.weekday),
   });
   await prisma.prescription.update({ where: { userId }, data: { workoutSlots: slots } });
   await rebuildPlan(prisma, userId, { reason: 'personalisation' });

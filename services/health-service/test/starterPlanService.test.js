@@ -53,6 +53,7 @@ mock.module('../services/journey/journeyService.js', {
 const {
   buildWorkoutSlots,
   createStarterPlan,
+  refreshWorkoutSlotsForProfile,
   regenerateForUser,
   resolveUnlockedLayerKeys,
   START_LAYER,
@@ -279,6 +280,69 @@ test('a first plan anchors the week on the start day so day one is a workout day
   });
   assert.equal(slots[0].weekday, 5);
   assert.deepEqual(slots.map((s) => s.weekday), [5, 0, 1]);
+});
+
+test('a rebuild keeps the weekdays the plan already has instead of re-laying the week', async () => {
+  // The first plan was anchored on a Saturday: Sat/Mon/Tue. Without keeping
+  // them, a rebuild falls back to Mon/Wed/Thu and today becomes a rest day.
+  const kept = [5, 0, 1];
+  const same = await buildWorkoutSlots(fakePrisma(), {
+    experienceLevel: 'new_to_gym', location: 'gym', sessions: 3, keepWeekdays: kept,
+  });
+  assert.deepEqual(same.map((s) => s.weekday), [5, 0, 1]);
+
+  // Fewer sessions drop days from the end; the first days stay.
+  const fewer = await buildWorkoutSlots(fakePrisma(), {
+    experienceLevel: 'new_to_gym', location: 'gym', sessions: 2, keepWeekdays: kept,
+  });
+  assert.deepEqual(fewer.map((s) => s.weekday), [5, 0]);
+
+  // More sessions keep every existing day and add from the usual spread, never
+  // doubling a weekday.
+  const more = await buildWorkoutSlots(fakePrisma(), {
+    experienceLevel: 'new_to_gym', location: 'gym', sessions: 4, keepWeekdays: kept,
+  });
+  assert.deepEqual(more.map((s) => s.weekday), [5, 0, 1, 2]);
+  assert.equal(new Set(more.map((s) => s.weekday)).size, 4);
+
+  // Nothing to keep behaves as before.
+  const none = await buildWorkoutSlots(fakePrisma(), {
+    experienceLevel: 'new_to_gym', location: 'gym', sessions: 3, keepWeekdays: [],
+  });
+  assert.deepEqual(none.map((s) => s.weekday), [0, 2, 3]);
+});
+
+test('a named rest day still wins over a kept weekday', async () => {
+  // preferredRestDay uses Sunday=0, so 6 is Saturday (5 in slot terms).
+  const prisma = fakePrisma({
+    prisma: { personalisationProfile: { findUnique: async () => ({ preferredRestDay: 6 }) } },
+  });
+  const slots = await buildWorkoutSlots(prisma, {
+    experienceLevel: 'new_to_gym', location: 'gym', sessions: 3, userId: 7, keepWeekdays: [5, 0, 1],
+  });
+  assert.ok(!slots.some((s) => s.weekday === 5), 'a slot landed on the named rest day');
+  assert.deepEqual(slots.map((s) => s.weekday), [0, 1, 2]);
+});
+
+test('refreshing slots for a profile change keeps the planned weekdays and rebuilds the plan', async () => {
+  rebuildCalls.length = 0;
+  const written = [];
+  const prisma = fakePrisma({
+    state: {
+      prescription: {
+        workoutSlots: [5, 0, 1].map((weekday) => ({
+          weekday, location: 'gym', title: 'Full Body x3 — Beginner-friendly',
+        })),
+      },
+    },
+  });
+  prisma.prescription.update = async ({ data }) => { written.push(data); };
+
+  const ok = await refreshWorkoutSlotsForProfile(prisma, 7);
+
+  assert.equal(ok, true);
+  assert.deepEqual(written[0].workoutSlots.map((s) => s.weekday), [5, 0, 1]);
+  assert.equal(rebuildCalls.at(-1).options.reason, 'personalisation');
 });
 
 test('a home week is built from the home track, and experienced users get the harder pool', async () => {
