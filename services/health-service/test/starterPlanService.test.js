@@ -269,6 +269,18 @@ test('a beginner gym week is the Full Body x3 starter, spread like the legacy me
   }
 });
 
+test('a first plan anchors the week on the start day so day one is a workout day', async () => {
+  // Saturday (5) is outside the Mon/Wed/Thu spread: unanchored, day one is rest.
+  const slots = await buildWorkoutSlots(fakePrisma(), {
+    experienceLevel: 'new_to_gym',
+    location: 'gym',
+    sessions: 3,
+    startWeekday: 5,
+  });
+  assert.equal(slots[0].weekday, 5);
+  assert.deepEqual(slots.map((s) => s.weekday), [5, 0, 1]);
+});
+
 test('a home week is built from the home track, and experienced users get the harder pool', async () => {
   const home = await buildWorkoutSlots(fakePrisma(), {
     experienceLevel: 'new_to_gym',

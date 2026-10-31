@@ -187,18 +187,24 @@ function injuryBias(template, profile) {
   return [...groups].some((group) => affectedGroups.has(group)) ? -2 : 0;
 }
 
-function planWeekdays(sessions, preferredRestDay) {
+function planWeekdays(sessions, preferredRestDay, startWeekday = null) {
   // Profile uses Sunday=0; prescription slots use Monday=0.
   if (sessions >= 7) return [...SLOT_WEEKDAY_PATTERN];
   const restWeekday = preferredRestDay == null ? null : (preferredRestDay + 6) % 7;
-  const available = SLOT_WEEKDAY_PATTERN.filter((day) => day !== restWeekday);
+  // A first plan anchors the same spread on the day it is built, so day one is
+  // a workout day (unless the user named that weekday their rest day) rather
+  // than a rest day the pattern happened to put there.
+  const pattern = startWeekday == null
+    ? SLOT_WEEKDAY_PATTERN
+    : SLOT_WEEKDAY_PATTERN.map((day) => (day + startWeekday) % 7);
+  const available = pattern.filter((day) => day !== restWeekday);
   const days = [];
   for (let i = 0; i < sessions; i++) days.push(available[i % available.length]);
   return days;
 }
 
 export async function buildWorkoutSlots(prisma, {
-  experienceLevel, location, sessions, goals = [], userId = null,
+  experienceLevel, location, sessions, goals = [], userId = null, startWeekday = null,
 }) {
   const count = Math.max(0, Math.floor(Number(sessions) || 0));
   if (count === 0) return [];
@@ -249,7 +255,7 @@ export async function buildWorkoutSlots(prisma, {
   );
 
   const slots = [];
-  const weekdays = planWeekdays(count, profile?.preferredRestDay);
+  const weekdays = planWeekdays(count, profile?.preferredRestDay, startWeekday);
   for (let i = 0; i < count; i++) {
     // Cycle through the ranked catalog while avoiding consecutive duplicates
     // whenever the selected pool contains alternatives.
@@ -287,6 +293,11 @@ function badRequest(message) {
 // convention HealthGoal.startDate and BiometricEntry.localDate carry.
 function todayLocalDate() {
   return isoDayIST(new Date());
+}
+
+// A YYYY-MM-DD day's weekday in the slot convention (0 = Monday .. 6 = Sunday).
+function weekdayOf(localDate) {
+  return (new Date(`${localDate}T00:00:00Z`).getUTCDay() + 6) % 7;
 }
 
 // ---- The starter plan ------------------------------------------------------
@@ -362,6 +373,7 @@ export async function createStarterPlan(prisma, userId, {
     sessions,
     goals: goalList,
     userId,
+    startWeekday: weekdayOf(todayLocalDate()),
   });
   await prisma.prescription.upsert({
     where: { userId },
