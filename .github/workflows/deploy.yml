@@ -310,6 +310,23 @@ jobs:
             echo "No prisma/migrations directory for ${{ matrix.service }} yet — skipping migrate deploy."
           fi
 
+      # Re-seed the food catalogue. The test job seeds its own throwaway
+      # database, but the deploy job used to run only `migrate deploy`, so
+      # rows added to foods.seed.js after the last manual seed never reached
+      # the deployed database — search silently missed them (e.g. "Chia
+      # seeds") until someone re-created the food by hand through the AI
+      # lookup. The seeder is idempotent on (name, basis), only touches rows
+      # with createdByUserId null, and never overwrites verified or
+      # INDB-sourced rows, so running it on every health-service deploy is
+      # safe.
+      - if: matrix.service == 'health-service'
+        working-directory: ${{ steps.svcmeta.outputs.source-dir }}
+        env:
+          DATABASE_URL: ${{ steps.dburl.outputs.database-url }}
+        run: |
+          npx prisma generate
+          npm run seed:foods
+
       - id: flags
         run: node deploy/scripts/build-deploy-flags.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
 

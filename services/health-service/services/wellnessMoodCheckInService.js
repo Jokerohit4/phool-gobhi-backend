@@ -1,4 +1,4 @@
-import { hourIST, isoDayIST } from '../utils/sessionDay.js';
+import { hourIST, isoDayIST, minuteIST } from '../utils/sessionDay.js';
 import { isIsoDay } from './ledger/isoDay.js';
 
 const MOODS = new Set([
@@ -18,7 +18,7 @@ function problem(status, error, code) {
 }
 
 function istParts(now = new Date()) {
-  return { day: isoDayIST(now), hour: hourIST(now) };
+  return { day: isoDayIST(now), hour: hourIST(now), minute: minuteIST(now) };
 }
 
 function validateInput({ localDate, slot, mood, factors, support, note }) {
@@ -65,7 +65,7 @@ export async function createMoodCheckIn(prisma, { userId, ...input } = {}) {
   };
   validateInput(data);
 
-  const { day, hour } = istParts();
+  const { day, hour, minute } = istParts();
   // One night window starts at 18:00 and ends at 05:00 the next day.
   // Accept the calendar date from older clients, but store its evening date.
   const nightStart = hour < 5
@@ -75,8 +75,9 @@ export async function createMoodCheckIn(prisma, { userId, ...input } = {}) {
   if (data.localDate !== day && data.localDate !== slotDate) {
     throw problem(409, 'Check-ins can only be saved for today.', 'MOOD_CHECKIN_DATE_CLOSED');
   }
+  // The morning window runs 05:00–15:30 IST; the night window 18:00–05:00.
   const slotOpen = data.slot === 'morning'
-    ? hour >= 5 && hour < 12
+    ? hour >= 5 && (hour < 15 || (hour === 15 && minute < 30))
     : hour >= 18 || hour < 5;
   if (!slotOpen) {
     throw problem(409, 'This check-in window has closed.', 'CHECKIN_WINDOW_CLOSED');
