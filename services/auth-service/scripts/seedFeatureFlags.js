@@ -397,6 +397,8 @@ async function main() {
     console.log(`\nWrote ${plan.changed.length} flag(s): ${plan.changed.join(', ')}`);
     console.log(`Audit note: ${note}`);
     console.log('Note: gates in other services cache /app-config for 30s, so enforcement lags a little.');
+    console.log('Note: this script runs in a separate process and cannot evict the running auth-service app-config cache.');
+    console.log('      Running instances pick the change up within 15s (appConfigBundleCache TTL, utils/settingsCaches.js).');
   } catch (err) {
     fail(err.message || String(err));
   } finally {
