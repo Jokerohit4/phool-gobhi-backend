@@ -18,7 +18,7 @@ test('setup', async (t) => {
 
 const prisma = () => ({
   nutritionTarget: { findFirst: async () => { await delay(10); return { waterMl: 2500 }; } },
-  waterLog: { findMany: async () => { log.push('water'); await delay(20); return [{ id: 1, ml: 250 }]; } },
+  waterLog: { findMany: async () => { log.push('water'); await delay(20); log.push('water:end'); return [{ id: 1, ml: 250 }]; } },
   supplementSchedule: { findMany: async () => [{ id: 1, name: 'D3', times: ['09:00'] }] },
   supplementLog: { findMany: async () => [] },
 });
@@ -45,7 +45,10 @@ test('a failing snapshot is swallowed: routine null, the rest of the screen inta
 
 test('a slow snapshot overlaps the habit reads instead of adding to them', async () => {
   log = []; snapshot = async () => { await delay(30); return null; };
-  const t0 = Date.now();
   await getToday(prisma(), { userId: 1, localDate: '2026-10-30' });
-  assert.ok(Date.now() - t0 < 30 + 25, 'serial would be ~30ms snapshot + 20ms reads');
+  // Ordering, not a stopwatch (a wall-clock threshold flakes under load): the slow
+  // snapshot was already running while the water read was still in flight, and the
+  // water read finished before the snapshot did.
+  assert.ok(log.indexOf('routine:start') >= 0 && log.indexOf('routine:start') < log.indexOf('water:end'));
+  assert.ok(log.indexOf('water:end') < log.indexOf('routine:end'));
 });

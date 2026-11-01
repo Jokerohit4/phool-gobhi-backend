@@ -25,10 +25,8 @@ function fake(log) {
 
 test('currentNutritionTarget: target read and doctor plan overlap; override still applied', async () => {
   const log = [];
-  const t0 = Date.now();
   const target = await currentNutritionTarget(fake(log), 7, '2026-10-30');
-  assert.ok(log.indexOf('consent:start') < log.indexOf('target:end'), 'plan lookup started before the target read finished');
-  assert.ok(Date.now() - t0 < 45, 'was target + consent in series');
+  assert.ok(log.indexOf('consent:start') < log.indexOf('target:end'), 'plan lookup started before the target read finished (ordering proves the overlap; no wall-clock threshold, which flakes under load)');
   assert.equal(target.kcal, 1900);
   assert.equal(target.proteinG, 120);
   assert.equal(target.doctorPlan.id, 4);

@@ -587,11 +587,18 @@ test('previewDay and the target state start their independent reads together', a
   const { previewDay } = await import('../services/ledger/scoreService.js');
   const prisma = mockPrisma({ snapshots: [snap('2026-09-30', 40)] });
   const started = [];
-  const slow = (name, fn) => async (...a) => { started.push(name); await new Promise((r) => setTimeout(r, 15)); return fn(...a); };
+  let inFlight = 0; let peak = 0;
+  const slow = (name, fn) => async (...a) => {
+    started.push(name); inFlight++; peak = Math.max(peak, inFlight);
+    await new Promise((r) => setTimeout(r, 15));
+    inFlight--;
+    return fn(...a);
+  };
   prisma.scoreDaySnapshot.findFirst = slow('previousClose', prisma.scoreDaySnapshot.findFirst);
   prisma.healthGoal.findUnique = slow('goal', prisma.healthGoal.findUnique);
-  const t0 = Date.now();
   await previewDay(prisma, { userId: USER, localDate: '2026-10-01', today: '2026-10-01' });
-  assert.deepEqual(started.slice(0, 2).sort(), ['goal', 'previousClose'], 'both in flight at once');
-  assert.ok(Date.now() - t0 < 60, 'overlapped, not serial');
+  assert.deepEqual([...started].sort(), ['goal', 'previousClose']);
+  // Concurrency, not a stopwatch (wall-clock thresholds flake under load): serial
+  // reads would never have both in flight at once.
+  assert.equal(peak, 2, 'both reads were in flight at the same time');
 });
