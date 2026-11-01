@@ -273,10 +273,13 @@ app.use('/api/challenges', proxy(CHALLENGE_SERVICE_URL, {
 }));
 // Health & Activity (exercise records, routines, workout sessions, device
 // health sync): no public routes — same posture as /api/challenges and
-// /api/buddy, everything requires a verified JWT. Plain JSON only, no
-// raised limit needed.
+// /api/buddy, everything requires a verified JWT. Raised limit: this mount now
+// carries the workout-photo multipart upload (POST /sessions/:id/photo), which
+// must reach health-service's own multer cap rather than fail first in this
+// proxy's smaller default body buffer.
 app.use('/api/health', proxy(HEALTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(HEALTH_SERVICE_URL),
+  limit: '15mb',
 }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
