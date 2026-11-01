@@ -132,6 +132,11 @@ test('the client resolves a missing key the same way the registry defaults it', 
   for (const m of dart.matchAll(/(\w+Enabled):\s*\w+\['enabled'\]\s*==\s*true\s*,/g)) {
     fromJson.set(m[1], false);
   }
+  // The same fail-closed decoder written inline, without a local variable:
+  //   <clientKey>: (features['<name>'] as Map<String, dynamic>?)?['enabled'] == true,
+  for (const m of dart.matchAll(/(\w+Enabled):\s*\(\s*features\['\w+'\]\s*as\s*Map<String,\s*dynamic>\?\s*\)\?\['enabled'\]\s*==\s*true\s*,/g)) {
+    fromJson.set(m[1], false);
+  }
 
   const divergence = [];
   for (const flag of FEATURE_FLAGS) {
@@ -217,6 +222,9 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
     'referralHomeTriggerEnabled',
     'coachAssistantEnabled',
     'exploreFoodFindsEnabled',
+    // weeklySummaryVisible on AppConfigStore folds in coachJourneyVisible and the
+    // widgets/routes read that getter directly; the cubit holds no field for it.
+    'weeklySummaryEnabled',
   ]);
 
   const divergence = [];
