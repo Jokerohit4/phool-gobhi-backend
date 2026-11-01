@@ -66,3 +66,14 @@ export const requireFeatureFlag = (flagName) => async (req, res, next) => {
   }
   next();
 };
+
+// Warm the cache at module load so the first request after a cold start does
+// not block on auth-service. Fire-and-forget: refreshFlags() never rejects, the
+// extra catch is belt-and-braces, and failure handling (2s timeout, 5s retry,
+// fail-closed first call) is exactly the normal path. Only on Cloud Run
+// (K_SERVICE) and never under tests.
+export function warmFeatureFlags({ env = process.env } = {}) {
+  if (env.NODE_ENV === 'test' || env.NODE_TEST_CONTEXT || !env.K_SERVICE) return null;
+  try { return Promise.resolve(getFeatureFlags()).catch(() => {}); } catch { return null; }
+}
+void warmFeatureFlags();

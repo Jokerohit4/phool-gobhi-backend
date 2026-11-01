@@ -72,3 +72,29 @@ test('after the TTL, an outage keeps serving last-known flags and spaces retries
   await mod.isFeatureEnabled('f');
   assert.equal(calls, 4);
 });
+
+test('warm-at-load: warms once on Cloud Run, skipped under tests, never throws', async (t) => {
+  let calls = 0;
+  let up = true;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    if (!up) throw new Error('down');
+    return { ok: true, json: async () => ({ features: { f: { enabled: true } } }) };
+  });
+  const { mod } = await fresh(t);
+  assert.equal(calls, 0, 'importing under node --test must not fetch');
+  assert.equal(mod.warmFeatureFlags(), null, 'skipped under node --test');
+  assert.equal(mod.warmFeatureFlags({ env: { K_SERVICE: 'svc' , NODE_TEST_CONTEXT: '1' } }), null);
+  assert.equal(mod.warmFeatureFlags({ env: {} }), null, 'skipped off Cloud Run');
+  await mod.warmFeatureFlags({ env: { K_SERVICE: 'svc' } });
+  assert.equal(calls, 1);
+  assert.equal(await mod.isFeatureEnabled('f'), true);
+  assert.equal(calls, 1, 'first request after warm-up is served from cache');
+});
+
+test('warm-at-load: an auth-service outage during warm-up resolves quietly and stays fail-closed', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('down'); });
+  const { mod } = await fresh(t);
+  await assert.doesNotReject(mod.warmFeatureFlags({ env: { K_SERVICE: 'svc' } }));
+  assert.equal(await mod.isFeatureEnabled('f'), false);
+});
