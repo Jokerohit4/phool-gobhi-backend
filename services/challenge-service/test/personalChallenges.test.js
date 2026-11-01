@@ -44,7 +44,7 @@ async function withActivity(action) {
 
 test('five profile kinds and map quests keep distinct eligibility', () => {
   const cases = [
-    [{ workoutIntent: 'wellness_only' }, 'wellness'], [{ appMode: 'home_track' }, 'home_training'],
+    [{ workoutIntent: 'wellness_only' }, 'wellness'], [{ appMode: 'home_track' }, 'home_training'], [{ trainingLocationPref: 'sports' }, 'sports'],
     [{ trainingLocationPref: 'gym' }, 'own_gym'], [{ linkedGymId: 4 }, 'linked_gym'], [{}, 'explorer'],
   ];
   for (const [profile, audience] of cases) assert.equal(audienceForProfile(profile), audience);
@@ -54,7 +54,7 @@ test('five profile kinds and map quests keep distinct eligibility', () => {
 });
 
 test('seed includes a tailored personal challenge for every profile kind', () => {
-  for (const audience of ['wellness', 'home_training', 'own_gym', 'linked_gym', 'explorer']) {
+  for (const audience of ['wellness', 'home_training', 'sports', 'own_gym', 'linked_gym', 'explorer']) {
     assert.ok(PERSONAL_CHALLENGES.some(definition => definition.audiences.includes(audience)));
   }
 });

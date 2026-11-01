@@ -96,8 +96,9 @@ function legacyAudience(p) {
   if (p.workoutIntent === 'wellness_only' || p.appMode === 'wellness' || p.wellnessSetupCompleted
     || p.wellnessFocuses?.length || p.wellnessDayPattern || p.wellnessSleepPattern) return 'wellness';
   if (['gym', 'fitness_centre'].includes(p.trainingLocationPref)) return 'own_gym';
+  if (p.trainingLocationPref === 'sports') return 'sports';
   if (p.appMode === 'home_track' || p.currentlyWorksOut === true
-    || ['home', 'sports', 'other'].includes(p.trainingLocationPref)) return 'home_training';
+    || ['home', 'other'].includes(p.trainingLocationPref)) return 'home_training';
   return 'explorer';
 }
 
@@ -120,7 +121,9 @@ test('initialPersonaFromAnswers matches the legacy rule for every answered combi
     // They are whatever deriveAppMode already made them — wanting a gym is
     // explorer (marketplace), wanting a fitness centre is home_training.
     if (currentlyWorksOut === false && legacy === 'own_gym' && !linkedGymId && !homeUnclaimedGymId) {
-      assert.equal(got, trainingLocationPref === 'gym' ? PERSONAS.EXPLORER : PERSONAS.HOME_TRAINING, JSON.stringify(u));
+      const expected = trainingLocationPref === 'gym' ? PERSONAS.EXPLORER
+        : trainingLocationPref === 'sports' ? PERSONAS.SPORTS : PERSONAS.HOME_TRAINING;
+      assert.equal(got, expected, JSON.stringify(u));
       continue;
     }
     assert.equal(got, legacy, JSON.stringify(u));
@@ -165,6 +168,7 @@ function userIn(persona) {
     case 'own_gym': return { user: customer({ homeUnclaimedGymId: 50, trainingLocationPref: 'gym', currentlyWorksOut: true }) };
     case 'wellness': return { user: customer({ workoutIntent: 'wellness_only', wellnessFocuses: ['sleep'], wellnessSetupCompleted: true }) };
     case 'home_training': return { user: customer({ currentlyWorksOut: true, trainingLocationPref: 'home' }) };
+    case 'sports': return { user: customer({ currentlyWorksOut: true, trainingLocationPref: 'sports' }) };
     case 'explorer': return { user: customer({ currentlyWorksOut: false, trainingLocationPref: 'gym' }) };
     default: throw new Error(persona);
   }

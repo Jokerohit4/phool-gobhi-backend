@@ -118,6 +118,7 @@ export const PERSONAS = {
   OWN_GYM: 'own_gym',
   WELLNESS: 'wellness',
   HOME_TRAINING: 'home_training',
+  SPORTS: 'sports',
   EXPLORER: 'explorer',
 };
 

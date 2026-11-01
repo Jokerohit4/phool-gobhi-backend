@@ -1,5 +1,5 @@
 // Persona: who the user is in the app — linked_gym, own_gym, wellness,
-// home_training or explorer.
+// home_training, sports or explorer.
 //
 // Before this module the persona was re-guessed from the onboarding answers in
 // four places (the app twice, deriveAppMode, challenge-service), and the
@@ -59,9 +59,11 @@ export function initialPersonaFromAnswers(user) {
 
   const pref = u.trainingLocationPref ?? null;
   if (u.currentlyWorksOut === false) {
+    if (pref === TRAINING_LOCATION_PREFS.SPORTS) return PERSONAS.SPORTS;
     return pref && pref !== TRAINING_LOCATION_PREFS.GYM ? PERSONAS.HOME_TRAINING : PERSONAS.EXPLORER;
   }
   if (GYM_LOCATIONS.includes(pref)) return PERSONAS.OWN_GYM;
+  if (pref === TRAINING_LOCATION_PREFS.SPORTS) return PERSONAS.SPORTS;
   if (pref) return PERSONAS.HOME_TRAINING;
   if (u.currentlyWorksOut === true) return PERSONAS.HOME_TRAINING;
 
@@ -83,7 +85,8 @@ export function appModeForPersona(persona) {
   switch (persona) {
     case PERSONAS.WELLNESS: return APP_MODES.WELLNESS;
     case PERSONAS.OWN_GYM:
-    case PERSONAS.HOME_TRAINING: return APP_MODES.HOME_TRACK;
+    case PERSONAS.HOME_TRAINING:
+    case PERSONAS.SPORTS: return APP_MODES.HOME_TRACK;
     case PERSONAS.LINKED_GYM:
     case PERSONAS.EXPLORER: return APP_MODES.GYM_SEEKER;
     default: return null;

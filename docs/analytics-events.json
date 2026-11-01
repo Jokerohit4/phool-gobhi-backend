@@ -312,7 +312,7 @@
     "source": "server",
     "service": "auth-service",
     "since": "2026-10-28",
-    "notes": "a user's persona changed (linked_gym / own_gym / wellness / home_training / explorer). Props from_persona, to_persona, source: settings | floating_prompt | onboarding for a user switch, gym_link | gym_leave | gym_removed when a gym link changed it. AppModeHistory holds the same rows."
+    "notes": "a user's persona changed (linked_gym / own_gym / wellness / home_training / sports / explorer). Props from_persona, to_persona, source: settings | floating_prompt | onboarding for a user switch, gym_link | gym_leave | gym_removed when a gym link changed it. AppModeHistory holds the same rows."
   },
   "persona_switch_started": {
     "source": "client",

@@ -1,6 +1,6 @@
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
-export const AUDIENCES = ['wellness', 'home_training', 'own_gym', 'linked_gym', 'explorer'];
+export const AUDIENCES = ['wellness', 'home_training', 'sports', 'own_gym', 'linked_gym', 'explorer'];
 
 // auth-service owns the persona now (services/personaService.js) and serves it
 // resolved on /internal/:id. The derivation below is only the fallback for an
@@ -14,8 +14,9 @@ export function audienceForProfile(profile) {
       profile.wellnessSetupCompleted || profile.wellnessFocuses?.length ||
       profile.wellnessDayPattern || profile.wellnessSleepPattern) return 'wellness';
   if (['gym', 'fitness_centre'].includes(profile.trainingLocationPref)) return 'own_gym';
+  if (profile.trainingLocationPref === 'sports') return 'sports';
   if (profile.appMode === 'home_track' || profile.currentlyWorksOut === true ||
-      ['home', 'sports', 'other'].includes(profile.trainingLocationPref)) return 'home_training';
+      ['home', 'other'].includes(profile.trainingLocationPref)) return 'home_training';
   return 'explorer';
 }
 
