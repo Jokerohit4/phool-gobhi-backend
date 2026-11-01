@@ -13,6 +13,7 @@ import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreServ
 import * as checkinDaysService from './checkinDaysService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 import { pageArgs, finishPage } from '../utils/pagination.js';
+import { createTtlCache } from '../utils/ttlCache.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -937,13 +938,12 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       via: subscriptionId ? 'subscription' : 'wallet', city: gym.city,
     });
 
-    await prisma.booking.updateMany({
-      where: { id: reservation.id, status: 'pending' },
-      data: { status: 'confirmed' },
-    });
-    const confirmed = normalizeBookingMoney(
-      (await prisma.booking.findUnique({ where: { id: reservation.id } })) ?? reservation,
-    );
+    // One round trip on the normal path: update() with the same status guard
+    // the old updateMany had, returning the row. When the guard does not match
+    // (already confirmed/cancelled concurrently) or the row is gone, update()
+    // throws P2025 - which maps to exactly the old behaviour: no write, then
+    // return whatever the row currently is (or the reservation if deleted).
+    const confirmed = normalizeBookingMoney(await confirmReservation(prisma, reservation));
 
     // booking_confirmed event, the partner's push and the customer's
     // "Booking confirmed" push - the same as a partner confirmation sends.
@@ -975,10 +975,34 @@ const DEFAULT_CANCELLATION_TIERS = [
   { maxHoursNotice: null, blocked: false, refundRate: 1.0 },
 ];
 
+// createBooking's final pending -> confirmed step. Exported (with the client
+// injectable) so test/confirmReservationDb.test.js can run it against a real DB.
+export async function confirmReservation(db, reservation) {
+  try {
+    return await db.booking.update({
+      where: { id: reservation.id, status: 'pending' },
+      data: { status: 'confirmed' },
+    });
+  } catch (e) {
+    if (e?.code !== 'P2025') throw e;
+    return (await db.booking.findUnique({ where: { id: reservation.id } })) ?? reservation;
+  }
+}
+
 export async function getCancellationPolicy() {
   const row = await prisma.cancellationPolicySetting.findUnique({ where: { id: 1 } });
   return { tiers: row ? row.tiers : DEFAULT_CANCELLATION_TIERS, updatedAt: row?.updatedAt ?? null };
 }
+
+// cancelBooking's refund tiers are read on every cancel; cache them briefly.
+// Per-instance cache: updateCancellationPolicy evicts on the instance that
+// served the write, but OTHER Cloud Run instances only converge when their
+// entry expires - hence the short 15s TTL (worst-case staleness window).
+// Failures are never cached (see utils/ttlCache.js). Only cancelBooking's
+// refund calc uses the cache; the admin GET endpoint always reads fresh.
+const POLICY_CACHE_KEY = 'cancellation-policy';
+const policyCache = createTtlCache(15_000);
+export function clearCancellationPolicyCache() { policyCache.clear(); }
 
 export async function updateCancellationPolicy(tiers, updatedBy) {
   if (!Array.isArray(tiers) || !tiers.length) {
@@ -994,11 +1018,14 @@ export async function updateCancellationPolicy(tiers, updatedBy) {
     create: { id: 1, tiers, updatedBy },
     update: { tiers, updatedBy },
   });
+  // Evict after the write commits. evict() also detaches any in-flight read
+  // that started before the write so it cannot repopulate the old tiers.
+  policyCache.evict(POLICY_CACHE_KEY);
   return { tiers: saved.tiers, updatedAt: saved.updatedAt };
 }
 
 async function cancellationRefundRate(hoursUntil) {
-  const { tiers } = await getCancellationPolicy();
+  const { tiers } = await policyCache.get(POLICY_CACHE_KEY, getCancellationPolicy);
   for (const tier of tiers) {
     if (tier.maxHoursNotice === null || hoursUntil < tier.maxHoursNotice) {
       return tier.blocked ? null : tier.refundRate;

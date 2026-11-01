@@ -37,6 +37,7 @@ let blocksMode = 'none'; // 'none' | 'blocked' | 'otherSlot' | 'error' | 'junk'
 let subMode = 'none'; // 'none' | 'active' | 'error'
 let axiosGetLog = []; // { kind, url, opts }
 let siblingBarrier = null; // { arrive(), reached }
+let onDebit = null; // hook run inside the wallet debit (simulates a concurrent change)
 let gymGate = null; // Promise gating the lookup of gym 77 (cancel city test)
 
 function makeBooking(overrides) {
@@ -87,6 +88,7 @@ function resetFakes() {
   axiosGetLog = [];
   siblingBarrier = null;
   gymGate = null;
+  onDebit = null;
 }
 
 let createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym;
@@ -148,9 +150,12 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
               bookingRows.set(row.id, row);
               return row;
             },
-            update: async ({ where: { id }, data }) => {
+            update: async ({ where: { id, status }, data }) => {
               const row = bookingRows.get(id);
-              if (!row) throw new Error('not found');
+              // Mirrors Prisma: a non-matching where (missing row OR status guard) throws P2025.
+              if (!row || (status !== undefined && row.status !== status)) {
+                throw Object.assign(new Error('Record to update not found.'), { code: 'P2025' });
+              }
               Object.assign(row, data);
               return row;
             },
@@ -242,6 +247,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
           if (url.includes('/debit')) {
             if (walletDebitFails) throw { response: { data: { error: 'Insufficient wallet balance' } } };
             walletDebitCalls.push(body);
+            if (onDebit) await onDebit();
             return { data: { success: true } };
           }
           if (url.includes('/credit')) {
@@ -429,6 +435,38 @@ test('createBooking: incomplete profile throws 400', async () => {
       return true;
     }
   );
+});
+
+// Confirm step: single guarded update() (status 'pending' only) with a P2025 fallback.
+test('createBooking confirm: a booking cancelled concurrently is NOT flipped back to confirmed', async () => {
+  resetFakes();
+  onDebit = async () => { for (const r of bookingRows.values()) r.status = 'cancelled'; };
+  const b = await createBooking(CUSTOMER, { gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00' });
+  assert.equal(b.status, 'cancelled', 'returns the current row, as the old updateMany+findUnique did');
+  assert.equal([...bookingRows.values()][0].status, 'cancelled');
+});
+
+test('createBooking confirm: a booking deleted before confirm falls back to the reservation row', async () => {
+  resetFakes();
+  onDebit = async () => { bookingRows.clear(); };
+  const b = await createBooking(CUSTOMER, { gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00' });
+  assert.equal(b.status, 'pending', 'reservation fallback, same as the old findUnique ?? reservation');
+  assert.ok(b.qrToken);
+});
+
+test('createBooking confirm: non-P2025 errors still propagate as 500', async () => {
+  resetFakes();
+  onDebit = async () => {};
+  // make the confirm update blow up with an unrelated error
+  const client = (await import('../db/prisma.js')).default;
+  const realUpdate = client.booking.update;
+  client.booking.update = async () => { throw Object.assign(new Error('conn reset'), { code: 'P1001' }); };
+  try {
+    await assert.rejects(
+      () => createBooking(CUSTOMER, { gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00' }),
+      (e) => e.status === 500,
+    );
+  } finally { client.booking.update = realUpdate; }
 });
 
 // --- cancelBooking -----------------------------------------------------
