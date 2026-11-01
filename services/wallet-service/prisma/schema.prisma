@@ -57,6 +57,8 @@ model WalletTransaction {
   gymId             Int?
 
   @@index([gymId])
+  // Transaction history is always read per wallet, newest first.
+  @@index([walletId, createdAt])
   @@schema("wallet")
 }
 
