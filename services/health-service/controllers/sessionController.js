@@ -1,6 +1,10 @@
 import * as workoutSessionService from '../services/workoutSessionService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
 import { isAnyFeatureEnabled } from '../middleware/requireFeatureFlag.js';
+import { parseLimit, parseCursor } from '../utils/pagination.js';
+
+const SESSIONS_DEFAULT_LIMIT = 30;
+const SESSIONS_MAX_LIMIT = 100;
 
 export const startSession = async (req, res) => {
   try {
@@ -26,8 +30,10 @@ export const startSession = async (req, res) => {
 
 export const listSessions = async (req, res) => {
   try {
-    const sessions = await workoutSessionService.listSessionsService(req.userId);
-    res.json({ data: serializeDecimals(sessions) });
+    const limit = parseLimit(req.query?.limit, SESSIONS_DEFAULT_LIMIT, SESSIONS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await workoutSessionService.listSessionsPageService(req.userId, { limit, cursor });
+    res.json({ data: serializeDecimals(items), meta });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

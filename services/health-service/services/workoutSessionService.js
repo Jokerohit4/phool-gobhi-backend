@@ -4,6 +4,7 @@ import prisma from '../db/prisma.js';
 import { computeProgression } from './progressionService.js';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
 import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
+import { pageArgs, finishPage } from '../utils/pagination.js';
 
 // Applies double progression to the routine a finished session was started
 // from, and returns what changed so the app can say so. Best-effort by the
@@ -275,6 +276,20 @@ export async function listSessionsService(userId) {
     include: includeFull,
     orderBy: { startedAt: 'desc' },
   });
+}
+
+// Cursor-paginated variant behind GET /sessions. Same order as listSessionsService
+// (startedAt desc) with id desc as a tiebreaker so equal timestamps never
+// duplicate/drop across a page boundary. Same item shape (includeFull).
+// Returns { items, meta } — see utils/pagination.js.
+export async function listSessionsPageService(userId, { limit, cursor } = {}) {
+  const rows = await prisma.workoutSession.findMany({
+    where: { userId },
+    include: includeFull,
+    orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+    ...pageArgs({ limit, cursor }),
+  });
+  return finishPage(rows, limit);
 }
 
 export async function getSessionDetailService(sessionId, userId) {
