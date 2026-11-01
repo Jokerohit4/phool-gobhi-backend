@@ -124,6 +124,9 @@ export async function emitMemberAttendanceSignals({ customerId, attendanceId, gy
 }
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
+// Upper bound on the small sibling reads createBooking fans out (profile,
+// slot blocks, subscription candidate).
+const SIBLING_CALL_TIMEOUT_MS = 3000;
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
@@ -297,6 +300,73 @@ async function getGymCity(gymId) {
   } catch (_) {
     return null;
   }
+}
+
+// Small in-process "gym card" cache for the customer-facing lists that need
+// a gym's display fields for every booking/visit/warning row
+// (getCustomerBookings, getVisitedGyms, getMyAttendanceWarnings). Without it
+// each request makes one gym-service call per distinct gym, and each of those
+// loads the full gym + all images. Per-instance only (no shared store), so
+// staleness is bounded by the TTL: a renamed gym or new cover photo shows up
+// in these lists within GYM_CARD_CACHE_TTL_MS. Concurrent misses for the same
+// gym share one in-flight request; failures are never cached.
+const GYM_CARD_CACHE_TTL_MS = 5 * 60 * 1000;
+const GYM_CARD_CACHE_MAX = 500;
+const GYM_CARD_FETCH_TIMEOUT_MS = 5000;
+const gymCardCache = new Map(); // gymId -> { card, expiresAt }
+const gymCardInflight = new Map(); // gymId -> Promise<card|null>
+
+// Test hook: drop all cached/in-flight cards.
+export function _resetGymCardCache() {
+  gymCardCache.clear();
+  gymCardInflight.clear();
+}
+
+function rememberGymCard(gymId, card) {
+  if (gymCardCache.size >= GYM_CARD_CACHE_MAX) {
+    const now = Date.now();
+    for (const [k, v] of gymCardCache) if (v.expiresAt <= now) gymCardCache.delete(k);
+    // Still full of live entries: evict the oldest insertion.
+    if (gymCardCache.size >= GYM_CARD_CACHE_MAX) gymCardCache.delete(gymCardCache.keys().next().value);
+  }
+  gymCardCache.set(gymId, { card, expiresAt: Date.now() + GYM_CARD_CACHE_TTL_MS });
+}
+
+// Resolves to { id, name, address, city, lat, lng, imageUrl } or null when the
+// gym could not be loaded (never throws).
+function getGymCard(gymId) {
+  const hit = gymCardCache.get(gymId);
+  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.card);
+  const pending = gymCardInflight.get(gymId);
+  if (pending) return pending;
+  const p = (async () => {
+    try {
+      const res = await axios.get(
+        `${GYM_SERVICE_URL}/internal/${gymId}`,
+        { ...(await internalHeadersFor(GYM_SERVICE_URL)), timeout: GYM_CARD_FETCH_TIMEOUT_MS }
+      );
+      // Wrapped ({data}) or bare body; an explicit `data: null` means no gym.
+      const gym = res.data && Object.hasOwn(res.data, 'data') ? res.data.data : res.data;
+      if (!gym) return null;
+      const card = {
+        id: gym.id,
+        name: gym.name,
+        address: gym.address,
+        city: gym.city,
+        lat: gym.lat,
+        lng: gym.lng,
+        imageUrl: gym.images?.[0]?.url || null,
+      };
+      rememberGymCard(gymId, card);
+      return card;
+    } catch (_) {
+      return null;
+    } finally {
+      gymCardInflight.delete(gymId);
+    }
+  })();
+  gymCardInflight.set(gymId, p);
+  return p;
 }
 
 const RESERVE_MAX_ATTEMPTS = 4;
@@ -636,21 +706,41 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       };
     }
 
+    // 1a/1b/1c. Three independent reads — profile (auth-service), slot block
+    // (gym-service) and subscription candidate (wallet-service) — started
+    // together instead of back to back, then evaluated below in the original
+    // order so error precedence is unchanged: profile (fail-closed 400s)
+    // first, then the 409 block, then the subscription lookup (any failure
+    // falls through to the normal paid flow). A short timeout bounds each so
+    // one slow dependency can't stall the booking.
+    //
+    // A class with a set price is always charged that amount regardless of
+    // subscription status (see amount above) — it must never even look up a
+    // candidate subscription, so it can never accidentally consume the
+    // daily subscription quota.
+    const classIsAlwaysPaid = !!(classId && cls.price != null);
+    const [profileSettled, blocksSettled, subSettled] = await Promise.allSettled([
+      (async () => axios.get(
+        `${AUTH_SERVICE_URL}/internal/${customerId}`,
+        { ...(await internalHeadersFor(AUTH_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS }
+      ))(),
+      (async () => axios.get(
+        `${GYM_SERVICE_URL}/internal/blocks/${gymId}?date=${encodeURIComponent(date)}`,
+        { ...(await internalHeadersFor(GYM_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS }
+      ))(),
+      classIsAlwaysPaid
+        ? Promise.resolve(null)
+        : (async () => axios.get(
+            `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}&date=${encodeURIComponent(date)}`,
+            { ...(await internalHeadersFor(WALLET_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS }
+          ))(),
+    ]);
+
     // 1a. Require a complete profile (name + date of birth) before booking —
     // both are optional at OTP signup, so a customer can otherwise reach
     // this endpoint before ever filling them in. Mirrors the app's own
     // pre-booking check, enforced here too since that check is client-side only.
-    try {
-      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
-      const profile = profileRes.data;
-      if (!profile?.name?.trim() || !profile?.dateOfBirth) {
-        throw {
-          status: 400,
-          error: 'Please add your name and date of birth before booking'
-        };
-      }
-    } catch (err) {
-      if (err.status) throw err;
+    if (profileSettled.status === 'rejected') {
       // auth-service unreachable — fail closed, same as a missing profile,
       // rather than silently letting an unverifiable booking through.
       throw {
@@ -658,25 +748,35 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         error: 'Could not verify your profile — please try again'
       };
     }
+    {
+      const profile = profileSettled.value.data;
+      if (!profile?.name?.trim() || !profile?.dateOfBirth) {
+        throw {
+          status: 400,
+          error: 'Please add your name and date of birth before booking'
+        };
+      }
+    }
 
     // 1b. Check if the slot is blocked — shared with class bookings too: a
     // gym-wide SlotBlock at this date/startTime (e.g. "closed for
     // maintenance") closes a class occurrence at that same time as well,
     // same physical location. One-off class-only cancellations use
     // GymClassCancellation instead (checked above via cancelledDates).
-    try {
-      const blockRes = await axios.get(
-        `${GYM_SERVICE_URL}/${gymId}/blocks?date=${date}`,
-        await internalHeadersFor(GYM_SERVICE_URL)
+    // Uses gym-service's internal read route (the partner-only /:id/blocks
+    // route rejects service callers). A failed lookup is non-critical and
+    // lets the booking proceed, but is logged so it is visible.
+    if (blocksSettled.status === 'rejected') {
+      console.warn(
+        `slot-block check failed for gym ${gymId} ${date} — allowing booking:`,
+        blocksSettled.reason?.message || blocksSettled.reason
       );
-      const blocks = blockRes.data?.data || [];
-      const isBlocked = blocks.some(b => b.startTime === effectiveStartTime);
+    } else {
+      const blocks = blocksSettled.value?.data?.data;
+      const isBlocked = Array.isArray(blocks) && blocks.some(b => b.startTime === effectiveStartTime);
       if (isBlocked) {
         throw { status: 409, error: 'This slot has been blocked by the gym' };
       }
-    } catch (err) {
-      if (err.error) throw err;
-      // If block check fails, allow booking (non-critical)
     }
 
     // 1c. Subscription entitlement check — does this customer have an active
@@ -688,28 +788,14 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // subscription-covered is decided atomically inside reserveBookingSlot's
     // transaction (see there for why), so don't trust this subscriptionId
     // for anything money-related below; use reservation.subscriptionId.
-    // A class with a set price is always charged that amount regardless of
-    // subscription status (see amount above) — it must never even look up a
-    // candidate subscription, so it can never accidentally consume the
-    // daily subscription quota.
-    const classIsAlwaysPaid = !!(classId && cls.price != null);
     let candidateSubscription = null;
     let candidateSubscriptionId = null;
     let candidateViaGiftDay = false;
-    if (!classIsAlwaysPaid) {
-      try {
-        const subRes = await axios.get(
-          `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}&date=${encodeURIComponent(date)}`,
-          await internalHeadersFor(WALLET_SERVICE_URL)
-        );
-        if (subRes.data?.data?.active) {
-          candidateSubscription = subRes.data.data.subscription;
-          candidateSubscriptionId = candidateSubscription.id;
-          candidateViaGiftDay = !!subRes.data.data.viaGiftDay;
-        }
-      } catch (_) {
-        // wallet-service unreachable — fall through to the paid flow
-      }
+    if (subSettled.status === 'fulfilled' && subSettled.value?.data?.data?.active) {
+      const subData = subSettled.value.data.data;
+      candidateSubscription = subData.subscription;
+      candidateSubscriptionId = candidateSubscription.id;
+      candidateViaGiftDay = !!subData.viaGiftDay;
     }
 
     // A class with no price (price null) is a subscription-only perk, not
@@ -1034,15 +1120,24 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
       nextVisitIntent: feedback.nextVisitIntent ?? null,
     };
 
-    track('booking_cancelled', customerId, {
+    // The gym city is analytics-only. On a cache hit it is read synchronously
+    // (event emitted inline, as before); on a miss the gym-service lookup runs
+    // in the background so the customer's cancel response never waits on it.
+    const emitCancelled = (city) => track('booking_cancelled', customerId, {
       booking_id: booking.id, gym_id: booking.gymId, amount: booking.amount, date: booking.date,
       refund_rate: refundRate, refund_amount: refundAmount, hours_until_slot: hoursUntil,
-      city: await getGymCity(booking.gymId),
+      city,
       // FR-14: null here is meaningful data too (the customer skipped the
       // prompt), which is why these are always emitted rather than omitted.
       cancellation_reason: feedback.cancellationReason ?? null,
       next_visit_intent: feedback.nextVisitIntent ?? null,
     });
+    const cachedCity = gymCityCache.get(booking.gymId);
+    if (cachedCity && cachedCity.expiresAt > Date.now()) {
+      emitCancelled(cachedCity.city);
+    } else {
+      getGymCity(booking.gymId).then(emitCancelled).catch(() => {});
+    }
 
     notifyCustomer(customerId, {
       title: 'Booking cancelled',
@@ -2086,22 +2181,16 @@ export async function getCustomerBookings(customerId) {
     const uniqueGymIds = [...new Set(bookings.map(b => b.gymId))];
     const gymMap = {};
     await Promise.all(uniqueGymIds.map(async (gymId) => {
-      try {
-        const resp = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
-          headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(GYM_SERVICE_URL)) }
-        });
-        if (resp.ok) {
-          const body = await resp.json();
-          const gym = body.data || body;
-          gymMap[gymId] = {
-            id: gym.id,
-            name: gym.name,
-            address: gym.address,
-            city: gym.city,
-            imageUrl: gym.images?.[0]?.url || null,
-          };
-        }
-      } catch (_) { /* leave gym undefined for this id */ }
+      const card = await getGymCard(gymId);
+      if (card) {
+        gymMap[gymId] = {
+          id: card.id,
+          name: card.name,
+          address: card.address,
+          city: card.city,
+          imageUrl: card.imageUrl,
+        };
+      }
     }));
 
     // Strip partner-internal fields before this reaches the customer. Two
@@ -2148,6 +2237,25 @@ export async function getSlotCounts(gymId, date) {
     counts[b.startTime] = (counts[b.startTime] || 0) + 1;
   }
   return counts;
+}
+
+// Internal batch variant of getSlotCounts for gym-service's availability
+// endpoint: one grouped query for an inclusive date range instead of one call
+// per day. Returns { [date]: { [startTime]: count } }; dates with no bookings
+// are absent. Same filter as getSlotCounts (plain slots only, not cancelled).
+// Booking.date is a zero-padded ISO string, so string range comparison orders
+// correctly.
+export async function getSlotCountsRange(gymId, from, to) {
+  const rows = await prisma.booking.groupBy({
+    by: ['date', 'startTime'],
+    where: { gymId, classId: null, status: { not: 'cancelled' }, date: { gte: from, lte: to } },
+    _count: { _all: true },
+  });
+  const byDate = {};
+  for (const r of rows) {
+    (byDate[r.date] ||= {})[r.startTime] = r._count._all;
+  }
+  return byDate;
 }
 
 // Internal: booking counts for a single recurring class across a set of
@@ -3313,12 +3421,17 @@ export async function getVisitedGyms(customerId, { version = 1 } = {}) {
     const rows = [...venues.values()].sort((a, b) => a.type.localeCompare(b.type) || a.id - b.id);
     return await Promise.all(rows.map(async (venue) => {
       let gym = null;
-      try {
-        const path = venue.type === 'partner' ? `${venue.id}` : `unclaimed-gyms/${venue.id}`;
-        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${path}`, await internalHeadersFor(GYM_SERVICE_URL));
-        const metadata = gymRes.data && Object.hasOwn(gymRes.data, 'data') ? gymRes.data.data : gymRes.data;
-        if (metadata) gym = { name: metadata.name, lat: metadata.lat, lng: metadata.lng, city: metadata.city };
-      } catch (_) { /* leave gym metadata null for this id */ }
+      if (venue.type === 'partner') {
+        // Partner gyms go through the shared gym-card cache.
+        const card = await getGymCard(venue.id);
+        if (card) gym = { name: card.name, lat: card.lat, lng: card.lng, city: card.city };
+      } else {
+        try {
+          const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/unclaimed-gyms/${venue.id}`, await internalHeadersFor(GYM_SERVICE_URL));
+          const metadata = gymRes.data && Object.hasOwn(gymRes.data, 'data') ? gymRes.data.data : gymRes.data;
+          if (metadata) gym = { name: metadata.name, lat: metadata.lat, lng: metadata.lng, city: metadata.city };
+        } catch (_) { /* leave gym metadata null for this id */ }
+      }
       return {
         ...(version === 2 ? {
           venueId: venue.venueId,
@@ -3349,11 +3462,8 @@ export async function getMyAttendanceWarnings(customerId) {
     const uniqueGymIds = [...new Set(warnings.map((w) => w.gymId))];
     const gymNameById = {};
     await Promise.all(uniqueGymIds.map(async (gymId) => {
-      try {
-        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-        const gym = gymRes.data?.data || gymRes.data;
-        gymNameById[gymId] = gym?.name || null;
-      } catch (_) { /* leave gym name null for this id */ }
+      const card = await getGymCard(gymId);
+      if (card) gymNameById[gymId] = card.name || null;
     }));
 
     return {

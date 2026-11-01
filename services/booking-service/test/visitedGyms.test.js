@@ -13,7 +13,7 @@ const queries = [];
 const lookups = [];
 const signals = [];
 let readError = null;
-let server, baseUrl;
+let server, baseUrl, resetGymCardCache;
 
 function reader(model, rows) {
   return async (args) => {
@@ -61,6 +61,7 @@ before(async () => {
     });
   }
   const { default: routes } = await import('../routes/booking.js');
+  ({ _resetGymCardCache: resetGymCardCache } = await import('../services/bookingService.js'));
   const app = express();
   app.use('/api/bookings', routes);
   server = app.listen(0, '127.0.0.1');
@@ -78,6 +79,8 @@ beforeEach(() => {
   for (const rows of [bookings, members, independent, queries, lookups, signals]) rows.length = 0;
   metadata.clear();
   readError = null;
+  // Gym cards are cached in-process; each test sets its own gym metadata.
+  resetGymCardCache();
 });
 afterEach(() => assert.deepEqual(signals, [], 'projection must remain read-only'));
 

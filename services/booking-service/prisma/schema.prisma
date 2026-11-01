@@ -147,6 +147,11 @@ model Booking {
   // page/relation granularity under load, causing spurious serialization
   // conflicts for unrelated concurrent bookings.
   @@index([classId, date])
+  // Customer-scoped reads: booking list (customerId, newest first), attendance
+  // history / streaks (customerId, attendedAt) and the subscription visit count.
+  @@index([customerId, createdAt])
+  @@index([customerId, attendedAt])
+  @@index([subscriptionId])
   @@schema("booking")
 }
 

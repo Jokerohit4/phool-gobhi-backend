@@ -78,6 +78,22 @@ export const getSlotCounts = async (req, res) => {
   }
 };
 
+// Internal batch variant: ?from=YYYY-MM-DD&to=YYYY-MM-DD -> { [date]: { [startTime]: n } }.
+export const getSlotCountsRange = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const { from, to } = req.query;
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isoDate.test(String(from || '')) || !isoDate.test(String(to || ''))) {
+      return res.status(400).json({ error: 'from and to (YYYY-MM-DD) are required' });
+    }
+    const counts = await bookingService.getSlotCountsRange(gymId, from, to);
+    res.json({ data: counts });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 // Internal service-to-service: gym-service computes class-occurrence
 // availability across upcoming dates (?dates=2026-08-10,2026-08-17,...).
 export const getClassCounts = async (req, res) => {

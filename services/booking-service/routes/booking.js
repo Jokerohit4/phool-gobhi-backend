@@ -11,6 +11,7 @@ router.post('/internal/daily-briefing', requireInternal, ctrl.sendDailyBriefing)
 router.post('/internal/auto-complete', requireInternal, ctrl.autoCompleteSessions);
 router.post('/internal/session-reminders', requireInternal, ctrl.sendSessionReminders);
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
+router.get('/internal/slot-counts/:gymId/range', requireInternal, ctrl.getSlotCountsRange);
 // DPDPA access right (s.11). Called by auth-service's platform-wide export
 // fan-out; internal only, never reachable through the gateway.
 router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);

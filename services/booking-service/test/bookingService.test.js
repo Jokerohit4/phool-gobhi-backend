@@ -32,6 +32,12 @@ let profileLookupThrows = false;
 let profileIncomplete = false;
 let walletDebitFails = false;
 let walletCreditFails = false;
+// createBooking sibling-call controls (profile / blocks / subscription lookups)
+let blocksMode = 'none'; // 'none' | 'blocked' | 'otherSlot' | 'error' | 'junk'
+let subMode = 'none'; // 'none' | 'active' | 'error'
+let axiosGetLog = []; // { kind, url, opts }
+let siblingBarrier = null; // { arrive(), reached }
+let gymGate = null; // Promise gating the lookup of gym 77 (cancel city test)
 
 function makeBooking(overrides) {
   return {
@@ -76,6 +82,11 @@ function resetFakes() {
   profileLookupThrows = false;
   profileIncomplete = false;
   walletDebitFails = false;
+  blocksMode = 'none';
+  subMode = 'none';
+  axiosGetLog = [];
+  siblingBarrier = null;
+  gymGate = null;
 }
 
 let createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym;
@@ -109,6 +120,21 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
               if (where.classId !== undefined && where.classId === null) results = results.filter(r => r.classId === null);
               if (where.status && where.status.not) results = results.filter(r => r.status !== where.status.not);
               return results;
+            },
+            groupBy: async ({ where, by }) => {
+              const groups = new Map();
+              for (const r of bookingRows.values()) {
+                if (where.gymId !== undefined && r.gymId !== where.gymId) continue;
+                if (where.classId === null && r.classId !== null) continue;
+                if (where.status?.not && r.status === where.status.not) continue;
+                if (where.date?.gte !== undefined && r.date < where.date.gte) continue;
+                if (where.date?.lte !== undefined && r.date > where.date.lte) continue;
+                const key = by.map((k) => r[k]).join('|');
+                const g = groups.get(key) || { ...Object.fromEntries(by.map((k) => [k, r[k]])), _count: { _all: 0 } };
+                g._count._all += 1;
+                groups.set(key, g);
+              }
+              return [...groups.values()];
             },
             count: async ({ where }) => {
               let results = [...bookingRows.values()];
@@ -178,6 +204,27 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
     exports: {
       default: {
         get: async (url, _opts) => {
+          const kind = url.includes('/internal/blocks/') ? 'blocks'
+            : (url.includes('auth-service') || url.includes('/internal/users')) ? 'profile'
+            : url.includes('subscriptions/active') ? 'subscription' : 'other';
+          axiosGetLog.push({ kind, url, opts: _opts });
+          if (siblingBarrier && kind !== 'other') await siblingBarrier.arrive();
+          if (kind === 'blocks') {
+            if (blocksMode === 'error') throw new Error('gym-service blocks lookup failed');
+            if (blocksMode === 'blocked') return { data: { data: [{ startTime: '10:00' }] } };
+            if (blocksMode === 'otherSlot') return { data: { data: [{ startTime: '15:00' }] } };
+            if (blocksMode === 'junk') return { data: { data: { not: 'an array' } } };
+            return { data: { data: [] } };
+          }
+          if (kind === 'subscription') {
+            if (subMode === 'error') throw new Error('wallet-service down');
+            if (subMode === 'active') return { data: { data: { active: true, subscription: { id: 5 } } } };
+            return { data: { data: null } };
+          }
+          if (url.endsWith('/internal/77')) {
+            if (gymGate) await gymGate;
+            return { data: { data: { ...GYM, id: 77, city: 'Pune' } } };
+          }
           if (url.includes('auth-service') || url.includes('/internal/users')) {
             if (profileLookupThrows) throw new Error('profile lookup failed');
             if (profileIncomplete) return { data: { name: '', dateOfBirth: null } };
@@ -769,4 +816,175 @@ test('cancelBookingByGym: a plan-covered booking refunds nothing', async () => {
   const result = await cancelBookingByGym(b.id, GYM.id, PARTNER);
   assert.equal(result.refundAmount, 0);
   assert.equal(walletCreditCalls.length, 0);
+});
+
+// --- createBooking: blocked slots + parallel sibling lookups ---------------
+
+const BOOK = { gymId: GYM.id, date: TODAY_IST, startTime: '10:00', endTime: '11:00' };
+
+function barrierOf(n, waitMs = 300) {
+  let arrived = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const b = {
+    reached: false,
+    arrive: async () => {
+      arrived += 1;
+      if (arrived >= n) { b.reached = true; release(); }
+      await Promise.race([gate, new Promise((r) => setTimeout(r, waitMs))]);
+    },
+  };
+  return b;
+}
+
+test('createBooking: a gym-blocked slot is rejected with 409 and nothing is charged', async () => {
+  resetFakes();
+  blocksMode = 'blocked';
+  await assert.rejects(() => createBooking(CUSTOMER, BOOK), (err) => {
+    assert.equal(err.status, 409);
+    assert.equal(err.error, 'This slot has been blocked by the gym');
+    return true;
+  });
+  assert.equal(walletDebitCalls.length, 0);
+  assert.equal(bookingRows.size, 0);
+});
+
+test('createBooking: blocks use the internal gym-service route, not the partner-only /:id/blocks', async () => {
+  resetFakes();
+  await createBooking(CUSTOMER, BOOK);
+  const blockCalls = axiosGetLog.filter((c) => c.kind === 'blocks');
+  assert.equal(blockCalls.length, 1);
+  assert.match(blockCalls[0].url, new RegExp(`/internal/blocks/${GYM.id}\\?date=${TODAY_IST}$`));
+  assert.ok(blockCalls[0].opts.headers['x-internal-key'], 'internal key sent');
+});
+
+test('createBooking: a block on a different start time does not stop the booking', async () => {
+  resetFakes();
+  blocksMode = 'otherSlot';
+  const b = await createBooking(CUSTOMER, BOOK);
+  assert.equal(b.status, 'confirmed');
+});
+
+test('createBooking: a failed block lookup still books, and is logged with console.warn', async (t) => {
+  resetFakes();
+  blocksMode = 'error';
+  const warn = t.mock.method(console, 'warn', () => {});
+  const b = await createBooking(CUSTOMER, BOOK);
+  assert.equal(b.status, 'confirmed');
+  assert.equal(warn.mock.callCount(), 1);
+  assert.match(String(warn.mock.calls[0].arguments[0]), /slot-block check failed/);
+  assert.match(String(warn.mock.calls[0].arguments[1]), /blocks lookup failed/);
+});
+
+test('createBooking: a malformed block payload is treated as no blocks', async () => {
+  resetFakes();
+  blocksMode = 'junk';
+  const b = await createBooking(CUSTOMER, BOOK);
+  assert.equal(b.status, 'confirmed');
+});
+
+test('createBooking: profile, blocks and subscription lookups are started together, each with a 3s timeout', async () => {
+  resetFakes();
+  siblingBarrier = barrierOf(3);
+  const b = await createBooking(CUSTOMER, BOOK);
+  assert.equal(b.status, 'confirmed');
+  assert.equal(siblingBarrier.reached, true, 'all three were in flight before any returned');
+  const kinds = axiosGetLog.filter((c) => c.kind !== 'other').map((c) => c.kind);
+  assert.deepEqual([...kinds].sort(), ['blocks', 'profile', 'subscription']);
+  for (const c of axiosGetLog.filter((x) => x.kind !== 'other')) assert.equal(c.opts.timeout, 3000, c.kind);
+});
+
+test('createBooking error precedence is unchanged: incomplete profile (400) beats a block (409)', async () => {
+  resetFakes();
+  profileIncomplete = true;
+  blocksMode = 'blocked';
+  await assert.rejects(() => createBooking(CUSTOMER, BOOK), (err) => {
+    assert.equal(err.status, 400);
+    assert.match(err.error, /name and date of birth/);
+    return true;
+  });
+});
+
+test('createBooking error precedence is unchanged: unreachable auth-service fails closed (400) even if blocked', async () => {
+  resetFakes();
+  profileLookupThrows = true;
+  blocksMode = 'blocked';
+  await assert.rejects(() => createBooking(CUSTOMER, BOOK), (err) => {
+    assert.equal(err.status, 400);
+    assert.match(err.error, /Could not verify your profile/);
+    return true;
+  });
+});
+
+test('createBooking: block (409) beats a subscription candidate; no charge, no reservation', async () => {
+  resetFakes();
+  blocksMode = 'blocked';
+  subMode = 'active';
+  await assert.rejects(() => createBooking(CUSTOMER, BOOK), (err) => err.status === 409);
+  assert.equal(walletDebitCalls.length, 0);
+  assert.equal(bookingRows.size, 0);
+});
+
+test('createBooking: a failed subscription lookup falls through to the normal paid flow', async () => {
+  resetFakes();
+  subMode = 'error';
+  const b = await createBooking(CUSTOMER, BOOK);
+  assert.equal(b.status, 'confirmed');
+  assert.equal(walletDebitCalls.length, 1);
+  assert.equal(walletDebitCalls[0].amount, 500);
+});
+
+// --- cancelBooking: gym city no longer blocks the response -----------------
+
+test('cancelBooking: on a gym-city cache miss the response does not wait for gym-service; the event follows', async () => {
+  resetFakes();
+  let release;
+  gymGate = new Promise((r) => { release = r; });
+  const b = makeBooking({ status: 'confirmed', gymId: 77 });
+  bookingRows.set(b.id, b);
+
+  const result = await cancelBooking(b.id, CUSTOMER);   // would hang forever if it awaited the city
+  assert.equal(result.status, 'cancelled');
+  assert.equal(trackCalls.filter((c) => c[0] === 'booking_cancelled').length, 0, 'not emitted yet');
+
+  release();
+  await new Promise((r) => setTimeout(r, 20));
+  const ev = trackCalls.filter((c) => c[0] === 'booking_cancelled');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0][2].city, 'Pune');
+  assert.equal(ev[0][2].gym_id, 77);
+});
+
+test('cancelBooking: with the city already cached the event is emitted inline, as before', async () => {
+  resetFakes();
+  const b = makeBooking({ status: 'confirmed', gymId: 77 });
+  bookingRows.set(b.id, b);
+  await cancelBooking(b.id, CUSTOMER);
+  const ev = trackCalls.filter((c) => c[0] === 'booking_cancelled');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0][2].city, 'Pune');
+});
+
+// --- getSlotCountsRange (batch variant) ------------------------------------
+
+test('getSlotCountsRange: grouped counts by date and start time, same filters as getSlotCounts', async () => {
+  const { getSlotCountsRange } = await import('../services/bookingService.js');
+  resetFakes();
+  const rows = [
+    makeBooking({ date: '2026-09-14', startTime: '10:00' }),
+    makeBooking({ date: '2026-09-14', startTime: '10:00' }),
+    makeBooking({ date: '2026-09-14', startTime: '11:00' }),
+    makeBooking({ date: '2026-09-15', startTime: '10:00' }),
+    makeBooking({ date: '2026-09-15', startTime: '10:00', status: 'cancelled' }),
+    makeBooking({ date: '2026-09-15', startTime: '12:00', classId: 3 }),
+    makeBooking({ date: '2026-09-16', startTime: '10:00', gymId: 999 }),
+    makeBooking({ date: '2026-09-20', startTime: '10:00' }), // outside range
+  ];
+  for (const r of rows) bookingRows.set(r.id, r);
+  const range = await getSlotCountsRange(GYM.id, '2026-09-14', '2026-09-16');
+  assert.deepEqual(range, { '2026-09-14': { '10:00': 2, '11:00': 1 }, '2026-09-15': { '10:00': 1 } });
+  // per-day results agree with the existing single-day function
+  for (const date of Object.keys(range)) {
+    assert.deepEqual(await getSlotCounts(GYM.id, date), range[date]);
+  }
 });
