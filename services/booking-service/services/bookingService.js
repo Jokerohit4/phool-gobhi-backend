@@ -12,6 +12,7 @@ import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
 import * as checkinDaysService from './checkinDaysService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
+import { pageArgs, finishPage } from '../utils/pagination.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -2155,12 +2156,22 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
   }
 }
 
-export async function getCustomerBookings(customerId) {
+// Legacy shape: just the (first page of) bookings as an array.
+export async function getCustomerBookings(customerId, opts = {}) {
+  return (await getCustomerBookingsPage(customerId, opts)).items;
+}
+
+// Cursor-paginated (see utils/pagination.js): createdAt desc with id desc as a
+// tiebreaker, backed by the (customerId, createdAt) index. Only the page's
+// gyms are enriched. Returns { items, meta }.
+export async function getCustomerBookingsPage(customerId, { limit = 50, cursor = null } = {}) {
   try {
-    let bookings = (await prisma.booking.findMany({
+    const { items: pageRows, meta } = finishPage(await prisma.booking.findMany({
       where: { customerId },
-      orderBy: { createdAt: 'desc' }
-    })).map(normalizeBookingMoney);
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...pageArgs({ limit, cursor }),
+    }), limit);
+    let bookings = pageRows.map(normalizeBookingMoney);
 
     // Self-heal: a booking stuck at `pending` (process died between
     // reserving the slot and confirming payment) gets resolved the next
@@ -2204,7 +2215,9 @@ export async function getCustomerBookings(customerId) {
     // Every booking gets a signed check-in token regardless of status —
     // verifyAttendance's own status/date checks are what actually gate a
     // successful scan.
-    return bookings.map(b => {
+    // meta was computed from the raw page above, so a stale-pending booking
+    // dropped by the self-heal never breaks the cursor chain.
+    const items = bookings.map(b => {
       const {
         attendanceOverrideReason, attendanceVerifiedBy,
         commissionPct, partnerShare, walletTxId, payoutAmount, payoutCreditedAt,
@@ -2212,6 +2225,7 @@ export async function getCustomerBookings(customerId) {
       } = b;
       return { ...safe, gym: gymMap[b.gymId] || null, qrToken: signQrToken(b.id, b.gymId) };
     });
+    return { items, meta };
   } catch (err) {
     console.error('getCustomerBookings error:', err);
     throw {

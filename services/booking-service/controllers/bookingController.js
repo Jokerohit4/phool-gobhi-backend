@@ -2,6 +2,10 @@ import * as bookingService from '../services/bookingService.js';
 import * as globalLeaderboardService from '../services/globalLeaderboardService.js';
 import * as exportService from '../services/exportService.js';
 import * as checkinDaysService from '../services/checkinDaysService.js';
+import { parseLimit, parseCursor } from '../utils/pagination.js';
+
+const MY_BOOKINGS_DEFAULT_LIMIT = 50;
+const MY_BOOKINGS_MAX_LIMIT = 100;
 
 export const createBooking = async (req, res) => {
   try {
@@ -19,8 +23,10 @@ export const createBooking = async (req, res) => {
 
 export const getMyBookings = async (req, res) => {
   try {
-    const bookings = await bookingService.getCustomerBookings(req.userId);
-    res.json({ data: bookings });
+    const limit = parseLimit(req.query?.limit, MY_BOOKINGS_DEFAULT_LIMIT, MY_BOOKINGS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await bookingService.getCustomerBookingsPage(req.userId, { limit, cursor });
+    res.json({ data: items, meta });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
