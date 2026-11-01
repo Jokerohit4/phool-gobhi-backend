@@ -1,5 +1,6 @@
 import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
+import { profileChanged } from '../utils/buddyCaches.js';
 
 // DPDPA erasure for this service, called by auth-service when a user
 // deletes their account. Buddy holds the most personal data on the
@@ -87,6 +88,7 @@ export async function eraseUserService(userId) {
     ...(profile ? [prisma.buddyPhoto.deleteMany({ where: { buddyProfileId: profile.id } })] : []),
     prisma.buddyProfile.deleteMany({ where: { userId } }),
   ]);
+  profileChanged(userId);
 
   return {
     erased: true,

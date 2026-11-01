@@ -160,8 +160,8 @@ test('getMessages(after): messages query runs alongside the participant guard', 
   state.messages = [{ id: 9, matchId: 5, body: 'x' }];
   const out = await svc.getMessages(1, 5, { after: '3' });
   assert.deepEqual(out, state.messages);
-  assert.ok(events.includes('messages:start') && events.includes('profiles:start'));
-  assert.ok(events.indexOf('messages:start') < events.lastIndexOf('profiles:start') + 5);
+  assert.ok(events.includes('messages:start') && events.includes('suspension:start'));
+  assert.ok(events.indexOf('messages:start') < events.lastIndexOf('suspension:start') + 5);
 });
 
 test('getMessages(after): the guard still gates the response (not a participant -> 403, no rows)', async () => {

@@ -7,6 +7,7 @@ import { getUserInternal, getUsersBatchInternal } from './authClient.js';
 import { notifyMatch } from '../utils/notifyMatch.js';
 import { notifyMessage } from '../utils/notifyMessage.js';
 import { MAX_BUDDY_PHOTOS } from '../utils/upload.js';
+import { feedCache, activeCache, evictFeed, profileChanged } from '../utils/buddyCaches.js';
 
 
 // Stranger-matching by physical proximity — this can't rest solely on
@@ -274,6 +275,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
       else code = 'PHOTOS_REQUIRED';
     }
     const profile = await prisma.buddyProfile.update({ where: { userId }, data });
+    profileChanged(userId);
     return { profile, code };
   }
 
@@ -319,6 +321,7 @@ export async function createOrUpdateProfile(userId, { bio, lat, lng, isDiscovera
       womenOnlyBlocked: computeWomenOnlyBlocked({ ...genderChange, genderChangeClearedAt: null }),
     },
   });
+  profileChanged(userId);
   track('buddy_profile_created', userId, {});
   return { profile: created, code: isDiscoverable === true ? 'PHOTOS_REQUIRED' : undefined };
 }
@@ -342,6 +345,7 @@ export async function syncProfileFromAuth(userId) {
     // DOB was edited downward below 18 post-creation — pause discoverability
     // rather than deleting the profile outright.
     await prisma.buddyProfile.update({ where: { userId }, data: { isDiscoverable: false } });
+    profileChanged(userId);
     throw { status: 403, error: 'You must be 18 or older to use buddy matching' };
   }
 
@@ -359,9 +363,10 @@ export async function syncProfileFromAuth(userId) {
   // it changes away, the mode turns off. Existing matches are untouched.
   if (gender !== 'female' && existing.filter?.womenOnly) {
     await prisma.buddyFilter.update({ where: { userId }, data: { womenOnly: false } });
+    profileChanged(userId);
   }
 
-  return prisma.buddyProfile.update({
+  const synced = await prisma.buddyProfile.update({
     where: { userId },
     data: {
       gender,
@@ -372,6 +377,8 @@ export async function syncProfileFromAuth(userId) {
       womenOnlyBlocked,
     },
   });
+  profileChanged(userId);
+  return synced;
 }
 
 export async function refreshProfileFromAuth(userId) {
@@ -392,7 +399,7 @@ export async function addPhotos(userId, files) {
   // `order` values. 913_001 is this table's lock namespace (buddy-service
   // has no other advisory locks; wallet-service's namespaces live in a
   // different database).
-  return prisma.$transaction(async (tx) => {
+  const added = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(913001::int, ${userId}::int)`;
 
     const profile = await tx.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
@@ -412,6 +419,8 @@ export async function addPhotos(userId, files) {
     }
     return created;
   });
+  profileChanged(userId);
+  return added;
 }
 
 // One-way "use my main profile photo" shortcut — buddy and account photos
@@ -429,7 +438,7 @@ export async function addPhotoFromUrl(userId, sourceUrl) {
     transformation: [{ width: 1080, height: 1350, crop: 'limit', quality: 'auto' }],
   });
   try {
-    return await prisma.$transaction(async (tx) => {
+    const added = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(913_001, ${userId})`;
 
       const profile = await tx.buddyProfile.findUnique({ where: { userId }, include: { photos: true } });
@@ -446,6 +455,8 @@ export async function addPhotoFromUrl(userId, sourceUrl) {
         },
       });
     });
+    profileChanged(userId);
+    return added;
   } catch (err) {
     await cloudinary.uploader.destroy(uploaded.public_id).catch(() => {});
     throw err;
@@ -464,6 +475,7 @@ export async function reorderPhotos(userId, order) {
   await prisma.$transaction(
     order.map((id, idx) => prisma.buddyPhoto.update({ where: { id }, data: { order: idx } }))
   );
+  profileChanged(userId);
   return prisma.buddyPhoto.findMany({ where: { buddyProfileId: profile.id }, orderBy: { order: 'asc' } });
 }
 
@@ -481,6 +493,7 @@ export async function deletePhoto(userId, photoId) {
   }
 
   await prisma.buddyPhoto.delete({ where: { id: photoId } });
+  profileChanged(userId);
 
   // Dropping below 3 photos hides the profile again; the client shows the
   // same "Add 3 photos to be visible" notice it shows on save.
@@ -557,11 +570,13 @@ export async function upsertFilters(userId, data, userType) {
     womenOnly: nextWomenOnly,
   };
 
-  return prisma.buddyFilter.upsert({
+  const saved = await prisma.buddyFilter.upsert({
     where: { userId },
     update: payload,
     create: { userId, ...payload },
   });
+  profileChanged(userId);
+  return saved;
 }
 
 // ---- Discovery --------------------------------------------------------------
@@ -570,10 +585,28 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
   page = Math.max(1, page);
   limit = Math.min(Math.max(1, limit), 50);
 
-  // "Self" and "already swiped" are feed-only exclusions; blocks and reports
-  // (either way) apply to likes-by-id as well, via safetyExcludedIds. None of
-  // the three reads depends on another, so they run together; the missing-
-  // profile / cannot-browse checks still gate everything that follows.
+  // Paging is offset-based, so every page used to recompute the whole sorted
+  // list. It is now built once per viewer and cached 45s (single-flight; a
+  // failed or rejected build is never cached). Writes that can change the deck
+  // evict it — see utils/buddyCaches.js and the callers of evictFeed /
+  // profileChanged. A suspended/held viewer reaches here only through a build
+  // (eviction on suspension), so assertCanBrowse still gates every cold load.
+  const withDistance = await feedCache.get(userId, () => buildFeedList(userId));
+
+  const pageSlice = withDistance.slice((page - 1) * limit, page * limit);
+  const displayInfo = await getUsersBatchInternal(pageSlice.map((c) => c.userId)).catch(() => []);
+  const displayMap = new Map(displayInfo.map((u) => [u.id, u]));
+
+  const data = pageSlice.map((c) => toPublicCandidate(c, displayMap.get(c.userId)));
+  return { data, page, hasMore: page * limit < withDistance.length };
+}
+
+// The sorted, filtered candidate list for one viewer (the expensive part of getFeed).
+// "Self" and "already swiped" are feed-only exclusions; blocks and reports
+// (either way) apply to likes-by-id as well, via safetyExcludedIds. None of
+// the three reads depends on another, so they run together; the missing-
+// profile / cannot-browse checks still gate everything that follows.
+async function buildFeedList(userId) {
   const [me, swiped, safetyIds] = await Promise.all([
     prisma.buddyProfile.findUnique({ where: { userId }, include: { filter: true } }),
     prisma.swipe.findMany({ where: { swiperId: userId }, select: { swipeeId: true } }),
@@ -610,19 +643,12 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
     take: 300,
   });
 
-  const withDistance = candidates
+  return candidates
     .map((c) => ({ ...c, distanceKm: haversineKm(me.lat, me.lng, c.lat, c.lng) }))
     // The bounding box over-includes near its corners — this trims to the
     // exact circle, and applies the candidate's own radius the other way.
     .filter((c) => distanceAcceptsBothWays(me, c, c.distanceKm))
     .sort((a, b) => a.distanceKm - b.distanceKm);
-
-  const pageSlice = withDistance.slice((page - 1) * limit, page * limit);
-  const displayInfo = await getUsersBatchInternal(pageSlice.map((c) => c.userId)).catch(() => []);
-  const displayMap = new Map(displayInfo.map((u) => [u.id, u]));
-
-  const data = pageSlice.map((c) => toPublicCandidate(c, displayMap.get(c.userId)));
-  return { data, page, hasMore: page * limit < withDistance.length };
 }
 
 // ---- Swipes & matches ----------------------------------------------------
@@ -665,6 +691,7 @@ export async function recordSwipe(swiperId, swipeeId, action) {
     update: { action },
     create: { swiperId, swipeeId, action },
   });
+  evictFeed(swiperId); // the swiped user must leave this viewer's cached deck now
   track('buddy_swiped', swiperId, { action });
 
   if (action !== 'like') return { matched: false };
@@ -887,6 +914,8 @@ export async function blockUser(userId, targetUserId, reason) {
     create: { blockerId: userId, blockedId: targetUserId, reason },
   });
 
+  evictFeed(userId, targetUserId);
+
   // Auto-unmatch: a block should sever any existing conversation, not just
   // hide the user from future discovery.
   const userLowId = Math.min(userId, targetUserId);
@@ -908,6 +937,7 @@ export async function blockUser(userId, targetUserId, reason) {
 
 export async function unblockUser(userId, targetUserId) {
   await prisma.blockedUser.deleteMany({ where: { blockerId: userId, blockedId: targetUserId } });
+  evictFeed(userId, targetUserId);
   return { message: 'User unblocked' };
 }
 
@@ -951,6 +981,13 @@ const matchExpiryCutoff = () =>
 // a dead match, getMatchedProfile answers 410. Unifying them would be tidier and
 // would be a silent client-facing contract change, so each call site keeps the
 // code its own client already handles.
+function isProfileActive(uid) {
+  return activeCache.get(uid, async () => {
+    const p = await prisma.buddyProfile.findUnique({ where: { userId: uid }, select: { isActive: true } });
+    return p ? p.isActive : null; // null = no profile (never treated as suspended)
+  });
+}
+
 async function assertActiveParticipant(matchId, userId, { inactiveStatus = 410 } = {}) {
   const match = await assertParticipant(matchId, userId);
   if (match.status !== 'active') {
@@ -959,13 +996,12 @@ async function assertActiveParticipant(matchId, userId, { inactiveStatus = 410 }
   // Chat, the match list and profile view need BOTH sides active. A hold is
   // not checked here on purpose: held users keep their open chats.
   const otherUserId = match.userLowId === userId ? match.userHighId : match.userLowId;
-  const profiles = await prisma.buddyProfile.findMany({
-    where: { userId: { in: [userId, otherUserId] } },
-    select: { userId: true, isActive: true },
-  });
-  const inactive = new Set(profiles.filter((p) => p.isActive === false).map((p) => p.userId));
-  if (inactive.has(userId)) throw buddyError('BUDDY_SUSPENDED');
-  if (inactive.has(otherUserId)) {
+  // The match row above is read fresh on every call, so a block / unmatch /
+  // report fails the next poll immediately. Only the profile isActive flag is
+  // cached (30s, evicted by suspendUser / reinstateUser / erasure).
+  const [meActive, otherActive] = await Promise.all([isProfileActive(userId), isProfileActive(otherUserId)]);
+  if (meActive === false) throw buddyError('BUDDY_SUSPENDED');
+  if (otherActive === false) {
     throw { status: inactiveStatus, error: 'This match is no longer active' };
   }
   // Defensive: `lastActivityAt` is NOT NULL with a default, but a row written
@@ -1005,6 +1041,7 @@ export async function reportUser(userId, reportedUserId, reason, details) {
   const report = await prisma.report.create({
     data: { reporterId: userId, reportedUserId, reason, details: details?.slice(0, 1000) ?? null, severity },
   });
+  evictFeed(userId, reportedUserId);
   track('buddy_reported', userId, { reportedUserId, reason, severity });
 
   await evaluateAutoHold(reportedUserId, reason);
@@ -1094,6 +1131,7 @@ async function evaluateAutoHold(reportedUserId, reason) {
     data: { moderationHoldAt: new Date() },
   });
   if (count > 0) {
+    profileChanged(reportedUserId);
     track('buddy_auto_held', reportedUserId, { reporter_count: qualifying, reason });
     return true;
   }
@@ -1213,6 +1251,7 @@ async function suspendUser(userId) {
       data: { status: 'unmatched', unmatchedBy: userId, unmatchedAt: now },
     }),
   ]);
+  profileChanged(userId);
   return ended.count;
 }
 
@@ -1247,14 +1286,18 @@ async function requireProfileForModeration(userId) {
 // Clears moderationHoldAt only.
 export async function releaseHold(userId) {
   await requireProfileForModeration(userId);
-  return prisma.buddyProfile.update({ where: { userId }, data: { moderationHoldAt: null } });
+  const released = await prisma.buddyProfile.update({ where: { userId }, data: { moderationHoldAt: null } });
+  profileChanged(userId);
+  return released;
 }
 
 // isActive=true and the hold cleared. Brings back the deck only: matches the
 // suspension ended stay ended.
 export async function reinstateUser(userId) {
   await requireProfileForModeration(userId);
-  return prisma.buddyProfile.update({ where: { userId }, data: { isActive: true, moderationHoldAt: null } });
+  const reinstated = await prisma.buddyProfile.update({ where: { userId }, data: { isActive: true, moderationHoldAt: null } });
+  profileChanged(userId);
+  return reinstated;
 }
 
 // ---- Gender-change moderation (women-only guard) ---------------------------
@@ -1282,11 +1325,13 @@ export async function listGenderChanges() {
 export async function clearGenderChange(userId) {
   const profile = await requireProfileForModeration(userId);
   const genderChangeClearedAt = new Date();
-  return prisma.buddyProfile.update({
+  const cleared = await prisma.buddyProfile.update({
     where: { userId },
     data: {
       genderChangeClearedAt,
       womenOnlyBlocked: computeWomenOnlyBlocked({ ...profile, genderChangeClearedAt }),
     },
   });
+  profileChanged(userId);
+  return cleared;
 }

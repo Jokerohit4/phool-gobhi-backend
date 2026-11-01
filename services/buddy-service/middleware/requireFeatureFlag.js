@@ -59,6 +59,20 @@ async function refreshFlags() {
   return cachedFlags;
 }
 
+// Warm the cache at module load so the first request after a cold start does
+// not wait on auth-service. Never throws or rejects (refreshFlags swallows its
+// own errors; the catch is belt-and-braces) and is skipped under node --test,
+// where it would fire an unmocked fetch at import time.
+export function warmFeatureFlags() {
+  if (process.env.NODE_TEST_CONTEXT && process.env.BUDDY_FLAG_WARM_FORCE !== '1') return;
+  try {
+    getFeatureFlags().catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+warmFeatureFlags();
+
 export async function isFeatureEnabled(flagName) {
   const flags = await getFeatureFlags();
   return !!flags?.[flagName]?.enabled;
