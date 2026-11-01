@@ -116,6 +116,10 @@ model Exercise {
   // tagged yet — a null is "unclassified", not "beginner".
   difficulty       String?
   demoImageUrl     String?
+  // Looping demo animation (GIF). Licensed media — keep mediaAttribution
+  // alongside it wherever the GIF is shown.
+  demoGifUrl       String?
+  mediaAttribution String?
   createdByUserId  Int?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
