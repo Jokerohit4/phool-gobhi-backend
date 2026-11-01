@@ -151,6 +151,35 @@ test('a grant records the version it was given under', async () => {
   );
 });
 
+// The bug behind "Cannot read properties of null (reading 'grantedAt')" on the
+// very first consent tap: addScope echoed grantedAt from the row it read BEFORE
+// the upsert, and a first-ever grant has no such row. The row was still written,
+// so the second tap worked. Every other test starts from an existing row, which
+// is why this went unnoticed.
+for (const [name, grant, scope] of [
+  ['nutrition', () => grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION }), () => NUTRITION_SCOPE],
+  ['medical records', () => grantMedicalRecordsConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION }), () => MEDICAL_RECORDS_SCOPE],
+  ['photo', () => grantPhotoConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION }), () => PHOTO_SCOPE],
+]) {
+  test(`the first-ever ${name} grant (no consent row yet) succeeds and reports when it was granted`, async () => {
+    resetConsent();
+    consent = null; // a brand-new user: nothing on record
+    const before = Date.now();
+    const out = await grant();
+    assert.equal(out.granted, true);
+    assert.equal(out.privacyVersion, LEDGER_POLICY_VERSION);
+    assert.ok(out.grantedAt instanceof Date, 'grantedAt comes from the row that was written');
+    assert.ok(out.grantedAt.getTime() >= before, 'a new grant is stamped now');
+    assert.ok(consent.scopes.includes(scope()));
+  });
+}
+
+test('a grant on an existing row keeps reporting the row\'s grantedAt', async () => {
+  resetConsent();
+  const out = await grantNutritionConsentService(1, { privacyVersion: LEDGER_POLICY_VERSION });
+  assert.equal(out.grantedAt.toISOString(), new Date('2026-01-01').toISOString());
+});
+
 test('a made-up version is refused', async () => {
   resetConsent();
   await assert.rejects(

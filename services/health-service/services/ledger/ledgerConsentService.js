@@ -126,7 +126,11 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
   // the version is what left this unauditable in the first place: the grant
   // exists, and nothing says which wording it was given under.
   const scopeVersions = { ...scopeVersionsOf(consent), [scope]: privacyVersion };
-  await prisma.ledgerConsent.upsert({
+  // The row that was actually written. `consent` above is what existed BEFORE
+  // this call, and for a first-ever grant that is null — echoing grantedAt from
+  // it threw "Cannot read properties of null" on the user's first consent tap
+  // (after the row had already been saved, so the retry worked).
+  const saved = await prisma.ledgerConsent.upsert({
     where: { userId },
     create: {
       userId,
@@ -145,7 +149,7 @@ async function addScope(userId, scope, { privacyVersion } = {}) {
 
   return {
     granted: true,
-    grantedAt: consent.grantedAt,
+    grantedAt: saved.grantedAt,
     // Echoed from the value now on the row, not from the request, so the
     // response cannot describe a grant that was not written.
     privacyVersion,
