@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { createExploreService } from './service.js';
 import { ExploreError, errorResponse, requireExploreCustomer } from './contracts.js';
 
-export function createExploreRouter(service=createExploreService({db:new PrismaClient()})) {
+export function createExploreRouter(service=createExploreService({db:prisma})) {
   const router=Router();
   router.use(requireExploreCustomer);
   const handle=fn=>async(req,res)=>{

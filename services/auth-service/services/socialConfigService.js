@@ -10,8 +10,7 @@
 //
 // Contract: always resolves (never throws), always an object with a boolean.
 
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 /** Pure derivation of the switch from an already-loaded config blob. */
 export function socialFromConfig(config) {

@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Default ₹ bonus credited once when a profile crosses from incomplete to
 // complete — applied until an admin explicitly saves a row via PUT

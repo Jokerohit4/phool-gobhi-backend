@@ -1,6 +1,7 @@
 import { hash, compare } from 'bcrypt';
 import crypto from 'crypto';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { generateAccessToken } from '../utils/generateTokens.js';
 import { issueRefreshFamily, rotate as rotateRefreshToken, revokeByToken } from './refreshTokenService.js';
 import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
@@ -23,7 +24,6 @@ const OTP_EXPIRY_SECONDS = 300; // 5 minutes
 // fresh send-otp used to leave it in place. Bound it to the OTP lifetime.
 const OTP_ATTEMPTS_TTL_SECONDS = 300;
 
-const prisma = new PrismaClient();
 
 // Constant-time string compare — a plain !== on a guessable secret (an OTP
 // code here) leaks a timing signal proportional to how many leading

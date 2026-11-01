@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { signedResumeUrl } from '../utils/gcsResume.js';
 
-const prisma = new PrismaClient();
 
 const MAX_MESSAGE_LENGTH = 5000;
 

@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { exportUserAcrossServices } from '../utils/exportAcrossServices.js';
-const prisma = new PrismaClient();
 
 // Platform-wide DPDPA access right (s.11): one document covering everything
 // Phool Gobhi holds about a person, assembled from every service that stores

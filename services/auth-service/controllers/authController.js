@@ -1,6 +1,6 @@
 
 import { buildFullExportService } from '../services/exportService.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import semver from 'semver';
 import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
@@ -38,7 +38,6 @@ import {
 } from '../utils/settingsCaches.js';
 import { bucketFor } from '../services/experimentService.js';
 
-const prisma = new PrismaClient();
 
 const signup = async (req, res) => {
   try {

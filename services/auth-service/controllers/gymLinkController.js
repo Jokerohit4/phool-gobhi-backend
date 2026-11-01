@@ -2,7 +2,7 @@
 // services/gymLinkService.js, shape the response. Owns the Prisma client so
 // tests can inject an in-memory double (same pattern as deviceController.js).
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import {
   linkGym,
   leaveGym,
@@ -16,7 +16,6 @@ import {
 } from '../services/gymLinkService.js';
 import { assertPartnerOwnsGym } from '../services/authService.js';
 
-const prisma = new PrismaClient();
 
 function requesterId(req) {
   const id = Number(req.user?.id ?? req.headers['x-user-id']);

@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { upsertDevice, listUserIdsForInstall, listInstallIdsForUser } from '../services/deviceService.js';
 
-const prisma = new PrismaClient();
 
 // POST /devices (verifyToken) — the app registers/refreshes the current install
 // after sign-in. Upsert on (userId, installId); 204, no body.

@@ -1,9 +1,8 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { signRefreshToken } from '../utils/generateTokens.js';
 
-const prisma = new PrismaClient();
 
 // Each successful refresh renews the session for 30 days. There is no fixed
 // cutoff from the original login; an unused session still expires naturally.

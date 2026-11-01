@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { bindPushToken, unbindPushToken } from '../services/pushTokenService.js';
-const prisma = new PrismaClient();
 
 export function pushTokenHandler(database, remove = false) {
   return async (req, res) => {

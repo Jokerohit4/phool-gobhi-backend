@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, VALID_WORKOUT_INTENTS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
 import { resolvePersona, switchPersona, personaForAppMode } from '../services/personaService.js';
@@ -11,7 +11,6 @@ import { normalizePhone } from '../services/authService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
-const prisma = new PrismaClient();
 
 const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';

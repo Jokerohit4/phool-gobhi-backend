@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Same normalization the website's isAllowedContact used to do locally:
 // lowercase-trim for email, last-10-digits for phone (accepts +91XXXXXXXXXX,

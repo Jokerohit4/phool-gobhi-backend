@@ -5,7 +5,7 @@ dotenv.config();
 import { connectDB } from './db.js';
 connectDB();
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db/prisma.js';
 import authRoutes from './routes/auth.js';
 import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
@@ -21,7 +21,6 @@ app.use(analyticsMiddleware({
     ? deliverPickupBatch({db:prisma,send:deliverReceiptEvent,limit:1})
     : undefined,
 }));
-const prisma = new PrismaClient();
 
 // Middleware
 app.use(express.json());
