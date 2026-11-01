@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { getProvider } from './providers/index.js';
 
-const prisma = new PrismaClient();
 
 /// The only keys that may ever be written, and everything that differs between
 /// them. The model proposes; this table disposes — anything it invents is

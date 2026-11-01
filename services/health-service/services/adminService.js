@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // Aggregate counts only — no per-user drill-down, enforcing the
 // customer-only visibility decision in the implementation plan. Gobhi staff

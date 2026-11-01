@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { getProvider, isProviderConfigured } from './providers/index.js';
 import { classifyQuestion, filterReply } from './guardrails.js';
 import { ASSISTANT_TOPIC_SCOPE } from './assistantPolicy.js';
 
-const prisma = new PrismaClient();
 
 export function parseSuggestions(content) {
   try {

@@ -1,9 +1,8 @@
 import { isoDayIST } from '../utils/sessionDay.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { latestBiometricRows } from './biometricLatest.js';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
-const prisma = new PrismaClient();
 
 // Fitness+ FR-12 + Health+ FR-01, one implementation. Fitness+ only surfaces
 // weight/body_fat (the "Track body" 2-tap flow); Health+ Phase 1 adds the

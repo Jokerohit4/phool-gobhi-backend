@@ -1,10 +1,9 @@
 import { isoDayIST } from '../utils/sessionDay.js';
 import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater } from '../services/routineJourneyService.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import * as habitsService from '../services/habitsService.js';
 import * as moodCheckInService from '../services/wellnessMoodCheckInService.js';
 
-const prisma = new PrismaClient();
 
 // Thin adapter over habitsService, same shape as the ledger and coach-consent
 // controllers: parse, delegate, wrap errors. The rules (bounds, formats, the

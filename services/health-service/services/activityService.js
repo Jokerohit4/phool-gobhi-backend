@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { EXERCISE_RECORD_SOURCES, EXERCISE_RECORD_TYPES, DAILY_ACTIVITY_SOURCES } from '../constants/healthEnums.js';
-const prisma = new PrismaClient();
 
 // Cardio/yoga/other duration-based entries — manual create, and the same
 // endpoint doubles as the batch-upsert target for device-synced workout

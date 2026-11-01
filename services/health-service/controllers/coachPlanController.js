@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import * as todayService from '../services/plan/todayService.js';
 import { rebuildPlan } from '../services/plan/rebuildPlan.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
@@ -7,7 +7,6 @@ import { getMedicalRecordsConsentService } from '../services/ledger/ledgerConsen
 import { getJourney, unlockFoodEarly } from '../services/journey/journeyService.js';
 import { track } from '../utils/analytics.js';
 
-const prisma = new PrismaClient();
 
 function handle(fn) {
   return async (req, res) => {

@@ -19,14 +19,13 @@ import * as foodPhotoService from '../services/ledger/foodPhotoService.js';
 import * as foodRequestService from '../services/ledger/foodRequestService.js';
 import * as foodAdminService from '../services/ledger/foodAdminService.js';
 import * as foodEmbeddingService from '../services/ledger/foodEmbeddingService.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { track } from '../utils/analytics.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { evaluateWeeklyRewards, evaluateUserReward } from '../services/rewardService.js';
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
 import { correlateMarkerImprovement } from '../services/correlationService.js';
 
-const prisma = new PrismaClient();
 
 // Every handler here is a thin adapter: parse, delegate, wrap errors. The rules
 // live in the services, because a rule enforced in a controller is a rule that

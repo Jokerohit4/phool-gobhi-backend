@@ -1,5 +1,5 @@
 import { isoDayIST } from '../../utils/sessionDay.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { JOURNEY, elapsedJourneyDays, LAYER_OF_LAYER_KEY, layerKeysUpTo, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
@@ -11,7 +11,6 @@ import { rebuildPlan } from '../plan/rebuildPlan.js';
 import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { isWellnessProfile } from '../../utils/persona.js';
 
-const prisma = new PrismaClient();
 
 const DEFAULT_EXPERIENCE_LEVEL = 'new_to_gym';
 

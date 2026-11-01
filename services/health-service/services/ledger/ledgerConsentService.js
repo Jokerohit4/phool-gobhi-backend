@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
 
-const prisma = new PrismaClient();
 
 // Three consent scopes, deliberately separate from each other and from
 // `location_routes`.

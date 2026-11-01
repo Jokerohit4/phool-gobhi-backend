@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Consent to hold sensitive health-profile answers: personal health issues,
 // allergies, drinking, smoking, the two substance questions and medications.

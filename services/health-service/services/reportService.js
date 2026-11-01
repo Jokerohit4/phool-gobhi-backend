@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { track } from '../utils/analytics.js';
 import { extractBiomarkersFromPDF } from '../utils/ocrService.js';
 import { signedDocumentUrl } from './ledger/medicalDocumentStorage.js';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
 
-const prisma = new PrismaClient();
 
 /**
  * Service to handle medical report uploads and biomarker extraction.

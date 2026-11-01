@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import {
   validateProfilePatch,
   validateMedication,
@@ -26,7 +26,6 @@ import { hasBiometricConsentService } from './biometricConsentService.js';
 import { upsertEntryService } from './biometricService.js';
 import { creditProfileQuestionCoin } from '../utils/notifyChallengeService.js';
 
-const prisma = new PrismaClient();
 
 // Served with every read so the app renders chips from the server's sets —
 // adding an option needs no app release.

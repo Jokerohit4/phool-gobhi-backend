@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { rebuildPlan } from './plan/rebuildPlan.js';
 
-const prisma = new PrismaClient();
 
 // Consent for Gobhi the Coach. Two scopes, deliberately separate from each
 // other and from the ledger's:

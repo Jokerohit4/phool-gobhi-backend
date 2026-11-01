@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import {
   dayString, dayToDate, addDays, startOfIsoWeek, COUNTED_WORKOUT_WHERE,
 } from '../utils/sessionDay.js';
-const prisma = new PrismaClient();
 
 // The server returns numbers, the client renders the card (BRD Tech §5.4:
 // "image-spec payload"). Deliberately no name, no gym, no photo, nothing

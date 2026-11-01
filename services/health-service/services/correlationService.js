@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { BIOLOGICAL_TARGETS } from './ledger/constants.js';
 
-const prisma = new PrismaClient();
 
 /**
  * Correlates biological marker improvements with AI-prescribed behavioral changes.

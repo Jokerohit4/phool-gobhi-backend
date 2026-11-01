@@ -1,5 +1,5 @@
 import { calendarDayNumberIST, calendarPartsIST } from '../../utils/sessionDay.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
 import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
 import { tierOf, orderMemories } from './memoryService.js';
@@ -9,7 +9,6 @@ import { HEALTH_PROFILE_POLICY_VERSION } from '../healthProfileConsentService.js
 import { quoteUserText, QUOTE_NOTE } from './guardrails.js';
 import { isWellnessProfile } from '../../utils/persona.js';
 
-const prisma = new PrismaClient();
 
 // Hard ceiling on the user-context block. Without one, a user with two years
 // of history quietly makes every one of their messages the most expensive

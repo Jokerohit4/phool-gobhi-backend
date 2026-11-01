@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import * as appointmentService from '../services/ledger/appointmentService.js';
 
 // Appointments are a ledger concern - gated behind the same three layers as the
@@ -10,7 +10,6 @@ import * as appointmentService from '../services/ledger/appointmentService.js';
 // appointmentService. That split is not style: every rule enforced here would be
 // a rule the next controller forgets, and the rules here are the ones that keep
 // one user's appointments out of another user's list.
-const prisma = new PrismaClient();
 
 function handle(fn) {
   return async (req, res) => {

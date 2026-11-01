@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
-const prisma = new PrismaClient();
 
 // The consent record that gates the OS-level HealthKit/Health Connect
 // permission prompt — a fresh grant always overwrites revokedAt/policyVersion

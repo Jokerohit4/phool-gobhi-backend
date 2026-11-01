@@ -1,10 +1,9 @@
 import { isoDayIST } from '../utils/sessionDay.js';
 import { recordRoutineWorkout } from './routineJourneyService.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { computeProgression } from './progressionService.js';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
 import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
-const prisma = new PrismaClient();
 
 // Applies double progression to the routine a finished session was started
 // from, and returns what changed so the app can say so. Best-effort by the

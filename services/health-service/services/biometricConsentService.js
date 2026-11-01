@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Consent to store the body numbers a person types in by hand: weight, body
 // fat, and the Health+ quick-add metrics (sleep, resting HR, HRV, stress).

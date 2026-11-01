@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { challengeActivity } from '../services/challengeActivityService.js';
 import { hasCoachScopeService } from '../services/coachConsentService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 
-const prisma = new PrismaClient();
 
 export async function getChallengeActivityInternal(req, res) {
   try {

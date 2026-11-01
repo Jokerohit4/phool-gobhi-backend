@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // DPDPA purpose limitation: personal data may only be kept as long as the
 // purpose it was collected for still needs it. That is NOT one number — the

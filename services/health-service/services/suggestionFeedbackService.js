@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // FR-15. Two halves that must not drift apart: an impression row is written
 // every time a suggestion is SHOWN (vote null), and the vote lands on that

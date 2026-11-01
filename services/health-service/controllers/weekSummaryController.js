@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { getWeekSummary } from '../services/weekSummaryService.js';
-const prisma = new PrismaClient();
 export async function weekSummary(req, res) {
   try {
     return res.json({ data: await getWeekSummary(prisma, { userId: req.userId, week: req.query.week }) });

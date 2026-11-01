@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import {
   getJourney,
   startJourney,
@@ -10,7 +10,6 @@ import {
 } from '../services/journey/journeyService.js';
 import { hasCoachScopeService } from '../services/coachConsentService.js';
 
-const prisma = new PrismaClient();
 
 export async function getJourneyController(req, res) {
   try {

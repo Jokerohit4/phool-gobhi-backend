@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { hasMedicalRecordsConsentService } from './ledger/ledgerConsentService.js';
 import { currentNutritionTarget } from './ledger/currentTarget.js';
-const prisma = new PrismaClient();
 
 // FR-16. One builder feeds both the JSON and CSV shapes — the BRD's "Robin
 // Hood rule" (Tech §8.3) is that an export and the on-screen numbers for the

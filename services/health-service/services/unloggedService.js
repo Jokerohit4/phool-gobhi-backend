@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { fetchAttendanceSince } from '../utils/fetchAttendance.js';
 import { istDateString, COUNTED_WORKOUT_WHERE } from '../utils/sessionDay.js';
 
-const prisma = new PrismaClient();
 
 // The last piece of FR-03: "you were at the gym and haven't said what you
 // did." Everything else about the attendance attachment shipped on

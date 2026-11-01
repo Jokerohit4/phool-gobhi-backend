@@ -1,10 +1,9 @@
 import { isoDayIST } from '../../utils/sessionDay.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { fetchInternal } from '../../utils/fetchInternal.js';
 import { createTtlCache } from '../../utils/ttlCache.js';
 import { onJourneyInvalidate } from '../../utils/journeyCacheBus.js';
 
-const prisma = new PrismaClient();
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
 

@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { buildInsurerGradeService } from '../services/share/insurerGradeService.js';
 import { validateRange } from '../services/share/insurerGrade.js';
 import { hasNutritionConsentService } from '../services/ledger/ledgerConsentService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { recordAudit } from '../services/auditService.js';
 
-const prisma = new PrismaClient();
 
 // The user's own ig-v1 summary - the exact object a future insurer share would
 // sign (see services/share/insurerGrade.js). Read-only, self-service, always

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import {
   startOfIsoWeek, addDays, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
@@ -9,7 +9,6 @@ import {
 // definition and the Monday boundary can never drift between them.
 export { startOfIsoWeek } from '../utils/sessionDay.js';
 
-const prisma = new PrismaClient();
 
 // FR-04. One weekly session target per user, and the week's progress against
 // it, resolved server-side so the ring, the export and any future stats

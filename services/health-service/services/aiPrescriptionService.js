@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import * as ledgerPlanService from './ledger/ledgerPlanService.js';
 
-const prisma = new PrismaClient();
 
 /**
  * Processes a structured prescription from the AI Assistant.

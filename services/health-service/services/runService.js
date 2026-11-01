@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import {
   RUN_MAX_ELAPSED_SECONDS,
   RUN_MAX_DISTANCE_METERS,
@@ -9,7 +9,6 @@ import {
 } from '../constants/healthEnums.js';
 import { decodePolyline, polylineDistanceMeters, thumbnailPolyline } from '../utils/polyline.js';
 
-const prisma = new PrismaClient();
 
 function badRequest(message) {
   const err = new Error(message);

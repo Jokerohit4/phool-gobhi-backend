@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import * as contentService from '../services/contentService.js';
 
-const prisma = new PrismaClient();
 
 // Thin adapter over contentService (B15): parse, delegate, wrap errors. The
 // review rules live in the service so the tests pin them without HTTP.

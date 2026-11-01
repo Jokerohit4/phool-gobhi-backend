@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { istDateString } from '../utils/sessionDay.js';
 
-const prisma = new PrismaClient();
 
 /// The consent scope this feature lives behind. Added to HealthConsent.scopes
 /// rather than given its own consent table — the schema comment on that field

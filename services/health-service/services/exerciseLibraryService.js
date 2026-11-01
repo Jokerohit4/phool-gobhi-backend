@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { MUSCLE_GROUPS, EQUIPMENT, LOGGING_TYPES } from '../constants/healthEnums.js';
 import { rankExercises } from './exerciseSearch.js';
 import { createTtlCache } from '../utils/ttlCache.js';
-const prisma = new PrismaClient();
 
 // The library is global (createdByUserId: null) plus this user's own custom
 // entries — never another user's custom exercises, which is what the OR

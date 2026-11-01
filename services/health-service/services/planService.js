@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // Multi-week plans (D-02/H-22, docs/../sprint2/PG-HUNT-001) — a thin
 // sequence over the same WorkoutTemplate/WorkoutSession machinery the rest

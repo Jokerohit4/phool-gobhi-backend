@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 import { getProvider, isProviderConfigured, ProviderError } from './providers/index.js';
 import { buildUserContextService } from './contextService.js';
 import { canSendMessageService, recordMessageSentService } from './rateLimitService.js';
@@ -14,7 +14,6 @@ import { buildCoachGrounding } from './coachGrounding.js';
 import { isFeatureEnabled } from '../../middleware/requireFeatureFlag.js';
 import { track } from '../../utils/analytics.js';
 
-const prisma = new PrismaClient();
 
 const MAX_OUTPUT_TOKENS = Number(process.env.ASSISTANT_MAX_OUTPUT_TOKENS || 600);
 // How many raw turns go to the model. Everything older is represented by the

@@ -1,9 +1,8 @@
 import { structuredExercises, routineDescription } from './routineStructure.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { equipmentFit, rankByFit } from './homeSetup.js';
 import { progressionFields } from './progressionService.js';
 import { createTtlCache } from '../utils/ttlCache.js';
-const prisma = new PrismaClient();
 
 const includeExercises = {
   exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },

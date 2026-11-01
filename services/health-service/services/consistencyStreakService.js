@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import {
   startOfIsoWeek, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
 } from '../utils/sessionDay.js';
 
-const prisma = new PrismaClient();
 
 // The home-track streak. Deliberately NOT the same thing as
 // challenge-service's UserStreak/UserStreakWeek, and deliberately not

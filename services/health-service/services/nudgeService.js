@@ -1,5 +1,5 @@
 import { hourIST, isoDayIST } from '../utils/sessionDay.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
 import { notifyUser } from '../utils/notifyUser.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
@@ -7,7 +7,6 @@ import { isWellnessProfile } from '../utils/persona.js';
 import { findUnloggedUsersService } from './unloggedService.js';
 import { getScoreTargetState } from './ledger/scoreTargetService.js';
 
-const prisma = new PrismaClient();
 
 // FR-08. Three nudges, all earned by something the user actually did or chose:
 //

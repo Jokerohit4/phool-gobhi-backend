@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { equipmentFit } from './homeSetup.js';
 import { releaseExpiredRecoveryMode } from './cycleTrackingService.js';
 import {
   startOfIsoWeek, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
 } from '../utils/sessionDay.js';
-const prisma = new PrismaClient();
 
 const RANGE_DAYS = { '4w': 28, '3m': 90, '1y': 365 };
 

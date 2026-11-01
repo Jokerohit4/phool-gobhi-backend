@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Two windows, because they stop different things. The hourly cap stops a
 // single frustrated session from burning a day's budget; the daily cap stops

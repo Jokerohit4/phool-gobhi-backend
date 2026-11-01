@@ -1,9 +1,8 @@
 import { weekStartOf } from '../utils/sessionDay.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { behavioralAverages, todayIST, shiftDay, CONSISTENCY_WINDOW_DAYS } from './ledger/scoreService.js';
 import { creditWeeklyConsistencyCoins } from '../utils/notifyChallengeService.js';
 
-const prisma = new PrismaClient();
 
 // The bar the Health Score card draws and the amount it promises. Both are
 // shown to the user verbatim, so changing either here changes a promise.
