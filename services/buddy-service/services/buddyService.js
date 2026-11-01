@@ -571,18 +571,19 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
   page = Math.max(1, page);
   limit = Math.min(Math.max(1, limit), 50);
 
-  const me = await prisma.buddyProfile.findUnique({ where: { userId }, include: { filter: true } });
+  // "Self" and "already swiped" are feed-only exclusions; blocks and reports
+  // (either way) apply to likes-by-id as well, via safetyExcludedIds. None of
+  // the three reads depends on another, so they run together; the missing-
+  // profile / cannot-browse checks still gate everything that follows.
+  const [me, swiped, safetyIds] = await Promise.all([
+    prisma.buddyProfile.findUnique({ where: { userId }, include: { filter: true } }),
+    prisma.swipe.findMany({ where: { swiperId: userId }, select: { swipeeId: true } }),
+    safetyExcludedIds(userId),
+  ]);
   if (!me) throw { status: 400, error: 'Create your buddy profile first' };
   assertCanBrowse(me);
 
   const radiusKm = me.filter?.radiusKm ?? DEFAULT_FILTER.radiusKm;
-
-  // "Self" and "already swiped" are feed-only exclusions; blocks and reports
-  // (either way) apply to likes-by-id as well, via safetyExcludedIds.
-  const [swiped, safetyIds] = await Promise.all([
-    prisma.swipe.findMany({ where: { swiperId: userId }, select: { swipeeId: true } }),
-    safetyExcludedIds(userId),
-  ]);
   const excludeIds = [...new Set([userId, ...swiped.map((s) => s.swipeeId), ...safetyIds])];
 
   const box = boundingBox(me.lat, me.lng, radiusKm);
@@ -598,7 +599,15 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
         { lng: { gte: box.minLng, lte: box.maxLng } },
       ],
     },
-    include: { photos: { orderBy: { order: 'asc' }, take: MAX_BUDDY_PHOTOS }, filter: true },
+    // Only what distanceAcceptsBothWays + toPublicCandidate read: a candidate row
+    // is up to 300 wide, so the unused columns (moderation, sync, gender-change
+    // bookkeeping, ...) were pure transfer.
+    select: {
+      userId: true, publicCode: true, dateOfBirth: true, gender: true, bio: true,
+      socialMediaUrl: true, fitnessGoals: true, lat: true, lng: true,
+      photos: { orderBy: { order: 'asc' }, take: MAX_BUDDY_PHOTOS, select: { id: true, url: true, order: true } },
+      filter: { select: { radiusKm: true } },
+    },
     take: 300,
   });
 
@@ -719,8 +728,12 @@ export async function verifyActiveMatchMembership(matchId, userId) {
 }
 
 export async function getMatches(userId) {
-  await assertNotSuspended(userId);
-  const matches = await prisma.match.findMany({
+  // The suspension check and the list query are independent: run them together.
+  // Suspension still wins — it is awaited first, so a suspended caller gets the
+  // BUDDY_SUSPENDED error and never the data (even if the list query failed).
+  const suspension = assertNotSuspended(userId);
+  suspension.catch(() => {});
+  const matchesQuery = prisma.match.findMany({
     where: {
       status: 'active',
       OR: [{ userLowId: userId }, { userHighId: userId }],
@@ -732,6 +745,9 @@ export async function getMatches(userId) {
     include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
     orderBy: { matchedAt: 'desc' },
   });
+  matchesQuery.catch(() => {});
+  await suspension;
+  const matches = await matchesQuery;
 
   const otherIds = matches.map((m) => (m.userLowId === userId ? m.userHighId : m.userLowId));
   const [infos, buddyProfiles] = await Promise.all([
@@ -816,14 +832,22 @@ export async function getMessages(userId, matchId, { before, after, limit = 30 }
   // 410s getMatchedProfile — but this reader only ever checked participation, so
   // the blocker could keep paging the full history by matchId for as long as they
   // held the id.
-  await assertActiveParticipant(matchId, userId);
+  const gate = assertActiveParticipant(matchId, userId);
   const take = Math.min(Math.max(1, parseInt(limit) || 30), 100);
   const where = { matchId };
 
   if (after) {
+    // The 3-second chat poll: the messages query does not depend on the guard's
+    // result, so it runs alongside it. The guard still gates the response — its
+    // rejection is thrown before the rows are returned, and the rows are dropped.
+    gate.catch(() => {});
     where.id = { gt: parseInt(after) };
-    return prisma.chatMessage.findMany({ where, orderBy: { id: 'asc' }, take });
+    const rows = prisma.chatMessage.findMany({ where, orderBy: { id: 'asc' }, take });
+    rows.catch(() => {});
+    await gate;
+    return rows;
   }
+  await gate;
 
   if (before) where.id = { lt: parseInt(before) };
   const messages = await prisma.chatMessage.findMany({ where, orderBy: { id: 'desc' }, take });

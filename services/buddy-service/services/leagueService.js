@@ -41,23 +41,26 @@ export async function getConsistencyLeague(userId) {
     const userList = Array.from(buddyIds);
 
     // 2. Fetch behavioral consistency from health-service
-    const res = await axios.post(
-      `${HEALTH_SERVICE_URL}/internal/ledger/biometrics/batch-consistency`,
-      { userIds: userList },
-      await internalHeaders()
-    );
-
-    const scores = res.data.data || [];
+    // The health scores and the display-name lookup are independent, so they
+    // run together. The name lookup is best-effort (below) and must never
+    // reject, so a health failure still fails the league exactly as before.
+    const namesPromise = getUsersBatchInternal(userList).catch(() => []);
+    const scoresPromise = (async () => {
+      const res = await axios.post(
+        `${HEALTH_SERVICE_URL}/internal/ledger/biometrics/batch-consistency`,
+        { userIds: userList },
+        { ...(await internalHeaders()), timeout: 3000 }
+      );
+      return res.data.data || [];
+    })();
+    const [scores, userInfos] = await Promise.all([scoresPromise, namesPromise]);
 
     // Display names come from auth-service's batch lookup — BuddyProfile has
     // no `name`/`displayName` column, so the old `profile?.displayName`
     // fallback rendered every row (including the caller's own) as
     // "Unknown Buddy". Best-effort like elsewhere in the service: a lookup
     // failure degrades to the fallback rather than failing the league.
-    let userInfos = [];
-    try {
-      userInfos = await getUsersBatchInternal(userList);
-    } catch (_) { /* fall back to 'Buddy' below */ }
+    // (A lookup failure was already mapped to [] above.)
     const nameById = new Map(userInfos.map((u) => [u.id, u.name]));
 
     // Build from the full buddy set, not just the scored rows: users with no
