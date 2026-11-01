@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // DPDPA access right (s.11) for the one thing gym-service holds about a
 // customer: the reviews they wrote. Called by auth-service's platform-wide

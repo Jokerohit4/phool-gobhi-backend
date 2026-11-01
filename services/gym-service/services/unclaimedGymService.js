@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import * as placesService from './placesService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
-const prisma = new PrismaClient();
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';

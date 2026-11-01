@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
 import { generateTimeSlots, generateWindowedSlots } from '../utils/slots.js';
 import { getDayOfWeek } from '../utils/slotTiming.js';
 import * as placesService from './placesService.js';
 import { getRoadDistancesKm } from './roadDistanceService.js';
 
-const prisma = new PrismaClient();
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
