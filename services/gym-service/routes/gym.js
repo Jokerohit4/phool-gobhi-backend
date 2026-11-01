@@ -22,6 +22,11 @@ router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal)
 // MUST stay above /internal/:id for the same reason /internal/export does —
 // registered after it, "unclaimed-gyms" would be parsed as a gym id.
 router.get('/internal/unclaimed-gyms/:id', requireInternal, unclaimedCtrl.getUnclaimedGymInternal);
+// Slot blocks for booking-service's createBooking. The partner-facing
+// GET /:id/blocks needs x-user-* headers a service caller does not have.
+// MUST stay above /internal/:id (kept explicit even though segment counts
+// differ today, so a future reorder cannot shadow it).
+router.get('/internal/blocks/:gymId', requireInternal, ctrl.getSlotBlocksInternal);
 router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);

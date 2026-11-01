@@ -291,10 +291,40 @@ export async function getNearestGymDistance(userLat, userLng) {
   return { nearestGymId: nearest?.gymId ?? null, nearestDistanceKm: nearest?.distanceKm ?? null };
 }
 
+const GYM_DETAIL_REVIEW_LIMIT = 10;
+
+// Narrow gym read for the slot/availability endpoints: they only need these
+// fields, not images or reviews. Same visibility rules (and 404) as
+// getGymById.
+export async function getGymForSlots(id) {
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({
+    where: { id },
+    select: {
+      capacity: true,
+      slotDuration: true,
+      sessionPrice: true,
+      isActive: true,
+      isApproved: true,
+      marketplaceEnabled: true,
+    },
+  }));
+  if (!gym || !gym.isActive || !gym.isApproved || !gym.marketplaceEnabled) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  return gym;
+}
+
 export async function getGymById(id, userLat, userLng) {
   const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id },
-    include: { images: { orderBy: { id: 'asc' } }, reviews: true },
+    // Only the most recent reviews ride along on gym detail — the full list
+    // is unbounded and has its own endpoint (GET /:id/reviews). The gym's
+    // rating / ratingCount are stored aggregates on the Gym row (see
+    // recomputeGymRating), so trimming this list cannot change any average.
+    include: {
+      images: { orderBy: { id: 'asc' } },
+      reviews: { orderBy: { createdAt: 'desc' }, take: GYM_DETAIL_REVIEW_LIMIT },
+    },
   }));
 
   if (!gym || !gym.isActive || !gym.isApproved || !gym.marketplaceEnabled) {
@@ -946,15 +976,18 @@ export async function deleteReview(gymId, reviewId) {
 }
 
 export async function getGymReviews(gymId) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  // Independent reads — run together; the visibility check still decides the
+  // outcome (a hidden gym's reviews are fetched and discarded, never returned).
+  const [gym, reviews] = await Promise.all([
+    prisma.gym.findUnique({ where: { id: gymId }, select: { isActive: true, isApproved: true } }),
+    prisma.gymReview.findMany({
+      where: { gymId },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
   if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
   }
-
-  const reviews = await prisma.gymReview.findMany({
-    where: { gymId },
-    orderBy: { createdAt: 'desc' },
-  });
 
   return reviews;
 }
@@ -1283,6 +1316,15 @@ export async function getSlotBlocks(gymId, date) {
   });
 }
 
+// Blocks for a whole date range (inclusive; dates are zero-padded ISO strings
+// so string comparison orders them correctly) in one query.
+export async function getSlotBlocksInRange(gymId, from, to) {
+  return prisma.slotBlock.findMany({
+    where: { gymId, date: { gte: from, lte: to } },
+    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+  });
+}
+
 async function applySlotBlockAdd(gymId, { date, startTime, endTime }) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.slotBlock.findFirst({
@@ -1394,6 +1436,12 @@ export async function getOperatingHours(gymId, dayOfWeek) {
   const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { openTime: true, closeTime: true } });
   if (!gym) return null;
   return { gymId, dayOfWeek, morningStart: gym.openTime, morningEnd: gym.closeTime, eveningStart: null, eveningEnd: null };
+}
+
+// All 7 days' hours in one query, with the same per-day legacy fallback as
+// getOperatingHours. No visibility check — callers have already resolved the gym.
+export async function getOperatingHoursAllDays(gymId) {
+  return readOperatingHours(gymId);
 }
 
 export async function getAllOperatingHours(gymId) {
@@ -1759,18 +1807,21 @@ export async function upsertSlotPrices(gymId, partnerId, prices) {
 export async function getGymInternalWithSlotPrice(gymId, startTime, date) {
   const gym = await getGymByIdRaw(gymId);
 
+  // Slot price and operating hours are independent of each other.
+  const [priceRow, hours] = await Promise.all([
+    startTime
+      ? prisma.gymSlotPrice.findUnique({ where: { gymId_startTime: { gymId, startTime } } })
+      : Promise.resolve(null),
+    date && startTime ? getOperatingHours(gymId, getDayOfWeek(date)) : Promise.resolve(null),
+  ]);
+
   let resolvedSlotPrice = gym.sessionPrice;
   if (startTime) {
-    const row = await prisma.gymSlotPrice.findUnique({
-      where: { gymId_startTime: { gymId, startTime } },
-    });
-    resolvedSlotPrice = row ? Number(row.price) : gym.sessionPrice;
+    resolvedSlotPrice = priceRow ? Number(priceRow.price) : gym.sessionPrice;
   }
 
   let isValidSlot;
   if (date && startTime) {
-    const dayOfWeek = getDayOfWeek(date);
-    const hours = await getOperatingHours(gymId, dayOfWeek);
     const validTimes = new Set(generateWindowedSlots(hours, gym.slotDuration).map(s => s.startTime));
     isValidSlot = validTimes.has(startTime);
   }

@@ -148,6 +148,8 @@ model GymImage {
   gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
+  // Every gym read includes its images (listGyms, detail, internal fetch).
+  @@index([gymId])
   @@schema("gym")
 }
 

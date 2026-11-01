@@ -18,6 +18,26 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 // perfect fleet-wide) — a shared cache is only worth the added infra if ORS
 // quota or hit rate actually becomes a problem, not preemptively.
 const cache = new Map();
+const CACHE_MAX_ENTRIES = 500;
+
+// This label is cosmetic (haversine already filtered and sorted), so it must
+// never hold up the gym list: give ORS a short deadline, and when it fails
+// (timeout, 5xx, quota, bad body) remember that for a minute instead of paying
+// the failed call again on every request. Before this the fetch had no timeout
+// at all — a slow or hung ORS stalled the home screen — and only successes were
+// cached, so a quota error was retried on every single list/detail call.
+const ORS_TIMEOUT_MS = 1500;
+const FAILURE_TTL_MS = 60 * 1000;
+
+// Identical concurrent lookups (same spot, same gyms) share one ORS call.
+const inFlight = new Map();
+
+function remember(key, entry) {
+  if (cache.size >= CACHE_MAX_ENTRIES && !cache.has(key)) {
+    cache.delete(cache.keys().next().value); // oldest first
+  }
+  cache.set(key, entry);
+}
 
 function roundCoord(n) {
   return Number(n.toFixed(CACHE_PRECISION));
@@ -42,6 +62,29 @@ export async function getRoadDistancesKm(userLat, userLng, gyms) {
   const apiKey = process.env.ORS_API_KEY;
   if (!apiKey) return new Map();
 
+  const flightKey = `${key}|${gymIdsKey}`;
+  const running = inFlight.get(flightKey);
+  if (running) return running;
+
+  const lookup = fetchRoadDistances(apiKey, userLat, userLng, gyms)
+    .then((distances) => {
+      // Success -> the long TTL. Anything that came back empty-handed (failure
+      // OR "ORS routed nothing") -> the short one, so it is retried soon but
+      // not on every request.
+      remember(key, {
+        gymIdsKey,
+        distances,
+        expiresAt: Date.now() + (distances.size > 0 ? CACHE_TTL_MS : FAILURE_TTL_MS),
+      });
+      return distances;
+    })
+    .finally(() => inFlight.delete(flightKey));
+  inFlight.set(flightKey, lookup);
+  return lookup;
+}
+
+// Never rejects: any failure resolves to an empty Map (callers fall back to haversine).
+async function fetchRoadDistances(apiKey, userLat, userLng, gyms) {
   try {
     const res = await fetch(ORS_MATRIX_URL, {
       method: 'POST',
@@ -56,6 +99,7 @@ export async function getRoadDistancesKm(userLat, userLng, gyms) {
         destinations: gyms.map((_, i) => i + 1),
         metrics: ['distance'],
       }),
+      signal: AbortSignal.timeout(ORS_TIMEOUT_MS),
     });
     if (!res.ok) return new Map();
 
@@ -70,8 +114,6 @@ export async function getRoadDistancesKm(userLat, userLng, gyms) {
         distances.set(gym.id, Math.round((meters / 1000) * 10) / 10);
       }
     });
-
-    cache.set(key, { gymIdsKey, distances, expiresAt: Date.now() + CACHE_TTL_MS });
     return distances;
   } catch {
     return new Map();
