@@ -346,6 +346,7 @@ export async function startJourney(userId, { experienceLevel, goals, daysPerWeek
     goals,
     daysPerWeek,
     location,
+    quitReason,
   });
 
   invalidateJourneyCaches(userId);
