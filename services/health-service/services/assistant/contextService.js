@@ -167,7 +167,7 @@ const FREE_TIME_PHRASES = {
   late_night: 'late nights',
   flexible: 'it varies',
 };
-const GOAL_PHRASES = {
+export const GOAL_PHRASES = {
   weight_loss: 'weight loss',
   muscle_gain: 'muscle gain',
   general_fitness: 'general fitness',
@@ -211,7 +211,11 @@ export function summariseTrainingProfile(profile) {
   const free = FREE_TIME_PHRASES[profile.freeTimeWindow];
   if (free) bits.push(`Usually free: ${free}.`);
   const goals = (profile.fitnessGoals || []).map((g) => GOAL_PHRASES[g]).filter(Boolean);
-  if (goals.length) bits.push(`Goals: ${goals.join(', ')}.`);
+  if (goals.length) {
+    bits.push(`Goals: ${goals.join(', ')}.`);
+    // A rule, not just a fact: workouts are tailored to these goals by default.
+    bits.push('Unless they ask otherwise, tailor workout suggestions to these goals.');
+  }
   if (!bits.length) return null;
   return `How they train (from onboarding): ${bits.join(' ')}`;
 }

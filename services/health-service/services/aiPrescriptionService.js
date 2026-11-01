@@ -1,5 +1,11 @@
 import prisma from '../db/prisma.js';
 import * as ledgerPlanService from './ledger/ledgerPlanService.js';
+import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
+import {
+  goalDescription,
+  normaliseTemplateGoal,
+  orderTemplatesByGoal,
+} from '../utils/workoutGoals.js';
 
 
 /**
@@ -16,8 +22,16 @@ import * as ledgerPlanService from './ledger/ledgerPlanService.js';
  *   ]
  * }
  */
-export async function injectAiPrescription(userId, prescription) {
+export async function injectAiPrescription(
+  userId,
+  prescription,
+  { fetchProfile = fetchUserProfileInternal } = {},
+) {
   const { planItems = [], suggestedTemplates = [] } = prescription;
+  // Onboarding goals ground the templates. Best-effort: with no reachable
+  // profile the templates are written as before, just without a goal.
+  const profile = suggestedTemplates.length ? await fetchProfile(userId) : null;
+  const fitnessGoals = profile?.fitnessGoals || [];
   const results = {
     planItemsCreated: 0,
     templatesCreated: 0,
@@ -43,19 +57,32 @@ export async function injectAiPrescription(userId, prescription) {
   }
 
   // 2. Inject Workout Templates (Smart Templates)
-  for (const template of suggestedTemplates) {
+  //
+  // Each template is stamped with a routine goal (the model's, if it is a real
+  // one, else the user's primary goal) and the batch is written goal-matched
+  // first, so what the assistant prescribes lines up with onboarding goals
+  // rather than depending on the model remembering the prompt.
+  const goalled = suggestedTemplates.map((t) => ({
+    ...t,
+    goal: normaliseTemplateGoal(t.goal, fitnessGoals),
+  }));
+  for (const template of orderTemplatesByGoal(goalled, fitnessGoals)) {
     try {
+      if (!Array.isArray(template.exercises) || template.exercises.length === 0) {
+        throw new Error('template has no exercises');
+      }
       await prisma.workoutTemplate.create({
         data: {
           userId,
           name: template.name,
-          category: template.category || 'AI Suggested',
+          description: goalDescription(template.goal),
           exercises: {
-            create: template.exercises.map(ex => ({
+            create: template.exercises.map((ex, i) => ({
               exerciseId: ex.exerciseId,
+              order: i,
               targetSets: ex.targetSets,
               targetReps: ex.targetReps,
-              targetWeight: ex.targetWeight,
+              targetWeightKg: ex.targetWeightKg ?? ex.targetWeight ?? null,
               restSeconds: ex.restSeconds,
             })),
           },
