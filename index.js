@@ -13,7 +13,7 @@ import rateLimit from 'express-rate-limit';
 import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
 import { QUEUE_DIAGNOSTIC_EVENTS, validQueueDiagnostic } from './utils/exploreQueueDiagnosticSchema.js';
-import { withGoogleIdToken } from './utils/googleIdToken.js';
+import { withGoogleIdToken, prewarmIdTokens } from './utils/googleIdToken.js';
 
 export const app = express();
 app.use(analyticsMiddleware());
@@ -292,4 +292,6 @@ if (!process.env.JWT_SECRET) {
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
+  void prewarmIdTokens([AUTH_SERVICE_URL, WALLET_SERVICE_URL, GYM_SERVICE_URL, BOOKING_SERVICE_URL,
+    BUDDY_SERVICE_URL, CHALLENGE_SERVICE_URL, HEALTH_SERVICE_URL]);
 }

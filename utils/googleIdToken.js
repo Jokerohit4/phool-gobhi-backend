@@ -57,3 +57,17 @@ export function withGoogleIdToken(audience) {
     return proxyReqOpts;
   };
 }
+
+// Fire-and-forget: pays the metadata-server fetch for each audience at boot so
+// the first proxied request per audience doesn't. Never throws, never rejects;
+// no-ops off Cloud Run (no metadata server) and under node --test / NODE_ENV=test.
+export function prewarmIdTokens(audiences, { enabled = onCloudRun, fetchToken = getIdToken } = {}) {
+  const underTest = process.env.NODE_ENV === 'test' || !!process.env.NODE_TEST_CONTEXT;
+  if (!enabled || underTest) return Promise.resolve();
+  const unique = [...new Set((audiences || []).filter(Boolean))];
+  return Promise.allSettled(unique.map(async (audience) => {
+    try { await fetchToken(audience); } catch (error) {
+      if (process.env.LOG_LEVEL === 'debug') console.debug('[id-token prewarm] skipped:', error && error.message);
+    }
+  })).then(() => {}, () => {});
+}
