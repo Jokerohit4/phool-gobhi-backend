@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
-const prisma = new PrismaClient();
 
 // Every check-in this service ever sees happened in India, so the day that
 // matters is the IST day. On the UTC day a 05:00 IST check-in sat in

@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // DPDPA erasure for the gamification layer, called by auth-service when a
 // user deletes their account.

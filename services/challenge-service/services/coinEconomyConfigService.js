@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { createTtlCache } from '../utils/ttlCache.js';
-const prisma = new PrismaClient();
 
 // Read-only DISPLAY cache (GET /coins/catalog scarcity numbers). 30s in-process,
 // single-flight, failures not cached, evicted by updateEconomyConfig below.

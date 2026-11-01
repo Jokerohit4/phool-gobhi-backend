@@ -1,9 +1,9 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService, debitCoinsService, debitCoinsInTx } from './coinLedgerService.js';
 import { loadEconomyConfig, loadEconomyConfigCached } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
 import { runAtMostEvery } from '../utils/runAtMostEvery.js';
-const prisma = new PrismaClient();
 
 // Seeded once, only if the catalog is completely empty, so the feature isn't
 // empty out of the box. Admins are free to edit/retire/add more items from

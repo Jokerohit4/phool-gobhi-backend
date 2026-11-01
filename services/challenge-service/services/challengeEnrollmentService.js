@@ -1,9 +1,8 @@
 import { challengeMatchesAudience, isPersonalChallenge } from './challengeAudience.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { isWithinMaxChallengeRange } from '../utils/location.js';
 import { track } from '../utils/analytics.js';
-const prisma = new PrismaClient();
 
 // Same haversine formula as booking-service's self-check-in geofence check
 // — duplicated per-service by this repo's own convention (see e.g.

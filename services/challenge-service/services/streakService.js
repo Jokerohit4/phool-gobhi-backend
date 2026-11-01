@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
 import { startOfIsoWeek, istDayBounds } from '../utils/isoWeek.js';
-const prisma = new PrismaClient();
 
 // Idempotent on idempotencyKey — booking-service's fire-and-forget call to
 // POST /internal/attendance-events can retry freely without double-counting

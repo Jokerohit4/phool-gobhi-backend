@@ -1,10 +1,9 @@
 import { challengeMatchesAudience, isPersonalChallenge } from './challengeAudience.js';
 import { seedPersonalChallenges, refreshPersonalChallenge } from './personalChallengeService.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { runAtMostEvery } from '../utils/runAtMostEvery.js';
 import { MAX_CHALLENGE_DISTANCE_KM, distanceKmFromUser, isWithinMaxChallengeRange } from '../utils/location.js';
 
-const prisma = new PrismaClient();
 
 // Seed is additive and idempotent: existing rows are matched by
 // (definition key, city) and only ever backfilled (coordinates) — never

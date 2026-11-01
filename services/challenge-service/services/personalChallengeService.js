@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { challengeMatchesAudience } from './challengeAudience.js';
 
-const prisma = new PrismaClient();
 
 async function updateActiveEnrollment(enrollment, data) {
   await prisma.challengeEnrollment.updateMany({ where: { id: enrollment.id, status: 'active' }, data });

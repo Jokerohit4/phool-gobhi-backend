@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { track } from '../utils/analytics.js';
-const prisma = new PrismaClient();
 
 // Wave 2 — wild Sprout spawns for a challenge's live map (see
 // sprint2/explore-map-wave2-pokemongo-redesign-spec.html §8/§12-13). Species

@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { verifyMatchMembership } from './buddyServiceClient.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
 import { startOfIsoWeek } from '../utils/isoWeek.js';
-const prisma = new PrismaClient();
 
 // startOfIsoWeek is shared with streakService (utils/isoWeek.js) so both
 // normalize the close-week target to the same IST Monday — if they ever

@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { track } from '../utils/analytics.js';
-const prisma = new PrismaClient();
 
 // Mirrors wallet-service's credit/debit ledger pattern exactly (same
 // idempotencyKey @unique + atomic check-and-decrement + upsert-on-credit /

@@ -1,6 +1,5 @@
 import { AUDIENCES } from './challengeAudience.js';
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // A challenge without an anchor coordinate can never be shown or joined (the
 // 20km radius requires one — see utils/location.js). The admin form accepts
