@@ -13,6 +13,7 @@ let savedPhotos = [];
 let deletedPhotos = [];
 
 let svc;
+let suggestionRows = [];
 
 test('setup', async (t) => {
   t.mock.module('../services/routineJourneyService.js', { exports: { recordRoutineWorkout: async () => null } });
@@ -31,6 +32,8 @@ test('setup', async (t) => {
               return { exercises: [], ...s };
             },
           };
+          this.workoutSession.findFirst = async () => { const s = sessions.find((x) => x.localDate === '2026-11-01'); return s ? { exercises: [], ...s } : null; };
+          this.sessionExercise = { findMany: async (q) => (q.distinct ? suggestionRows : []) };
           this.workoutSet = {
             findUnique: async ({ where }) => {
               const s = sets.find((x) => x.id === where.id);
@@ -214,4 +217,52 @@ test('photo reward roll (default CSPRNG) always lands in 1..5 and hits every val
     seen.add(reward.coins);
   }
   assert.deepEqual([...seen].sort(), [1, 2, 3, 4, 5]);
+});
+
+test('photo is mapped to its own session: two users, several sessions', async () => {
+  reset();
+  const a1 = seed({ userId: 1, endedAt: new Date() });
+  const a2 = seed({ userId: 1, endedAt: new Date() });
+  const b1 = seed({ userId: 2, endedAt: new Date() });
+  const b2 = seed({ userId: 2, endedAt: new Date() });
+  await svc.uploadSessionPhotoService(a1.id, 1, photo, { rng: () => 1 });
+  assert.ok(a1.photoStoragePath && a1.photoUploadedAt);
+  for (const other of [a2, b1, b2]) {
+    assert.equal(other.photoStoragePath, null);
+    assert.equal(other.photoUploadedAt, undefined);
+  }
+  // another user cannot attach to user 1's session
+  await assert.rejects(svc.uploadSessionPhotoService(a2.id, 2, photo), (e) => e.status === 404);
+  assert.equal(a2.photoStoragePath, null);
+  await svc.uploadSessionPhotoService(b1.id, 2, photo, { rng: () => 2 });
+  await svc.uploadSessionPhotoService(a2.id, 1, photo, { rng: () => 3 });
+  assert.match(a1.photoStoragePath, /^food\/1\/workout\//);
+  assert.match(a2.photoStoragePath, /^food\/1\/workout\//);
+  assert.match(b1.photoStoragePath, /^food\/2\/workout\//);
+  const keys = [a1, a2, b1].map((x) => x.photoStoragePath);
+  assert.equal(new Set(keys).size, 3, 'distinct object key per session');
+  assert.equal(b2.photoStoragePath, null);
+});
+
+test('session serializers carry suggestedRestSeconds / restSuggestionSource and keep routine restSeconds', async () => {
+  reset();
+  suggestionRows = [{ exerciseId: 7, sessionId: 99, sets: [{ restSeconds: 90 }, { restSeconds: 100 }] }];
+  const s = seed({
+    endedAt: new Date(),
+    exercises: [
+      { exerciseId: 7, restSeconds: 120, sets: [] },
+      { exerciseId: 8, restSeconds: null, sets: [] },
+    ],
+  });
+  const detail = await svc.getSessionDetailService(s.id, 1);
+  assert.equal(detail.exercises[0].suggestedRestSeconds, 95);
+  assert.equal(detail.exercises[0].restSuggestionSource, 'history');
+  assert.equal(detail.exercises[0].restSeconds, 120, 'routine target untouched');
+  assert.equal(detail.exercises[1].suggestedRestSeconds, null);
+  assert.equal(detail.exercises[1].restSuggestionSource, null);
+  const fin = await svc.finishSessionService(seed({ exercises: [{ exerciseId: 7, restSeconds: 60, sets: [] }] }).id, 1, {});
+  assert.equal(fin.exercises[0].suggestedRestSeconds, 95);
+  const today = await svc.getTodaySessionService(1);
+  assert.ok(today === null || today.exercises.every((e) => 'suggestedRestSeconds' in e));
+  suggestionRows = [];
 });

@@ -8,6 +8,7 @@ import { creditWorkoutPhotoCoins } from '../utils/notifyWorkoutPhoto.js';
 import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
 import { pageArgs, finishPage } from '../utils/pagination.js';
 import * as photoStorage from './ledger/foodPhotoStorage.js';
+import { loadSuggestedRest } from './restSuggestionService.js';
 import { latestBiometricRows } from './biometricLatest.js';
 
 const MAX_SECONDS = 86400;
@@ -24,9 +25,24 @@ export function sanitizeSeconds(value) {
 // Adds `photoUrl` (a freshly minted short-lived signed URL; never persisted,
 // the bucket is private) and drops the internal storage path. Best-effort: a
 // signing failure yields photoUrl null rather than failing the read.
-async function withPhotoUrl(session) {
+async function withPhotoUrl(session, { suggestRest = true } = {}) {
   if (!session) return session;
   const { photoStoragePath, ...rest } = session;
+  // Personalised rest per exercise (see restSuggestionService). Best-effort:
+  // a failure just means no suggestions. The routine's own `restSeconds` on
+  // each exercise is left untouched.
+  if (Array.isArray(rest.exercises) && rest.exercises.length) {
+    let suggestions = new Map();
+    // History lists skip the lookup (a suggestion is meaningless on a past
+    // session and would be one query per row): fields are present, null.
+    try {
+      if (suggestRest) suggestions = await loadSuggestedRest(session.userId, rest.exercises.map((e) => e.exerciseId), { excludeSessionId: session.id });
+    } catch (err) { console.error('[restSuggestion] failed:', err?.message); }
+    rest.exercises = rest.exercises.map((e) => {
+      const sug = suggestions.get(e.exerciseId);
+      return { ...e, suggestedRestSeconds: sug ? sug.seconds : null, restSuggestionSource: sug ? 'history' : null };
+    });
+  }
   let photoUrl = null;
   if (photoStoragePath) {
     try { photoUrl = await photoStorage.signedPhotoUrl(photoStoragePath); }
@@ -167,7 +183,7 @@ export async function startSessionService(userId, templateId, attendance, client
     });
     // Scoped to the caller: a ref is client-generated, so treating someone
     // else's as "already done" would hand them another user's session.
-    if (existing && existing.userId === userId) return existing;
+    if (existing && existing.userId === userId) return withPhotoUrl(existing);
     if (existing) {
       const err = new Error('clientRef already used');
       err.status = 409;
@@ -178,14 +194,14 @@ export async function startSessionService(userId, templateId, attendance, client
   const createData = { userId, ...attachData, ...(clientRef ? { clientRef } : {}) };
 
   try {
-    return await createSessionRow(createData, templateId, userId);
+    return await withPhotoUrl(await createSessionRow(createData, templateId, userId));
   } catch (err) {
     if (clientRef && err?.code === 'P2002') {
       const raced = await prisma.workoutSession.findUnique({
         where: { clientRef },
         include: includeFull,
       });
-      if (raced && raced.userId === userId) return raced;
+      if (raced && raced.userId === userId) return withPhotoUrl(raced);
     }
     throw err;
   }
@@ -305,7 +321,7 @@ export async function listSessionsService(userId) {
     include: includeFull,
     orderBy: { startedAt: 'desc' },
   });
-  return Promise.all(rows.map(withPhotoUrl));
+  return Promise.all(rows.map((r) => withPhotoUrl(r, { suggestRest: false })));
 }
 
 // Cursor-paginated variant behind GET /sessions. Same order as listSessionsService
@@ -320,7 +336,7 @@ export async function listSessionsPageService(userId, { limit, cursor } = {}) {
     ...pageArgs({ limit, cursor }),
   });
   const page = finishPage(rows, limit);
-  return { ...page, items: await Promise.all(page.items.map(withPhotoUrl)) };
+  return { ...page, items: await Promise.all(page.items.map((r) => withPhotoUrl(r, { suggestRest: false }))) };
 }
 
 export async function getSessionDetailService(sessionId, userId) {
