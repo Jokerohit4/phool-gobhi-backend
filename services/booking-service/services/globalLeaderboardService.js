@@ -9,14 +9,13 @@
 // same day still pay once. Users who never attend anywhere aren't ranked
 // globally (same contract as the per-gym board only listing that gym's
 // check-ins); a steps-only user with zero presence stays off the board.
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 import { todayDateStringIST } from '../utils/slotTiming.js';
 
-const prisma = new PrismaClient();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';

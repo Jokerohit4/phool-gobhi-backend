@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { IST_OFFSET_MS } from '../utils/slotTiming.js';
 
 // Coach-journey B3: the "showed-up day" source of truth. Health-service's
@@ -8,7 +8,6 @@ import { IST_OFFSET_MS } from '../utils/slotTiming.js';
 // linked member) or an IndependentCheckIn (non-partner gym). Kept in its own
 // module (not bookingService.js) so the union logic is testable without
 // standing up that file's entire mock surface.
-const prisma = new PrismaClient();
 
 // Booking.attendedAt is a UTC instant; the day it "happened on" is the IST
 // calendar day (slotTiming.js convention — booking.date is always IST too,

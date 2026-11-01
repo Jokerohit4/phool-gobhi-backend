@@ -5,12 +5,11 @@ dotenv.config();
 import { connectDB } from './db.js';
 connectDB();
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db/prisma.js';
 import bookingRoutes from './routes/booking.js';
 
 const app = express();
 app.use(analyticsMiddleware());
-const prisma = new PrismaClient();
 
 app.use(express.json());
 

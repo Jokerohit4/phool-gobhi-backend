@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import axios from 'axios';
 import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
@@ -35,7 +36,6 @@ function istDateWindow(days) {
   return { fromDateString, todayString };
 }
 
-const prisma = new PrismaClient();
 
 // "First-ever visit to this gym" spans BOTH attendance tables — a customer
 // who's booked at gym X and later does their first member-checkin at that
