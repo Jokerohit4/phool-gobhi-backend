@@ -1,4 +1,5 @@
 import { isoDayIST } from '../../utils/sessionDay.js';
+import { quitReasonBias } from '../../utils/quitReasonBias.js';
 // The coach journey's plan engine (B7): the starter plan a new member gets
 // on day one, and the rebuild that keeps it honest afterwards.
 //
@@ -217,7 +218,7 @@ function planWeekdays(sessions, preferredRestDay, startWeekday = null, keepWeekd
 
 export async function buildWorkoutSlots(prisma, {
   experienceLevel, location, sessions, goals = [], userId = null, startWeekday = null,
-  keepWeekdays = [],
+  keepWeekdays = [], quitReason = null,
 }) {
   const count = Math.max(0, Math.floor(Number(sessions) || 0));
   if (count === 0) return [];
@@ -254,6 +255,7 @@ export async function buildWorkoutSlots(prisma, {
         + (lowImpactPreference && lowImpact ? 8 : 0)
         + smallSpaceFit
         + injuryBias(template, profile)
+        + quitReasonBias(template, quitReason, recentIds.has(template.id))
         - (recentIds.has(template.id) ? 2 : 0),
     };
   }).sort((a, b) => b.score - a.score || a.template.id - b.template.id);
@@ -261,7 +263,8 @@ export async function buildWorkoutSlots(prisma, {
     ? rankedCandidates.filter((candidate) => candidate.equipmentFits === true)
     : [];
   const candidates = fittingCandidates.length ? fittingCandidates : rankedCandidates;
-  const hasPersonalContext = goals.length > 0 || recentIds.size > 0 || Boolean(
+  const hasPersonalContext = goals.length > 0 || recentIds.size > 0
+    || quitReason === 'time' || quitReason === 'boredom' || Boolean(
     profile?.experienceLevel || profile?.preferredRestDay != null || profile?.homeSetupAt
       || profile?.trainingSpace || profile?.programmingMode === 'low_impact_recovery'
       || (profile?.consentAt && profile?.injuryZones?.length),
@@ -331,6 +334,7 @@ export async function createStarterPlan(prisma, userId, {
   location,
   wellnessOnly = false,
   wellnessProfile = null,
+  quitReason = null,
 } = {}) {
   const level = experienceLevel ?? DEFAULT_EXPERIENCE_LEVEL;
   if (experienceLevel != null && !(level in LEVEL_DEFAULTS)) {
@@ -387,6 +391,7 @@ export async function createStarterPlan(prisma, userId, {
     goals: goalList,
     userId,
     startWeekday: weekdayOf(todayLocalDate()),
+    quitReason,
   });
   await prisma.prescription.upsert({
     where: { userId },
@@ -449,6 +454,7 @@ export async function refreshWorkoutSlotsForProfile(prisma, userId) {
     sessions: prescription.workoutSlots.length,
     goals: goal?.goals ?? [],
     userId,
+    quitReason: journey?.quitReason ?? null,
     // Same number of sessions: refresh the routines, keep the days.
     keepWeekdays: prescription.workoutSlots.map((slot) => slot.weekday),
   });
