@@ -372,6 +372,19 @@ model WorkoutSession {
   // the finish call can never double-credit, independent of the ledger's own
   // idempotencyKey check (belt-and-suspenders, cheap to keep in sync).
   coinsAwarded Boolean          @default(false)
+  // Time actually training vs paused, reported by the client at finish. Null
+  // for sessions finished by an older client.
+  activeSeconds Int?
+  pausedSeconds Int?
+  // Snapshot of the user's latest weight biometric at finish, so history keeps
+  // the body weight of THAT day rather than whatever they weigh later.
+  bodyWeightKg  Float?
+  // Post-workout photo, private bucket (path only - signed URLs are minted on
+  // read, never persisted). photoRewardCoins is the server-rolled 1-5 coin
+  // reward; null means no reward has been paid, which is also the retry guard.
+  photoStoragePath  String?
+  photoUploadedAt   DateTime?
+  photoRewardCoins  Int?
 
   exercises SessionExercise[]
 
@@ -420,6 +433,10 @@ model WorkoutSet {
   durationSeconds   Int?
   distanceMeters    Decimal?        @db.Decimal(8, 2)
   completed         Boolean         @default(false)
+  // Rest taken AFTER this set, in seconds, reported by the client.
+  restSeconds       Int?
+  // Set when `completed` flips to true, cleared when it flips back.
+  completedAt       DateTime?
   updatedAt         DateTime        @updatedAt
 
   @@index([sessionExerciseId])

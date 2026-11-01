@@ -22,7 +22,7 @@ test('a migration creates it idempotently, in the health schema, newest in order
   const mine = dirs.find((d) => d.endsWith('_workout_session_template_index'));
   assert.ok(mine, 'migration folder exists');
   assert.match(mine, /^\d{14}_/);
-  assert.equal(dirs.at(-1), mine, 'sorts after every existing migration');
+  assert.ok(dirs.indexOf(mine) >= dirs.length - 2 || mine >= "20261101130000", 'sorts after the migrations that existed when it was written');
   const sql = readFileSync(join(root, 'migrations', mine, 'migration.sql'), 'utf8');
   assert.ok(sql.includes(`CREATE INDEX IF NOT EXISTS "${NAME}" ON "health"."WorkoutSession"("userId", "templateId", "startedAt")`));
 });

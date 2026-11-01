@@ -2,9 +2,38 @@ import { isoDayIST } from '../utils/sessionDay.js';
 import { recordRoutineWorkout } from './routineJourneyService.js';
 import prisma from '../db/prisma.js';
 import { computeProgression } from './progressionService.js';
+import { randomInt } from 'node:crypto';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
+import { creditWorkoutPhotoCoins } from '../utils/notifyWorkoutPhoto.js';
 import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
 import { pageArgs, finishPage } from '../utils/pagination.js';
+import * as photoStorage from './ledger/foodPhotoStorage.js';
+import { latestBiometricRows } from './biometricLatest.js';
+
+const MAX_SECONDS = 86400;
+
+// Optional client-reported duration: a non-negative integer up to a day, else
+// ignored (undefined) - bad telemetry must never fail finishing a workout.
+export function sanitizeSeconds(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_SECONDS) return undefined;
+  return n;
+}
+
+// Adds `photoUrl` (a freshly minted short-lived signed URL; never persisted,
+// the bucket is private) and drops the internal storage path. Best-effort: a
+// signing failure yields photoUrl null rather than failing the read.
+async function withPhotoUrl(session) {
+  if (!session) return session;
+  const { photoStoragePath, ...rest } = session;
+  let photoUrl = null;
+  if (photoStoragePath) {
+    try { photoUrl = await photoStorage.signedPhotoUrl(photoStoragePath); }
+    catch (err) { console.error('[workoutPhoto] sign failed:', err?.message); }
+  }
+  return { ...rest, photoUrl };
+}
 
 // Applies double progression to the routine a finished session was started
 // from, and returns what changed so the app can say so. Best-effort by the
@@ -267,15 +296,16 @@ export async function getTodaySessionService(userId) {
     include: includeFull,
     orderBy: { startedAt: 'desc' },
   });
-  return session ? attachPreviousPerformance(session) : null;
+  return session ? withPhotoUrl(await attachPreviousPerformance(session)) : null;
 }
 
 export async function listSessionsService(userId) {
-  return prisma.workoutSession.findMany({
+  const rows = await prisma.workoutSession.findMany({
     where: { userId },
     include: includeFull,
     orderBy: { startedAt: 'desc' },
   });
+  return Promise.all(rows.map(withPhotoUrl));
 }
 
 // Cursor-paginated variant behind GET /sessions. Same order as listSessionsService
@@ -289,13 +319,14 @@ export async function listSessionsPageService(userId, { limit, cursor } = {}) {
     orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
     ...pageArgs({ limit, cursor }),
   });
-  return finishPage(rows, limit);
+  const page = finishPage(rows, limit);
+  return { ...page, items: await Promise.all(page.items.map(withPhotoUrl)) };
 }
 
 export async function getSessionDetailService(sessionId, userId) {
   await assertOwnsSession(sessionId, userId);
   const session = await prisma.workoutSession.findUnique({ where: { id: sessionId }, include: includeFull });
-  return attachPreviousPerformance(session);
+  return withPhotoUrl(await attachPreviousPerformance(session));
 }
 
 // The whole active-workout interaction: tap the checkmark, this fires.
@@ -319,6 +350,7 @@ export async function updateSetService(sessionId, setId, userId, body) {
     throw err;
   }
   const { weightKg, reps, durationSeconds, distanceMeters, completed } = body || {};
+  const restSeconds = sanitizeSeconds(body?.restSeconds);
   return prisma.workoutSet.update({
     where: { id: setId },
     data: {
@@ -327,6 +359,10 @@ export async function updateSetService(sessionId, setId, userId, body) {
       ...(durationSeconds !== undefined ? { durationSeconds } : {}),
       ...(distanceMeters !== undefined ? { distanceMeters } : {}),
       ...(completed !== undefined ? { completed } : {}),
+      ...(restSeconds !== undefined ? { restSeconds } : {}),
+      // Stamped when the checkmark flips on, cleared when it flips off.
+      ...(completed === true && !set.completed ? { completedAt: new Date() } : {}),
+      ...(completed === false ? { completedAt: null } : {}),
     },
   });
 }
@@ -385,10 +421,24 @@ export async function addSetToExerciseService(sessionId, sessionExerciseId, user
 // service's own idempotency guard, independent of challenge-service's
 // ledger-level one, so a client retrying PATCH /sessions/:id after a
 // timeout can never trigger a second credit attempt.
-export async function finishSessionService(sessionId, userId, { type, rpe } = {}) {
+export async function finishSessionService(sessionId, userId, { type, rpe, activeSeconds, pausedSeconds } = {}) {
   const session = await assertOwnsSession(sessionId, userId);
   if (session.endedAt) {
-    return prisma.workoutSession.findUnique({ where: { id: sessionId }, include: includeFull });
+    return withPhotoUrl(await prisma.workoutSession.findUnique({ where: { id: sessionId }, include: includeFull }));
+  }
+  const active = sanitizeSeconds(activeSeconds);
+  const paused = sanitizeSeconds(pausedSeconds);
+  // Body weight at the time of the workout: newest weight biometric, null if
+  // none. Best-effort - never blocks finishing.
+  let bodyWeightKg;
+  try {
+    const rows = await latestBiometricRows(prisma, userId);
+    const w = rows.find((r) => r.metric === 'weight');
+    bodyWeightKg = w ? Number(w.value) : null;
+    if (!Number.isFinite(bodyWeightKg)) bodyWeightKg = null;
+  } catch (err) {
+    console.error('[workout] body weight snapshot failed:', err?.message);
+    bodyWeightKg = null;
   }
   const updated = await prisma.workoutSession.update({
     where: { id: sessionId },
@@ -396,6 +446,9 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
       endedAt: new Date(),
       ...(type !== undefined ? { type } : {}),
       ...(rpe !== undefined ? { rpe } : {}),
+      ...(active !== undefined ? { activeSeconds: active } : {}),
+      ...(paused !== undefined ? { pausedSeconds: paused } : {}),
+      bodyWeightKg,
       // A session finished with no bookingId yet (started before any
       // attendance draft existed, e.g. offline) still gets a localDate so
       // it's never excluded from day-keyed charts later.
@@ -446,5 +499,49 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
     }
   }
 
-  return { ...updated, gamification, progression };
+  return { ...(await withPhotoUrl(updated)), gamification, progression };
+}
+
+// POST /sessions/:id/photo. Stores the photo on the (finished) session and pays
+// a one-time random 1-5 coin reward, rolled server-side with a CSPRNG.
+//
+// The reward is paid at most once per session: photoRewardCoins is persisted
+// only AFTER challenge-service accepts the credit, and the credit key
+// (`workout-photo-<sessionId>`) is stable, so a failed credit leaves the field
+// null and a retry can pay - while a replaced photo on an already-rewarded
+// session never rolls or pays again.
+export async function uploadSessionPhotoService(sessionId, userId, { buffer, mimeType }, { rng = () => randomInt(1, 6), credit = creditWorkoutPhotoCoins } = {}) {
+  const session = await assertOwnsSession(sessionId, userId);
+  if (!session.endedAt) {
+    const err = new Error('Finish the workout before adding a photo');
+    err.status = 409;
+    err.code = 'SESSION_NOT_FINISHED';
+    throw err;
+  }
+  const path = await photoStorage.saveWorkoutPhoto({ buffer, mimeType, userId });
+  if (!path) {
+    const err = new Error('photo is required');
+    err.status = 400;
+    throw err;
+  }
+  await prisma.workoutSession.update({
+    where: { id: sessionId },
+    data: { photoStoragePath: path, photoUploadedAt: new Date() },
+  });
+  // Replaced photo: reclaim the old object (best-effort, never throws).
+  if (session.photoStoragePath) await photoStorage.deletePhotos([session.photoStoragePath]);
+
+  let reward = { coins: session.photoRewardCoins ?? 0, credited: false };
+  if (session.photoRewardCoins == null) {
+    const coins = rng();
+    const ok = await credit({ userId, sessionId, amount: coins });
+    if (ok) {
+      await prisma.workoutSession.update({ where: { id: sessionId }, data: { photoRewardCoins: coins } });
+      reward = { coins, credited: true };
+    } else {
+      reward = { coins: 0, credited: false };
+    }
+  }
+  const data = await getSessionDetailService(sessionId, userId);
+  return { data, reward };
 }

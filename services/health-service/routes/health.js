@@ -33,6 +33,7 @@ import * as biometricConsentCtrl from '../controllers/biometricConsentController
 import * as healthProfileCtrl from '../controllers/healthProfileController.js';
 import * as reportCtrl from '../controllers/reportController.js';
 import { uploadHealthReportMiddleware } from '../middleware/medicalUpload.js';
+import { uploadWorkoutPhotoMiddleware } from '../middleware/workoutPhotoUpload.js';
 // Adults-only on every consent GRANT (never on revoke/delete) — see requireAdult.
 import { requireAdult } from '../middleware/requireAdult.js';
 import * as recapCtrl from '../controllers/recapController.js';
@@ -265,6 +266,7 @@ router.get('/sessions', ...workoutGated, sessionCtrl.listSessions);
 router.get('/sessions/today', ...workoutGated, sessionCtrl.getTodaySession);
 router.get('/sessions/:id', ...workoutGated, sessionCtrl.getSessionDetail);
 router.patch('/sessions/:id/sets/:setId', ...workoutGated, sessionCtrl.updateSet);
+router.post('/sessions/:id/photo', ...workoutGated, uploadWorkoutPhotoMiddleware, sessionCtrl.uploadSessionPhoto);
 router.post('/sessions/:id/exercises', ...workoutGated, sessionCtrl.addExerciseToSession);
 router.post('/sessions/:id/exercises/:sessionExerciseId/sets', ...workoutGated, sessionCtrl.addSetToExercise);
 // Finishing a session is what triggers the gamified-layer coin check (see
