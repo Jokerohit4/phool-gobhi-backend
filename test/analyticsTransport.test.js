@@ -48,3 +48,36 @@ test('failed client delivery returns retryable 503 without failing a business re
   assert.equal((await fetch(base+'/booking')).status,202);
   delete process.env.ANALYTICS_PROVIDER;
 });
+
+test('publishRows honours per-call attempt timeout and retry count',async()=>{
+  process.env.ANALYTICS_ENVIRONMENT='dev';
+  const seen=[];const client={async request(options){seen.push(options.timeout);throw Error('down');}};
+  const topic='projects/phool-gobhi/topics/analytics-events-dev';
+  await assert.rejects(publishRows([eventEnvelope({event:'screen_viewed'})],{client,topic,attemptTimeoutMs:500,retries:0}));
+  assert.deepEqual(seen,[500]);
+  seen.length=0;
+  await assert.rejects(publishRows([eventEnvelope({event:'screen_viewed'})],{client,topic}));
+  assert.deepEqual(seen,[1500,1500]);
+});
+
+test('events path keeps durable options; other paths use short deadline without retry; empty rows never publish',async t=>{
+  process.env.ANALYTICS_PROVIDER='bigquery';process.env.ANALYTICS_ENVIRONMENT='dev';
+  t.mock.method(console,'error',()=>{});
+  const calls=[];
+  const app=express();
+  app.use(analyticsMiddleware({telemetryTimeoutMs:50,telemetryAttemptMs:40,timeoutMs:2000,publish:async(rows,options)=>{
+    calls.push({rows:rows.length,options});if(options)await new Promise(resolve=>setTimeout(resolve,500));}}));
+  for(const route of ['/api/events','/booking'])app.get(route,(_req,res)=>{enqueueWarehouse(eventEnvelope({event:'screen_viewed'}));res.status(202).json({ok:true});});
+  app.get('/quiet',(_req,res)=>res.json({ok:true}));
+  const server=app.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>server.close());
+  const base='http://127.0.0.1:'+server.address().port;
+  assert.equal((await fetch(base+'/api/events')).status,202);
+  assert.deepEqual(calls.pop(),{rows:1,options:undefined});
+  const started=Date.now();
+  assert.equal((await fetch(base+'/booking')).status,202);
+  assert.ok(Date.now()-started<400,'slow telemetry must be cut at the short deadline');
+  assert.deepEqual(calls.pop(),{rows:1,options:{attemptTimeoutMs:40,retries:0}});
+  assert.equal((await fetch(base+'/quiet')).status,200);
+  assert.equal(calls.length,0);
+  delete process.env.ANALYTICS_PROVIDER;
+});

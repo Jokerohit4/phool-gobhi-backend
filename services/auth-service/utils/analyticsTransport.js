@@ -41,7 +41,7 @@ function recordFailure() {
   console.error(JSON.stringify({ severity: 'ERROR', component: 'analytics', code: 'ANALYTICS_PUBLISH_FAILED' }));
 }
 
-export async function publishRows(rows, { client, topic = process.env.ANALYTICS_TOPIC } = {}) {
+export async function publishRows(rows, { client, topic = process.env.ANALYTICS_TOPIC, attemptTimeoutMs = 1500, retries = 1 } = {}) {
   if (!rows.length) return;
   if (!/^projects\/[a-z][a-z0-9-]+\/topics\/analytics-events-(dev|prod)$/.test(topic || '')) throw Error('invalid analytics topic');
   if (!topic.endsWith('-' + analyticsEnvironment())) throw Error('analytics environment/topic mismatch');
@@ -49,15 +49,15 @@ export async function publishRows(rows, { client, topic = process.env.ANALYTICS_
   for (let start = 0; start < rows.length; start += 100) {
     const messages = rows.slice(start, start + 100).map(row => ({ data: Buffer.from(JSON.stringify(row)).toString('base64') }));
     let delivered = false;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const response = await transport.request({ url: `https://pubsub.googleapis.com/v1/${topic}:publish`,
-          method: 'POST', data: { messages }, timeout: 1500, retry: false });
+          method: 'POST', data: { messages }, timeout: attemptTimeoutMs, retry: false });
         if (response.data?.messageIds?.length !== messages.length) throw Error('missing publish acknowledgement');
         delivered = true;
         break;
       } catch (error) {
-        if (attempt === 1) throw error;
+        if (attempt >= retries) throw error;
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
@@ -82,7 +82,13 @@ export async function flushAnalytics() {
   await Promise.allSettled([...outside]);
 }
 
-export function analyticsMiddleware({ publish = publishRows, timeoutMs = 4000, beforeDrain } = {}) {
+// Client-ingest (/api/events) keeps the durable-acceptance deadline and retry.
+// Every other path carries optional telemetry only: a Pub/Sub hiccup may add at
+// most telemetryTimeoutMs (no retry) to the response. Both are env-overridable.
+const envMs = (name, fallback) => { const value = Number(process.env[name]); return Number.isFinite(value) && value > 0 ? value : fallback; };
+export function analyticsMiddleware({ publish = publishRows, timeoutMs = 4000, beforeDrain,
+  telemetryTimeoutMs = envMs('ANALYTICS_TELEMETRY_DEADLINE_MS', 800),
+  telemetryAttemptMs = envMs('ANALYTICS_TELEMETRY_ATTEMPT_MS', 500) } = {}) {
   return (req, res, next) => {
     if (!['bigquery', 'dual'].includes((process.env.ANALYTICS_PROVIDER || '').toLowerCase())) return next();
     requests.run({ rows: [], closed: false }, () => {
@@ -92,19 +98,23 @@ export function analyticsMiddleware({ publish = publishRows, timeoutMs = 4000, b
       res.end = function (...args) {
         if (ending) return this;
         ending = true;
+        const isEvents = /^\/api\/events\/?$/.test(req.path);
+        const deadlineMs = isEvents ? timeoutMs : telemetryTimeoutMs;
         const drain = async () => {
           if (beforeDrain) await beforeDrain(req);
           const values = await Promise.all(scope.rows);
           if (values.some(value => value.failed)) throw Error('event preparation failed');
-          await publish(values.map(value => value.row));
+          if (!values.length) return;
+          if (isEvents) await publish(values.map(value => value.row));
+          else await publish(values.map(value => value.row), { attemptTimeoutMs: telemetryAttemptMs, retries: 0 });
         };
         let timer;
-        Promise.race([drain(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('analytics deadline')), timeoutMs); })])
+        Promise.race([drain(), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('analytics deadline')), deadlineMs); })])
           .catch(() => {
             recordFailure();
             // A client analytics 202 means durable Pub/Sub acceptance. Optional
             // server telemetry must not turn a successful payment/booking into a failure.
-            if (/^\/api\/events\/?$/.test(req.path) && !res.headersSent) {
+            if (isEvents && !res.headersSent) {
               res.statusCode = 503;
               res.setHeader('Retry-After', '5');
               args = [JSON.stringify({ error: 'ANALYTICS_UNAVAILABLE', retryable: true })];
