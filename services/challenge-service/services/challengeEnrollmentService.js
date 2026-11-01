@@ -3,6 +3,7 @@ import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { isWithinMaxChallengeRange } from '../utils/location.js';
 import { track } from '../utils/analytics.js';
+import { evictPersonalProgress } from '../utils/personalProgressCache.js';
 
 // Same haversine formula as booking-service's self-check-in geofence check
 // — duplicated per-service by this repo's own convention (see e.g.
@@ -84,6 +85,7 @@ export async function enrollService(userId, challengeId, { userLat, userLng, aud
 
   if (!challengeMatchesAudience(challenge, audience)) throw { status: 403, error: 'This challenge is for a different training or wellbeing preference' };
   const created = await prisma.challengeEnrollment.create({ data: { userId, challengeId: challenge.id } });
+  evictPersonalProgress(userId); // a fresh enrollment must never read a cached count
   track('challenge_enrolled', userId, {
     challenge_id: challenge.id, already_enrolled: false,
     target_count: challenge.targetCount, reward_coins: challenge.rewardCoins,
@@ -122,6 +124,7 @@ export async function leaveChallengeService(userId, challengeId) {
     where: { id: enrollment.id },
     data: { status: 'abandoned' },
   });
+  evictPersonalProgress(userId);
   track('challenge_left', userId, {
     challenge_id: Number(challengeId), prior_status: 'active', abandoned: true,
     progress_count: updated.progressCount,

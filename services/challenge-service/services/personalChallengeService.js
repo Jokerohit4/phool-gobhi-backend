@@ -3,6 +3,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { challengeMatchesAudience } from './challengeAudience.js';
+import { getCachedProgress } from '../utils/personalProgressCache.js';
 
 
 async function updateActiveEnrollment(enrollment, data) {
@@ -59,14 +60,19 @@ export async function refreshPersonalChallenge(challenge, userId, audience) {
       verifiedAttendance: String(challenge.challengeDefinition.audiences?.includes('linked_gym') ?? false),
     });
     try {
-      const response = await fetch(`${base}/internal/challenge-activity?${query}`, {
-        headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...await googleIdTokenHeader(base) },
-        signal: AbortSignal.timeout(5000),
+      // 15s per-enrollment cache of the raw health count (single-flight,
+      // failures not cached). Completion below stays idempotent regardless.
+      const rawCount = await getCachedProgress(userId, enrollment, async () => {
+        const response = await fetch(`${base}/internal/challenge-activity?${query}`, {
+          headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...await googleIdTokenHeader(base) },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) throw new Error(`Activity ${response.status}`);
+        const data = (await response.json()).data;
+        if (!Number.isInteger(data?.count) || data.count < 0) throw new Error('Invalid activity count');
+        return data.count;
       });
-      if (!response.ok) throw new Error(`Activity ${response.status}`);
-      const data = (await response.json()).data;
-      if (!Number.isInteger(data?.count) || data.count < 0) throw new Error('Invalid activity count');
-      count = Math.min(challenge.targetCount, data.count);
+      count = Math.min(challenge.targetCount, rawCount);
     } catch (_) {
       // Keep the last confirmed progress; a failed read cannot complete a quest.
       return { ...challenge, progressUnavailable: true };
