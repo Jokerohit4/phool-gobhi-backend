@@ -3,7 +3,9 @@ import { recordAudit } from '../services/auditService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
 import {
   HOME_EQUIPMENT, TRAINING_SPACES, validateHomeEquipment, validateTrainingSpace,
+  suggestHomeEquipment,
 } from '../services/homeSetup.js';
+import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 
 const EXPERIENCE_LEVELS = ['none', 'lt_1_year', 'one_to_three_years', 'over_three_years'];
 const ENERGY_PATTERNS = ['morning', 'afternoon', 'evening'];
@@ -20,9 +22,15 @@ const WEIGHT_MAX_KG = 400;
 export const getProfile = async (req, res) => {
   try {
     const profile = await personalisationService.getProfileService(req.userId);
+    // Best-effort hint for the home-setup sheet; never fails the profile read.
+    const authUser = await fetchUserProfileInternal(req.userId);
     res.json({
       data: {
         ...serializeDecimals(profile),
+        suggestedHomeEquipment: suggestHomeEquipment(
+          authUser?.fitnessGoals,
+          profile?.homeEquipment,
+        ),
         // The client renders the chip sets from this rather than hardcoding
         // its own copy, so adding a zone/level later needs no app release.
         options: {
