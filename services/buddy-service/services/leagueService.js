@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { MATCH_EXPIRY_DAYS } from './buddyService.js';
 import { getUsersBatchInternal } from './authClient.js';
 
-const prisma = new PrismaClient();
 const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 

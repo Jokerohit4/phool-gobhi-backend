@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
 import { getUserInternal } from '../services/authClient.js';
 import { createSocialService } from '../services/socialService.js';
@@ -8,7 +8,7 @@ import { requireRole } from '../middleware/requireAuth.js';
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 
 const router = Router();
-const service = createSocialService({ prisma: new PrismaClient(), cloudinary, getUserInternal });
+const service = createSocialService({ prisma, cloudinary, getUserInternal });
 const customer = [requireRole('customer'), requireFeatureFlag('buddy')];
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024, files: 1, fields: 5 } });
 const route = run => async (req, res) => {

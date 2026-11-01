@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
-const prisma = new PrismaClient();
 
 // DPDPA erasure for this service, called by auth-service when a user
 // deletes their account. Buddy holds the most personal data on the

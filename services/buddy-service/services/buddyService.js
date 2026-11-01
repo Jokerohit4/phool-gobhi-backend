@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
 import { track } from '../utils/analytics.js';
 import { haversineKm, boundingBox, bucketDistanceKm } from '../utils/geo.js';
@@ -8,7 +8,6 @@ import { notifyMatch } from '../utils/notifyMatch.js';
 import { notifyMessage } from '../utils/notifyMessage.js';
 import { MAX_BUDDY_PHOTOS } from '../utils/upload.js';
 
-const prisma = new PrismaClient();
 
 // Stranger-matching by physical proximity — this can't rest solely on
 // auth-service's own validation holding forever, so buddy-service enforces

@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // DPDPA access right (s.11) for the gym-buddy layer, called by auth-service's
 // platform-wide export. The mirror of erasureService: the same data, handed
