@@ -85,6 +85,13 @@ export async function refreshPersonalChallenge(challenge, userId, audience) {
     await prisma.rewardIssuance.upsert({ where: { enrollmentId: enrollment.id }, update: {},
       create: { enrollmentId: enrollment.id, rewardType: 'coins', coinAmount: challenge.rewardCoins } });
   }
+  // Nothing changed and the quest is not completing: skip the updateMany +
+  // findUnique pair (every list call used to write here). The completion and
+  // reward branches above/below are unaffected — they only run when
+  // count >= targetCount, which never takes this early return.
+  if (count < challenge.targetCount && count === enrollment.progressCount) {
+    return { ...challenge, enrollments: [enrollment] };
+  }
   const updated = await updateActiveEnrollment(enrollment,
     { progressCount: count, ...(count >= challenge.targetCount ? { status: 'completed', completedAt: enrollment.completedAt ?? new Date() } : {}) });
   return { ...challenge, enrollments: [updated] };

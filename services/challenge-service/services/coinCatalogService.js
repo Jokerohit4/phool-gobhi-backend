@@ -1,7 +1,8 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { creditCoinsService, debitCoinsService, debitCoinsInTx } from './coinLedgerService.js';
-import { loadEconomyConfig } from './coinEconomyConfigService.js';
+import { loadEconomyConfig, loadEconomyConfigCached } from './coinEconomyConfigService.js';
 import { track } from '../utils/analytics.js';
+import { runAtMostEvery } from '../utils/runAtMostEvery.js';
 const prisma = new PrismaClient();
 
 // Seeded once, only if the catalog is completely empty, so the feature isn't
@@ -46,12 +47,13 @@ const SEED_ITEMS = [
   },
 ];
 
-async function ensureSeeded() {
+// Checked once per instance (re-checked every 10 min), not on every catalog request.
+const ensureSeeded = runAtMostEvery(10 * 60 * 1000, async () => {
   const count = await prisma.coinCatalogItem.count();
   if (count === 0) {
     await prisma.coinCatalogItem.createMany({ data: SEED_ITEMS });
   }
-}
+});
 
 function startOfMonth(date = new Date()) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
@@ -67,11 +69,11 @@ function startOfMonth(date = new Date()) {
 //
 // userId is optional so the unauthenticated web preview (PG-HUNT-001 H-11,
 // not yet built) can still show honest scarcity without an account.
-async function annotateGymTrials(items, userId) {
+async function annotateGymTrials(items, userId, configPromise = loadEconomyConfigCached()) {
   const hasGymTrial = items.some((i) => i.category === 'gym_trial');
   if (!hasGymTrial) return items;
 
-  const config = await loadEconomyConfig();
+  const config = await configPromise;
   const monthStart = startOfMonth();
 
   const [monthlyCount, userCount] = await Promise.all([
@@ -97,8 +99,12 @@ async function annotateGymTrials(items, userId) {
 
 export async function listActiveCatalogService(userId) {
   await ensureSeeded();
+  // The economy config is independent of the item list: start it alongside.
+  // A rejection is only surfaced if a gym_trial item actually needs it (as before).
+  const configPromise = loadEconomyConfigCached();
+  configPromise.catch(() => {});
   const items = await prisma.coinCatalogItem.findMany({ where: { isActive: true }, orderBy: { coinCost: 'asc' } });
-  const annotated = await annotateGymTrials(items, userId);
+  const annotated = await annotateGymTrials(items, userId, configPromise);
   track('coins_catalog_viewed', userId, { item_count: annotated.length });
   return annotated;
 }

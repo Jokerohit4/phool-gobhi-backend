@@ -118,3 +118,31 @@ test('a challenge joined under another persona is paused, not advanced or paid',
   assert.equal(current.status, 'completed');
   assert.equal(payments.size, 1);
 }));
+
+test('an unchanged, non-completing count skips the enrollment write entirely', async () => withActivity(async () => {
+  let writes = 0;
+  const { updateMany, findUnique } = prisma.challengeEnrollment;
+  prisma.challengeEnrollment.updateMany = async (...args) => { writes++; return updateMany(...args); };
+  prisma.challengeEnrollment.findUnique = async (...args) => { writes++; return findUnique(...args); };
+  try {
+    current.progressCount = 1; count = 1;
+    const result = await refreshPersonalChallenge(quest(), 42);
+    assert.equal(writes, 0);
+    assert.equal(result.enrollments[0].progressCount, 1);
+    assert.equal(payments.size, 0);
+    // progress that moved is still persisted
+    count = 2;
+    const moved = await refreshPersonalChallenge(quest(), 42);
+    assert.ok(writes > 0);
+    assert.equal(current.progressCount, 2);
+    assert.equal(moved.enrollments[0].progressCount, 2);
+    // and completion still completes and pays exactly once
+    count = 3;
+    await refreshPersonalChallenge(quest(), 42);
+    assert.equal(current.status, 'completed');
+    assert.equal(payments.size, 1);
+  } finally {
+    prisma.challengeEnrollment.updateMany = updateMany;
+    prisma.challengeEnrollment.findUnique = findUnique;
+  }
+}));

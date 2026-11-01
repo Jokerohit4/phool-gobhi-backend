@@ -1,4 +1,4 @@
-import { loadChallengeAudience } from '../services/challengeAudience.js';
+import { loadChallengeAudience, loadChallengeAudienceCached } from '../services/challengeAudience.js';
 import * as coinLedgerService from '../services/coinLedgerService.js';
 import * as onboardingRewardService from '../services/onboardingRewardService.js';
 import * as erasureService from '../services/erasureService.js';
@@ -95,7 +95,7 @@ export const redeemCoinCatalogItem = async (req, res) => {
 
 export const getChallenges = async (req, res) => {
   try {
-    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, audience: await loadChallengeAudience(req.userId), ...parseLocation(req) });
+    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, audience: loadChallengeAudienceCached(req.userId), ...parseLocation(req) });
     res.json({ data: challenges });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -104,7 +104,7 @@ export const getChallenges = async (req, res) => {
 
 export const getChallengeDetail = async (req, res) => {
   try {
-    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, audience: await loadChallengeAudience(req.userId), ...parseLocation(req) });
+    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, audience: loadChallengeAudienceCached(req.userId), ...parseLocation(req) });
     res.json({ data: detail });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

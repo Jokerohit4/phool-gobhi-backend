@@ -1,5 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import { createTtlCache } from '../utils/ttlCache.js';
 const prisma = new PrismaClient();
+
+// Read-only DISPLAY cache (GET /coins/catalog scarcity numbers). 30s in-process,
+// single-flight, failures not cached, evicted by updateEconomyConfig below.
+// Anything that decides a coin amount, a cap check or a redemption must keep
+// calling the uncached loadEconomyConfig — never this.
+const economyConfigDisplayCache = createTtlCache(30_000);
 
 // Placeholder numbers from the planning docs (explicitly flagged "guess"
 // there too) — shipped as the default so the feature isn't empty on day
@@ -66,6 +73,10 @@ export async function loadEconomyConfig() {
   };
 }
 
+export function loadEconomyConfigCached() {
+  return economyConfigDisplayCache.get('economy', loadEconomyConfig);
+}
+
 function validateAmount(value, label) {
   const n = Number(value);
   if (!Number.isInteger(n) || n < 0 || n > MAX_COIN_AMOUNT) {
@@ -129,6 +140,7 @@ export async function updateEconomyConfig(
     create: { id: 1, ...data },
     update: data,
   });
+  economyConfigDisplayCache.evict('economy');
   return {
     coinsPerCheckin: updated.coinsPerCheckin,
     weeklyTargetBonus: updated.weeklyTargetBonus,

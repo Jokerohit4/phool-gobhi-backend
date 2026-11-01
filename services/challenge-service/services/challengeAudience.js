@@ -35,6 +35,37 @@ export async function loadChallengeAudience(userId) {
   }
 }
 
+// Read paths (the challenge list and detail screens) only use the audience to
+// FILTER what they show, so a few seconds of staleness after a persona switch
+// is harmless, and the list screen asks for it on every open — each time paying
+// an auth-service round trip (with an ID-token header) before touching the DB.
+// Cache it briefly per user and share one in-flight lookup. Enrolling does NOT
+// use this: it decides what a user may join, so it always reads fresh.
+// Failures are never cached. TTL 0 under `node --test`.
+const AUDIENCE_CACHE_TTL_MS =
+  process.env.NODE_TEST_CONTEXT && process.env.CHALLENGE_CACHE_FORCE !== '1' ? 0 : 15_000;
+const AUDIENCE_CACHE_MAX = 2000;
+const audienceCache = new Map(); // userId -> { value, expiresAt }
+const audienceInFlight = new Map(); // userId -> Promise
+
+export function loadChallengeAudienceCached(userId) {
+  if (!(AUDIENCE_CACHE_TTL_MS > 0)) return loadChallengeAudience(userId);
+  const key = Number(userId);
+  const hit = audienceCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
+  const running = audienceInFlight.get(key);
+  if (running) return running;
+  const promise = loadChallengeAudience(userId)
+    .then((value) => {
+      if (audienceCache.size >= AUDIENCE_CACHE_MAX) audienceCache.delete(audienceCache.keys().next().value);
+      audienceCache.set(key, { value, expiresAt: Date.now() + AUDIENCE_CACHE_TTL_MS });
+      return value;
+    })
+    .finally(() => audienceInFlight.delete(key));
+  audienceInFlight.set(key, promise);
+  return promise;
+}
+
 export function isPersonalChallenge(challenge) {
   return challenge.challengeDefinition?.defaultVerificationMethod === 'activity_log';
 }

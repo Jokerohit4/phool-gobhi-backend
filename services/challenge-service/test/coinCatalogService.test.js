@@ -155,6 +155,7 @@ test('setup: mock prisma + coinEconomyConfigService, import coinCatalogService o
   t.mock.module(new URL('../services/coinEconomyConfigService.js', import.meta.url).href, {
     exports: {
       loadEconomyConfig: async () => ({ ...economyConfig }),
+      loadEconomyConfigCached: async () => ({ ...economyConfig }),
     },
   });
 

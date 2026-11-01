@@ -1,6 +1,7 @@
 import { challengeMatchesAudience, isPersonalChallenge } from './challengeAudience.js';
 import { seedPersonalChallenges, refreshPersonalChallenge } from './personalChallengeService.js';
 import { PrismaClient } from '@prisma/client';
+import { runAtMostEvery } from '../utils/runAtMostEvery.js';
 import { MAX_CHALLENGE_DISTANCE_KM, distanceKmFromUser, isWithinMaxChallengeRange } from '../utils/location.js';
 
 const prisma = new PrismaClient();
@@ -94,7 +95,7 @@ async function upsertChallenge({ definition, city, lat, lng, targetCount, reward
   return challenge;
 }
 
-async function ensureSeeded() {
+async function seedCatalog() {
   await seedPersonalChallenges();
   const offPeakDef = await upsertDefinition({
     key: OFF_PEAK_HUNTER_KEY,
@@ -157,13 +158,27 @@ async function ensureSeeded() {
   });
 }
 
-export async function listActiveChallengesService({ userId, userLat, userLng, audience }) {
-  await ensureSeeded();
-  const challenges = await prisma.challenge.findMany({
-    where: { status: 'active' },
-    include: { challengeDefinition: true, enrollments: { where: { userId } } },
-    orderBy: { id: 'asc' },
-  });
+// The seeds are idempotent and only ever need to exist, so seed once per instance
+// (re-checked every 10 min, which also lets a new deploy's added cities reach a
+// live database on its first request) instead of on every list request: that
+// was ~30 sequential queries plus an advisory-lock transaction per call.
+const ensureSeeded = runAtMostEvery(10 * 60 * 1000, seedCatalog);
+
+// `audience` may be a value or a promise of one: the controller starts the
+// auth-service lookup and hands the promise in, so it runs alongside the seed
+// check and the catalog query instead of before them. A lookup failure still
+// surfaces (as its own 503) from the await below.
+export async function listActiveChallengesService({ userId, userLat, userLng, audience: audienceInput }) {
+  const audiencePromise = Promise.resolve(audienceInput);
+  audiencePromise.catch(() => {}); // awaited below; don't leave it unhandled if seeding/the query throws first
+  const [challenges, audience] = await Promise.all([
+    ensureSeeded().then(() => prisma.challenge.findMany({
+      where: { status: 'active' },
+      include: { challengeDefinition: true, enrollments: { where: { userId } } },
+      orderBy: { id: 'asc' },
+    })),
+    audiencePromise,
+  ]);
   const visible = challenges
     .filter(challenge => challengeMatchesAudience(challenge, audience) || challenge.enrollments?.length)
     .map((challenge) => ({
@@ -179,15 +194,22 @@ export async function listActiveChallengesService({ userId, userLat, userLng, au
   return refreshed.map(serializeChallenge);
 }
 
-export async function getChallengeDetailService(challengeId, { userId, userLat, userLng, audience }) {
-  let challenge = await prisma.challenge.findUnique({
-    where: { id: Number(challengeId) },
-    include: {
-      challengeDefinition: true,
-      enrollments: { where: { userId } },
-      checkpointSpots: { orderBy: { sequence: 'asc' } },
-    },
-  });
+// `audience` may be a value or a promise (see listActiveChallengesService).
+export async function getChallengeDetailService(challengeId, { userId, userLat, userLng, audience: audienceInput }) {
+  const audiencePromise = Promise.resolve(audienceInput);
+  audiencePromise.catch(() => {});
+  const [found, audience] = await Promise.all([
+    prisma.challenge.findUnique({
+      where: { id: Number(challengeId) },
+      include: {
+        challengeDefinition: true,
+        enrollments: { where: { userId } },
+        checkpointSpots: { orderBy: { sequence: 'asc' } },
+      },
+    }),
+    audiencePromise,
+  ]);
+  let challenge = found;
   if (!challenge) throw { status: 404, error: 'Challenge not found' };
   // Same geo-gate as the list: an out-of-range challenge — or one that can't
   // be proven within range (no anchor / no user location) — is treated as
