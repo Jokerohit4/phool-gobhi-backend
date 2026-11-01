@@ -28,7 +28,9 @@ test('setup', async (t) => {
   t.mock.module('../services/routineJourneyService.js', { exports: { recordRoutineWorkout: async () => null } });
   t.mock.module('@prisma/client', { exports: { Prisma: {}, PrismaClient: class { constructor() {
     this.workoutSession = { findUnique: async () => current };
-    this.sessionExercise = { findMany: async (args) => { queries.push(args); return applyQuery(args); } };
+    // The batched rest-suggestion lookup (`distinct`) is a separate query; this
+    // test is about the per-exercise previous-performance reads only.
+    this.sessionExercise = { findMany: async (args) => { if (args.distinct) return []; queries.push(args); return applyQuery(args); } };
   } } } });
   ({ getSessionDetailService } = await import('../services/workoutSessionService.js'));
 });

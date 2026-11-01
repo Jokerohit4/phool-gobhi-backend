@@ -27,7 +27,7 @@ test('create, edit and start preserve routine phases, guidance, rest and timed t
           savedSession = data;
           return { id: 8, userId: 3, startedAt: new Date(), exercises: data.exercises.create.map((e) => ({ ...e, sets: e.sets.create })) };
         } };
-        this.sessionExercise = { findMany: async ({ where }) => { previousPhases.push(where.phase); return []; } };
+        this.sessionExercise = { findMany: async ({ where }) => { if (where.phase !== undefined) previousPhases.push(where.phase); return []; } };
       }
     } },
   });

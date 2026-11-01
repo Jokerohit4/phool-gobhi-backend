@@ -92,6 +92,22 @@ export const addSetToExercise = async (req, res) => {
   }
 };
 
+export const uploadSessionPhoto = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    if (!Number.isInteger(sessionId)) return res.status(404).json({ error: 'Session not found' });
+    if (!req.file?.buffer?.length) return res.status(400).json({ error: 'photo is required', code: 'PHOTO_REQUIRED' });
+    const { data, reward } = await workoutSessionService.uploadSessionPhotoService(
+      sessionId,
+      req.userId,
+      { buffer: req.file.buffer, mimeType: req.file.mimetype },
+    );
+    res.json({ data: serializeDecimals(data), reward });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
+  }
+};
+
 const WORKOUT_TYPES = ['strength', 'cardio', 'hiit', 'yoga_mobility', 'full_body', 'rest'];
 
 export const finishSession = async (req, res) => {
@@ -108,7 +124,10 @@ export const finishSession = async (req, res) => {
         return res.status(400).json({ error: 'rpe must be an integer between 1 and 10' });
       }
     }
-    const session = await workoutSessionService.finishSessionService(sessionId, req.userId, { type, rpe: parsedRpe });
+    // activeSeconds/pausedSeconds are telemetry: invalid values are ignored by
+    // the service rather than failing the finish.
+    const { activeSeconds, pausedSeconds } = req.body || {};
+    const session = await workoutSessionService.finishSessionService(sessionId, req.userId, { type, rpe: parsedRpe, activeSeconds, pausedSeconds });
     res.json({ data: serializeDecimals(session) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

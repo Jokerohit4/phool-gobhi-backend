@@ -120,7 +120,7 @@ test('controller: default limit 30, response {data, meta}, item shape unchanged'
   assert.equal(res.body.data.length, 30);
   assert.deepEqual(res.body.meta, { nextCursor: res.body.data[29].id, hasMore: true });
   assert.deepEqual(Object.keys(res.body.data[0]).sort(),
-    ['exercises', 'id', 'name', 'startedAt', 'templateId', 'userId']);
+    ['exercises', 'id', 'name', 'photoUrl', 'startedAt', 'templateId', 'userId']);
   assert.equal(res.body.data[0].exercises[0].sets[0].reps, 5);
 
   const res2 = mkRes();

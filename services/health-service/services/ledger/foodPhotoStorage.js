@@ -74,7 +74,7 @@ function extensionFor(mimeType) {
   return EXT_BY_MIME[mimeType] || 'jpg';
 }
 
-export async function savePhoto({ buffer, mimeType, userId }) {
+export async function savePhoto({ buffer, mimeType, userId, subPath = '' }) {
   if (!buffer || !buffer.length) return null;
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     throw Object.assign(new Error('That image type is not accepted'), { status: 400 });
@@ -83,7 +83,10 @@ export async function savePhoto({ buffer, mimeType, userId }) {
     throw Object.assign(new Error('That photo is larger than 8 MB'), { status: 400 });
   }
 
-  const objectName = `food/${userId}/${randomUUID()}.${extensionFor(mimeType)}`;
+  // subPath (e.g. 'workout/') stays under food/{userId}/ on purpose: the
+  // account-erasure prefix sweep (deleteUserPhotos) then covers it with no
+  // second code path to forget.
+  const objectName = `food/${userId}/${subPath}${randomUUID()}.${extensionFor(mimeType)}`;
 
   await getBucket().file(objectName).save(buffer, {
     contentType: mimeType,
@@ -92,6 +95,11 @@ export async function savePhoto({ buffer, mimeType, userId }) {
   });
 
   return objectName;
+}
+
+// Post-workout photo. Same private bucket and erasure sweep as food photos.
+export function saveWorkoutPhoto({ buffer, mimeType, userId }) {
+  return savePhoto({ buffer, mimeType, userId, subPath: 'workout/' });
 }
 
 /**
