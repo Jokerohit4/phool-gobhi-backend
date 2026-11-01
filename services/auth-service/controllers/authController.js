@@ -31,7 +31,11 @@ import {
   validateFeaturePayload,
   diffChangedFlags,
 } from '../config/featureFlagRegistry.js';
-import * as socialConfigService from '../services/socialConfigService.js';
+import { socialFromConfig } from '../services/socialConfigService.js';
+import {
+  appConfigBundleCache, APP_CONFIG_KEY, launchGateCache, LAUNCH_GATE_KEY,
+  evictAppConfigBundle, evictLaunchGate,
+} from '../utils/settingsCaches.js';
 import { bucketFor } from '../services/experimentService.js';
 
 const prisma = new PrismaClient();
@@ -188,6 +192,7 @@ const getOtpConfigAdmin = async (req, res) => {
 const updateOtpConfigAdmin = async (req, res) => {
   try {
     const updated = await updateOtpProvider(req.body?.provider, req.user.id);
+    evictAppConfigBundle();
     res.json({ data: { provider: updated.provider }, updatedAt: updated.updatedAt });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -210,6 +215,7 @@ const getProfileCompletionBonusAdmin = async (req, res) => {
 const updateProfileCompletionBonusAdmin = async (req, res) => {
   try {
     const updated = await updateProfileCompletionBonusAmount(req.body?.amount, req.user.id);
+    evictAppConfigBundle();
     res.json({ data: { amount: updated.amount }, updatedAt: updated.updatedAt });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -367,15 +373,22 @@ const getAppConfig = async (req, res) => {
   try {
     // These independent reads previously took three database round trips on
     // every app launch. Social failure still resolves to the fail-closed default.
-    const [config, otpProvider, bonusAmount, socialConfig] = await Promise.all([
-      loadAppVersionConfig(),
-      loadOtpProvider(),
-      loadProfileCompletionBonusAmount(),
-      socialConfigService.get().catch((err) => {
-        console.error('getAppConfig social error:', err);
-        return { enabled: false };
-      }),
-    ]);
+    // The DB-derived pieces are cached 15s in-process (single-flight, failures
+    // not cached, evicted by every admin write — see utils/settingsCaches.js).
+    // Social is derived from the SAME config row, so appVersionSetting is read
+    // once, not twice. Nothing caller-specific is cached: the app/platform/
+    // version comparison below runs per request.
+    const { config, otpProvider, bonusAmount, social: socialConfig } = await appConfigBundleCache.get(
+      APP_CONFIG_KEY,
+      async () => {
+        const [cfg, otp, bonus] = await Promise.all([
+          loadAppVersionConfig(),
+          loadOtpProvider(),
+          loadProfileCompletionBonusAmount(),
+        ]);
+        return { config: cfg, otpProvider: otp, bonusAmount: bonus, social: socialFromConfig(cfg) };
+      },
+    );
     social = socialConfig;
     entry = config?.[app]?.[platform] || entry;
     maintenance = resolveMaintenance(config);
@@ -499,6 +512,7 @@ const updateAppConfigAdmin = async (req, res) => {
       create: { id: 1, config, updatedBy: req.user.id },
       update: { config, updatedBy: req.user.id },
     });
+    evictAppConfigBundle();
     // Audit only the flags that actually moved. A history row is written for
     // each, in one insert, so "which flag changed at 14:03" is one indexed
     // lookup rather than a scan over every save ever made.
@@ -570,7 +584,7 @@ async function loadLaunchGate() {
 // seconds early is worse here than a transient false "not live yet".
 const getLaunchStatus = async (req, res) => {
   try {
-    const gate = await loadLaunchGate();
+    const gate = await launchGateCache.get(LAUNCH_GATE_KEY, loadLaunchGate);
     if (!gate.enabled) return res.json({ launchAt: null, isLive: true });
     if (!gate.launchAt) return res.json({ launchAt: null, isLive: false });
     const launchAt = gate.launchAt.toISOString();
@@ -609,6 +623,7 @@ const updateLaunchGateAdmin = async (req, res) => {
       create: { id: 1, enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
       update: { enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
     });
+    evictLaunchGate();
     res.json({ data: { enabled: updated.enabled, launchAt: updated.launchAt } });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

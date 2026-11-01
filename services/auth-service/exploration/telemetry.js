@@ -45,6 +45,16 @@ export async function deliverPickupBatch({db,send,limit=25,now=()=>new Date()}) 
   return delivered;
 }
 
+// Only /explore requests enqueue receipt events, so only they need the
+// deliver-before-response drain (a transaction: BEGIN + SELECT FOR UPDATE SKIP
+// LOCKED + COMMIT, ~3 Neon round-trips). Paying that on every other request —
+// /me, /refresh, profile reads — added tens to 100+ ms to each of them for an
+// outbox that is almost always empty; the interval timer below drains the rest.
+// originalUrl, not path: inside a mounted router req.path is mount-relative.
+export function isExploreRequest(req) {
+  return /^\/explore(?:[/?]|$)/.test(req?.originalUrl ?? req?.url ?? '');
+}
+
 export function startPickupDelivery({db,send,intervalMs=15000}) {
   let running=false;
   const tick=async()=>{

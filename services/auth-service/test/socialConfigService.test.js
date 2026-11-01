@@ -37,3 +37,11 @@ test('fails closed: no row, no key, or a read error', async () => {
   assert.deepEqual(await get(), { enabled: false });
   fail = false;
 });
+
+test('socialFromConfig matches get() for the same blob without a DB read', async () => {
+  const { socialFromConfig } = await import('../services/socialConfigService.js');
+  for (const config of [null, {}, { social: { enabled: true } }, { social: { enabled: 'true' } }, { social: {} }]) {
+    row = config === null ? null : { id: 1, config };
+    assert.deepEqual(socialFromConfig(config), await get());
+  }
+});

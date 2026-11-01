@@ -11,11 +11,16 @@ import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
 import deviceRoutes from './routes/devices.js';
 import gymLinkRoutes from './routes/gymLinks.js';
-import { startPickupDelivery, deliverPickupBatch } from './exploration/telemetry.js';
+import { startPickupDelivery, deliverPickupBatch, isExploreRequest } from './exploration/telemetry.js';
 import { deliverReceiptEvent } from './utils/analytics.js';
 
 const app = express();
-app.use(analyticsMiddleware({ beforeDrain: () => deliverPickupBatch({db:prisma,send:deliverReceiptEvent,limit:1}) }));
+app.use(analyticsMiddleware({
+  // Explore requests only — see isExploreRequest for why not every request.
+  beforeDrain: (req) => isExploreRequest(req)
+    ? deliverPickupBatch({db:prisma,send:deliverReceiptEvent,limit:1})
+    : undefined,
+}));
 const prisma = new PrismaClient();
 
 // Middleware

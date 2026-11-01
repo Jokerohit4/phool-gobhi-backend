@@ -13,6 +13,11 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
+/** Pure derivation of the switch from an already-loaded config blob. */
+export function socialFromConfig(config) {
+  return { enabled: config?.social?.enabled === true };
+}
+
 /**
  * The platform-wide social master switch.
  *
