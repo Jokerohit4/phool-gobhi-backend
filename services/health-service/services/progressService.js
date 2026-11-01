@@ -84,31 +84,45 @@ export async function getProgressSummaryService(userId, range) {
 // same personal-records concept as exerciseLibraryService's per-exercise
 // detail stats, just surfaced as a flat list across every exercise trained.
 async function getPersonalRecordsService(userId, limit = 5) {
-  const sets = await prisma.workoutSet.findMany({
-    where: {
-      completed: true,
-      weightKg: { not: null },
-      reps: { not: null },
-      sessionExercise: { session: { userId } },
-    },
-    // Only weight, reps and the exercise name are read below.
-    select: {
-      weightKg: true, reps: true,
-      sessionExercise: { select: { exercise: { select: { name: true } } } },
-    },
-  });
-  const bestByExercise = new Map();
-  for (const s of sets) {
-    const name = s.sessionExercise.exercise.name;
-    const weight = Number(s.weightKg);
-    const existing = bestByExercise.get(name);
-    if (!existing || weight * s.reps > existing.weightKg * existing.reps) {
-      bestByExercise.set(name, { exerciseName: name, weightKg: weight, reps: s.reps });
-    }
-  }
-  return [...bestByExercise.values()]
-    .sort((a, b) => b.weightKg * b.reps - a.weightKg * a.reps)
-    .slice(0, limit);
+  // Done in SQL so only the top `limit` rows leave the database, not every set
+  // the user ever logged. Reproduces the old JS exactly:
+  //  - eligible sets: completed, weight and reps both non-null, user's own;
+  //  - "best" per exercise NAME (not id: two exercises sharing a name merge) is
+  //    the max weight*reps, computed in float8 like JS's Number*Number so ties
+  //    and near-ties compare identically; the old loop only replaced on a strict
+  //    >, so the first set seen wins a tie. findMany had no orderBy, so "first"
+  //    is insertion (id) order -> ORDER BY id;
+  //  - the final list was a stable sort by score desc over Map insertion order,
+  //    i.e. the order each name was first seen -> tie-break on MIN(id) per name.
+  const rows = await prisma.$queryRaw`
+    WITH s AS (
+      SELECT e."name" AS "name", ws."id" AS "id",
+             ws."weightKg"::float8 AS "weightKg", ws."reps" AS "reps",
+             ws."weightKg"::float8 * ws."reps"::float8 AS "score"
+      FROM "health"."WorkoutSet" ws
+      JOIN "health"."SessionExercise" se ON se."id" = ws."sessionExerciseId"
+      JOIN "health"."WorkoutSession" sess ON sess."id" = se."sessionId"
+      JOIN "health"."Exercise" e ON e."id" = se."exerciseId"
+      WHERE ws."completed"
+        AND ws."weightKg" IS NOT NULL
+        AND ws."reps" IS NOT NULL
+        AND sess."userId" = ${userId}
+    ),
+    best AS (
+      SELECT DISTINCT ON ("name") "name", "weightKg", "reps", "score"
+      FROM s
+      ORDER BY "name", "score" DESC, "id" ASC
+    ),
+    firstSeen AS (
+      SELECT "name", MIN("id") AS "firstId" FROM s GROUP BY "name"
+    )
+    SELECT b."name" AS "exerciseName", b."weightKg" AS "weightKg", b."reps" AS "reps"
+    FROM best b
+    JOIN firstSeen f ON f."name" = b."name"
+    ORDER BY b."score" DESC, f."firstId" ASC
+    LIMIT ${limit}
+  `;
+  return rows.map((r) => ({ exerciseName: r.exerciseName, weightKg: Number(r.weightKg), reps: Number(r.reps) }));
 }
 
 // A simple, explicitly non-ML heuristic (see the implementation plan's Open
@@ -148,14 +162,34 @@ const MODE_GROUP_WEIGHTS = {
 // groups ready as eagerly. 1.5x is a judgement call, not a clinical figure.
 const RECOVERY_MODE_WINDOW_MULTIPLIER = 1.5;
 
+// Per muscle group, the most recent startedAt of a counted session that trained
+// it. "Counted" mirrors COUNTED_WORKOUT_WHERE (finished, non-rest, >=1 completed
+// set), so a rest day or an abandoned log doesn't mark a muscle as trained.
+// Deliberately NOT time-bounded: daysSinceTrained is reported for any age.
+// Prisma's NOT { type: 'rest' } compiles to a plain SQL <>, so a null type
+// (never-confirmed draft) is excluded too - the same three-valued logic here.
+// One row per group instead of the whole history.
+function loadLastTrainedByGroup(userId) {
+  return prisma.$queryRaw`
+    SELECT e."muscleGroup"::text AS "muscleGroup", MAX(s."startedAt") AS "lastTrainedAt"
+    FROM "health"."SessionExercise" se
+    JOIN "health"."WorkoutSession" s ON s."id" = se."sessionId"
+    JOIN "health"."Exercise" e ON e."id" = se."exerciseId"
+    WHERE s."userId" = ${userId}
+      AND s."endedAt" IS NOT NULL
+      AND s."type" <> 'rest'::"health"."WorkoutType"
+      AND EXISTS (
+        SELECT 1 FROM "health"."SessionExercise" se2
+        JOIN "health"."WorkoutSet" ws ON ws."sessionExerciseId" = se2."id"
+        WHERE se2."sessionId" = s."id" AND ws."completed"
+      )
+    GROUP BY e."muscleGroup"
+  `;
+}
+
 export async function getMuscleReadinessService(userId) {
-  const [recentSessionExercises, profile, templates] = await Promise.all([
-    prisma.sessionExercise.findMany({
-      // "Last trained" means a counted session (finished, non-rest, >=1 set),
-      // so a rest day or an abandoned log doesn't mark a muscle as trained.
-      where: { session: { userId, ...COUNTED_WORKOUT_WHERE } },
-      include: { exercise: { select: { muscleGroup: true } }, session: { select: { startedAt: true } } },
-    }),
+  const [lastTrainedRows, profile, templates] = await Promise.all([
+    loadLastTrainedByGroup(userId),
     prisma.personalisationProfile.findUnique({ where: { userId } }),
     // Independent of readiness (only the scoring below needs it): start it now.
     loadSuggestionTemplates(userId),
@@ -177,13 +211,7 @@ export async function getMuscleReadinessService(userId) {
   }
 
   const lastTrainedAt = {};
-  for (const se of recentSessionExercises) {
-    const group = se.exercise.muscleGroup;
-    const trainedAt = se.session.startedAt;
-    if (!lastTrainedAt[group] || trainedAt > lastTrainedAt[group]) {
-      lastTrainedAt[group] = trainedAt;
-    }
-  }
+  for (const row of lastTrainedRows) lastTrainedAt[row.muscleGroup] = row.lastTrainedAt;
 
   const now = Date.now();
   const readiness = Object.keys(RECOVERY_WINDOW_DAYS).map((muscleGroup) => {

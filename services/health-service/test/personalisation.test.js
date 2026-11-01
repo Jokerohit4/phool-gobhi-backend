@@ -23,7 +23,16 @@ test('setup: mock prisma once, import the services once', async (t) => {
     exports: {
       PrismaClient: class {
         constructor() {
-          this.sessionExercise = { findMany: async () => sessionExercises };
+          // Last-trained aggregate (one row per muscle group, MAX(startedAt)),
+          // derived from the fixture rows the way the SQL would.
+          this.$queryRaw = async () => {
+            const max = new Map();
+            for (const se of sessionExercises) {
+              const g = se.exercise.muscleGroup;
+              if (!max.has(g) || se.session.startedAt > max.get(g)) max.set(g, se.session.startedAt);
+            }
+            return [...max].map(([muscleGroup, lastTrainedAt]) => ({ muscleGroup, lastTrainedAt }));
+          };
           this.workoutTemplate = { findMany: async () => templates };
           this.workoutSession = { findMany: async () => [] };
           this.workoutSet = { findMany: async () => [] };
