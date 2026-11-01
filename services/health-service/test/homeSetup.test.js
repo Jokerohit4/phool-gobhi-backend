@@ -68,3 +68,27 @@ test('coach line: fixed phrases, null until answered', () => {
   // Skipped the sheet: answered, but nothing to say.
   assert.equal(summariseHomeSetup(answered([])), null);
 });
+
+import { suggestHomeEquipment, HOME_EQUIPMENT } from '../services/homeSetup.js';
+
+test('suggestHomeEquipment only suggests real home-setup values, ordered and capped', () => {
+  const out = suggestHomeEquipment(['muscle_gain', 'weight_loss', 'sports_training']);
+  assert.deepEqual(out, ['dumbbells', 'pull_up_bar', 'resistance_bands']);
+  for (const goal of ['muscle_gain', 'weight_loss', 'general_fitness', 'sports_training', 'rehabilitation', 'flexibility_yoga']) {
+    for (const item of suggestHomeEquipment([goal])) assert.ok(HOME_EQUIPMENT.includes(item), item);
+  }
+  assert.deepEqual(suggestHomeEquipment(['flexibility_yoga']), []);
+  assert.deepEqual(suggestHomeEquipment(undefined), []);
+  assert.deepEqual(suggestHomeEquipment(['nope']), []);
+});
+
+test('suggestHomeEquipment drops what is owned; a full home gym needs none', () => {
+  assert.deepEqual(suggestHomeEquipment(['muscle_gain'], ['dumbbells']), ['pull_up_bar', 'resistance_bands']);
+  assert.deepEqual(suggestHomeEquipment(['muscle_gain'], ['full_home_gym']), []);
+  assert.deepEqual(suggestHomeEquipment(['muscle_gain'], ['none']), ['dumbbells', 'pull_up_bar', 'resistance_bands']);
+});
+
+test('a suggestion never changes fit: unanswered setup stays unknown', () => {
+  const template = { exercises: [{ exercise: { equipment: 'dumbbell' } }] };
+  assert.equal(equipmentFit(template, { homeSetupAt: null, homeEquipment: [] }), null);
+});

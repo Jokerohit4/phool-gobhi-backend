@@ -126,3 +126,41 @@ export function summariseHomeSetup(profile) {
   if (!bits.length) return null;
   return `Home setup: ${bits.join('; ')}. Only suggest exercises that fit this.`;
 }
+
+// ---- Suggested kit ----------------------------------------------------------
+//
+// What the coach would suggest someone with these goals picks up for home
+// training: a few cheap, widely available items from HOME_EQUIPMENT, best
+// first. This replaces the old auth-service `recommendedEquipment` integer-id
+// array, which nothing ever wrote and which had no catalog.
+//
+// It is a SUGGESTION, never ownership. equipmentFit/rankByFit read
+// profile.homeEquipment only, so a suggestion can't make a routine "fit" or
+// re-rank anything — only what the person says they own does that. The client
+// shows it as a hint on the home-setup sheet.
+//
+// Keys are onboarding fitnessGoals codes (auth-service enum).
+const GOAL_SUGGESTED_KIT = {
+  muscle_gain: ['dumbbells', 'pull_up_bar', 'resistance_bands'],
+  weight_loss: ['kettlebell', 'resistance_bands', 'dumbbells'],
+  general_fitness: ['dumbbells', 'resistance_bands'],
+  sports_training: ['kettlebell', 'resistance_bands', 'pull_up_bar'],
+  rehabilitation: ['resistance_bands'],
+  flexibility_yoga: [],
+};
+const MAX_SUGGESTED = 3;
+
+/// Ordered, de-duplicated, capped at 3, and minus anything already owned. A
+/// full home gym (or an explicit "none" is NOT treated as owning things: "none"
+/// is exactly who the suggestion is for) needs no suggestion.
+export function suggestHomeEquipment(fitnessGoals, ownedEquipment = []) {
+  const owned = new Set(Array.isArray(ownedEquipment) ? ownedEquipment : []);
+  if (owned.has('full_home_gym')) return [];
+  const out = [];
+  for (const goal of Array.isArray(fitnessGoals) ? fitnessGoals : []) {
+    for (const item of GOAL_SUGGESTED_KIT[goal] ?? []) {
+      if (!owned.has(item) && !out.includes(item)) out.push(item);
+    }
+  }
+  return out.slice(0, MAX_SUGGESTED);
+}
