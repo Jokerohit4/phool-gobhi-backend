@@ -2,6 +2,7 @@ import {
   createWalletService,
   getWalletService,
   getWalletTransactionsService,
+  getWalletTransactionsPageService,
   creditWalletService,
   debitWalletService,
   getPartnerBalancesService,
@@ -43,6 +44,26 @@ import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
+import { parseLimit, parseCursor } from '../utils/pagination.js';
+import { runReconcileThrottled, clearReconcileThrottle } from '../utils/reconcileThrottle.js';
+
+const TRANSACTIONS_DEFAULT_LIMIT = 50;
+const TRANSACTIONS_MAX_LIMIT = 100;
+
+// Lazy Razorpay top-up reconcile for the wallet read paths, throttled to once
+// per user per 30s (cleared on order create / verify / webhook so a just-paid
+// user is never delayed). Best-effort: never throws, and a reconcile that
+// throws is not recorded as done. Resolves to the reconcile summary, or null
+// when skipped/failed.
+async function lazyReconcile(userId) {
+  try {
+    const out = await runReconcileThrottled(userId, () => reconcilePendingRazorpayOrdersService({ userId }));
+    return out.skipped ? null : out.result;
+  } catch (err) {
+    console.error('Lazy wallet reconcile error:', err.message);
+    return null;
+  }
+}
 
 // Buffer-length mismatch makes crypto.timingSafeEqual throw rather than
 // return false, so a shorter/longer signature must be treated as "not
@@ -70,16 +91,24 @@ export const getMyWallet = async (req, res) => {
     // is the exact moment a paid-but-unsettled top-up should land, so settle
     // any stale PENDING orders first. Best-effort and never allowed to break
     // the wallet read: a DB or Razorpay hiccup here must not 500 the balance.
-    try {
-      await reconcilePendingRazorpayOrdersService({ userId: req.userId });
-    } catch (err) {
-      console.error('Lazy wallet reconcile error:', err.message);
-    }
-    let wallet;
-    try {
+    // The wallet read and the reconcile run together; the wallet is re-read
+    // only if the reconcile actually credited something.
+    const readWallet = async () => {
+      try {
+        return await getWalletService(req.userId);
+      } catch (_) {
+        try {
+          return await createWalletService(req.userId, req.userRole || 'customer');
+        } catch (createErr) {
+          // Lost a create race with the reconcile's credit path — it exists now.
+          return await getWalletService(req.userId).catch(() => { throw createErr; });
+        }
+      }
+    };
+    const [initial, reconciled] = await Promise.all([readWallet(), lazyReconcile(req.userId)]);
+    let wallet = initial;
+    if (reconciled && reconciled.credited > 0) {
       wallet = await getWalletService(req.userId);
-    } catch (_) {
-      wallet = await createWalletService(req.userId, req.userRole || 'customer');
     }
     res.json({ data: wallet });
   } catch (err) {
@@ -106,13 +135,11 @@ export const getWallet = async (req, res) => {
 
 export const getMyWalletTransactions = async (req, res) => {
   try {
-    try {
-      await reconcilePendingRazorpayOrdersService({ userId: req.userId });
-    } catch (err) {
-      console.error('Lazy wallet reconcile error:', err.message);
-    }
-    const transactions = await getWalletTransactionsService(req.userId);
-    res.json({ data: transactions });
+    await lazyReconcile(req.userId);
+    const limit = parseLimit(req.query?.limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await getWalletTransactionsPageService(req.userId, { limit, cursor });
+    res.json({ data: items, meta });
   } catch (err) {
     res.status(404).json({ error: err.message });
   }
@@ -122,8 +149,10 @@ export const getWalletTransactions = async (req, res) => {
   try {
     const { userId } = req.params;
     if (parseInt(userId) !== req.userId) return res.status(403).json({ error: 'Forbidden' });
-    const transactions = await getWalletTransactionsService(Number(userId));
-    res.json({ data: transactions });
+    const limit = parseLimit(req.query?.limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await getWalletTransactionsPageService(Number(userId), { limit, cursor });
+    res.json({ data: items, meta });
   } catch (err) {
     res.status(404).json({ error: err.message });
   }
@@ -431,6 +460,7 @@ export const createTopUpOrder = async (req, res) => {
 
     // Store order in DB
     await createRazorpayOrderService(userId, order.id, amount);
+    clearReconcileThrottle(userId);
 
     track('wallet_topup_order_created', userId, { amount, order_id: order.id });
 
@@ -484,6 +514,7 @@ export const verifyAndCreditWallet = async (req, res) => {
     if (order.userId !== userId) {
       return res.status(403).json({ error: 'Order does not belong to this account' });
     }
+    clearReconcileThrottle(userId);
 
     // Captured before claiming, so a capture that fails leaves the order
     // PENDING for the webhook or the reconciler rather than stuck PROCESSING.
@@ -519,6 +550,7 @@ export const verifyAndCreditWallet = async (req, res) => {
 
     // Update order status
     await updateRazorpayOrderStatusService(orderId, 'SUCCESS', razorpayPaymentId);
+    clearReconcileThrottle(userId);
 
     track('wallet_topup_succeeded', userId, { amount: order.amount, order_id: orderId });
 
@@ -749,6 +781,7 @@ export const handleRazorpayWebhook = async (req, res) => {
     if (event === 'payment.authorized' || event === 'payment.captured') {
       const { id: paymentId, order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
+      if (order) clearReconcileThrottle(order.userId);
 
       // Razorpay orders are only ever created for wallet top-ups now —
       // subscriptions are paid out of wallet balance (see
@@ -768,6 +801,7 @@ export const handleRazorpayWebhook = async (req, res) => {
           // credit is still applied exactly once.
           await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`, `razorpay-topup:${orderId}`);
           await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+          clearReconcileThrottle(order.userId);
           track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
         }
       }

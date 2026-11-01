@@ -49,6 +49,7 @@ test('setup: mock dependencies and import webhook handler', async (t) => {
     createWalletService: noOp,
     getWalletService: noOp,
     getWalletTransactionsService: noOp,
+    getWalletTransactionsPageService: noOp,
     creditWalletService: (...a) => mockCredit(...a),
     debitWalletService: noOp,
     getPartnerBalancesService: noOp,

@@ -5,6 +5,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { DEFAULT_WALLET_TOPUP_CONFIG, HARD_MAX_TOPUP_AMOUNT } from '../utils/walletConstants.js';
+import { pageArgs, finishPage } from '../utils/pagination.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
@@ -309,6 +310,22 @@ export async function getWalletService(userId) {
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
   if (!wallet) throw new Error('Wallet not found');
   return serializeWallet(wallet);
+}
+
+// Paginated (cursor) variant used by GET /wallet/transactions. Same order as
+// the unpaginated function (newest first) plus id as a tiebreaker so rows with
+// identical createdAt never duplicate/drop across a page boundary. Backed by
+// @@index([walletId, createdAt]). Returns { items, meta } — see utils/pagination.js.
+export async function getWalletTransactionsPageService(userId, { limit, cursor } = {}) {
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (!wallet) throw new Error('Wallet not found');
+  const rows = await prisma.walletTransaction.findMany({
+    where: { walletId: wallet.id },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    ...pageArgs({ limit, cursor }),
+  });
+  const { items, meta } = finishPage(rows, limit);
+  return { items: items.map(serializeTransaction), meta };
 }
 
 export async function getWalletTransactionsService(userId) {
