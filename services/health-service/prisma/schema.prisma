@@ -378,6 +378,8 @@ model WorkoutSession {
   @@index([userId, startedAt])
   @@index([userId, bookingId])
   @@index([userId, localDate])
+  // "Last done" per template (GET /templates): groupBy templateId, max(startedAt).
+  @@index([userId, templateId, startedAt])
   @@schema("health")
 }
 

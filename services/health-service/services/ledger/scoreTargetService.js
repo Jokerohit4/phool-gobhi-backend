@@ -259,8 +259,10 @@ export async function getScoreTargetState(prisma, { userId, today }) {
     };
   }
 
-  const current = await currentScore(prisma, { userId, today });
-  const baseline = await baselineScore(prisma, { userId, from: goal.scoreTargetFrom });
+  const [current, baseline] = await Promise.all([
+    currentScore(prisma, { userId, today, goal }),
+    baselineScore(prisma, { userId, from: goal.scoreTargetFrom }),
+  ]);
   return buildState({ goal, today, current, baseline });
 }
 
@@ -280,8 +282,9 @@ export async function getScoreTargetState(prisma, { userId, today }) {
  * user earned by missing everything, and treating it as missing data would
  * quietly hide a red start.
  */
-async function currentScore(prisma, { userId, today }) {
-  const preview = await previewDay(prisma, { userId, localDate: today, today });
+async function currentScore(prisma, { userId, today, goal }) {
+  // The goal was just read by the caller; hand it down so previewDay does not read it again.
+  const preview = await previewDay(prisma, { userId, localDate: today, today, goal });
   if (preview && Number.isFinite(Number(preview.close))) return Number(preview.close);
 
   const last = await prisma.scoreDaySnapshot.findFirst({

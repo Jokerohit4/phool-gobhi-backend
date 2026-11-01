@@ -33,7 +33,9 @@ import { currentNutritionTarget } from './currentTarget.js';
 import {
   blendedScoreCacheKey,
   invalidateBlendedScore,
+  blendedMemo,
 } from './blendedScoreCache.js';
+import { latestBiometricRows } from '../biometricLatest.js';
 
 const CACHE_TTL = 3600; // 1 hour
 
@@ -72,15 +74,19 @@ function deriveScoringFlags(scoringWindow, localDate) {
  * Kept separate from `closeDay` so the app can show today's running score
  * without a snapshot row existing for today. Only a closed day gets frozen.
  */
-export async function previewDay(prisma, { userId, localDate, today }) {
-  const scoringWindow = await getScoringWindow(prisma, userId);
-  const onLayerKeys = await getOnLayerKeys(prisma, userId);
-  const resolved = await resolveDay(prisma, { userId, localDate, onLayerKeys });
-  const previous = await previousClose(prisma, { userId, localDate });
-  const goal = await prisma.healthGoal.findUnique({
-    where: { userId },
-    select: { pausedFrom: true, pausedUntil: true },
-  });
+export async function previewDay(prisma, { userId, localDate, today, goal: knownGoal }) {
+  // Only resolveDay depends on another read (the on-layer keys); everything else
+  // is independent, so they all run together. `knownGoal` lets a caller that has
+  // already read the HealthGoal (the score target card) skip the second read.
+  const [scoringWindow, resolved, previous, goal] = await Promise.all([
+    getScoringWindow(prisma, userId),
+    getOnLayerKeys(prisma, userId).then((onLayerKeys) => resolveDay(prisma, { userId, localDate, onLayerKeys })),
+    previousClose(prisma, { userId, localDate }),
+    knownGoal !== undefined ? knownGoal : prisma.healthGoal.findUnique({
+      where: { userId },
+      select: { pausedFrom: true, pausedUntil: true },
+    }),
+  ]);
   const closed = localDate < today;
   const paused = isPausedOn(goal, localDate);
   const scored = scoringWindow !== null && !paused;
@@ -257,15 +263,22 @@ export async function closeDay(prisma, { userId, localDate, today }) {
 }
 
 export async function getBlendedScore(prisma, { userId }) {
+  // In-process single-flight + 60s memo (evicted by invalidateBlendedScore).
+  return blendedMemo.get(String(userId), () => computeBlendedScore(prisma, { userId }));
+}
+
+async function computeBlendedScore(prisma, { userId }) {
   const cacheKey = blendedScoreCacheKey(userId);
   const cached = await redis.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
   // Parallelize the behavioral baseline and biological state fetches
   const [latestSnapshot, bioEntries, averages] = await Promise.all([
+    // Only `close` is read below; skip dragging the `breakdown` Json.
     prisma.scoreDaySnapshot.findFirst({
       where: { userId },
       orderBy: { localDate: 'desc' },
+      select: { close: true },
     }),
     // No `metric` filter on purpose. This used to pass
     // Object.keys(BIOLOGICAL_TARGETS) — the blood-panel markers hba1c, ldl,
@@ -286,15 +299,11 @@ export async function getBlendedScore(prisma, { userId }) {
     // either — a row here is either typed by the user, or written by
     // verifyExtractionService, which only writes once the user has confirmed
     // the value. So every row is confirmed by construction.
-    prisma.biometricEntry.findMany({
-      where: {
-        userId,
-      },
-      // By the day the value belongs to, not when it was typed or verified:
-      // confirming a 2024 report after a 2026 one must not make 2024 "latest".
-      // localDate is 'YYYY-MM-DD', so string order is date order.
-      orderBy: [{ localDate: 'desc' }, { createdAt: 'desc' }],
-    }),
+    // Newest row per metric only (grouped index pass + indexed fetch), not the
+    // whole history. "Newest" is by the day the value belongs to, not when it was
+    // typed or verified: confirming a 2024 report after a 2026 one must not make
+    // 2024 "latest". localDate is 'YYYY-MM-DD', so string order is date order.
+    latestBiometricRows(prisma, userId, { select: { value: true } }),
     behavioralAverageStats(prisma, { userIds: [userId] }),
   ]);
 
@@ -718,6 +727,7 @@ export async function previousClose(prisma, { userId, localDate }) {
   const prev = await prisma.scoreDaySnapshot.findFirst({
     where: { userId, localDate: { lt: localDate } },
     orderBy: { localDate: 'desc' },
+    select: { close: true }, // every caller uses only the number
   });
   // Null for the first day ever. The score starts at 0, deliberately, rather
   // than at a baseline invented to make the first chart look encouraging.

@@ -3,7 +3,7 @@ import { isoDayIST, weekStartOf, weekDays, shiftDay, COUNTED_WORKOUT_WHERE } fro
 import { isIsoDay } from './ledger/isoDay.js';
 import { sumFoodLogs } from './ledger/nutritionService.js';
 import { nutritionTargetFromHistory } from './ledger/currentTarget.js';
-import { activeDoctorPlan, applyDoctorTargets } from './ledger/doctorPlan.js';
+import { activeDoctorPlans, applyDoctorTargets } from './ledger/doctorPlan.js';
 import { resolveDay } from './plan/rowProgress.js';
 import { getLayers, getOnLayerKeys } from './plan/layerState.js';
 import { hasCoachScopeService } from './coachConsentService.js';
@@ -11,6 +11,34 @@ import { resolveGoalService } from './goalService.js';
 import { getShowedUpDays } from './journey/showedUpDays.js';
 import { foodStatus, waterMet, summarizeDays } from './weekSummary/definitions.js';
 import redis from '../utils/redisClient.js';
+import { createTtlCache } from '../utils/ttlCache.js';
+import { onJourneyInvalidate } from '../utils/journeyCacheBus.js';
+
+// In-process memo for GET /week-summary (the Redis layer below is a no-op where
+// REDIS_URL is unset). The key carries the access signature (today + layers +
+// on-layer keys), so a consent change or layer unlock never reads an old entry.
+// Week data is written from too many places to evict from each one (food, water,
+// plan ticks, sessions, day close), so the TTL is deliberately short: 15s. Only
+// workout finish / consent erase / journey writes (journeyCacheBus) evict early.
+export const WEEK_MEMO_TTL_MS = 15_000;
+const weekMemo = createTtlCache({ ttlMs: WEEK_MEMO_TTL_MS, maxEntries: 2000 });
+const weekMemoKeys = new Map(); // userId -> Set(memo key), so a user's weeks can all be evicted
+onJourneyInvalidate((userId) => {
+  const keys = weekMemoKeys.get(String(userId));
+  if (!keys) return;
+  for (const k of keys) weekMemo.invalidate(k);
+  weekMemoKeys.delete(String(userId));
+});
+function trackMemoKey(userId, key) {
+  const id = String(userId);
+  if (!weekMemoKeys.has(id)) {
+    if (weekMemoKeys.size >= 2000) weekMemoKeys.delete(weekMemoKeys.keys().next().value);
+    weekMemoKeys.set(id, new Set());
+  }
+  const set = weekMemoKeys.get(id);
+  if (set.size >= 50) set.clear(); // bounded; worst case a stale entry lives out its 15s TTL
+  set.add(key);
+}
 
 export function resolveWeek(week, today = isoDayIST()) {
   const current = weekStartOf(today);
@@ -54,8 +82,16 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
   const access = await (deps.access ?? weekSummaryAccess)(prisma, userId);
   const { layers, onLayerKeys } = access;
   const signature = JSON.stringify([today, layers, onLayerKeys]);
-  const cache = deps.cache ?? redis;
   const key = `health:week:${userId}:${weekStart}`;
+  const memoKey = `${key}:${signature}`;
+  trackMemoKey(userId, memoKey);
+  return weekMemo.get(memoKey, () => computeWeekSummary(prisma, {
+    userId, today, weekStart, dates, weekEnd, isCurrentWeek, layers, onLayerKeys, signature, key,
+  }, deps));
+}
+
+async function computeWeekSummary(prisma, { userId, today, weekStart, dates, weekEnd, isCurrentWeek, layers, onLayerKeys, signature, key }, deps) {
+  const cache = deps.cache ?? redis;
   // Re-check consent/layers before every cache hit, including consent withdrawal.
   try {
     const cached = JSON.parse(await cache.get(key));
@@ -63,20 +99,25 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
   } catch { /* cache failure must not fail a read */ }
 
   const range = { userId, localDate: { in: dates.filter(d => d <= today) } };
-  const [foodLogs, waterRows, snapshots, workouts, history, goal, healthGoal, showedUp] = await Promise.all([
+  const needsTargets = layers.some(l => l === 'food' || l === 'water');
+  const elapsed = dates.filter(d => d <= today);
+  const [foodLogs, waterRows, snapshots, workouts, history, goal, healthGoal, showedUp, doctorPlans, liveToday] = await Promise.all([
     layers.includes('food') ? prisma.foodLog.findMany({ where: range, orderBy: [{ slot: 'asc' }, { createdAt: 'asc' }] }) : [],
     layers.includes('water') ? prisma.waterLog.groupBy({ by: ['localDate'], where: range, _sum: { ml: true } }) : [],
-    layers.includes('plan') ? prisma.scoreDaySnapshot.findMany({ where: range }) : [],
+    layers.includes('plan') ? prisma.scoreDaySnapshot.findMany({ where: range, select: { localDate: true, paused: true, planSummary: true } }) : [],
     layers.includes('workouts') ? prisma.workoutSession.findMany({ where: { ...range, ...COUNTED_WORKOUT_WHERE }, select: { localDate: true } }) : [],
     layers.some(l => l === 'food' || l === 'water') ? prisma.nutritionTarget.findMany({ where: { userId }, orderBy: { effectiveFrom: 'asc' } }) : [],
     layers.includes('workouts') ? (deps.goal ?? (id => resolveGoalService(id, { persist: false })))(userId) : null,
     layers.length ? prisma.healthGoal.findUnique({ where: { userId } }) : null,
     layers.length ? (deps.showedUp ?? ((id, from, to) => getShowedUpDays(id, from, { to, limit: 7 })))(userId, weekStart, weekEnd) : [],
+    // The doctor override that applied on each day, as the score saw it: one
+    // consent read + one document read for the whole week, not one pair per day.
+    needsTargets ? loadDoctorPlans(prisma, userId, elapsed, deps) : new Map(),
+    // Today's live plan resolves alongside the rest rather than after it.
+    layers.includes('plan') && dates.includes(today)
+      ? (deps.resolveDay ?? resolveDay)(prisma, { userId, localDate: today, onLayerKeys })
+      : null,
   ]);
-  // The doctor override that applied on each day, as the score saw it.
-  const needsTargets = layers.some(l => l === 'food' || l === 'water');
-  const doctorPlans = new Map(needsTargets ? await Promise.all(dates.filter(d => d <= today)
-    .map(async d => [d, await (deps.doctorPlan ?? activeDoctorPlan)(prisma, userId, d)])) : []);
   const snapshotByDay = new Map(snapshots.map(s => [s.localDate, s]));
   const waterByDay = new Map(waterRows.map(r => [r.localDate, Number(r._sum.ml) || 0]));
   const showedUpDays = new Set(showedUp);
@@ -95,7 +136,7 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
         const summary = snapshot?.planSummary;
         day.plan = { done: summary?.done ?? null, total: summary?.total ?? null, targetHit: summary?.targetHit ?? null, source: 'snapshot' };
       } else {
-        const live = await (deps.resolveDay ?? resolveDay)(prisma, { userId, localDate, onLayerKeys });
+        const live = liveToday;
         day.plan = { ...live.counts, targetHit: live.earned >= live.target, source: 'live' };
       }
     }
@@ -128,4 +169,13 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
   };
   try { await cache.set(key, JSON.stringify({ signature, data }), 'EX', isCurrentWeek ? 60 : 600); } catch { /* best effort */ }
   return data;
+}
+
+// An injected per-day resolver (tests) keeps the per-day calls; production uses
+// the batched loader, which is provably the same answer (see activeDoctorPlans).
+async function loadDoctorPlans(prisma, userId, days, deps) {
+  if (deps.doctorPlan) {
+    return new Map(await Promise.all(days.map(async d => [d, await deps.doctorPlan(prisma, userId, d)])));
+  }
+  return activeDoctorPlans(prisma, userId, days);
 }

@@ -1,4 +1,6 @@
 import { buildRangeSeriesService } from './exportService.js';
+import { createTtlCache } from '../utils/ttlCache.js';
+import { onJourneyInvalidate } from '../utils/journeyCacheBus.js';
 import {
   istDateString, dayString, dayToDate, addDays, startOfIsoWeek, countsAsSession,
 } from '../utils/sessionDay.js';
@@ -21,6 +23,15 @@ import {
 // speed up a query that isn't slow. The response shape is exactly what a
 // materialised table would serve, so swapping the source later changes this
 // file and nothing else.
+// The finished-session series is the same 84-day window for every range (the
+// window is max(range, heatmap)), so one per-user entry serves all ranges. 60s TTL;
+// a workout finish emits journeyCacheBus and evicts at once. Edits to an
+// already-finished session (set weight changes, deletes) are not evicted and show
+// up within the TTL.
+export const STATS_CACHE_TTL_MS = 60_000;
+const seriesCache = createTtlCache({ ttlMs: STATS_CACHE_TTL_MS, maxEntries: 2000 });
+onJourneyInvalidate((userId) => seriesCache.invalidate(String(userId)));
+
 export const RANGES = { '7d': 7, '30d': 30, '12w': 84 };
 export const DEFAULT_RANGE = '30d';
 
@@ -59,9 +70,19 @@ export async function getStatsService(userId, requestedRange) {
   const windowStart = addDays(today, -(windowDays - 1));
   const rangeStart = addDays(today, -(rangeDays - 1));
 
-  const { sessions } = await buildRangeSeriesService(userId, {
-    from: dayString(windowStart),
-  });
+  const from = dayString(windowStart);
+  const key = String(userId);
+  const load = async () => {
+    // slim: /stats never reads biometrics or exercise names.
+    const series = await buildRangeSeriesService(userId, { from }, { slim: true });
+    return { from, sessions: series.sessions };
+  };
+  let entry = await seriesCache.get(key, load);
+  if (entry.from !== from) { // IST day rolled over since it was cached
+    seriesCache.invalidate(key);
+    entry = await seriesCache.get(key, load);
+  }
+  const { sessions } = entry;
 
   // A session with no localDate predates that column; fall back to the IST
   // day its startedAt landed on so old history still appears rather than

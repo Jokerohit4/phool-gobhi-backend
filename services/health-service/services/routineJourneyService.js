@@ -3,6 +3,19 @@ import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { isQualifyingSession } from './journey/showedUpDays.js';
 import { routineRewardPolicy, istDay } from './routineRewardPolicy.js';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
+import { createTtlCache } from '../utils/ttlCache.js';
+import { onJourneyInvalidate } from '../utils/journeyCacheBus.js';
+
+// The "did this user already finish a qualifying workout?" repair read loads up
+// to 100 sessions with nested sets and ran on every GET /habits/today until the
+// state flag was set. Its only output is a boolean, so that is what is cached
+// (per user, 5 min). The normal path (recordRoutineWorkout at finish) sets the
+// flag directly; this is the self-heal for a crash between the write and the
+// flag, so a few minutes of delay costs nothing. A workout finish emits
+// journeyCacheBus, which evicts the entry immediately.
+export const WORKOUT_REPAIR_TTL_MS = 5 * 60_000;
+const workoutRepairCache = createTtlCache({ ttlMs: WORKOUT_REPAIR_TTL_MS, maxEntries: 5000 });
+onJourneyInvalidate((userId) => workoutRepairCache.invalidate(String(userId)));
 
 const AUTH = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const CHALLENGE = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
@@ -27,23 +40,37 @@ export async function routineSnapshot(prisma, userId) {
   if (!state) return null;
   // Recover saved outcomes if a process died between the activity write and
   // its progress update. Also restores progress on another device.
-  const water = !state.waterLoggedAt ? await prisma.waterLog.findFirst({ where: { userId }, orderBy: { id: 'asc' } }) : null;
-  const sessions = !state.workoutCompletedAt ? await prisma.workoutSession.findMany({
-    where: { userId, endedAt: { not: null }, type: { not: null, notIn: ['rest'] } },
-    orderBy: { endedAt: 'desc' }, take: 100,
-    include: { exercises: { include: { sets: true } } },
-  }) : [];
-  if (water || sessions.some(isQualifyingSession)) {
+  // All four reads are independent: run them together.
+  const [water, hasQualifying, rewardsEnabled, pendingClaims] = await Promise.all([
+    !state.waterLoggedAt ? prisma.waterLog.findFirst({ where: { userId }, orderBy: { id: 'asc' } }) : null,
+    !state.workoutCompletedAt
+      ? workoutRepairCache.get(String(userId), async () => {
+        const sessions = await prisma.workoutSession.findMany({
+          where: { userId, endedAt: { not: null }, type: { not: null, notIn: ['rest'] } },
+          orderBy: { endedAt: 'desc' }, take: 100,
+          // Only what isQualifyingSession reads; all sets are kept with their completed flag.
+          select: {
+            type: true, endedAt: true, startedAt: true,
+            exercises: { select: { sets: { select: { completed: true } } } },
+          },
+        });
+        return sessions.some(isQualifyingSession);
+      })
+      : false,
+    isFeatureEnabled('streaksCoins'),
+    prisma.routineRewardClaim.count({ where: { userId, paidAt: null } }),
+  ]);
+  if (water || hasQualifying) {
     state = await prisma.routineJourneyState.update({ where: { userId }, data: {
       ...(water && !state.waterLoggedAt ? { waterLoggedAt: water.createdAt } : {}),
-      ...(sessions.some(isQualifyingSession) && !state.workoutCompletedAt ? { workoutCompletedAt: new Date() } : {}),
+      ...(hasQualifying && !state.workoutCompletedAt ? { workoutCompletedAt: new Date() } : {}),
     } });
   }
   return {
     waterLogged: !!state.waterLoggedAt,
     workoutCompleted: !!state.workoutCompletedAt,
-    rewardsEnabled: await isFeatureEnabled('streaksCoins'),
-    rewardsPending: await prisma.routineRewardClaim.count({ where: { userId, paidAt: null } }) > 0,
+    rewardsEnabled,
+    rewardsPending: pendingClaims > 0,
     policy: routineRewardPolicy(state.accountCreatedAt),
   };
 }

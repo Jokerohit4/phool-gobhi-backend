@@ -442,8 +442,10 @@ export const repeatFoodLogs = handle(async (req) => {
 
 export const getDayTotals = handle(async (req) => {
   const { localDate } = req.params;
-  const day = await nutritionService.getDayTotals(prisma, req.userId, localDate);
-  const target = await currentNutritionTarget(prisma, req.userId, localDate);
+  const [day, target] = await Promise.all([
+    nutritionService.getDayTotals(prisma, req.userId, localDate),
+    currentNutritionTarget(prisma, req.userId, localDate),
+  ]);
   const targets = target
     ? {
         kcal: Number(target.kcal),

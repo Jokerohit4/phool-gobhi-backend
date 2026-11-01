@@ -14,9 +14,11 @@ mock.module('@prisma/client', {
       exercise = {
         findMany: async ({ where }) => {
           requested = where;
+          // Either the cached global catalogue read or the caller's own custom rows.
+          if (where.createdByUserId === null) return rows.filter((e) => e.createdByUserId == null);
           const [scope, muscle, equipment] = where.AND;
-          const userId = scope.OR[1].createdByUserId;
-          return rows.filter((e) => (e.createdByUserId == null || e.createdByUserId === userId)
+          const userId = scope.createdByUserId;
+          return rows.filter((e) => e.createdByUserId === userId
             && (!muscle.muscleGroup || e.muscleGroup === muscle.muscleGroup)
             && (!equipment.equipment || e.equipment === equipment.equipment));
         },
@@ -28,7 +30,7 @@ const { searchExercisesService } = await import('../services/exerciseLibraryServ
 
 test('aliases and typos retain user ownership and equipment/muscle filters', async () => {
   const matches = await searchExercisesService(7, { q: 'dumbell bench', muscleGroup: 'chest', equipment: 'dumbbell' });
-  assert.deepEqual(requested.AND[0], { OR: [{ createdByUserId: null }, { createdByUserId: 7 }] });
+  assert.deepEqual(requested.AND[0], { createdByUserId: 7 }, 'only the caller own custom rows are queried per request');
   assert.deepEqual(matches.map((e) => e.id), [1, 2]);
 });
 

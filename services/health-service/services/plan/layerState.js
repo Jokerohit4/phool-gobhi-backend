@@ -33,10 +33,20 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
     return true;
   }
 
-  const layers = [];
-  for (const cfg of JOURNEY.layers) {
+  // Layers used to be evaluated strictly one after another, each awaiting its own
+  // consent / target query. They are independent, so evaluate them concurrently
+  // (Promise.all keeps config order), and share one lookup per consent scope /
+  // target for the duration of this call — several layers name the same scope.
+  const memo = new Map();
+  const once = (key, fn) => {
+    if (!memo.has(key)) memo.set(key, fn());
+    return memo.get(key);
+  };
+
+  // Returns the layer entry, or null when the layer's flag is off.
+  async function evaluateLayer(cfg) {
     const enabled = await flagsEnabled(cfg);
-    if (!enabled) continue;
+    if (!enabled) return null;
 
     const jLayer = journey?.layers?.find(l => l.layer === cfg.layer);
     const unlocked = !!jLayer?.unlocked;
@@ -48,15 +58,14 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
                  : unlock.type === 'steady_weeks' ? journey?.steadyWeeks ?? 0
                  : unlock.type === 'elapsed_days' ? journey?.elapsedDays ?? 0
                  : 0;
-      layers.push({
+      return {
         layer: cfg.layer,
         key: cfg.key,
         state: 'locked',
         unlockedAt: unlockedAt ? unlockedAt.toISOString() : null,
         isNew: false,
         unlock: { type: unlock.type, have, need: unlock.need, earlyAllowed: !!cfg.earlyAllowed },
-      });
-      continue;
+      };
     }
 
     // consent check
@@ -66,19 +75,19 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
       const scope = cfg.consent.scope;
       if (scope === 'coach.basic' || scope === 'coach.supplements') {
         const coachScope = scope === 'coach.basic' ? 'basic' : 'supplements';
-        const granted = await hasCoachScopeService(userId, coachScope);
+        const granted = await once(`coach:${coachScope}`, () => hasCoachScopeService(userId, coachScope));
         if (!granted) {
           needsConsent = true;
           consentInfo = { scope, granted: false, reason: 'missing' };
         }
       } else if (scope === 'nutrition') {
-        const consent = await getNutritionConsentService(userId);
+        const consent = await once('nutrition', () => getNutritionConsentService(userId));
         if (!consent?.granted) {
           needsConsent = true;
           consentInfo = { scope, granted: false, reason: consent?.needsReconsent ? 'policy_updated' : 'missing' };
         }
       } else if (scope === 'medical_records') {
-        const consent = await getMedicalRecordsConsentService(userId);
+        const consent = await once('medical_records', () => getMedicalRecordsConsentService(userId));
         if (!consent?.granted) {
           needsConsent = true;
           consentInfo = { scope, granted: false, reason: consent?.needsReconsent ? 'policy_updated' : 'missing' };
@@ -98,22 +107,20 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
       if (cfg.optionalConsent) {
         out.optionalConsent = { scope: cfg.optionalConsent.scope, granted: false };
       }
-      layers.push(out);
-      continue;
+      return out;
     }
 
     // food setup
     if (cfg.needsSetup) {
-      const target = await currentNutritionTarget(prisma, userId);
+      const target = await once('nutritionTarget', () => currentNutritionTarget(prisma, userId));
       if (!target) {
-        layers.push({
+        return {
           layer: cfg.layer,
           key: cfg.key,
           state: 'needs_setup',
           unlockedAt: unlockedAt ? unlockedAt.toISOString() : null,
           isNew: !!unlockedAt && (Date.now() - unlockedAt.getTime()) < 3 * 24 * 60 * 60 * 1000,
-        });
-        continue;
+        };
       }
     }
 
@@ -128,10 +135,11 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
     if (cfg.consent?.scope) {
       outOn.consent = { scope: cfg.consent.scope, granted: true };
     }
-    layers.push(outOn);
+    return outOn;
   }
 
-  return layers;
+  const evaluated = await Promise.all(JOURNEY.layers.map(evaluateLayer));
+  return evaluated.filter(Boolean);
 }
 
 /**
@@ -143,7 +151,7 @@ export async function getLayers(prisma, userId, { journey, flags } = {}) {
  * @param {{journey?: object}} [options]
  * @returns {Promise<string[]>}
  */
-export async function getOnLayerKeys(prisma, userId, { journey, layers: resolvedLayers } = {}) {
+export async function getOnLayerKeys(prisma, userId, { journey, layers: resolvedLayers, medicalGranted: knownMedicalGranted } = {}) {
   const { JOURNEY } = await import('../journey/journeyConfig.js');
   const { hasMedicalRecordsConsentService } = await import('../ledger/ledgerConsentService.js');
   // Callers assembling both views can reuse one consent/setup snapshot.
@@ -169,7 +177,9 @@ export async function getOnLayerKeys(prisma, userId, { journey, layers: resolved
     }
   }
   onKeys.push('own');
-  const medicalGranted = await hasMedicalRecordsConsentService(userId);
+  // A caller that already looked this up (buildToday runs it in parallel with the
+  // layer evaluation) passes it in and skips the extra round-trip.
+  const medicalGranted = knownMedicalGranted ?? await hasMedicalRecordsConsentService(userId);
   if (medicalGranted) onKeys.push('medicine');
   return [...new Set(onKeys)];
 }

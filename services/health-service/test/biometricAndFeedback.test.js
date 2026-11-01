@@ -52,6 +52,7 @@ test('setup: mock prisma once, import the services once', async (t) => {
             findMany: async ({ where, orderBy }) => {
               let rows = entryRows.filter((e) => e.userId === where.userId);
               if (where.metric?.in) rows = rows.filter((e) => where.metric.in.includes(e.metric));
+              if (where.OR) rows = rows.filter((e) => where.OR.some((c) => c.metric === e.metric && c.localDate === e.localDate));
               const clauses = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
               for (const clause of [...clauses].reverse()) {
                 const [field, direction] = Object.entries(clause)[0];
@@ -61,6 +62,14 @@ test('setup: mock prisma once, import the services once', async (t) => {
                 });
               }
               return rows;
+            },
+            groupBy: async ({ where }) => {
+              const by = new Map();
+              for (const e of entryRows.filter((r) => r.userId === where.userId)) {
+                const cur = by.get(e.metric);
+                if (!cur || e.localDate > cur) by.set(e.metric, e.localDate);
+              }
+              return [...by].map(([metric, localDate]) => ({ metric, _max: { localDate } }));
             },
             findUnique: async ({ where }) => {
               const { userId, metric, localDate } = where.userId_metric_localDate;

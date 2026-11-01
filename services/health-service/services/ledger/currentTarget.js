@@ -29,11 +29,15 @@ import { activeDoctorPlan, applyDoctorTargets } from './doctorPlan.js';
 import { isoDayIST } from '../../utils/sessionDay.js';
 export async function currentNutritionTarget(prisma, userId, localDate) {
   const day = localDate || isoDayIST();
-  const target = await prisma.nutritionTarget.findFirst({
-    where: { userId },
-    orderBy: { effectiveFrom: 'desc' },
-  });
-  return applyDoctorTargets(target, await activeDoctorPlan(prisma, userId, day));
+  // Independent reads: run together instead of back to back.
+  const [target, plan] = await Promise.all([
+    prisma.nutritionTarget.findFirst({
+      where: { userId },
+      orderBy: { effectiveFrom: 'desc' },
+    }),
+    activeDoctorPlan(prisma, userId, day),
+  ]);
+  return applyDoctorTargets(target, plan);
 }
 
 /**
@@ -51,14 +55,17 @@ export async function hasCurrentNutritionTarget(prisma, userId) {
 
 /** Target effective on a calendar day; pre-history days use the oldest target. */
 export async function nutritionTargetOn(prisma, userId, localDate) {
-  const base = await prisma.nutritionTarget.findFirst({
-    where: { userId, effectiveFrom: { lte: localDate } },
-    orderBy: { effectiveFrom: 'desc' },
-  }) ?? await prisma.nutritionTarget.findFirst({
-    where: { userId }, orderBy: { effectiveFrom: 'asc' },
-  });
+  const [base, plan] = await Promise.all([
+    (async () => await prisma.nutritionTarget.findFirst({
+      where: { userId, effectiveFrom: { lte: localDate } },
+      orderBy: { effectiveFrom: 'desc' },
+    }) ?? await prisma.nutritionTarget.findFirst({
+      where: { userId }, orderBy: { effectiveFrom: 'asc' },
+    }))(),
+    activeDoctorPlan(prisma, userId, localDate),
+  ]);
   // Same doctor override the day's score used, so history agrees with it.
-  return applyDoctorTargets(base, await activeDoctorPlan(prisma, userId, localDate));
+  return applyDoctorTargets(base, plan);
 }
 
 /** Resolve a fetched history without issuing a query for every day. */

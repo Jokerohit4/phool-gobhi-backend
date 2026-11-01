@@ -124,7 +124,7 @@ test('score card exposes closedDays and reports too few closed days as null', as
   const { getBlendedScore } = await import('../services/ledger/scoreService.js');
   const db = {
     scoreDaySnapshot: { ...fakePrisma.scoreDaySnapshot, findFirst: async () => snapshots[0] },
-    biometricEntry: { findMany: async () => [] },
+    biometricEntry: { findMany: async () => [], groupBy: async () => [] },
   };
   const result = await getBlendedScore(db, { userId: USER });
   assert.equal(result.closedDays, 3);

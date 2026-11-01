@@ -77,6 +77,14 @@ test('setup: mock modules and import todayService once', async (t) => {
     },
   });
 
+  // buildToday starts the medical-records consent lookup in parallel with the
+  // layer evaluation (it used to run inside getOnLayerKeys, which is mocked here).
+  t.mock.module('../services/ledger/ledgerConsentService.js', {
+    exports: {
+      hasMedicalRecordsConsentService: async () => false,
+    },
+  });
+
   t.mock.module('../middleware/requireFeatureFlag.js', {
     exports: {
       isFeatureEnabled: async () => true,

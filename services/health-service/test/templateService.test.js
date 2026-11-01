@@ -54,6 +54,15 @@ test('setup: mock prisma once, import templateService once', async (t) => {
           };
           this.personalisationProfile = { findUnique: async () => homeProfile };
           this.workoutSession = {
+            groupBy: async ({ where }) => {
+              const out = new Map();
+              for (const s of sessions) {
+                if (s.userId !== where.userId || !where.templateId.in.includes(s.templateId)) continue;
+                const cur = out.get(s.templateId);
+                if (!cur || s.startedAt > cur) out.set(s.templateId, s.startedAt);
+              }
+              return [...out].map(([templateId, startedAt]) => ({ templateId, _max: { startedAt } }));
+            },
             findFirst: async ({ where }) => {
               const matches = sessions
                 .filter((s) => s.templateId === where.templateId && s.userId === where.userId)

@@ -6,7 +6,7 @@ test('enabling the proposed rule makes card, league and coin decision agree on i
   let rows = Array.from({length:3},()=>({userId:7,close:500}));
   const db = {
     scoreDaySnapshot: {findMany:async()=>rows,findFirst:async()=>({close:500})},
-    biometricEntry:{findMany:async()=>[]},
+    biometricEntry:{findMany:async()=>[],groupBy:async()=>[]},
   };
   let credits=0;
   t.mock.module('../services/ledger/constants.js',{exports:{...constants,USE_CLOSED_DAY_BEHAVIORAL_AVERAGE:true}});

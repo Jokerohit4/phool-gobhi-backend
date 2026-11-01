@@ -1,7 +1,10 @@
 import { isoDayIST } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
-import { JOURNEY, elapsedJourneyDays, LAYER_OF_LAYER_KEY, layerKeysUpTo, unlockConfigForLayerKey, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
+import { JOURNEY, elapsedJourneyDays, LAYER_OF_LAYER_KEY, layerKeysUpTo, earlyAllowedForLayerKey, startLayerFor } from './journeyConfig.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { getShowedUpDays, getLastShowedUpDate } from './showedUpDays.js';
+import { createTtlCache } from '../../utils/ttlCache.js';
+import { onJourneyInvalidate, emitJourneyInvalidate } from '../../utils/journeyCacheBus.js';
 import { countSteadyWeeks } from './steadyWeeks.js';
 import { checkAndTriggerHomeDaysReferral } from './referralHomeTrigger.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
@@ -11,6 +14,15 @@ import { isWellnessProfile } from '../../utils/persona.js';
 const prisma = new PrismaClient();
 
 const DEFAULT_EXPERIENCE_LEVEL = 'new_to_gym';
+
+// The unlock rule of a LAYER, by its layer key ('food', 'body', ...). Callers used
+// unlockConfigForLayerKey(layer.key), but that helper looks up by ROW key
+// ('steps', 'sleep', 'workout', ...). The two only coincide for some layers, so
+// the 'body' layer (rows steps/sleep) always resolved to null and the "next
+// unlock" hint went missing for the whole week between food and body unlocking.
+function unlockConfigForLayerName(layerName) {
+  return JOURNEY.layers.find((l) => l.key === layerName)?.unlock ?? null;
+}
 
 function todayLocalDate() {
   return isoDayIST(new Date());
@@ -119,7 +131,7 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
   const nextLocked = layers.find((l) => !l.unlocked);
   let next = null;
   if (nextLocked) {
-    const unlock = unlockConfigForLayerKey(nextLocked.key);
+    const unlock = unlockConfigForLayerName(nextLocked.key);
     if (unlock && unlock.type === 'showed_up_days') {
       next = { layer: nextLocked.layer, type: 'showed_up_days', have: showedUpDays.length, need: unlock.need };
     } else if (unlock && unlock.type === 'elapsed_days') {
@@ -152,26 +164,36 @@ function buildJourneyResponse(progress, unlockedLayers, showedUpDays, steadyWeek
 /**
  * Persist computed unlocks with conditional update guard, emit events and rebuild plan.
  */
-async function syncUnlocks(userId, progress, computed) {
+async function syncUnlocks(userId, progress, computed, lastShowedUpDate = progress.lastShowedUpDate) {
   const existing = progress.unlocked ?? [];
   const newUnlocks = computed.filter(u => !existing.some(e => e.layer === u.layer));
-  if (newUnlocks.length === 0 && (progress.lastShowedUpDate === null || progress.lastShowedUpDate === undefined)) {
+  // Only write when something actually changed. This used to write on EVERY read
+  // for any user with a showed-up day (the early return only fired when
+  // lastShowedUpDate was null), which made GET /journey and GET /plan/today
+  // writers: an extra DB round-trip each, and two parallel app calls raced on the
+  // updatedAt guard and retried. A changed lastShowedUpDate with no new unlock is
+  // persisted by getJourney itself.
+  if (newUnlocks.length === 0) {
     return { updated: false, progress };
   }
   // conditional update to avoid concurrent races
+  let conflicted = false;
   const updated = await prisma.journeyProgress.update({
     where: { userId, updatedAt: progress.updatedAt },
     data: {
       unlocked: computed,
-      lastShowedUpDate: progress.lastShowedUpDate,
+      lastShowedUpDate,
       updatedAt: new Date(),
     },
   }).catch(async err => {
     // conflict, retry once
+    conflicted = true;
     const fresh = await prisma.journeyProgress.findUnique({ where: { userId } });
     if (!fresh) return null;
-    return await syncUnlocks(userId, fresh, computed);
+    return await syncUnlocks(userId, fresh, computed, lastShowedUpDate);
   });
+  // The retry returns {updated, progress}; the happy path returns the row itself.
+  if (conflicted && updated) return updated;
   if (!updated) return { updated: false, progress };
   // emit layer_unlocked per new layer; how mapping from via
   for (const u of newUnlocks) {
@@ -187,7 +209,40 @@ async function syncUnlocks(userId, progress, computed) {
  * Main journey service - gets or creates JourneyProgress, computes unlocks,
  * and returns the journey response.
  */
+// getJourney is the hottest read in the service: GET /plan/today, /plan,
+// /journey and the layer/score helpers all call it, and one app launch fires
+// several of those at once. Cached per user for a few seconds with single-flight
+// loading (parallel callers share one computation). Every write path in this
+// module — and workout finish / consent erase via invalidateJourneyCaches — evicts.
+const JOURNEY_TTL_MS = Number(process.env.JOURNEY_CACHE_TTL_MS ?? 5_000);
+const journeyCache = createTtlCache({ ttlMs: JOURNEY_TTL_MS });
+// rebuildPlan (reached from syncUnlocks inside a load) calls getJourney again via
+// getOnLayerKeys → getLayers. Joining the in-flight load from inside itself would
+// deadlock, so a nested call for the same user bypasses the cache.
+const journeyLoadContext = new AsyncLocalStorage();
+
+/**
+ * Drop a user's cached journey (and, via the bus, their cached showed-up days).
+ * Call after anything that changes either. Write paths outside this module
+ * (workout finish, consent erase) emit on the same bus.
+ */
+export function invalidateJourneyCaches(userId) {
+  emitJourneyInvalidate(userId);
+}
+onJourneyInvalidate((userId) => journeyCache.invalidate(Number(userId)));
+
 export async function getJourney(userId) {
+  if (journeyLoadContext.getStore() === Number(userId)) return computeJourney(userId);
+  const journey = await journeyCache.get(
+    Number(userId),
+    () => journeyLoadContext.run(Number(userId), () => computeJourney(userId)),
+    { cacheable: (value) => value !== null },
+  );
+  // Callers own their copy (the object is small plain data).
+  return journey === null ? null : structuredClone(journey);
+}
+
+async function computeJourney(userId) {
   let progress = await prisma.journeyProgress.findUnique({ where: { userId } });
 
   if (!progress) {
@@ -213,12 +268,12 @@ export async function getJourney(userId) {
   // Compute unlocked layers
   const unlockedLayers = await computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, startLevel);
 
-  // Sync unlocks with conditional guard and rebuild
-  const { updated, progress: syncedProgress } = await syncUnlocks(userId, { ...progress, lastShowedUpDate }, unlockedLayers);
+  // Sync unlocks with conditional guard and rebuild (writes only on a new unlock).
+  const { updated, progress: syncedProgress } = await syncUnlocks(userId, progress, unlockedLayers, lastShowedUpDate);
   progress = syncedProgress ?? progress;
 
   // Update lastShowedUpDate if changed without unlock
-  if (lastShowedUpDate !== progress.lastShowedUpDate) {
+  if (lastShowedUpDate !== (progress.lastShowedUpDate ?? null)) {
     progress = await prisma.journeyProgress.update({
       where: { userId },
       data: { lastShowedUpDate },
@@ -294,6 +349,7 @@ export async function startJourney(userId, { experienceLevel, goals, daysPerWeek
     location,
   });
 
+  invalidateJourneyCaches(userId);
   return { journey: await getJourney(userId), plan };
 }
 
@@ -344,6 +400,7 @@ export async function startWellnessJourney(userId) {
     experienceLevel: 'new_to_gym', goals: [], location: 'home', daysPerWeek: 0,
     wellnessOnly: true, wellnessProfile: profile,
   });
+  invalidateJourneyCaches(userId);
   return { journey: await getJourney(userId), plan };
 }
 
@@ -379,6 +436,7 @@ export async function switchJourneyTrack(userId, toPersona) {
   if (!progress) return { changed: false, reason: 'no_journey' };
   const toWellness = toPersona === 'wellness';
   if (toWellness === progress.wellnessOnly) return { changed: false, reason: 'same_track' };
+  invalidateJourneyCaches(userId);
 
   if (toWellness) {
     await startWellnessJourney(userId);
@@ -405,6 +463,7 @@ export async function switchJourneyTrack(userId, toPersona) {
       },
     });
   }
+  invalidateJourneyCaches(userId);
   await rebuildPlan(prisma, userId, { reason: 'persona_switch' });
   return { changed: true, track: 'workout', restored: Boolean(snapshot) };
 }
@@ -429,6 +488,7 @@ export async function unlockFoodEarly(userId) {
     where: { userId },
     data: { foodEarlyAt: new Date() },
   });
+  invalidateJourneyCaches(userId);
 
   // Rebuild plan for early unlock
   await rebuildPlan(prisma, userId, { reason: 'unlock', layer: 2, how: 'early' });
@@ -489,6 +549,22 @@ export async function getJourneySummary(userId) {
 
   const showedUpDays = await getShowedUpDays(userId);
   const steadyWeeks = countSteadyWeeks(showedUpDays);
+  const startLevelForSummary = progress.startLevel ?? DEFAULT_EXPERIENCE_LEVEL;
+
+  // The unlock computation and the weekly score delta are independent of each
+  // other (both only need showedUpDays / today) — start them together instead of
+  // paying their DB round-trips back to back.
+  const unlockedLayersPromise = computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, startLevelForSummary);
+  unlockedLayersPromise.catch(() => {}); // surfaced where awaited below
+  const weekDeltaPromise = (async () => {
+    try {
+      // dynamic import to avoid circular deps
+      const { weekDelta: weekDeltaFn } = await import('../ledger/scoreService.js');
+      return await weekDeltaFn(prisma, { userId, today: todayLocalDate() });
+    } catch {
+      return null;
+    }
+  })();
 
   // This week's showed-up days (Monday-start week)
   const today = todayLocalDate();
@@ -508,17 +584,10 @@ export async function getJourneySummary(userId) {
   const daysSinceStart = daysSince(startedAt);
   const scoreVisible = daysSinceStart >= 14;
 
-  // weekDelta from B10's scoreService - dynamic import to avoid circular deps
-  let weekDelta = null;
-  try {
-    const { weekDelta: weekDeltaFn } = await import('../ledger/scoreService.js');
-    weekDelta = await weekDeltaFn(prisma, { userId, today });
-  } catch {
-    weekDelta = null;
-  }
+  // weekDelta from B10's scoreService (started above, in parallel)
+  const [weekDelta, unlockedLayers] = await Promise.all([weekDeltaPromise, unlockedLayersPromise]);
 
   // Next unlock info
-  const unlockedLayers = await computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, progress.startLevel ?? DEFAULT_EXPERIENCE_LEVEL);
   const layers = JOURNEY.layers.map((l) => {
     const unlocked = unlockedLayers.find((u) => u.layer === l.layer);
     return { layer: l.layer, key: l.key, unlocked: !!unlocked };
@@ -526,11 +595,13 @@ export async function getJourneySummary(userId) {
   const nextLocked = layers.find((l) => !l.unlocked);
   let nextUnlock = null;
   if (nextLocked) {
-    const unlock = unlockConfigForLayerKey(nextLocked.key);
+    const unlock = unlockConfigForLayerName(nextLocked.key);
     if (unlock && unlock.type === 'showed_up_days') {
       nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: showedUpDays.length, need: unlock.need };
     } else if (unlock && unlock.type === 'elapsed_days') {
-      next = { layer: nextLocked.layer, type: 'elapsed_days', have: elapsedJourneyDays(progress.startedAt), need: unlock.need };
+      // Was `next = {...}` on an undeclared variable: a ReferenceError (ESM is
+      // strict) the moment the next locked layer was a time-based one.
+      nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: elapsedJourneyDays(progress.startedAt), need: unlock.need };
     } else if (unlock && unlock.type === 'steady_weeks') {
       nextUnlock = { label: `Layer ${nextLocked.layer} (${nextLocked.key})`, have: steadyWeeks, need: unlock.need };
     }

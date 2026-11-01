@@ -555,3 +555,43 @@ test('clearing reports hasGoal true for a user who has one', async () => {
   assert.equal(out.hasGoal, true);
   assert.equal(out.active, false);
 });
+
+// --- item 6: fewer, overlapping reads ----------------------------------------
+
+test('the goal is read once per target-state request (previewDay reuses the caller read)', async () => {
+  const prisma = mockPrisma({
+    snapshots: [snap('2026-09-30', 40)],
+    goal: targetGoal({ points: 100, from: '2026-09-01', until: '2026-10-31' }),
+  });
+  let goalReads = 0;
+  const original = prisma.healthGoal.findUnique;
+  prisma.healthGoal.findUnique = async (a) => { goalReads++; return original(a); };
+  const out = await getScoreTargetState(prisma, { userId: USER, today: '2026-10-01' });
+  assert.equal(goalReads, 1, 'was 2: the state read and previewDay own');
+  assert.equal(out.active, true);
+});
+
+test('a pause on the passed-down goal still makes previewDay treat the day as paused', async () => {
+  const { previewDay } = await import('../services/ledger/scoreService.js');
+  const prisma = mockPrisma({ snapshots: [snap('2026-09-30', 40)] });
+  prisma.healthGoal.findUnique = async () => { throw new Error('must not be read when the goal is supplied'); };
+  const day = await previewDay(prisma, {
+    userId: USER, localDate: '2026-10-01', today: '2026-10-01',
+    goal: { pausedFrom: '2026-09-28', pausedUntil: '2026-10-05' },
+  });
+  assert.equal(day.paused, true);
+  assert.equal(day.close, 40);
+});
+
+test('previewDay and the target state start their independent reads together', async () => {
+  const { previewDay } = await import('../services/ledger/scoreService.js');
+  const prisma = mockPrisma({ snapshots: [snap('2026-09-30', 40)] });
+  const started = [];
+  const slow = (name, fn) => async (...a) => { started.push(name); await new Promise((r) => setTimeout(r, 15)); return fn(...a); };
+  prisma.scoreDaySnapshot.findFirst = slow('previousClose', prisma.scoreDaySnapshot.findFirst);
+  prisma.healthGoal.findUnique = slow('goal', prisma.healthGoal.findUnique);
+  const t0 = Date.now();
+  await previewDay(prisma, { userId: USER, localDate: '2026-10-01', today: '2026-10-01' });
+  assert.deepEqual(started.slice(0, 2).sort(), ['goal', 'previousClose'], 'both in flight at once');
+  assert.ok(Date.now() - t0 < 60, 'overlapped, not serial');
+});

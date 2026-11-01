@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
 const prisma = new PrismaClient();
 
 // The consent record that gates the OS-level HealthKit/Health Connect
@@ -208,6 +209,8 @@ export async function deleteAllDataService(userId) {
     prisma.journeyProgress.deleteMany({ where: { userId } }),
     prisma.coachConsent.deleteMany({ where: { userId } }),
   ]);
+  // Erased data must not be served from the in-process journey cache.
+  emitJourneyInvalidate(userId);
 
   // The medical BLOBS are swept here, after the transaction has committed.
   //

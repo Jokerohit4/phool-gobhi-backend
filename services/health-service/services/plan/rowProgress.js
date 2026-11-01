@@ -15,15 +15,17 @@ import { ROW_POINTS, POINTS, DEFAULT_SLEEP_MINUTES } from '../ledger/constants.j
 import { DEFAULT_STEPS } from '../journey/journeyConfig.js';
 import { getOnLayerKeys } from './layerState.js';
 import { computeEarns } from '../ledger/scoreEngine.js';
+import { makeTemplateLoader } from './templateLoader.js';
 
 // Row kinds the app renders for habit rows are named after the layer, not the
 // generic PlanItem kind ('habit'). Row kinds for the other kinds are the
 // PlanItem kind already.
 const ROW_KIND_BY_LAYER = { water: 'water', steps: 'steps', sleep: 'sleep' };
 
-export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}) {
+export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadTemplate } = {}) {
   const today = isoDayIST(new Date());
   onLayerKeys ??= await getOnLayerKeys(prisma, userId);
+  loadTemplate ??= makeTemplateLoader(prisma);
 
   const [
     planResult,
@@ -146,9 +148,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys } = {}
         action = done ? 'open_session' : 'start_session';
         const slot = prescription?.workoutSlots?.find((s) => Number(s.weekday) === weekday);
         templateId = slot?.templateId ?? item.templateId ?? null;
-        const template = templateId ? await prisma.workoutTemplate.findUnique({
-          where: { id: templateId }, include: { exercises: true },
-        }) : null;
+        const template = await loadTemplate(templateId);
         moves = template?.exercises?.length ?? null;
         progress = done ? 1 : 0;
         break;

@@ -3,6 +3,7 @@ import { recordRoutineWorkout } from './routineJourneyService.js';
 import { PrismaClient } from '@prisma/client';
 import { computeProgression } from './progressionService.js';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
+import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
 const prisma = new PrismaClient();
 
 // Applies double progression to the routine a finished session was started
@@ -61,8 +62,10 @@ async function assertOwnsSession(sessionId, userId) {
 // exercise, and returns a setNumber -> {weightKg, reps} map from it — the
 // active-workout screen's ghost/pre-fill text, i.e. Strong's "previous
 // performance overlay," the single most important feature in any strength
-// app per the UI/UX section's research. Sorted in JS (see
-// exerciseLibraryService for why nested-relation orderBy is avoided here).
+// app per the UI/UX section's research. "Most recent" is decided
+// in the query (session.startedAt desc, id desc, take 1) - the same row the old
+// read-everything-then-sort-in-JS picked, minus loading the exercise's whole
+// history. Only identical startedAt ties could differ, and those were arbitrary.
 async function attachPreviousPerformance(session) {
   const exercisesWithPrevious = await Promise.all(
     session.exercises.map(async (se) => {
@@ -73,10 +76,10 @@ async function attachPreviousPerformance(session) {
           session: { userId: session.userId, startedAt: { lt: session.startedAt } },
         },
         include: { sets: { where: { completed: true } }, session: { select: { startedAt: true } } },
+        orderBy: [{ session: { startedAt: 'desc' } }, { id: 'desc' }],
+        take: 1,
       });
-      const mostRecent = priorSessions.sort(
-        (a, b) => b.session.startedAt - a.session.startedAt,
-      )[0];
+      const mostRecent = priorSessions[0];
       const previousBySetNumber = {};
       for (const s of mostRecent?.sets || []) {
         previousBySetNumber[s.setNumber] = { weightKg: s.weightKg, reps: s.reps };
@@ -386,6 +389,9 @@ export async function finishSessionService(sessionId, userId, { type, rpe } = {}
     },
     include: includeFull,
   });
+  // A finished session can add a showed-up day: drop the cached journey so the
+  // next Home read reflects it instead of waiting out the TTL.
+  emitJourneyInvalidate(userId);
 
   let routinePolicy;
   try { routinePolicy = await recordRoutineWorkout(prisma, updated); }

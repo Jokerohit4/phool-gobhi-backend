@@ -1,21 +1,44 @@
 import { PrismaClient } from '@prisma/client';
 import { MUSCLE_GROUPS, EQUIPMENT, LOGGING_TYPES } from '../constants/healthEnums.js';
 import { rankExercises } from './exerciseSearch.js';
+import { createTtlCache } from '../utils/ttlCache.js';
 const prisma = new PrismaClient();
 
 // The library is global (createdByUserId: null) plus this user's own custom
 // entries — never another user's custom exercises, which is what the OR
 // clause below enforces.
+//
+// The global catalogue is the same for everyone and only changes when
+// prisma/seed.js is run (no API writes a createdByUserId-null exercise), so it
+// is cached in-process for 10 minutes per instance - a reseed shows up on an
+// instance within the TTL or at its next restart. Only the caller's own custom
+// exercises are queried per request. Muscle/equipment filters are applied to the
+// cached catalogue in JS with the same equality the query used.
+export const SYSTEM_EXERCISES_TTL_MS = 10 * 60_000;
+export const systemExercisesCache = createTtlCache({ ttlMs: SYSTEM_EXERCISES_TTL_MS, maxEntries: 1 });
+const loadSystemExercises = () => systemExercisesCache.get('system', () => prisma.exercise.findMany({
+  where: { createdByUserId: null },
+  orderBy: { name: 'asc' },
+}));
+
 export async function searchExercisesService(userId, { q, muscleGroup, equipment } = {}) {
-  const where = {
-    AND: [
-      { OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
-      muscleGroup ? { muscleGroup } : {},
-      equipment ? { equipment } : {},
-    ],
-  };
-  const exercises = await prisma.exercise.findMany({ where, orderBy: { name: 'asc' } });
-  return rankExercises(exercises, q);
+  const [system, custom] = await Promise.all([
+    loadSystemExercises(),
+    prisma.exercise.findMany({
+      where: {
+        AND: [
+          { createdByUserId: userId },
+          muscleGroup ? { muscleGroup } : {},
+          equipment ? { equipment } : {},
+        ],
+      },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
+  const fits = (e) => (!muscleGroup || e.muscleGroup === muscleGroup) && (!equipment || e.equipment === equipment);
+  // rankExercises fully re-sorts (score, then name), so merge order only matters
+  // between identically-named rows.
+  return rankExercises([...system.filter(fits), ...custom], q);
 }
 
 export async function createCustomExerciseService(userId, body) {

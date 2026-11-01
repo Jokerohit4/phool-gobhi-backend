@@ -20,7 +20,12 @@ export const RANGE_INCLUDES = Object.freeze([
   'scoreSnapshots', 'foodDayTotals', 'cycleLogged',
 ]);
 
-export async function buildRangeSeriesService(userId, { from, to } = {}, { include = [] } = {}) {
+// `slim` is for callers that only need the session series (GET /stats): it skips
+// the biometric read (returned as []) and narrows the session include to the
+// fields the series maths reads. Ignored when `include` slices are requested,
+// and defaults off, so the export / FHIR callers see exactly what they always did.
+export async function buildRangeSeriesService(userId, { from, to } = {}, { include = [], slim = false } = {}) {
+  const lean = slim && include.length === 0;
   const unknown = include.filter((k) => !RANGE_INCLUDES.includes(k));
   if (unknown.length) {
     // A typo'd slice name would silently produce an export missing a whole
@@ -40,13 +45,15 @@ export async function buildRangeSeriesService(userId, { from, to } = {}, { inclu
       },
       include: {
         exercises: {
-          include: { exercise: { select: { name: true, muscleGroup: true } }, sets: true },
+          include: lean
+            ? { sets: { select: { completed: true, weightKg: true, reps: true } } }
+            : { exercise: { select: { name: true, muscleGroup: true } }, sets: true },
           orderBy: { order: 'asc' },
         },
       },
       orderBy: { startedAt: 'asc' },
     }),
-    prisma.biometricEntry.findMany({
+    lean ? [] : prisma.biometricEntry.findMany({
       where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
       orderBy: [{ localDate: 'asc' }, { metric: 'asc' }],
     }),

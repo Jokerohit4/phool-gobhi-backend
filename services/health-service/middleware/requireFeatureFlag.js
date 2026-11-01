@@ -2,8 +2,16 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const FLAG_CACHE_TTL_MS = 30_000;
+// A hung auth-service must not hold every gated request open: the fetch is cut
+// off after this long, and then treated like any other failed refresh.
+const FLAG_FETCH_TIMEOUT_MS = 2_000;
+// After a failed refresh, keep serving what we have and do not try again for
+// this long — otherwise every request during an outage re-fetches (and, with no
+// timeout, used to wait on) auth-service.
+const FLAG_RETRY_AFTER_FAILURE_MS = 5_000;
 let cachedFlags = null;
 let cachedAt = 0;
+let nextRetryAt = 0;
 // The refresh already on the wire, if any. A cold start (or a TTL expiry)
 // meets a BURST of requests — one app launch fans out into a dozen-plus routes
 // that each check a flag — and without this every one of them missed the
@@ -17,7 +25,11 @@ let inFlight = null;
 // feature exposing new personal-data collection, so every customer-facing
 // route here re-checks the same flag the admin panel controls.
 async function getFeatureFlags() {
-  if (cachedFlags && Date.now() - cachedAt < FLAG_CACHE_TTL_MS) return cachedFlags;
+  const now = Date.now();
+  if (cachedFlags && now - cachedAt < FLAG_CACHE_TTL_MS) return cachedFlags;
+  // Recent failed refresh: serve last-known (or the fail-closed {} on a cold
+  // start) until the retry window opens.
+  if (cachedFlags && now < nextRetryAt) return cachedFlags;
   if (!inFlight) inFlight = refreshFlags().finally(() => { inFlight = null; });
   return inFlight;
 }
@@ -26,16 +38,19 @@ async function refreshFlags() {
   try {
     const res = await fetch(`${AUTH_SERVICE_URL}/app-config`, {
       headers: await googleIdTokenHeader(AUTH_SERVICE_URL),
+      signal: AbortSignal.timeout(FLAG_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`app-config fetch failed (${res.status})`);
     const body = await res.json();
     cachedFlags = body.features || {};
     cachedAt = Date.now();
+    nextRetryAt = 0;
   } catch (err) {
     // Fail closed on the very first call (no last-known-good yet), fail open
     // to the last-known value on a transient blip thereafter.
     console.error('requireFeatureFlag: failed to refresh flags:', err.message);
     if (!cachedFlags) cachedFlags = {};
+    nextRetryAt = Date.now() + FLAG_RETRY_AFTER_FAILURE_MS;
   }
   return cachedFlags;
 }

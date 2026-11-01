@@ -102,7 +102,13 @@ export async function waterTargetMl(prisma, userId) {
 export async function getToday(prisma, { userId, localDate } = {}) {
   const day = resolveDay(localDate);
 
-  const [targetMl, waterLogs, schedules, dayLogs] = await Promise.all([
+  // The routine snapshot is independent of the habit reads; start it with them.
+  // It is best-effort: a failure there must never fail the habits screen.
+  const routineP = routineSnapshot(prisma, userId).catch((error) => {
+    console.error('[routine] snapshot unavailable:', error.message);
+    return null;
+  });
+  const [targetMl, waterLogs, schedules, dayLogs, routine] = await Promise.all([
     waterTargetMl(prisma, userId),
     prisma.waterLog.findMany({
       where: { userId, localDate: day },
@@ -113,6 +119,7 @@ export async function getToday(prisma, { userId, localDate } = {}) {
       orderBy: { id: 'asc' },
     }),
     prisma.supplementLog.findMany({ where: { userId, localDate: day } }),
+    routineP,
   ]);
 
   const water = {
@@ -127,10 +134,6 @@ export async function getToday(prisma, { userId, localDate } = {}) {
     takenToday: dayLogs.some((l) => l.scheduleId === s.id),
   }));
 
-  let routine = null;
-  try { routine = await routineSnapshot(prisma, userId); } catch (error) {
-    console.error('[routine] snapshot unavailable:', error.message);
-  }
   return { water, supplements, routine };
 }
 

@@ -23,10 +23,15 @@ export async function getProgressSummaryService(userId, range) {
   // Only counted workouts count, so an empty quick-log or a rest day doesn't
   // inflate the "workouts" total on the Training Progress screen (matches the
   // home ring, the stats KPI and the streak).
-  const sessions = await prisma.workoutSession.findMany({
-    where: { userId, startedAt: { gte: since }, ...COUNTED_WORKOUT_WHERE },
-    include: { exercises: { include: { exercise: true, sets: { where: { completed: true } } } } },
-  });
+  // The PR read does not depend on the sessions read: run them together. The
+  // exercise include is narrowed to the one field the loop reads (muscleGroup).
+  const [sessions, personalRecords] = await Promise.all([
+    prisma.workoutSession.findMany({
+      where: { userId, startedAt: { gte: since }, ...COUNTED_WORKOUT_WHERE },
+      include: { exercises: { include: { exercise: { select: { muscleGroup: true } }, sets: { where: { completed: true } } } } },
+    }),
+    getPersonalRecordsService(userId),
+  ]);
 
   let totalVolumeKg = 0;
   let totalDurationSeconds = 0;
@@ -63,8 +68,6 @@ export async function getProgressSummaryService(userId, range) {
     percent: Math.round((volume / totalGroupVolume) * 100),
   }));
 
-  const personalRecords = await getPersonalRecordsService(userId);
-
   return {
     range: range || '4w',
     totalWorkouts: sessions.length,
@@ -89,7 +92,11 @@ async function getPersonalRecordsService(userId, limit = 5) {
       reps: { not: null },
       sessionExercise: { session: { userId } },
     },
-    include: { sessionExercise: { include: { exercise: true } } },
+    // Only weight, reps and the exercise name are read below.
+    select: {
+      weightKg: true, reps: true,
+      sessionExercise: { select: { exercise: { select: { name: true } } } },
+    },
   });
   const bestByExercise = new Map();
   for (const s of sets) {
@@ -143,7 +150,7 @@ const MODE_GROUP_WEIGHTS = {
 const RECOVERY_MODE_WINDOW_MULTIPLIER = 1.5;
 
 export async function getMuscleReadinessService(userId) {
-  const [recentSessionExercises, profile] = await Promise.all([
+  const [recentSessionExercises, profile, templates] = await Promise.all([
     prisma.sessionExercise.findMany({
       // "Last trained" means a counted session (finished, non-rest, >=1 set),
       // so a rest day or an abandoned log doesn't mark a muscle as trained.
@@ -151,6 +158,8 @@ export async function getMuscleReadinessService(userId) {
       include: { exercise: { select: { muscleGroup: true } }, session: { select: { startedAt: true } } },
     }),
     prisma.personalisationProfile.findUnique({ where: { userId } }),
+    // Independent of readiness (only the scoring below needs it): start it now.
+    loadSuggestionTemplates(userId),
   ]);
 
   // The mode is the stored value, lazily expired: a low_impact_recovery this
@@ -188,7 +197,7 @@ export async function getMuscleReadinessService(userId) {
     return { muscleGroup, daysSinceTrained: last ? Math.round(daysSince) : null, status };
   });
 
-  const suggestedTemplate = await pickSuggestedTemplate(userId, readiness, mode, profile);
+  const suggestedTemplate = pickSuggestedTemplate(templates, readiness, mode, profile);
   return {
     readiness,
     suggestedTemplate,
@@ -216,15 +225,18 @@ export async function getMuscleReadinessService(userId) {
 // they don't have is only a candidate when NOTHING they own fits — the same
 // "still returned rather than hidden if it's all the user has" rule as limited
 // groups above. Unknown setup (never answered) changes nothing.
-async function pickSuggestedTemplate(userId, readiness, mode = 'neutral', profile = null) {
-  const statusByGroup = Object.fromEntries(readiness.map((r) => [r.muscleGroup, r.status]));
-  const weights = MODE_GROUP_WEIGHTS[mode] ?? {};
-  const all = await prisma.workoutTemplate.findMany({
+function loadSuggestionTemplates(userId) {
+  return prisma.workoutTemplate.findMany({
     where: { userId },
     include: {
       exercises: { include: { exercise: { select: { muscleGroup: true, equipment: true } } } },
     },
   });
+}
+
+function pickSuggestedTemplate(all, readiness, mode = 'neutral', profile = null) {
+  const statusByGroup = Object.fromEntries(readiness.map((r) => [r.muscleGroup, r.status]));
+  const weights = MODE_GROUP_WEIGHTS[mode] ?? {};
   if (all.length === 0) return null;
   const fitting = all.filter((t) => equipmentFit(t, profile)?.fits !== false);
   const templates = fitting.length ? fitting : all;

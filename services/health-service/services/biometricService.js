@@ -1,5 +1,6 @@
 import { isoDayIST } from '../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
+import { latestBiometricRows } from './biometricLatest.js';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
 const prisma = new PrismaClient();
@@ -267,10 +268,8 @@ export async function listEntriesService(userId, { metric, metrics, from, to } =
 // Latest value per metric — what a dashboard header wants ("74.2 kg, 18%,
 // 52 bpm") without pulling the whole history down to find the last point.
 export async function latestByMetricService(userId) {
-  const rows = await prisma.biometricEntry.findMany({
-    where: { userId },
-    orderBy: { localDate: 'desc' },
-  });
+  // One grouped index pass + one indexed fetch instead of the full history.
+  const rows = await latestBiometricRows(prisma, userId);
   const latest = {};
   for (const row of rows) {
     if (!latest[row.metric]) latest[row.metric] = row;

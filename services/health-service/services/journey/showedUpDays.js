@@ -1,6 +1,8 @@
 import { isoDayIST } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { fetchInternal } from '../../utils/fetchInternal.js';
+import { createTtlCache } from '../../utils/ttlCache.js';
+import { onJourneyInvalidate } from '../../utils/journeyCacheBus.js';
 
 const prisma = new PrismaClient();
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
@@ -82,13 +84,30 @@ export function isQualifyingSession(session) {
  * Get showed-up days by combining booking-service checkin-days with qualifying workout days.
  * Returns distinct IST days (YYYY-MM-DD), newest first, capped at 90 days.
  */
-export async function getShowedUpDays(userId, from = null, { to = null, limit = 90 } = {}) {
+// Every journey/plan read needs this, and it costs a cross-service HTTP call to
+// booking-service (+ its DB query) on top of ours. The default call (whole
+// history, 90-day cap) is cached per user for a few seconds; one app launch
+// fans out into /plan/today, /journey and /journey/summary which all want it.
+// Booking check-ins happen in another service and can't evict, so the TTL is
+// the staleness bound; our own workout finishes evict explicitly.
+const SHOWED_UP_TTL_MS = Number(process.env.SHOWED_UP_DAYS_CACHE_TTL_MS ?? 10_000);
+const showedUpCache = createTtlCache({ ttlMs: SHOWED_UP_TTL_MS });
+
+export function invalidateShowedUpDays(userId) {
+  showedUpCache.invalidate(Number(userId));
+}
+// Evicted with the journey cache on the shared bus (workout finish, consent erase,
+// journey writes) — journeyService doesn't need to import this module for it.
+onJourneyInvalidate(invalidateShowedUpDays);
+
+async function loadShowedUpDays(userId, from, { to, limit }) {
+  let degraded = false;
   const [bookingDays, workoutDays] = await Promise.all([
     // booking-service internal endpoint returns {days: ["YYYY-MM-DD", ...]} distinct union
     // of Booking.attendedAt, MemberAttendance.date, IndependentCheckIn.date (IST)
     fetchInternal(BOOKING_SERVICE_URL, `/internal/users/${userId}/checkin-days${from ? `?from=${from}` : ''}`)
       .then((res) => (res.data?.days || []))
-      .catch(() => []),
+      .catch(() => { degraded = true; return []; }),
     getQualifyingWorkoutDays(userId, from),
   ]);
 
@@ -99,7 +118,22 @@ export async function getShowedUpDays(userId, from = null, { to = null, limit = 
     daysArray = daysArray.slice(0, limit);
   }
 
-  return daysArray;
+  return { days: daysArray, degraded };
+}
+
+export async function getShowedUpDays(userId, from = null, { to = null, limit = 90 } = {}) {
+  if (from || to || limit !== 90) {
+    return (await loadShowedUpDays(userId, from, { to, limit })).days;
+  }
+  // A degraded result (booking-service unreachable → workout days only) is served
+  // to this caller as before but never cached, so one blip can't hide check-in
+  // days for the whole TTL.
+  const result = await showedUpCache.get(
+    Number(userId),
+    () => loadShowedUpDays(userId, null, { to: null, limit }),
+    { cacheable: (r) => !r.degraded },
+  );
+  return [...result.days]; // callers own their copy
 }
 
 /**

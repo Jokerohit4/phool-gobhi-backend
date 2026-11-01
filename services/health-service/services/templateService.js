@@ -2,6 +2,7 @@ import { structuredExercises, routineDescription } from './routineStructure.js';
 import { PrismaClient } from '@prisma/client';
 import { equipmentFit, rankByFit } from './homeSetup.js';
 import { progressionFields } from './progressionService.js';
+import { createTtlCache } from '../utils/ttlCache.js';
 const prisma = new PrismaClient();
 
 const includeExercises = {
@@ -20,18 +21,33 @@ const includeExercises = {
 // every user, the same query without this filter would leak one user's
 // "last done" timestamp onto every OTHER user viewing the same shared
 // routine — this fixes that before it could ever happen.
+// One grouped query for every template (it used to be one findFirst per
+// template: 15-30 round trips for a user with the system routines). Served by
+// the (userId, templateId, startedAt) index.
 async function attachLastDone(templates, userId) {
-  return Promise.all(
-    templates.map(async (t) => {
-      const lastSession = await prisma.workoutSession.findFirst({
-        where: { templateId: t.id, userId },
-        orderBy: { startedAt: 'desc' },
-        select: { startedAt: true },
-      });
-      return { ...t, lastDoneAt: lastSession?.startedAt || null };
-    }),
-  );
+  if (templates.length === 0) return [];
+  const ids = [...new Set(templates.map((t) => t.id))];
+  const groups = await prisma.workoutSession.groupBy({
+    by: ['templateId'],
+    where: { userId, templateId: { in: ids } },
+    _max: { startedAt: true },
+  });
+  const lastByTemplate = new Map(groups.map((g) => [g.templateId, g._max.startedAt]));
+  return templates.map((t) => ({ ...t, lastDoneAt: lastByTemplate.get(t.id) || null }));
 }
+
+// System templates are identical for every user and only ever change when a
+// seed script (prisma/seed*Templates.js) is run - there is no API that writes
+// them (the user-facing create/update/delete are all scoped to the caller's own
+// templates). So they are cached in-process for 10 minutes per instance; after a
+// reseed an instance can serve the old set until its TTL lapses or it restarts.
+export const SYSTEM_TEMPLATES_TTL_MS = 10 * 60_000;
+export const systemTemplatesCache = createTtlCache({ ttlMs: SYSTEM_TEMPLATES_TTL_MS, maxEntries: 1 });
+const loadSystemTemplates = () => systemTemplatesCache.get('system', () => prisma.workoutTemplate.findMany({
+  where: { isSystem: true },
+  include: includeExercises,
+  orderBy: { name: 'asc' },
+}));
 
 // Returns the caller's own templates AND every system template (H-21) —
 // the 12 seeded no-equipment routines are visible to everyone this way,
@@ -52,11 +68,7 @@ export async function listTemplatesService(userId) {
       include: includeExercises,
       orderBy: { updatedAt: 'desc' },
     }),
-    prisma.workoutTemplate.findMany({
-      where: { isSystem: true },
-      include: includeExercises,
-      orderBy: { name: 'asc' },
-    }),
+    loadSystemTemplates(),
     // Best-effort: a failed read costs the fit badge, never the list.
     (async () => prisma.personalisationProfile.findUnique({
       where: { userId }, select: { homeEquipment: true, homeSetupAt: true },

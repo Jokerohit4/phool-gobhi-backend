@@ -2,6 +2,8 @@ import { isoDayIST } from '../../utils/sessionDay.js';
 import { weekDays, weekStartOf } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { resolveDay } from './rowProgress.js';
+import { makeTemplateLoader } from './templateLoader.js';
+import { hasMedicalRecordsConsentService } from '../ledger/ledgerConsentService.js';
 import { getLayers, getOnLayerKeys } from './layerState.js';
 import { getJourney, getUnlockedLayerKeys } from '../journey/journeyService.js';
 import { previousClose } from '../ledger/scoreService.js';
@@ -66,7 +68,8 @@ function buildWeek(showedUpDays, today) {
  * @param {string} today
  * @returns {Promise<{today: object|null, tomorrow: object|null}>}
  */
-async function getSessions(prisma, userId, today, { wellnessOnly = false } = {}) {
+async function getSessions(prisma, userId, today, { wellnessOnly = false, loadTemplate } = {}) {
+  loadTemplate ??= makeTemplateLoader(prisma);
   // A prescription can outlive the journey branch that created it. Do not let
   // stale workout slots leak back into the Home prompt for a wellbeing-only
   // journey.
@@ -89,9 +92,7 @@ async function getSessions(prisma, userId, today, { wellnessOnly = false } = {})
 
   const formatSession = async (slot) => {
     if (!slot) return null;
-    const template = slot.templateId ? await prisma.workoutTemplate.findUnique({
-      where: { id: slot.templateId }, include: { exercises: true },
-    }) : null;
+    const template = await loadTemplate(slot.templateId);
     return {
       templateId: slot.templateId ?? null,
       title: slot.title ?? template?.name ?? 'Workout',
@@ -133,8 +134,15 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     };
   }
 
-  // Get journey (exactly once - it syncs unlocks and rebuilds if needed)
-  const journey = await getJourney(userId);
+  // Get journey (exactly once - it syncs unlocks and rebuilds if needed). The
+  // journey doesn't feed the score-open / pause lookups, so they ride along
+  // instead of waiting behind it. They're cheap single-row reads; a user with
+  // consent but no journey yet wastes two of them, which is the rare case.
+  const [journey, scoreOpen, pauseState] = await Promise.all([
+    getJourney(userId),
+    previousClose(prisma, { userId, localDate: resolvedDate }),
+    getPauseState(prisma, userId, resolvedDate),
+  ]);
   if (!journey) {
     return {
       state: 'no_plan',
@@ -142,17 +150,20 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     };
   }
 
-  // Load the journey once, then pass its on layers into the resolver.
-  const [layers, scoreOpen, pauseState, sessions] = await Promise.all([
+  // One template loader shared by the session preview and the day resolver, and
+  // the medical-records consent lookup started alongside the layer evaluation
+  // (getOnLayerKeys used to run it as its own round-trip afterwards).
+  const loadTemplate = makeTemplateLoader(prisma);
+  const [layers, sessions, medicalGranted] = await Promise.all([
     getLayers(prisma, userId, { journey }),
-    previousClose(prisma, { userId, localDate: resolvedDate }),
-    getPauseState(prisma, userId, resolvedDate),
     getSessions(prisma, userId, resolvedDate, {
       wellnessOnly: journey.wellnessOnly === true,
+      loadTemplate,
     }),
+    hasMedicalRecordsConsentService(userId),
   ]);
-  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers });
-  const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys });
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers, medicalGranted });
+  const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys, loadTemplate });
   const showedUpDays = journey.showedUpDates ?? [];
 
   // Re-extract resolved values from dayResolution
@@ -239,15 +250,22 @@ export async function buildPlanDefinition(prisma, userId) {
   }
 
   // Load data in parallel
-  const [prescription, weeklyGoal, healthGoal, target, layers, templates] = await Promise.all([
+  // (plan items used to be fetched after all of this, as one more round-trip)
+  const [prescription, weeklyGoal, healthGoal, target, layers, templates, items, medicalGranted] = await Promise.all([
     prisma.prescription.findUnique({ where: { userId } }),
     prisma.weeklyGoal.findUnique({ where: { userId } }),
     prisma.healthGoal.findUnique({ where: { userId } }),
     prisma.nutritionTarget.findFirst({ where: { userId }, orderBy: { effectiveFrom: 'desc' } }),
     getLayers(prisma, userId, { journey }),
     listTemplatesService(userId),
+    // Build items (only user + doctor rows)
+    prisma.planItem.findMany({
+      where: { userId, active: true, origin: { in: ['user', 'doctor'] } },
+      orderBy: [{ kind: 'asc' }, { createdAt: 'asc' }],
+    }),
+    hasMedicalRecordsConsentService(userId),
   ]);
-  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers });
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers, medicalGranted });
 
   // Build settings
   const settings = {
@@ -273,12 +291,6 @@ export async function buildPlanDefinition(prisma, userId) {
     level: slot.level ?? null,
     moves: slot.moves ?? null,
   }));
-
-  // Build items (only user + doctor rows)
-  const items = await prisma.planItem.findMany({
-    where: { userId, active: true, origin: { in: ['user', 'doctor'] } },
-    orderBy: [{ kind: 'asc' }, { createdAt: 'asc' }],
-  });
 
   const formattedItems = items.map((item) => ({
     itemId: item.id,

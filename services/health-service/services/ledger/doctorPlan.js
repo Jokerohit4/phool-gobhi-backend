@@ -30,21 +30,53 @@ export function validateDoctorPlan(input, today = isoDayIST()) {
     authenticity: 'user_provided_not_verified' };
 }
 
-export async function activeDoctorPlan(prisma, userId, day) {
-  // Test doubles and older consumers without this optional record store carry
-  // no doctor override. Database errors in the real store propagate.
-  if (!prisma.ledgerConsent?.findUnique || !prisma.medicalDocument?.findMany) return null;
-  const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
-  if (!consent || consent.revokedAt || !consent.scopes?.includes('medical_records') ||
-      consent.scopeVersions?.medical_records !== '2026-09-27') return null;
-  const records = await prisma.medicalDocument.findMany({ where: { userId, structuredPlan: { path: ['version'], equals: 1 },
-    OR: [{ supersededAt: null }, { supersededAt: { gt: new Date(`${day}T23:59:59.999+05:30`) } }] },
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+const consentAllowsDoctorPlan = consent => Boolean(consent && !consent.revokedAt && consent.scopes?.includes('medical_records') &&
+  consent.scopeVersions?.medical_records === '2026-09-27');
+const endOfDay = day => new Date(`${day}T23:59:59.999+05:30`);
+
+// The one place that decides which record wins on `day`. `records` must already be
+// ordered createdAt desc, id desc and limited to records not superseded before `day`.
+function pickDoctorPlan(records, day) {
   // Prior records are retired atomically on save. Deleting the replacement
   // does not reactivate an older prescription. Previous days retain their plan.
   const record = records.find(r => r.structuredPlan?.version === 1 && r.structuredPlan?.confirmed === true && r.structuredPlan.startsOn <= day);
   if (!record || (record.structuredPlan.endsOn && record.structuredPlan.endsOn < day)) return null;
   return { id: record.id, ...record.structuredPlan };
+}
+
+/**
+ * The doctor plan that applied on each of `days`, from ONE consent read and ONE
+ * document read (activeDoctorPlan issues both per day). Same answer as calling
+ * activeDoctorPlan per day: the supersededAt window the SQL applied per day is
+ * applied here per day in JS, over a superset fetched for the earliest day.
+ * Returns Map<day, plan|null>.
+ */
+export async function activeDoctorPlans(prisma, userId, days) {
+  const out = new Map(days.map(d => [d, null]));
+  if (!days.length || !prisma.ledgerConsent?.findUnique || !prisma.medicalDocument?.findMany) return out;
+  const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
+  if (!consentAllowsDoctorPlan(consent)) return out;
+  const earliest = days.reduce((a, b) => (b < a ? b : a));
+  const records = await prisma.medicalDocument.findMany({ where: { userId, structuredPlan: { path: ['version'], equals: 1 },
+    OR: [{ supersededAt: null }, { supersededAt: { gt: endOfDay(earliest) } }] },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  for (const day of days) {
+    const cutoff = endOfDay(day).getTime();
+    out.set(day, pickDoctorPlan(records.filter(r => r.supersededAt == null || new Date(r.supersededAt).getTime() > cutoff), day));
+  }
+  return out;
+}
+
+export async function activeDoctorPlan(prisma, userId, day) {
+  // Test doubles and older consumers without this optional record store carry
+  // no doctor override. Database errors in the real store propagate.
+  if (!prisma.ledgerConsent?.findUnique || !prisma.medicalDocument?.findMany) return null;
+  const consent = await prisma.ledgerConsent.findUnique({ where: { userId } });
+  if (!consentAllowsDoctorPlan(consent)) return null;
+  const records = await prisma.medicalDocument.findMany({ where: { userId, structuredPlan: { path: ['version'], equals: 1 },
+    OR: [{ supersededAt: null }, { supersededAt: { gt: endOfDay(day) } }] },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  return pickDoctorPlan(records, day);
 }
 
 export function applyDoctorTargets(target, plan) {
