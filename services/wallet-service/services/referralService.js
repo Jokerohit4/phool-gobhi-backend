@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 // Namespace import (not named) on purpose: webhook.test.js mocks
 // walletService.js with a partial export set, and referralService is now
 // reachable from walletController.js (the referral routes). A named import
@@ -7,14 +7,7 @@ import { PrismaClient } from '@prisma/client';
 // undefined only if actually accessed, which they don't.
 import * as walletService from './walletService.js';
 
-// Constructed lazily rather than at module top-level: walletController.js
-// imports this module for its route handlers, and webhook.test.js (which
-// loads walletController) does not mock @prisma/client — a top-level
-// construction would run the real, ungenerated client there. Construction is
-// deferred until a referral function actually touches the DB.
-let prisma;
 function getPrisma() {
-  if (!prisma) prisma = new PrismaClient();
   return prisma;
 }
 

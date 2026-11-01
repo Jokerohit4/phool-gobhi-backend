@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import axios from 'axios';
 import Razorpay from 'razorpay';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { DEFAULT_WALLET_TOPUP_CONFIG, HARD_MAX_TOPUP_AMOUNT } from '../utils/walletConstants.js';
-const prisma = new PrismaClient();
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';

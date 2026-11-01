@@ -5,13 +5,12 @@ dotenv.config();
 import { connectDB } from './db.js';
 connectDB();
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db/prisma.js';
 import { extractUser } from './middleware/requireAuth.js';
 import walletRoutes from './routes/wallet.js';
 
 const app = express();
 app.use(analyticsMiddleware());
-const prisma = new PrismaClient();
 // Razorpay signs the exact raw bytes of the webhook payload — stash them here
 // since express.json() only exposes the re-parsed object, and re-serializing
 // that with JSON.stringify is not guaranteed to match byte-for-byte (key
