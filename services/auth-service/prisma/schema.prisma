@@ -34,6 +34,9 @@ model User {
   genderChangedAt DateTime?
   genderChangedTo Gender?
   fitnessGoals  FitnessGoal[]
+  // Sports the user plays (constants/sports.js). Independent of persona and
+  // never cleared by a switch.
+  sportsPlayed  String[]      @default([])
   // LIVE AGAIN as of the coach-journey cutover (2026-10-16). It was deprecated
   // on 2026-09-30: the onboarding step that collected it and the client-side
   // gym scorer that read it were both removed. The coach journey re-introduces

@@ -206,6 +206,11 @@ export function summariseTrainingProfile(profile) {
       bits.push('Suggest workouts that need no gym equipment unless they mention having some.');
     }
   }
+  // Plain labels, not an allowlist: the sports catalog (auth-service) grows with venues.
+  const sports = (Array.isArray(profile.sportsPlayed) ? profile.sportsPlayed : [])
+    .filter((k) => typeof k === 'string' && k !== 'other')
+    .map((k) => k.replace(/_/g, ' '));
+  if (sports.length) bits.push(`Plays ${sports.join(', ')}.`);
   const freq = FREQUENCY_PHRASES[profile.weeklyFrequencyIntent];
   if (freq) bits.push(`Usually trains ${freq}.`);
   const free = FREE_TIME_PHRASES[profile.freeTimeWindow];

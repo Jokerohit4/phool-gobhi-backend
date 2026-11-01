@@ -196,3 +196,10 @@ test('the audit still counts memories without copying them', async () => {
   assert.equal(audit.memories, 2);
   assert.ok(!JSON.stringify(audit).includes('peanuts'));
 });
+
+test('summariseTrainingProfile names the sports someone plays, and skips "other"', async () => {
+  const { summariseTrainingProfile } = await import('../services/assistant/contextService.js');
+  const text = summariseTrainingProfile({ currentlyWorksOut: true, trainingLocationPref: 'sports', sportsPlayed: ['table_tennis', 'cricket', 'other'] });
+  assert.match(text, /Plays table tennis, cricket\./);
+  assert.doesNotMatch(summariseTrainingProfile({ currentlyWorksOut: true, trainingLocationPref: 'home', sportsPlayed: [] }) || '', /Plays/);
+});

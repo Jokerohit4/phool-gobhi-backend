@@ -6,6 +6,7 @@ import { notifyPersonaChanged } from '../services/personaEvents.js';
 import { gymLookupDeps, isLinkablePartnerGym, isKnownUnclaimedGym } from '../services/gymLookup.js';
 import { isPersonaSwitchEnabled } from '../services/gymLinkService.js';
 import { normalizeFitnessGoals } from '../constants/userEnums.js';
+import { normalizeSportsPlayed, VALID_SPORTS } from '../constants/sports.js';
 import { linkGym } from '../services/gymLinkService.js';
 import { normalizePhone } from '../services/authService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
@@ -166,6 +167,7 @@ function formatUser(user) {
     gender: user.gender || null,
     dateOfBirth: user.dateOfBirth || null,
     fitnessGoals: user.fitnessGoals || [],
+    sportsPlayed: user.sportsPlayed || [],
     recommendedEquipment: user.recommendedEquipment ?? null,
     experienceLevel: user.experienceLevel || null,
     weeklyFrequencyIntent: user.weeklyFrequencyIntent || null,
@@ -440,7 +442,7 @@ export const updateProfile = async (req, res) => {
       currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
       weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
       wellnessFocuses, wellnessDayPattern, wellnessSleepPattern, wellnessSetupCompleted,
-      firstVisitBadgeConsent, recommendedEquipment,
+      firstVisitBadgeConsent, recommendedEquipment, sportsPlayed,
     } = req.body;
 
     // appMode is deliberately NOT accepted here. It is derived server-side
@@ -571,6 +573,13 @@ export const updateProfile = async (req, res) => {
         return res.status(400).json({ error: `Invalid fitnessGoals. Must be an array of: ${VALID_FITNESS_GOALS.join(', ')}` });
       }
     }
+    let cleanSports;
+    if (sportsPlayed !== undefined && sportsPlayed !== null) {
+      cleanSports = normalizeSportsPlayed(sportsPlayed);
+      if (cleanSports === null) {
+        return res.status(400).json({ error: `Invalid sportsPlayed. Must be an array of: ${VALID_SPORTS.join(', ')}`, code: 'INVALID_SPORTS' });
+      }
+    }
     if (recommendedEquipment !== undefined && recommendedEquipment !== null) {
       if (
         !Array.isArray(recommendedEquipment)
@@ -623,6 +632,7 @@ export const updateProfile = async (req, res) => {
     }
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
+    if (sportsPlayed !== undefined) updates.sportsPlayed = cleanSports || [];
     if (recommendedEquipment !== undefined) updates.recommendedEquipment = recommendedEquipment;
     // linkedGymId is the gym-join attribution written when a customer follows
     // a gym's join link (the app PUTs it here, and signup/login backfill it

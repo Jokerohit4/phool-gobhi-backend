@@ -682,6 +682,7 @@ const getMe = async (req, res) => {
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
+      sportsPlayed: user.sportsPlayed ?? [],
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
       gymLinkSource,
@@ -748,6 +749,7 @@ const getUserInternal = async (req, res) => {
       genderChangedAt: user.genderChangedAt ?? null,
       genderChangedTo: user.genderChangedTo ?? null,
       fitnessGoals: user.fitnessGoals,
+      sportsPlayed: user.sportsPlayed ?? [],
       // Onboarding answers health-service reads to seed a weekly training
       // goal (FR-04) instead of measuring everyone against one hardcoded
       // number. Preferences, not sensitive data — the same class as
