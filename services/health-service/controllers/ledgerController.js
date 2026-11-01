@@ -723,6 +723,28 @@ export const uploadMedicalDocument = handle(async (req) => {
     throw err;
   }
 
+  // Optional link to one of the caller's own appointments. Checked before the
+  // bytes are stored so a bad id leaves no orphaned object behind, and scoped to
+  // userId so one account can never attach a file to another's appointment.
+  let appointmentId = null;
+  if (req.body?.appointmentId !== undefined && req.body.appointmentId !== '') {
+    appointmentId = Number(req.body.appointmentId);
+    if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+      const err = new Error('appointmentId must be a positive integer');
+      err.status = 400;
+      throw err;
+    }
+    const appointment = await prisma.doctorAppointment.findFirst({
+      where: { id: appointmentId, userId: req.userId },
+      select: { id: true },
+    });
+    if (!appointment) {
+      const err = new Error('No such appointment');
+      err.status = 404;
+      throw err;
+    }
+  }
+
   const storagePath = await medicalDocumentStorage.saveDocument({
     buffer: req.file.buffer,
     mimeType: req.file.mimetype,
@@ -739,6 +761,7 @@ export const uploadMedicalDocument = handle(async (req) => {
       notes: req.body?.notes ? String(req.body.notes).slice(0, 500) : null,
       mimeType: req.file.mimetype,
       sizeBytes: req.file.size,
+      appointmentId,
     },
   });
 
@@ -755,8 +778,20 @@ export const uploadMedicalDocument = handle(async (req) => {
 });
 
 export const listMedicalDocuments = handle(async (req) => {
+  // `?appointmentId=` narrows the list to one appointment's files; without it
+  // every document comes back, as before.
+  const where = { userId: req.userId };
+  if (req.query?.appointmentId !== undefined && req.query.appointmentId !== '') {
+    const appointmentId = Number(req.query.appointmentId);
+    if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+      const err = new Error('appointmentId must be a positive integer');
+      err.status = 400;
+      throw err;
+    }
+    where.appointmentId = appointmentId;
+  }
   const docs = await prisma.medicalDocument.findMany({
-    where: { userId: req.userId },
+    where,
     orderBy: { createdAt: 'desc' },
   });
   return docs.map(({ storagePath, ...safe }) => safe);

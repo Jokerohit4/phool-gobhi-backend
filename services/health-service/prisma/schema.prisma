@@ -1894,10 +1894,16 @@ model MedicalDocument {
   supersededAt DateTime?
   mimeType    String?
   sizeBytes   Int?
+  // Set when the file was scanned or uploaded against a doctor appointment.
+  // Optional: most documents belong to no appointment. Deleting the appointment
+  // keeps the document (it is still the user's record) and just unlinks it.
+  appointmentId Int?
+  appointment   DoctorAppointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+  @@index([appointmentId])
   @@schema("health")
 }
 
@@ -1913,6 +1919,7 @@ model DoctorAppointment {
   localTime    String?
   followUpDate String?
   notes        String?
+  documents    MedicalDocument[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
