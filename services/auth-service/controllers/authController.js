@@ -656,9 +656,22 @@ const updateStaffStatus = async (req, res) => {
   }
 };
 
+export const ME_SELECT = Object.fromEntries([
+  'id', 'phone', 'name', 'email', 'role', 'type', 'gender', 'dateOfBirth', 'fitnessGoals', 'sportsPlayed',
+  'referralCode', 'linkedGymId', 'trainerGymId', 'leaderboardOptIn', 'experienceLevel', 'homeUnclaimedGymId',
+  'pendingGymPromptGymId', 'gymLinkNotice', 'firstVisitBadgeConsent', 'currentlyWorksOut', 'workoutIntent',
+  'wellnessFocuses', 'wellnessDayPattern', 'wellnessSleepPattern', 'wellnessSetupCompleted',
+  'trainingLocationPref', 'trainingLocationOther', 'appMode', 'persona', 'freeTimeWindow', 'recommendedEquipment',
+].map((field) => [field, true]));
+
 const getMe = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    // Narrow select: exactly the columns the response below reads, plus the
+    // inputs resolvePersona() reads (persona, linkedGymId, homeUnclaimedGymId,
+    // the wellness answers, trainingLocationPref, currentlyWorksOut, appMode,
+    // workoutIntent). The User row is wide; /me is the app-boot call. Adding a
+    // field to the response means adding it to ME_SELECT (test pins this).
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: ME_SELECT });
     if (!user) return res.status(404).json({ error: 'User not found' });
     // How the active gym membership was made (QR vs self-declared), so the app
     // can render the linked-member home from /me alone. Null when the pointer
