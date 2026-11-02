@@ -114,8 +114,28 @@ export const requireAnyFeatureFlag = (...flagNames) => async (req, res, next) =>
 // extra catch is belt-and-braces, and failure handling (2s timeout, 5s retry,
 // fail-closed first call) is exactly the normal path. Only on Cloud Run
 // (K_SERVICE) and never under tests.
+//
+// The cache is then kept warm for the life of the instance. With min-instances>0
+// an idle dev instance can take a request every few minutes; without this, the
+// 30s TTL guarantees that almost every such request pays the auth-service hop
+// (observed 0.19–0.53s warm, 4.1s cold) inside the request. The timer obeys the
+// same nextRetryAt/inFlight guards, so an auth-service outage is still retried
+// at most every 5s, not on every tick.
+let keepFreshTimer = null;
+
+function refreshInBackground() {
+  if (cachedFlags && Date.now() < nextRetryAt) return;
+  if (!inFlight) inFlight = refreshFlags().finally(() => { inFlight = null; });
+}
+
 export function warmFeatureFlags({ env = process.env } = {}) {
   if (env.NODE_ENV === 'test' || env.NODE_TEST_CONTEXT || !env.K_SERVICE) return null;
-  try { return Promise.resolve(getFeatureFlags()).catch(() => {}); } catch { return null; }
+  let warm;
+  try { warm = Promise.resolve(getFeatureFlags()).catch(() => {}); } catch { return null; }
+  if (!keepFreshTimer) {
+    keepFreshTimer = setInterval(refreshInBackground, FLAG_CACHE_TTL_MS / 2);
+    keepFreshTimer.unref?.();
+  }
+  return warm;
 }
 void warmFeatureFlags();

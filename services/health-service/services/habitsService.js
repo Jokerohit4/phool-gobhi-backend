@@ -167,6 +167,14 @@ export async function logWater(prisma, { userId, ml, localDate, requestId } = {}
     }
   }
 
+  // The prescription target and the day total are independent reads; start the
+  // target before awaiting the aggregate so the two round trips overlap instead
+  // of running in series on every drink.
+  const targetP = waterTargetMl(prisma, userId);
+  // A rejection is surfaced by the await below; swallow the interim rejection so
+  // it is not reported as unhandled while the aggregate is still in flight.
+  targetP.catch(() => {});
+
   const total = await prisma.waterLog.aggregate({
     _sum: { ml: true },
     where: { userId, localDate: day },
@@ -174,7 +182,7 @@ export async function logWater(prisma, { userId, ml, localDate, requestId } = {}
 
   let reward = { coinsAwarded: 0, pending: false };
   try {
-    reward = await recordRoutineWater(prisma, { userId, localDate: day, replayed, now: row.createdAt, targetMl: await waterTargetMl(prisma, userId) });
+    reward = await recordRoutineWater(prisma, { userId, localDate: day, replayed, now: row.createdAt, targetMl: await targetP });
   } catch (error) { console.error('[routine] water reward pending:', error.message); reward.pending = true; }
   return { id: row.id, loggedMl: Number(total._sum.ml || 0), reward };
 }

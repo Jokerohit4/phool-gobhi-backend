@@ -20,6 +20,15 @@ onJourneyInvalidate((userId) => workoutRepairCache.invalidate(String(userId)));
 const AUTH = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const CHALLENGE = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
 
+// Crediting coins is a side effect of an already-saved drink/workout, not the
+// record itself. It stays awaited so the response can report the award, but a
+// cold or wedged challenge-service must not hold the request open: a cold
+// /internal/coins/:id/credit took 3.05s against 0.65s warm (observed on
+// health-service-dev, 2026-11). On timeout the durable claim stays pending and
+// POST /habits/rewards/retry (or the next drink) pays it with the same
+// idempotency key, so no coin is lost or double-paid.
+const COIN_CREDIT_TIMEOUT_MS = 1_200;
+
 export async function routineState(prisma, userId) {
   if (!await isFeatureEnabled('homeIntroduction')) return null;
   let state = await prisma.routineJourneyState.findUnique({ where: { userId } });
@@ -102,6 +111,7 @@ export async function payRoutineClaims(prisma, userId) {
     try {
       await fetchInternal(CHALLENGE, `/internal/coins/${userId}/credit`, {
         method: 'POST', body: { amount: claim.amount, description: claim.description, idempotencyKey: claim.key },
+        timeout: COIN_CREDIT_TIMEOUT_MS,
       });
       const marked = await prisma.routineRewardClaim.updateMany({
         where: { key: claim.key, paidAt: null }, data: { paidAt: new Date() },
