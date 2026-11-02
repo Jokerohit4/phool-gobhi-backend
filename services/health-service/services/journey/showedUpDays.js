@@ -101,14 +101,35 @@ onJourneyInvalidate(invalidateShowedUpDays);
 
 async function loadShowedUpDays(userId, from, { to, limit }) {
   let degraded = false;
+  const loadStart = Date.now();
+  let bookingMs = 0;
+  let dbMs = 0;
   const [bookingDays, workoutDays] = await Promise.all([
     // booking-service internal endpoint returns {days: ["YYYY-MM-DD", ...]} distinct union
     // of Booking.attendedAt, MemberAttendance.date, IndependentCheckIn.date (IST)
-    fetchInternal(BOOKING_SERVICE_URL, `/internal/users/${userId}/checkin-days${from ? `?from=${from}` : ''}`)
-      .then((res) => (res.data?.days || []))
-      .catch(() => { degraded = true; return []; }),
-    getQualifyingWorkoutDays(userId, from),
+    (async () => {
+      const startedAt = Date.now();
+      try {
+        return await fetchInternal(BOOKING_SERVICE_URL, `/internal/users/${userId}/checkin-days${from ? `?from=${from}` : ''}`)
+          .then((res) => (res.data?.days || []))
+          .catch(() => { degraded = true; return []; });
+      } finally {
+        bookingMs = Date.now() - startedAt;
+      }
+    })(),
+    (async () => {
+      const startedAt = Date.now();
+      try {
+        return await getQualifyingWorkoutDays(userId, from);
+      } finally {
+        dbMs = Date.now() - startedAt;
+      }
+    })(),
   ]);
+  const loadMs = Date.now() - loadStart;
+  if (loadMs > 200) {
+    console.warn(`[showedUpDays] load ${loadMs}ms user ${userId} booking=${bookingMs}ms db=${dbMs}ms`);
+  }
 
   const allDays = new Set([...bookingDays, ...workoutDays]);
   let daysArray = Array.from(allDays).filter(day => !to || day <= to).sort().reverse(); // newest first

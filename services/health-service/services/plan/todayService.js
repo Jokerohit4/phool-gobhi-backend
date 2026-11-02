@@ -118,6 +118,21 @@ async function getSessions(prisma, userId, today, { wellnessOnly = false, loadTe
  */
 export async function buildToday(prisma, userId, { localDate } = {}) {
   const startTime = Date.now();
+  const phases = [];
+  let mark = startTime;
+  const lap = (label) => {
+    const now = Date.now();
+    phases.push(`${label}=${now - mark}ms`);
+    mark = now;
+  };
+  const timed = async (label, fn) => {
+    const startedAt = Date.now();
+    try {
+      return await fn();
+    } finally {
+      phases.push(`${label}=${Date.now() - startedAt}ms`);
+    }
+  };
 
   // Determine the date
   let resolvedDate = localDate;
@@ -133,16 +148,18 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
       reason: 'no_consent',
     };
   }
+  lap('consent');
 
   // Get journey (exactly once - it syncs unlocks and rebuilds if needed). The
   // journey doesn't feed the score-open / pause lookups, so they ride along
   // instead of waiting behind it. They're cheap single-row reads; a user with
   // consent but no journey yet wastes two of them, which is the rare case.
   const [journey, scoreOpen, pauseState] = await Promise.all([
-    getJourney(userId),
-    previousClose(prisma, { userId, localDate: resolvedDate }),
-    getPauseState(prisma, userId, resolvedDate),
+    timed('journey', () => getJourney(userId)),
+    timed('prevClose', () => previousClose(prisma, { userId, localDate: resolvedDate })),
+    timed('pause', () => getPauseState(prisma, userId, resolvedDate)),
   ]);
+  lap('journeyWall');
   if (!journey) {
     return {
       state: 'no_plan',
@@ -155,15 +172,18 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   // (getOnLayerKeys used to run it as its own round-trip afterwards).
   const loadTemplate = makeTemplateLoader(prisma);
   const [layers, sessions, medicalGranted] = await Promise.all([
-    getLayers(prisma, userId, { journey }),
-    getSessions(prisma, userId, resolvedDate, {
+    timed('layers', () => getLayers(prisma, userId, { journey })),
+    timed('sessions', () => getSessions(prisma, userId, resolvedDate, {
       wellnessOnly: journey.wellnessOnly === true,
       loadTemplate,
-    }),
-    hasMedicalRecordsConsentService(userId),
+    })),
+    timed('medical', () => hasMedicalRecordsConsentService(userId)),
   ]);
+  lap('layersWall');
   const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers, medicalGranted });
+  lap('onLayerKeys');
   const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys, loadTemplate });
+  lap('resolveDay');
   const showedUpDays = journey.showedUpDates ?? [];
 
   // Re-extract resolved values from dayResolution
@@ -217,7 +237,7 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   // Log duration
   const duration = Date.now() - startTime;
   if (duration > 300) {
-    console.warn(`[todayService] buildToday took ${duration}ms for user ${userId}`);
+    console.warn(`[todayService] buildToday took ${duration}ms for user ${userId} ${phases.join(' ')}`);
   }
 
   return payload;

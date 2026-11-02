@@ -27,6 +27,10 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadT
   onLayerKeys ??= await getOnLayerKeys(prisma, userId);
   loadTemplate ??= makeTemplateLoader(prisma);
 
+  const resolveStart = Date.now();
+  let templateMs = 0;
+  let prescriptionMs = 0;
+  const parallelStart = Date.now();
   const [
     planResult,
     foodResult,
@@ -61,6 +65,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadT
       select: { metric: true, value: true },
     }),
   ]);
+  const parallelMs = Date.now() - parallelStart;
 
   const planItems = planResult.items;
   // getPlanForDate returns every due row with its completion for the date
@@ -69,6 +74,7 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadT
   const completions = planItems
     .filter((item) => item.completion)
     .map((item) => ({ ...item.completion, planItemId: item.id }));
+
 
   const completedItemIds = new Set(completions.map((c) => c.planItemId));
   const takenSupplementIds = new Set(supplementLogs.map((l) => Number(l.scheduleId)));
@@ -92,8 +98,10 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadT
 
   const qualifyingSessions = sessions.filter(isQualifyingSession);
   // PlanItem stores the weekday schedule; the template lives on its slot.
+  const prescriptionStart = Date.now();
   const prescription = planItems.some((i) => i.kind === 'workout' && i.origin !== 'user' && !i.templateId)
     ? await prisma.prescription.findUnique({ where: { userId } }) : null;
+  prescriptionMs = Date.now() - prescriptionStart;
   const weekday = (new Date(`${localDate}T00:00:00Z`).getUTCDay() + 6) % 7;
 
   const layerFilter = new Set(onLayerKeys);
@@ -148,7 +156,9 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadT
         action = done ? 'open_session' : 'start_session';
         const slot = prescription?.workoutSlots?.find((s) => Number(s.weekday) === weekday);
         templateId = slot?.templateId ?? item.templateId ?? null;
+        const templateStart = Date.now();
         const template = await loadTemplate(templateId);
+        templateMs += Date.now() - templateStart;
         moves = template?.exercises?.length ?? null;
         progress = done ? 1 : 0;
         break;
@@ -378,6 +388,11 @@ export async function resolveDay(prisma, { userId, localDate, onLayerKeys, loadT
     }
     return 0;
   });
+
+  const resolveTotal = Date.now() - resolveStart;
+  if (resolveTotal > 200) {
+    console.warn(`[rowProgress] resolveDay ${resolveTotal}ms user ${userId} parallel=${parallelMs}ms prescription=${prescriptionMs}ms templates=${templateMs}ms`);
+  }
 
   return {
     rows,

@@ -242,7 +242,17 @@ export async function getJourney(userId) {
 }
 
 async function computeJourney(userId) {
+  const traceStart = Date.now();
+  let traceMark = traceStart;
+  const traceParts = [];
+  const traceStep = (label) => {
+    const now = Date.now();
+    traceParts.push(`${label}=${now - traceMark}ms`);
+    traceMark = now;
+  };
+
   let progress = await prisma.journeyProgress.findUnique({ where: { userId } });
+  traceStep('progress');
 
   if (!progress) {
     // Not started yet - caller should handle 404
@@ -251,6 +261,7 @@ async function computeJourney(userId) {
 
   const startLevel = progress.startLevel ?? DEFAULT_EXPERIENCE_LEVEL;
   const showedUpDays = await getShowedUpDays(userId);
+  traceStep('showedUp');
   const steadyWeeks = countSteadyWeeks(showedUpDays);
   const lastShowedUpDate = showedUpDays[0] ?? null;
 
@@ -263,13 +274,16 @@ async function computeJourney(userId) {
 
   // Check and trigger home-days referral (3rd showed-up day)
   await checkAndTriggerHomeDaysReferral(userId, showedUpDays, progress);
+  traceStep('referral');
 
   // Compute unlocked layers
   const unlockedLayers = await computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks, startLevel);
+  traceStep('unlocked');
 
   // Sync unlocks with conditional guard and rebuild (writes only on a new unlock).
   const { updated, progress: syncedProgress } = await syncUnlocks(userId, progress, unlockedLayers, lastShowedUpDate);
   progress = syncedProgress ?? progress;
+  traceStep('sync');
 
   // Update lastShowedUpDate if changed without unlock
   if (lastShowedUpDate !== (progress.lastShowedUpDate ?? null)) {
@@ -277,6 +291,12 @@ async function computeJourney(userId) {
       where: { userId },
       data: { lastShowedUpDate },
     });
+  }
+  traceStep('touch');
+
+  const traceTotal = Date.now() - traceStart;
+  if (traceTotal > 150) {
+    console.warn(`[journey] computeJourney ${traceTotal}ms user ${userId} ${traceParts.join(' ')}`);
   }
 
   // Milestones for experienced users
