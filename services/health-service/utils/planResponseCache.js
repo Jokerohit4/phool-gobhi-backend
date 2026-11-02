@@ -57,5 +57,3 @@ export function invalidatePlanToday(userId, localDate) {
 onJourneyInvalidate((userId) => {
   planTodayCache.invalidateKeysStartingWith(`${Number(userId)}|`);
 });
-
-export { emitJourneyInvalidate };
