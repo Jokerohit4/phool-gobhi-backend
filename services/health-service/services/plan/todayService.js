@@ -139,8 +139,9 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   if (!resolvedDate || !/^\d{4}-\d{2}-\d{2}$/.test(resolvedDate) || isFutureDate(resolvedDate)) {
     resolvedDate = todayIST();
   }
-
-  // Check coach basic consent first
+  // Check coach basic consent first — the gate must precede every other read
+  // on this path (the journey compute has side effects, and nothing else may be
+  // fetched for a user who never granted coach consent).
   const coachConsent = await prisma.coachConsent.findUnique({ where: { userId } });
   if (!coachConsent || coachConsent.revokedAt || !coachConsent.scopes?.includes('basic')) {
     return {
@@ -160,6 +161,7 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     timed('pause', () => getPauseState(prisma, userId, resolvedDate)),
   ]);
   lap('journeyWall');
+
   if (!journey) {
     return {
       state: 'no_plan',

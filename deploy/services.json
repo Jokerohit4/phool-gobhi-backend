@@ -416,8 +416,11 @@
             "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
             "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
             "ANALYTICS_MAX_BYTES_BILLED": "268435456",
-            "FOOD_PHOTO_CONTRIBUTIONS": "true",
-            "FOOD_TEXT_AI_LOOKUP": "true"
+              "FOOD_PHOTO_CONTRIBUTIONS": "true",
+              "FOOD_TEXT_AI_LOOKUP": "true",
+              "SHOWED_UP_DAYS_CACHE_TTL_MS": "60000",
+              "JOURNEY_CACHE_TTL_MS": "60000"
+
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"
