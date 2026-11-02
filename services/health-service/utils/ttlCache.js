@@ -59,6 +59,19 @@ export function createTtlCache({ ttlMs, maxEntries = 1000, forceEnabled = false 
     inflight.delete(key);
   }
 
+  // Drop every entry whose key starts with `prefix` (and any in-flight load for
+  // those keys). Used to evict all per-date response-cache entries for a user
+  // when a journey-level change (workout finish, consent erase) may have
+  // altered the today payload on any date.
+  function invalidateKeysStartingWith(prefix) {
+    for (const [k, e] of entries) {
+      if (k.startsWith(prefix)) {
+        entries.delete(k);
+        inflight.delete(k);
+      }
+    }
+  }
+
   function clear() {
     entries.clear();
     inflight.clear();

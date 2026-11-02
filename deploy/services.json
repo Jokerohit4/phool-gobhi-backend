@@ -419,7 +419,8 @@
               "FOOD_PHOTO_CONTRIBUTIONS": "true",
               "FOOD_TEXT_AI_LOOKUP": "true",
               "SHOWED_UP_DAYS_CACHE_TTL_MS": "60000",
-              "JOURNEY_CACHE_TTL_MS": "60000"
+              "JOURNEY_CACHE_TTL_MS": "60000",
+              "PLAN_TODAY_RESPONSE_CACHE_TTL_MS": "15000"
 
           },
           "secrets": {

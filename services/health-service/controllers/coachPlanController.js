@@ -1,5 +1,6 @@
 import prisma from '../db/prisma.js';
 import * as todayService from '../services/plan/todayService.js';
+import { getPlanToday, setPlanToday } from '../utils/planResponseCache.js';
 import { rebuildPlan } from '../services/plan/rebuildPlan.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
@@ -28,7 +29,10 @@ function handle(fn) {
 // GET /plan/today
 export const getToday = handle(async (req, res) => {
   const localDate = req.query.localDate;
-  const today = await todayService.buildToday(prisma, req.userId, { localDate });
+  const cacheDate = localDate ?? todayService.todayIST();
+  const today = await getPlanToday(req.userId, cacheDate, () =>
+    todayService.buildToday(prisma, req.userId, { localDate: cacheDate }),
+  );
   res.json(today);
 });
 
@@ -97,6 +101,7 @@ export const completeItem = handle(async (req, res) => {
   });
 
   const today = await todayService.buildToday(prisma, req.userId, { localDate });
+  setPlanToday(req.userId, localDate ?? todayService.todayIST(), today);
   res.json({ today });
 });
 
@@ -135,6 +140,7 @@ export const uncompleteItem = handle(async (req, res) => {
   }
 
   const today = await todayService.buildToday(prisma, req.userId, { localDate });
+  setPlanToday(req.userId, localDate ?? todayService.todayIST(), today);
   res.json({ today });
 });
 
@@ -187,6 +193,7 @@ export const createItem = handle(async (req, res) => {
     track('plan_edited', req.userId, { what: 'item_added' });
 
     const today = await todayService.buildToday(prisma, req.userId, {});
+    setPlanToday(req.userId, todayService.todayIST(), today);
     res.status(201).json({ item, today });
   } else if (type === 'doctor') {
     const { kind, title, schedule, prescribedBy, prescribedNote, endsOn } = data;
@@ -240,6 +247,7 @@ export const createItem = handle(async (req, res) => {
     track('plan_edited', req.userId, { what: 'item_added' });
 
     const today = await todayService.buildToday(prisma, req.userId, {});
+    setPlanToday(req.userId, todayService.todayIST(), today);
     res.status(201).json({ item, today });
   } else {
     const err = new Error('type must be "own" or "doctor"');
@@ -273,6 +281,7 @@ export const deleteItem = handle(async (req, res) => {
   track('plan_edited', req.userId, { what: 'item_removed' });
 
   const today = await todayService.buildToday(prisma, req.userId, {});
+  setPlanToday(req.userId, todayService.todayIST(), today);
   res.json({ today });
 });
 
@@ -313,5 +322,6 @@ export const foodEarly = handle(async (req, res) => {
   await unlockFoodEarly(req.userId);
 
   const today = await todayService.buildToday(prisma, req.userId, {});
+  setPlanToday(req.userId, todayService.todayIST(), today);
   res.json({ today });
 });
