@@ -78,12 +78,12 @@ test('own-gym answers PUT then GET round-trip, and appMode is derived', async ()
   assert.equal(u.trainingLocationPref, 'gym');
   assert.equal(u.weeklyFrequencyIntent, 'three_four');
   assert.equal(u.freeTimeWindow, 'evening');
-  // Own gym derives home_track, not gym_seeker. This asserted gym_seeker for as
-  // long as anyone who trains anywhere got the marketplace; the rule now gives
-  // that surface only to people who do not train yet, and demotes partner-gym
-  // discovery to the bottom of home_track for everyone already training. The
-  // answers above round-trip unchanged either way - only the derived mode moved.
-  assert.equal(u.appMode, 'home_track');
+  // Own gym derives home_track; gym without a linked/claimed gym derives
+  // gym_seeker (marketplace). Without a linked gym id here, the mode is the
+  // seeker surface — this is the fix for the bug where a bare "gym"
+  // preference put already-training users into home_track with no gym to
+  // track at.
+  assert.equal(u.appMode, 'gym_seeker');
   assert.equal(historyRows.length, 1);
   assert.equal(historyRows[0].source, 'onboarding');
 });

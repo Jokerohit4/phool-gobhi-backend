@@ -107,22 +107,24 @@ test('changing the answer later logs the switch as settings', async () => {
   ]);
 });
 
-test('switching training location is no longer a mode change, and logs nothing', async () => {
+test('switching training location home -> gym without a linked gym becomes a mode change', async () => {
   // The pair of halves to the test above, and the case that used to break.
   //
-  // home -> gym derives home_track either way, so there is no switch to record.
-  // Logging one would put a fabricated home_track -> home_track row in the
-  // audit trail, and this log exists to answer "how did this account end up in
-  // this mode" - a row that changes nothing is a worse answer than no row.
+  // home -> gym_seeker IS a mode change now: preferring gym without linking or
+  // claiming one means the user has no gym to track at, so they're a seeker.
+  // Logging the row answers "how did this account end up in gym_seeker?".
   reset({ currentlyWorksOut: true, trainingLocationPref: 'home', appMode: 'home_track' });
   const res = fakeRes();
 
   await updateProfile(reqWith({ trainingLocationPref: 'gym' }), res);
 
   assert.equal(res.statusCode, 200);
-  assert.equal(stored.appMode, 'home_track');
-  assert.equal(transactions, 0);
-  assert.equal(historyRows.length, 0);
+  assert.equal(stored.appMode, 'gym_seeker');
+  assert.equal(transactions, 1);
+  assert.equal(historyRows.length, 1);
+  assert.deepEqual(historyRows, [
+    { userId: 42, fromMode: 'home_track', toMode: 'gym_seeker', source: 'settings' },
+  ]);
 });
 
 test('moving gym -> home is not a mode change either', async () => {

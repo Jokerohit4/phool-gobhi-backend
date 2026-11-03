@@ -56,10 +56,31 @@ test('trains at home -> home_track', () => {
   );
 });
 
-test('trains at a gym/centre/sports/elsewhere -> home_track', () => {
+test('trains at a gym/centre/sports/elsewhere -> home_track if they have a gym, gym_seeker if they do not', () => {
+  // A bare "gym" / "fitness_centre" preference without a linked or claimed gym
+  // means they don't actually have one to track at — they're a seeker.
   for (const pref of [
     TRAINING_LOCATION_PREFS.GYM,
     TRAINING_LOCATION_PREFS.FITNESS_CENTRE,
+  ]) {
+    assert.equal(
+      deriveAppMode({ currentlyWorksOut: true, trainingLocationPref: pref }),
+      APP_MODES.GYM_SEEKER,
+      `pref=${pref}, no gym linked`,
+    );
+    assert.equal(
+      deriveAppMode({ currentlyWorksOut: true, trainingLocationPref: pref, linkedGymId: 42 }),
+      APP_MODES.HOME_TRACK,
+      `pref=${pref}, linked gym`,
+    );
+    assert.equal(
+      deriveAppMode({ currentlyWorksOut: true, trainingLocationPref: pref, homeUnclaimedGymId: 7 }),
+      APP_MODES.HOME_TRACK,
+      `pref=${pref}, claimed gym`,
+    );
+  }
+  // Sports and other preferences are not gym-seeking; they keep the training product.
+  for (const pref of [
     TRAINING_LOCATION_PREFS.SPORTS,
     TRAINING_LOCATION_PREFS.OTHER,
   ]) {
@@ -79,9 +100,14 @@ test('mid-onboarding (yes, but no location yet) stays null', () => {
   assert.equal(deriveAppMode({ currentlyWorksOut: true, trainingLocationPref: null }), null);
 });
 
-test('is a pure function of its two inputs', () => {
-  // Guards against someone later reaching for linkedGymId or a gym pick here:
-  // those belong to attendance and discovery, not to which Home leads.
+test('linked gym matters only for gym-type preferences', () => {
+  // HOME preference is unaffected by gym links.
   const base = { currentlyWorksOut: true, trainingLocationPref: TRAINING_LOCATION_PREFS.HOME };
   assert.equal(deriveAppMode({ ...base, linkedGymId: 42, name: 'x' }), APP_MODES.HOME_TRACK);
+
+  // Gym preference: no gym → seeker, with gym → home_track.
+  const gymBase = { currentlyWorksOut: true, trainingLocationPref: TRAINING_LOCATION_PREFS.GYM };
+  assert.equal(deriveAppMode(gymBase), APP_MODES.GYM_SEEKER);
+  assert.equal(deriveAppMode({ ...gymBase, linkedGymId: 42 }), APP_MODES.HOME_TRACK);
+  assert.equal(deriveAppMode({ ...gymBase, homeUnclaimedGymId: 7 }), APP_MODES.HOME_TRACK);
 });

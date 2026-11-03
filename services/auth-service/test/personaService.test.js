@@ -126,6 +126,12 @@ test('initialPersonaFromAnswers matches the legacy rule for every answered combi
       assert.equal(got, expected, JSON.stringify(u));
       continue;
     }
+    // Same correction for those who do train: a bare "gym" preference without
+    // a linked or claimed gym is not own_gym — they're an explorer/seeker.
+    if (currentlyWorksOut !== false && legacy === 'own_gym' && !linkedGymId && !homeUnclaimedGymId) {
+      assert.equal(got, PERSONAS.EXPLORER, JSON.stringify(u));
+      continue;
+    }
     assert.equal(got, legacy, JSON.stringify(u));
   }
 });

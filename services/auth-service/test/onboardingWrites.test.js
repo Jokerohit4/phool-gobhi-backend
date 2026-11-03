@@ -172,10 +172,10 @@ test('appMode row: not a member, prefers home -> home_track', async () => {
   assert.equal(stored.appMode, 'home_track');
 });
 
-test('appMode row: already trains (at a gym) -> home_track', async () => {
+test('appMode row: already trains (at a gym) -> gym_seeker when no gym is linked', async () => {
   reset();
   const res = fakeRes();
   await updateProfile(reqWith({ currentlyWorksOut: true, trainingLocationPref: 'gym' }), res);
   assert.equal(res.statusCode, 200);
-  assert.equal(stored.appMode, 'home_track');
+  assert.equal(stored.appMode, 'gym_seeker');
 });

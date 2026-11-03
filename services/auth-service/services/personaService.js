@@ -62,7 +62,11 @@ export function initialPersonaFromAnswers(user) {
     if (pref === TRAINING_LOCATION_PREFS.SPORTS) return PERSONAS.SPORTS;
     return pref && pref !== TRAINING_LOCATION_PREFS.GYM ? PERSONAS.HOME_TRAINING : PERSONAS.EXPLORER;
   }
-  if (GYM_LOCATIONS.includes(pref)) return PERSONAS.OWN_GYM;
+  if (GYM_LOCATIONS.includes(pref)) {
+    // OWN_GYM means they actually claimed an unclaimed gym — a bare "gym"
+    // preference without one pinned is just an explorer/seeker.
+    return u.homeUnclaimedGymId != null ? PERSONAS.OWN_GYM : PERSONAS.EXPLORER;
+  }
   if (pref === TRAINING_LOCATION_PREFS.SPORTS) return PERSONAS.SPORTS;
   if (pref) return PERSONAS.HOME_TRAINING;
   if (u.currentlyWorksOut === true) return PERSONAS.HOME_TRAINING;

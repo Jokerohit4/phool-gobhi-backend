@@ -145,6 +145,30 @@ const eventsIngestLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many events' },
 });
+
+// Dedup client events by event_id (TTL 5 min). Requires the client to send
+// event_id; without it every send is unique and nothing is dropped. The id is
+// a content fingerprint (distinct_id + event + properties) so identical events
+// fired by separate widget instances / remounts collapse to one ingestion.
+const EVENT_DEDUP_TTL_MS = 5 * 60 * 1000;
+const seenEventIds = new Map(); // eventId -> expiryAt
+
+function _sweepSeenEventIds() {
+  const now = Date.now();
+  for (const [k, v] of seenEventIds) {
+    if (v <= now) seenEventIds.delete(k);
+  }
+}
+setInterval(_sweepSeenEventIds, EVENT_DEDUP_TTL_MS);
+
+function isDuplicateEventId(eventId) {
+  if (!eventId) return false;
+  const now = Date.now();
+  const expiry = seenEventIds.get(eventId);
+  if (expiry !== undefined && expiry > now) return true;
+  seenEventIds.set(eventId, now + EVENT_DEDUP_TTL_MS);
+  return false;
+}
 const RATE_LIMITED_ROUTES = [
   { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact|refresh-token|google|verify-firebase-token)$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
@@ -192,10 +216,15 @@ export function eventsHandler(req, res) {
       if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
       const properties = e.properties;
       if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
-      if (e.event_id !== undefined && (typeof e.event_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e.event_id))) continue;
+      if (e.event_id !== undefined && typeof e.event_id !== 'string') continue;
       const occurrence = typeof e.occurred_at === 'string' ? Date.parse(e.occurred_at) : NaN;
       if (e.event_id !== undefined && (!Number.isFinite(occurrence) || occurrence > Date.now()+300000 || occurrence < Date.now()-7*86400000)) continue;
       const eventId = e.event_id ? 'client:' + createHash('sha256').update(JSON.stringify([e.distinct_id,e.event,e.event_id])).digest('hex') : undefined;
+
+      // Drop re-sends of the same event within the dedup window (widget
+      // remounts, retries, rapid taps). event_id is a content fingerprint, so
+      // identical events collapse to one ingestion.
+      if (isDuplicateEventId(eventId)) continue;
 
       if (QUEUE_DIAGNOSTIC_EVENTS.has(e.event)) {
         // Separate default-off activation gate: schema registration is not

@@ -61,7 +61,19 @@ export function deriveAppMode(user) {
   // (demoted to the bottom of home_track) for when/if they want to try partner
   // gyms; the attendance case for their own gym is handled via "Check in at
   // your gym" (non-partner attendance).
-  if (trainingLocationPref) return APP_MODES.HOME_TRACK;
+  //
+  // But "gym" as a bare preference is not a gym habit: if they haven't linked
+  // or claimed a gym yet, they don't actually have one to track at, so they're
+  // a seeker — they need to discover and book a partner gym first. Sports and
+  // other preferences keep the training product either way.
+  if (trainingLocationPref) {
+    const isGymPref = trainingLocationPref === TRAINING_LOCATION_PREFS.GYM || trainingLocationPref === TRAINING_LOCATION_PREFS.FITNESS_CENTRE;
+    if (isGymPref) {
+      const hasGym = user.linkedGymId != null || user.homeUnclaimedGymId != null;
+      return hasGym ? APP_MODES.HOME_TRACK : APP_MODES.GYM_SEEKER;
+    }
+    return APP_MODES.HOME_TRACK;
+  }
 
   // Said yes but hasn't answered where yet — mid-onboarding. Leave it null
   // rather than guessing; the next PATCH re-derives with the full picture.
