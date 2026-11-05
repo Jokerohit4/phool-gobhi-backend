@@ -7,7 +7,9 @@ import { getUserInternal, getUsersBatchInternal } from './authClient.js';
 import { notifyMatch } from '../utils/notifyMatch.js';
 import { notifyMessage } from '../utils/notifyMessage.js';
 import { MAX_BUDDY_PHOTOS } from '../utils/upload.js';
-import { pickBestRecord } from '../utils/records.js';
+import { topRecords } from '../utils/records.js';
+import { shortName } from '../utils/displayName.js';
+import { getWeeklyHealthScores } from './healthClient.js';
 import { feedCache, activeCache, evictFeed, profileChanged } from '../utils/buddyCaches.js';
 
 
@@ -239,23 +241,30 @@ function primaryImage(profile, display) {
   return profile.photos[0]?.url || display?.profileImageUrl || '';
 }
 
-// A stranger's view: first photo, name, age, distance bucket, bio, goals.
+// A stranger's view: what the swipe card and its scroll-down details show.
+// The name is the first name and last initial, never the surname.
 // `share` is present only when the profile has switched sharing on
-// (isShareable); it adds the public code and best PR, which is what that
-// switch means to the person who turned it on. Everything else (social
-// handle, other photos) waits for a match.
+// (isShareable); it adds the public code, their top lifts, followers and
+// weekly health score, which is what that switch means to the person who
+// turned it on. The social handle waits for a match.
 function toDiscoveryCandidate(profile, display, share) {
-  const first = profile.photos[0];
   return {
     userId: profile.userId,
-    name: display?.name ?? 'Buddy',
+    name: shortName(display?.name),
     profileImageUrl: primaryImage(profile, display),
     ageYears: ageFromDOB(profile.dateOfBirth),
     bio: profile.bio || '',
     fitnessGoals: profile.fitnessGoals,
-    photos: first ? [{ id: first.id, url: first.url, order: first.order }] : [],
+    photos: profile.photos.map((p) => ({ id: p.id, url: p.url, order: p.order })),
     distanceRange: bucketDistanceKm(profile.distanceKm),
-    ...(share ? { publicCode: share.publicCode, bestRecord: share.bestRecord } : {}),
+    ...(share ? {
+      publicCode: share.publicCode,
+      bestRecord: share.bestRecord,
+      topRecords: share.topRecords,
+      recordCount: share.recordCount,
+      followers: share.followers,
+      healthScore: share.healthScore,
+    } : {}),
   };
 }
 
@@ -289,23 +298,39 @@ async function shareInfoFor(userIds) {
     select: { id: true, userId: true, publicCode: true },
   });
   if (!shareable.length) return new Map();
-  const records = await prisma.buddyPersonalRecord.findMany({
-    where: { buddyProfileId: { in: shareable.map((p) => p.id) } },
-    orderBy: { createdAt: 'desc' },
-    select: { buddyProfileId: true, exerciseName: true, weight: true, unit: true, reps: true },
-  });
+  const sharingUserIds = shareable.map((p) => p.userId);
+  // Independent reads, so together. The health lookup is best effort and
+  // never rejects (see healthClient), so it cannot fail the deck.
+  const [records, followerRows, healthScores] = await Promise.all([
+    prisma.buddyPersonalRecord.findMany({
+      where: { buddyProfileId: { in: shareable.map((p) => p.id) } },
+      orderBy: { createdAt: 'desc' },
+      select: { buddyProfileId: true, exerciseName: true, weight: true, unit: true, reps: true },
+    }),
+    prisma.buddyFollow.groupBy({
+      by: ['targetId'],
+      where: { targetId: { in: sharingUserIds } },
+      _count: { _all: true },
+    }),
+    getWeeklyHealthScores(sharingUserIds),
+  ]);
   const byProfile = new Map();
   for (const r of records) {
     if (!byProfile.has(r.buddyProfileId)) byProfile.set(r.buddyProfileId, []);
     byProfile.get(r.buddyProfileId).push(r);
   }
+  const followers = new Map(followerRows.map((row) => [row.targetId, row._count._all]));
+  const lift = (r) => ({ exerciseName: r.exerciseName, weight: r.weight, unit: r.unit, reps: r.reps });
   return new Map(shareable.map((p) => {
-    const best = pickBestRecord(byProfile.get(p.id) ?? []);
+    const mine = byProfile.get(p.id) ?? [];
+    const top = topRecords(mine, 3).map(lift);
     return [p.userId, {
       publicCode: p.publicCode,
-      bestRecord: best && {
-        exerciseName: best.exerciseName, weight: best.weight, unit: best.unit, reps: best.reps,
-      },
+      bestRecord: top[0] ?? null,
+      topRecords: top,
+      recordCount: mine.length,
+      followers: followers.get(p.userId) ?? 0,
+      healthScore: healthScores.get(p.userId) ?? null,
     }];
   }));
 }
@@ -707,10 +732,10 @@ async function buildFeedList(userId) {
     },
     // Only what distanceAcceptsBothWays + toDiscoveryCandidate read: a candidate
     // row is up to 300 wide, so the unused columns (moderation, sync, gender,
-    // social handle, ...) were pure transfer. A stranger sees one photo.
+    // social handle, ...) were pure transfer.
     select: {
       userId: true, dateOfBirth: true, bio: true, fitnessGoals: true, lat: true, lng: true,
-      photos: { orderBy: { order: 'asc' }, take: 1, select: { id: true, url: true, order: true } },
+      photos: { orderBy: { order: 'asc' }, take: MAX_BUDDY_PHOTOS, select: { id: true, url: true, order: true } },
       filter: { select: { radiusKm: true } },
     },
     take: 300,

@@ -20,14 +20,14 @@ function fixture() {
   prisma.buddyFollow.upsert = async ({ create }) => { follow.set(`${create.followerId}-${create.targetId}`, create); return create; };
   const destroyed = [];
   const cloudinary = { uploader: { destroy: async (...args) => destroyed.push(args) } };
-  const service = createSocialService({ prisma, cloudinary, getUserInternal: async id => ({ name: `Buddy ${id}`, phone: 'private' }) });
+  const service = createSocialService({ prisma, cloudinary, getUserInternal: async id => ({ name: `Member${id} Lastname`, phone: 'private' }) });
   return { service, tables, profiles, destroyed, cloudinary };
 }
 
 test('public preview omits location, DOB, contact and internal identifiers', async () => {
   const { service } = fixture();
   const dto = await service.view(null, '222222222222');
-  assert.equal(dto.name, 'Buddy 2');
+  assert.equal(dto.name, 'Member2 L.');
   for (const key of ['lat','lng','dateOfBirth','phone','userId','filter','moderationHoldAt']) assert.equal(key in dto, false, key);
 });
 
@@ -77,7 +77,7 @@ test('women-only profiles require an eligible authenticated viewer', async () =>
   profiles.get(1).gender = 'male';
   await assert.rejects(service.view(1, '222222222222'), e => e.status === 404);
   profiles.get(1).gender = 'female';
-  assert.equal((await service.view(1, '222222222222')).name, 'Buddy 2');
+  assert.equal((await service.view(1, '222222222222')).name, 'Member2 L.');
 });
 
 test('following is idempotent and cannot create a self follow', async () => {
@@ -192,4 +192,11 @@ test('a rejected edit upload leaves the existing attachment untouched', async ()
   await assert.rejects(service.updateRecord(1, 1, body, { buffer: Buffer.from('0000ftypisom') }), e => e.status === 400);
   assert.equal(tables.buddyPersonalRecord.get(1).mediaPublicId, 'old');
   assert.deepEqual(destroyed, [['toolong', { resource_type: 'video' }]]);
+});
+
+test('your own profile shows your full name; everyone else sees first name and last initial', async () => {
+  const { service } = fixture();
+  assert.equal((await service.me(2)).name, 'Member2 Lastname');
+  assert.equal((await service.view(1, '222222222222')).name, 'Member2 L.');
+  assert.equal((await service.view(null, '222222222222')).name, 'Member2 L.', 'anonymous link previews too');
 });

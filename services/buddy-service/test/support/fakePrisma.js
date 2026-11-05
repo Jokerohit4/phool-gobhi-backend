@@ -267,6 +267,18 @@ export function createFakePrisma(tables) {
         return list.map((r) => shape(model, r, { include, select }));
       },
       count: async ({ where } = {}) => rows(model).filter((r) => matchWhere(model, r, where)).length,
+      groupBy: async ({ by, where, _count } = {}) => {
+        const groups = new Map();
+        for (const r of rows(model).filter((row) => matchWhere(model, row, where))) {
+          const k = by.map((f) => r[f]).join('|');
+          if (!groups.has(k)) groups.set(k, { row: r, n: 0 });
+          groups.get(k).n++;
+        }
+        return [...groups.values()].map(({ row, n }) => ({
+          ...Object.fromEntries(by.map((f) => [f, row[f]])),
+          ...(_count ? { _count: { _all: n } } : {}),
+        }));
+      },
       create: async ({ data, include, select }) => shape(model, insert(model, data), { include, select }),
       update: async ({ where, data, include, select }) => {
         const row = uniqueLookup(model, where);

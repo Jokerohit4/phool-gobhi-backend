@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { estimatedOneRepMaxKg, pickBestRecord } from '../utils/records.js';
+import { estimatedOneRepMaxKg, pickBestRecord, topRecords } from '../utils/records.js';
 
 const r = (weight, reps, unit = 'kg', name = 'Lift') => ({ weight, reps, unit, exerciseName: name });
 const near = (a, b) => Math.abs(a - b) < 0.01;
@@ -31,4 +31,12 @@ test('a tie goes to the first (the newest, when passed newest-first)', () => {
 
 test('nothing in, nothing out', () => {
   assert.equal(pickBestRecord([]), null);
+});
+
+test('topRecords: the n strongest, best first, ties in the order given', () => {
+  const records = [r(40, 10, 'kg', 'Curl'), r(140, 3, 'kg', 'Squat'), r(100, 5, 'kg', 'Bench'), r(100, 5, 'kg', 'Bench2')];
+  assert.deepEqual(topRecords(records, 3).map((x) => x.exerciseName), ['Squat', 'Bench', 'Bench2']);
+  assert.equal(topRecords(records, 1)[0].exerciseName, 'Squat');
+  assert.deepEqual(topRecords([], 3), []);
+  assert.equal(topRecords(records, 10).length, 4);
 });

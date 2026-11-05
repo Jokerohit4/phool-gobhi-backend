@@ -1,4 +1,5 @@
 import { profileChanged } from '../utils/buddyCaches.js';
+import { shortName } from '../utils/displayName.js';
 const CODE = /^[A-F0-9]{12}$/;
 const fail = (status, error) => { throw { status, error }; };
 
@@ -92,7 +93,10 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
       viewerId ? prisma.buddyFollow.findUnique({ where: { followerId_targetId: { followerId: viewerId, targetId: p.userId } } }) : null,
     ]);
     return {
-      ...(viewerId ? { userId: p.userId } : {}), name: user.name || 'Buddy',
+      ...(viewerId ? { userId: p.userId } : {}),
+      // Your own profile shows your full name; everyone else sees the first
+      // name and last initial.
+      name: viewerId === p.userId ? (user.name || 'Buddy') : shortName(user.name),
       publicCode: p.publicCode, isShareable: p.isShareable,
       profileImageUrl: p.photos[0]?.url || '', bio: p.bio || '',
       photos: p.photos.map(({ id, url, order }) => ({ id, url, order })),

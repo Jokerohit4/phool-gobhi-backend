@@ -17,18 +17,20 @@ import { createFakePrisma } from './support/fakePrisma.js';
 const tables = {
   buddyProfile: new Map(), buddyPhoto: new Map(), buddyFilter: new Map(),
   swipe: new Map(), match: new Map(), chatMessage: new Map(),
-  blockedUser: new Map(), report: new Map(), buddyPersonalRecord: new Map(),
+  blockedUser: new Map(), report: new Map(), buddyPersonalRecord: new Map(), buddyFollow: new Map(),
 };
 const fake = createFakePrisma(tables);
 
 // auth-service's view of each user, read by profile create/sync.
 const authUsers = new Map();
+const healthScores = new Map(); // userId -> 7-day health score, as health-service would answer
 const events = [];
 let seq = 1;
 
 function resetAll() {
   for (const t of Object.values(tables)) t.clear();
   authUsers.clear();
+  healthScores.clear();
   events.length = 0;
   seq = 1;
 }
@@ -41,6 +43,12 @@ mock.module('../services/authClient.js', {
   exports: {
     getUserInternal: async (id) => authUsers.get(id) ?? { id, dateOfBirth: null },
     getUsersBatchInternal: async (ids) => ids.map((id) => ({ id, name: `Person${id} Surname`, profileImageUrl: '' })),
+  },
+});
+mock.module('../services/healthClient.js', {
+  exports: {
+    getWeeklyHealthScores: async (ids) =>
+      new Map(ids.filter((id) => healthScores.has(id)).map((id) => [id, healthScores.get(id)])),
   },
 });
 mock.module('../utils/analytics.js', {
@@ -861,12 +869,13 @@ test('discovery: a stranger gets what the card shows and nothing more', async ()
   const { data } = await svc.getFeed(1, { page: 1, limit: 10 });
   const card = data.find((c) => c.userId === 2);
   assert.deepEqual(Object.keys(card).sort(), CARD_KEYS);
-  assert.equal(card.photos.length, 1, 'one photo, not all of them');
+  assert.equal(card.photos.length, 3, 'the card scrolls through every photo');
   assert.equal(card.photos[0].url, 'https://img/2/0');
+  assert.equal(card.name, 'Person2 S.', 'first name and last initial only');
   assert.equal(card.bio, 'I lift');
   assert.deepEqual(card.fitnessGoals, ['strength']);
   const wire = JSON.stringify(data);
-  for (const leaked of ['private.handle', 'AAAAAAAAAAAA', 'gender', 'female', 'socialMediaUrl', 'lat', 'lng', 'dateOfBirth']) {
+  for (const leaked of ['private.handle', 'AAAAAAAAAAAA', 'Surname', 'gender', 'female', 'socialMediaUrl', 'lat', 'lng', 'dateOfBirth']) {
     assert.ok(!wire.includes(leaked), `${leaked} must not reach a stranger`);
   }
 });
@@ -890,12 +899,16 @@ test('discovery: sharing adds the public code and the best PR, and only then', a
 
   assert.equal(by(2).publicCode, 'BBBBBBBBBBBB');
   assert.deepEqual(by(2).bestRecord, { exerciseName: 'Squat', weight: 140, unit: 'kg', reps: 3 });
+  assert.deepEqual(by(2).topRecords.map((r) => r.exerciseName), ['Squat', 'Bench', 'Curl'], 'strongest first');
+  assert.equal(by(2).recordCount, 3);
 
   assert.deepEqual(Object.keys(by(3)).sort(), CARD_KEYS, 'no sharing, no extras');
   assert.ok(!JSON.stringify(by(3)).includes('Secret'));
 
   assert.equal(by(4).publicCode, 'DDDDDDDDDDDD');
   assert.equal(by(4).bestRecord, null, 'sharing on but no records');
+  assert.deepEqual(by(4).topRecords, []);
+  assert.equal(by(4).recordCount, 0);
 });
 
 test('discovery: turning sharing off takes the code and PR out of the next deck', async () => {
@@ -963,4 +976,43 @@ test('saving filters: a man\'s genders are dropped, a woman\'s are kept', async 
   const woman = await callCtrl(ctrl.updateFilters, { userId: 2, body: { genders: ['male'] } });
   assert.equal(woman.statusCode, 200);
   assert.deepEqual(woman.body.data.genders, ['male']);
+});
+
+test('discovery: sharing profiles carry followers and a weekly health score', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { publicCode: 'BBBBBBBBBBBB', isShareable: true });
+  seedUser(3, { publicCode: 'CCCCCCCCCCCC', isShareable: true });
+  seedUser(4, { publicCode: 'DDDDDDDDDDDD', isShareable: false });
+  for (const [id, follower] of [[1, 3], [2, 3], [3, 2], [4, 2], [5, 2]]) {
+    tables.buddyFollow.set(`${follower}-${id}`, { followerId: id, targetId: follower });
+  }
+  healthScores.set(2, 82);
+  healthScores.set(4, 99); // not sharing: never read
+
+  const { data } = await svc.getFeed(1, { page: 1, limit: 10 });
+  const by = (id) => data.find((c) => c.userId === id);
+  assert.equal(by(2).followers, 3, 'counted from follows');
+  assert.equal(by(2).healthScore, 82);
+  assert.equal(by(3).followers, 2);
+  assert.equal(by(3).healthScore, null, 'no score on file is null, not 0');
+  assert.ok(!('followers' in by(4)) && !('healthScore' in by(4)), 'nothing for a profile that is not sharing');
+});
+
+test('discovery: a failing health lookup never fails the deck or hides the rest', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { publicCode: 'BBBBBBBBBBBB', isShareable: true });
+  // healthClient swallows its own errors and answers with no scores.
+  const card = (await svc.getFeed(1, { page: 1, limit: 10 })).data[0];
+  assert.equal(card.healthScore, null);
+  assert.equal(card.publicCode, 'BBBBBBBBBBBB');
+});
+
+test('a match still sees the full name, a stranger only the short one', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2);
+  assert.equal((await svc.getMatchedProfile(1, seedMatch(1, 2))).name, 'Person2 Surname');
+  assert.equal((await svc.getFeed(1, { page: 1, limit: 10 })).data[0].name, 'Person2 S.');
 });

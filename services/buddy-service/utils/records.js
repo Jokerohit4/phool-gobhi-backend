@@ -12,6 +12,15 @@ export function estimatedOneRepMaxKg({ weight, unit, reps }) {
   return (unit === 'lb' ? weight * LB_TO_KG : weight) * (1 + Math.min(reps, 30) / 30);
 }
 
+// The `n` strongest, best first; equal records keep the order they came in.
+export function topRecords(records, n) {
+  return records
+    .map((record, index) => ({ record, index, e1rm: estimatedOneRepMaxKg(record) }))
+    .sort((a, b) => b.e1rm - a.e1rm || a.index - b.index)
+    .slice(0, n)
+    .map((entry) => entry.record);
+}
+
 // The strongest of `records`; the first of equals, so callers that pass them
 // newest-first get the newest on a tie. null for none.
 export function pickBestRecord(records) {
