@@ -35,6 +35,24 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
     return p;
   }
 
+  // Uploads one attachment, or nothing. An over-long video is removed again
+  // before the error surfaces, so a rejected upload never leaves media behind.
+  async function uploadMedia(file) {
+    if (!file) return {};
+    const kind = mediaKind(file.buffer);
+    const uploaded = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream({ resource_type: kind,
+        folder: 'phool-gobhi/buddy-records', allowed_formats: kind === 'video'
+          ? ['mp4','mov','webm'] : ['jpg','jpeg','png','webp'] },
+      (err, value) => err ? reject(err) : resolve(value)).end(file.buffer);
+    });
+    if (kind === 'video' && (!uploaded.duration || uploaded.duration > 60)) {
+      await cloudinary.uploader.destroy(uploaded.public_id, { resource_type: kind });
+      fail(400, 'Choose a video up to 60 seconds');
+    }
+    return { uploaded, kind };
+  }
+
   async function excluded(viewerId, targetId) {
     const [block, report] = await Promise.all([
       prisma.blockedUser.findFirst({ where: { OR: [
@@ -121,19 +139,8 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
     async addRecord(userId, body, file) {
       const data = validateRecord(body);
       const p = await owner(userId);
-      let uploaded;
-      let kind;
-      if (file) {
-        kind = mediaKind(file.buffer);
-        uploaded = await new Promise((resolve, reject) => {
-          cloudinary.uploader.upload_stream({ resource_type: kind,
-            folder: 'phool-gobhi/buddy-records', allowed_formats: kind === 'video'
-              ? ['mp4','mov','webm'] : ['jpg','jpeg','png','webp'] },
-          (err, value) => err ? reject(err) : resolve(value)).end(file.buffer);
-        });
-      }
+      const { uploaded, kind } = await uploadMedia(file);
       try {
-        if (kind === 'video' && (!uploaded.duration || uploaded.duration > 60)) fail(400, 'Choose a video up to 60 seconds');
         return await prisma.$transaction(async tx => {
           // Serializes record creation and enforces the limit under concurrent uploads.
           await tx.$queryRaw`SELECT id FROM buddy."BuddyProfile" WHERE id = ${p.id} FOR UPDATE`;
@@ -146,6 +153,32 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
         if (uploaded) await cloudinary.uploader.destroy(uploaded.public_id, { resource_type: kind });
         throw err;
       }
+    },
+    // Edits one of the caller's own records. The body is the full record (same
+    // validation as adding). Media: a new file replaces the old one, an
+    // explicit removeMedia drops it, otherwise it is left alone. The previous
+    // attachment is only destroyed once the row points at the new state.
+    async updateRecord(userId, id, body, file) {
+      const data = validateRecord(body);
+      const p = await owner(userId);
+      if (!Number.isSafeInteger(id) || id < 1) fail(400, 'Invalid record');
+      const record = await prisma.buddyPersonalRecord.findFirst({ where: { id, buddyProfileId: p.id } });
+      if (!record) fail(404, 'Personal record not found');
+      const { uploaded, kind } = await uploadMedia(file);
+      const removeMedia = !file && (body.removeMedia === true || body.removeMedia === 'true');
+      const media = uploaded
+        ? { mediaUrl: uploaded.secure_url, mediaPublicId: uploaded.public_id, mediaType: kind }
+        : removeMedia ? { mediaUrl: null, mediaPublicId: null, mediaType: null } : {};
+      let updated;
+      try {
+        updated = await prisma.buddyPersonalRecord.update({ where: { id }, data: { ...data, ...media } });
+      } catch (err) {
+        if (uploaded) await cloudinary.uploader.destroy(uploaded.public_id, { resource_type: kind });
+        throw err;
+      }
+      if ((uploaded || removeMedia) && record.mediaPublicId)
+        await cloudinary.uploader.destroy(record.mediaPublicId, { resource_type: record.mediaType });
+      return updated;
     },
     async deleteRecord(userId, id) {
       const p = await owner(userId);

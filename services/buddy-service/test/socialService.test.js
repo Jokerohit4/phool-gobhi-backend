@@ -138,3 +138,58 @@ test('deleting a PR removes its attachment before its database row', async () =>
   assert.deepEqual(destroyed, [['photo1', { resource_type: 'image' }]]);
   assert.equal(tables.buddyPersonalRecord.size, 0);
 });
+
+test('a record can be edited by its owner only, with the same validation as adding', async () => {
+  const { service, tables } = fixture();
+  const body = { exerciseId: 1, exerciseName: 'Squat', weight: 100, unit: 'kg', reps: 5 };
+  const record = await service.addRecord(1, body);
+  const updated = await service.updateRecord(1, record.id, { ...body, weight: '110.5', reps: '3', unit: 'lb' });
+  assert.equal(updated.weight, 110.5);
+  assert.equal(updated.reps, 3);
+  assert.equal(updated.unit, 'lb');
+  assert.equal(tables.buddyPersonalRecord.get(record.id).weight, 110.5);
+  await assert.rejects(service.updateRecord(2, record.id, body), e => e.status === 404);
+  await assert.rejects(service.updateRecord(1, record.id, { ...body, weight: 0 }), e => e.status === 400);
+  await assert.rejects(service.updateRecord(1, 999, body), e => e.status === 404);
+  await assert.rejects(service.updateRecord(1, 0, body), e => e.status === 400);
+});
+
+test('editing keeps, replaces or removes the attachment and cleans up the old one', async () => {
+  const { service, tables, cloudinary, destroyed } = fixture();
+  let n = 0;
+  cloudinary.uploader.upload_stream = (options, callback) => ({
+    end() { n++; callback(null, { duration: 20, public_id: `video${n}`, secure_url: `https://media/${n}.mp4` }); },
+  });
+  const body = { exerciseId: 1, exerciseName: 'Squat', weight: 100, unit: 'kg', reps: 5 };
+  const record = await service.addRecord(1, body, { buffer: Buffer.from('0000ftypisom') });
+  assert.equal(record.mediaUrl, 'https://media/1.mp4');
+
+  // Untouched media stays, nothing is destroyed.
+  let updated = await service.updateRecord(1, record.id, { ...body, reps: 6 });
+  assert.equal(updated.mediaUrl, 'https://media/1.mp4');
+  assert.deepEqual(destroyed, []);
+
+  // A new file replaces it and the old one is destroyed afterwards.
+  updated = await service.updateRecord(1, record.id, body, { buffer: Buffer.from('0000ftypisom') });
+  assert.equal(updated.mediaUrl, 'https://media/2.mp4');
+  assert.deepEqual(destroyed, [['video1', { resource_type: 'video' }]]);
+
+  // removeMedia drops it.
+  updated = await service.updateRecord(1, record.id, { ...body, removeMedia: 'true' });
+  assert.equal(updated.mediaUrl, null);
+  assert.equal(updated.mediaType, null);
+  assert.equal(tables.buddyPersonalRecord.get(record.id).mediaPublicId, null);
+  assert.deepEqual(destroyed.at(-1), ['video2', { resource_type: 'video' }]);
+});
+
+test('a rejected edit upload leaves the existing attachment untouched', async () => {
+  const { service, tables, cloudinary, destroyed } = fixture();
+  cloudinary.uploader.upload_stream = (options, callback) => ({
+    end() { callback(null, { duration: 90, public_id: 'toolong', secure_url: 'https://media/long.mp4' }); },
+  });
+  const body = { exerciseId: 1, exerciseName: 'Squat', weight: 100, unit: 'kg', reps: 5 };
+  tables.buddyPersonalRecord.set(1, { id: 1, buddyProfileId: 1, ...body, mediaUrl: 'https://media/old.jpg', mediaPublicId: 'old', mediaType: 'image' });
+  await assert.rejects(service.updateRecord(1, 1, body, { buffer: Buffer.from('0000ftypisom') }), e => e.status === 400);
+  assert.equal(tables.buddyPersonalRecord.get(1).mediaPublicId, 'old');
+  assert.deepEqual(destroyed, [['toolong', { resource_type: 'video' }]]);
+});

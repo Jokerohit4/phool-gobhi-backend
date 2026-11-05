@@ -10,7 +10,7 @@ import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 const router = Router();
 const service = createSocialService({ prisma, cloudinary, getUserInternal });
 const customer = [requireRole('customer'), requireFeatureFlag('buddy')];
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024, files: 1, fields: 5 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024, files: 1, fields: 8 } });
 const route = run => async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json({ data: await run(req) ?? null }); }
@@ -23,6 +23,7 @@ router.get('/social/me', ...customer, route(req => service.me(req.userId)));
 router.put('/social/me', ...customer, route(req => service.settings(req.userId, req.body || {})));
 router.get('/social/following', ...customer, route(req => service.following(req.userId)));
 router.post('/social/records', ...customer, upload.single('media'), route(req => service.addRecord(req.userId, req.body || {}, req.file)));
+router.put('/social/records/:id', ...customer, upload.single('media'), route(req => service.updateRecord(req.userId, Number(req.params.id), req.body || {}, req.file)));
 router.delete('/social/records/:id', ...customer, route(req => service.deleteRecord(req.userId, Number(req.params.id))));
 router.get('/social/:code', ...customer, route(req => service.view(req.userId, req.params.code)));
 router.post('/social/:code/follow', ...customer, route(req => service.follow(req.userId, req.params.code, true)));
