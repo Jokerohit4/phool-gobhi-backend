@@ -1016,3 +1016,19 @@ test('a match still sees the full name, a stranger only the short one', async ()
   assert.equal((await svc.getMatchedProfile(1, seedMatch(1, 2))).name, 'Person2 Surname');
   assert.equal((await svc.getFeed(1, { page: 1, limit: 10 })).data[0].name, 'Person2 S.');
 });
+
+test('discovery: a sharer shows up to five lifts, strongest first', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { publicCode: 'BBBBBBBBBBBB', isShareable: true });
+  const lifts = [['Curl', 20, 12], ['Squat', 140, 3], ['Bench', 100, 5], ['Row', 90, 6], ['Press', 55, 5], ['Deadlift', 180, 1], ['Fly', 10, 12]];
+  lifts.forEach(([name, weight, reps], i) => tables.buddyPersonalRecord.set(i + 1, {
+    id: i + 1, buddyProfileId: 1002, exerciseName: name, weight, unit: 'kg', reps, createdAt: new Date(Date.now() - i * 1000),
+  }));
+  const card = (await svc.getFeed(1, { page: 1, limit: 10 })).data[0];
+  assert.equal(card.recordCount, 7, 'the count is all of them');
+  assert.equal(card.topRecords.length, 5, 'but only five are listed');
+  // Estimated one-rep max: Deadlift 186, Squat 154, Bench 117, Row 108, Press 64.
+  assert.deepEqual(card.topRecords.map((r) => r.exerciseName), ['Deadlift', 'Squat', 'Bench', 'Row', 'Press']);
+  assert.equal(card.bestRecord.exerciseName, 'Deadlift');
+});

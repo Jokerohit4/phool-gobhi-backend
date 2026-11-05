@@ -323,7 +323,7 @@ async function shareInfoFor(userIds) {
   const lift = (r) => ({ exerciseName: r.exerciseName, weight: r.weight, unit: r.unit, reps: r.reps });
   return new Map(shareable.map((p) => {
     const mine = byProfile.get(p.id) ?? [];
-    const top = topRecords(mine, 3).map(lift);
+    const top = topRecords(mine, 5).map(lift);
     return [p.userId, {
       publicCode: p.publicCode,
       bestRecord: top[0] ?? null,
