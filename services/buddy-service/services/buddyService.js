@@ -7,6 +7,7 @@ import { getUserInternal, getUsersBatchInternal } from './authClient.js';
 import { notifyMatch } from '../utils/notifyMatch.js';
 import { notifyMessage } from '../utils/notifyMessage.js';
 import { MAX_BUDDY_PHOTOS } from '../utils/upload.js';
+import { pickBestRecord } from '../utils/records.js';
 import { feedCache, activeCache, evictFeed, profileChanged } from '../utils/buddyCaches.js';
 
 
@@ -123,7 +124,9 @@ export function targetEligibility(viewer, excludedIds = []) {
   if (excludedIds.length) and.push({ userId: { notIn: excludedIds } });
 
   // ---- The viewer's preferences, applied to the target ----
-  const genders = effectiveGenders(viewerFilter);
+  // Only a woman has a gender preference; anyone else's (e.g. one saved before
+  // that rule) is ignored rather than silently narrowing their deck.
+  const genders = viewer.gender === 'female' ? effectiveGenders(viewerFilter) : [];
   if (genders.length) and.push({ gender: { in: genders } });
   if (viewerFilter) {
     // Older DOB = older age, so the min-age bound is the *later* cutoff date
@@ -139,6 +142,10 @@ export function targetEligibility(viewer, excludedIds = []) {
   // ---- Two-way: the target's filter must accept the viewer ----
   and.push({
     OR: [
+      // Only women have a gender preference, so anyone else accepts everyone,
+      // whatever an older client left in their filter.
+      { gender: null },
+      { gender: { not: 'female' } },
       { filter: { is: null } },
       { filter: { is: { genders: { isEmpty: true }, womenOnly: false } } },
       // A viewer with no gender only passes targets with no gender preference.
@@ -215,28 +222,92 @@ function assertCanBrowse(profile) {
   if (!profile.dateOfBirth) throw buddyError('DOB_REQUIRED');
 }
 
-// Never includes lat/lng or an exact distance — only a bucketed range (see
-// utils/geo.js#bucketDistanceKm). This is the single seam all discovery/
-// match responses go through so that guarantee can't be bypassed by a
-// call site forgetting to strip coordinates.
-function toPublicCandidate(profile, display) {
+// Never include lat/lng or an exact distance — only a bucketed range (see
+// utils/geo.js#bucketDistanceKm). These two are the only seams discovery and
+// match responses go through, so that guarantee can't be bypassed by a call
+// site forgetting to strip coordinates.
+//
+// Two audiences, two shapes. A stranger in the deck gets what the swipe card
+// shows and nothing more; the rest of a profile is for someone they have
+// matched with. Neither carries gender (nothing in the app displays it, and
+// women-only is enforced server-side, not by the client reading it).
+
+// Prefer the buddy profile's own curated photo over the account avatar — every
+// buddy profile has at least one (photos are required to save one), while the
+// account avatar is optional and often unset.
+function primaryImage(profile, display) {
+  return profile.photos[0]?.url || display?.profileImageUrl || '';
+}
+
+// A stranger's view: first photo, name, age, distance bucket, bio, goals.
+// `share` is present only when the profile has switched sharing on
+// (isShareable); it adds the public code and best PR, which is what that
+// switch means to the person who turned it on. Everything else (social
+// handle, other photos) waits for a match.
+function toDiscoveryCandidate(profile, display, share) {
+  const first = profile.photos[0];
   return {
     userId: profile.userId,
-    publicCode: profile.publicCode,
     name: display?.name ?? 'Buddy',
-    // Prefer the buddy profile's own curated photo over the account avatar
-    // — every buddy profile has at least one (photos are required to save
-    // one), while the account avatar is optional and often unset, which
-    // otherwise leaves this summary field blank for no reason.
-    profileImageUrl: profile.photos[0]?.url || display?.profileImageUrl || '',
+    profileImageUrl: primaryImage(profile, display),
     ageYears: ageFromDOB(profile.dateOfBirth),
-    gender: profile.gender,
+    bio: profile.bio || '',
+    fitnessGoals: profile.fitnessGoals,
+    photos: first ? [{ id: first.id, url: first.url, order: first.order }] : [],
+    distanceRange: bucketDistanceKm(profile.distanceKm),
+    ...(share ? { publicCode: share.publicCode, bestRecord: share.bestRecord } : {}),
+  };
+}
+
+// A match's view: the whole profile the person chose to show buddies, still
+// without gender or anything that locates them.
+function toMatchedProfile(profile, display) {
+  return {
+    userId: profile.userId,
+    publicCode: profile.isShareable ? profile.publicCode : null,
+    name: display?.name ?? 'Buddy',
+    profileImageUrl: primaryImage(profile, display),
+    ageYears: ageFromDOB(profile.dateOfBirth),
     bio: profile.bio || '',
     socialMediaUrl: profile.socialMediaUrl || null,
     fitnessGoals: profile.fitnessGoals,
     photos: profile.photos.map((p) => ({ id: p.id, url: p.url, order: p.order })),
     distanceRange: bucketDistanceKm(profile.distanceKm),
   };
+}
+
+// Sharing consent and best PR for a set of candidates, read when the deck is
+// built and cached with it (45s, like visibility and photos). The writes that
+// change it - the sharing switch and adding, editing or deleting a record -
+// call profileChanged, which drops every cached deck. Two reads for the whole
+// deck, none per page; a profile that has not opted in is absent from the
+// result.
+async function shareInfoFor(userIds) {
+  if (!userIds.length) return new Map();
+  const shareable = await prisma.buddyProfile.findMany({
+    where: { userId: { in: userIds }, isShareable: true },
+    select: { id: true, userId: true, publicCode: true },
+  });
+  if (!shareable.length) return new Map();
+  const records = await prisma.buddyPersonalRecord.findMany({
+    where: { buddyProfileId: { in: shareable.map((p) => p.id) } },
+    orderBy: { createdAt: 'desc' },
+    select: { buddyProfileId: true, exerciseName: true, weight: true, unit: true, reps: true },
+  });
+  const byProfile = new Map();
+  for (const r of records) {
+    if (!byProfile.has(r.buddyProfileId)) byProfile.set(r.buddyProfileId, []);
+    byProfile.get(r.buddyProfileId).push(r);
+  }
+  return new Map(shareable.map((p) => {
+    const best = pickBestRecord(byProfile.get(p.id) ?? []);
+    return [p.userId, {
+      publicCode: p.publicCode,
+      bestRecord: best && {
+        exerciseName: best.exerciseName, weight: best.weight, unit: best.unit, reps: best.reps,
+      },
+    }];
+  }));
 }
 
 // ---- Profile ----------------------------------------------------------
@@ -563,7 +634,10 @@ export async function upsertFilters(userId, data, userType) {
     // (Previously the forced value was also written to the DB, so turning
     // womenOnly off resurrected ['female'] and permanently destroyed the
     // original preference.)
-    genders: nextWomenOnly
+    // Only women have a gender preference; for anyone else it is always empty.
+    genders: !isFemale
+      ? []
+      : nextWomenOnly
       ? (genders !== undefined ? ['female'] : (existing?.genders ?? DEFAULT_FILTER.genders))
       : (genders ?? existing?.genders ?? DEFAULT_FILTER.genders),
     fitnessGoals: fitnessGoals ?? existing?.fitnessGoals ?? DEFAULT_FILTER.fitnessGoals,
@@ -597,7 +671,7 @@ export async function getFeed(userId, { page = 1, limit = 20 }) {
   const displayInfo = await getUsersBatchInternal(pageSlice.map((c) => c.userId)).catch(() => []);
   const displayMap = new Map(displayInfo.map((u) => [u.id, u]));
 
-  const data = pageSlice.map((c) => toPublicCandidate(c, displayMap.get(c.userId)));
+  const data = pageSlice.map((c) => toDiscoveryCandidate(c, displayMap.get(c.userId), c.share));
   return { data, page, hasMore: page * limit < withDistance.length };
 }
 
@@ -631,24 +705,26 @@ async function buildFeedList(userId) {
         { lng: { gte: box.minLng, lte: box.maxLng } },
       ],
     },
-    // Only what distanceAcceptsBothWays + toPublicCandidate read: a candidate row
-    // is up to 300 wide, so the unused columns (moderation, sync, gender-change
-    // bookkeeping, ...) were pure transfer.
+    // Only what distanceAcceptsBothWays + toDiscoveryCandidate read: a candidate
+    // row is up to 300 wide, so the unused columns (moderation, sync, gender,
+    // social handle, ...) were pure transfer. A stranger sees one photo.
     select: {
-      userId: true, publicCode: true, dateOfBirth: true, gender: true, bio: true,
-      socialMediaUrl: true, fitnessGoals: true, lat: true, lng: true,
-      photos: { orderBy: { order: 'asc' }, take: MAX_BUDDY_PHOTOS, select: { id: true, url: true, order: true } },
+      userId: true, dateOfBirth: true, bio: true, fitnessGoals: true, lat: true, lng: true,
+      photos: { orderBy: { order: 'asc' }, take: 1, select: { id: true, url: true, order: true } },
       filter: { select: { radiusKm: true } },
     },
     take: 300,
   });
 
-  return candidates
+  const inRange = candidates
     .map((c) => ({ ...c, distanceKm: haversineKm(me.lat, me.lng, c.lat, c.lng) }))
     // The bounding box over-includes near its corners — this trims to the
     // exact circle, and applies the candidate's own radius the other way.
     .filter((c) => distanceAcceptsBothWays(me, c, c.distanceKm))
     .sort((a, b) => a.distanceKm - b.distanceKm);
+
+  const shares = await shareInfoFor(inRange.map((c) => c.userId));
+  return inRange.map((c) => ({ ...c, share: shares.get(c.userId) }));
 }
 
 // ---- Swipes & matches ----------------------------------------------------
@@ -799,7 +875,7 @@ export async function getMatches(userId) {
       otherUser: {
         userId: otherUserId,
         name: other?.name ?? 'Buddy',
-        // Same buddy-photo-over-account-avatar preference as toPublicCandidate.
+        // Same buddy-photo-over-account-avatar preference as primaryImage.
         profileImageUrl: primaryPhotoMap.get(otherUserId) || other?.profileImageUrl || '',
       },
       lastMessage: lastMessage?.body ?? null,
@@ -809,10 +885,10 @@ export async function getMatches(userId) {
   });
 }
 
-// Full profile (photos + bio) of the other person in an active match — the
-// only place besides discovery a profile is ever exposed, and only to a
-// confirmed match, not a stranger. Same toPublicCandidate DTO as discovery
-// so the bucketed-distance privacy guarantee applies here too.
+// Full profile (all photos, bio, goals, social handle) of the other person in
+// an active match — only ever shown to a confirmed match, never to a stranger
+// (discovery gets the smaller toDiscoveryCandidate). Distance stays bucketed
+// here too.
 export async function getMatchedProfile(userId, matchId) {
   const match = await assertActiveParticipant(matchId, userId);
   const otherUserId = match.userLowId === userId ? match.userHighId : match.userLowId;
@@ -828,7 +904,7 @@ export async function getMatchedProfile(userId, matchId) {
 
   const distanceKm = me ? haversineKm(me.lat, me.lng, other.lat, other.lng) : null;
   const infos = await getUsersBatchInternal([otherUserId]).catch(() => []);
-  return toPublicCandidate({ ...other, distanceKm }, infos[0]);
+  return toMatchedProfile({ ...other, distanceKm }, infos[0]);
 }
 
 export async function unmatch(userId, matchId) {

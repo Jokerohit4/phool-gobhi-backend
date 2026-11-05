@@ -17,7 +17,7 @@ import { createFakePrisma } from './support/fakePrisma.js';
 const tables = {
   buddyProfile: new Map(), buddyPhoto: new Map(), buddyFilter: new Map(),
   swipe: new Map(), match: new Map(), chatMessage: new Map(),
-  blockedUser: new Map(), report: new Map(),
+  blockedUser: new Map(), report: new Map(), buddyPersonalRecord: new Map(),
 };
 const fake = createFakePrisma(tables);
 
@@ -333,8 +333,8 @@ test('likes by id: blocked when either side reported the other', async () => {
 test('likes by id: blocked when filtered out, either way', async () => {
   // Target only wants women; liker is a man.
   await likeIsBlocked(() => { seedUser(1, { gender: 'male' }); seedUser(2, { gender: 'female', filter: { genders: ['female'] } }); });
-  // Liker only wants men; target is a woman.
-  await likeIsBlocked(() => { seedUser(1, { gender: 'male', filter: { genders: ['male'] } }); seedUser(2, { gender: 'female' }); });
+  // Liker (a woman: only women have a gender preference) only wants men; target is a woman.
+  await likeIsBlocked(() => { seedUser(1, { gender: 'female', filter: { genders: ['male'] } }); seedUser(2, { gender: 'female' }); });
   // Target's age range excludes the liker.
   await likeIsBlocked(() => { seedUser(1, { age: 45 }); seedUser(2, { filter: { minAge: 20, maxAge: 30 } }); });
 });
@@ -593,7 +593,7 @@ test('two-way filter: gender works both ways', async () => {
 test('two-way filter: a viewer with no gender only sees people with no gender preference', async () => {
   resetAll();
   seedUser(1, { gender: null });
-  seedUser(2, { filter: { genders: ['male'] } });
+  seedUser(2, { gender: 'female', filter: { genders: ['male'] } });
   seedUser(3, { filter: { genders: [] } });
   seedUser(4); // no filter row
   assert.deepEqual(await feedIds(1), [3, 4]);
@@ -848,4 +848,119 @@ test('computeWomenOnlyBlocked follows the contract formula', () => {
   assert.equal(svc.computeWomenOnlyBlocked({ genderChangedTo: 'female', genderChangedAt: t2, genderChangeClearedAt: t1 }), true);
   assert.equal(svc.computeWomenOnlyBlocked({ genderChangedTo: 'male', genderChangedAt: t2, genderChangeClearedAt: null }), false);
   assert.equal(svc.computeWomenOnlyBlocked({ genderChangedTo: null, genderChangedAt: null, genderChangeClearedAt: null }), false);
+});
+
+// ── What a stranger vs a match gets ─────────────────────────────────────────
+
+const CARD_KEYS = ['ageYears', 'bio', 'distanceRange', 'fitnessGoals', 'name', 'photos', 'profileImageUrl', 'userId'];
+
+test('discovery: a stranger gets what the card shows and nothing more', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { gender: 'female', bio: 'I lift', socialMediaUrl: '@private.handle', fitnessGoals: ['strength'], publicCode: 'AAAAAAAAAAAA' });
+  const { data } = await svc.getFeed(1, { page: 1, limit: 10 });
+  const card = data.find((c) => c.userId === 2);
+  assert.deepEqual(Object.keys(card).sort(), CARD_KEYS);
+  assert.equal(card.photos.length, 1, 'one photo, not all of them');
+  assert.equal(card.photos[0].url, 'https://img/2/0');
+  assert.equal(card.bio, 'I lift');
+  assert.deepEqual(card.fitnessGoals, ['strength']);
+  const wire = JSON.stringify(data);
+  for (const leaked of ['private.handle', 'AAAAAAAAAAAA', 'gender', 'female', 'socialMediaUrl', 'lat', 'lng', 'dateOfBirth']) {
+    assert.ok(!wire.includes(leaked), `${leaked} must not reach a stranger`);
+  }
+});
+
+test('discovery: sharing adds the public code and the best PR, and only then', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { publicCode: 'BBBBBBBBBBBB', isShareable: true });
+  seedUser(3, { publicCode: 'CCCCCCCCCCCC', isShareable: false });
+  seedUser(4, { publicCode: 'DDDDDDDDDDDD', isShareable: true }); // sharing on, no PRs yet
+  const rec = (id, profileId, name, weight, unit, reps, ago) => tables.buddyPersonalRecord.set(id, {
+    id, buddyProfileId: profileId, exerciseName: name, weight, unit, reps, createdAt: new Date(Date.now() - ago),
+  });
+  rec(1, 1002, 'Curl', 20, 'kg', 12, 0);        // newest
+  rec(2, 1002, 'Squat', 140, 'kg', 3, 1000);    // best
+  rec(3, 1002, 'Bench', 225, 'lb', 1, 2000);
+  rec(4, 1003, 'Secret', 300, 'kg', 1, 0);      // not shareable: never shown
+
+  const { data } = await svc.getFeed(1, { page: 1, limit: 10 });
+  const by = (id) => data.find((c) => c.userId === id);
+
+  assert.equal(by(2).publicCode, 'BBBBBBBBBBBB');
+  assert.deepEqual(by(2).bestRecord, { exerciseName: 'Squat', weight: 140, unit: 'kg', reps: 3 });
+
+  assert.deepEqual(Object.keys(by(3)).sort(), CARD_KEYS, 'no sharing, no extras');
+  assert.ok(!JSON.stringify(by(3)).includes('Secret'));
+
+  assert.equal(by(4).publicCode, 'DDDDDDDDDDDD');
+  assert.equal(by(4).bestRecord, null, 'sharing on but no records');
+});
+
+test('discovery: turning sharing off takes the code and PR out of the next deck', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { publicCode: 'BBBBBBBBBBBB', isShareable: true });
+  tables.buddyPersonalRecord.set(1, { id: 1, buddyProfileId: 1002, exerciseName: 'Squat', weight: 100, unit: 'kg', reps: 5, createdAt: new Date() });
+  assert.ok('publicCode' in (await svc.getFeed(1, { page: 1, limit: 10 })).data[0]);
+  profileOf(2).isShareable = false;
+  const card = (await svc.getFeed(1, { page: 1, limit: 10 })).data[0];
+  assert.ok(!('publicCode' in card) && !('bestRecord' in card));
+});
+
+test('a match gets the full profile, still without gender or location', async () => {
+  resetAll();
+  seedUser(1);
+  seedUser(2, { gender: 'female', bio: 'I lift', socialMediaUrl: '@their.handle', fitnessGoals: ['strength'], publicCode: 'AAAAAAAAAAAA', isShareable: true });
+  seedUser(3, { publicCode: 'CCCCCCCCCCCC', isShareable: false });
+  const shared = await svc.getMatchedProfile(1, seedMatch(1, 2));
+  assert.equal(shared.socialMediaUrl, '@their.handle');
+  assert.equal(shared.photos.length, 3, 'every photo');
+  assert.equal(shared.publicCode, 'AAAAAAAAAAAA');
+  assert.deepEqual(shared.fitnessGoals, ['strength']);
+  const wire = JSON.stringify(shared);
+  for (const leaked of ['gender', 'female', 'lat', 'lng', 'dateOfBirth']) {
+    assert.ok(!wire.includes(leaked), `${leaked} must not be sent`);
+  }
+
+  const unshared = await svc.getMatchedProfile(1, seedMatch(1, 3));
+  assert.equal(unshared.publicCode, null, 'the code follows the sharing switch for matches too');
+});
+
+// ── Gender preferences belong to women ──────────────────────────────────────
+
+test('gender preference: a man\'s saved one narrows nobody and hides nobody', async () => {
+  resetAll();
+  // Saved by an older client: a man who "only wants women".
+  seedUser(1, { gender: 'male', filter: { genders: ['female'] } });
+  seedUser(2, { gender: 'male' });
+  seedUser(3, { gender: 'female' });
+  assert.deepEqual(await feedIds(1), [2, 3], 'his deck is not narrowed by it');
+  assert.ok((await feedIds(2)).includes(1), 'and he is not hidden from other men by it');
+});
+
+test('gender preference: a woman\'s still works both ways', async () => {
+  resetAll();
+  seedUser(1, { gender: 'female', filter: { genders: ['female'] } });
+  seedUser(2, { gender: 'male' });
+  seedUser(3, { gender: 'female' });
+  assert.deepEqual(await feedIds(1), [3], 'she sees only women');
+  assert.ok(!(await feedIds(2)).includes(1), 'and men do not see a woman who wants only women');
+});
+
+test('saving filters: a man\'s genders are dropped, a woman\'s are kept', async () => {
+  resetAll();
+  seedUser(1, { gender: 'male' });
+  seedUser(2, { gender: 'female' });
+
+  const man = await callCtrl(ctrl.updateFilters, { userId: 1, body: { genders: ['female'], radiusKm: 10 } });
+  assert.equal(man.statusCode, 200);
+  assert.deepEqual(man.body.data.genders, []);
+  assert.equal(man.body.data.radiusKm, 10, 'the rest of the filter still saves');
+  assert.deepEqual(filterOf(1).genders, []);
+
+  const woman = await callCtrl(ctrl.updateFilters, { userId: 2, body: { genders: ['male'] } });
+  assert.equal(woman.statusCode, 200);
+  assert.deepEqual(woman.body.data.genders, ['male']);
 });

@@ -1,3 +1,4 @@
+import { profileChanged } from '../utils/buddyCaches.js';
 const CODE = /^[A-F0-9]{12}$/;
 const fail = (status, error) => { throw { status, error }; };
 
@@ -109,6 +110,9 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
       if (typeof body.isShareable !== 'boolean') fail(400, 'Choose whether to allow profile sharing');
       if (body.isShareable && p.photos.length < 3) fail(400, 'Add 3 profile photos before allowing sharing');
       await prisma.buddyProfile.update({ where: { userId }, data: { isShareable: body.isShareable } });
+      // Sharing decides whether a profile's code and best PR appear in other
+      // people's decks, so cached decks must not outlive the switch.
+      profileChanged(userId);
     },
     async follow(userId, code, enabled) {
       await owner(userId);
@@ -141,7 +145,7 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
       const p = await owner(userId);
       const { uploaded, kind } = await uploadMedia(file);
       try {
-        return await prisma.$transaction(async tx => {
+        const created = await prisma.$transaction(async tx => {
           // Serializes record creation and enforces the limit under concurrent uploads.
           await tx.$queryRaw`SELECT id FROM buddy."BuddyProfile" WHERE id = ${p.id} FOR UPDATE`;
           if (await tx.buddyPersonalRecord.count({ where: { buddyProfileId: p.id } }) >= 30)
@@ -149,6 +153,8 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
           return tx.buddyPersonalRecord.create({ data: { ...data, buddyProfileId: p.id,
             mediaUrl: uploaded?.secure_url, mediaPublicId: uploaded?.public_id, mediaType: kind } });
         });
+        profileChanged(userId); // the best PR shown in decks may have changed
+        return created;
       } catch (err) {
         if (uploaded) await cloudinary.uploader.destroy(uploaded.public_id, { resource_type: kind });
         throw err;
@@ -178,6 +184,7 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
       }
       if ((uploaded || removeMedia) && record.mediaPublicId)
         await cloudinary.uploader.destroy(record.mediaPublicId, { resource_type: record.mediaType });
+      profileChanged(userId);
       return updated;
     },
     async deleteRecord(userId, id) {
@@ -187,6 +194,7 @@ export function createSocialService({ prisma, cloudinary, getUserInternal }) {
       if (!record) fail(404, 'Personal record not found');
       if (record.mediaPublicId) await cloudinary.uploader.destroy(record.mediaPublicId, { resource_type: record.mediaType });
       await prisma.buddyPersonalRecord.delete({ where: { id } });
+      profileChanged(userId);
     },
   };
 }

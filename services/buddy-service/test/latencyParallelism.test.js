@@ -197,7 +197,11 @@ test('getFeed: me, swiped and safety reads start together; candidates use select
   assert.ok(state.candidateArgs.select.photos && state.candidateArgs.select.filter);
   assert.equal(out.data.length, 1);
   assert.equal(out.data[0].userId, 7);
-  assert.equal(out.data[0].publicCode, 'ABC');
+  // A stranger gets the card only; the public code needs sharing switched on.
+  assert.ok(!('publicCode' in out.data[0]));
+  assert.ok(!('socialMediaUrl' in out.data[0]) && !('gender' in out.data[0]));
+  assert.equal(state.candidateArgs.select.socialMediaUrl, undefined);
+  assert.equal(state.candidateArgs.select.gender, undefined);
   assert.equal(out.data[0].bio, 'hi');
   assert.deepEqual(out.data[0].photos, [{ id: 1, url: 'u', order: 0 }]);
   assert.equal(out.data[0].distanceRange, '< 1 km');
