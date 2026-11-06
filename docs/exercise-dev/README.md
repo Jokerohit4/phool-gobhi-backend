@@ -34,28 +34,40 @@ offered as a standalone download. CC BY-SA derivatives retain that license.
 | --- | ---: | ---: |
 | Demo GIF | 1,103 | 0 |
 | Photo | 1,103 | 0 |
-| English tutorial reference | 711 | 392 |
+| English tutorial reference | 816 | 287 |
 | Source/app guide | 1,103 | 0 |
-| Hindi source guide | 402 | 701 |
+| Hindi source guide | 401 | 702 |
 
 GIF completion does not mean every content field is complete. All 66 starter
 exercises have English tutorial references. Eleven direct MP4 demonstrations
 are separate from tutorials. See the [field lists](../exercise-data-gaps/README.md)
 and [remaining content work](../exercise-content-production/README.md).
 
-This update adds 525 exercise tutorial references using existing publisher
-footage: 387 with primary English-caption evidence and 138 filmed demonstrations
-with visually reviewed English on-screen instruction steps. The 711 exercise
-mappings use 644 unique videos. No generated walkthroughs were produced and no
+This update adds 630 exercise tutorial references using existing publisher
+footage: 489 with primary English-caption evidence and 139 filmed demonstrations
+with visually reviewed English on-screen instruction steps, and two with locally
+verified existing English coaching audio. The 816 exercise
+mappings use 735 unique videos. No generated walkthroughs were produced and no
 publisher footage was rehosted. Exact movement/equipment review rejected wrong
-variants even when titles matched. New primary YouTube checks received HTTP 429;
-unverified references remain excluded. The remaining 392 tutorials are unfinished.
+variants even when titles matched. Initial primary YouTube checks received HTTP
+429; verification subsequently resumed successfully in small batches. Unverified
+references remain excluded. The remaining 287 tutorials are unfinished.
+All 308 original catalogue exercises now have a tutorial reference. Some guides
+teach a reviewed support, grip or load-position variation; these differences
+are recorded explicitly in `resumed-trainer-decisions-20261106.json` rather than
+claiming identical footage for every variant. Later-phase preview checks resolved
+the full toe-supported Body-Up and double-kettlebell jerk before selection.
 
 All 72 missing English guides were filled: 28 licensed RepDB profiles and 44
-original app guides. Four incompatible English passages were corrected, retaining
+original app guides. Eight incompatible guides were corrected, retaining
 the superseded-source provenance. These are source/app guides, not approved coach
 content. Existing coach content, translations and private exercises are preserved.
-The 76 instruction profiles retain attribution and language. Whitespace-only
+The 80 instruction profiles retain attribution and language. Towel Row's pinned
+English and Hindi source text omitted the fixed anchor shown in its licensed
+media; both requests now receive a correctly labelled original English guide.
+Band hip adduction now teaches inward movement; lying dumbbell pronation and
+supination teach forearm rotation instead of shoulder rotation. Corrections are
+pinned to known source URLs. Other sources and translations are preserved. Whitespace-only
 upstream steps are removed from runtime responses without altering raw snapshots.
 
 When a requested-language tutorial is absent, the API returns the existing
@@ -74,11 +86,12 @@ requested-language videos take precedence; Hindi guide coverage remains separate
 - [Deployment](deployment.json) records the tested revision, environment hash,
   service account and dev promotion. [Live smoke check](live-smoke.json) records
   the main dev URL. Runtime environment and secret bindings were preserved.
-  Revision `health-service-dev-00190-coy` serves 100% of dev traffic; previous
-  revision `health-service-dev-00188-yez` is retained for rollback.
-- 54 distinct focused backend test cases passed across the focused runs,
+  Revision `health-service-dev-00196-luc` serves 100% of dev traffic; previous
+  revision `health-service-dev-00194-fij` is retained for rollback.
+- 57 distinct focused backend test cases passed across the focused runs,
   including complete source-guide coverage, tutorial review evidence, language
-  fallback, GIF/photo coverage and custom-exercise isolation. Fourteen focused
+  fallback, GIF/photo coverage and custom-exercise isolation. The latest focused
+  instruction/API/provenance subset passed all 17 cases. Fourteen focused
   Flutter tests passed, including actual tutorial language labels.
   Changed-file Flutter analysis passed. The earlier full backend suite had one
   unrelated `reportDetectedDate.test.js` localization failure.

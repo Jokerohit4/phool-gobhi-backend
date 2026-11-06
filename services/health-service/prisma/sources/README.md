@@ -74,23 +74,39 @@ GIF/MP4/JPG asset hashes, credit, rights and clip/crop are retained in
 verifies public availability/MIME/size before writing that runtime manifest.
 The DVIDS source credit includes the required non-endorsement notice.
 
-`reviewed-tutorial-mappings.json` contains 711 exercise-to-video selections.
-`reviewed-tutorial-metadata.json` retains 644 unique primary publisher metadata
+`reviewed-tutorial-mappings.json` contains 816 exercise-to-video selections.
+`reviewed-tutorial-metadata.json` retains 735 unique primary publisher metadata
 responses with actual titles, durations, channels and verification timestamps.
 Tutorials link to the original YouTube publisher; their footage is not rehosted.
 
-The 6 November review added 525 exercise references: 387 with primary English
-caption evidence and 138 recorded demonstrations with visually inspected English
-on-screen instruction steps. Explicit selections, equipment decisions and
+The 6 November review added 630 exercise references: 489 with primary English
+caption evidence and 139 recorded demonstrations with visually inspected English
+on-screen instruction steps, plus two with locally verified existing English
+coaching audio. Explicit selections, equipment decisions and
 rejected variants are retained in `trainer-tutorial-review-20261106.json` and
 `reviewed-annotated-trainer-tutorials-20261106.json`. Contact sheets are retained
-under the dev report's `reference-review/` directory. Candidate/search metadata
-is research only and must not be bulk-published. New primary verification was
-rate-limited; 392 exercises still lack a reviewed tutorial reference.
+under the dev report's `reference-review/` directory. Resumed selections and
+rejections, including explicitly recorded minor setup variations, are retained
+in `resumed-trainer-decisions-20261106.json`. Candidate/search metadata
+is research only and must not be bulk-published. Primary verification resumed in
+small batches after the earlier rate limit; 287 exercises still lack a reviewed
+tutorial reference. The original 308 exercises are all covered.
 
-`prisma/exerciseInstructionFallbacks.json` contains 76 reviewed profiles: 28
+`reviewed-audio-trainer-tutorials-20261106.json` records two explicit selections
+whose English coaching was verified locally when captions were absent. Public
+publisher audio and full machine transcripts stay in private temporary storage;
+the repository retains hashes, language metrics, setup reviews and summaries.
+`reviewTrainerAudio.py` collects research evidence only and never publishes a
+reference. Its default duration limit is 120 seconds; an explicit
+`--max-duration 600` supports longer instructional sources. Silent clips and
+movement/grip mismatches remain excluded even when speech detection succeeds.
+
+`prisma/exerciseInstructionFallbacks.json` contains 80 reviewed profiles: 28
 licensed RepDB guides, 44 original English app guides for missing instructions,
-and four original corrections to incompatible source passages. Raw upstream
+and eight original corrections to incompatible source guides. Towel Row's
+correction is pinned to the faulty source URL and covers its English/Hindi text,
+returning correctly labelled English rather than claiming a Hindi translation.
+Raw upstream
 snapshots remain intact. Runtime guidance retains source links, attribution,
 language and superseded-source metadata, and never replaces approved coach
 content. RepDB instruction use retains its required in-app credit and license

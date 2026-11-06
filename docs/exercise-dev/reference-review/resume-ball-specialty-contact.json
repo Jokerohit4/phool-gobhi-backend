@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Exercise Ball Pull-In",
+    "youtubeVideoId": "PbCgRWzQPc8",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Extended Range One-Arm Kettlebell Floor Press",
+    "youtubeVideoId": "nJtoTf0cPsE",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Elbow to Knee",
+    "youtubeVideoId": "5J9ec8XX9r4",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Elevated Back Lunge",
+    "youtubeVideoId": "U5Q5HfUyy78",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  }
+]

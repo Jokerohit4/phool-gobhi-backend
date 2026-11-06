@@ -42,7 +42,7 @@ FOCUSED = {
 }
 
 
-def inspect(item):
+def inspect(item, fractions=(.12, .35, .6, .85)):
     name, video_id = item
     try:
         with urllib.request.urlopen('https://www.youtube.com/watch?v=' + video_id, timeout=25) as response:
@@ -56,7 +56,7 @@ def inspect(item):
         width, height, count, columns, rows = map(int, [width, height, count, columns, rows])
         cache = {}
         frames = []
-        for fraction in [.12, .35, .6, .85]:
+        for fraction in fractions:
             index = min(count - 1, int(count * fraction))
             sheet = index // (columns * rows)
             if sheet not in cache:
@@ -110,24 +110,28 @@ def main():
     draw = ImageDraw.Draw(contact)
     font = ImageFont.truetype('C:/Windows/Fonts/arial.ttf', 19)
     manifest = []
+    fractions = tuple(map(float, sys.argv[sys.argv.index('--fractions') + 1].split(','))) if '--fractions' in sys.argv else (.12, .35, .6, .85)
+    if len(fractions) != 4 or not all(0 < fraction < 1 for fraction in fractions):
+        raise ValueError('Specify four preview positions between zero and one')
+    inspector = lambda target: inspect(target, fractions)
     def inspected_targets():
         if '--slow' in sys.argv:
             for index, target in enumerate(targets.items()):
                 if index:
                     time.sleep(5)
-                result = inspect(target)
+                result = inspector(target)
                 yield result
                 if result[3] == 'HTTP429':
                     break
         else:
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-                yield from pool.map(inspect, targets.items())
+                yield from pool.map(inspector, targets.items())
 
     for row_index, (name, video_id, frames, error) in enumerate(inspected_targets()):
-            draw.text((8, row_index * 170 + 5), f'{name} | {video_id}' + (f' | unavailable: {error}' if error else ''), font=font, fill='white')
-            for index, frame in enumerate(frames):
-                contact.paste(frame, (index * 240, row_index * 170 + 30))
-            manifest.append({'name': name, 'youtubeVideoId': video_id, 'previewFrames': len(frames), 'error': error})
+        draw.text((8, row_index * 170 + 5), f'{name} | {video_id}' + (f' | unavailable: {error}' if error else ''), font=font, fill='white')
+        for index, frame in enumerate(frames):
+            contact.paste(frame, (index * 240, row_index * 170 + 30))
+        manifest.append({'name': name, 'youtubeVideoId': video_id, 'previewFrames': len(frames), 'error': error, 'previewFractions': fractions})
     contact.save(OUTPUT / (prefix + '.jpg'), quality=92)
     (OUTPUT / (prefix + '.json')).write_text(json.dumps(manifest, indent=2) + '\n')
     print(json.dumps({'videos': len(manifest), 'available': sum(not row['error'] for row in manifest)}))

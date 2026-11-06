@@ -28,6 +28,9 @@ def main():
     assert verified['http']['detailsChecked'] == 1103 and not verified['http']['failures']
     checked = datetime.datetime.fromisoformat(verified['checkedAt'].replace('Z', '+00:00'))
     assert (datetime.datetime.now(datetime.timezone.utc) - checked).total_seconds() < 3600
+    revision = json.loads(cloud('run', 'revisions', 'describe', deployment['taggedRevision'], '--region=asia-south1', '--format=json'))
+    created = datetime.datetime.fromisoformat(revision['metadata']['creationTimestamp'].replace('Z', '+00:00'))
+    assert checked >= created, 'Verification predates the tagged revision; verify this deployment before promotion'
     service = json.loads(cloud('run', 'services', 'describe', 'health-service-dev', '--region=asia-south1', '--format=json'))
     traffic = [row for row in service['status']['traffic'] if row.get('percent', 0)]
     assert len(traffic) == 1 and traffic[0]['percent'] == 100
@@ -46,11 +49,16 @@ def main():
     library = get('/exercises')['data']
     assert len(library) == 1103 and all(row.get('demoGifUrl') for row in library)
     probes = {}
-    for name in ['Cat-Cow', 'March in Place', 'High Plank', 'Kettlebell Halo']:
+    instructions = json.loads((ROOT / 'services/health-service/prisma/exerciseInstructionFallbacks.json').read_text(encoding='utf-8'))
+    for name in ['Cat-Cow', 'March in Place', 'High Plank', 'Kettlebell Halo', 'Towel Row', 'Band Hip Adductions', 'Dumbbell Lying Pronation', 'Dumbbell Lying Supination']:
         row = next(row for row in library if row['name'] == name)
         detail = get('/exercises/' + str(row['id']) + '?lang=en')['data']
         assert detail.get('demoGifUrl') and detail.get('demoImageUrl')
         probes[name] = {'id': row['id'], 'demoGifUrl': detail['demoGifUrl'], 'kind': detail.get('demoGifKind', 'motion')}
+        if name in ['Towel Row', 'Band Hip Adductions', 'Dumbbell Lying Pronation', 'Dumbbell Lying Supination']:
+            assert detail['sourceInstructions'] == instructions[name]['instructions']
+            assert detail['sourceInstructionLanguage'] == 'en'
+            probes[name]['correctedSourceGuideVerified'] = True
     after = json.loads(cloud('run', 'services', 'describe', 'health-service-dev', '--region=asia-south1', '--format=json'))
     assert any(row.get('revisionName') == deployment['taggedRevision'] and row.get('percent') == 100 for row in after['status']['traffic'])
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()

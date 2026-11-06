@@ -35,8 +35,8 @@
       "id": "missing-tutorial-video",
       "label": "No tutorial video seed entry",
       "group": "Content",
-      "missing": 365,
-      "present": 738,
+      "missing": 287,
+      "present": 816,
       "file": "missing-tutorial-video.csv"
     },
     {
@@ -51,8 +51,8 @@
       "id": "missing-watchable-video",
       "label": "No tutorial entry or direct demonstration",
       "group": "Content",
-      "missing": 365,
-      "present": 738,
+      "missing": 287,
+      "present": 816,
       "file": "missing-watchable-video.csv"
     },
     {
@@ -67,8 +67,8 @@
       "id": "missing-hindi-source-instructions",
       "label": "No Hindi source fallback instructions",
       "group": "Content",
-      "missing": 701,
-      "present": 402,
+      "missing": 702,
+      "present": 401,
       "file": "missing-hindi-source-instructions.csv"
     },
     {

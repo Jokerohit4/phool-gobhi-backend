@@ -28,6 +28,15 @@ def main():
             visual = read(PRISMA / 'sources/reviewed-annotated-trainer-tutorials-20261106.json')['selected'][name]
             assert visual['youtubeVideoId'] == video_id and visual['equipment'] == catalogue[name]['equipment']
             assert visual['previewFrames'] >= 4 and visual['language'] == 'en' and visual['reason']
+        elif row.get('instructionFormat') == 'recorded_trainer_with_verified_english_audio':
+            spoken = read(PRISMA / 'sources/reviewed-audio-trainer-tutorials-20261106.json')['selected'][name]
+            evidence = read(ROOT.parents[1] / 'docs/exercise-dev/trainer-audio-candidates.json')[video_id]
+            assert spoken['youtubeVideoId'] == video_id and spoken['equipment'] == catalogue[name]['equipment']
+            assert spoken['previewFrames'] >= 4 and spoken['instructionSummary'] and spoken['reason']
+            assert evidence['language'] == 'en' and evidence['languageProbability'] >= .9
+            assert evidence['wordCount'] >= 20 and evidence['meanNoSpeechProbability'] < .4
+            assert evidence['meanLogProbability'] > -1
+            assert spoken['audioSha256'] == evidence['audioSha256'] and spoken['transcriptSha256'] == evidence['transcriptSha256']
         else:
             assert any(language.startswith('en') for language in source['captionLanguages'])
         assert name not in mappings or mappings[name] == video_id, 'Refusing an unreviewed replacement'

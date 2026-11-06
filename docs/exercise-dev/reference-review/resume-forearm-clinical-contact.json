@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Dumbbell Lying Pronation",
+    "youtubeVideoId": "cFN80sNHFTs",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Dumbbell Lying Supination",
+    "youtubeVideoId": "4Om83PMgZAg",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  }
+]

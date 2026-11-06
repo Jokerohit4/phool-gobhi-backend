@@ -1,7 +1,7 @@
 {
-  "checkedAt": "2026-11-06T06:21:46.913296+00:00",
+  "checkedAt": "2026-11-06T12:16:15.520580+00:00",
   "url": "https://health-service-dev-pwixdiy6va-el.a.run.app",
-  "revision": "health-service-dev-00190-coy",
+  "revision": "health-service-dev-00196-luc",
   "health": {
     "status": "Health Service is healthy"
   },
@@ -27,6 +27,30 @@
       "id": 184,
       "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/pose-references/e0f84bf6d1fe1d6a0b7584f025ca347e49caea91d3881750686ca0a9260477d2.gif",
       "kind": "pose_sequence"
+    },
+    "Towel Row": {
+      "id": 43,
+      "demoGifUrl": "https://res.cloudinary.com/dgbydysk2/image/upload/v1793560855/phool-gobhi/exercises/uTv34oq-demo.gif",
+      "kind": "motion",
+      "correctedSourceGuideVerified": true
+    },
+    "Band Hip Adductions": {
+      "id": 636,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/pose-references/8d93ce1016167f27f7abe5da18b088cd213e29e4488ed2cc33acb96ff3c1e3d1.gif",
+      "kind": "pose_sequence",
+      "correctedSourceGuideVerified": true
+    },
+    "Dumbbell Lying Pronation": {
+      "id": 356,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0347-mym4hJo.gif",
+      "kind": "motion",
+      "correctedSourceGuideVerified": true
+    },
+    "Dumbbell Lying Supination": {
+      "id": 518,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0349-M2Pm3zj.gif",
+      "kind": "motion",
+      "correctedSourceGuideVerified": true
     }
   },
   "productionChanged": false

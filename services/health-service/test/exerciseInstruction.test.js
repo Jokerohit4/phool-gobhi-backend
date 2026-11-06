@@ -7,6 +7,19 @@ import { withExerciseInstructionFallback } from '../services/exerciseInstruction
 const catalogue = JSON.parse(readFileSync(new URL('../prisma/exerciseCatalogue.json', import.meta.url), 'utf8'));
 const media = JSON.parse(readFileSync(new URL('../prisma/exerciseMedia.json', import.meta.url), 'utf8'));
 
+test('lying forearm rotation guides teach pronation and supination without shoulder rotation', () => {
+  for (const [name, direction] of [['Dumbbell Lying Pronation', 'palm-down'], ['Dumbbell Lying Supination', 'palm-up']]) {
+    const original = { name, equipment: 'dumbbell', instructions: ['Existing coach guide'] };
+    const result = withExerciseSource(original);
+    assert.match(result.sourceInstructions[2], new RegExp(direction));
+    assert.match(result.sourceInstructions[2], /without bending your wrist or rolling your shoulder/);
+    assert.match(result.sourceMetadata.supersededInstructionSource.sourceUrl, /Dumbbell_Lying_/);
+    assert.deepEqual(result.instructions, original.instructions);
+    const unrelated = { ...original, sourceInstructions: ['New reviewed source'], sourceInstructionLanguage: 'en', sourceInstructionUrl: 'https://example.com/new-guide' };
+    assert.equal(withExerciseInstructionFallback(unrelated), unrelated);
+  }
+});
+
 test('all catalogue exercises have real instruction text and preserve media', () => {
   for (const exercise of catalogue) {
     const result = withExerciseSource({ ...exercise, demoGifUrl: media[exercise.name]?.gifUrl, demoImageUrl: media[exercise.name]?.imageUrl });
@@ -57,4 +70,14 @@ test('known towel-row source mismatch gets anchored guidance in English and Hind
   }
   const unrelated = { name: 'Towel Row', equipment: 'bodyweight', sourceInstructions: ['Reviewed Hindi source'], sourceInstructionLanguage: 'hi', sourceInstructionUrl: 'https://example.com/new-reviewed-guide' };
   assert.equal(withExerciseInstructionFallback(unrelated), unrelated);
+});
+
+test('band hip-adduction guide matches the named inward movement and retained source photos', () => {
+  const exercise = { name: 'Band Hip Adductions', equipment: 'other', instructions: ['Existing coach guide'] };
+  const corrected = withExerciseSource(exercise);
+  assert.match(corrected.sourceInstructions[1], /nearest the anchor/);
+  assert.match(corrected.sourceInstructions[2], /inward across/);
+  assert.match(corrected.sourceMetadata.supersededInstructionSource.sourceUrl, /Band_Hip_Adductions/);
+  assert.match(corrected.demoGifUrl, /8d93ce1016167f27/);
+  assert.deepEqual(corrected.instructions, exercise.instructions);
 });

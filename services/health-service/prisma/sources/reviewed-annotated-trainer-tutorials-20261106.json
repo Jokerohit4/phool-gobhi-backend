@@ -1517,6 +1517,17 @@
       "previewFrames": 4,
       "language": "en",
       "reason": "Inspected public primary storyboard previews: actual paused bench-press setup with English instructional overlays including bar alignment and press path, plus the coach demonstration. English narration is not claimed from unavailable captions."
+    },
+    "Dumbbell Clean": {
+      "youtubeVideoId": "SYxObzJ3gn0",
+      "equipment": "dumbbell",
+      "publisher": "CrossFit",
+      "instructionFormat": "recorded_trainer_with_on_screen_steps",
+      "reviewType": "visual_preview_setup_and_instruction_cues",
+      "contactSheet": "resume-technique-review-contact.jpg",
+      "previewFrames": 4,
+      "language": "en",
+      "reason": "Inspected filmed two-dumbbell clean from floor with full squat catch and standing recovery. Primary preview includes English movement steps beside the demonstrator throughout. Matches canonical two-dumbbell squat clean; no one-arm or hang-only substitution. No claim of spoken narration."
     }
   },
   "rejected": [

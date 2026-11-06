@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Front Leg Raises",
+    "youtubeVideoId": "naW8u72lOzI",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Gironda Sternum Chins",
+    "youtubeVideoId": "UK5zf93oORc",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Frog Sit-Ups",
+    "youtubeVideoId": "ZLyOWSPnVrM",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  }
+]

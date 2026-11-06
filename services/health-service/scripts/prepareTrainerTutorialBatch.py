@@ -322,6 +322,21 @@ def main():
         assert row['reviewType'] == 'visual_preview_setup_and_instruction_cues' and row['previewFrames'] >= 4
         assert row['language'] == 'en' and row['contactSheet'] and row['reason']
         selected[name] = row['youtubeVideoId']
+    audio_path = PRISMA / 'sources/reviewed-audio-trainer-tutorials-20261106.json'
+    audio = read(audio_path)['selected'] if audio_path.exists() else {}
+    audio_candidates = read(OUTPUT / 'trainer-audio-candidates.json') if audio else {}
+    for name, decision in audio.items():
+        assert decision['instructionFormat'] == 'recorded_trainer_with_verified_english_audio'
+        assert decision['reviewType'] == 'visual_setup_and_local_audio_instruction_review'
+        assert decision['language'] == 'en' and decision['previewFrames'] >= 4
+        assert decision['reason'] and decision['instructionSummary'] and decision['contactSheet']
+        evidence = audio_candidates[decision['youtubeVideoId']]
+        assert evidence['language'] == 'en' and evidence['languageProbability'] >= .9
+        assert evidence['wordCount'] >= 20 and evidence['meanNoSpeechProbability'] < .4
+        assert evidence['meanLogProbability'] > -1
+        assert decision['audioSha256'] == evidence['audioSha256']
+        assert decision['transcriptSha256'] == evidence['transcriptSha256']
+        selected[name] = decision['youtubeVideoId']
     catalogue = {row['name']: row for row in read(PRISMA / 'exerciseCatalogue.json')}
     cache_path = PRISMA / 'sources/trainer-tutorial-candidate-metadata.json'
     cache = read(cache_path)
@@ -348,7 +363,8 @@ def main():
             withheld.append({'exercise': name, 'id': video_id, 'reason': 'Primary playable embed metadata unavailable'})
             continue
         visual = annotated.get(name)
-        if not visual and not any(str(language).startswith('en') for language in row.get('captionLanguages', [])):
+        spoken = audio.get(name)
+        if not visual and not spoken and not any(str(language).startswith('en') for language in row.get('captionLanguages', [])):
             withheld.append({'exercise': name, 'id': video_id, 'reason': 'English narration evidence not established; do not count a silent demo as a tutorial'})
             continue
         if not 10 <= row['durationSeconds'] <= 7200:
@@ -358,10 +374,14 @@ def main():
             assert visual['equipment'] == catalogue[name]['equipment']
             row['instructionFormat'] = visual['instructionFormat']
             row['languageEvidence'] = 'English on-screen instruction cues inspected in primary storyboard previews'
+        if spoken:
+            assert spoken['equipment'] == catalogue[name]['equipment']
+            row['instructionFormat'] = spoken['instructionFormat']
+            row['languageEvidence'] = 'Existing English speech verified through local machine transcription and visual setup review; publisher audio is not rehosted'
         accepted[name] = {'youtubeVideoId': video_id, 'equipment': catalogue[name]['equipment'],
                           'reviewType': 'primary_publisher_and_canonical_setup_review',
-                          'instructionFormat': visual['instructionFormat'] if visual else 'trainer_instruction_with_english_captions',
-                          'reason': visual['reason'] if visual else resumed[name]['reason'] if name in resumed else 'Published trainer/physio instructional reference; title and available description checked against canonical setup/equipment. English speech indicated by primary English captions; actual title, publisher, duration, playable embed and oEmbed verified. No rehosting or claim of physical-device playback.'}
+                          'instructionFormat': visual['instructionFormat'] if visual else spoken['instructionFormat'] if spoken else 'trainer_instruction_with_english_captions',
+                          'reason': visual['reason'] if visual else spoken['reason'] if spoken else resumed[name]['reason'] if name in resumed else 'Published trainer/physio instructional reference; title and available description checked against canonical setup/equipment. English speech indicated by primary English captions; actual title, publisher, duration, playable embed and oEmbed verified. No rehosting or claim of physical-device playback.'}
     cache_path.write_text(json.dumps(cache, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     rejected = [{'exercise': name, 'youtubeVideoId': initial[name], 'reason': reason} for name, reason in EXCLUDED.items()]
     report = {'reviewedAt': datetime.now(timezone.utc).isoformat(), 'constraint': 'Existing trainer-led tutorials only; no generated walkthroughs or bare movement-demo substitutions.', 'selected': accepted, 'rejectedCandidates': rejected, 'withheld': withheld}

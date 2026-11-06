@@ -142,7 +142,7 @@ try {
         } catch (error) { failures.push({ id: row.id, name: row.name, error: error.message }); }
       }
     }));
-    for (const name of ['Knee Push-up', 'Plank', 'Dumbbell Step Ups', 'Barbell Rollout from Bench', 'Towel Row']) {
+    for (const name of ['Knee Push-up', 'Plank', 'Dumbbell Step Ups', 'Barbell Rollout from Bench', 'Towel Row', 'Band Hip Adductions']) {
       const row = rows.find((exercise) => exercise.name === name);
       const expected = withExerciseSource(row, 'hi');
       const { data } = await get(`/exercises/${row.id}?lang=hi`);

@@ -43,7 +43,7 @@ def search(exercise):
                 for item in value:
                     walk(item)
         walk(data)
-        return {'exercise': exercise['name'], 'equipment': exercise['equipment'], 'queryUrl': url, 'candidates': videos[:8]}
+        return {'exercise': exercise['name'], 'equipment': exercise['equipment'], 'queryUrl': url, 'candidates': videos[:20]}
     except urllib.error.HTTPError as error:
         return {'exercise': exercise['name'], 'equipment': exercise['equipment'], 'queryUrl': url, 'candidates': [], 'error': 'public_search_unavailable', 'httpStatus': error.code}
     except Exception:

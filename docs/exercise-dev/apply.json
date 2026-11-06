@@ -1,6 +1,6 @@
 {
   "target": "dev",
-  "checkedAt": "2026-11-06T10:25:26.101Z",
+  "checkedAt": "2026-11-06T12:20:08.411Z",
   "exercises": 1103,
   "exerciseColumns": [
     "id",
@@ -23,7 +23,7 @@
   "effectiveMissing": {
     "demoGif": 0,
     "photo": 0,
-    "tutorial": 365,
+    "tutorial": 287,
     "sourceInstructions": 0
   },
   "missing": {
@@ -31,49 +31,9 @@
     "photo": [],
     "tutorial": [
       {
-        "id": 43,
-        "name": "Towel Row",
-        "equipment": "bodyweight"
-      },
-      {
-        "id": 145,
-        "name": "Assisted Pistol Squat",
-        "equipment": "bodyweight"
-      },
-      {
-        "id": 243,
-        "name": "Dumbbell Dead Bug",
-        "equipment": "dumbbell"
-      },
-      {
-        "id": 250,
-        "name": "Low-Impact Skater",
-        "equipment": "bodyweight"
-      },
-      {
-        "id": 264,
-        "name": "Hiking",
-        "equipment": "other"
-      },
-      {
-        "id": 276,
-        "name": "Squat to Reach",
-        "equipment": "bodyweight"
-      },
-      {
-        "id": 303,
-        "name": "Deep Squat Hold",
-        "equipment": "bodyweight"
-      },
-      {
         "id": 316,
         "name": "Reverse Band Sumo Deadlift",
         "equipment": "barbell"
-      },
-      {
-        "id": 319,
-        "name": "Gironda Sternum Chins",
-        "equipment": "other"
       },
       {
         "id": 324,
@@ -89,11 +49,6 @@
         "id": 327,
         "name": "Iron Cross",
         "equipment": "dumbbell"
-      },
-      {
-        "id": 329,
-        "name": "Band Assisted Pull-Up",
-        "equipment": "other"
       },
       {
         "id": 332,
@@ -116,11 +71,6 @@
         "equipment": "other"
       },
       {
-        "id": 339,
-        "name": "Decline Smith Press",
-        "equipment": "machine"
-      },
-      {
         "id": 340,
         "name": "Alternating Floor Press",
         "equipment": "kettlebell"
@@ -134,16 +84,6 @@
         "id": 346,
         "name": "Dancer's Stretch",
         "equipment": "other"
-      },
-      {
-        "id": 355,
-        "name": "Latissimus Dorsi-SMR",
-        "equipment": "other"
-      },
-      {
-        "id": 356,
-        "name": "Dumbbell Lying Pronation",
-        "equipment": "dumbbell"
       },
       {
         "id": 358,
@@ -188,11 +128,6 @@
       {
         "id": 381,
         "name": "Rhomboids-SMR",
-        "equipment": "other"
-      },
-      {
-        "id": 387,
-        "name": "Ankle On The Knee",
         "equipment": "other"
       },
       {
@@ -246,34 +181,14 @@
         "equipment": "other"
       },
       {
-        "id": 410,
-        "name": "Calves-SMR",
-        "equipment": "other"
-      },
-      {
         "id": 411,
         "name": "Rear Leg Raises",
         "equipment": "bodyweight"
       },
       {
-        "id": 412,
-        "name": "Yoke Walk",
-        "equipment": "other"
-      },
-      {
         "id": 413,
         "name": "Sledgehammer Swings",
         "equipment": "other"
-      },
-      {
-        "id": 415,
-        "name": "Cable Wrist Curl",
-        "equipment": "cable"
-      },
-      {
-        "id": 416,
-        "name": "Leverage Shoulder Press",
-        "equipment": "machine"
       },
       {
         "id": 417,
@@ -321,11 +236,6 @@
         "equipment": "other"
       },
       {
-        "id": 440,
-        "name": "Downward Facing Balance",
-        "equipment": "other"
-      },
-      {
         "id": 441,
         "name": "Barbell Rollout from Bench",
         "equipment": "barbell"
@@ -361,11 +271,6 @@
         "equipment": "kettlebell"
       },
       {
-        "id": 456,
-        "name": "Exercise Ball Pull-In",
-        "equipment": "other"
-      },
-      {
         "id": 457,
         "name": "Calf Raises - With Bands",
         "equipment": "other"
@@ -373,11 +278,6 @@
       {
         "id": 459,
         "name": "Behind Head Chest Stretch",
-        "equipment": "other"
-      },
-      {
-        "id": 462,
-        "name": "Kneeling Forearm Stretch",
         "equipment": "other"
       },
       {
@@ -389,11 +289,6 @@
         "id": 468,
         "name": "Middle Back Stretch",
         "equipment": "other"
-      },
-      {
-        "id": 472,
-        "name": "Lying Cable Curl",
-        "equipment": "cable"
       },
       {
         "id": 473,
@@ -409,11 +304,6 @@
         "id": 477,
         "name": "Plyo Kettlebell Pushups",
         "equipment": "kettlebell"
-      },
-      {
-        "id": 480,
-        "name": "One-Arm Long Bar Row",
-        "equipment": "barbell"
       },
       {
         "id": 482,
@@ -456,16 +346,6 @@
         "equipment": "bodyweight"
       },
       {
-        "id": 504,
-        "name": "Brachialis-SMR",
-        "equipment": "other"
-      },
-      {
-        "id": 505,
-        "name": "Body-Up",
-        "equipment": "bodyweight"
-      },
-      {
         "id": 506,
         "name": "Standing Elevated Quad Stretch",
         "equipment": "other"
@@ -491,16 +371,6 @@
         "equipment": "other"
       },
       {
-        "id": 518,
-        "name": "Dumbbell Lying Supination",
-        "equipment": "dumbbell"
-      },
-      {
-        "id": 520,
-        "name": "Ankle Circles",
-        "equipment": "other"
-      },
-      {
         "id": 526,
         "name": "Chest Push (multiple response)",
         "equipment": "other"
@@ -511,26 +381,6 @@
         "equipment": "bodyweight"
       },
       {
-        "id": 528,
-        "name": "Olympic Squat",
-        "equipment": "barbell"
-      },
-      {
-        "id": 531,
-        "name": "Quadriceps-SMR",
-        "equipment": "other"
-      },
-      {
-        "id": 534,
-        "name": "Smith Machine Decline Press",
-        "equipment": "machine"
-      },
-      {
-        "id": 535,
-        "name": "Narrow Stance Hack Squats",
-        "equipment": "machine"
-      },
-      {
         "id": 537,
         "name": "Preacher Hammer Dumbbell Curl",
         "equipment": "dumbbell"
@@ -539,11 +389,6 @@
         "id": 545,
         "name": "Chest Stretch on Stability Ball",
         "equipment": "other"
-      },
-      {
-        "id": 546,
-        "name": "Two-Arm Kettlebell Military Press",
-        "equipment": "kettlebell"
       },
       {
         "id": 547,
@@ -594,16 +439,6 @@
         "id": 570,
         "name": "Medicine Ball Chest Pass",
         "equipment": "other"
-      },
-      {
-        "id": 573,
-        "name": "Low Cable Crossover",
-        "equipment": "cable"
-      },
-      {
-        "id": 574,
-        "name": "Cable Preacher Curl",
-        "equipment": "cable"
       },
       {
         "id": 575,
@@ -661,11 +496,6 @@
         "equipment": "barbell"
       },
       {
-        "id": 598,
-        "name": "Dumbbell Clean",
-        "equipment": "dumbbell"
-      },
-      {
         "id": 599,
         "name": "Straight-Arm Dumbbell Pullover",
         "equipment": "dumbbell"
@@ -679,11 +509,6 @@
         "id": 605,
         "name": "Incline Push-Up Depth Jump",
         "equipment": "other"
-      },
-      {
-        "id": 608,
-        "name": "Elbow to Knee",
-        "equipment": "bodyweight"
       },
       {
         "id": 613,
@@ -704,11 +529,6 @@
         "id": 619,
         "name": "Single Leg Butt Kick",
         "equipment": "bodyweight"
-      },
-      {
-        "id": 620,
-        "name": "Bodyweight Walking Lunge",
-        "equipment": "other"
       },
       {
         "id": 621,
@@ -733,16 +553,6 @@
       {
         "id": 633,
         "name": "Chain Handle Extension",
-        "equipment": "other"
-      },
-      {
-        "id": 636,
-        "name": "Band Hip Adductions",
-        "equipment": "other"
-      },
-      {
-        "id": 637,
-        "name": "Balance Board",
         "equipment": "other"
       },
       {
@@ -801,11 +611,6 @@
         "equipment": "other"
       },
       {
-        "id": 659,
-        "name": "Two-Arm Kettlebell Jerk",
-        "equipment": "kettlebell"
-      },
-      {
         "id": 660,
         "name": "One-Arm Kettlebell Split Jerk",
         "equipment": "kettlebell"
@@ -826,18 +631,8 @@
         "equipment": "other"
       },
       {
-        "id": 671,
-        "name": "Backward Drag",
-        "equipment": "other"
-      },
-      {
         "id": 673,
         "name": "Squat with Chains",
-        "equipment": "barbell"
-      },
-      {
-        "id": 675,
-        "name": "Barbell Step Ups",
         "equipment": "barbell"
       },
       {
@@ -859,11 +654,6 @@
         "id": 684,
         "name": "Calf Raise On A Dumbbell",
         "equipment": "dumbbell"
-      },
-      {
-        "id": 685,
-        "name": "Leverage Iso Row",
-        "equipment": "machine"
       },
       {
         "id": 686,
@@ -889,11 +679,6 @@
         "id": 694,
         "name": "Front Raise And Pullover",
         "equipment": "barbell"
-      },
-      {
-        "id": 696,
-        "name": "Rope Straight-Arm Pulldown",
-        "equipment": "cable"
       },
       {
         "id": 697,
@@ -931,11 +716,6 @@
         "equipment": "machine"
       },
       {
-        "id": 708,
-        "name": "90/90 Hamstring",
-        "equipment": "bodyweight"
-      },
-      {
         "id": 713,
         "name": "Wide-Grip Rear Pull-Up",
         "equipment": "bodyweight"
@@ -966,19 +746,9 @@
         "equipment": "other"
       },
       {
-        "id": 728,
-        "name": "Seated Dumbbell Curl",
-        "equipment": "dumbbell"
-      },
-      {
         "id": 729,
         "name": "Kettlebell Pass Between The Legs",
         "equipment": "kettlebell"
-      },
-      {
-        "id": 730,
-        "name": "Natural Glute Ham Raise",
-        "equipment": "bodyweight"
       },
       {
         "id": 733,
@@ -988,16 +758,6 @@
       {
         "id": 734,
         "name": "Forward Drag with Press",
-        "equipment": "other"
-      },
-      {
-        "id": 737,
-        "name": "Standing Biceps Stretch",
-        "equipment": "other"
-      },
-      {
-        "id": 742,
-        "name": "Sled Row",
         "equipment": "other"
       },
       {
@@ -1014,11 +774,6 @@
         "id": 750,
         "name": "Lying Bent Leg Groin",
         "equipment": "other"
-      },
-      {
-        "id": 752,
-        "name": "Barbell Seated Calf Raise",
-        "equipment": "barbell"
       },
       {
         "id": 754,
@@ -1053,11 +808,6 @@
       {
         "id": 762,
         "name": "Intermediate Hip Flexor and Quad Stretch",
-        "equipment": "other"
-      },
-      {
-        "id": 765,
-        "name": "Alternate Leg Diagonal Bound",
         "equipment": "other"
       },
       {
@@ -1098,11 +848,6 @@
       {
         "id": 783,
         "name": "Lying Prone Quadriceps",
-        "equipment": "bodyweight"
-      },
-      {
-        "id": 784,
-        "name": "Butt-Ups",
         "equipment": "bodyweight"
       },
       {
@@ -1161,11 +906,6 @@
         "equipment": "other"
       },
       {
-        "id": 816,
-        "name": "Two-Arm Kettlebell Row",
-        "equipment": "kettlebell"
-      },
-      {
         "id": 820,
         "name": "Kneeling Jump Squat",
         "equipment": "barbell"
@@ -1176,11 +916,6 @@
         "equipment": "other"
       },
       {
-        "id": 822,
-        "name": "Cocoons",
-        "equipment": "bodyweight"
-      },
-      {
         "id": 823,
         "name": "Lying Glute",
         "equipment": "bodyweight"
@@ -1189,11 +924,6 @@
         "id": 825,
         "name": "Rocky Pull-Ups/Pulldowns",
         "equipment": "other"
-      },
-      {
-        "id": 826,
-        "name": "Bench Jump",
-        "equipment": "bodyweight"
       },
       {
         "id": 827,
@@ -1236,11 +966,6 @@
         "equipment": "other"
       },
       {
-        "id": 842,
-        "name": "Leverage High Row",
-        "equipment": "machine"
-      },
-      {
         "id": 843,
         "name": "Isometric Chest Squeezes",
         "equipment": "bodyweight"
@@ -1249,11 +974,6 @@
         "id": 845,
         "name": "Weighted Ball Hyperextension",
         "equipment": "other"
-      },
-      {
-        "id": 846,
-        "name": "Narrow Stance Leg Press",
-        "equipment": "machine"
       },
       {
         "id": 847,
@@ -1269,11 +989,6 @@
         "id": 852,
         "name": "Trail Running/Walking",
         "equipment": "other"
-      },
-      {
-        "id": 859,
-        "name": "Two-Arm Kettlebell Clean",
-        "equipment": "kettlebell"
       },
       {
         "id": 860,
@@ -1309,11 +1024,6 @@
         "id": 875,
         "name": "Smith Machine Reverse Calf Raises",
         "equipment": "machine"
-      },
-      {
-        "id": 879,
-        "name": "Adductor",
-        "equipment": "other"
       },
       {
         "id": 882,
@@ -1366,11 +1076,6 @@
         "equipment": "other"
       },
       {
-        "id": 905,
-        "name": "Barbell Curls Lying Against An Incline",
-        "equipment": "barbell"
-      },
-      {
         "id": 906,
         "name": "Shotgun Row",
         "equipment": "cable"
@@ -1379,11 +1084,6 @@
         "id": 911,
         "name": "Barbell Ab Rollout",
         "equipment": "barbell"
-      },
-      {
-        "id": 912,
-        "name": "Calf Press",
-        "equipment": "machine"
       },
       {
         "id": 913,
@@ -1414,11 +1114,6 @@
         "id": 927,
         "name": "Elevated Back Lunge",
         "equipment": "barbell"
-      },
-      {
-        "id": 929,
-        "name": "Chair Upper Body Stretch",
-        "equipment": "other"
       },
       {
         "id": 930,
@@ -1456,16 +1151,6 @@
         "equipment": "dumbbell"
       },
       {
-        "id": 940,
-        "name": "Front Leg Raises",
-        "equipment": "bodyweight"
-      },
-      {
-        "id": 941,
-        "name": "Chair Lower Back Stretch",
-        "equipment": "other"
-      },
-      {
         "id": 942,
         "name": "Scissors Jump",
         "equipment": "bodyweight"
@@ -1479,11 +1164,6 @@
         "id": 945,
         "name": "Shoulder Raise",
         "equipment": "other"
-      },
-      {
-        "id": 946,
-        "name": "Kettlebell Sumo High Pull",
-        "equipment": "kettlebell"
       },
       {
         "id": 949,
@@ -1556,16 +1236,6 @@
         "equipment": "other"
       },
       {
-        "id": 969,
-        "name": "Calf Stretch Hands Against Wall",
-        "equipment": "other"
-      },
-      {
-        "id": 971,
-        "name": "Peroneals-SMR",
-        "equipment": "other"
-      },
-      {
         "id": 973,
         "name": "Wind Sprints",
         "equipment": "bodyweight"
@@ -1584,11 +1254,6 @@
         "id": 985,
         "name": "Fast Skipping",
         "equipment": "bodyweight"
-      },
-      {
-        "id": 986,
-        "name": "Floor Glute-Ham Raise",
-        "equipment": "other"
       },
       {
         "id": 989,
@@ -1636,11 +1301,6 @@
         "equipment": "barbell"
       },
       {
-        "id": 1014,
-        "name": "Ring Dips",
-        "equipment": "other"
-      },
-      {
         "id": 1016,
         "name": "Palms-Up Barbell Wrist Curl Over A Bench",
         "equipment": "barbell"
@@ -1649,16 +1309,6 @@
         "id": 1017,
         "name": "Jogging, Treadmill",
         "equipment": "machine"
-      },
-      {
-        "id": 1018,
-        "name": "Calf Stretch Elbows Against Wall",
-        "equipment": "other"
-      },
-      {
-        "id": 1019,
-        "name": "Palms-Down Dumbbell Wrist Curl Over A Bench",
-        "equipment": "dumbbell"
       },
       {
         "id": 1020,
@@ -1686,11 +1336,6 @@
         "equipment": "barbell"
       },
       {
-        "id": 1029,
-        "name": "One-Arm Overhead Kettlebell Squats",
-        "equipment": "kettlebell"
-      },
-      {
         "id": 1033,
         "name": "Lying Cambered Barbell Row",
         "equipment": "barbell"
@@ -1704,11 +1349,6 @@
         "id": 1038,
         "name": "Sumo Deadlift with Chains",
         "equipment": "barbell"
-      },
-      {
-        "id": 1040,
-        "name": "External Rotation",
-        "equipment": "dumbbell"
       },
       {
         "id": 1041,
@@ -1746,24 +1386,9 @@
         "equipment": "cable"
       },
       {
-        "id": 1051,
-        "name": "Axle Deadlift",
-        "equipment": "other"
-      },
-      {
-        "id": 1053,
-        "name": "Foot-SMR",
-        "equipment": "other"
-      },
-      {
         "id": 1054,
         "name": "Overhead Lat",
         "equipment": "other"
-      },
-      {
-        "id": 1061,
-        "name": "Alternating Renegade Row",
-        "equipment": "kettlebell"
       },
       {
         "id": 1070,
@@ -1806,11 +1431,6 @@
         "equipment": "machine"
       },
       {
-        "id": 1088,
-        "name": "Bicycling",
-        "equipment": "other"
-      },
-      {
         "id": 1091,
         "name": "Knee/Hip Raise On Parallel Bars",
         "equipment": "other"
@@ -1841,18 +1461,8 @@
         "equipment": "other"
       },
       {
-        "id": 1101,
-        "name": "Cable Chest Press",
-        "equipment": "cable"
-      },
-      {
         "id": 1102,
         "name": "Box Jump (Multiple Response)",
-        "equipment": "other"
-      },
-      {
-        "id": 1104,
-        "name": "Cat Stretch",
         "equipment": "other"
       }
     ],

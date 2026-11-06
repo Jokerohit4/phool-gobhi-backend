@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Dumbbell Clean",
+    "youtubeVideoId": "SYxObzJ3gn0",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Dumbbell Squat To A Bench",
+    "youtubeVideoId": "wL9FSf7ZENU",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Dumbbell Seated One-Leg Calf Raise",
+    "youtubeVideoId": "E1mG5L9rpFc",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  },
+  {
+    "name": "Downward Facing Balance",
+    "youtubeVideoId": "aff0lTsnU98",
+    "previewFrames": 4,
+    "error": null,
+    "previewFractions": [
+      0.12,
+      0.35,
+      0.6,
+      0.85
+    ]
+  }
+]

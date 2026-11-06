@@ -1,7 +1,7 @@
 # Closing the remaining exercise content gaps
 
 The current catalogue has 1,103 exercises. Remaining gaps are **0 GIFs,
-0 photos, 392 English tutorials, 0 source/app guides and 701 Hindi source guides**.
+0 photos, 287 English tutorials, 0 source/app guides and 702 Hindi source guides**.
 Counts overlap. All 66 starter exercises have English tutorial references.
 The [field inventory](../exercise-data-gaps/README.md) lists each missing field;
 the [dev rollout report](../exercise-dev/README.md) records live verification.
@@ -19,20 +19,20 @@ All work in this session targets dev.
 | [P0](P0.csv) | 0 | Starter-routine exercises missing a visual or guide |
 | [P1](P1.csv) | 0 | Other exercises missing a visual or guide |
 | [P2](P2.csv) | 49 | Other starter exercises missing a requested deliverable |
-| [P3](P3.csv) | 850 | Remaining tutorial, translation or metadata work |
+| [P3](P3.csv) | 823 | Remaining tutorial, translation or metadata work |
 
 [recording-plan.json](recording-plan.json) records the exact movement, equipment,
-starter usage and deliverables for each exercise. Two hundred and four catalogue exercises
+starter usage and deliverables for each exercise. Two hundred and thirty-one catalogue exercises
 have none of the tracked actionable gaps. Actual runtime fallback also depends
 on approved database content. March in Place now has a schematic GIF, photo,
 English tutorial and original English source/app guide.
 
 Only existing trainer-led/recorded instructional references are eligible under
 the user's preference. Narrated slideshows are not a substitute. The remaining
-392 tutorial gaps have no approved exact existing reference in the integrated
-sources; new primary YouTube checks are currently rate-limited (HTTP 429).
+287 tutorial gaps have no approved existing reference in the integrated sources.
+Small-batch primary YouTube verification resumed after the earlier HTTP 429.
 The separate missing-tutorial list remains the source of truth. English fallback
-keeps instruction text available; 701 genuine Hindi translations still need work.
+keeps instruction text available; 702 genuine Hindi translations still need work.
 
 ## A complete content package
 

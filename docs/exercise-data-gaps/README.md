@@ -23,11 +23,11 @@ An exercise can appear in multiple lists. Do not add the counts together.
 | No usable demo GIF URL | 0 | 1103 | [CSV](missing-demo-gif.csv) |
 | No photo URL from either media seed or source | 0 | 1103 | [CSV](missing-photos.csv) |
 | No source photo gallery | 5 | 1098 | [CSV](missing-source-photo-gallery.csv) |
-| No tutorial video seed entry | 365 | 738 | [CSV](missing-tutorial-video.csv) |
+| No tutorial video seed entry | 287 | 816 | [CSV](missing-tutorial-video.csv) |
 | No licensed direct MP4 demonstration | 1092 | 11 | [CSV](missing-direct-demo-video.csv) |
-| No tutorial entry or direct demonstration | 365 | 738 | [CSV](missing-watchable-video.csv) |
+| No tutorial entry or direct demonstration | 287 | 816 | [CSV](missing-watchable-video.csv) |
 | No source fallback instructions | 0 | 1103 | [CSV](missing-source-instructions.csv) |
-| No Hindi source fallback instructions | 701 | 402 | [CSV](missing-hindi-source-instructions.csv) |
+| No Hindi source fallback instructions | 702 | 401 | [CSV](missing-hindi-source-instructions.csv) |
 | No instruction text in source or English media seed | 0 | 1103 | [CSV](missing-all-instruction-text.csv) |
 
 ## Combined gaps

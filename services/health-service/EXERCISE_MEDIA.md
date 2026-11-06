@@ -18,9 +18,9 @@ instruction fallback on dev. Tutorial coverage remains incomplete.
 | --- | ---: | ---: |
 | Demo GIF | 1,103 | 0 |
 | Photo | 1,103 | 0 |
-| English tutorial reference | 711 | 392 |
+| English tutorial reference | 816 | 287 |
 | Source/app instructions | 1,103 | 0 |
-| Hindi source instructions | 402 | 701 |
+| Hindi source instructions | 401 | 702 |
 
 All 66 starter-routine exercises have an English tutorial reference. Tutorial
 metadata retains the actual publisher, title and duration. Six older references
@@ -32,10 +32,10 @@ falls back to the actual English reference, preserving `languageCode: en` and
 returning `formVideoFallbackLanguage: en`. The updated app labels each tutorial
 card with its real language; genuine requested-language videos take precedence.
 
-The new 525 exercise references use existing publisher footage: 387 have primary
-English-caption evidence and 138 have visually inspected English on-screen
-instruction steps with a filmed demonstrator. No narrated slideshow or other
-generated tutorial was produced. The full 711 mappings use 644 distinct primary
+The new 630 exercise references use existing publisher footage: 489 have primary
+English-caption evidence and 139 have visually inspected English on-screen
+instruction steps with a filmed demonstrator; two have locally verified existing English coaching audio. No narrated slideshow or other
+generated tutorial was produced. The full 816 mappings use 735 distinct primary
 videos. Public player/oEmbed metadata preserves real titles, authors, durations
 and embedding availability. Visual setup/step review and explicit rejections
 are retained in `prisma/sources/trainer-tutorial-review-20261106.json` and
@@ -43,14 +43,20 @@ are retained in `prisma/sources/trainer-tutorial-review-20261106.json` and
 dev report. Public publisher footage is not rehosted.
 
 Seventy-two instruction gaps were filled with 28 licensed RepDB profiles and
-44 original English app guides. Four known incompatible English source passages
+44 original English app guides. Eight known incompatible source guides
 were replaced with original app guidance, retaining upstream snapshots and
 superseded-source provenance. These remain source/app guidance, never approved
-coach content. Existing translated guidance is preserved. Empty upstream step
+coach content. Towel Row's pinned faulty English/Hindi text is replaced with
+honestly labelled English guidance for its anchored row. Other translated
+guidance and unrelated source URLs are preserved. Empty upstream step
 strings are omitted from runtime output; the retained snapshots stay intact.
 
-New primary YouTube verification received HTTP 429. Unverified/mismatched
+Initial primary YouTube verification received HTTP 429; small-batch verification
+has since resumed successfully. Unverified/mismatched
 references remain absent rather than being counted as completed tutorials.
+All 308 original exercises now have tutorial references. Reviewed minor support,
+grip and load-position variations are recorded in the resumed decisions; the
+remaining 287 tutorial gaps belong to the imported expansion.
 
 GIFs comprise 503 motion demonstrations, 545 labelled photo-pose sequences,
 nine static hold references and 46 original schematic pose sequences. The user
@@ -92,8 +98,9 @@ English. A silent demonstration is not counted as a tutorial. Private exercises
 never inherit public source content merely by matching a name.
 
 The customer app includes the photo gallery, source guide and separate direct-demo
-player. The dev Android APK has been built and installed on the connected phone with
-existing app data retained. Full phone playback remains to be checked.
+player. The 6 November dev APK built successfully; no device was connected, so
+this build is not installed. The prior 5 November build was installed with app
+data retained. Full phone playback remains to be checked.
 
 ## Rebuild and checks
 

@@ -334,6 +334,42 @@ ORIGINAL = {
     ],
 }
 OVERRIDES = {
+    'Dumbbell Lying Pronation': {
+        'reason': 'Canonical photos and forearm target show supported forearm pronation; retained text incorrectly describes shoulder rotation. Correct the joint action while preserving the lying bench setup.',
+        'reference': 'https://www.youtube.com/watch?v=cFN80sNHFTs',
+        'replacementSourceUrl': 'https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Lying_Pronation.json',
+        'steps': [
+            'Lie securely on a bench and support the working forearm on the bench, with the hand free beyond its edge.',
+            'Hold a very light dumbbell securely and keep your elbow and upper arm still; use only a load you can control through forearm rotation.',
+            'Rotate the forearm slowly toward a palm-down position without bending your wrist or rolling your shoulder.',
+            'Stop within a comfortable range and rotate back slowly, keeping the forearm supported.',
+            'Complete the repetitions, set the weight down safely and change arms.',
+        ],
+    },
+    'Dumbbell Lying Supination': {
+        'reason': 'Canonical photos and forearm target show supported forearm supination; retained text incorrectly describes shoulder rotation. Correct the joint action while preserving the lying bench setup.',
+        'reference': 'https://www.youtube.com/watch?v=4Om83PMgZAg',
+        'replacementSourceUrl': 'https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Lying_Supination.json',
+        'steps': [
+            'Lie securely on your side on a bench and support the working forearm, leaving the hand free to rotate beyond the bench edge.',
+            'Hold a very light dumbbell securely and keep your elbow and upper arm still; use only a load you can control through forearm rotation.',
+            'Rotate the forearm slowly toward a palm-up position without bending your wrist or rolling your shoulder.',
+            'Stop within a comfortable range and rotate back slowly, keeping the forearm supported.',
+            'Complete the repetitions, set the weight down safely and change arms.',
+        ],
+    },
+    'Band Hip Adductions': {
+        'reason': 'Retained text describes outward hip abduction, but the exercise name, target muscles and inspected canonical photos show inward hip adduction with the band on the leg nearest the anchor.',
+        'reference': 'https://www.youtube.com/watch?v=Vce3tIYpzhc',
+        'replacementSourceUrl': 'https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Band_Hip_Adductions.json',
+        'steps': [
+            'Secure a resistance band to a fixed support near ankle height and stand side-on to the anchor, holding a stable support for balance if needed.',
+            'Place the band around the ankle of the leg nearest the anchor and step away until there is light tension.',
+            'Keep your torso steady and the working knee comfortably straight as you draw that leg inward across the front of the standing leg.',
+            'Return slowly toward the anchor without letting the band pull your body sideways.',
+            'Complete the repetitions, remove the band safely and turn around to work the other side.',
+        ],
+    },
     'Towel Row': {
         'reason': 'Licensed canonical media shows a standing lean-back row using a towel anchored to fixed rungs. Retained English and Hindi text omit the anchor and describe unsupported towel pulling.',
         'reference': 'https://res.cloudinary.com/dgbydysk2/image/upload/v1793560856/phool-gobhi/exercises/uTv34oq-thumb.jpg',

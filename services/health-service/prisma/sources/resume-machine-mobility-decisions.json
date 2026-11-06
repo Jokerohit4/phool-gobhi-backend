@@ -1,0 +1,42 @@
+{
+  "Smith Machine Decline Press": {
+    "youtubeVideoId": "74TpXRT3zj8",
+    "reason": "Trainer teaches the Smith-machine press on an actual decline bench with secured feet and controlled bar travel to the chest. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Decline Smith Press": {
+    "youtubeVideoId": "74TpXRT3zj8",
+    "reason": "Same canonical Smith-machine decline-bench press as Smith Machine Decline Press; source descriptions specify the same apparatus, bench angle and press path. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Leverage Shoulder Press": {
+    "youtubeVideoId": "X0SteQbRbCo",
+    "reason": "Manufacturer instructor teaches setup, loading and use of the plate-loaded Hammer Strength shoulder press. This establishes the correct leverage apparatus rather than a generic selectorized press. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Leverage High Row": {
+    "youtubeVideoId": "segIU92CNME",
+    "reason": "Coach teaches the plate-loaded high-row machine using a pronated grip, matching the catalogue grip and overhead-to-torso path. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Leverage Iso Row": {
+    "youtubeVideoId": "FVyVvApcyZY",
+    "reason": "Coach explains the chest-supported plate-loaded Hammer Strength row for the middle back, with horizontal handles and elbow travel matching the canonical iso row. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Calves-SMR": {
+    "youtubeVideoId": "_1CagXeazig",
+    "reason": "Physical therapist teaches seated floor calf foam rolling with hands supporting the body and adjustable pressure, matching the canonical calf self-release setup. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Quadriceps-SMR": {
+    "youtubeVideoId": "asgAWqwC67c",
+    "reason": "Coach teaches prone quadriceps foam rolling with forearm support and the roller under the thigh, matching the canonical setup and region. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  },
+  "Latissimus Dorsi-SMR": {
+    "youtubeVideoId": "VQrNYuh95Vc",
+    "reason": "Rehab instructor teaches side-lying lat foam rolling with the roller just behind the armpit and the arm extended, matching the canonical muscle region and supported posture. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-machine-mobility-contact.jpg"
+  }
+}
