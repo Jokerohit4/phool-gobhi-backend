@@ -98,6 +98,8 @@ const MATRIX = [
   ['GET', '/streak/me', STREAKS],
   ['GET', '/coins/wallet', STREAKS],
   ['GET', '/coins/catalog', STREAKS],
+  ['GET', '/coins/unrevealed', STREAKS],
+  ['POST', '/coins/reveal', STREAKS],
   ['POST', '/coins/redeem', STREAKS],
   ['POST', '/coins/onboarding-reward', STREAKS],
   // Challenge list/detail/enrolment/leave/checkpoint + the Sprout spawn surface.

@@ -49,6 +49,29 @@ export const getMyCoinWallet = async (req, res) => {
   }
 };
 
+// Credits that were made but never celebrated in the app (a slow request, a
+// closed app). The app shows them once on its next launch.
+export const getUnrevealedRewards = async (req, res) => {
+  try {
+    res.json({ data: await coinLedgerService.getUnrevealedRewardsService(req.userId) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Marks credits as shown. Body {ids: [..]} marks those; no body marks all.
+export const revealRewards = async (req, res) => {
+  try {
+    const ids = req.body?.ids;
+    if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100 || !ids.every(Number.isInteger))) {
+      return res.status(400).json({ error: 'ids must be an array of up to 100 integers' });
+    }
+    res.json({ data: await coinLedgerService.markRewardsRevealedService(req.userId, { ids }) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getCoinCatalog = async (req, res) => {
   try {
     // userId (not just "is authenticated") lets a gym_trial item come back

@@ -44,8 +44,14 @@ model CoinLedgerEntry {
   // a caller retrying a fire-and-forget credit/debit must never double-apply it.
   idempotencyKey String?             @unique
   createdAt      DateTime            @default(now())
+  // When the person was shown the reward moment for this credit (the wheel).
+  // Null means credited but not yet celebrated: the app lists those on its
+  // next launch ("while you were away") so a slow or abandoned request never
+  // costs the person the moment. Existing rows were backfilled as revealed.
+  revealedAt     DateTime?
 
   @@index([userId, createdAt])
+  @@index([userId, revealedAt])
   @@schema("challenge")
 }
 

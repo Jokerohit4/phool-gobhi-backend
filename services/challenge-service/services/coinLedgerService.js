@@ -129,3 +129,56 @@ export async function getCoinLedgerService(userId, limit = 50) {
     take: limit,
   });
 }
+
+// --- Reward moments ("while you were away") -------------------------------
+//
+// A credit is a celebration the person should get to see: the wheel after a
+// log. The app shows it as soon as the log's reply lands, but a slow request,
+// a closed app or a lost reply can lose that moment. These two functions let
+// the app list what was credited but never shown, and mark it shown.
+//
+// Only activity rewards count. Refunds, redemptions and the like are credits
+// too but are not celebrations, so the list is an allow-list of the key
+// prefixes the activity credits use.
+export const REWARD_MOMENT_KEY_PREFIXES = [
+  'workout-credit:',
+  'workout-photo-',
+  'routine:',
+  'health-profile:',
+  'health-weekly-consistency:',
+];
+
+// Older than this and it is no longer news.
+const UNREVEALED_WINDOW_DAYS = 3;
+
+export async function getUnrevealedRewardsService(userId, { now = new Date(), limit = 20 } = {}) {
+  const since = new Date(now.getTime() - UNREVEALED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const entries = await prisma.coinLedgerEntry.findMany({
+    where: {
+      userId,
+      type: 'credit',
+      revealedAt: null,
+      createdAt: { gte: since },
+      OR: REWARD_MOMENT_KEY_PREFIXES.map((prefix) => ({ idempotencyKey: { startsWith: prefix } })),
+    },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+    select: { id: true, amount: true, description: true, createdAt: true },
+  });
+  return { coins: entries.reduce((sum, e) => sum + e.amount, 0), entries };
+}
+
+// With ids: marks exactly those. Without: marks every credit made up to now,
+// which is what the app sends once its reveal queue has drained.
+export async function markRewardsRevealedService(userId, { ids, now = new Date() } = {}) {
+  const where = {
+    userId,
+    type: 'credit',
+    revealedAt: null,
+    ...(Array.isArray(ids)
+      ? { id: { in: ids.filter((id) => Number.isInteger(id)) } }
+      : { createdAt: { lte: now } }),
+  };
+  const { count } = await prisma.coinLedgerEntry.updateMany({ where, data: { revealedAt: now } });
+  return { revealed: count };
+}

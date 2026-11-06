@@ -11,6 +11,8 @@ const router = Router();
 router.get('/streak/me', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyStreak);
 router.get('/coins/wallet', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyCoinWallet);
 router.get('/coins/catalog', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getCoinCatalog);
+router.get('/coins/unrevealed', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getUnrevealedRewards);
+router.post('/coins/reveal', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.revealRewards);
 // The customer redemption path (H-16, D-06) — separate from the internal
 // /internal/coins/redemptions route below, which only wallet-service calls
 // as a step inside a purchase it controls end to end. This one is reachable
