@@ -1,0 +1,7 @@
+{
+  "checkedAt": "2026-11-06T06:15:21.413284+00:00",
+  "provider": "YouTube",
+  "status": "new_primary_verification_rate_limited",
+  "httpStatus": 429,
+  "action": "Stopped new primary-metadata requests; no unverified matches published. Existing verified metadata and visual-review evidence retained. No account/IP change or access-control bypass."
+}

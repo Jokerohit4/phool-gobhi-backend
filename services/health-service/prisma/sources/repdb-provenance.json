@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/RepDB/exercise-dataset",
+  "revision": "66c4298af8d99b9dc397dad6699e508fb871d249",
+  "hashes": {
+    "exercises.json": "ecaeece74163382d74d0082639cee83b466dec5c3e2430efaf327e3dd5357443",
+    "LICENSE-DATA.md": "ef3dc963ae8f7640fc1f816664933c639a6170b021ae3c7976210810cbea1c12",
+    "ATTRIBUTION.md": "ab8055e35463f8965482569001bb4aa92750482a531f2f2c8c792ee6ca57376c"
+  },
+  "usage": "Research and movement review; no unreviewed assets integrated."
+}

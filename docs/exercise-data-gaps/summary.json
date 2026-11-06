@@ -1,0 +1,195 @@
+{
+  "scope": "Local catalogue and source/seed files only; not a live database or availability audit.",
+  "catalogueExercises": 1103,
+  "retainedSourceRecords": {
+    "freeExerciseDb": 876,
+    "hasaneyldrm": 1324,
+    "wger": 930
+  },
+  "lists": [
+    {
+      "id": "missing-demo-gif",
+      "label": "No usable demo GIF URL",
+      "group": "Content",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-demo-gif.csv"
+    },
+    {
+      "id": "missing-photos",
+      "label": "No photo URL from either media seed or source",
+      "group": "Content",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-photos.csv"
+    },
+    {
+      "id": "missing-source-photo-gallery",
+      "label": "No source photo gallery",
+      "group": "Content",
+      "missing": 5,
+      "present": 1098,
+      "file": "missing-source-photo-gallery.csv"
+    },
+    {
+      "id": "missing-tutorial-video",
+      "label": "No tutorial video seed entry",
+      "group": "Content",
+      "missing": 365,
+      "present": 738,
+      "file": "missing-tutorial-video.csv"
+    },
+    {
+      "id": "missing-direct-demo-video",
+      "label": "No licensed direct MP4 demonstration",
+      "group": "Content",
+      "missing": 1092,
+      "present": 11,
+      "file": "missing-direct-demo-video.csv"
+    },
+    {
+      "id": "missing-watchable-video",
+      "label": "No tutorial entry or direct demonstration",
+      "group": "Content",
+      "missing": 365,
+      "present": 738,
+      "file": "missing-watchable-video.csv"
+    },
+    {
+      "id": "missing-source-instructions",
+      "label": "No source fallback instructions",
+      "group": "Content",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-source-instructions.csv"
+    },
+    {
+      "id": "missing-hindi-source-instructions",
+      "label": "No Hindi source fallback instructions",
+      "group": "Content",
+      "missing": 701,
+      "present": 402,
+      "file": "missing-hindi-source-instructions.csv"
+    },
+    {
+      "id": "missing-all-instruction-text",
+      "label": "No instruction text in source or English media seed",
+      "group": "Content",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-all-instruction-text.csv"
+    },
+    {
+      "id": "missing-both-gif-and-photos",
+      "label": "Neither GIF nor photo",
+      "group": "Combined gaps",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-both-gif-and-photos.csv"
+    },
+    {
+      "id": "missing-all-visual-media",
+      "label": "No GIF, photo, direct demonstration or tutorial",
+      "group": "Combined gaps",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-all-visual-media.csv"
+    },
+    {
+      "id": "missing-visual-and-instructions",
+      "label": "No GIF/photo and no instruction text in source or seed",
+      "group": "Combined gaps",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-visual-and-instructions.csv"
+    },
+    {
+      "id": "missing-primary-muscles",
+      "label": "Empty primary muscles",
+      "group": "Catalogue fields",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-primary-muscles.csv"
+    },
+    {
+      "id": "missing-secondary-muscles",
+      "label": "Empty secondary muscles (can be intentional)",
+      "group": "Catalogue fields",
+      "missing": 178,
+      "present": 925,
+      "file": "missing-secondary-muscles.csv"
+    },
+    {
+      "id": "unreviewed-secondary-muscles",
+      "label": "Empty supporting-muscle list without a recorded review",
+      "group": "Catalogue fields",
+      "missing": 178,
+      "present": 925,
+      "file": "unreviewed-secondary-muscles.csv"
+    },
+    {
+      "id": "missing-muscle-group",
+      "label": "Empty muscle group",
+      "group": "Catalogue fields",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-muscle-group.csv"
+    },
+    {
+      "id": "missing-equipment",
+      "label": "Empty app equipment",
+      "group": "Catalogue fields",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-equipment.csv"
+    },
+    {
+      "id": "missing-logging-type",
+      "label": "Empty logging type",
+      "group": "Catalogue fields",
+      "missing": 0,
+      "present": 1103,
+      "file": "missing-logging-type.csv"
+    },
+    {
+      "id": "missing-source-difficulty",
+      "label": "Missing retained source difficulty",
+      "group": "Retained source metadata (not exposed as dedicated UI fields)",
+      "missing": 206,
+      "present": 897,
+      "file": "missing-source-difficulty.csv"
+    },
+    {
+      "id": "missing-source-force",
+      "label": "Missing retained source force (push/pull/static)",
+      "group": "Retained source metadata (not exposed as dedicated UI fields)",
+      "missing": 236,
+      "present": 867,
+      "file": "missing-source-force.csv"
+    },
+    {
+      "id": "missing-source-mechanic",
+      "label": "Missing retained source mechanic (compound/isolation)",
+      "group": "Retained source metadata (not exposed as dedicated UI fields)",
+      "missing": 297,
+      "present": 806,
+      "file": "missing-source-mechanic.csv"
+    },
+    {
+      "id": "missing-source-category",
+      "label": "Missing retained source original category",
+      "group": "Retained source metadata (not exposed as dedicated UI fields)",
+      "missing": 66,
+      "present": 1037,
+      "file": "missing-source-category.csv"
+    },
+    {
+      "id": "missing-source-equipment",
+      "label": "Missing retained source original equipment",
+      "group": "Retained source metadata (not exposed as dedicated UI fields)",
+      "missing": 128,
+      "present": 975,
+      "file": "missing-source-equipment.csv"
+    }
+  ]
+}

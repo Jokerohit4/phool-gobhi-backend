@@ -1,0 +1,31 @@
+{
+  "provider": "wger",
+  "snapshots": {
+    "license": {
+      "url": "https://wger.de/api/v2/license/?limit=1000",
+      "sha256": "5c0f35f4f321c53a6865f1e8052b001ac051c73d29266102192a51434ec16bdf",
+      "records": 5
+    },
+    "exerciseinfo": {
+      "url": "https://wger.de/api/v2/exerciseinfo/?limit=1000",
+      "sha256": "45e42907193fdcc18ed3729d23bbf32a17136f04a4e4486ebf04523bb9dab16e",
+      "records": 930
+    },
+    "exerciseimage": {
+      "url": "https://wger.de/api/v2/exerciseimage/?limit=1000",
+      "sha256": "c859dfeb180f1f15937d1b3031bfec558a7ef3de6e494b983fe250393eca2caa",
+      "records": 383
+    },
+    "video": {
+      "url": "https://wger.de/api/v2/video/?limit=1000",
+      "sha256": "031a7ae64b58d7c8a68b87d512dc6acff8b17107283a991af078b8770b0d205c",
+      "records": 78
+    }
+  },
+  "rightsPolicy": "Only individually attributed CC0/CC-BY/CC-BY-SA assets; explicit field-level mapping and visual review. No ODbL-only or unreviewed media imported.",
+  "directVideoIdsVerifiedHttp200": [
+    23,
+    61,
+    64
+  ]
+}

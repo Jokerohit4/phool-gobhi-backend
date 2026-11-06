@@ -1,0 +1,3059 @@
+{
+  "target": "dev",
+  "checkedAt": "2026-11-05T05:31:11.926Z",
+  "exercises": 308,
+  "exerciseColumns": [
+    "id",
+    "name",
+    "muscleGroup",
+    "equipment",
+    "loggingType",
+    "primaryMuscles",
+    "secondaryMuscles",
+    "demoImageUrl",
+    "createdByUserId",
+    "createdAt",
+    "updatedAt",
+    "difficulty",
+    "demoGifUrl",
+    "mediaAttribution"
+  ],
+  "storedMissingGif": 144,
+  "storedMissingPhoto": 144,
+  "effectiveMissing": {
+    "demoGif": 136,
+    "photo": 96,
+    "tutorial": 288,
+    "sourceInstructions": 84
+  },
+  "missing": {
+    "demoGif": [
+      {
+        "id": 13,
+        "name": "Overhead Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 15,
+        "name": "Face Pull",
+        "equipment": "cable"
+      },
+      {
+        "id": 19,
+        "name": "Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 21,
+        "name": "Running",
+        "equipment": "other"
+      },
+      {
+        "id": 22,
+        "name": "Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 23,
+        "name": "Yoga Flow",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 26,
+        "name": "Standing Cable Chest Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 28,
+        "name": "Single-Arm Cable Row",
+        "equipment": "cable"
+      },
+      {
+        "id": 36,
+        "name": "Cable Woodchopper",
+        "equipment": "cable"
+      },
+      {
+        "id": 37,
+        "name": "Bodyweight Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 41,
+        "name": "Pike Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 42,
+        "name": "Chair Dip",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 44,
+        "name": "Superman",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 47,
+        "name": "Wall Sit",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 48,
+        "name": "Side Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 49,
+        "name": "Hollow Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 50,
+        "name": "March in Place",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 51,
+        "name": "Step-Back Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 52,
+        "name": "Shadow Boxing",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 56,
+        "name": "Paused Bench Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 57,
+        "name": "Barbell Floor Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 61,
+        "name": "Dumbbell Floor Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 64,
+        "name": "Dumbbell Squeeze Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 67,
+        "name": "Pec Deck Fly",
+        "equipment": "machine"
+      },
+      {
+        "id": 77,
+        "name": "Scapular Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 82,
+        "name": "Meadows Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 83,
+        "name": "Landmine Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 85,
+        "name": "Chest-Supported Dumbbell Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 89,
+        "name": "Renegade Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 90,
+        "name": "Close-Grip Lat Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 91,
+        "name": "Wide-Grip Lat Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 95,
+        "name": "Cable Pullover",
+        "equipment": "cable"
+      },
+      {
+        "id": 98,
+        "name": "Machine Low Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 99,
+        "name": "Chest-Supported Machine Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 100,
+        "name": "Reverse Pec Deck",
+        "equipment": "machine"
+      },
+      {
+        "id": 106,
+        "name": "Prone Y Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 107,
+        "name": "Bird Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 111,
+        "name": "Stiff-Leg Deadlift",
+        "equipment": "barbell"
+      },
+      {
+        "id": 112,
+        "name": "Barbell Hip Thrust",
+        "equipment": "barbell"
+      },
+      {
+        "id": 116,
+        "name": "Box Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 117,
+        "name": "Paused Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 121,
+        "name": "Bulgarian Split Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 124,
+        "name": "Dumbbell Sumo Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 125,
+        "name": "Dumbbell Lateral Lunge",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 127,
+        "name": "Dumbbell Hip Thrust",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 135,
+        "name": "Machine Hip Thrust",
+        "equipment": "machine"
+      },
+      {
+        "id": 136,
+        "name": "Belt Squat",
+        "equipment": "machine"
+      },
+      {
+        "id": 137,
+        "name": "Single-Leg Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 138,
+        "name": "Reverse Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 140,
+        "name": "Lateral Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 141,
+        "name": "Step-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 143,
+        "name": "Frog Pump",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 144,
+        "name": "Cossack Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 147,
+        "name": "Nordic Hamstring Curl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 148,
+        "name": "Single-Leg Squat to Bench",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 149,
+        "name": "Hip Airplane",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 154,
+        "name": "Single-Leg Calf Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 155,
+        "name": "Tibialis Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 157,
+        "name": "Kettlebell Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 158,
+        "name": "Kettlebell Reverse Lunge",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 159,
+        "name": "Kettlebell Romanian Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 166,
+        "name": "Leaning Lateral Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 168,
+        "name": "Push Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 169,
+        "name": "Landmine Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 176,
+        "name": "Single-Arm Cable Shoulder Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 180,
+        "name": "Wall Slide",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 181,
+        "name": "Wall Angel",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 182,
+        "name": "Prone T Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 183,
+        "name": "Kettlebell Strict Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 184,
+        "name": "Kettlebell Halo",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 188,
+        "name": "Alternating Dumbbell Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 193,
+        "name": "Dumbbell Wrist Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 202,
+        "name": "Single-Arm Overhead Triceps Extension",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 203,
+        "name": "EZ-Bar Skull Crusher",
+        "equipment": "barbell"
+      },
+      {
+        "id": 208,
+        "name": "Cable Triceps Kickback",
+        "equipment": "cable"
+      },
+      {
+        "id": 211,
+        "name": "Bayesian Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 212,
+        "name": "High Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 219,
+        "name": "Bicycle Crunch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 220,
+        "name": "Sit-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 222,
+        "name": "Lying Leg Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 226,
+        "name": "Seated Knee Tuck",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 227,
+        "name": "Hanging Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 228,
+        "name": "Captain Chair Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 229,
+        "name": "Bear Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 230,
+        "name": "Forearm Side Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 231,
+        "name": "High Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 234,
+        "name": "Boat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 235,
+        "name": "Pallof Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 240,
+        "name": "Stability Ball Rollout",
+        "equipment": "other"
+      },
+      {
+        "id": 241,
+        "name": "Medicine Ball Russian Twist",
+        "equipment": "other"
+      },
+      {
+        "id": 243,
+        "name": "Dumbbell Dead Bug",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 244,
+        "name": "Jumping Jack",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 245,
+        "name": "High Knees",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 246,
+        "name": "Butt Kick",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 247,
+        "name": "Fast Feet",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 248,
+        "name": "Standing Knee Drive",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 249,
+        "name": "Step Jack",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 250,
+        "name": "Low-Impact Skater",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 252,
+        "name": "Treadmill Walk",
+        "equipment": "machine"
+      },
+      {
+        "id": 253,
+        "name": "Treadmill Run",
+        "equipment": "machine"
+      },
+      {
+        "id": 255,
+        "name": "Stationary Bike",
+        "equipment": "machine"
+      },
+      {
+        "id": 256,
+        "name": "Recumbent Bike",
+        "equipment": "machine"
+      },
+      {
+        "id": 258,
+        "name": "Rowing Machine",
+        "equipment": "machine"
+      },
+      {
+        "id": 262,
+        "name": "Brisk Walking",
+        "equipment": "other"
+      },
+      {
+        "id": 263,
+        "name": "Jogging",
+        "equipment": "other"
+      },
+      {
+        "id": 264,
+        "name": "Hiking",
+        "equipment": "other"
+      },
+      {
+        "id": 265,
+        "name": "Swimming",
+        "equipment": "other"
+      },
+      {
+        "id": 266,
+        "name": "Outdoor Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 269,
+        "name": "Step Aerobics",
+        "equipment": "other"
+      },
+      {
+        "id": 270,
+        "name": "Aerobic Dance",
+        "equipment": "other"
+      },
+      {
+        "id": 272,
+        "name": "Squat Thrust",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 275,
+        "name": "Crab Walk",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 277,
+        "name": "Sprawl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 279,
+        "name": "Kettlebell Clean",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 281,
+        "name": "Kettlebell Clean and Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 284,
+        "name": "Dumbbell Thruster",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 285,
+        "name": "Dumbbell Clean and Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 287,
+        "name": "Dumbbell Devil Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 289,
+        "name": "Suitcase Carry",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 290,
+        "name": "Cat-Cow",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 291,
+        "name": "Child Pose",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 292,
+        "name": "Downward Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 293,
+        "name": "Cobra Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 295,
+        "name": "Hip Flexor Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 296,
+        "name": "Standing Hamstring Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 297,
+        "name": "Seated Hamstring Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 298,
+        "name": "Figure Four Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 300,
+        "name": "Chest Doorway Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 301,
+        "name": "Thoracic Rotation",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 302,
+        "name": "Ankle Mobility Rock",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 303,
+        "name": "Deep Squat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 304,
+        "name": "90-90 Hip Switch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 306,
+        "name": "Wrist Flexor Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 307,
+        "name": "Shoulder Cross-Body Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 308,
+        "name": "Standing Quad Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 309,
+        "name": "Calf Stretch",
+        "equipment": "bodyweight"
+      }
+    ],
+    "photo": [
+      {
+        "id": 21,
+        "name": "Running",
+        "equipment": "other"
+      },
+      {
+        "id": 22,
+        "name": "Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 23,
+        "name": "Yoga Flow",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 28,
+        "name": "Single-Arm Cable Row",
+        "equipment": "cable"
+      },
+      {
+        "id": 36,
+        "name": "Cable Woodchopper",
+        "equipment": "cable"
+      },
+      {
+        "id": 41,
+        "name": "Pike Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 47,
+        "name": "Wall Sit",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 49,
+        "name": "Hollow Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 50,
+        "name": "March in Place",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 51,
+        "name": "Step-Back Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 52,
+        "name": "Shadow Boxing",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 64,
+        "name": "Dumbbell Squeeze Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 77,
+        "name": "Scapular Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 82,
+        "name": "Meadows Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 89,
+        "name": "Renegade Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 98,
+        "name": "Machine Low Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 99,
+        "name": "Chest-Supported Machine Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 106,
+        "name": "Prone Y Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 107,
+        "name": "Bird Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 121,
+        "name": "Bulgarian Split Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 124,
+        "name": "Dumbbell Sumo Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 125,
+        "name": "Dumbbell Lateral Lunge",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 127,
+        "name": "Dumbbell Hip Thrust",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 135,
+        "name": "Machine Hip Thrust",
+        "equipment": "machine"
+      },
+      {
+        "id": 136,
+        "name": "Belt Squat",
+        "equipment": "machine"
+      },
+      {
+        "id": 137,
+        "name": "Single-Leg Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 138,
+        "name": "Reverse Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 140,
+        "name": "Lateral Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 141,
+        "name": "Step-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 143,
+        "name": "Frog Pump",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 144,
+        "name": "Cossack Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 147,
+        "name": "Nordic Hamstring Curl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 148,
+        "name": "Single-Leg Squat to Bench",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 149,
+        "name": "Hip Airplane",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 154,
+        "name": "Single-Leg Calf Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 155,
+        "name": "Tibialis Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 157,
+        "name": "Kettlebell Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 158,
+        "name": "Kettlebell Reverse Lunge",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 159,
+        "name": "Kettlebell Romanian Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 166,
+        "name": "Leaning Lateral Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 169,
+        "name": "Landmine Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 176,
+        "name": "Single-Arm Cable Shoulder Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 180,
+        "name": "Wall Slide",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 181,
+        "name": "Wall Angel",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 182,
+        "name": "Prone T Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 183,
+        "name": "Kettlebell Strict Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 184,
+        "name": "Kettlebell Halo",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 202,
+        "name": "Single-Arm Overhead Triceps Extension",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 208,
+        "name": "Cable Triceps Kickback",
+        "equipment": "cable"
+      },
+      {
+        "id": 211,
+        "name": "Bayesian Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 219,
+        "name": "Bicycle Crunch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 222,
+        "name": "Lying Leg Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 227,
+        "name": "Hanging Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 228,
+        "name": "Captain Chair Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 229,
+        "name": "Bear Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 231,
+        "name": "High Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 234,
+        "name": "Boat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 240,
+        "name": "Stability Ball Rollout",
+        "equipment": "other"
+      },
+      {
+        "id": 241,
+        "name": "Medicine Ball Russian Twist",
+        "equipment": "other"
+      },
+      {
+        "id": 243,
+        "name": "Dumbbell Dead Bug",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 244,
+        "name": "Jumping Jack",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 245,
+        "name": "High Knees",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 246,
+        "name": "Butt Kick",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 247,
+        "name": "Fast Feet",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 248,
+        "name": "Standing Knee Drive",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 249,
+        "name": "Step Jack",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 250,
+        "name": "Low-Impact Skater",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 262,
+        "name": "Brisk Walking",
+        "equipment": "other"
+      },
+      {
+        "id": 263,
+        "name": "Jogging",
+        "equipment": "other"
+      },
+      {
+        "id": 264,
+        "name": "Hiking",
+        "equipment": "other"
+      },
+      {
+        "id": 265,
+        "name": "Swimming",
+        "equipment": "other"
+      },
+      {
+        "id": 266,
+        "name": "Outdoor Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 269,
+        "name": "Step Aerobics",
+        "equipment": "other"
+      },
+      {
+        "id": 270,
+        "name": "Aerobic Dance",
+        "equipment": "other"
+      },
+      {
+        "id": 272,
+        "name": "Squat Thrust",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 275,
+        "name": "Crab Walk",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 277,
+        "name": "Sprawl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 279,
+        "name": "Kettlebell Clean",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 281,
+        "name": "Kettlebell Clean and Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 284,
+        "name": "Dumbbell Thruster",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 285,
+        "name": "Dumbbell Clean and Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 287,
+        "name": "Dumbbell Devil Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 289,
+        "name": "Suitcase Carry",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 290,
+        "name": "Cat-Cow",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 291,
+        "name": "Child Pose",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 292,
+        "name": "Downward Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 293,
+        "name": "Cobra Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 296,
+        "name": "Standing Hamstring Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 300,
+        "name": "Chest Doorway Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 301,
+        "name": "Thoracic Rotation",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 302,
+        "name": "Ankle Mobility Rock",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 303,
+        "name": "Deep Squat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 304,
+        "name": "90-90 Hip Switch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 306,
+        "name": "Wrist Flexor Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 307,
+        "name": "Shoulder Cross-Body Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 308,
+        "name": "Standing Quad Stretch",
+        "equipment": "bodyweight"
+      }
+    ],
+    "tutorial": [
+      {
+        "id": 2,
+        "name": "Incline Dumbbell Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 3,
+        "name": "Cable Fly",
+        "equipment": "cable"
+      },
+      {
+        "id": 11,
+        "name": "Leg Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 25,
+        "name": "Cable Crossover",
+        "equipment": "cable"
+      },
+      {
+        "id": 26,
+        "name": "Standing Cable Chest Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 27,
+        "name": "Straight-Arm Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 28,
+        "name": "Single-Arm Cable Row",
+        "equipment": "cable"
+      },
+      {
+        "id": 29,
+        "name": "Cable Pull-Through",
+        "equipment": "cable"
+      },
+      {
+        "id": 30,
+        "name": "Cable Kickback",
+        "equipment": "cable"
+      },
+      {
+        "id": 31,
+        "name": "Cable Lateral Raise",
+        "equipment": "cable"
+      },
+      {
+        "id": 32,
+        "name": "Cable Upright Row",
+        "equipment": "cable"
+      },
+      {
+        "id": 33,
+        "name": "Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 34,
+        "name": "Cable Overhead Triceps Extension",
+        "equipment": "cable"
+      },
+      {
+        "id": 35,
+        "name": "Cable Crunch",
+        "equipment": "cable"
+      },
+      {
+        "id": 36,
+        "name": "Cable Woodchopper",
+        "equipment": "cable"
+      },
+      {
+        "id": 37,
+        "name": "Bodyweight Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 38,
+        "name": "Incline Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 39,
+        "name": "Glute Bridge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 40,
+        "name": "Dead Bug",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 41,
+        "name": "Pike Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 42,
+        "name": "Chair Dip",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 43,
+        "name": "Towel Row",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 44,
+        "name": "Superman",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 45,
+        "name": "Split Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 46,
+        "name": "Calf Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 47,
+        "name": "Wall Sit",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 48,
+        "name": "Side Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 49,
+        "name": "Hollow Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 50,
+        "name": "March in Place",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 51,
+        "name": "Step-Back Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 52,
+        "name": "Shadow Boxing",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 53,
+        "name": "Incline Barbell Bench Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 54,
+        "name": "Decline Barbell Bench Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 55,
+        "name": "Close-Grip Bench Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 56,
+        "name": "Paused Bench Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 57,
+        "name": "Barbell Floor Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 58,
+        "name": "Dumbbell Bench Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 59,
+        "name": "Dumbbell Fly",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 60,
+        "name": "Incline Dumbbell Fly",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 61,
+        "name": "Dumbbell Floor Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 62,
+        "name": "Decline Dumbbell Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 63,
+        "name": "Dumbbell Pullover",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 64,
+        "name": "Dumbbell Squeeze Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 65,
+        "name": "Machine Chest Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 66,
+        "name": "Incline Machine Chest Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 67,
+        "name": "Pec Deck Fly",
+        "equipment": "machine"
+      },
+      {
+        "id": 68,
+        "name": "Smith Machine Bench Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 69,
+        "name": "Smith Machine Incline Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 70,
+        "name": "Decline Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 71,
+        "name": "Diamond Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 72,
+        "name": "Wide Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 73,
+        "name": "Knee Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 74,
+        "name": "Wall Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 75,
+        "name": "Chest Dip",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 76,
+        "name": "Archer Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 77,
+        "name": "Scapular Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 78,
+        "name": "Pendlay Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 79,
+        "name": "T-Bar Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 80,
+        "name": "Underhand Barbell Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 81,
+        "name": "Rack Pull",
+        "equipment": "barbell"
+      },
+      {
+        "id": 82,
+        "name": "Meadows Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 83,
+        "name": "Landmine Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 84,
+        "name": "Single-Arm Dumbbell Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 85,
+        "name": "Chest-Supported Dumbbell Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 86,
+        "name": "Incline Dumbbell Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 87,
+        "name": "Dumbbell Shrug",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 88,
+        "name": "Dumbbell Reverse Fly",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 89,
+        "name": "Renegade Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 90,
+        "name": "Close-Grip Lat Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 91,
+        "name": "Wide-Grip Lat Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 92,
+        "name": "Underhand Lat Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 93,
+        "name": "Single-Arm Lat Pulldown",
+        "equipment": "cable"
+      },
+      {
+        "id": 94,
+        "name": "Wide-Grip Cable Row",
+        "equipment": "cable"
+      },
+      {
+        "id": 95,
+        "name": "Cable Pullover",
+        "equipment": "cable"
+      },
+      {
+        "id": 96,
+        "name": "Assisted Pull-up",
+        "equipment": "machine"
+      },
+      {
+        "id": 97,
+        "name": "Machine High Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 98,
+        "name": "Machine Low Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 99,
+        "name": "Chest-Supported Machine Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 100,
+        "name": "Reverse Pec Deck",
+        "equipment": "machine"
+      },
+      {
+        "id": 101,
+        "name": "Back Extension",
+        "equipment": "machine"
+      },
+      {
+        "id": 102,
+        "name": "Chin-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 103,
+        "name": "Neutral-Grip Pull-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 104,
+        "name": "Inverted Row",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 105,
+        "name": "Scapular Pull-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 106,
+        "name": "Prone Y Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 107,
+        "name": "Bird Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 108,
+        "name": "Front Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 109,
+        "name": "Romanian Deadlift",
+        "equipment": "barbell"
+      },
+      {
+        "id": 110,
+        "name": "Sumo Deadlift",
+        "equipment": "barbell"
+      },
+      {
+        "id": 111,
+        "name": "Stiff-Leg Deadlift",
+        "equipment": "barbell"
+      },
+      {
+        "id": 112,
+        "name": "Barbell Hip Thrust",
+        "equipment": "barbell"
+      },
+      {
+        "id": 113,
+        "name": "Barbell Glute Bridge",
+        "equipment": "barbell"
+      },
+      {
+        "id": 114,
+        "name": "Barbell Good Morning",
+        "equipment": "barbell"
+      },
+      {
+        "id": 115,
+        "name": "Zercher Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 116,
+        "name": "Box Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 117,
+        "name": "Paused Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 118,
+        "name": "Goblet Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 119,
+        "name": "Dumbbell Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 120,
+        "name": "Dumbbell Romanian Deadlift",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 121,
+        "name": "Bulgarian Split Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 122,
+        "name": "Dumbbell Reverse Lunge",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 123,
+        "name": "Dumbbell Step-up",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 124,
+        "name": "Dumbbell Sumo Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 125,
+        "name": "Dumbbell Lateral Lunge",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 126,
+        "name": "Single-Leg Romanian Deadlift",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 127,
+        "name": "Dumbbell Hip Thrust",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 128,
+        "name": "Hack Squat",
+        "equipment": "machine"
+      },
+      {
+        "id": 129,
+        "name": "Smith Machine Squat",
+        "equipment": "machine"
+      },
+      {
+        "id": 130,
+        "name": "Leg Extension",
+        "equipment": "machine"
+      },
+      {
+        "id": 131,
+        "name": "Seated Leg Curl",
+        "equipment": "machine"
+      },
+      {
+        "id": 132,
+        "name": "Lying Leg Curl",
+        "equipment": "machine"
+      },
+      {
+        "id": 133,
+        "name": "Hip Abduction Machine",
+        "equipment": "machine"
+      },
+      {
+        "id": 134,
+        "name": "Hip Adduction Machine",
+        "equipment": "machine"
+      },
+      {
+        "id": 135,
+        "name": "Machine Hip Thrust",
+        "equipment": "machine"
+      },
+      {
+        "id": 136,
+        "name": "Belt Squat",
+        "equipment": "machine"
+      },
+      {
+        "id": 137,
+        "name": "Single-Leg Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 138,
+        "name": "Reverse Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 139,
+        "name": "Forward Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 140,
+        "name": "Lateral Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 141,
+        "name": "Step-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 142,
+        "name": "Single-Leg Glute Bridge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 143,
+        "name": "Frog Pump",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 144,
+        "name": "Cossack Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 145,
+        "name": "Assisted Pistol Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 146,
+        "name": "Sissy Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 147,
+        "name": "Nordic Hamstring Curl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 148,
+        "name": "Single-Leg Squat to Bench",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 149,
+        "name": "Hip Airplane",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 150,
+        "name": "Standing Calf Raise",
+        "equipment": "machine"
+      },
+      {
+        "id": 151,
+        "name": "Seated Calf Raise",
+        "equipment": "machine"
+      },
+      {
+        "id": 152,
+        "name": "Leg Press Calf Raise",
+        "equipment": "machine"
+      },
+      {
+        "id": 153,
+        "name": "Dumbbell Calf Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 154,
+        "name": "Single-Leg Calf Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 155,
+        "name": "Tibialis Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 156,
+        "name": "Kettlebell Goblet Squat",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 157,
+        "name": "Kettlebell Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 158,
+        "name": "Kettlebell Reverse Lunge",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 159,
+        "name": "Kettlebell Romanian Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 160,
+        "name": "Seated Dumbbell Shoulder Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 161,
+        "name": "Arnold Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 162,
+        "name": "Dumbbell Front Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 163,
+        "name": "Bent-Over Lateral Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 164,
+        "name": "Dumbbell Upright Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 165,
+        "name": "Single-Arm Dumbbell Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 166,
+        "name": "Leaning Lateral Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 167,
+        "name": "Seated Barbell Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 168,
+        "name": "Push Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 169,
+        "name": "Landmine Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 170,
+        "name": "Barbell Front Raise",
+        "equipment": "barbell"
+      },
+      {
+        "id": 171,
+        "name": "Barbell Upright Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 172,
+        "name": "Barbell Shrug",
+        "equipment": "barbell"
+      },
+      {
+        "id": 173,
+        "name": "Cable Front Raise",
+        "equipment": "cable"
+      },
+      {
+        "id": 174,
+        "name": "Cable Reverse Fly",
+        "equipment": "cable"
+      },
+      {
+        "id": 175,
+        "name": "Cable External Rotation",
+        "equipment": "cable"
+      },
+      {
+        "id": 176,
+        "name": "Single-Arm Cable Shoulder Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 177,
+        "name": "Machine Shoulder Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 178,
+        "name": "Machine Lateral Raise",
+        "equipment": "machine"
+      },
+      {
+        "id": 179,
+        "name": "Smith Machine Shoulder Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 180,
+        "name": "Wall Slide",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 181,
+        "name": "Wall Angel",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 182,
+        "name": "Prone T Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 183,
+        "name": "Kettlebell Strict Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 184,
+        "name": "Kettlebell Halo",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 185,
+        "name": "Dumbbell Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 186,
+        "name": "Incline Dumbbell Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 187,
+        "name": "Concentration Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 188,
+        "name": "Alternating Dumbbell Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 189,
+        "name": "Cross-Body Hammer Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 190,
+        "name": "Zottman Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 191,
+        "name": "Dumbbell Preacher Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 192,
+        "name": "Reverse Dumbbell Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 193,
+        "name": "Dumbbell Wrist Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 194,
+        "name": "Dumbbell Reverse Wrist Curl",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 195,
+        "name": "EZ-Bar Curl",
+        "equipment": "barbell"
+      },
+      {
+        "id": 196,
+        "name": "Reverse Barbell Curl",
+        "equipment": "barbell"
+      },
+      {
+        "id": 197,
+        "name": "Barbell Preacher Curl",
+        "equipment": "barbell"
+      },
+      {
+        "id": 198,
+        "name": "Barbell Wrist Curl",
+        "equipment": "barbell"
+      },
+      {
+        "id": 199,
+        "name": "Dumbbell Triceps Extension",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 200,
+        "name": "Dumbbell Skull Crusher",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 201,
+        "name": "Triceps Kickback",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 202,
+        "name": "Single-Arm Overhead Triceps Extension",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 203,
+        "name": "EZ-Bar Skull Crusher",
+        "equipment": "barbell"
+      },
+      {
+        "id": 204,
+        "name": "Barbell Triceps Extension",
+        "equipment": "barbell"
+      },
+      {
+        "id": 205,
+        "name": "Rope Triceps Pushdown",
+        "equipment": "cable"
+      },
+      {
+        "id": 206,
+        "name": "Reverse-Grip Triceps Pushdown",
+        "equipment": "cable"
+      },
+      {
+        "id": 207,
+        "name": "Single-Arm Triceps Pushdown",
+        "equipment": "cable"
+      },
+      {
+        "id": 208,
+        "name": "Cable Triceps Kickback",
+        "equipment": "cable"
+      },
+      {
+        "id": 209,
+        "name": "Rope Hammer Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 210,
+        "name": "Single-Arm Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 211,
+        "name": "Bayesian Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 212,
+        "name": "High Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 213,
+        "name": "Cable Reverse Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 214,
+        "name": "Machine Preacher Curl",
+        "equipment": "machine"
+      },
+      {
+        "id": 215,
+        "name": "Machine Triceps Extension",
+        "equipment": "machine"
+      },
+      {
+        "id": 216,
+        "name": "Assisted Dip",
+        "equipment": "machine"
+      },
+      {
+        "id": 217,
+        "name": "Crunch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 218,
+        "name": "Reverse Crunch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 219,
+        "name": "Bicycle Crunch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 220,
+        "name": "Sit-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 221,
+        "name": "Russian Twist",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 222,
+        "name": "Lying Leg Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 223,
+        "name": "Flutter Kick",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 224,
+        "name": "Heel Touch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 225,
+        "name": "V-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 226,
+        "name": "Seated Knee Tuck",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 227,
+        "name": "Hanging Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 228,
+        "name": "Captain Chair Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 229,
+        "name": "Bear Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 230,
+        "name": "Forearm Side Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 231,
+        "name": "High Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 232,
+        "name": "Plank Shoulder Tap",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 233,
+        "name": "Mountain Climber",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 234,
+        "name": "Boat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 235,
+        "name": "Pallof Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 236,
+        "name": "Cable Rotation",
+        "equipment": "cable"
+      },
+      {
+        "id": 237,
+        "name": "Kneeling Cable Crunch",
+        "equipment": "cable"
+      },
+      {
+        "id": 238,
+        "name": "Ab Wheel Rollout",
+        "equipment": "other"
+      },
+      {
+        "id": 239,
+        "name": "Stability Ball Crunch",
+        "equipment": "other"
+      },
+      {
+        "id": 240,
+        "name": "Stability Ball Rollout",
+        "equipment": "other"
+      },
+      {
+        "id": 241,
+        "name": "Medicine Ball Russian Twist",
+        "equipment": "other"
+      },
+      {
+        "id": 242,
+        "name": "Dumbbell Side Bend",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 243,
+        "name": "Dumbbell Dead Bug",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 244,
+        "name": "Jumping Jack",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 245,
+        "name": "High Knees",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 246,
+        "name": "Butt Kick",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 247,
+        "name": "Fast Feet",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 248,
+        "name": "Standing Knee Drive",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 249,
+        "name": "Step Jack",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 250,
+        "name": "Low-Impact Skater",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 251,
+        "name": "Skater Hop",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 252,
+        "name": "Treadmill Walk",
+        "equipment": "machine"
+      },
+      {
+        "id": 253,
+        "name": "Treadmill Run",
+        "equipment": "machine"
+      },
+      {
+        "id": 254,
+        "name": "Incline Treadmill Walk",
+        "equipment": "machine"
+      },
+      {
+        "id": 255,
+        "name": "Stationary Bike",
+        "equipment": "machine"
+      },
+      {
+        "id": 256,
+        "name": "Recumbent Bike",
+        "equipment": "machine"
+      },
+      {
+        "id": 257,
+        "name": "Elliptical",
+        "equipment": "machine"
+      },
+      {
+        "id": 258,
+        "name": "Rowing Machine",
+        "equipment": "machine"
+      },
+      {
+        "id": 259,
+        "name": "Ski Erg",
+        "equipment": "machine"
+      },
+      {
+        "id": 260,
+        "name": "Stair Climber",
+        "equipment": "machine"
+      },
+      {
+        "id": 261,
+        "name": "Air Bike",
+        "equipment": "machine"
+      },
+      {
+        "id": 262,
+        "name": "Brisk Walking",
+        "equipment": "other"
+      },
+      {
+        "id": 263,
+        "name": "Jogging",
+        "equipment": "other"
+      },
+      {
+        "id": 264,
+        "name": "Hiking",
+        "equipment": "other"
+      },
+      {
+        "id": 265,
+        "name": "Swimming",
+        "equipment": "other"
+      },
+      {
+        "id": 266,
+        "name": "Outdoor Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 267,
+        "name": "Jump Rope",
+        "equipment": "other"
+      },
+      {
+        "id": 268,
+        "name": "Battle Rope",
+        "equipment": "other"
+      },
+      {
+        "id": 269,
+        "name": "Step Aerobics",
+        "equipment": "other"
+      },
+      {
+        "id": 270,
+        "name": "Aerobic Dance",
+        "equipment": "other"
+      },
+      {
+        "id": 271,
+        "name": "Burpee",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 272,
+        "name": "Squat Thrust",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 273,
+        "name": "Inchworm",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 274,
+        "name": "Bear Crawl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 275,
+        "name": "Crab Walk",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 276,
+        "name": "Squat to Reach",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 277,
+        "name": "Sprawl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 278,
+        "name": "Kettlebell Swing",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 279,
+        "name": "Kettlebell Clean",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 280,
+        "name": "Kettlebell Snatch",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 281,
+        "name": "Kettlebell Clean and Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 282,
+        "name": "Turkish Get-up",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 283,
+        "name": "Kettlebell Thruster",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 284,
+        "name": "Dumbbell Thruster",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 285,
+        "name": "Dumbbell Clean and Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 286,
+        "name": "Dumbbell Snatch",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 287,
+        "name": "Dumbbell Devil Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 288,
+        "name": "Farmer Carry",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 289,
+        "name": "Suitcase Carry",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 290,
+        "name": "Cat-Cow",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 291,
+        "name": "Child Pose",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 292,
+        "name": "Downward Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 293,
+        "name": "Cobra Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 294,
+        "name": "Worlds Greatest Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 295,
+        "name": "Hip Flexor Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 296,
+        "name": "Standing Hamstring Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 297,
+        "name": "Seated Hamstring Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 298,
+        "name": "Figure Four Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 299,
+        "name": "Butterfly Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 300,
+        "name": "Chest Doorway Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 301,
+        "name": "Thoracic Rotation",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 302,
+        "name": "Ankle Mobility Rock",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 303,
+        "name": "Deep Squat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 304,
+        "name": "90-90 Hip Switch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 305,
+        "name": "Neck Side Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 306,
+        "name": "Wrist Flexor Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 307,
+        "name": "Shoulder Cross-Body Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 308,
+        "name": "Standing Quad Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 309,
+        "name": "Calf Stretch",
+        "equipment": "bodyweight"
+      }
+    ],
+    "sourceInstructions": [
+      {
+        "id": 12,
+        "name": "Walking Lunge",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 21,
+        "name": "Running",
+        "equipment": "other"
+      },
+      {
+        "id": 22,
+        "name": "Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 23,
+        "name": "Yoga Flow",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 28,
+        "name": "Single-Arm Cable Row",
+        "equipment": "cable"
+      },
+      {
+        "id": 47,
+        "name": "Wall Sit",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 50,
+        "name": "March in Place",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 51,
+        "name": "Step-Back Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 52,
+        "name": "Shadow Boxing",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 56,
+        "name": "Paused Bench Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 64,
+        "name": "Dumbbell Squeeze Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 77,
+        "name": "Scapular Push-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 79,
+        "name": "T-Bar Row",
+        "equipment": "barbell"
+      },
+      {
+        "id": 89,
+        "name": "Renegade Row",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 98,
+        "name": "Machine Low Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 99,
+        "name": "Chest-Supported Machine Row",
+        "equipment": "machine"
+      },
+      {
+        "id": 106,
+        "name": "Prone Y Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 117,
+        "name": "Paused Squat",
+        "equipment": "barbell"
+      },
+      {
+        "id": 121,
+        "name": "Bulgarian Split Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 124,
+        "name": "Dumbbell Sumo Squat",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 125,
+        "name": "Dumbbell Lateral Lunge",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 127,
+        "name": "Dumbbell Hip Thrust",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 135,
+        "name": "Machine Hip Thrust",
+        "equipment": "machine"
+      },
+      {
+        "id": 136,
+        "name": "Belt Squat",
+        "equipment": "machine"
+      },
+      {
+        "id": 137,
+        "name": "Single-Leg Press",
+        "equipment": "machine"
+      },
+      {
+        "id": 140,
+        "name": "Lateral Lunge",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 141,
+        "name": "Step-up",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 143,
+        "name": "Frog Pump",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 144,
+        "name": "Cossack Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 145,
+        "name": "Assisted Pistol Squat",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 147,
+        "name": "Nordic Hamstring Curl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 148,
+        "name": "Single-Leg Squat to Bench",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 149,
+        "name": "Hip Airplane",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 154,
+        "name": "Single-Leg Calf Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 157,
+        "name": "Kettlebell Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 158,
+        "name": "Kettlebell Reverse Lunge",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 159,
+        "name": "Kettlebell Romanian Deadlift",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 166,
+        "name": "Leaning Lateral Raise",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 168,
+        "name": "Push Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 169,
+        "name": "Landmine Press",
+        "equipment": "barbell"
+      },
+      {
+        "id": 174,
+        "name": "Cable Reverse Fly",
+        "equipment": "cable"
+      },
+      {
+        "id": 176,
+        "name": "Single-Arm Cable Shoulder Press",
+        "equipment": "cable"
+      },
+      {
+        "id": 180,
+        "name": "Wall Slide",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 181,
+        "name": "Wall Angel",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 182,
+        "name": "Prone T Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 183,
+        "name": "Kettlebell Strict Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 202,
+        "name": "Single-Arm Overhead Triceps Extension",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 208,
+        "name": "Cable Triceps Kickback",
+        "equipment": "cable"
+      },
+      {
+        "id": 211,
+        "name": "Bayesian Cable Curl",
+        "equipment": "cable"
+      },
+      {
+        "id": 222,
+        "name": "Lying Leg Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 227,
+        "name": "Hanging Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 228,
+        "name": "Captain Chair Knee Raise",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 229,
+        "name": "Bear Plank",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 234,
+        "name": "Boat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 240,
+        "name": "Stability Ball Rollout",
+        "equipment": "other"
+      },
+      {
+        "id": 241,
+        "name": "Medicine Ball Russian Twist",
+        "equipment": "other"
+      },
+      {
+        "id": 243,
+        "name": "Dumbbell Dead Bug",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 246,
+        "name": "Butt Kick",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 247,
+        "name": "Fast Feet",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 248,
+        "name": "Standing Knee Drive",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 250,
+        "name": "Low-Impact Skater",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 261,
+        "name": "Air Bike",
+        "equipment": "machine"
+      },
+      {
+        "id": 262,
+        "name": "Brisk Walking",
+        "equipment": "other"
+      },
+      {
+        "id": 263,
+        "name": "Jogging",
+        "equipment": "other"
+      },
+      {
+        "id": 264,
+        "name": "Hiking",
+        "equipment": "other"
+      },
+      {
+        "id": 265,
+        "name": "Swimming",
+        "equipment": "other"
+      },
+      {
+        "id": 266,
+        "name": "Outdoor Cycling",
+        "equipment": "other"
+      },
+      {
+        "id": 269,
+        "name": "Step Aerobics",
+        "equipment": "other"
+      },
+      {
+        "id": 270,
+        "name": "Aerobic Dance",
+        "equipment": "other"
+      },
+      {
+        "id": 272,
+        "name": "Squat Thrust",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 275,
+        "name": "Crab Walk",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 277,
+        "name": "Sprawl",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 279,
+        "name": "Kettlebell Clean",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 281,
+        "name": "Kettlebell Clean and Press",
+        "equipment": "kettlebell"
+      },
+      {
+        "id": 285,
+        "name": "Dumbbell Clean and Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 287,
+        "name": "Dumbbell Devil Press",
+        "equipment": "dumbbell"
+      },
+      {
+        "id": 292,
+        "name": "Downward Dog",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 296,
+        "name": "Standing Hamstring Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 300,
+        "name": "Chest Doorway Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 301,
+        "name": "Thoracic Rotation",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 303,
+        "name": "Deep Squat Hold",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 306,
+        "name": "Wrist Flexor Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 307,
+        "name": "Shoulder Cross-Body Stretch",
+        "equipment": "bodyweight"
+      },
+      {
+        "id": 308,
+        "name": "Standing Quad Stretch",
+        "equipment": "bodyweight"
+      }
+    ]
+  }
+}

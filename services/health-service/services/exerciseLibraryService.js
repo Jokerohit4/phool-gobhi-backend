@@ -2,6 +2,7 @@ import prisma from '../db/prisma.js';
 import { MUSCLE_GROUPS, EQUIPMENT, LOGGING_TYPES } from '../constants/healthEnums.js';
 import { rankExercises } from './exerciseSearch.js';
 import { createTtlCache } from '../utils/ttlCache.js';
+import { withExerciseSource } from './exerciseSourceService.js';
 
 // The library is global (createdByUserId: null) plus this user's own custom
 // entries — never another user's custom exercises, which is what the OR
@@ -107,11 +108,12 @@ async function computePersonalRecords(userId, exerciseId) {
 }
 
 export async function getExerciseDetailService(userId, exerciseId, lang) {
+  const videoLanguage = lang ? String(lang).replace('_', '-').toLowerCase().split('-')[0] : undefined;
   const exercise = await prisma.exercise.findUnique({
     where: { id: exerciseId },
     include: {
       formVideos: {
-        where: lang ? { languageCode: lang } : undefined,
+        where: videoLanguage ? { languageCode: videoLanguage } : undefined,
         orderBy: { order: 'asc' },
       },
     },
@@ -122,7 +124,16 @@ export async function getExerciseDetailService(userId, exerciseId, lang) {
     throw err;
   }
   const records = await computePersonalRecords(userId, exerciseId);
-  return { ...exercise, records };
+  const enriched = withExerciseSource(exercise, lang);
+  // Keep real English instruction available when a translation is absent.
+  // Preserve each video's actual language; clients label the returned cards.
+  if (videoLanguage && videoLanguage !== 'en' && !enriched.formVideos?.length) {
+    const english = await prisma.exerciseFormVideo.findMany({
+      where: { exerciseId: exercise.id, languageCode: 'en' }, orderBy: { order: 'asc' },
+    });
+    if (english.length) return { ...enriched, formVideos: english, formVideoRequestedLanguage: videoLanguage, formVideoFallbackLanguage: 'en', records };
+  }
+  return { ...enriched, records };
 }
 
 // Every logged set for this exercise across sessions, oldest -> newest —

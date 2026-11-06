@@ -1,0 +1,266 @@
+{
+  "Renegade Row": {
+    "sourceId": "renegade-row",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/renegade-row-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\renegade-row-start.webp",
+        "sha256": "d5c7115e25dc60f38b57459dcf469a35deb96e679ac33389a7f80988ded17ca8"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/renegade-row-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\renegade-row-peak.webp",
+        "sha256": "1ca5587204434f2faa8cbaa0b9c3659fa9b8abcb229312ce297db16bf1d8df58"
+      }
+    ]
+  },
+  "Chest-Supported Machine Row": {
+    "sourceId": "chest-supported-machine-row",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/chest-supported-machine-row-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\chest-supported-machine-row-start.webp",
+        "sha256": "86a5f29399ea08822211741d38a9d47d77b9cd17ca2a6e71f2b07ed6c7f76f9c"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/chest-supported-machine-row-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\chest-supported-machine-row-peak.webp",
+        "sha256": "6c989a4f4539d7b854fbeb24bdfc312d23613543ef969497ae0a5c096b0597b8"
+      }
+    ]
+  },
+  "Single-Leg Press": {
+    "sourceId": "single-leg-press",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/single-leg-press-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\single-leg-press-start.webp",
+        "sha256": "36f5899d9ee24634e07153c6c82e239f743813ec569e65a48bd94372734e9915"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/single-leg-press-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\single-leg-press-peak.webp",
+        "sha256": "bb02dbee935f88d8e5a81db81d06acdf0fad9da624732d80f3e94c5951ab6407"
+      }
+    ]
+  },
+  "Kettlebell Deadlift": {
+    "sourceId": "kettlebell-deadlift",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-deadlift-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-deadlift-start.webp",
+        "sha256": "cc0358ad96a4b361986cedcdda28f25379e23bce87edf96002a2bb984d2db1c3"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-deadlift-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-deadlift-peak.webp",
+        "sha256": "659f5b49d3bfbdbd74693efd62e5a049f5ba9b460315c255d85620e64f8e8639"
+      }
+    ]
+  },
+  "Kettlebell Reverse Lunge": {
+    "sourceId": "kettlebell-reverse-lunge",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-reverse-lunge-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-reverse-lunge-start.webp",
+        "sha256": "166820383d8c18a9215d9e4d294d37bebb80878cf1a9c548ace14044c3002e1c"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-reverse-lunge-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-reverse-lunge-peak.webp",
+        "sha256": "b089b9e3edbc5a438755d228293549c659febe16ad4c773e85217e5e11a90e2a"
+      }
+    ]
+  },
+  "Kettlebell Strict Press": {
+    "sourceId": "one-arm-kettlebell-shoulder-press",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/one-arm-kettlebell-shoulder-press-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\one-arm-kettlebell-shoulder-press-start.webp",
+        "sha256": "291fe79ae03f6ca01eb9825fa10a0c5718247a04d47a4ecf8fb1aad8ba072389"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/one-arm-kettlebell-shoulder-press-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\one-arm-kettlebell-shoulder-press-peak.webp",
+        "sha256": "30664ef12da3f2c6c520b5427ddaab239996277d2c82433f5a6fbdfe7d635d4e"
+      }
+    ]
+  },
+  "Kettlebell Halo": {
+    "sourceId": "kettlebell-halo",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-halo-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-halo-start.webp",
+        "sha256": "7846b8053a5c6e5dc381163afd00623235767c1a29f564b8d299fbba340cd697"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-halo-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-halo-peak.webp",
+        "sha256": "a84056aa458ca09b036fa8fd43d585f0250b46e1389ff8e812d7589e39045031"
+      }
+    ]
+  },
+  "Kettlebell Overhead Triceps Extension": {
+    "sourceId": "kettlebell-overhead-tricep-extension",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-overhead-tricep-extension-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-overhead-tricep-extension-start.webp",
+        "sha256": "e863adfe3c2148dd394bcf7c8772298c770e3551dcca24ac792d96967e5c76d1"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/kettlebell-overhead-tricep-extension-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\kettlebell-overhead-tricep-extension-peak.webp",
+        "sha256": "4d00f5c67f3725b54cb24311f3131f489d81544889fd8a505fc2c2b995c54bfa"
+      }
+    ]
+  },
+  "90-90 Hip Switch": {
+    "sourceId": "90-90-switch",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/90-90-switch-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\90-90-switch-start.webp",
+        "sha256": "26ba1456fd5d9387919d50e6c510bc18c98f98ca0654245d9599f50d35b27b9b"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/90-90-switch-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\90-90-switch-peak.webp",
+        "sha256": "f32ce930baa5bb0ed056c72bc9951597bf5572c89ef94082444d9f353c9a1bec"
+      }
+    ]
+  },
+  "Dumbbell Clean and Press": {
+    "sourceId": "dumbbell-clean-and-press",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/dumbbell-clean-and-press-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\dumbbell-clean-and-press-start.webp",
+        "sha256": "d5c398879ad479499dada1939938d32c8e5d0f88971c2549cfb7019a8cacaf68"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/dumbbell-clean-and-press-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\dumbbell-clean-and-press-peak.webp",
+        "sha256": "3569a31f4eff25a0bc140fc1079e9970cb966940ddf00c858a1de6963779e724"
+      }
+    ]
+  },
+  "Kettlebell Clean and Press": {
+    "sourceId": "double-kettlebell-clean-and-press",
+    "images": [
+      {
+        "phase": "start",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/double-kettlebell-clean-and-press-start.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\double-kettlebell-clean-and-press-start.webp",
+        "sha256": "07ea66ad111cb1d2c9c03b44b2c05f680efe7101a681243ba5caf285fbaefa06"
+      },
+      {
+        "phase": "peak",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/double-kettlebell-clean-and-press-peak.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\double-kettlebell-clean-and-press-peak.webp",
+        "sha256": "e3a573393a549052e0e54b8a4ed8fd5f55aaa0b06f17978562ded4f4df0d4e62"
+      }
+    ]
+  },
+  "Downward Dog": {
+    "sourceId": "downward-dog",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/downward-dog-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\downward-dog-main.webp",
+        "sha256": "5e8ea8e3cb2d55855894236d076b21a5279572cd3bdc7b4b97778af628351245"
+      }
+    ]
+  },
+  "Cobra Stretch": {
+    "sourceId": "cobra-stretch",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/cobra-stretch-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\cobra-stretch-main.webp",
+        "sha256": "91a14d41910e0e399fb77ad1b81d310ad121b421a704fcea27fe2cc93b2c6059"
+      }
+    ]
+  },
+  "Boat Hold": {
+    "sourceId": "boat-pose",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/boat-pose-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\boat-pose-main.webp",
+        "sha256": "7103d91634180cf3b42f0e11c89a79d439fce32fd5e4469360e92a9081c36ae3"
+      }
+    ]
+  },
+  "Deep Squat Hold": {
+    "sourceId": "deep-squat-hold",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/deep-squat-hold-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\deep-squat-hold-main.webp",
+        "sha256": "0c1311cb766e3b8ea550ddbc1aa423ea3fc215ea7ba0454a3e70df4f910723e2"
+      }
+    ]
+  },
+  "High Plank": {
+    "sourceId": "high-plank",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/high-plank-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\high-plank-main.webp",
+        "sha256": "6ff08cbab2cb993aab34ee10af8543ae2e8d96d4386e1c9c3714e178584ad1df"
+      }
+    ]
+  },
+  "The Straddle": {
+    "sourceId": "seated-straddle-stretch",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/seated-straddle-stretch-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\seated-straddle-stretch-main.webp",
+        "sha256": "4989eac1e18854eda205ad34c6b0ae1ccbeff1c59e96ba7d7fae1928db1147ec"
+      }
+    ]
+  },
+  "Suitcase Carry": {
+    "sourceId": "suitcase-carry",
+    "images": [
+      {
+        "phase": "main",
+        "url": "https://raw.githubusercontent.com/RepDB/exercise-dataset/66c4298af8d99b9dc397dad6699e508fb871d249/images/flat/suitcase-carry-main.webp",
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-repdb-review\\suitcase-carry-main.webp",
+        "sha256": "2a41ad110d8add3293221f151e80fafbf52e99d1fde69e48a3ca3df4460ca953"
+      }
+    ]
+  }
+}

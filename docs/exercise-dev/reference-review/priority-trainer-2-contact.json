@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Ball rollout / Functional Effect",
+    "youtubeVideoId": "lyMJClJQl-8",
+    "previewFrames": 4,
+    "error": null
+  },
+  {
+    "name": "Weighted dead bug / Caroline",
+    "youtubeVideoId": "TeNg1oTvlVM",
+    "previewFrames": 4,
+    "error": null
+  },
+  {
+    "name": "Jumping jack / NASM",
+    "youtubeVideoId": "uLVt6u15L98",
+    "previewFrames": 4,
+    "error": null
+  },
+  {
+    "name": "Low-impact skater / STAT",
+    "youtubeVideoId": "j08ExZfGWV0",
+    "previewFrames": 0,
+    "error": "AssertionError"
+  },
+  {
+    "name": "Clean press / Dan John",
+    "youtubeVideoId": "xHDRoJfDTfE",
+    "previewFrames": 4,
+    "error": null
+  },
+  {
+    "name": "Devil press / Mayhem",
+    "youtubeVideoId": "gaVoxC7RV_8",
+    "previewFrames": 4,
+    "error": null
+  },
+  {
+    "name": "Deep squat / Hinge",
+    "youtubeVideoId": "IHApHfNA2Ag",
+    "previewFrames": 4,
+    "error": null
+  },
+  {
+    "name": "Goblet reverse lunge / Le Sweat",
+    "youtubeVideoId": "niq8QoGEXfE",
+    "previewFrames": 4,
+    "error": null
+  }
+]

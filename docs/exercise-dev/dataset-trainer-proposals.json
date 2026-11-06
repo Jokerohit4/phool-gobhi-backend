@@ -1,0 +1,342 @@
+[
+  {
+    "exercise": "Single-Arm Lat Pulldown",
+    "equipment": "cable",
+    "sourceId": "cable_one_arm_lat_pulldown",
+    "sourceName": "One Arm Lat Pulldown",
+    "sourceInstructions": [
+      "Select an appropriate weight and adjust the knee pad to help keep you down. Grasp the handle with a pronated grip. This will be your starting position.",
+      "Pull the handle down, squeezing your elbow to your side as you flex the elbow.",
+      "Pause at the bottom of the motion, and then slowly return the handle to the starting position.",
+      "For multiple repetitions, avoid completely returning the weight to keep tension on the muscles being worked."
+    ],
+    "videos": [
+      {
+        "youtube_id": "M9xUoJYtXtc",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Ben Yanes",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "3/4 Sit-Up",
+    "equipment": "bodyweight",
+    "sourceId": "bodyweight_3_4_sit_up",
+    "sourceName": "3/4 Sit-Up",
+    "sourceInstructions": [
+      "Lie down on the floor and secure your feet. Your legs should be bent at the knees.",
+      "Place your hands behind or to the side of your head. You will begin with your back on the ground. This will be your starting position.",
+      "Flex your hips and spine to raise your torso toward your knees.",
+      "At the top of the contraction your torso should be perpendicular to the ground. Reverse the motion, going only ¾ of the way down.",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "videos": [
+      {
+        "youtube_id": "qcL8me8Cah0",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Eternal Fitness",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Band Good Morning (Pull Through)",
+    "equipment": "other",
+    "sourceId": "bands_band_good_morning",
+    "sourceName": "Band Good Morning (Pull Through)",
+    "sourceInstructions": [
+      "Loop the band around a solid post and place the opposite end behind your neck, using hands to secure it.",
+      "Hinge at the hips, driving your glutes backward while keeping back flat and knees slightly soft.",
+      "Extend forcefully through your hips to return to a tall standing lockout."
+    ],
+    "videos": [
+      {
+        "youtube_id": "tb7JtugjLQ8",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "SEXioFIT",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Barbell Incline Shoulder Raise",
+    "equipment": "barbell",
+    "sourceId": "barbell_incline_shoulder_raise",
+    "sourceName": "Barbell Incline Shoulder Raise",
+    "sourceInstructions": [
+      "Lie back on an incline bench and hold a barbell overhead with arms straight and elbows locked.",
+      "Without bending your elbows, push the barbell upward purely by protracting your shoulder blades off the bench.",
+      "Lower your shoulder blades back into the bench with control and repeat."
+    ],
+    "videos": [
+      {
+        "youtube_id": "3Y_RFoYl-dk",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "My PT Hub",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Body Tricep Press",
+    "equipment": "bodyweight",
+    "sourceId": "bodyweight_body_tricep_press",
+    "sourceName": "Body Tricep Press",
+    "sourceInstructions": [
+      "Position a bar in a rack at chest height.",
+      "Take an overhand grip, step backward with feet together, leaning into the bar with straight arms.",
+      "Flex elbows to lower your head beneath the bar in a skull-crusher movement.",
+      "Extend elbows forcefully to push your body back to the starting angle."
+    ],
+    "videos": [
+      {
+        "youtube_id": "Ub2LQxjZuvQ",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "RAD FITNESS",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Bodyweight Flyes",
+    "equipment": "barbell",
+    "sourceId": "ez_bar_bodyweight_flyes",
+    "sourceName": "Bodyweight Flyes",
+    "sourceInstructions": [
+      "Assume a push-up position with hands gripping two loaded, rolling EZ bars on the floor.",
+      "Slowly roll the bars outward away from your midline, lowering your chest toward the floor.",
+      "Pull the bars back together forcefully using your chest muscles to return to the starting plank."
+    ],
+    "videos": [
+      {
+        "youtube_id": "2jr1z5OZsLY",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "GymPaws",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Cable Preacher Curl",
+    "equipment": "cable",
+    "sourceId": "cable_preacher_curl",
+    "sourceName": "Cable Preacher Curl",
+    "sourceInstructions": [
+      "Place a preacher bench in front of a low pulley with a straight or EZ bar attachment.",
+      "Rest upper arms firmly on the pad with arms fully extended.",
+      "Curl the bar toward your shoulders, squeezing biceps hard at the top.",
+      "Lower weight slowly until arms are extended."
+    ],
+    "videos": [
+      {
+        "youtube_id": "P33oQtDURjs",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Jase Stuart - Better Body Academy",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Cable Russian Twists",
+    "equipment": "cable",
+    "sourceId": "cable_cable_russian_twists",
+    "sourceName": "Cable Russian Twists",
+    "sourceInstructions": [
+      "Connect a standard handle attachment, and position the cable to a middle pulley position.",
+      "Lie on a stability ball perpendicular to the cable and grab the handle with one hand. You should be approximately arm's length away from the pulley, with the tension of the weight on the cable.",
+      "Grab the handle with both hands and fully extend your arms above your chest. You hands should be directly in-line with the pulley. If not, adjust the pulley up or down until they are.",
+      "Keep your hips elevated and abs engaged. Rotate your torso away from the pulley for a full-quarter rotation. Your body should be flat from head to knees.",
+      "Pause for a moment and in a slow and controlled manner reset to the starting position. You should still have side tension on the cable in the resting position.",
+      "Repeat the same movement to failure.",
+      "Then, reposition and repeat the same series of movements on the opposite side."
+    ],
+    "videos": [
+      {
+        "youtube_id": "Gm0KbW6Od30",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Jason Nelson",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Front Raise And Pullover",
+    "equipment": "barbell",
+    "sourceId": "barbell_front_raise_and_pullover",
+    "sourceName": "Front Raise And Pullover",
+    "sourceInstructions": [
+      "Lie on a flat bench holding a barbell over your thighs with arms straight.",
+      "Raise the bar in a wide semicircular arc upward and all the way behind your head until arms are parallel to floor.",
+      "Reverse the 180-degree arc smoothly to bring the bar back to your thighs as you exhale."
+    ],
+    "videos": [
+      {
+        "youtube_id": "X_eGLtiWZSs",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "My PT Hub",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Full Range-Of-Motion Lat Pulldown",
+    "equipment": "cable",
+    "sourceId": "cable_full_rom_lat_pulldown",
+    "sourceName": "Full Range-Of-Motion Lat Pulldown",
+    "sourceInstructions": [
+      "Grasp two stirrup handles from opposing high pulleys with arms crisscrossed overhead.",
+      "Maintain upright chest and pull handles downward and outward along an arced path.",
+      "Rotate wrists so palms face inward at bottom contraction, squeezing lats firmly before returning."
+    ],
+    "videos": [
+      {
+        "youtube_id": "cczFstlkvzQ",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Kurdish Bodybuilding",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "One Arm Lat Pulldown",
+    "equipment": "cable",
+    "sourceId": "cable_one_arm_lat_pulldown",
+    "sourceName": "One Arm Lat Pulldown",
+    "sourceInstructions": [
+      "Select an appropriate weight and adjust the knee pad to help keep you down. Grasp the handle with a pronated grip. This will be your starting position.",
+      "Pull the handle down, squeezing your elbow to your side as you flex the elbow.",
+      "Pause at the bottom of the motion, and then slowly return the handle to the starting position.",
+      "For multiple repetitions, avoid completely returning the weight to keep tension on the muscles being worked."
+    ],
+    "videos": [
+      {
+        "youtube_id": "M9xUoJYtXtc",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Ben Yanes",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Seated Two-Arm Palms-Up Low-Pulley Wrist Curl",
+    "equipment": "cable",
+    "sourceId": "cable_seated_two_arm_palms_up_low_pulley_wrist_curl",
+    "sourceName": "Seated Two-Arm Palms-Up Low-Pulley Wrist Curl",
+    "sourceInstructions": [
+      "Put a bench in front of a low pulley machine that has a barbell or EZ Curl attachment on it.",
+      "Move the bench far enough away so that when you bring the handle to the top of your thighs tension is created on the cable due to the weight stack being moved up.",
+      "Now hold the handle with both hands, palms up, using a shoulder-width grip.",
+      "Step back and sit on the bench with your feet about shoulder width apart, firmly on the floor.",
+      "Lean forward and place the forearms on your thighs with the back of your wrists over your knees. This will be your starting position.",
+      "Lower the bar as far as possible, while inhaling and keeping a tight grip.",
+      "Now curl the bar up as high as possible while contracting the forearms. Tip: Only the wrist should move; not the forearms.",
+      "After a second contraction at the top go back to the starting position as you inhale.",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "videos": [
+      {
+        "youtube_id": "_QhXMgl0xOI",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "FitSW Fitness Software",
+        "rating": 5
+      }
+    ]
+  },
+  {
+    "exercise": "Smith Machine Hip Raise",
+    "equipment": "machine",
+    "sourceId": "machine_smith_machine_hip_raise",
+    "sourceName": "Smith Machine Hip Raise",
+    "sourceInstructions": [
+      "Position a bench in the rack and load the bar to an appropriate weight. Lie down on the bench, placing the bottom of your feet against the bar. Unlock the bar and extend your legs. You may need to use your hands to assist you. For added stability grasp the sides of the Smith Machine. This will be your starting position.",
+      "Initiate the movement by rotating your pelvis, flexing your spine to raise your hips off of the bench. Maintain a slight bend in the knees throughout the motion.",
+      "After a brief pause, return the hips to the bench.",
+      "Repeat for the desired number of repetitions."
+    ],
+    "videos": [
+      {
+        "youtube_id": "n2GP6ZrRayw",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "My PT Hub",
+        "rating": 1
+      }
+    ]
+  },
+  {
+    "exercise": "Standing Dumbbell Calf Raise",
+    "equipment": "dumbbell",
+    "sourceId": "dumbbells_standing_dumbbell_calf_raise",
+    "sourceName": "Standing Dumbbell Calf Raise",
+    "sourceInstructions": [
+      "Stand with your torso upright holding two dumbbells in your hands by your sides. Place the ball of the foot on a sturdy and stable wooden board (that is around 2-3 inches tall) while your heels extend off and touch the floor. This will be your starting position.",
+      "With the toes pointing either straight (to hit all parts equally), inwards (for emphasis on the outer head) or outwards (for emphasis on the inner head), raise the heels off the floor as you exhale by contracting the calves. Hold the top contraction for a second.",
+      "As you inhale, go back to the starting position by slowly lowering the heels.",
+      "Repeat for the recommended amount of times."
+    ],
+    "videos": [
+      {
+        "youtube_id": "hPA98_r-6e4",
+        "type": "standard",
+        "priority": 1,
+        "language": "en",
+        "start_seconds": 0,
+        "aspect_ratio": "16:9",
+        "channel": "Horton Barbell",
+        "rating": 5
+      }
+    ]
+  }
+]

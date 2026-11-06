@@ -1,0 +1,107 @@
+{
+  "Renegade Row": {
+    "sourceId": "renegade-row",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Chest-Supported Machine Row": {
+    "sourceId": "chest-supported-machine-row",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Single-Leg Press": {
+    "sourceId": "single-leg-press",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Kettlebell Deadlift": {
+    "sourceId": "kettlebell-deadlift",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Kettlebell Reverse Lunge": {
+    "sourceId": "kettlebell-reverse-lunge",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Kettlebell Strict Press": {
+    "sourceId": "one-arm-kettlebell-shoulder-press",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Kettlebell Halo": {
+    "sourceId": "kettlebell-halo",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Kettlebell Overhead Triceps Extension": {
+    "sourceId": "kettlebell-overhead-tricep-extension",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "90-90 Hip Switch": {
+    "sourceId": "90-90-switch",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Dumbbell Clean and Press": {
+    "sourceId": "dumbbell-clean-and-press",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Kettlebell Clean and Press": {
+    "sourceId": "double-kettlebell-clean-and-press",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "pose_sequence"
+  },
+  "Downward Dog": {
+    "sourceId": "downward-dog",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "hold_reference"
+  },
+  "Cobra Stretch": {
+    "sourceId": "cobra-stretch",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "hold_reference"
+  },
+  "Boat Hold": {
+    "sourceId": "boat-pose",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "hold_reference"
+  },
+  "Deep Squat Hold": {
+    "sourceId": "deep-squat-hold",
+    "reviewStatus": "excluded",
+    "reviewReason": "Single drawing does not establish the required movement or complete end position; continue sourcing."
+  },
+  "High Plank": {
+    "sourceId": "high-plank",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed actual source illustration(s): canonical equipment and body position match. Deterministic resize/label only; no generative artwork derivation.",
+    "kind": "hold_reference"
+  },
+  "The Straddle": {
+    "sourceId": "seated-straddle-stretch",
+    "reviewStatus": "excluded",
+    "reviewReason": "Single drawing does not establish the required movement or complete end position; continue sourcing."
+  },
+  "Suitcase Carry": {
+    "sourceId": "suitcase-carry",
+    "reviewStatus": "excluded",
+    "reviewReason": "Single drawing does not establish the required movement or complete end position; continue sourcing."
+  }
+}

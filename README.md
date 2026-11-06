@@ -60,4 +60,8 @@ cd services/user-service && npm run dev
 ### User Service (http://localhost:5002)
 - GET /api/users/profile
 - PUT /api/users/profile
-- GET /health 
+- GET /health
+
+### Exercise artwork credit
+
+Exercise data by [RepDB](https://repdb.co). Selected free-tier exercise illustrations are used in the app with attribution under the [RepDB free-tier terms](https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md).

@@ -1,0 +1,222 @@
+{
+  "Running": {
+    "slug": "running",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Cycling": {
+    "slug": "cycling",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Single-Arm Cable Row": {
+    "slug": "single-arm-cable-row",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Pike Push-up": {
+    "slug": "pike-push-up",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Wall Sit": {
+    "slug": "wall-sit",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Hollow Hold": {
+    "slug": "hollow-body-hold",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Scapular Push-up": {
+    "slug": "scapular-push-up",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Meadows Row": {
+    "slug": "meadows-row",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Prone Y Raise": {
+    "slug": "prone-y-raise",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Bird Dog": {
+    "slug": "bird-dog",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Dumbbell Sumo Squat": {
+    "slug": "dumbbell-sumo-squat",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Dumbbell Lateral Lunge": {
+    "slug": "dumbbell-lateral-lunge",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Dumbbell Hip Thrust": {
+    "slug": "dumbbell-hip-thrust",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Belt Squat": {
+    "slug": "belt-squat",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Reverse Lunge": {
+    "slug": "reverse-lunge",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Lateral Lunge": {
+    "slug": "lateral-lunge",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Step-up": {
+    "slug": "step-up",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Frog Pump": {
+    "slug": "frog-pump",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Cossack Squat": {
+    "slug": "cossack-squat",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Nordic Hamstring Curl": {
+    "slug": "nordic-hamstring-curl",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Single-Leg Squat to Bench": {
+    "slug": "single-leg-box-squat",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Hip Airplane": {
+    "slug": "hip-airplane",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed supported hip-airplane poses: hinge on one standing leg, open and close hips while using a light balance support. Show the actual supported setup."
+  },
+  "Kettlebell Romanian Deadlift": {
+    "slug": "kettlebell-romanian-deadlift",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Landmine Press": {
+    "slug": "landmine-press",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed half-kneeling single-arm landmine press poses. Canonical exercise name does not constrain standing versus kneeling; actual barbell anchor and pressing direction match."
+  },
+  "Prone T Raise": {
+    "slug": "prone-t-raise",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Bicycle Crunch": {
+    "slug": "bicycle-crunch",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Seated Knee Tuck": {
+    "slug": "seated-knee-tuck",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Hanging Knee Raise": {
+    "slug": "hanging-knee-raise",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Captain Chair Knee Raise": {
+    "slug": "captains-chair-knee-raise",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Bear Plank": {
+    "slug": "bear-plank",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Jumping Jack": {
+    "slug": "jumping-jack",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "High Knees": {
+    "slug": "high-knees",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Fast Feet": {
+    "slug": "fast-feet",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Brisk Walking": {
+    "slug": "walking",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Jogging": {
+    "slug": "running",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Hiking": {
+    "slug": "hiking",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Swimming": {
+    "slug": "swimming",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Outdoor Cycling": {
+    "slug": "cycling",
+    "reviewStatus": "excluded",
+    "reviewReason": "Excluded after actual frame inspection: source uses extra weights, a machine instead of the named outdoor activity, or a different setup. Source names alone are insufficient."
+  },
+  "Squat Thrust": {
+    "slug": "squat-thrust",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Crab Walk": {
+    "slug": "crab-walk",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Sprawl": {
+    "slug": "sprawl",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Chest Doorway Stretch": {
+    "slug": "doorway-chest-stretch",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Shoulder Cross-Body Stretch": {
+    "slug": "cross-body-shoulder-stretch",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  },
+  "Standing Quad Stretch": {
+    "slug": "standing-quad-stretch",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Inspected all three source poses against the canonical movement. Matching equipment and body position; licensed pose references are labelled rather than presented as continuous footage."
+  }
+}

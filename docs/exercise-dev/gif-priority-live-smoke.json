@@ -1,0 +1,287 @@
+{
+  "checkedAt": "2026-11-05T11:59:46.888118+00:00",
+  "url": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+  "exercisesWithGif": 502,
+  "missingGif": 601,
+  "newGifFieldsVerified": 46,
+  "libraryRows": 1103,
+  "results": [
+    {
+      "name": "Ankle Circles",
+      "id": 520,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1368-uL9CsKm.gif",
+      "matches": true
+    },
+    {
+      "name": "Balance Board",
+      "id": 637,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0020-xAySMB0.gif",
+      "matches": true
+    },
+    {
+      "name": "Bent Over Two-Dumbbell Row",
+      "id": 753,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0293-BJ0Hz5L.gif",
+      "matches": true
+    },
+    {
+      "name": "Cable Deadlifts",
+      "id": 838,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0157-eGDudUV.gif",
+      "matches": true
+    },
+    {
+      "name": "Cable Lying Triceps Extension",
+      "id": 735,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0186-uxJcFUU.gif",
+      "matches": true
+    },
+    {
+      "name": "Calf Stretch Hands Against Wall",
+      "id": 969,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1377-m0tCHqc.gif",
+      "matches": true
+    },
+    {
+      "name": "Chair Leg Extended Stretch",
+      "id": 426,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1548-xGgAGPm.gif",
+      "matches": true
+    },
+    {
+      "name": "Drop Push",
+      "id": 1100,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1275-Q497lAE.gif",
+      "matches": true
+    },
+    {
+      "name": "Dynamic Chest Stretch",
+      "id": 860,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1167-3uj0Ozg.gif",
+      "matches": true
+    },
+    {
+      "name": "Farmer's Walk",
+      "id": 344,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/2133-qPEzJjA.gif",
+      "matches": true
+    },
+    {
+      "name": "Front Two-Dumbbell Raise",
+      "id": 328,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0310-3eGE2JC.gif",
+      "matches": true
+    },
+    {
+      "name": "Gironda Sternum Chins",
+      "id": 319,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0466-IL0JUxR.gif",
+      "matches": true
+    },
+    {
+      "name": "Incline Push-Up Depth Jump",
+      "id": 605,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0492-CB8WET1.gif",
+      "matches": true
+    },
+    {
+      "name": "Inverted Row with Straps",
+      "id": 661,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0498-jdiExfW.gif",
+      "matches": true
+    },
+    {
+      "name": "Iron Crosses (stretch)",
+      "id": 544,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1419-pZwUsKB.gif",
+      "matches": true
+    },
+    {
+      "name": "Kipping Muscle Up",
+      "id": 918,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0558-pM07UxU.gif",
+      "matches": true
+    },
+    {
+      "name": "Leg-Up Hamstring Stretch",
+      "id": 638,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1576-sU5BrfP.gif",
+      "matches": true
+    },
+    {
+      "name": "Mountain Climbers",
+      "id": 627,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0630-RJgzwny.gif",
+      "matches": true
+    },
+    {
+      "name": "Muscle Up",
+      "id": 809,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0631-yJUHKTn.gif",
+      "matches": true
+    },
+    {
+      "name": "One Arm Against Wall",
+      "id": 650,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1355-ZZTGMKh.gif",
+      "matches": true
+    },
+    {
+      "name": "One Arm Pronated Dumbbell Triceps Extension",
+      "id": 577,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0344-wyaqzOS.gif",
+      "matches": true
+    },
+    {
+      "name": "One Arm Supinated Dumbbell Triceps Extension",
+      "id": 532,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0346-zZlORz6.gif",
+      "matches": true
+    },
+    {
+      "name": "One-Arm Flat Bench Dumbbell Flye",
+      "id": 373,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1285-o5Jsk92.gif",
+      "matches": true
+    },
+    {
+      "name": "Pelvic Tilt Into Bridge",
+      "id": 748,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1422-D9qe7CM.gif",
+      "matches": true
+    },
+    {
+      "name": "Preacher Hammer Dumbbell Curl",
+      "id": 537,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0370-F1KxjBa.gif",
+      "matches": true
+    },
+    {
+      "name": "Rack Pulls",
+      "id": 855,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0074-za9Ni4z.gif",
+      "matches": true
+    },
+    {
+      "name": "Ring Dips",
+      "id": 1014,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0677-ezTvXcr.gif",
+      "matches": true
+    },
+    {
+      "name": "Side Lateral Raise",
+      "id": 888,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0334-DsgkuIt.gif",
+      "matches": true
+    },
+    {
+      "name": "Side Neck Stretch",
+      "id": 350,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0716-oQRJYkC.gif",
+      "matches": true
+    },
+    {
+      "name": "Side To Side Chins",
+      "id": 968,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0720-isAAZWA.gif",
+      "matches": true
+    },
+    {
+      "name": "Side-Lying Floor Stretch",
+      "id": 555,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1358-jDOKRM5.gif",
+      "matches": true
+    },
+    {
+      "name": "Standing Lateral Stretch",
+      "id": 934,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0794-1jXLYEw.gif",
+      "matches": true
+    },
+    {
+      "name": "Standing Pelvic Tilt",
+      "id": 578,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1364-cuKYxhu.gif",
+      "matches": true
+    },
+    {
+      "name": "Suspended Push-Up",
+      "id": 487,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0806-IaGQCrC.gif",
+      "matches": true
+    },
+    {
+      "name": "Suspended Reverse Crunch",
+      "id": 892,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0807-R1WYG5D.gif",
+      "matches": true
+    },
+    {
+      "name": "Suspended Row",
+      "id": 360,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0808-4OaumBr.gif",
+      "matches": true
+    },
+    {
+      "name": "Suspended Split Squat",
+      "id": 792,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0809-QpXqiq8.gif",
+      "matches": true
+    },
+    {
+      "name": "Tricep Side Stretch",
+      "id": 404,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0817-uOV3Itw.gif",
+      "matches": true
+    },
+    {
+      "name": "Upper Back Stretch",
+      "id": 965,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1365-GSDioYu.gif",
+      "matches": true
+    },
+    {
+      "name": "Seated Calf Stretch",
+      "id": 672,
+      "demoGifUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1390-17bqEXD.gif",
+      "matches": true
+    },
+    {
+      "name": "Bodyweight Squat",
+      "id": 37,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/517502/61606dde90dd668c26a0844ef602ecef7a30b122c6c4e3e8a7f4a7bc93bbda03.gif",
+      "matches": true
+    },
+    {
+      "name": "Side Plank",
+      "id": 48,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/640254/4f5d504ecd118af3b269f174192a96c928f531840c689278b77c2b06bc2a3a73.gif",
+      "matches": true
+    },
+    {
+      "name": "Plank",
+      "id": 19,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/640237/27133c12644dd5af242ed53329f61a47fdafa2ff0910215ee805c46d04d0ff8a.gif",
+      "matches": true
+    },
+    {
+      "name": "Face Pull",
+      "id": 15,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/wger-78/7169864f4db8c04fa97c3c2b23f4c4d9ab9fdc898389d55cd5f6f50c20d2faa2.gif",
+      "matches": true
+    },
+    {
+      "name": "Barbell Hip Thrust",
+      "id": 112,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/wger-72/cbc630d2f708b6fa9eec6af44b024d70d5f08c4a2ffe40a552a62f12d62ee5b2.gif",
+      "matches": true
+    },
+    {
+      "name": "Barbell Walking Lunge",
+      "id": 994,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/wger-34/36c4100c52ae5f67841640c6f01c7a91a1446026f9b130727a9b7047c69ea511.gif",
+      "matches": true
+    }
+  ],
+  "productionChanged": false
+}

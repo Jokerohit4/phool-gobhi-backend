@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="400" viewBox="0 0 360 400">
+<rect width="360" height="400" fill="#f5f9f8"/>
+<polyline points="15,370 345,370" fill="none" stroke="#a3b7b1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="130" y="321" width="130" height="49" fill="#d5e3df" stroke="#647b78" stroke-width="2"/>
+<polyline points="225,202 227,257 227,312" fill="none" stroke="#4f8580" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="227" cy="257" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polyline points="225,117 230,167 233,219" fill="none" stroke="#4f8580" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="230" cy="167" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polyline points="213,202 215,257 215,312" fill="none" stroke="#285d58" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="215" cy="257" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polyline points="212,117 210,167 207,219" fill="none" stroke="#285d58" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="210" cy="167" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polygon points="212,117 225,117 225,202 213,202" fill="#c1ddd5" stroke="#285d58" stroke-width="2"/>
+<polyline points="220,102 212,117" fill="none" stroke="#285d58" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="220,102 225,117" fill="none" stroke="#285d58" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="220,102 220,82" fill="none" stroke="#285d58" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="220" cy="82" r="14" fill="#d4e7e2" stroke="#285d58" stroke-width="2"/>
+<polyline points="215,312 238,317" fill="none" stroke="#285d58" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="227,312 250,317" fill="none" stroke="#285d58" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="207" cy="219" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<circle cx="233" cy="219" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<text x="10" y="19" fill="#174b40" font-family="Arial,sans-serif" font-size="16">SCHEMATIC / POSE 2 OF 3</text>
+<text x="10" y="37" fill="#174b40" font-family="Arial,sans-serif" font-size="12">Step up under control</text>
+<text x="10" y="395" fill="#174b40" font-family="Arial,sans-serif" font-size="12">Phool Gobhi / Illustrated pose reference</text>
+</svg>

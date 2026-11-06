@@ -190,6 +190,7 @@ function formatUser(user) {
     // Resolved, never null-for-unset-when-answers-exist: see personaService.
     persona: resolvePersona(user),
     freeTimeWindow: user.freeTimeWindow || null,
+    gymSubscriptionEndDate: user.gymSubscriptionEndDate || null,
     // Same coach-journey gym-link fields /me returns. The app falls back to
     // this endpoint when /me fails, and used to lose the user's own gym (and
     // with it their persona) every time it did.
@@ -442,7 +443,7 @@ export const updateProfile = async (req, res) => {
       currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
       weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
       wellnessFocuses, wellnessDayPattern, wellnessSleepPattern, wellnessSetupCompleted,
-      firstVisitBadgeConsent, recommendedEquipment, sportsPlayed,
+      firstVisitBadgeConsent, recommendedEquipment, sportsPlayed, gymSubscriptionEndDate,
     } = req.body;
 
     // appMode is deliberately NOT accepted here. It is derived server-side
@@ -456,6 +457,19 @@ export const updateProfile = async (req, res) => {
     if (freeTimeWindow !== undefined && freeTimeWindow !== null
         && !VALID_FREE_TIME_WINDOWS.includes(freeTimeWindow)) {
       return res.status(400).json({ error: `Invalid freeTimeWindow. Must be one of: ${VALID_FREE_TIME_WINDOWS.join(', ')}` });
+    }
+    // Membership end date: null clears it, anything else must be a valid date
+    // strictly in the future — a membership that already ended is not data we
+    // want to collect.
+    let parsedGymSubscriptionEnd;
+    if (gymSubscriptionEndDate !== undefined && gymSubscriptionEndDate !== null) {
+      parsedGymSubscriptionEnd = new Date(gymSubscriptionEndDate);
+      if (Number.isNaN(parsedGymSubscriptionEnd.getTime())) {
+        return res.status(400).json({ error: 'Invalid gymSubscriptionEndDate. Must be an ISO date.' });
+      }
+      if (parsedGymSubscriptionEnd.getTime() <= Date.now()) {
+        return res.status(400).json({ error: 'gymSubscriptionEndDate must be a future date.' });
+      }
     }
     // The onboarding "how often" answer. It was always sent by the app and
     // read by health-service (goalService derives the first weekly target
@@ -681,6 +695,8 @@ export const updateProfile = async (req, res) => {
       updates.trainingLocationOther = null;
     }
     if (freeTimeWindow !== undefined) updates.freeTimeWindow = freeTimeWindow;
+    if (gymSubscriptionEndDate === null) updates.gymSubscriptionEndDate = null;
+    else if (parsedGymSubscriptionEnd) updates.gymSubscriptionEndDate = parsedGymSubscriptionEnd;
     if (weeklyFrequencyIntent !== undefined) updates.weeklyFrequencyIntent = weeklyFrequencyIntent;
 
     // Re-derive appMode whenever an input to it actually changes, from the

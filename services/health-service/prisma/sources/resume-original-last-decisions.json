@@ -1,0 +1,32 @@
+{
+  "Hiking": {
+    "youtubeVideoId": "zqlPM3jpJHE",
+    "reason": "Mountain fitness coach teaches actual downhill trail-walking foot placement and control outdoors. This tutorial focuses on downhill hiking technique; it is not presented as a complete course in every hiking skill. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-original-last-contact.jpg"
+  },
+  "Deep Squat Hold": {
+    "youtubeVideoId": "IyPqRrAdT0A",
+    "reason": "Fitness instructor teaches resting at the bottom of a full bodyweight squat with heels down, palms together and elbows inside the knees. This matches the canonical unsupported squat hold. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-original-last-contact.jpg"
+  },
+  "Assisted Pistol Squat": {
+    "youtubeVideoId": "04zQAQTN20s",
+    "reason": "Trainer teaches a wall-assisted single-leg pistol squat with a fixed wall for hand support and grounded standing foot. No heel plate or suspension-strap substitution. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-original-last-contact.jpg"
+  },
+  "Squat to Reach": {
+    "youtubeVideoId": "ujNy4KGkMnQ",
+    "reason": "Coach teaches an unloaded squat followed by standing overhead arm reach; the platform is only a demonstration surface, not a step-up or an added load. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-original-last-contact.jpg"
+  },
+  "90/90 Hamstring": {
+    "youtubeVideoId": "Vflq1PtzV1Y",
+    "reason": "Physical therapist teaches the supine 90/90 hamstring stretch, holding the thigh with hip flexed and extending the knee; not the similarly named seated 90/90 hip stretch. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-original-last-contact.jpg"
+  },
+  "Butt-Ups": {
+    "youtubeVideoId": "m9QWYs2CXMo",
+    "reason": "Coach teaches forearm-plank hip pikes with toes grounded and return to plank. This matches the canonical Butt-Ups movement rather than a lying hip raise. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-original-last-contact.jpg"
+  }
+}

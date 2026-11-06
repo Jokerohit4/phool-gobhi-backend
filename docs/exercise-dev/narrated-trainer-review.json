@@ -1,0 +1,877 @@
+[
+  {
+    "exercise": "Cable Crossover",
+    "equipment": "cable",
+    "id": "EsXgqAxVKbA",
+    "title": "How To Do The Cable Crossover - BPI Sports",
+    "channel": "BPI Sports"
+  },
+  {
+    "exercise": "Standing Cable Chest Press",
+    "equipment": "cable",
+    "id": "fOHouR0t9Cw",
+    "title": "Standing Cable Chest Press  - Technique, Benefits, and Common Mistakes",
+    "channel": "Mike | J2FIT Strength & Conditioning"
+  },
+  {
+    "exercise": "Straight-Arm Pulldown",
+    "equipment": "cable",
+    "id": "wcVDItawocI",
+    "title": "Straight Arm Pulldown - Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Superman",
+    "equipment": "bodyweight",
+    "id": "hhq86gJvrvo",
+    "title": "Superman - Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Close-Grip Bench Press",
+    "equipment": "barbell",
+    "id": "vEUyEOVn3yM",
+    "title": "Close-Grip Bench Press Guide | 3 Mistakes to AVOID",
+    "channel": "BarBend"
+  },
+  {
+    "exercise": "Incline Dumbbell Fly",
+    "equipment": "dumbbell",
+    "id": "idAvu2HvqSQ",
+    "title": "HOW TO: Incline Dumbbell Fly || PERFECT FORM (GROWTH & STRENGTH)",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Chest Dip",
+    "equipment": "bodyweight",
+    "id": "dX_nSOOJIsE",
+    "title": "How to Do a Chest Dip | Chest Workout",
+    "channel": "Howcast"
+  },
+  {
+    "exercise": "Pendlay Row",
+    "equipment": "barbell",
+    "id": "Uy17rdP6G14",
+    "title": "How to PROPERLY Pendlay Row | Gain Back Muscle With This Exercise",
+    "channel": "Colossus Fitness"
+  },
+  {
+    "exercise": "Incline Dumbbell Row",
+    "equipment": "dumbbell",
+    "id": "0SVRQOgBfc8",
+    "title": "How To: Incline Dumbbell Row",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Dumbbell Shrug",
+    "equipment": "dumbbell",
+    "id": "g6qbq4Lf1FI",
+    "title": "How to Do Dumbbell Shrugs",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Renegade Row",
+    "equipment": "dumbbell",
+    "id": "4qEIChzM4ZA",
+    "title": "Renegade Row Guide | Form Tips, Muscles Worked, and Variations",
+    "channel": "BarBend"
+  },
+  {
+    "exercise": "Single-Arm Lat Pulldown",
+    "equipment": "cable",
+    "id": "DU7m4f63gko",
+    "title": "How to Single-Arm Lat Pulldown | Target Your Lower Lats",
+    "channel": "Physique Development"
+  },
+  {
+    "exercise": "Back Extension",
+    "equipment": "machine",
+    "id": "ph3pddpKzzw",
+    "title": "How to Do Back Extensions",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Inverted Row",
+    "equipment": "bodyweight",
+    "id": "hXTc1mDnZCw",
+    "title": "Inverted Row Guide | Form Tips, Muscles Worked, and Mistakes",
+    "channel": "BarBend"
+  },
+  {
+    "exercise": "Barbell Hip Thrust",
+    "equipment": "barbell",
+    "id": "Fk1OfkMmVt4",
+    "title": "Barbell Hip Thrust - Legs / Glutes Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Smith Machine Squat",
+    "equipment": "machine",
+    "id": "AHnX-aimA4E",
+    "title": "How To: Smith Machine- Squat",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Single-Leg Press",
+    "equipment": "machine",
+    "id": "ZYDTJaAM-gE",
+    "title": "SINGLE LEG PRESS | Legs | How-To Exercise Tutorial",
+    "channel": "Buff Dudes Workouts"
+  },
+  {
+    "exercise": "Arnold Press",
+    "equipment": "dumbbell",
+    "id": "TUHL8dXFvTg",
+    "title": "How to do an Arnold Press | The Right Way | Well+Good",
+    "channel": "Well+Good"
+  },
+  {
+    "exercise": "Bent-Over Lateral Raise",
+    "equipment": "dumbbell",
+    "id": "SWjzFaH9QXA",
+    "title": "Bent-Over Lateral Raise",
+    "channel": "Testosterone Nation"
+  },
+  {
+    "exercise": "Seated Barbell Press",
+    "equipment": "barbell",
+    "id": "AFC-_Ka8nY4",
+    "title": "Seated Barbell Military Press - Shoulder Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Barbell Upright Row",
+    "equipment": "barbell",
+    "id": "nIJGvsdNtFE",
+    "title": "How to Do Upright Barbell Rows",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Barbell Shrug",
+    "equipment": "barbell",
+    "id": "9xGqgGFAtiM",
+    "title": "Barbell Shrug - Shoulder Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Reverse Dumbbell Curl",
+    "equipment": "dumbbell",
+    "id": "EoYWMB856cA",
+    "title": "Dumbbell Reverse Curl",
+    "channel": "LivestrongWoman"
+  },
+  {
+    "exercise": "Dumbbell Triceps Extension",
+    "equipment": "dumbbell",
+    "id": "nRiJVZDpdL0",
+    "title": "How to Do Triceps Dumbbell Extensions",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Lying Leg Raise",
+    "equipment": "bodyweight",
+    "id": "SuIxXbKnwx4",
+    "title": "How To Do A LYING LEG RAISE | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Forearm Side Plank",
+    "equipment": "bodyweight",
+    "id": "Zu4so2D2atM",
+    "title": "How To Do A FOREARM SIDE PLANK | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Pallof Press",
+    "equipment": "cable",
+    "id": "axgv7H_VQOo",
+    "title": "Pallof Press Exercise Guide \u2014 Tutorial, Benefits, Variations",
+    "channel": "BarBend"
+  },
+  {
+    "exercise": "Kneeling Cable Crunch",
+    "equipment": "cable",
+    "id": "kc0PRn372lo",
+    "title": "How To Do A KNEELING CABLE CRUNCH | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Crab Walk",
+    "equipment": "bodyweight",
+    "id": "I-3r4cl4ahA",
+    "title": "Crab Walk",
+    "channel": "LivestrongWoman"
+  },
+  {
+    "exercise": "Kettlebell Clean and Press",
+    "equipment": "kettlebell",
+    "id": "48qvCvJJr8Y",
+    "title": "Kettlebell Clean and Press - a Primer on basic technique",
+    "channel": "Mark Wildman"
+  },
+  {
+    "exercise": "Dumbbell Thruster",
+    "equipment": "dumbbell",
+    "id": "SnHdBY_sK6M",
+    "title": "How to Do a Dumbbell Thruster | Warrior Fitness",
+    "channel": "Howcast"
+  },
+  {
+    "exercise": "Child Pose",
+    "equipment": "bodyweight",
+    "id": "kH12QrSGedM",
+    "title": "Child Pose",
+    "channel": "Baptist Health"
+  },
+  {
+    "exercise": "Cobra Stretch",
+    "equipment": "bodyweight",
+    "id": "JDcdhTuycOI",
+    "title": "Cobra Stretch",
+    "channel": "FitnessBlender"
+  },
+  {
+    "exercise": "Worlds Greatest Stretch",
+    "equipment": "bodyweight",
+    "id": "9NAGIQFLgb0",
+    "title": "World's Greatest Stretch",
+    "channel": "Coury & Buehler Physical Therapy"
+  },
+  {
+    "exercise": "Seated Hamstring Stretch",
+    "equipment": "bodyweight",
+    "id": "1rscgJNW27g",
+    "title": "How to Perform a Seated Hamstring Stretch",
+    "channel": "Vive Health"
+  },
+  {
+    "exercise": "Ab Roller",
+    "equipment": "other",
+    "id": "Q5MT5omGNJI",
+    "title": "Ab Roller - Ab Exercises - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Air Bike (Bicycle Crunch)",
+    "equipment": "bodyweight",
+    "id": "i6mPCVUrtNk",
+    "title": "Air Bike - Ab Exercises - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Ankle Circles",
+    "equipment": "other",
+    "id": "mzTQGYGI0Ng",
+    "title": "Ankle Circles - Ask Doctor Jo",
+    "channel": "AskDoctorJo"
+  },
+  {
+    "exercise": "Anterior Tibialis-SMR",
+    "equipment": "other",
+    "id": "vSUIBqrldkU",
+    "title": "SMR   Tibialis Anterior",
+    "channel": "National Academy of Sports Medicine (NASM)"
+  },
+  {
+    "exercise": "Arnold Dumbbell Press",
+    "equipment": "dumbbell",
+    "id": "X60-yTMOJfw",
+    "title": "Arnold Dumbbell Press - Shoulder Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Barbell Rear Delt Row",
+    "equipment": "barbell",
+    "id": "XagV4XfG9fo",
+    "title": "Barbell Rear Delt Row - Shoulder Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Barbell Shoulder Press",
+    "equipment": "barbell",
+    "id": "lPFwcHl0a2c",
+    "title": "Barbell Shoulder Press - Shoulder Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Barbell Side Split Squat",
+    "equipment": "barbell",
+    "id": "FQi20qWvy1E",
+    "title": "How to Do Barbell Side Split Squats",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Barbell Squat To A Bench",
+    "equipment": "barbell",
+    "id": "6rpfubNjoqU",
+    "title": "How to Do Barbell Squats to a Bench",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Bench Dips",
+    "equipment": "bodyweight",
+    "id": "c3ZGl4pAwZ4",
+    "title": "How To: Bench Dip",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Bent-Arm Dumbbell Pullover",
+    "equipment": "dumbbell",
+    "id": "4B-BrBH17uM",
+    "title": "Bent Arm Dumbbell Pullover - Chest / Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Bent Over Two-Arm Long Bar Row",
+    "equipment": "barbell",
+    "id": "e8YF8Z_N0-4",
+    "title": "Bent Over Two Arm Long Bar Row - Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Bent Over Two-Dumbbell Row",
+    "equipment": "dumbbell",
+    "id": "--gDUDFKx6Q",
+    "title": "Bent Over Two Dumbbell Row - Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Butt Lift (Bridge)",
+    "equipment": "bodyweight",
+    "id": "MqQlfjQOmHA",
+    "title": "Butt Lift Bridge - Legs / Glutes Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Butterfly",
+    "equipment": "machine",
+    "id": "oGxc2ph8Fnw",
+    "title": "Butterfly - Chest Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Cable Rope Overhead Triceps Extension",
+    "equipment": "cable",
+    "id": "mRozZKkGIfg",
+    "title": "Cable Rope Overhead Tricep Extension - Tricep Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Cable Shrugs",
+    "equipment": "cable",
+    "id": "Wab3-dsZohU",
+    "title": "Cable Shrug - The Proper Lift - BPI Sports",
+    "channel": "BPI Sports"
+  },
+  {
+    "exercise": "Chair Squat",
+    "equipment": "machine",
+    "id": "GIz1C3yfE1s",
+    "title": "Squats with a Chair - Ask Doctor Jo",
+    "channel": "AskDoctorJo"
+  },
+  {
+    "exercise": "Chin To Chest Stretch",
+    "equipment": "other",
+    "id": "GjS3i2-BlxA",
+    "title": "Chin-to-Chest Stretch",
+    "channel": "LIVESTRONG"
+  },
+  {
+    "exercise": "Clean Deadlift",
+    "equipment": "barbell",
+    "id": "iCWAMA9Zeus",
+    "title": "Clean Deadlift | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Clean Pull",
+    "equipment": "barbell",
+    "id": "xx8WkFrST2Y",
+    "title": "Clean Pull | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Clean Shrug",
+    "equipment": "barbell",
+    "id": "l5CVf0ztMMs",
+    "title": "Clean Shrug | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Clean and Jerk",
+    "equipment": "barbell",
+    "id": "v13d7g_uUXM",
+    "title": "Clean and Jerk - Shoulders / Legs / Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Close-Grip Front Lat Pulldown",
+    "equipment": "cable",
+    "id": "ecRF8ERf2q4",
+    "title": "Close Grip Front Lat Pulldown - Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Cuban Press",
+    "equipment": "dumbbell",
+    "id": "zD4Vp44roow",
+    "title": "Cuban Press | Nuffield Health",
+    "channel": "Nuffield Health"
+  },
+  {
+    "exercise": "Decline Dumbbell Bench Press",
+    "equipment": "dumbbell",
+    "id": "Pf1nDoqx_1A",
+    "title": "Decline Dumbbell Bench Press  - Chest Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Decline Dumbbell Triceps Extension",
+    "equipment": "dumbbell",
+    "id": "8IXB2dE1IJA",
+    "title": "How To Do A DECLINE DUMBBELL TRICEPS EXTENSION | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Decline Oblique Crunch",
+    "equipment": "bodyweight",
+    "id": "sBAZTuZAUA8",
+    "title": "How To: Decline Oblique Crunch",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Decline Reverse Crunch",
+    "equipment": "bodyweight",
+    "id": "YcMj0EEadQo",
+    "title": "Decline Reverse Crunch - Ab Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Dips - Chest Version",
+    "equipment": "other",
+    "id": "4la6BkUBLgo",
+    "title": "Dips   Chest Version - Chest Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Donkey Calf Raises",
+    "equipment": "other",
+    "id": "XEZUIXn5mgc",
+    "title": "Donkey Calf Raises - Calf Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Dumbbell Bench Press with Neutral Grip",
+    "equipment": "dumbbell",
+    "id": "Oq5MMAbUE2o",
+    "title": "Neutral Grip Dumbbell Bench Press | J2FIT",
+    "channel": "Mike | J2FIT Strength & Conditioning"
+  },
+  {
+    "exercise": "Dumbbell Incline Row",
+    "equipment": "dumbbell",
+    "id": "2LxN3_3atps",
+    "title": "How to PROPERLY Incline Dumbbell Row | Prone Row Tutorial For A Huge Back",
+    "channel": "Colossus Fitness"
+  },
+  {
+    "exercise": "Dumbbell Step Ups",
+    "equipment": "dumbbell",
+    "id": "7AtIjR-QqVA",
+    "title": "Dumbbell Step Ups - Leg Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Farmer's Walk",
+    "equipment": "other",
+    "id": "hJW-Xc8TvU8",
+    "title": "Farmer's Walk - Forearm Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Flat Bench Cable Flyes",
+    "equipment": "cable",
+    "id": "gV2QSjD3Cs0",
+    "title": "How To Do A FLAT BENCH CABLE FLY | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Flutter Kicks",
+    "equipment": "bodyweight",
+    "id": "ANVdMDaYRts",
+    "title": "How To: Flutter Kicks",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Freehand Jump Squat",
+    "equipment": "bodyweight",
+    "id": "dtJ6kOV5dUc",
+    "title": "Freehand Jump Squat - Leg Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Front Dumbbell Raise",
+    "equipment": "dumbbell",
+    "id": "CH9JzDStL3U",
+    "title": "How to Do Dumbbell Front Raises | Proper Form & Tips",
+    "channel": "Colossus Fitness"
+  },
+  {
+    "exercise": "Glute Ham Raise",
+    "equipment": "machine",
+    "id": "TDdV0dCsqKs",
+    "title": "Glute Ham Raise - Legs / Glutes Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Glute Kickback",
+    "equipment": "bodyweight",
+    "id": "BNDw4ciQoQI",
+    "title": "Glute Kickbacks | Nuffield Health",
+    "channel": "Nuffield Health"
+  },
+  {
+    "exercise": "Groiners",
+    "equipment": "bodyweight",
+    "id": "RSMWpaY_iaQ",
+    "title": "Groiners | Nuffield Health",
+    "channel": "Nuffield Health"
+  },
+  {
+    "exercise": "Hamstring-SMR",
+    "equipment": "other",
+    "id": "wQ6uUuBWCbw",
+    "title": "SMR  Hamstring",
+    "channel": "National Academy of Sports Medicine (NASM)"
+  },
+  {
+    "exercise": "Hamstring Stretch",
+    "equipment": "other",
+    "id": "Q4_TmIekeZ8",
+    "title": "Hamstring Stretch",
+    "channel": "Baptist Health"
+  },
+  {
+    "exercise": "Hang Clean",
+    "equipment": "barbell",
+    "id": "sPrFKddxxZo",
+    "title": "Hang Clean - Shoulders / Legs / Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Hang Snatch",
+    "equipment": "barbell",
+    "id": "Php-RclQ1yU",
+    "title": "Hang Snatch | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Heaving Snatch Balance",
+    "equipment": "barbell",
+    "id": "xoXwoXoJo_Y",
+    "title": "Heaving Snatch Balance | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Hyperextensions (Back Extensions)",
+    "equipment": "other",
+    "id": "qtjJUWCnDyE",
+    "title": "Hyperextensions (Back Extensions) - Core / Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Incline Dumbbell Flyes",
+    "equipment": "dumbbell",
+    "id": "idAvu2HvqSQ",
+    "title": "HOW TO: Incline Dumbbell Fly || PERFECT FORM (GROWTH & STRENGTH)",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Jerk Balance",
+    "equipment": "barbell",
+    "id": "VWU_0OwXoPQ",
+    "title": "Jerk Balance | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Kettlebell Figure 8",
+    "equipment": "kettlebell",
+    "id": "r7MoAw95LCc",
+    "title": "How To Do A Kettlebell Figure 8 | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Kettlebell One-Legged Deadlift",
+    "equipment": "kettlebell",
+    "id": "JOoc07_Xkls",
+    "title": "Kettlebell One-Legged Deadlift - Leg Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Knee Tuck Jump",
+    "equipment": "bodyweight",
+    "id": "BDA3DERQKFk",
+    "title": "Knee Tuck Jumps",
+    "channel": "FitnessBlender"
+  },
+  {
+    "exercise": "Leg Extensions",
+    "equipment": "machine",
+    "id": "yR_LqZYSIgM",
+    "title": "Leg Extensions - Leg Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Lying T-Bar Row",
+    "equipment": "machine",
+    "id": "w0KnlQ-b7jw",
+    "title": "Lying T-Bar Row - Back Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Monster Walk",
+    "equipment": "other",
+    "id": "UX-hIEbWpCA",
+    "title": "Monster Walk | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Muscle Snatch",
+    "equipment": "barbell",
+    "id": "nJmtGVutszE",
+    "title": "Muscle Snatch | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Narrow Stance Squats",
+    "equipment": "barbell",
+    "id": "sMVyjUCp-XI",
+    "title": "How To Do A SQUAT WITH NARROW STANCE | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Snatch",
+    "equipment": "kettlebell",
+    "id": "elzIpYSLVnA",
+    "title": "How To Do A SINGLE ARM KETTLEBELL SNATCH | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "One-Legged Cable Kickback",
+    "equipment": "cable",
+    "id": "xO5WVJGVJ2w",
+    "title": "One-Legged Cable Kickback - Leg Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "One Arm Lat Pulldown",
+    "equipment": "cable",
+    "id": "DU7m4f63gko",
+    "title": "How to Single-Arm Lat Pulldown | Target Your Lower Lats",
+    "channel": "Physique Development"
+  },
+  {
+    "exercise": "Overhead Squat",
+    "equipment": "barbell",
+    "id": "m_fvfJi94D8",
+    "title": "Overhead Squat | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Piriformis-SMR",
+    "equipment": "other",
+    "id": "djNRSC295-A",
+    "title": "SMR Piriformis",
+    "channel": "National Academy of Sports Medicine (NASM)"
+  },
+  {
+    "exercise": "Power Clean",
+    "equipment": "barbell",
+    "id": "zCEj0d3TatI",
+    "title": "Power Clean - Back & Legs Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Power Jerk",
+    "equipment": "barbell",
+    "id": "Ir_34nxrk1Q",
+    "title": "Power Jerk | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Push Press - Behind the Neck",
+    "equipment": "barbell",
+    "id": "eAkalDSMcbo",
+    "title": "Push Press Behind the Neck | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Reverse Flyes",
+    "equipment": "dumbbell",
+    "id": "3MKmYlhxgOo",
+    "title": "Reverse Fly Tutorial - Proper Form and Technique",
+    "channel": "Runna"
+  },
+  {
+    "exercise": "Seated Bent-Over Rear Delt Raise",
+    "equipment": "dumbbell",
+    "id": "DEeUsQ9rCso",
+    "title": "Seated Bent Over Rear Delt Raise - Shoulder Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Shoulder Circles",
+    "equipment": "other",
+    "id": "831d53pAlho",
+    "title": "Shoulder Circles | Nuffield Health",
+    "channel": "Nuffield Health"
+  },
+  {
+    "exercise": "Side Lateral Raise",
+    "equipment": "dumbbell",
+    "id": "E3abEP8SIh0",
+    "title": "Side Lateral Raise | Exercise Guide",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Smith Machine Incline Bench Press",
+    "equipment": "machine",
+    "id": "b8DqTO6ak0k",
+    "title": "How To: Smith Machine- Incline Bench Press",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Snatch Deadlift",
+    "equipment": "barbell",
+    "id": "mp9gtX-JqB0",
+    "title": "Snatch Deadlift | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Snatch Pull",
+    "equipment": "barbell",
+    "id": "G1QygZ3Kd3w",
+    "title": "Snatch Pull | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Snatch Shrug",
+    "equipment": "barbell",
+    "id": "TOfpapB5wF8",
+    "title": "Snatch Shrug | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Speed Squats",
+    "equipment": "barbell",
+    "id": "sz600ro-lj0",
+    "title": "How To Do A SPEED SQUAT | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Spider Curl",
+    "equipment": "barbell",
+    "id": "BsE9zhhTU1A",
+    "title": "How To: Spider Curl - Ultimate Bicep Isolator! (PERFECT FORM)",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Split Jerk",
+    "equipment": "barbell",
+    "id": "2GPA-cjUFnA",
+    "title": "Split Jerk | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Split Squat Stretch",
+    "equipment": "other",
+    "id": "UJWLxHAYxx4",
+    "title": "Split Squat - Legs Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Squat Jerk",
+    "equipment": "barbell",
+    "id": "iFc4l24llpw",
+    "title": "Squat Jerk | Olympic Weightlifting Exercise Library",
+    "channel": "Catalyst Athletics"
+  },
+  {
+    "exercise": "Standing Cable Wood Chop",
+    "equipment": "cable",
+    "id": "iTmMPyDzeYA",
+    "title": "Standing Cable Wood Chop  - Core / Abs - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Standing Dumbbell Calf Raise",
+    "equipment": "dumbbell",
+    "id": "wxwY7GXxL4k",
+    "title": "Standing Dumbbell Calf Raises - Calf Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Standing Dumbbell Upright Row",
+    "equipment": "dumbbell",
+    "id": "ciTcnS0pfmA",
+    "title": "How To Do A STANDING DUMBBELL UPRIGHT ROW | Exercise Demonstration Video and Guide",
+    "channel": "Live Lean TV Daily Exercises"
+  },
+  {
+    "exercise": "Stiff-Legged Dumbbell Deadlift",
+    "equipment": "dumbbell",
+    "id": "w9_PudlkeLI",
+    "title": "Stiff Legged Dumbbell Deadlift - Legs / Glutes Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Stomach Vacuum",
+    "equipment": "bodyweight",
+    "id": "f2PliOQHQ4c",
+    "title": "Stomach Vacuum | Ab Exercises Guide",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Suspended Fallout",
+    "equipment": "other",
+    "id": "0FAMdxWgFnA",
+    "title": "Suspended Fallout - Shoulder / Core Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Suspended Push-Up",
+    "equipment": "other",
+    "id": "LWGm1xC_fgU",
+    "title": "How to Perform a Suspended Pushup | Nuffield Health",
+    "channel": "Nuffield Health"
+  },
+  {
+    "exercise": "T-Bar Row with Handle",
+    "equipment": "barbell",
+    "id": "KDEl3AmZbVE",
+    "title": "T-Bar Row with Handle | Exercise Guide",
+    "channel": "Bodybuilding.com"
+  },
+  {
+    "exercise": "Tricep Dumbbell Kickback",
+    "equipment": "dumbbell",
+    "id": "6SS6K3lAwZ8",
+    "title": "How To: Tricep Kickback (Dumbbell)",
+    "channel": "ScottHermanFitness"
+  },
+  {
+    "exercise": "Triceps Stretch",
+    "equipment": "other",
+    "id": "Uvk1Y8O1_yM",
+    "title": "Tricep Stretch",
+    "channel": "Baptist Health"
+  },
+  {
+    "exercise": "Wrist Roller",
+    "equipment": "other",
+    "id": "-lOFG0U_rlY",
+    "title": "Wrist Roller - Forearm Exercise - Bodybuilding.com",
+    "channel": "Bodybuilding.com"
+  }
+]

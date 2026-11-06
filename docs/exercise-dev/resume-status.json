@@ -1,0 +1,25 @@
+{
+  "preparedTutorials": 758,
+  "remainingTutorials": 345,
+  "lastAppliedAt": "2026-11-06T10:25:26.101Z",
+  "lastAppliedMissing": {
+    "demoGif": 0,
+    "photo": 0,
+    "tutorial": 365,
+    "sourceInstructions": 0
+  },
+  "lastApiCheck": {
+    "checkedAt": "2026-11-06T10:26:37.496Z",
+    "http": {
+      "url": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+      "libraryRows": 1103,
+      "detailsChecked": 1103,
+      "failures": []
+    }
+  },
+  "instructionProfiles": 77,
+  "sourceCorrections": 5,
+  "stagedCorrection": "Anchored towel-row instructions; known bad English/Hindi source superseded with honestly labelled English",
+  "productionChanged": false,
+  "taskStatus": "Continuing source verification in small batches"
+}

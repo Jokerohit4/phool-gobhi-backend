@@ -5,6 +5,7 @@
 //   DRY_RUN=1 node prisma/seedExerciseMedia.js
 import { readFileSync } from 'node:fs';
 import { PrismaClient } from '@prisma/client';
+import { isExerciseMediaUrl } from '../utils/exerciseMedia.js';
 
 const prisma = new PrismaClient();
 const dry = process.env.DRY_RUN === '1';
@@ -12,13 +13,17 @@ const ATTRIBUTION = '© Gym visual — https://gymvisual.com/';
 const media = JSON.parse(readFileSync(new URL('./exerciseMedia.json', import.meta.url), 'utf8'));
 
 try {
-  const c = { exercise: 0, noUrl: 0, notFound: 0, content: 0, contentKept: 0 };
+  const c = { exercise: 0, noUrl: 0, invalidUrl: 0, notFound: 0, content: 0, contentKept: 0 };
   for (const [name, e] of Object.entries(media)) {
     const exercise = await prisma.exercise.findFirst({
       where: { name: { equals: name, mode: 'insensitive' }, createdByUserId: null },
     });
     if (!exercise) { c.notFound++; console.warn(`not in DB: ${name}`); continue; }
-    if (e.gifUrl && e.imageUrl) {
+    const invalidUrl = [e.gifUrl, e.imageUrl].some((url) => url != null && !isExerciseMediaUrl(url));
+    if (invalidUrl) {
+      c.invalidUrl++;
+      console.warn(`invalid media URL, preserving existing demo: ${name}`);
+    } else if (e.gifUrl && e.imageUrl) {
       if (!dry) {
         await prisma.exercise.update({
           where: { id: exercise.id },

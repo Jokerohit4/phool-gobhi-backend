@@ -1,0 +1,3561 @@
+{
+  "Running": {
+    "slug": "running",
+    "source": {
+      "id": "exercise-running",
+      "slug": "running",
+      "name": "Running",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/running/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/running/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/running/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\running-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/running/frame-1.png",
+        "sha256": "82e65b8c0ea73d0eca02e4981193e0ea7455daa6a06132d21ae220aba226d791"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\running-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/running/frame-2.png",
+        "sha256": "b837734f188f7eb7eaa15146f9073a1d56d5eda8ec52d0779a4eb70169f2fc6e"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\running-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/running/frame-3.png",
+        "sha256": "8c85ef9c243f344f8b2ba4dbe53dc098ec1a8e47cbe77645028fc5ebb84a3f7a"
+      }
+    ]
+  },
+  "Cycling": {
+    "slug": "cycling",
+    "source": {
+      "id": "exercise-cycling",
+      "slug": "cycling",
+      "name": "Cycling",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/cycling/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/cycling/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/cycling/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cycling-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cycling/frame-1.png",
+        "sha256": "b618d4c71a5ef2b54c118fc81079c7505a535b73f8171116365bb840c0dad3c2"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cycling-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cycling/frame-2.png",
+        "sha256": "b0ccde95804711b312068287b35911601417beeddc35fd1ad865c5da47db301c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cycling-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cycling/frame-3.png",
+        "sha256": "e1fda5048750e8400348536b339996cf30bdd205b99cde2a543bf6fbbb5a72c4"
+      }
+    ]
+  },
+  "Single-Arm Cable Row": {
+    "slug": "single-arm-cable-row",
+    "source": {
+      "id": "exercise-single-arm-cable-row",
+      "slug": "single-arm-cable-row",
+      "name": "Single-Arm Cable Row",
+      "exerciseType": "weight_reps",
+      "equipment": "Cable",
+      "primaryMuscle": "Back",
+      "secondaryMuscles": [
+        "Biceps",
+        "Rear Delts"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/single-arm-cable-row/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/single-arm-cable-row/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/single-arm-cable-row/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\single-arm-cable-row-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/single-arm-cable-row/frame-1.png",
+        "sha256": "47ec917218a3b41bd7b48f145bc2d015d9a0a18bf54c5f51edd63586d9ebd6c4"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\single-arm-cable-row-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/single-arm-cable-row/frame-2.png",
+        "sha256": "1d58d06a73a4f8691e5504b4684f25bd941c707681299fe5d723c4283212c63c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\single-arm-cable-row-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/single-arm-cable-row/frame-3.png",
+        "sha256": "759a904e4204e53c6e089dfc45ed38d805ce58180ed08bcbf870a5789f8ed4b7"
+      }
+    ]
+  },
+  "Pike Push-up": {
+    "slug": "pike-push-up",
+    "source": {
+      "id": "exercise-pike-push-up",
+      "slug": "pike-push-up",
+      "name": "Pike Push-up",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Shoulders",
+      "secondaryMuscles": [
+        "Triceps",
+        "Chest",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/pike-push-up/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/pike-push-up/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/pike-push-up/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\pike-push-up-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/pike-push-up/frame-1.png",
+        "sha256": "79a254a07db10482145d92d2fbfe98169dfd7c8cc7ee2a181007905e91c56e04"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\pike-push-up-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/pike-push-up/frame-2.png",
+        "sha256": "27eb6823404dbfd41f19861a552c6a7202c5e1fd139184664765686d1bbe210b"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\pike-push-up-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/pike-push-up/frame-3.png",
+        "sha256": "40a63d90aabd7344b04ee5fbe823f521757ed0a2ad6b851fc8903a952265c7cd"
+      }
+    ]
+  },
+  "Wall Sit": {
+    "slug": "wall-sit",
+    "source": {
+      "id": "exercise-wall-sit",
+      "slug": "wall-sit",
+      "name": "Wall Sit",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/wall-sit/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/wall-sit/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/wall-sit/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\wall-sit-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/wall-sit/frame-1.png",
+        "sha256": "70d2b13428b3914c9ce7a77ee1b409ec329c7067ed2a451e8a0095a10f27a83f"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\wall-sit-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/wall-sit/frame-2.png",
+        "sha256": "067a49668a97379b34de68ba4c7f966d47c6d1563ee42bdabaeb777a13a0d141"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\wall-sit-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/wall-sit/frame-3.png",
+        "sha256": "59e239a643d091a1c088824b6f8abf35e3c3deb8d892c1ded4266bd0bc18a3b7"
+      }
+    ]
+  },
+  "Hollow Hold": {
+    "slug": "hollow-body-hold",
+    "source": {
+      "id": "exercise-hollow-body-hold",
+      "slug": "hollow-body-hold",
+      "name": "Hollow Body Hold",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Quads"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/hollow-body-hold/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/hollow-body-hold/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/hollow-body-hold/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hollow-body-hold-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hollow-body-hold/frame-1.png",
+        "sha256": "3f2122bae1afbff04335140b1bfc03405483a7a89ef1d2c8e49c9c16b1393d28"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hollow-body-hold-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hollow-body-hold/frame-2.png",
+        "sha256": "5be1b4f0aaba78e0e9041bc56394bb1d36c89cc07c31dee2fc2cdecc5d57ec9a"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hollow-body-hold-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hollow-body-hold/frame-3.png",
+        "sha256": "7427eb09d44b10f4fce9f769a4f0082dab61db382e98306f26799fb1c543cc7f"
+      }
+    ]
+  },
+  "Scapular Push-up": {
+    "slug": "scapular-push-up",
+    "source": {
+      "id": "exercise-scapular-push-up",
+      "slug": "scapular-push-up",
+      "name": "Scapular Push-up",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Upper Back",
+      "secondaryMuscles": [
+        "Chest",
+        "Shoulders",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/scapular-push-up/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/scapular-push-up/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/scapular-push-up/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\scapular-push-up-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/scapular-push-up/frame-1.png",
+        "sha256": "fbac53a04b06b6d8ba76b3bf582a2b0eed42ebc97993fa004194ecbb9d0bb0d3"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\scapular-push-up-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/scapular-push-up/frame-2.png",
+        "sha256": "3e81c12f2313209893efc11fa7d470b4ef8a53b299f188c3ca83e7f6b02e6b59"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\scapular-push-up-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/scapular-push-up/frame-3.png",
+        "sha256": "770e76c8f750a2a1162c1e9298da7a5b81a253f01f97ecbf1dd355ee7d393441"
+      }
+    ]
+  },
+  "Meadows Row": {
+    "slug": "meadows-row",
+    "source": {
+      "id": "exercise-meadows-row",
+      "slug": "meadows-row",
+      "name": "Meadows Row",
+      "exerciseType": "weight_reps",
+      "equipment": "Barbell",
+      "primaryMuscle": "Back",
+      "secondaryMuscles": [
+        "Biceps",
+        "Rear Delts"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/meadows-row/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/meadows-row/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/meadows-row/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\meadows-row-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/meadows-row/frame-1.png",
+        "sha256": "65512a54bad86a70eb80d2d5e759f38778dd87811f5ad13d409c481d6293f14c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\meadows-row-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/meadows-row/frame-2.png",
+        "sha256": "90a2693892b57cfebebf345d30f06d3f7ce766883e5fc5eb5fd1aa4f1feb6d0f"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\meadows-row-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/meadows-row/frame-3.png",
+        "sha256": "77a8c8677a2f06b550983793242c6580f7acdd0ac5fa451d06dd0db9d2b31a15"
+      }
+    ]
+  },
+  "Prone Y Raise": {
+    "slug": "prone-y-raise",
+    "source": {
+      "id": "exercise-prone-y-raise",
+      "slug": "prone-y-raise",
+      "name": "Prone Y Raise",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Upper Back",
+      "secondaryMuscles": [
+        "Rear Delts",
+        "Shoulders"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/prone-y-raise/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/prone-y-raise/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/prone-y-raise/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\prone-y-raise-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/prone-y-raise/frame-1.png",
+        "sha256": "66a9c01313791aa6fc6814bb3191be6b20e7b67e65f234daf89e3dfa8f8e1b77"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\prone-y-raise-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/prone-y-raise/frame-2.png",
+        "sha256": "716b24cc041903d54c022034a21b7e54de004f52e8b7f4246bffb8491977ecba"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\prone-y-raise-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/prone-y-raise/frame-3.png",
+        "sha256": "02fa9d11c0915081a1959b32e6a17487b7b017a1d9c01516eb434cc75f15933a"
+      }
+    ]
+  },
+  "Bird Dog": {
+    "slug": "bird-dog",
+    "source": {
+      "id": "exercise-bird-dog",
+      "slug": "bird-dog",
+      "name": "Bird Dog",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Glutes",
+        "Shoulders"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/bird-dog/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/bird-dog/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/bird-dog/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bird-dog-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bird-dog/frame-1.png",
+        "sha256": "a507b0f33e550d3cf7fbf3201a755f9637fbb2e335ecde213f5686b60b49f95d"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bird-dog-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bird-dog/frame-2.png",
+        "sha256": "d88412ddc828ab2d4e8c449337c876da4e6e5172d5ee207124d45a484bedf149"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bird-dog-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bird-dog/frame-3.png",
+        "sha256": "2b9764a5d94032e2066cf5fc71e9e9bd1402a98508d8e8007f06c726aa14c285"
+      }
+    ]
+  },
+  "Dumbbell Sumo Squat": {
+    "slug": "dumbbell-sumo-squat",
+    "source": {
+      "id": "exercise-dumbbell-sumo-squat",
+      "slug": "dumbbell-sumo-squat",
+      "name": "Dumbbell Sumo Squat",
+      "exerciseType": "weight_reps",
+      "equipment": "Dumbbell",
+      "primaryMuscle": "Glutes",
+      "secondaryMuscles": [
+        "Quads",
+        "Adductors",
+        "Hamstrings"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/dumbbell-sumo-squat/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/dumbbell-sumo-squat/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/dumbbell-sumo-squat/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-sumo-squat-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-sumo-squat/frame-1.png",
+        "sha256": "c0c316cb9b6467fde9ca38fe2a8d97ef7c5b291aca76800b213493d62db4f7ad"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-sumo-squat-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-sumo-squat/frame-2.png",
+        "sha256": "adf7e559c863d99c35f244557acc99b8bb4b3a2e5f912c25cd5207a058f8cb98"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-sumo-squat-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-sumo-squat/frame-3.png",
+        "sha256": "53eecb075b0e0a7c32567ae593850e326f79d9b4e916ace5fa7ab656a5a108da"
+      }
+    ]
+  },
+  "Dumbbell Lateral Lunge": {
+    "slug": "dumbbell-lateral-lunge",
+    "source": {
+      "id": "exercise-dumbbell-lateral-lunge",
+      "slug": "dumbbell-lateral-lunge",
+      "name": "Dumbbell Lateral Lunge",
+      "exerciseType": "weight_reps",
+      "equipment": "Dumbbell",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes",
+        "Adductors",
+        "Hamstrings"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/dumbbell-lateral-lunge/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/dumbbell-lateral-lunge/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/dumbbell-lateral-lunge/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-lateral-lunge-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-lateral-lunge/frame-1.png",
+        "sha256": "2d9b766b567278da97267b72685617ec5959073dd0a9863233723f3f9c716125"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-lateral-lunge-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-lateral-lunge/frame-2.png",
+        "sha256": "50cca1f0a166cba96ae77773c6428456f5dc7d7f93bedd40c84ca24b3b70cdf1"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-lateral-lunge-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-lateral-lunge/frame-3.png",
+        "sha256": "42a94d6a443cd197be3cc08806dc2fc3c1c03330843268978a49ace0c80a964f"
+      }
+    ]
+  },
+  "Dumbbell Hip Thrust": {
+    "slug": "dumbbell-hip-thrust",
+    "source": {
+      "id": "exercise-dumbbell-hip-thrust",
+      "slug": "dumbbell-hip-thrust",
+      "name": "Dumbbell Hip Thrust",
+      "exerciseType": "weight_reps",
+      "equipment": "Dumbbell",
+      "primaryMuscle": "Glutes",
+      "secondaryMuscles": [
+        "Hamstrings"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/dumbbell-hip-thrust/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/dumbbell-hip-thrust/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/dumbbell-hip-thrust/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-hip-thrust-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-hip-thrust/frame-1.png",
+        "sha256": "9676646512f671f6bdf33ff46c5df213cab3cbbf4747bccba1e2104a7b6e3f96"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-hip-thrust-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-hip-thrust/frame-2.png",
+        "sha256": "9b2b6072d2836efb81940e11e50a4cee0ff8b34802acb272dca1c10a2ea07aa6"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\dumbbell-hip-thrust-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/dumbbell-hip-thrust/frame-3.png",
+        "sha256": "a219735fda9bd0a493e32178c95bffecd3401cad45ef7e18baccacd81bbdae80"
+      }
+    ]
+  },
+  "Belt Squat": {
+    "slug": "belt-squat",
+    "source": {
+      "id": "exercise-belt-squat",
+      "slug": "belt-squat",
+      "name": "Belt Squat",
+      "exerciseType": "weight_reps",
+      "equipment": "Machine",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/belt-squat/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/belt-squat/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/belt-squat/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\belt-squat-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/belt-squat/frame-1.png",
+        "sha256": "0d81586fd6f3d1b89cd74d3dd0fa9836959c12158833ee67d5c58098caa9952c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\belt-squat-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/belt-squat/frame-2.png",
+        "sha256": "da451bba69fb1e09210fa516441fbd0d96d533754acd502540e11288d179b1c7"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\belt-squat-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/belt-squat/frame-3.png",
+        "sha256": "d417587a33cdb09834f64b11a84c6ed7172a612a4f1f7bffb954d34c1a083e0c"
+      }
+    ]
+  },
+  "Reverse Lunge": {
+    "slug": "reverse-lunge",
+    "source": {
+      "id": "exercise-reverse-lunge",
+      "slug": "reverse-lunge",
+      "name": "Reverse Lunge",
+      "exerciseType": "weight_reps",
+      "equipment": "Dumbbell",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes",
+        "Hamstrings"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/reverse-lunge/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "source": {
+              "name": "Everkinetic",
+              "url": "https://github.com/everkinetic/data/blob/main/dist/svg/0129-tension.svg",
+              "license": "CC BY-SA 4.0",
+              "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+              "changes": "Rasterized on a transparent 512 \u00d7 512 canvas, recolored for monochrome display, and vector-traced."
+            }
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/reverse-lunge/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/reverse-lunge/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": {
+          "name": "Everkinetic",
+          "url": "https://github.com/everkinetic/data/blob/main/dist/svg/0129-tension.svg",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "changes": "Rasterized on a transparent 512 \u00d7 512 canvas, recolored for monochrome display, and vector-traced."
+        }
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\reverse-lunge-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/reverse-lunge/frame-1.png",
+        "sha256": "0d95836d0d8ce4d60182859c2fb7166a638deded53ff2c351966a6ad36f79ad4"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\reverse-lunge-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/reverse-lunge/frame-2.png",
+        "sha256": "c79a0ae5d1fe64298aa7118ba8ac23eed8c32920fb90b16f6a7cfd1cde6fe928"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\reverse-lunge-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/reverse-lunge/frame-3.png",
+        "sha256": "b3d6108383ad7671bbcdc643f4e4cf7bf82969c6912f7f23ef05d5a8cc2831d9"
+      }
+    ]
+  },
+  "Lateral Lunge": {
+    "slug": "lateral-lunge",
+    "source": {
+      "id": "exercise-lateral-lunge",
+      "slug": "lateral-lunge",
+      "name": "Lateral Lunge",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes",
+        "Hamstrings",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/lateral-lunge/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/lateral-lunge/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/lateral-lunge/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\lateral-lunge-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/lateral-lunge/frame-1.png",
+        "sha256": "48558bb9dfda9e61351ea1dd58c469991972aa9a44370803ce59c7f6766ef309"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\lateral-lunge-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/lateral-lunge/frame-2.png",
+        "sha256": "ebdad9b270b45333c8fe13f449db054d2d57bc85de39e87cfbe882b8ce4ef19c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\lateral-lunge-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/lateral-lunge/frame-3.png",
+        "sha256": "4f3272f538dce445a924baeb6c48cebc236f71423c6c9b95e3d52c44ffa60b89"
+      }
+    ]
+  },
+  "Step-up": {
+    "slug": "step-up",
+    "source": {
+      "id": "exercise-step-up",
+      "slug": "step-up",
+      "name": "Step-Up",
+      "exerciseType": "weight_reps",
+      "equipment": "Dumbbell",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/step-up/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "source": {
+              "name": "Everkinetic",
+              "url": "https://github.com/everkinetic/data/blob/main/dist/svg/0137-tension.svg",
+              "license": "CC BY-SA 4.0",
+              "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+              "changes": "Rasterized on a transparent 512 \u00d7 512 canvas, recolored for monochrome display, and vector-traced."
+            }
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/step-up/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/step-up/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": {
+          "name": "Everkinetic",
+          "url": "https://github.com/everkinetic/data/blob/main/dist/svg/0137-tension.svg",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "changes": "Rasterized on a transparent 512 \u00d7 512 canvas, recolored for monochrome display, and vector-traced."
+        }
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\step-up-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/step-up/frame-1.png",
+        "sha256": "f276bb8a493a8ba314714c0374f1345df3ce9a7d74ff82097eb3b9cae79397fa"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\step-up-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/step-up/frame-2.png",
+        "sha256": "f64fcf433b15c38759bf3836797a2e49fd316a3e9d4ee2dd8cab820cd7e2ea07"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\step-up-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/step-up/frame-3.png",
+        "sha256": "39302988419cf952f27851f9c988ea22be36ffe1baf1f31c12d20390f52527c6"
+      }
+    ]
+  },
+  "Frog Pump": {
+    "slug": "frog-pump",
+    "source": {
+      "id": "exercise-frog-pump",
+      "slug": "frog-pump",
+      "name": "Frog Pump",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Glutes",
+      "secondaryMuscles": [
+        "Hamstrings"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/frog-pump/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/frog-pump/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/frog-pump/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\frog-pump-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/frog-pump/frame-1.png",
+        "sha256": "858db0ea721b6b259fbb27726446923073420edc96bcdc73bc3fe053602f368c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\frog-pump-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/frog-pump/frame-2.png",
+        "sha256": "4907e99d06a79cd610df29c2c8b2419c646613747b8f3b6a7eb2bcdcaa892936"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\frog-pump-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/frog-pump/frame-3.png",
+        "sha256": "00dcc5ddd61becd4eec722a5b5a63082760b20f29e20d31c961efd4bd74f64dc"
+      }
+    ]
+  },
+  "Cossack Squat": {
+    "slug": "cossack-squat",
+    "source": {
+      "id": "exercise-cossack-squat",
+      "slug": "cossack-squat",
+      "name": "Cossack Squat",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes",
+        "Hamstrings",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/cossack-squat/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/cossack-squat/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/cossack-squat/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cossack-squat-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cossack-squat/frame-1.png",
+        "sha256": "b33880e67163e47e85919acb2dbde8bdfff4fd0bd0d9caae5ce4e04a0b9a93e7"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cossack-squat-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cossack-squat/frame-2.png",
+        "sha256": "16978600a4a4877a0f6d8d73b98daa26b5e30cafa21985885d0ec4cee9c83a46"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cossack-squat-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cossack-squat/frame-3.png",
+        "sha256": "31565df5d46cb43750db025accb6cd0541a72b21cf1a7fd7144b89814bd38861"
+      }
+    ]
+  },
+  "Nordic Hamstring Curl": {
+    "slug": "nordic-hamstring-curl",
+    "source": {
+      "id": "exercise-nordic-hamstring-curl",
+      "slug": "nordic-hamstring-curl",
+      "name": "Nordic Hamstring Curl",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Hamstrings",
+      "secondaryMuscles": [
+        "Glutes",
+        "Calves"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/nordic-hamstring-curl/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/nordic-hamstring-curl/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/nordic-hamstring-curl/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\nordic-hamstring-curl-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/nordic-hamstring-curl/frame-1.png",
+        "sha256": "77bd1e7f27880782ceefcac35af7af077da8b983feefa343c8c4366bb01e5c55"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\nordic-hamstring-curl-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/nordic-hamstring-curl/frame-2.png",
+        "sha256": "0cd9ca1b1fe412e67e47ed541ef0addbc097dadf4877f3ad35518d2f99eb6274"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\nordic-hamstring-curl-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/nordic-hamstring-curl/frame-3.png",
+        "sha256": "092f6fc0ccc34fd11ae5e8ab8a3812fc080e2026da4bbc02836618b8944fc92d"
+      }
+    ]
+  },
+  "Single-Leg Squat to Bench": {
+    "slug": "single-leg-box-squat",
+    "source": {
+      "id": "exercise-single-leg-box-squat",
+      "slug": "single-leg-box-squat",
+      "name": "Single-Leg Box Squat",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Box",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Glutes",
+        "Hamstrings",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/single-leg-box-squat/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/single-leg-box-squat/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/single-leg-box-squat/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\single-leg-box-squat-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/single-leg-box-squat/frame-1.png",
+        "sha256": "e3d45315cb83cc7b157582e3c26400ff7258b5875ef0f1f7fe4b268b4d828abe"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\single-leg-box-squat-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/single-leg-box-squat/frame-2.png",
+        "sha256": "0df45657b7890a702245c9afeb4115f482ae7b47f2858aaf4066ec0068cd935b"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\single-leg-box-squat-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/single-leg-box-squat/frame-3.png",
+        "sha256": "be1d2f18cd58c0dda36a6c560a055cce48f357d6930ae35205977513d5c316af"
+      }
+    ]
+  },
+  "Hip Airplane": {
+    "slug": "hip-airplane",
+    "source": {
+      "id": "exercise-hip-airplane",
+      "slug": "hip-airplane",
+      "name": "Hip Airplane",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Glutes",
+      "secondaryMuscles": [
+        "Hamstrings",
+        "Core"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/hip-airplane/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/hip-airplane/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/hip-airplane/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hip-airplane-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hip-airplane/frame-1.png",
+        "sha256": "e4e289a69a69e2ec8e72d57309ca9777bdcb6a45ba09d504642e4dba15164614"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hip-airplane-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hip-airplane/frame-2.png",
+        "sha256": "f7a83d6abd95f21bc18a785aae76d1ae00c53c4761fe1f2b40bc155c4943241e"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hip-airplane-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hip-airplane/frame-3.png",
+        "sha256": "b675ddf4bcb8adb954e9d93fb6f151452ed04c0fc9a324b8700f8ddbb15c22c6"
+      }
+    ]
+  },
+  "Kettlebell Romanian Deadlift": {
+    "slug": "kettlebell-romanian-deadlift",
+    "source": {
+      "id": "exercise-kettlebell-romanian-deadlift",
+      "slug": "kettlebell-romanian-deadlift",
+      "name": "Kettlebell Romanian Deadlift",
+      "exerciseType": "weight_reps",
+      "equipment": "Kettlebell",
+      "primaryMuscle": "Hamstrings",
+      "secondaryMuscles": [
+        "Glutes",
+        "Lower Back"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/kettlebell-romanian-deadlift/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/kettlebell-romanian-deadlift/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/kettlebell-romanian-deadlift/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\kettlebell-romanian-deadlift-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/kettlebell-romanian-deadlift/frame-1.png",
+        "sha256": "dfc34800127f93306b1e4aa820ef87574e6b7fc51bf1df11c19aceeca46f1bb6"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\kettlebell-romanian-deadlift-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/kettlebell-romanian-deadlift/frame-2.png",
+        "sha256": "d450d170dcfbcda85945a9f4115c7ebdcdeec9f3ed2606376eb7199aed3233be"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\kettlebell-romanian-deadlift-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/kettlebell-romanian-deadlift/frame-3.png",
+        "sha256": "2a2e1d20d189a722abd5f1cd4b7eff0c0349068a092c9bf3efc5906dbffe5c67"
+      }
+    ]
+  },
+  "Landmine Press": {
+    "slug": "landmine-press",
+    "source": {
+      "id": "exercise-landmine-press",
+      "slug": "landmine-press",
+      "name": "Landmine Press",
+      "exerciseType": "weight_reps",
+      "equipment": "Barbell",
+      "primaryMuscle": "Shoulders",
+      "secondaryMuscles": [
+        "Chest",
+        "Triceps"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/landmine-press/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/landmine-press/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/landmine-press/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\landmine-press-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/landmine-press/frame-1.png",
+        "sha256": "2046cc58be9fb072d817797b730eda38628e443e7ca0d6a0a412b7cd2afe3ca0"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\landmine-press-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/landmine-press/frame-2.png",
+        "sha256": "f55d37714b6ae64d2dfe47b0e33b3b7bc0f68416318f47fc8874c19a05e47849"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\landmine-press-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/landmine-press/frame-3.png",
+        "sha256": "05abe50c5f07d6dae51af4cbc00d02ecb210c118deda6e0ab2de51d03cc6038d"
+      }
+    ]
+  },
+  "Prone T Raise": {
+    "slug": "prone-t-raise",
+    "source": {
+      "id": "exercise-prone-t-raise",
+      "slug": "prone-t-raise",
+      "name": "Prone T Raise",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Upper Back",
+      "secondaryMuscles": [
+        "Rear Delts",
+        "Shoulders"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/prone-t-raise/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/prone-t-raise/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/prone-t-raise/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\prone-t-raise-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/prone-t-raise/frame-1.png",
+        "sha256": "cc003613486b2ba664da9eb3adf2652dfdb8ec00e7ffeafe95f39f32baabd5ef"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\prone-t-raise-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/prone-t-raise/frame-2.png",
+        "sha256": "66780aa94e45b54f0471ff828325c4eb58039afafb901aeb799d9c7c4faba66b"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\prone-t-raise-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/prone-t-raise/frame-3.png",
+        "sha256": "d5dae20d917c2125f5416125b4721074d96eb3c949f96e19d591f137691289e8"
+      }
+    ]
+  },
+  "Bicycle Crunch": {
+    "slug": "bicycle-crunch",
+    "source": {
+      "id": "exercise-bicycle-crunch",
+      "slug": "bicycle-crunch",
+      "name": "Bicycle Crunch",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Legs"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/bicycle-crunch/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "source": {
+              "name": "Everkinetic",
+              "url": "https://github.com/everkinetic/data/blob/main/dist/svg/0284-tension.svg",
+              "license": "CC BY-SA 4.0",
+              "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+              "changes": "Rasterized on a transparent 512 \u00d7 512 canvas, recolored for monochrome display, and vector-traced."
+            }
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/bicycle-crunch/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/bicycle-crunch/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": {
+          "name": "Everkinetic",
+          "url": "https://github.com/everkinetic/data/blob/main/dist/svg/0284-tension.svg",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+          "changes": "Rasterized on a transparent 512 \u00d7 512 canvas, recolored for monochrome display, and vector-traced."
+        }
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bicycle-crunch-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bicycle-crunch/frame-1.png",
+        "sha256": "0c9753b8702f2162fda12bb5ff59541f14ea3dda14200eb771d0f01ff516dcc6"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bicycle-crunch-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bicycle-crunch/frame-2.png",
+        "sha256": "da028df34a196ef36c9f8cc7a578b7e7fd2cf349e5afba8213bd6385752b4108"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bicycle-crunch-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bicycle-crunch/frame-3.png",
+        "sha256": "851232d76919b0cb765061fa38eff3c73ba10e34ca44548fc72091b3cbd41e1d"
+      }
+    ]
+  },
+  "Seated Knee Tuck": {
+    "slug": "seated-knee-tuck",
+    "source": {
+      "id": "exercise-seated-knee-tuck",
+      "slug": "seated-knee-tuck",
+      "name": "Seated Knee Tuck",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Quads"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/seated-knee-tuck/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/seated-knee-tuck/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/seated-knee-tuck/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\seated-knee-tuck-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/seated-knee-tuck/frame-1.png",
+        "sha256": "9440bc3546b8da3239e5483bb13d0947ab00a9f07070d769cbb520883bbee13a"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\seated-knee-tuck-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/seated-knee-tuck/frame-2.png",
+        "sha256": "db04ab62b34fc6da322daa15dd7272f8e86ad134e8cb27e67955b9ad305933a8"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\seated-knee-tuck-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/seated-knee-tuck/frame-3.png",
+        "sha256": "9a7cbc05c022db32b8a0d79705467bfc8202008114fc00a60a1e78d941a287ae"
+      }
+    ]
+  },
+  "Hanging Knee Raise": {
+    "slug": "hanging-knee-raise",
+    "source": {
+      "id": "exercise-hanging-knee-raise",
+      "slug": "hanging-knee-raise",
+      "name": "Hanging Knee Raise",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Pull-up Bar",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Grip"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/hanging-knee-raise/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/hanging-knee-raise/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/hanging-knee-raise/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hanging-knee-raise-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hanging-knee-raise/frame-1.png",
+        "sha256": "ac4b0e40058fb885fefa4bb7cef1bbc376d5afb78ed927f1c322f1ed1d2e7797"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hanging-knee-raise-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hanging-knee-raise/frame-2.png",
+        "sha256": "0b39cd607975eab3f60221beea35e00fd3580d3de0fbb09ba1b218da6052f60f"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hanging-knee-raise-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hanging-knee-raise/frame-3.png",
+        "sha256": "82f1bb0c9561f71f8280a353d401967b42928e27296b3e127e7939db0d43f4cf"
+      }
+    ]
+  },
+  "Captain Chair Knee Raise": {
+    "slug": "captains-chair-knee-raise",
+    "source": {
+      "id": "exercise-captains-chair-knee-raise",
+      "slug": "captains-chair-knee-raise",
+      "name": "Captain's Chair Knee Raise",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Machine",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Shoulders"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/captains-chair-knee-raise/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/captains-chair-knee-raise/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/captains-chair-knee-raise/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\captains-chair-knee-raise-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/captains-chair-knee-raise/frame-1.png",
+        "sha256": "11b96f7c066e01933ce44f2b7bcb106286bac4c64ca7f4c585582103095825a2"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\captains-chair-knee-raise-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/captains-chair-knee-raise/frame-2.png",
+        "sha256": "cb15967771074a4bf74a4b8debe82466ea7e9245b89b8ff9aa692ca9786a3bf0"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\captains-chair-knee-raise-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/captains-chair-knee-raise/frame-3.png",
+        "sha256": "b20788a6802e73a0e479c09e36206483b8a30af095c92ad5af0251a48278432a"
+      }
+    ]
+  },
+  "Bear Plank": {
+    "slug": "bear-plank",
+    "source": {
+      "id": "exercise-bear-plank",
+      "slug": "bear-plank",
+      "name": "Bear Plank",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Quads",
+        "Shoulders"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/bear-plank/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/bear-plank/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/bear-plank/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bear-plank-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bear-plank/frame-1.png",
+        "sha256": "3ec36c2f34c69cdc80ae0f93853966b7991cf028907e61f05d9f1c832da675fa"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bear-plank-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bear-plank/frame-2.png",
+        "sha256": "310655e757496fd46eebec3fb82e9fce57301665b45ca0150840e3fce3154566"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\bear-plank-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/bear-plank/frame-3.png",
+        "sha256": "d51168e98a74722fc646039297835ea8d59a19a4df84867f2344f8bb9aca69da"
+      }
+    ]
+  },
+  "Jumping Jack": {
+    "slug": "jumping-jack",
+    "source": {
+      "id": "exercise-jumping-jack",
+      "slug": "jumping-jack",
+      "name": "Jumping Jack",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Shoulders",
+        "Calves",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/jumping-jack/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/jumping-jack/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/jumping-jack/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\jumping-jack-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/jumping-jack/frame-1.png",
+        "sha256": "6d25b3d7b26de094adac6666607deb5a60b20dcd6bd93902f5a64b9c142d1e1a"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\jumping-jack-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/jumping-jack/frame-2.png",
+        "sha256": "c7ad6c4f7cef8d8bcc7f9d8889b51dfaae68c533bbcb4460f0398d8f836c4bbb"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\jumping-jack-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/jumping-jack/frame-3.png",
+        "sha256": "7c2df448bbdad1c7503339d5421f7cd67de88898ffa32a10534d936698edbcce"
+      }
+    ]
+  },
+  "High Knees": {
+    "slug": "high-knees",
+    "source": {
+      "id": "exercise-high-knees",
+      "slug": "high-knees",
+      "name": "High Knees",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Core",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/high-knees/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/high-knees/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/high-knees/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\high-knees-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/high-knees/frame-1.png",
+        "sha256": "903e6c34ed99ff980cdd600768d07a490d609cbcaeab071d748eaa852113e11b"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\high-knees-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/high-knees/frame-2.png",
+        "sha256": "fe702de9c492eb5a8dac77e3412e7d0d199f96b443aaf685ec50bed0fc9523a3"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\high-knees-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/high-knees/frame-3.png",
+        "sha256": "29f49e4510346a23bf5bad776c288666369ce63c77e145b61e28ea7da7366878"
+      }
+    ]
+  },
+  "Fast Feet": {
+    "slug": "fast-feet",
+    "source": {
+      "id": "exercise-fast-feet",
+      "slug": "fast-feet",
+      "name": "Fast Feet",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Calves",
+      "secondaryMuscles": [
+        "Legs",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/fast-feet/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/fast-feet/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/fast-feet/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\fast-feet-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/fast-feet/frame-1.png",
+        "sha256": "77ece710baacfa78eef640bb815f00061db3b17dce498f8c7c6a2aac1c658f05"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\fast-feet-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/fast-feet/frame-2.png",
+        "sha256": "9bfc36bc2cde35b49d6ff149685db5c4bea0f4c1d75d135308c862812c22121f"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\fast-feet-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/fast-feet/frame-3.png",
+        "sha256": "4490be898d5d68013afb6abe12ddcfbf3096c8835f31158313c3a78a847fbed8"
+      }
+    ]
+  },
+  "Brisk Walking": {
+    "slug": "walking",
+    "source": {
+      "id": "exercise-walking",
+      "slug": "walking",
+      "name": "Walking",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/walking/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/walking/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/walking/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\walking-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/walking/frame-1.png",
+        "sha256": "b9026d5c1fc90779df8d3dc54f3fe955df2f88d96d9ea766349a8ca5b8ab66db"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\walking-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/walking/frame-2.png",
+        "sha256": "9cfc31d65fd03c4f542b103535dd8534bfb7bf95f5bb68588a57f86db05e0892"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\walking-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/walking/frame-3.png",
+        "sha256": "6c927ce16287166d5f6b4aa9e7ef2fc27c3767dceab90284f0bb19c52fb69d0d"
+      }
+    ]
+  },
+  "Jogging": {
+    "slug": "running",
+    "source": {
+      "id": "exercise-running",
+      "slug": "running",
+      "name": "Running",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/running/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/running/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/running/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\running-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/running/frame-1.png",
+        "sha256": "82e65b8c0ea73d0eca02e4981193e0ea7455daa6a06132d21ae220aba226d791"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\running-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/running/frame-2.png",
+        "sha256": "b837734f188f7eb7eaa15146f9073a1d56d5eda8ec52d0779a4eb70169f2fc6e"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\running-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/running/frame-3.png",
+        "sha256": "8c85ef9c243f344f8b2ba4dbe53dc098ec1a8e47cbe77645028fc5ebb84a3f7a"
+      }
+    ]
+  },
+  "Hiking": {
+    "slug": "hiking",
+    "source": {
+      "id": "exercise-hiking",
+      "slug": "hiking",
+      "name": "Hiking",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Glutes",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/hiking/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/hiking/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/hiking/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hiking-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hiking/frame-1.png",
+        "sha256": "2d2b0043fa7c8e694d3f4c8db5fc9e5eef126e8a32ca7d5145b2a8ca9713ea50"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hiking-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hiking/frame-2.png",
+        "sha256": "9aecb1d5b5861f6e47f567b1653b2799d25f6d2427330551a4cedee829495362"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\hiking-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/hiking/frame-3.png",
+        "sha256": "82677abacdab3fabd420f735b781c278b349f00e61a103861b8c708f7239b796"
+      }
+    ]
+  },
+  "Swimming": {
+    "slug": "swimming",
+    "source": {
+      "id": "exercise-swimming",
+      "slug": "swimming",
+      "name": "Swimming",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Back",
+      "secondaryMuscles": [
+        "Shoulders",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/swimming/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/swimming/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/swimming/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\swimming-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/swimming/frame-1.png",
+        "sha256": "95b913434024d402da553919faff3916341e8e06299039b04815a08e95e2eda4"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\swimming-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/swimming/frame-2.png",
+        "sha256": "af3d824f2c3ad35f5611a691727ff4d83fcc4e7ad23018367d535415f779d11d"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\swimming-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/swimming/frame-3.png",
+        "sha256": "f6a20c2e3a9cca82a40c877f723007a46fda2439d2f9bd8eb2bc1e101ebefd9c"
+      }
+    ]
+  },
+  "Outdoor Cycling": {
+    "slug": "cycling",
+    "source": {
+      "id": "exercise-cycling",
+      "slug": "cycling",
+      "name": "Cycling",
+      "exerciseType": "distance_duration",
+      "equipment": "Cardio",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/cycling/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/cycling/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/cycling/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cycling-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cycling/frame-1.png",
+        "sha256": "b618d4c71a5ef2b54c118fc81079c7505a535b73f8171116365bb840c0dad3c2"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cycling-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cycling/frame-2.png",
+        "sha256": "b0ccde95804711b312068287b35911601417beeddc35fd1ad865c5da47db301c"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cycling-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cycling/frame-3.png",
+        "sha256": "e1fda5048750e8400348536b339996cf30bdd205b99cde2a543bf6fbbb5a72c4"
+      }
+    ]
+  },
+  "Squat Thrust": {
+    "slug": "squat-thrust",
+    "source": {
+      "id": "exercise-squat-thrust",
+      "slug": "squat-thrust",
+      "name": "Squat Thrust",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Core",
+      "secondaryMuscles": [
+        "Legs",
+        "Shoulders",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/squat-thrust/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/squat-thrust/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/squat-thrust/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\squat-thrust-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/squat-thrust/frame-1.png",
+        "sha256": "682f7bbc9f5d026c6a30dac42b9686b37766de42d4e5edfbaff4674e1f9c9f6a"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\squat-thrust-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/squat-thrust/frame-2.png",
+        "sha256": "39c1e49d1ce6e278fe90d2e013b5cd0832307b975bf0543913bc69cd99605446"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\squat-thrust-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/squat-thrust/frame-3.png",
+        "sha256": "e6ba08411d9c699ed4ad41cbabaf5b8400eac73b8ac5b162306372b7e6ca65a7"
+      }
+    ]
+  },
+  "Crab Walk": {
+    "slug": "crab-walk",
+    "source": {
+      "id": "exercise-crab-walk",
+      "slug": "crab-walk",
+      "name": "Crab Walk",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Triceps",
+      "secondaryMuscles": [
+        "Glutes",
+        "Core",
+        "Shoulders"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/crab-walk/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/crab-walk/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/crab-walk/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\crab-walk-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/crab-walk/frame-1.png",
+        "sha256": "f61df1233e1215c960d0b95f5f3038a644c5a69c667a5378abf69f58927d31ca"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\crab-walk-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/crab-walk/frame-2.png",
+        "sha256": "41295c12115702e80c7ae012dac8710728f1a64fbc97b234a9ed6563dacc5b21"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\crab-walk-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/crab-walk/frame-3.png",
+        "sha256": "1450a273e15477e4d38aa57f8054a88d4900c9deafbefdbf0a255fa25529e68e"
+      }
+    ]
+  },
+  "Sprawl": {
+    "slug": "sprawl",
+    "source": {
+      "id": "exercise-sprawl",
+      "slug": "sprawl",
+      "name": "Sprawl",
+      "exerciseType": "bodyweight_reps",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Legs",
+      "secondaryMuscles": [
+        "Core",
+        "Shoulders",
+        "Cardio"
+      ],
+      "isStretch": false,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/sprawl/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/sprawl/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/sprawl/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\sprawl-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/sprawl/frame-1.png",
+        "sha256": "d43f3e7b3f22305337b75d092432873693f1a5f80ba951f4c240bb658806f293"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\sprawl-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/sprawl/frame-2.png",
+        "sha256": "6def00ed5844ce0cf84471997ae7c2481680d6acfcbb326b5076cc7cdc48a261"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\sprawl-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/sprawl/frame-3.png",
+        "sha256": "ac3a4f632678d67172c2f336f161af6a25b5473aeb98fe85c69dc0a72512946c"
+      }
+    ]
+  },
+  "Chest Doorway Stretch": {
+    "slug": "doorway-chest-stretch",
+    "source": {
+      "id": "exercise-doorway-chest-stretch",
+      "slug": "doorway-chest-stretch",
+      "name": "Doorway Chest Stretch",
+      "exerciseType": "duration",
+      "equipment": "Doorway",
+      "primaryMuscle": "Chest",
+      "secondaryMuscles": [
+        "Shoulders",
+        "Mobility"
+      ],
+      "isStretch": true,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/doorway-chest-stretch/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/doorway-chest-stretch/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/doorway-chest-stretch/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\doorway-chest-stretch-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/doorway-chest-stretch/frame-1.png",
+        "sha256": "05b75916c92a034d0eaa57cf3103da2869eb282021407032a8515dad4bb6b63a"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\doorway-chest-stretch-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/doorway-chest-stretch/frame-2.png",
+        "sha256": "7c0cd0a606feee9aeb9722a90957f9d94be501e22f82723db458aadc8192fa73"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\doorway-chest-stretch-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/doorway-chest-stretch/frame-3.png",
+        "sha256": "56eddf34d0809069b92c9f3f896e7c34b019837e962b8c422bc355a334f400d5"
+      }
+    ]
+  },
+  "Shoulder Cross-Body Stretch": {
+    "slug": "cross-body-shoulder-stretch",
+    "source": {
+      "id": "exercise-cross-body-shoulder-stretch",
+      "slug": "cross-body-shoulder-stretch",
+      "name": "Cross-Body Shoulder Stretch",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Shoulders",
+      "secondaryMuscles": [
+        "Upper Back",
+        "Mobility"
+      ],
+      "isStretch": true,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/cross-body-shoulder-stretch/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/cross-body-shoulder-stretch/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/cross-body-shoulder-stretch/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cross-body-shoulder-stretch-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cross-body-shoulder-stretch/frame-1.png",
+        "sha256": "4fd5defca9d98d91466b5d8f4351f6dfcba81f0d007f065b4b0f70d9d33f0cb2"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cross-body-shoulder-stretch-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cross-body-shoulder-stretch/frame-2.png",
+        "sha256": "e168d678ebc0d63275bb379e2eac78c96af950dd3ca91cd02be4c64dfecaf026"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\cross-body-shoulder-stretch-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/cross-body-shoulder-stretch/frame-3.png",
+        "sha256": "aa31c5c5f4e35ad6ce522f4aa2b1124c38050045ee47e943b318da0e2caaecd1"
+      }
+    ]
+  },
+  "Standing Quad Stretch": {
+    "slug": "standing-quad-stretch",
+    "source": {
+      "id": "exercise-standing-quad-stretch",
+      "slug": "standing-quad-stretch",
+      "name": "Standing Quad Stretch",
+      "exerciseType": "duration",
+      "equipment": "Bodyweight",
+      "primaryMuscle": "Quads",
+      "secondaryMuscles": [
+        "Hips",
+        "Mobility"
+      ],
+      "isStretch": true,
+      "frames": [
+        {
+          "index": 1,
+          "path": "assets/standing-quad-stretch/frame-1.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 2,
+          "path": "assets/standing-quad-stretch/frame-2.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        },
+        {
+          "index": 3,
+          "path": "assets/standing-quad-stretch/frame-3.svg",
+          "width": 512,
+          "height": 512,
+          "format": "svg",
+          "attribution": {
+            "creator": "Bryl Lim",
+            "creatorUrl": "https://bryllim.com",
+            "license": "CC BY-SA 4.0",
+            "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+          }
+        }
+      ],
+      "attribution": {
+        "creator": "Bryl Lim",
+        "creatorUrl": "https://bryllim.com",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    },
+    "images": [
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\standing-quad-stretch-1.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/standing-quad-stretch/frame-1.png",
+        "sha256": "918d0d141664d1143888d10294fc515bc422a278431c6e5c1c3af4788e2bcc63"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\standing-quad-stretch-2.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/standing-quad-stretch/frame-2.png",
+        "sha256": "bd5314f75e395f378f63a584f4a2458eab0717421ddbac803b816f20bf2b1fd3"
+      },
+      {
+        "path": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-workout-guide\\standing-quad-stretch-3.png",
+        "url": "https://raw.githubusercontent.com/bryllim/workout-guide/aac599224bb9780305239607ef98540b7e0ce389/packages/workout-guide/assets/standing-quad-stretch/frame-3.png",
+        "sha256": "ca5c56129ea831595c3d712209cc4cdeece53995ead15e0237405f64febc93da"
+      }
+    ]
+  }
+}

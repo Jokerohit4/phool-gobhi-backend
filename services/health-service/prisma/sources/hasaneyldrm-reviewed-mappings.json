@@ -1,0 +1,596 @@
+{
+  "selected": {
+    "Rope Straight-Arm Pulldown": {
+      "id": "0237",
+      "reason": "Batch-3 frames and guide preserve the rope attachment and straight-arm shoulder extension, unlike the straight-bar candidate."
+    },
+    "Lying Leg Raise": {
+      "id": "0620",
+      "reason": "Batch-3 frames show lying straight-leg raises on a flat bench, with compatible instructions and no hanging or hip-curl substitution."
+    },
+    "Tricep Dumbbell Kickback": {
+      "id": "0420",
+      "reason": "Batch-3 frames show standing bent-over bilateral dumbbell kickbacks, preserving the canonical two-dumbbell setup rather than bench-supported unilateral kickbacks."
+    },
+    "Rocking Standing Calf Raise": {
+      "id": "0111",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show barbell rocking calf raises with heel/toe rocking. Source text omits the rocking phase; media only."
+    },
+    "Stiff-Legged Dumbbell Deadlift": {
+      "id": "0432",
+      "reason": "Batch-3 frames and guide show the named bilateral dumbbell stiff-leg hip hinge, preserving the dumbbell and knee-position variant."
+    },
+    "Smith Machine Overhead Shoulder Press": {
+      "id": "0765",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show seated Smith-bar pressing, matching canonical setup. Source instructions instead describe machine handles; media only."
+    },
+    "Cable Triceps Kickback": {
+      "id": "0860",
+      "reason": "Batch-3 frames and guide show unilateral cable triceps kickback. This is an arm exercise, so it is not assigned to the similarly named one-legged glute kickback."
+    },
+    "Calf Press On The Leg Press Machine": {
+      "id": "1391",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show ankle-only calf pressing on the leg-press sled. Source text adds knee extension like a full leg press; media only."
+    },
+    "Supine Chest Throw": {
+      "id": "1750",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show the medicine-ball chest throw lying on the floor. Source text incorrectly says to lie on a bench; media only."
+    },
+    "Standing One-Arm Dumbbell Triceps Extension": {
+      "id": "0423",
+      "reason": "Batch-3 frames and guide show standing unilateral overhead dumbbell elbow extension, preserving posture and laterality."
+    },
+    "Seated Bent-Over Two-Arm Dumbbell Triceps Extension": {
+      "id": "1737",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show seated bent-over bilateral kickbacks. Source text places elbows by the head rather than behind the torso; media only."
+    },
+    "Incline Cable Chest Press": {
+      "id": "0169",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show supported incline cable pressing. Source text calls for high pulleys, contradicting the illustrated low-pulley setup; media only."
+    },
+    "Decline Smith Press": {
+      "id": "0753",
+      "reason": "Batch-3 frames and guide show decline-bench Smith-bar pressing, preserving machine type and bench angle."
+    },
+    "Cable Hammer Curls - Rope Attachment": {
+      "id": "0165",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show the correct neutral-grip rope curl. Source text wrongly calls the grip underhand; retain the canonical grip instructions."
+    },
+    "Svend Press": {
+      "id": "0856",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show standing plate-squeeze pressing. Retain canonical instructions that explicitly require squeezing the plates between the palms."
+    },
+    "Lying Cambered Barbell Row": {
+      "id": "0248",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show prone bench-supported cambered-bar rows. Source text omits the essential cambered bar and changes support details; media only."
+    },
+    "Decline Close-Grip Bench To Skull Crusher": {
+      "id": "0035",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show the named decline close-grip press/skull-crusher combination. Source text only teaches skull-crusher repetitions; media only."
+    },
+    "Cable Russian Twists": {
+      "id": "0211",
+      "useInstructions": false,
+      "reason": "Batch-3 frames match canonical shoulders-supported-on-stability-ball cable rotation. Source text instead sits upright on the ball; media only."
+    },
+    "Triceps Pushdown - V-Bar Attachment": {
+      "id": "0241",
+      "reason": "Batch-3 frames and guide preserve the V-bar attachment and stationary upper-arm triceps pushdown."
+    },
+    "Hammer Grip Incline DB Bench Press": {
+      "id": "1623",
+      "useInstructions": false,
+      "reason": "Batch-3 frames preserve the neutral palms-in incline dumbbell press. Source text contradictorily calls that an overhand grip; media only."
+    },
+    "Seated Side Lateral Raise": {
+      "id": "0396",
+      "reason": "Batch-3 frames and guide show seated bilateral dumbbell lateral raises, matching posture and arm direction."
+    },
+    "Gorilla Chin/Crunch": {
+      "id": "0467",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show the combined chin-up and knee crunch. Source text describes an ordinary overhand pull-up and omits the crunch; media only."
+    },
+    "Dumbbell One-Arm Triceps Extension": {
+      "id": "0362",
+      "reason": "Batch-3 frames and guide show seated unilateral overhead dumbbell extension, one of the canonical setup options."
+    },
+    "All Fours Quad Stretch": {
+      "id": "1512",
+      "useInstructions": false,
+      "reason": "Batch-3 frames show the quadruped foot-held quad stretch. Source text omits holding the foot and contradicts its bent-knee position; media only."
+    },
+    "Cable Seated Lateral Raise": {
+      "id": "0215",
+      "useInstructions": false,
+      "reason": "Batch-3 frames match canonical seated bent-over cable raises. Source rear qualifier describes the actual canonical posture; its written guide omits the torso hinge, so media only."
+    },
+    "Lying One-Arm Lateral Raise": {
+      "id": "0345",
+      "reason": "Batch-3 frames and guide match canonical chest-down flat-bench unilateral lateral raises. The source rear qualifier does not change the pictured canonical posture."
+    },
+    "London Bridges": {
+      "id": "0609",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: supported feet on a fixed bar with hand-over-hand rope lowering/raising. Source text instead describes a conventional rope row; media only."
+    },
+    "Barbell Side Bend": {
+      "id": "0096",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: bar on upper back with lateral torso bending. Source text incorrectly lowers a hand-held bar to the knee; media only."
+    },
+    "Side Bridge": {
+      "id": "0705",
+      "reason": "Reviewed batch-2 GIF and guide: forearm-supported side bridge with stacked straight legs and a hip lift/hold."
+    },
+    "Kettlebell Clean": {
+      "id": "0535",
+      "reason": "Reviewed batch-2 GIF: standard unilateral kettlebell hang clean into rack, compatible with the generic catalogue clean; not used for the separate dead-clean entry."
+    },
+    "Single-Leg Calf Raise": {
+      "id": "1387",
+      "reason": "Reviewed batch-2 GIF: unloaded single-leg calf raise on the floor, with matching balance and heel-raise instructions."
+    },
+    "Stationary Bike": {
+      "id": "0798",
+      "reason": "Reviewed batch-2 GIF: seated stationary cycling with pedals and handlebars. Source walk name describes the machine animation; the instructions correctly describe pedalling."
+    },
+    "Dumbbell Shoulder Press": {
+      "id": "0405",
+      "reason": "Reviewed batch-2 GIF and canonical setup: seated bilateral dumbbell shoulder press, preserving the seated position."
+    },
+    "Oblique Crunches": {
+      "id": "1495",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: diagonal floor crunch with feet elevated on a bench, matching canonical setup. Source text instead puts feet on the floor; media only."
+    },
+    "Body Tricep Press": {
+      "id": "0816",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: bodyweight elbow extension using a fixed chest-height bar. Source text omits the essential bar/support; media only."
+    },
+    "Side Laterals to Front Raise": {
+      "id": "0335",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: standing lateral-to-front dumbbell raise. Source text describes separate raises rather than moving from lateral to front at shoulder height; media only."
+    },
+    "Calf Raise On A Dumbbell": {
+      "id": "0727",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: toes on a dumbbell handle with hand support. Source text instead holds a dumbbell in a hand; media only."
+    },
+    "Standing Inner-Biceps Curl": {
+      "id": "2321",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: standing outward dumbbell curl, preserving arm direction. Retain the more specific canonical instructions."
+    },
+    "Wide-Grip Pulldown Behind The Neck": {
+      "id": "1325",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: wide-grip cable pulldown behind the neck. Source text incorrectly pulls to the chest; media only."
+    },
+    "Incline Push-Up Medium": {
+      "id": "0493",
+      "reason": "Reviewed batch-2 GIF: standard medium-grip incline push-up on a raised platform. Not applied to the separate wide-grip entry."
+    },
+    "Kettlebell Pirate Ships": {
+      "id": "0543",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: two-handed kettlebell rotation to alternating sides at head height. Source text instead describes a unilateral overhead press; media only."
+    },
+    "Chest Push from 3 point stance": {
+      "id": "1303",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: medicine-ball chest pass from three-point stance, matching the canonical explosive throw. Source text describes an unrelated floor press; media only."
+    },
+    "Chest Push (multiple response)": {
+      "id": "1304",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: repeated kneeling medicine-ball chest pass with forward fall and recovery, matching canonical movement. Source text incorrectly uses standing; media only."
+    },
+    "Chest Push with Run Release": {
+      "id": "1312",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: medicine-ball chest pass with forward run/release. Retain canonical sprint/follow-through rather than the source text's contradictory rolling/catching instructions."
+    },
+    "Chest Push (single response)": {
+      "id": "1305",
+      "useInstructions": false,
+      "reason": "Reviewed batch-2 GIF: kneeling medicine-ball chest pass with forward fall, matching the single-response canonical movement. Source text incorrectly uses standing; media only."
+    },
+    "Dumbbell Step Ups": {
+      "id": "0431",
+      "reason": "Reviewed GIF frames: two dumbbells at sides, stepping onto a bench; matching setup and movement instructions."
+    },
+    "Barbell Step Ups": {
+      "id": "0114",
+      "reason": "Reviewed GIF frames: barbell across upper back, stepping onto bench; matching movement and equipment."
+    },
+    "Cable Shrugs": {
+      "id": "0220",
+      "reason": "Reviewed GIF frames: low cable bar shrug with extended elbows; singular/plural name difference."
+    },
+    "Wrist Roller": {
+      "id": "0859",
+      "reason": "Reviewed GIF frames: weighted wrist roller, held forward; source name rollerer is a spelling error."
+    },
+    "Oblique Crunches - On The Floor": {
+      "id": "0635",
+      "reason": "Reviewed GIF frames: side-lying floor oblique crunch with stacked bent legs; matching movement and equipment."
+    },
+    "Standing Dumbbell Upright Row": {
+      "id": "0437",
+      "reason": "Reviewed GIF frames: standing bilateral dumbbell upright row; source omits redundant standing qualifier."
+    },
+    "Triceps Pushdown - Rope Attachment": {
+      "id": "0200",
+      "reason": "Reviewed GIF frames: high-pulley rope triceps pushdown; same attachment, posture and elbow extension."
+    },
+    "Seated Good Mornings": {
+      "id": "0090",
+      "reason": "Reviewed GIF frames: seated barbell good morning on a bench; same seated hip hinge."
+    },
+    "Star Jump": {
+      "id": "3223",
+      "reason": "Reviewed GIF frames: explosive jump into airborne star position; source male qualifier identifies model, not movement variant."
+    },
+    "Two-Arm Dumbbell Preacher Curl": {
+      "id": "0372",
+      "reason": "Reviewed GIF frames: two dumbbells curling together over preacher pad; preserves bilateral variant."
+    },
+    "Landmine 180's": {
+      "id": "0562",
+      "useInstructions": false,
+      "reason": "Reviewed GIF frames: anchored barbell rotates from hip to opposite side. Media only; retain canonical setup rather than generic source rotation text."
+    },
+    "Barbell Rollout from Bench": {
+      "id": "0083",
+      "useInstructions": false,
+      "reason": "Reviewed GIF frames: knees on bench and barbell on floor match canonical movement. Source text incorrectly puts the bar on the bench; exclude all translated instructions."
+    },
+    "Isometric Chest Squeezes": {
+      "id": "1297",
+      "useInstructions": false,
+      "reason": "Reviewed GIF frames: palms pressed together with elbows bent. Source text instead instructs straight arms; import media only and retain canonical instructions."
+    },
+    "Barbell Seated Calf Raise": {
+      "id": "0088",
+      "reason": "Both candidates show the named seated barbell calf raise; use the original numbered asset."
+    },
+    "Close-Grip Dumbbell Press": {
+      "id": "0296",
+      "reason": "Close-grip dumbbell bench press; both candidates describe the same grip and equipment."
+    },
+    "Leverage Chest Press": {
+      "id": "0576",
+      "reason": "Seated lever chest press with the same equipment and target."
+    },
+    "Smith Machine Reverse Calf Raises": {
+      "id": "0763",
+      "reason": "Smith reverse calf raise, preserving the anterior lower-leg movement."
+    },
+    "Standing One-Arm Dumbbell Curl Over Incline Bench": {
+      "id": "0422",
+      "reason": "Standing unilateral dumbbell curl supported over an incline bench."
+    },
+    "Knee Push-up": {
+      "id": "3211",
+      "reason": "Kneeling push-up is the knee-supported bodyweight push-up."
+    },
+    "Crunch": {
+      "id": "0274",
+      "reason": "Unweighted floor crunch, matching the bodyweight catalogue movement."
+    },
+    "Dumbbell Skull Crusher": {
+      "id": "0351",
+      "reason": "Lying dumbbell triceps extension is the dumbbell skull-crusher movement."
+    },
+    "V-up": {
+      "id": "0507",
+      "reason": "Bodyweight jackknife sit-up raises straight legs and torso together into the V-up position."
+    },
+    "Cable Rotation": {
+      "id": "0243",
+      "reason": "Standing cable twist is the horizontal cable-rotation movement."
+    },
+    "Butterfly Stretch": {
+      "id": "1494",
+      "reason": "Seated butterfly pose with soles together is the catalogue butterfly stretch."
+    },
+    "Stair Climber": {
+      "id": "2311",
+      "reason": "Walking on a stepmill is the machine stair-climbing movement."
+    },
+    "Bradford/Rocky Presses": {
+      "id": "0087",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated front-to-behind-neck barbell pressing matches canonical setup; the standing candidate was rejected. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Seated Palm-Up Barbell Wrist Curl": {
+      "id": "0125",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated supinated barbell wrist curls with forearms supported on thighs; the prone-bench candidate was rejected. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Barbell Squat To A Bench": {
+      "id": "0026",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Back-loaded barbell squats to a bench match the canonical support and depth target. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Dumbbell Wrist Curl": {
+      "id": "0369",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Supinated dumbbell wrist curls with forearms supported on a bench match the existing free-source guide. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Seated Dumbbell Palms-Down Wrist Curl": {
+      "id": "0385",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated pronated dumbbell wrist extension with forearms on thighs matches canonical posture and grip. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Reverse Machine Flyes": {
+      "id": "0601",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated reverse fly on the lever machine with neutral/parallel grip, as specified in canonical setup. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Lying Close-Grip Barbell Triceps Extension Behind The Head": {
+      "id": "1748",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Canonical setup explicitly permits an EZ bar; reviewed clip demonstrates the close-grip behind-head triceps extension. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Seated Dumbbell Press": {
+      "id": "0405",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated bilateral dumbbell shoulder press matches the canonical supported pressing setup. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Standing Dumbbell Press": {
+      "id": "0426",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Standing bilateral dumbbell overhead press preserves the canonical standing position. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Seated Bent-Over One-Arm Dumbbell Triceps Extension": {
+      "id": "0398",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated bent-over unilateral kickback matches the canonical elbow-extension movement and laterality. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Leverage Iso Row": {
+      "id": "1350",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated chest-supported lever row matches canonical handle height, grip options and row path. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Standing Palms-Up Barbell Behind The Back Wrist Curl": {
+      "id": "0104",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Standing behind-back barbell wrist flexion matches canonical position and forearm movement. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Seated Triceps Press": {
+      "id": "2188",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Supported seated two-handed single-dumbbell overhead extension matches canonical setup. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Palms-Up Dumbbell Wrist Curl Over A Bench": {
+      "id": "0369",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Kneeling bench-supported supinated dumbbell wrist curls match the canonical bench support. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Cable Internal Rotation": {
+      "id": "0216",
+      "useInstructions": false,
+      "reason": "Batch-4 frames reviewed. Seated low-cable shoulder internal rotation matches the canonical floor-seated option and elbow position. Media-only mapping retains the more specific canonical instructions."
+    },
+    "Ankle Circles": {
+      "id": "1368",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Balance Board": {
+      "id": "0020",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Bent Over Two-Dumbbell Row": {
+      "id": "0293",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Cable Deadlifts": {
+      "id": "0157",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Cable Lying Triceps Extension": {
+      "id": "0186",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Calf Stretch Hands Against Wall": {
+      "id": "1377",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Chair Leg Extended Stretch": {
+      "id": "1548",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Drop Push": {
+      "id": "1275",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Dynamic Chest Stretch": {
+      "id": "1167",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Farmer's Walk": {
+      "id": "2133",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Front Two-Dumbbell Raise": {
+      "id": "0310",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Gironda Sternum Chins": {
+      "id": "0466",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Incline Push-Up Depth Jump": {
+      "id": "0492",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Inverted Row with Straps": {
+      "id": "0498",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Iron Crosses (stretch)": {
+      "id": "1419",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Kipping Muscle Up": {
+      "id": "0558",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Leg-Up Hamstring Stretch": {
+      "id": "1576",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Mountain Climbers": {
+      "id": "0630",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Muscle Up": {
+      "id": "0631",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "One Arm Against Wall": {
+      "id": "1355",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "One Arm Pronated Dumbbell Triceps Extension": {
+      "id": "0344",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "One Arm Supinated Dumbbell Triceps Extension": {
+      "id": "0346",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "One-Arm Flat Bench Dumbbell Flye": {
+      "id": "1285",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Pelvic Tilt Into Bridge": {
+      "id": "1422",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Preacher Hammer Dumbbell Curl": {
+      "id": "0370",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Rack Pulls": {
+      "id": "0074",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Ring Dips": {
+      "id": "0677",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Side Lateral Raise": {
+      "id": "0334",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Side Neck Stretch": {
+      "id": "0716",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Side To Side Chins": {
+      "id": "0720",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Side-Lying Floor Stretch": {
+      "id": "1358",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Standing Lateral Stretch": {
+      "id": "0794",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Standing Pelvic Tilt": {
+      "id": "1364",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Suspended Push-Up": {
+      "id": "0806",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Suspended Reverse Crunch": {
+      "id": "0807",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Suspended Row": {
+      "id": "0808",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Suspended Split Squat": {
+      "id": "0809",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Tricep Side Stretch": {
+      "id": "0817",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Upper Back Stretch": {
+      "id": "1365",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    },
+    "Seated Calf Stretch": {
+      "id": "1390",
+      "useInstructions": false,
+      "reason": "GIF-first review batch gif-priority-5: inspected actual motion and catalogue setup/equipment. Source movement matches this canonical variant; retain existing canonical guide rather than replacing it with the dataset generated instructions. Legacy other equipment bucket is retained where the canonical source has no equipment."
+    }
+  },
+  "excluded": {
+    "Cable Crossover": "Previously associated media is specifically an upper-chest crossover; retain the existing asset without claiming a new verified variant mapping.",
+    "Cable Reverse Fly": "Previously associated media is a supine reverse fly; do not substitute that for an unspecified standing reverse fly.",
+    "Assisted Pistol Squat": "Previously associated media is an unassisted pistol squat; assistance must not be silently removed.",
+    "Single-Leg Glute Bridge": "Previously associated media explicitly holds the other leg outstretched; preserve existing media without treating this as a new reviewed match."
+  }
+}

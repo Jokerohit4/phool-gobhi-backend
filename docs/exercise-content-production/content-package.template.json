@@ -1,0 +1,40 @@
+[
+  {
+    "exerciseName": "March in Place",
+    "equipment": "bodyweight",
+    "reviewStatus": "pending",
+    "reviewedBy": null,
+    "reviewedAt": null,
+    "rights": null,
+    "rightsEvidence": null,
+    "attribution": null,
+    "imageUrl": null,
+    "demoGifUrl": null,
+    "demoVideoUrl": null,
+    "tutorialVideoUrl": null,
+    "hasInstructionalExplanation": false,
+    "tutorialLanguage": null,
+    "tutorialDurationSeconds": null,
+    "videoCodec": null,
+    "instructions": {
+      "en": [],
+      "hi": []
+    },
+    "secondaryMuscles": [],
+    "emptySecondaryMusclesReason": null,
+    "classification": {
+      "difficulty": {
+        "value": null,
+        "basis": null
+      },
+      "force": {
+        "value": null,
+        "basis": null
+      },
+      "mechanic": {
+        "value": null,
+        "basis": null
+      }
+    }
+  }
+]

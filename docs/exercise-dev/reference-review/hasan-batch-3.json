@@ -1,0 +1,386 @@
+[
+  {
+    "sourceId": "0237",
+    "name": "cable straight arm pulldown (with rope)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0237-DT14T9T.gif",
+    "sha256": "acf66d7b840711a6aac516a048788f08e52be1e2989c385f8e57126bb5c92169",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0620",
+    "name": "lying leg raise flat bench",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0620-WhuFnR7.gif",
+    "sha256": "4004c2a1eb9fa28233d8ad8879dcc387befc17368575d28f1079997b4ce411d4",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0420",
+    "name": "dumbbell standing kickback",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0420-UmpPAAe.gif",
+    "sha256": "a15ad379647e939367b6011733975de0bba0220abd7e42023f17b810c9594dd8",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0111",
+    "name": "barbell standing rocking leg calf raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0111-6HiHHe0.gif",
+    "sha256": "22a5b3380bebed22026b6777fb95464fb93938a28e023e1f76df2f20c88fa4dd",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0432",
+    "name": "dumbbell stiff leg deadlift",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0432-5eLRITT.gif",
+    "sha256": "47953f8ddaa94eea056ff7e3e917fd648e1c6a2c52e5c2d1b3f816b988f4ce30",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0765",
+    "name": "smith seated shoulder press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0765-xUwnBMT.gif",
+    "sha256": "f06429668188b8a0bac7270dfb0c267ef65df51789b58eb2d1acdc74baa768fe",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0860",
+    "name": "cable kickback",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0860-HEJ6DIX.gif",
+    "sha256": "83a56c7c0ead639b893f8f7b32c2dea1ae4ff994e3dd439243b3ab3060483417",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0991",
+    "name": "band pull through",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0991-VtTbiP3.gif",
+    "sha256": "ca37d5b276261259b68bd5069c71988d55e263a7a0a672189945ff6b0ca9ba72",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1391",
+    "name": "sled calf press on leg press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1391-ykHcWme.gif",
+    "sha256": "1fb86ddfb76a8358dce035d04d64585cd96b78ddb836cfb8ffb57ecaf1a491c0",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1750",
+    "name": "medicine ball supine chest throw",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1750-Al3tP0D.gif",
+    "sha256": "1147a9cda577d54d3cceeea6f8c7ac1825a55b64f110210a7173721c7663ce06",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0423",
+    "name": "dumbbell standing one arm extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0423-BCUR88E.gif",
+    "sha256": "04b298298ea4a3e4bdb29e2145dfba4df8a570c662fe5ec961ceb4a82c280c61",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0126",
+    "name": "barbell wrist curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0126-82LxxkW.gif",
+    "sha256": "5f77a04a30f0df50689644d221d693b1aac258f2439579ec4e16d59a8cd79474",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1737",
+    "name": "dumbbell seated bent over triceps extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1737-4ievMJ9.gif",
+    "sha256": "d261e029021675eade5e89e18ab00b46adaf0ce320ab8ca34572af17429a0722",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0169",
+    "name": "cable incline bench press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0169-Vh0GsK4.gif",
+    "sha256": "4b29b0333cbfca892790c403260448c5a8856620a19f6212db9c785c79ce6426",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0753",
+    "name": "smith decline bench press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0753-ETZfAbZ.gif",
+    "sha256": "0ca6a8684d284f250e78f567cd01126ea19208ce2d5f6664db94e0713546e4d8",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0165",
+    "name": "cable hammer curl (with rope)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0165-HPlPoQA.gif",
+    "sha256": "b54f7a2caa09011db921732ce57f61bcc09e8ce57557138bb0440db98e82d29e",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0856",
+    "name": "weighted svend press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0856-I1OBLnn.gif",
+    "sha256": "7ec1064de68f484ed3dcb59296d9ca5dcc19397e3064a3cc7255949c2900b260",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0248",
+    "name": "cambered bar lying row",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0248-R5swFnc.gif",
+    "sha256": "7e018934ca130726e1b1bbd31b7d9d86cb15be90de33b893170a0c457e8eff61",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0035",
+    "name": "barbell decline close grip to skull press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0035-LMGXZn8.gif",
+    "sha256": "bee5acecce8b7a01ff15984079037b2d8993cc071c8887860d77c0b4b2e02597",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0211",
+    "name": "cable russian twists (on stability ball)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0211-d9Xaxq6.gif",
+    "sha256": "21a8dba0f98b5375c99bf130cdf41537fda575642f6743382e1667f18ee36292",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0241",
+    "name": "cable triceps pushdown (v-bar)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0241-gAwDzB3.gif",
+    "sha256": "4d2a66d4f19614125cd360b150f4fdc731e03436e5b0ef054e49ef5d7ca27d27",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0214",
+    "name": "cable seated one arm alternate row",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0214-vpp9Ku2.gif",
+    "sha256": "d2dab1b257a35f5e78e03095271676ec02fe29ea32072681ae9237370524f5e4",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0105",
+    "name": "barbell standing bradford press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0105-dCPESfR.gif",
+    "sha256": "bfd7dd69ee24a37b48e40a3490fab05249f3c5ee6a0b6a8f17e1cfc02d75a808",
+    "framesSampled": [
+      0,
+      6,
+      12
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1623",
+    "name": "dumbbell palms in incline bench press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1623-8eqjhOl.gif",
+    "sha256": "ba244c6d61c99707f95d013b90e95318a42c62f300087d72ea38a741e04e8686",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0396",
+    "name": "dumbbell seated lateral raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0396-hxyTtWj.gif",
+    "sha256": "25a4eacb20439a93fef6a70ef6b5e0b9b0a8757a9d7fc98bccdb0474caa46638",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0773",
+    "name": "smith standing leg calf raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0773-6MaEjVA.gif",
+    "sha256": "e507bed4dacb84630de76d65b67b3981c3a6e89b9e6ebb4bf1bf12be181d5c1a",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "3219",
+    "name": "scissor jumps (male)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/3219-Eh2v5Iu.gif",
+    "sha256": "aaa0e6b97d0acc40ba07597bb8b9575241de3b0bf1bc286971e72665650f2d5f",
+    "framesSampled": [
+      0,
+      8,
+      16
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0467",
+    "name": "gorilla chin",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0467-bmwlYvD.gif",
+    "sha256": "47367552b52b12515262b589a0520d7de5f67f10877058b827831291db3a331d",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0362",
+    "name": "dumbbell one arm triceps extension (on bench)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0362-nAuHPcD.gif",
+    "sha256": "623795179f255542f4323fc59ea8776f543f8a13af17097fa9d80542d1653a5b",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1512",
+    "name": "all fours squad stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1512-qBcKorM.gif",
+    "sha256": "25dccdbff76c890ab4382218d736979429d1256d8514e07035d2801dd7f7a708",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0215",
+    "name": "cable seated rear lateral raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0215-x825CZm.gif",
+    "sha256": "ef5536476c0f0f0e87d52a8e32453012eeefb8b6284317025f6b94de2cb509a2",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0345",
+    "name": "dumbbell lying one arm rear lateral raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0345-KwFGiEP.gif",
+    "sha256": "841faa52d0b3d869cb9715c8a2f5ea6cbb31bbbe10e7d36f496a22b0b55f6139",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  }
+]

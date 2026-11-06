@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="400" viewBox="0 0 360 400">
+<rect width="360" height="400" fill="#f5f9f8"/>
+<polyline points="15,370 345,370" fill="none" stroke="#a3b7b1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="35" y="339" width="300" height="7" fill="#d9eae4" stroke="#a4c2b6" stroke-width="2"/>
+<polyline points="112,196 138,196" fill="none" stroke="#3d4648" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="108" y="188" width="7" height="16" fill="#647174" stroke="#3d4648" stroke-width="2"/>
+<rect x="135" y="188" width="7" height="16" fill="#647174" stroke="#3d4648" stroke-width="2"/>
+<polyline points="205,323 255,318 315,321" fill="none" stroke="#4f8580" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="255" cy="318" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polyline points="110,321 140,251 140,196" fill="none" stroke="#4f8580" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="140" cy="251" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polyline points="195,316 235,251 285,251" fill="none" stroke="#285d58" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="235" cy="251" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polyline points="105,314 120,251 125,196" fill="none" stroke="#285d58" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="120" cy="251" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<polygon points="105,314 110,321 205,323 195,316" fill="#c1ddd5" stroke="#285d58" stroke-width="2"/>
+<polyline points="85,316 105,314" fill="none" stroke="#285d58" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="85,316 110,321" fill="none" stroke="#285d58" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="85,316 65,311" fill="none" stroke="#285d58" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="65" cy="311" r="14" fill="#d4e7e2" stroke="#285d58" stroke-width="2"/>
+<polyline points="285,251 298,253" fill="none" stroke="#285d58" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="315,321 330,321" fill="none" stroke="#285d58" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="125" cy="196" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<circle cx="140" cy="196" r="4" fill="#d4e7e2" stroke="#285d58" stroke-width="1"/>
+<text x="10" y="19" fill="#174b40" font-family="Arial,sans-serif" font-size="16">SCHEMATIC / POSE 1 OF 2</text>
+<text x="10" y="37" fill="#174b40" font-family="Arial,sans-serif" font-size="12">Hold the weight above the chest</text>
+<text x="10" y="395" fill="#174b40" font-family="Arial,sans-serif" font-size="12">Phool Gobhi / Illustrated pose reference</text>
+</svg>

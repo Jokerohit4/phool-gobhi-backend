@@ -1,0 +1,600 @@
+[
+  {
+    "name": "Running",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Alternating running gait with a passing position and flight phase; no machine or external load.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Jogging",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Alternating running gait with a passing position and flight phase; no machine or external load.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Brisk Walking",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Brisk overground walking; alternating heel-to-toe steps, upright torso.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "March in Place",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 4,
+    "definition": "Unloaded in-place march with alternating hip flexion and a planted support foot.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Standing Knee Drive",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Standing unloaded knee drive to approximately hip height; torso remains upright.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "High Knees",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "In-place high-knee running, unlike a travelling drill. No dumbbells.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Butt Kick",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "In-place alternating heel-to-glute running drill; knees remain beneath the hips.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Fast Feet",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Quick short alternating steps in place without an agility ladder or travelling.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Reverse Lunge",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Unloaded reverse lunge, front foot planted, front knee over ankle and rear knee lowered under control.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Step-Back Lunge",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Unloaded reverse lunge, front foot planted, front knee over ankle and rear knee lowered under control.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Step Jack",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 4,
+    "definition": "Low-impact step jack; one foot remains fixed in each side step and no jumping phase is shown.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Low-Impact Skater",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Low-impact side-to-side skater steps with a rear toe tap and soft support knee.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Aerobic Dance",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Example low-impact aerobic step-touch sequence; generic dance activity, not a prescribed choreography.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Step-up",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Basic unloaded step-up on a stable low platform; no dumbbells or extra knee-drive phase.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Step Aerobics",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Basic unloaded step-up on a stable low platform; no dumbbells or extra knee-drive phase.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Cycling",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Ordinary bicycle riding, with two wheels and alternating pedal positions; no stationary trainer.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Outdoor Cycling",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Ordinary bicycle riding, with two wheels and alternating pedal positions; no stationary trainer.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Hiking",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Overground hiking gait, illustrated with a small pack; no stair machine.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Swimming",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Example freestyle swim with alternating reaching and pulling arms; no exercise machine.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Shadow Boxing",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Unloaded shadow boxing, with punches returning to guard; no bag or partner.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Bayesian Cable Curl",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Facing away from a low pulley, curl a single supinated handle with the upper arm held behind the torso.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Single-Arm Cable Shoulder Press",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Single-arm low-cable shoulder press, other arm unloaded; no second cable handle.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Leaning Lateral Raise",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Supported leaning single-arm dumbbell lateral raise; support hand is on a fixed post.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Wall Angel",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Back-to-wall W-to-Y arm movement, unloaded, with neutral ribs and pelvis.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Wall Slide",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Forearm wall slide facing the wall; distinct from a back-to-wall angel.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Prone T Raise",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Top-down diagram of a bodyweight prone T raise on the floor, no dumbbells or bench.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Seated Knee Tuck",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Seated supported knee tuck with hips on a seat, not a hanging or parallel-bar exercise.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Dumbbell Dead Bug",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Supine weighted dead bug variation: dumbbell held above chest, legs alternate without lumbar movement.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Dumbbell Thruster",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Two-dumbbell front squat flowing into an overhead press, with a tall finish.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Dumbbell Devil Press",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Dumbbell burpee into a double-dumbbell overhead finish; staged reference positions, not filmed motion.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Suitcase Carry",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Unilateral dumbbell carry with the loaded arm hanging at the side; opposite hand free.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Kettlebell Halo with Overhead Extension",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 4,
+    "definition": "Kettlebell halo followed by a two-handed overhead triceps extension, using a single bell.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Standing Hamstring Stretch",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Unloaded standing hamstring stretch with the front heel down and toes raised; no strap.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Tibialis Raise",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Supported tibialis raise by ankle dorsiflexion with heels planted; no calf raise.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Ankle Mobility Rock",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Half-kneeling ankle dorsiflexion rock; the front heel and toes stay in contact with the floor.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Thoracic Rotation",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Quadruped thoracic-rotation example; pelvis stable and one hand remains on the floor.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Wrist Flexor Stretch",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Straight-arm wrist-flexor stretch with the palm up and a gentle opposite-hand finger pull.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Figure Four Stretch",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Supine figure-four glute stretch, with the crossed knee opening outward and hands supporting the uncrossed thigh.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Hollow Hold",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Hollow-body hold setup and final position: shoulders and straight legs raised, lower back remains on the mat.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Deep Squat Hold",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Unloaded deep squat hold, illustrated from standing into the bottom position.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Stability Ball Rollout",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Kneeling stability-ball rollout with forearms supported on the ball, hips and shoulders travelling forward together; ball size remains fixed.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Medicine Ball Russian Twist",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Seated medicine-ball Russian twist with a braced reclined torso and supported feet.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Dumbbell Squeeze Press",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Flat-bench dumbbell squeeze press: the pair stays together throughout the press; no standing Svend press.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Machine Low Row",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Seated low-handle rowing machine with a fixed seat and resistance stack; elbows travel behind the torso.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Machine Hip Thrust",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 2,
+    "definition": "Purpose-built hip-thrust machine with a bench/back support, hip pad and resistance lever; feet remain planted.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  },
+  {
+    "name": "Yoga Flow",
+    "reviewedAt": "2026-11-05T16:48:01.353967+00:00",
+    "reviewScope": "Implementation visual review of schematic frames; not trainer certification.",
+    "frames": 3,
+    "definition": "Example gentle cat-to-child mobility flow; explicitly presented as an example rather than a complete yoga programme.",
+    "checks": [
+      "equipment and movement positions",
+      "honest schematic label",
+      "no filmed-motion claim",
+      "SVG sources retained"
+    ]
+  }
+]

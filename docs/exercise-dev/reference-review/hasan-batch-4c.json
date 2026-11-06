@@ -1,0 +1,110 @@
+[
+  {
+    "sourceId": "0426",
+    "name": "dumbbell standing overhead press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0426-A6wtbuL.gif",
+    "sha256": "667ba53e82227da5d825d2249bf849514b79a5c06a280afd9f8cdc619f75ce8b",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0398",
+    "name": "dumbbell seated one arm kickback",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0398-VQ3sNCn.gif",
+    "sha256": "37e0a7100f291cac24d024bb2224403bcaf825a9ec4f0872be74bae539ee1e43",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0402",
+    "name": "dumbbell seated preacher curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0402-7D5bgLT.gif",
+    "sha256": "d06733ddcf309945ce8e151952c7a9e912c6a429e517b0edf162b01b500a7ebd",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0216",
+    "name": "cable seated shoulder internal rotation",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0216-YPoVrBi.gif",
+    "sha256": "3b5d4621cdeba0f256973a0f78a1e2dc555f538f7d3b990f380aca20a60981dc",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1350",
+    "name": "lever seated row",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1350-7I6LNUG.gif",
+    "sha256": "96000790878fe1238847466d0f3b81fbcaf6586e9555df38aad41727759c7cbd",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0104",
+    "name": "barbell standing back wrist curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0104-2qTvJAZ.gif",
+    "sha256": "3e1edc20ef2a2b63624f20f51fb4cd98fb53c8b2352bc00876fe4bdae8135677",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0107",
+    "name": "barbell standing front raise over head",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0107-S8mo30S.gif",
+    "sha256": "7a651108ec34f908541aa5fd9bada3cc1141b566ac45305e13cf4bb8a5cd916d",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "2188",
+    "name": "dumbbell seated triceps extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/2188-kont8Ut.gif",
+    "sha256": "a02fbadcf9651e198082fe3827892f9415c867330d1f153fa18645301a13eb9e",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0389",
+    "name": "dumbbell seated bench extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0389-JhYSVwT.gif",
+    "sha256": "61a7ff664a79e722e7dec6cc0b4cda884c011f8859a2e684b1cedaf0c2d71f50",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  }
+]

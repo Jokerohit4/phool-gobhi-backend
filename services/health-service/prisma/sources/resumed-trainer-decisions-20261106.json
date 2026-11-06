@@ -1,0 +1,358 @@
+{
+  "reviewedAt": "2026-11-06T08:10:37.042252+00:00",
+  "constraint": "Existing trainer-led instructional footage only; exact canonical movement/equipment; no generated walkthroughs.",
+  "selected": {
+    "Neutral-Grip Pull-up": {
+      "youtubeVideoId": "tSRo8ksP27I",
+      "reason": "Inspected filmed parallel-grip bodyweight pull-up and trainer setup explanations; palms face inward, matching the catalogue. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-1-contact.jpg"
+    },
+    "Single-Leg Squat to Bench": {
+      "youtubeVideoId": "8twCe4C0c1c",
+      "reason": "Runna coach teaches a bodyweight single-leg squat to a bench beside the demonstrator; bench, one-leg support and return match the catalogue. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-1-contact.jpg"
+    },
+    "Machine Triceps Extension": {
+      "youtubeVideoId": "NNyuuN2sJb0",
+      "reason": "Trainer explains seated preacher-style elbow-extension machine; upper arms rest on the pads, matching the canonical machine setup. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-1-contact.jpg"
+    },
+    "Assisted Dip": {
+      "youtubeVideoId": "kbmVlw-i0Vs",
+      "reason": "Trainer explains counterweight selection and demonstrates dips with knees on the assist pad and hands on parallel bars. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-1-contact.jpg"
+    },
+    "Stability Ball Rollout": {
+      "youtubeVideoId": "lyMJClJQl-8",
+      "reason": "Filmed coach demonstrates kneeling forearms-on-ball rollout with controlled trunk position, matching the canonical stability-ball rollout. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-2-contact.jpg"
+    },
+    "Kettlebell Clean and Press": {
+      "youtubeVideoId": "xHDRoJfDTfE",
+      "reason": "Dan John teaches two kettlebells cleaned to the rack and pressed overhead; both bells are visible, matching the double-kettlebell canonical variant. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-2-contact.jpg"
+    },
+    "Dumbbell Devil Press": {
+      "youtubeVideoId": "gaVoxC7RV_8",
+      "reason": "Mayhem coaches explain and demonstrate dumbbell burpee-to-overhead devil press, matching the canonical two-dumbbell movement. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "priority-trainer-2-contact.jpg"
+    },
+    "Hip Extension with Bands": {
+      "youtubeVideoId": "d4JPAOwo02g",
+      "reason": "Physiotherapist teaches standing resisted hip extension, with band anchored in front and around the ankle, matching source setup and straight-leg return. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "resume-cached-variants-contact.jpg"
+    },
+    "Seated Calf Stretch": {
+      "youtubeVideoId": "uKePAWa2e6c",
+      "reason": "Clinical publisher teaches seated straight-leg calf stretch with strap at the foot; source permits a strap/towel and the same ankle pull. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "resume-cached-variants-contact.jpg"
+    },
+    "Oblique Crunches - On The Floor": {
+      "youtubeVideoId": "QxaKQG-gmPY",
+      "reason": "Trainer teaches side-lying floor crunch with knees bent and stacked, matching canonical oblique setup; not a bicycle crunch. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted.",
+      "contactSheet": "resume-cached-variants-contact.jpg"
+    },
+    "Neck Press": {
+      "youtubeVideoId": "JIECaET8nt4",
+      "reason": "Existing reviewed barbell flat-bench guillotine press is the same canonical Neck Press movement, not a neck-strengthening or overhead-press substitution. Existing corrected source guide and provenance are preserved. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted."
+    },
+    "Thigh Abductor": {
+      "youtubeVideoId": "h9BqUMqK-SY",
+      "reason": "Existing reviewed trainer tutorial covers the seated hip-abduction machine, outward leg movement and equipment setup; Thigh Abductor is the same canonical machine movement. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted."
+    },
+    "One Arm Dumbbell Preacher Curl": {
+      "youtubeVideoId": "U77nfbV43uo",
+      "reason": "Existing reviewed Physique Development tutorial teaches the supported single-dumbbell preacher curl, matching one-arm load, bench support and elbow flexion in the source guide. Primary English-caption, duration and playable embed metadata retained; source footage is not rehosted."
+    },
+    "Archer Push-up": {
+      "youtubeVideoId": "jiA3RnMxFU0",
+      "reason": "Trainer demonstrates wide-arm floor archer push-ups with lateral weight transfer and explains progressions; not ring push-ups. Four public storyboard frames inspected and primary English-caption, duration and playable embed metadata verified.",
+      "contactSheet": "resume-original-candidates-contact.jpg"
+    },
+    "Machine Low Row": {
+      "youtubeVideoId": "lj2Bz2VQjS4",
+      "reason": "Muscle Mentors coach teaches seated Hammer Strength low row beside a demonstrator on the plate-loaded machine. Four public storyboard frames inspected and primary English-caption, duration and playable embed metadata verified.",
+      "contactSheet": "resume-original-candidates-contact.jpg"
+    },
+    "Back Extension": {
+      "youtubeVideoId": "sRFFS-DZ3SU",
+      "reason": "Trainer explains adjustment and use of a seated back-extension machine; not a Roman-chair hyperextension. Four public storyboard frames inspected and primary English-caption, duration and playable embed metadata verified.",
+      "contactSheet": "resume-original-candidates-contact.jpg"
+    },
+    "Tibialis Raise": {
+      "youtubeVideoId": "yC-UQjMeNVA",
+      "reason": "Coach teaches wall-supported tibialis raises, leaning against the wall with heels grounded and lifting the forefeet. Four public storyboard frames inspected and primary English-caption, duration and playable embed metadata verified.",
+      "contactSheet": "resume-original-candidates-contact.jpg"
+    },
+    "Push-Ups With Feet Elevated": {
+      "youtubeVideoId": "SKPab2YC8BE",
+      "reason": "Existing reviewed decline push-up tutorial is the same feet-on-bench bodyweight movement; source setup and supported elevation match. Primary English-caption and playable embed metadata reverified during this resumed batch."
+    },
+    "Step Mill": {
+      "youtubeVideoId": "SZU9Rm0sNOo",
+      "reason": "Existing reviewed Stairmaster tutorial teaches the rotating stair stepmill, controls, mounting and stepping; same equipment and activity as Step Mill. Primary English-caption and playable embed metadata reverified during this resumed batch."
+    },
+    "Cable Reverse Curl": {
+      "youtubeVideoId": "HwB-DevuJjU",
+      "reason": "Trainer demonstrates and explains a standing pronated straight-bar low-cable curl with elbows beside the torso. Four primary storyboard previews inspected; English captions, actual publisher title and playable embed verified.",
+      "contactSheet": "resume-next-candidates-contact.jpg"
+    },
+    "Reverse Cable Curl": {
+      "youtubeVideoId": "HwB-DevuJjU",
+      "reason": "Same low-cable pronated straight-bar curl as Cable Reverse Curl; canonical source specifies identical posture, grip and elbow flexion. Four primary storyboard previews inspected; English captions, actual publisher title and playable embed verified.",
+      "contactSheet": "resume-next-candidates-contact.jpg"
+    },
+    "Jumping Jack": {
+      "youtubeVideoId": "wqlQZk10dWE",
+      "reason": "Personal trainer teaches bodyweight jumping-jack form with arm and leg timing; a real cue-based tutorial rather than the rejected silent clip. Four primary storyboard previews inspected; English captions, actual publisher title and playable embed verified.",
+      "contactSheet": "resume-next-candidates-contact.jpg"
+    },
+    "Aerobic Dance": {
+      "youtubeVideoId": "e5rW7qjd3BY",
+      "reason": "Official Zumba instructor teaches beginner Latin aerobic-dance steps section by section; generic Aerobic Dance catalogue activity has no narrower choreography constraint. Four primary storyboard previews inspected; English captions, actual publisher title and playable embed verified.",
+      "contactSheet": "resume-next-candidates-contact.jpg"
+    },
+    "Incline Hammer Curls": {
+      "youtubeVideoId": "FdzmJiIHIPw",
+      "reason": "Coach teaches incline-bench dumbbell curls with neutral hammer grip and explains upper-arm positioning. Four primary storyboard frames inspected; primary English captions and playable embed verified.",
+      "contactSheet": "resume-cached-exact-contact.jpg"
+    },
+    "Snatch": {
+      "youtubeVideoId": "V9dJTdolGw8",
+      "reason": "Olympic-weightlifting coach teaches the barbell snatch from the floor to full squat catch and overhead standing finish, including progressions. Four primary storyboard frames inspected; primary English captions and playable embed verified.",
+      "contactSheet": "resume-cached-exact-contact.jpg"
+    },
+    "One Leg Barbell Squat": {
+      "youtubeVideoId": "JlTojfaAXBo",
+      "reason": "Trainer demonstrates rear-foot-on-bench barbell single-leg squat, matching the canonical rear-foot-elevated barbell setup. Four primary storyboard frames inspected; primary English captions and playable embed verified.",
+      "contactSheet": "resume-cached-exact-contact.jpg"
+    },
+    "Suspended Row": {
+      "youtubeVideoId": "X9ptLAm8fuE",
+      "reason": "Trainer teaches a straight-body leaning suspension-strap row with handles, matching the canonical Suspended Row setup. Four primary storyboard frames inspected; primary English captions and playable embed verified.",
+      "contactSheet": "resume-cached-exact-contact.jpg"
+    },
+    "Bodyweight Walking Lunge": {
+      "youtubeVideoId": "_GqxkGp7NAA",
+      "reason": "Coach teaches unloaded forward walking lunges outdoors; foot progression and bodyweight load match. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "Ring Dips": {
+      "youtubeVideoId": "2bdNrGhoyuk",
+      "reason": "Coach teaches ring support and dip progressions on freely suspended gymnastic rings, not parallel-bar dips. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "Olympic Squat": {
+      "youtubeVideoId": "Akd5xmZlsvg",
+      "reason": "Olympic-weightlifting coach teaches high-bar back squat with upright torso, hip-width stance and full-depth descent. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "Seated Dumbbell Curl": {
+      "youtubeVideoId": "uj001FhllVU",
+      "reason": "Trainer teaches seated dumbbell curls with both upper arms beside the torso and controlled supinated curling. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "Narrow Stance Leg Press": {
+      "youtubeVideoId": "QPlMYBDSRE0",
+      "reason": "Coach explains a loaded sled leg-press machine with feet close together in the center of the platform; foot placement and supported posture match. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "Narrow Stance Hack Squats": {
+      "youtubeVideoId": "kchbYV_bYMg",
+      "reason": "Coach teaches back-supported hack-squat machine repetitions with the narrow stance specified by the catalogue. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "Low-Impact Skater": {
+      "youtubeVideoId": "TvVJ_9AoUIM",
+      "reason": "Instructor explains low-impact skater options and demonstrates lateral stepping and rear-foot crossover without the leaping substitution. Four primary storyboard frames inspected; English-caption and playable-embed metadata verified.",
+      "contactSheet": "resume-strength-candidates-contact.jpg"
+    },
+    "One-Arm Long Bar Row": {
+      "youtubeVideoId": "gEROPm2NAl0",
+      "reason": "Coach teaches a single-arm landmine row with the bar anchored at one end and a hinged torso. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Rope Straight-Arm Pulldown": {
+      "youtubeVideoId": "32auHIqgEoM",
+      "reason": "Coach explicitly teaches rope as a neutral-grip attachment option and explains the same high-pulley straight-arm shoulder extension. Publisher instructions name rope, bar and V-bar options. Preview uses a bar option; this is not claimed as rope-only footage. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Sled Row": {
+      "youtubeVideoId": "kioxCL1To-A",
+      "reason": "Exercise physiologist teaches strap-handled standing sled rows, pulling the loaded sled with horizontal rowing and resetting the straps. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Yoke Walk": {
+      "youtubeVideoId": "QCwFmrk7Kpw",
+      "reason": "Strongman coach teaches yoke positioning, bracing and walking under the shoulder-supported yoke. No substitution with barbell carries. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Low Cable Crossover": {
+      "youtubeVideoId": "JUDTGZh4rhg",
+      "reason": "Trainer covers cable-crossover pulley-height options, explicitly teaching lower-pulley upper-chest setup, stance, controlled adduction and return. This covers multiple heights rather than claiming every frame is low-pulley. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Palms-Down Dumbbell Wrist Curl Over A Bench": {
+      "youtubeVideoId": "xENVg7RX_O8",
+      "reason": "Trainer explains pronated dumbbell wrist extension with forearm supported on a bench edge. Footage teaches one wrist at a time; the bilateral exercise uses that same independent movement at each wrist. No claim that both dumbbells appear simultaneously. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Lying Cable Curl": {
+      "youtubeVideoId": "1wrnfw5T61A",
+      "reason": "Coach teaches supinated low-cable curls with flat supported supine torso and feet toward the pulley. Filmed support is a flat bench while the written source uses the floor; arm position, grip and cable-curl path match. This support-surface variation is recorded explicitly. Four public storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-strength-next-contact.jpg"
+    },
+    "Hiking": {
+      "youtubeVideoId": "zqlPM3jpJHE",
+      "reason": "Mountain fitness coach teaches actual downhill trail-walking foot placement and control outdoors. This tutorial focuses on downhill hiking technique; it is not presented as a complete course in every hiking skill. Four primary storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-original-last-contact.jpg"
+    },
+    "Deep Squat Hold": {
+      "youtubeVideoId": "IyPqRrAdT0A",
+      "reason": "Fitness instructor teaches resting at the bottom of a full bodyweight squat with heels down, palms together and elbows inside the knees. This matches the canonical unsupported squat hold. Four primary storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-original-last-contact.jpg"
+    },
+    "Assisted Pistol Squat": {
+      "youtubeVideoId": "04zQAQTN20s",
+      "reason": "Trainer teaches a wall-assisted single-leg pistol squat with a fixed wall for hand support and grounded standing foot. No heel plate or suspension-strap substitution. Four primary storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-original-last-contact.jpg"
+    },
+    "Squat to Reach": {
+      "youtubeVideoId": "ujNy4KGkMnQ",
+      "reason": "Coach teaches an unloaded squat followed by standing overhead arm reach; the platform is only a demonstration surface, not a step-up or an added load. Four primary storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-original-last-contact.jpg"
+    },
+    "90/90 Hamstring": {
+      "youtubeVideoId": "Vflq1PtzV1Y",
+      "reason": "Physical therapist teaches the supine 90/90 hamstring stretch, holding the thigh with hip flexed and extending the knee; not the similarly named seated 90/90 hip stretch. Four primary storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-original-last-contact.jpg"
+    },
+    "Butt-Ups": {
+      "youtubeVideoId": "m9QWYs2CXMo",
+      "reason": "Coach teaches forearm-plank hip pikes with toes grounded and return to plank. This matches the canonical Butt-Ups movement rather than a lying hip raise. Four primary storyboard frames inspected; English captions and playable embed verified.",
+      "contactSheet": "resume-original-last-contact.jpg"
+    }
+  },
+  "rejected": [
+    {
+      "exercise": "Band Assisted Pull-Up",
+      "youtubeVideoId": "vKpqOpjJt18",
+      "reason": "Preview uses a counterweight assist machine, not a band looped over a bar."
+    },
+    {
+      "exercise": "Seated Floor Hamstring Stretch",
+      "youtubeVideoId": "1rscgJNW27g",
+      "reason": "Chair stretch; canonical guide is seated on floor."
+    },
+    {
+      "exercise": "Leverage Shoulder Press",
+      "youtubeVideoId": "3R14MnZbcpw",
+      "reason": "Preview shows selectorized shoulder machine; plate-loaded leverage setup not established."
+    },
+    {
+      "exercise": "Reverse Hyperextension",
+      "youtubeVideoId": "3d9_W--eUcI",
+      "reason": "Preview shows unloaded bench movement, not the canonical loaded reverse-hyper carriage."
+    },
+    {
+      "exercise": "Two-Arm Kettlebell Jerk",
+      "youtubeVideoId": "IR32hqinsRo",
+      "reason": "Preview teaches one kettlebell; canonical exercise uses two."
+    },
+    {
+      "exercise": "Dumbbell Clean",
+      "youtubeVideoId": "1aGLUdG_Shs",
+      "reason": "Single-dumbbell clean-and-jerk does not establish canonical two-dumbbell squat clean."
+    },
+    {
+      "exercise": "Standing Biceps Stretch",
+      "youtubeVideoId": "QY4gCIYbGQk",
+      "reason": "Wall stretch differs from canonical clasped-hands-behind-back stretch."
+    },
+    {
+      "exercise": "Tricep Side Stretch",
+      "youtubeVideoId": "Uvk1Y8O1_yM",
+      "reason": "Overhead triceps stretch differs from canonical cross-body position."
+    },
+    {
+      "exercise": "Elbow to Knee",
+      "youtubeVideoId": "FcjwuLMdGyM",
+      "reason": "Alternating bicycle crunch differs from canonical fixed crossed-leg crunch."
+    },
+    {
+      "exercise": "Archer Push-up",
+      "youtubeVideoId": "b0xFZ2HtENM",
+      "reason": "Preview teaches ring push-ups, not floor archer push-ups."
+    },
+    {
+      "exercise": "Assisted Pistol Squat",
+      "youtubeVideoId": "R1mxpLzYgxM",
+      "reason": "Fixed-support assisted version not established by preview."
+    },
+    {
+      "exercise": "Tibialis Raise",
+      "youtubeVideoId": "pQcvW08rnAk",
+      "reason": "Silent/name-only demonstration has no established instructional cues."
+    },
+    {
+      "exercise": "Jumping Jack",
+      "youtubeVideoId": "uLVt6u15L98",
+      "reason": "Silent demonstration lacks established explanatory cues."
+    },
+    {
+      "exercise": "Low-Impact Skater",
+      "youtubeVideoId": "j08ExZfGWV0",
+      "reason": "Six-second bare demonstration, not an instructional tutorial."
+    },
+    {
+      "exercise": "Dumbbell Dead Bug",
+      "youtubeVideoId": "TeNg1oTvlVM",
+      "reason": "Follow-along timer/exercise names do not establish an instructional walkthrough for this variant."
+    },
+    {
+      "exercise": "Dumbbell Dead Bug",
+      "youtubeVideoId": "9SczW9fYKd8",
+      "reason": "Preview shows seated weighted leg opening rather than canonical supine static-dumbbell dead bug."
+    },
+    {
+      "exercise": "Low-Impact Skater",
+      "youtubeVideoId": "Jx2KXGbQkYM",
+      "reason": "Tutorial teaches leaping skater hops; low-impact stepping regression not established."
+    },
+    {
+      "exercise": "Deep Squat Hold",
+      "youtubeVideoId": "IbsFs5mBZgo",
+      "reason": "Front-supported mobility drill differs from canonical unsupported elbows-inside-knees hold."
+    },
+    {
+      "exercise": "Towel Row",
+      "youtubeVideoId": "lPZufNTFFHQ",
+      "reason": "Upright self-resistance movement; canonical slightly hinged standing towel row not established."
+    },
+    {
+      "exercise": "Assisted Pistol Squat",
+      "youtubeVideoId": "bH3mRwnAN88",
+      "reason": "General progression montage does not establish required fixed support and exact assisted setup."
+    },
+    {
+      "exercise": "Cable Wrist Curl",
+      "youtubeVideoId": "Avvmae4hIMA",
+      "reason": "Standing cable wrist setup differs from canonical seated forearms-on-thighs wrist curl."
+    },
+    {
+      "exercise": "Assisted Pistol Squat",
+      "youtubeVideoId": "sWSDybvNEPk",
+      "reason": "Preview uses elevated-heel progression; canonical instructions keep the standing heel grounded."
+    },
+    {
+      "exercise": "Squat to Reach",
+      "youtubeVideoId": "2zqGivvCHn8",
+      "reason": "Name/logo-only silent demo has no established instructional cues."
+    },
+    {
+      "exercise": "Smith Machine Decline Press",
+      "youtubeVideoId": "ZZZLtgOKqfk",
+      "reason": "Dedicated decline-bench setup is not established in sampled footage; keep pending a clearer matching reference."
+    }
+  ]
+}

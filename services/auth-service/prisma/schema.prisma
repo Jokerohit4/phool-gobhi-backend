@@ -109,6 +109,8 @@ model User {
   // ever goes away, delete the field rather than leaving it to rot the way
   // fitnessGoals did.
   freeTimeWindow FreeTimeWindow?
+  // When the user's own-gym membership ends (future date when written).
+  gymSubscriptionEndDate DateTime?
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]

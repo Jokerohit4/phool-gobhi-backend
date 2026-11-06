@@ -1,0 +1,1062 @@
+[
+  {
+    "exercise": "Wall Sit",
+    "equipment": "bodyweight",
+    "id": "JaZNYM3zAP0",
+    "title": "How To Do a Wall Sit | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:40",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Hollow Hold",
+    "equipment": "bodyweight",
+    "id": "TNHSgs_orU0",
+    "title": "How to do a Hollow Hold | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:24",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Incline Barbell Bench Press",
+    "equipment": "barbell",
+    "id": "SrqOu55lrYU",
+    "title": "How To: Incline Barbell Bench Press | 3 GOLDEN RULES! (MADE BETTER!)",
+    "channel": "ScottHermanFitness",
+    "duration": "5:34",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Decline Barbell Bench Press",
+    "equipment": "barbell",
+    "id": "LfyQBUKR8SE",
+    "title": "How To: Barbell Decline Bench Press",
+    "channel": "ScottHermanFitness",
+    "duration": "2:04",
+    "description": "",
+    "canonicalSetup": [
+      "Secure your legs at the end of the decline bench and slowly lay down on the bench.",
+      "Using a medium width grip (a grip that creates a 90-degree angle in the middle of the movement between the forearms and the upper arms), lift the bar from the rack and hold it straight over you with your arms locked. The arms should be perpendicular to the floor. This will be your starting position. Tip: In order to protect your rotator cuff, it is best if you have a spotter help you lift the barbell off the rack."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Smith Machine Bench Press",
+    "equipment": "machine",
+    "id": "z_r6hDOYtO0",
+    "title": "How To: Smith Machine- Bench Press",
+    "channel": "ScottHermanFitness",
+    "duration": "1:54",
+    "description": "",
+    "canonicalSetup": [
+      "Place a flat bench underneath the smith machine. Now place the barbell at a height that you can reach when lying down and your arms are almost fully extended. Once the weight you need is selected, lie down on the flat bench. Using a pronated grip that is wider than shoulder width, unlock the bar from the rack and hold it straight over you with your arms locked. This will be your starting position.",
+      "As you breathe in, come down slowly until you feel the bar on your middle chest."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Decline Push-up",
+    "equipment": "bodyweight",
+    "id": "SKPab2YC8BE",
+    "title": "How To: Decline Push-Up",
+    "channel": "ScottHermanFitness",
+    "duration": "1:30",
+    "description": "",
+    "canonicalSetup": [
+      "Lie on the floor face down and place your hands about 36 inches apart while holding your torso up at arms length. Move your feet up to a box or bench. This will be your starting position.",
+      "Next, lower yourself downward until your chest almost touches the floor as you inhale."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Diamond Push-up",
+    "equipment": "bodyweight",
+    "id": "J0DnG1_S92I",
+    "title": "How To: Diamond Push-Up",
+    "channel": "ScottHermanFitness",
+    "duration": "1:50",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Chest-Supported Dumbbell Row",
+    "equipment": "dumbbell",
+    "id": "ro2vfHfD0DQ",
+    "title": "How To Do A Chest Supported Dumbbell Row Correctly",
+    "channel": "Jack Hanrahan Fitness ",
+    "duration": "7:38",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Reverse Fly",
+    "equipment": "dumbbell",
+    "id": "d1QEddtoOq0",
+    "title": "How To Dumbbell Reverse Fly PROPERLY | MAXIMIZE REAR DELTS",
+    "channel": "Colossus Fitness",
+    "duration": "3:06",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Wide-Grip Lat Pulldown",
+    "equipment": "cable",
+    "id": "lueEJGjTuPQ",
+    "title": "Wide-Grip Lat Pulldown | Back Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "1:05",
+    "description": "",
+    "canonicalSetup": [
+      "Sit down on a pull-down machine with a wide bar attached to the top pulley. Make sure that you adjust the knee pad of the machine to fit your height. These pads will prevent your body from being raised by the resistance attached to the bar.",
+      "Grab the bar with the palms facing forward using the prescribed grip. Note on grips: For a wide grip, your hands need to be spaced out at a distance wider than shoulder width. For a medium grip, your hands need to be spaced out at a distance equal to your shoulder width and for a close grip at a distance smaller than your shoulder width."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Wide-Grip Cable Row",
+    "equipment": "cable",
+    "id": "e9oe5qbN0jo",
+    "title": "Wide Grip Cable Row | How To Perform Them Correctly",
+    "channel": "KAGED ",
+    "duration": "1:54",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Back Extension",
+    "equipment": "machine",
+    "id": "ph3pddpKzzw",
+    "title": "How to Do Back Extensions",
+    "channel": "LIVESTRONG",
+    "duration": "1:24",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Front Squat",
+    "equipment": "barbell",
+    "id": "tlfahNdNPPI",
+    "title": "How To: Front Squat (Barbell)",
+    "channel": "ScottHermanFitness",
+    "duration": "4:15",
+    "description": "",
+    "canonicalSetup": [
+      "This exercise is best performed inside a squat rack for safety purposes. To begin, first set the bar on a rack that best matches your height. Once the correct height is chosen and the bar is loaded, bring your arms up under the bar while keeping the elbows high and the upper arm slightly above parallel to the floor. Rest the bar on top of the deltoids and cross your arms while grasping the bar for total control.",
+      "Lift the bar off the rack by first pushing with your legs and at the same time straightening your torso."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Sumo Deadlift",
+    "equipment": "barbell",
+    "id": "JbY72Him34Q",
+    "title": "How To Correctly Perform A Sumo Deadlift",
+    "channel": "PureGym",
+    "duration": "1:00",
+    "description": "",
+    "canonicalSetup": [
+      "Begin with a bar loaded on the ground. Approach the bar so that the bar intersects the middle of the feet. The feet should be set very wide, near the collars. Bend at the hips to grip the bar. The arms should be directly below the shoulders, inside the legs, and you can use a pronated grip, a mixed grip, or hook grip. Relax the shoulders, which in effect lengthens your arms.",
+      "Take a breath, and then lower your hips, looking forward with your head with your chest up. Drive through the floor, spreading your feet apart, with your weight on the back half of your feet. Extend through the hips and knees."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Barbell Glute Bridge",
+    "equipment": "barbell",
+    "id": "0od5lwWMGV8",
+    "title": "How To: Barbell Glute Bridge | 3 GOLDEN RULES (BUILD BIGGER GLUTES!)",
+    "channel": "ScottHermanFitness",
+    "duration": "5:29",
+    "description": "",
+    "canonicalSetup": [
+      "Begin seated on the ground with a loaded barbell over your legs. Using a fat bar or having a pad on the bar can greatly reduce the discomfort caused by this exercise. Roll the bar so that it is directly above your hips, and lay down flat on the floor.",
+      "Begin the movement by driving through with your heels, extending your hips vertically through the bar. Your weight should be supported by your upper back and the heels of your feet."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Zercher Squat",
+    "equipment": "barbell",
+    "id": "vpy4ADmlo1E",
+    "title": "How To: Zercher Squat",
+    "channel": "ScottHermanFitness",
+    "duration": "1:52",
+    "description": "",
+    "canonicalSetup": [
+      "This exercise is best performed inside a squat rack for safety purposes. To begin, first set the bar on a rack that best matches your height. The correct height should be anywhere above the waist but below the chest. Once the correct height is chosen and the bar is loaded, lock your hands together and place the bar on top of your arms in between the forearm and upper arm.",
+      "Lift the bar up so that it is resting on top of your forearms. If you are holding the bar properly, it should look as if you have your arms crossed but with a bar running across them."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Squat",
+    "equipment": "dumbbell",
+    "id": "v_c67Omje48",
+    "title": "How to Dumbbell Squat | Mike Hildebrandt",
+    "channel": "Bodybuilding.com",
+    "duration": "1:35",
+    "description": "",
+    "canonicalSetup": [
+      "Stand up straight while holding a dumbbell on each hand (palms facing the side of your legs).",
+      "Position your legs using a shoulder width medium stance with the toes slightly pointed out. Keep your head up at all times as looking down will get you off balance and also maintain a straight back. This will be your starting position. Note: For the purposes of this discussion we will use the medium stance described above which targets overall development; however you can choose any of the three stances discussed in the foot stances section."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Bulgarian Split Squat",
+    "equipment": "dumbbell",
+    "id": "SkNsa3eBwLA",
+    "title": "How to do the BULGARIAN SPLIT SQUAT! | 2 Minute Tutorial",
+    "channel": "Max Euceda",
+    "duration": "2:00",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Hack Squat",
+    "equipment": "machine",
+    "id": "0tn5K9NlCfo",
+    "title": "Hack Squat | Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "1:23",
+    "description": "",
+    "canonicalSetup": [
+      "Place the back of your torso against the back pad of the machine and hook your shoulders under the shoulder pads provided.",
+      "Position your legs in the platform using a shoulder width medium stance with the toes slightly pointed out. Tip: Keep your head up at all times and also maintain the back on the pad at all times."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Lying Leg Curl",
+    "equipment": "machine",
+    "id": "vl5nUdE9mWM",
+    "title": "How to Lying Leg Curl | Proper Technique, Set Up, & Mistakes",
+    "channel": "Physique Development",
+    "duration": "2:44",
+    "description": "",
+    "canonicalSetup": [
+      "Adjust the machine lever to fit your height and lie face down on the leg curl machine with the pad of the lever on the back of your legs (just a few inches under the calves). Tip: Preferably use a leg curl machine that is angled as opposed to flat since an angled position is more favorable for hamstrings recruitment.",
+      "Keeping the torso flat on the bench, ensure your legs are fully stretched and grab the side handles of the machine. Position your toes straight (or you can also use any of the other two stances described on the foot positioning section). This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Reverse Lunge",
+    "equipment": "bodyweight",
+    "id": "-Nr6dqEvz3Q",
+    "title": "How To Do A Reverse Lunge Correctly",
+    "channel": "Jack Hanrahan Fitness ",
+    "duration": "8:21",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Forward Lunge",
+    "equipment": "bodyweight",
+    "id": "g8-Ge9S0aUw",
+    "title": "How To Do A Forward Lunge",
+    "channel": "PureGym",
+    "duration": "0:26",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Single-Leg Glute Bridge",
+    "equipment": "bodyweight",
+    "id": "_K_di6h2-Wg",
+    "title": "How to do a Single-Leg Glute Bridge | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "3:29",
+    "description": "",
+    "canonicalSetup": [
+      "Lay on the floor with your feet flat and knees bent.",
+      "Raise one leg off of the ground, pulling the knee to your chest. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Sissy Squat",
+    "equipment": "bodyweight",
+    "id": "VUiFlZ2FsKA",
+    "title": "How To: Sissy Squat",
+    "channel": "ScottHermanFitness",
+    "duration": "2:24",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Single-Leg Calf Raise",
+    "equipment": "bodyweight",
+    "id": "ElcvJ0kjt6c",
+    "title": "Single Leg Calf Raise Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:31",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Kettlebell Deadlift",
+    "equipment": "kettlebell",
+    "id": "hinonqqzatk",
+    "title": "How To Do a Kettlebell Deadlift | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "2:12",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Arnold Press",
+    "equipment": "dumbbell",
+    "id": "TUHL8dXFvTg",
+    "title": "How to do an Arnold Press | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:50",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Front Raise",
+    "equipment": "dumbbell",
+    "id": "CH9JzDStL3U",
+    "title": "How to Do Dumbbell Front Raises | Proper Form & Tips",
+    "channel": "Colossus Fitness",
+    "duration": "2:21",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Upright Row",
+    "equipment": "dumbbell",
+    "id": "IhZLB48kluc",
+    "title": "How To: Dumbbell Upright-Row",
+    "channel": "ScottHermanFitness",
+    "duration": "1:41",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Push Press",
+    "equipment": "barbell",
+    "id": "Hqxjk5Z35SM",
+    "title": "Push Press Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:36",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Barbell Front Raise",
+    "equipment": "barbell",
+    "id": "Ofo2DQdT7DA",
+    "title": "How To: Barbell Front Raise | 2 MOST COMMON MISTAKES! (STOP)",
+    "channel": "ScottHermanFitness",
+    "duration": "8:30",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Incline Dumbbell Curl",
+    "equipment": "dumbbell",
+    "id": "HhHHBj3qTJ4",
+    "title": "How to do the INCLINE DUMBBELL CURL! | 2 Minute Tutorial",
+    "channel": "Max Euceda",
+    "duration": "2:00",
+    "description": "",
+    "canonicalSetup": [
+      "Sit back on an incline bench with a dumbbell in each hand held at arms length. Keep your elbows close to your torso and rotate the palms of your hands until they are facing forward. This will be your starting position.",
+      "While holding the upper arm stationary, curl the weights forward while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the dumbbells are at shoulder level. Hold the contracted position for a second."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Alternating Dumbbell Curl",
+    "equipment": "dumbbell",
+    "id": "sAq_ocpRh_I",
+    "title": "How To: Alternating Dumbbell Curl",
+    "channel": "ScottHermanFitness",
+    "duration": "1:20",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Zottman Curl",
+    "equipment": "dumbbell",
+    "id": "ZrpRBgswtHs",
+    "title": "How To: Zottman Curl",
+    "channel": "ScottHermanFitness",
+    "duration": "1:43",
+    "description": "",
+    "canonicalSetup": [
+      "Stand up with your torso upright and a dumbbell in each hand being held at arms length. The elbows should be close to the torso.",
+      "Make sure the palms of the hands are facing each other. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Wrist Curl",
+    "equipment": "dumbbell",
+    "id": "7ac_qmBjkFI",
+    "title": "How to Do Dumbbell Wrist Curls",
+    "channel": "LIVESTRONG",
+    "duration": "1:29",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Reverse Wrist Curl",
+    "equipment": "dumbbell",
+    "id": "krZ6pWGZ8xo",
+    "title": "How to Do Dumbbell Reverse Wrist Curls",
+    "channel": "LIVESTRONG",
+    "duration": "1:26",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Reverse Barbell Curl",
+    "equipment": "barbell",
+    "id": "didEQUuieRQ",
+    "title": "How To: Reverse Barbell Curl | BICEPS BUILDER",
+    "channel": "ScottHermanFitness",
+    "duration": "2:40",
+    "description": "",
+    "canonicalSetup": [
+      "Stand up with your torso upright while holding a barbell at shoulder width with the elbows close to the torso. The palm of your hands should be facing down (pronated grip). This will be your starting position.",
+      "While holding the upper arms stationary, curl the weights while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the bar is at shoulder level. Hold the contracted position for a second as you squeeze the muscle."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Triceps Extension",
+    "equipment": "dumbbell",
+    "id": "nRiJVZDpdL0",
+    "title": "How to Do Triceps Dumbbell Extensions",
+    "channel": "LIVESTRONG",
+    "duration": "1:41",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Skull Crusher",
+    "equipment": "dumbbell",
+    "id": "ir5PsbniVSc",
+    "title": "How To: Dumbbell Skull Crusher",
+    "channel": "ScottHermanFitness",
+    "duration": "1:28",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Rope Hammer Curl",
+    "equipment": "cable",
+    "id": "1Quc_tOv97I",
+    "title": "How To: Rope Hammer Curl",
+    "channel": "ScottHermanFitness",
+    "duration": "1:28",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Russian Twist",
+    "equipment": "bodyweight",
+    "id": "IJDOoVyVjhc",
+    "title": "Russian Twist Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:36",
+    "description": "",
+    "canonicalSetup": [
+      "Lie down on the floor placing your feet either under something that will not move or by having a partner hold them. Your legs should be bent at the knees.",
+      "Elevate your upper body so that it creates an imaginary V-shape with your thighs. Your arms should be fully extended in front of you perpendicular to your torso and with the hands clasped. This is the starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Seated Knee Tuck",
+    "equipment": "bodyweight",
+    "id": "54q250IUEAc",
+    "title": "How to Do a Seated Knee Tuck",
+    "channel": "LIVESTRONG",
+    "duration": "0:58",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Boat Hold",
+    "equipment": "bodyweight",
+    "id": "xmfJyheHY6w",
+    "title": "How to do a Boat Hold | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:58",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Rowing Machine",
+    "equipment": "machine",
+    "id": "6_eLpWiNijE",
+    "title": "How To Use The Rowing Machine",
+    "channel": "PureGym",
+    "duration": "1:00",
+    "description": "",
+    "canonicalSetup": [
+      "To begin, seat yourself on the rower. Make sure that your heels are resting comfortably against the base of the foot pedals and that the straps are secured. Select the program that you wish to use, if applicable. Sit up straight and bend forward at the hips.",
+      "There are three phases of movement when using a rower. The first phase is when you come forward on the rower. Your knees are bent and against your chest. Your upper body is leaning slightly forward while still maintaining good posture. Next, push against the foot pedals and extend your legs while bringing your hands to your upper abdominal area, squeezing your shoulders back as you do so. To avoid straining your back, use primarily your leg and hip muscles."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Jump Rope",
+    "equipment": "other",
+    "id": "u3zgHI8QnqE",
+    "title": "How To Jump Rope | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "2:44",
+    "description": "",
+    "canonicalSetup": [
+      "Hold an end of the rope in each hand. Position the rope behind you on the ground. Raise your arms up and turn the rope over your head bringing it down in front of you. When it reaches the ground, jump over it. Find a good turning pace that can be maintained. Different speeds and techniques can be used to introduce variation.",
+      "Rope jumping is exciting, challenges your coordination, and requires a lot of energy. A 150 lb person will burn about 350 calories jumping rope for 30 minutes, compared to over 450 calories running."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Burpee",
+    "equipment": "bodyweight",
+    "id": "qLBImHhCXSw",
+    "title": "How To Do A Burpee | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "3:24",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Bear Crawl",
+    "equipment": "bodyweight",
+    "id": "U3Y58Kyw7Xw",
+    "title": "Bear Crawl Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:39",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Kettlebell Swing",
+    "equipment": "kettlebell",
+    "id": "sSESeQAir2M",
+    "title": "How To Do A Kettlebell Swing | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "2:33",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Snatch",
+    "equipment": "dumbbell",
+    "id": "0yd9443Y-fg",
+    "title": "How to do a Dumbbell Snatch | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:52",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Downward Dog",
+    "equipment": "bodyweight",
+    "id": "Xt5WMcSv9Js",
+    "title": "Downward Dog Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:31",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Butterfly Stretch",
+    "equipment": "bodyweight",
+    "id": "-z2LUk9OSO0",
+    "title": "Butterfly Stretch Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:26",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Standing Quad Stretch",
+    "equipment": "bodyweight",
+    "id": "kzAsm4WQqvQ",
+    "title": "How To Do A Standing Quad Stretch",
+    "channel": "PureGym",
+    "duration": "0:41",
+    "description": "",
+    "canonicalSetup": [],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Ab Crunch Machine",
+    "equipment": "machine",
+    "id": "LQ1VKHflOXQ",
+    "title": "How To Use: Ab Crunch Machine - AF ASHFIELD",
+    "channel": "Anytime Fitness Ashfield",
+    "duration": "1:24",
+    "description": "",
+    "canonicalSetup": [
+      "Select a light resistance and sit down on the ab machine placing your feet under the pads provided and grabbing the top handles. Your arms should be bent at a 90 degree angle as you rest the triceps on the pads provided. This will be your starting position.",
+      "At the same time, begin to lift the legs up as you crunch your upper torso. Breathe out as you perform this movement. Tip: Be sure to use a slow and controlled motion. Concentrate on using your abs to move the weight while relaxing your legs and feet."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Barbell Hack Squat",
+    "equipment": "barbell",
+    "id": "64PFHtq5XO8",
+    "title": "How to Do Barbell Hack Squats",
+    "channel": "LIVESTRONG",
+    "duration": "1:56",
+    "description": "",
+    "canonicalSetup": [
+      "Stand up straight while holding a barbell behind you at arms length and your feet at shoulder width. Tip: A shoulder width grip is best with the palms of your hands facing back. You can use wrist wraps for this exercise for a better grip. This will be your starting position.",
+      "While keeping your head and eyes up and back straight, squat until your upper thighs are parallel to the floor. Breathe in as you slowly go down."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Barbell Incline Bench Press - Medium Grip",
+    "equipment": "barbell",
+    "id": "SrqOu55lrYU",
+    "title": "How To: Incline Barbell Bench Press | 3 GOLDEN RULES! (MADE BETTER!)",
+    "channel": "ScottHermanFitness",
+    "duration": "5:34",
+    "description": "",
+    "canonicalSetup": [
+      "Lie back on an incline bench. Using a medium-width grip (a grip that creates a 90-degree angle in the middle of the movement between the forearms and the upper arms), lift the bar from the rack and hold it straight over you with your arms locked. This will be your starting position.",
+      "As you breathe in, come down slowly until you feel the bar on you upper chest."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Bent Over Barbell Row",
+    "equipment": "barbell",
+    "id": "FWJR5Ve8bnQ",
+    "title": "How to do the BENT-OVER BARBELL ROW! | 2 Minute Tutorial",
+    "channel": "Max Euceda",
+    "duration": "2:00",
+    "description": "",
+    "canonicalSetup": [
+      "Holding a barbell with a pronated grip (palms facing down), bend your knees slightly and bring your torso forward, by bending at the waist, while keeping the back straight until it is almost parallel to the floor. Tip: Make sure that you keep the head up. The barbell should hang directly in front of you as your arms hang perpendicular to the floor and your torso. This is your starting position.",
+      "Now, while keeping the torso stationary, breathe out and lift the barbell to you. Keep the elbows close to the body and only use the forearms to hold the weight. At the top contracted position, squeeze the back muscles and hold for a brief pause."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Cable Hammer Curls - Rope Attachment",
+    "equipment": "cable",
+    "id": "vsarApmqJmo",
+    "title": "How To: Cable Hammer Curl | Shaun Stafford",
+    "channel": "Bodybuilding.com",
+    "duration": "0:46",
+    "description": "",
+    "canonicalSetup": [
+      "Attach a rope attachment to a low pulley and stand facing the machine about 12 inches away from it.",
+      "Grasp the rope with a neutral (palms-in) grip and stand straight up keeping the natural arch of the back and your torso stationary."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Clean and Press",
+    "equipment": "barbell",
+    "id": "KCe8l86-alA",
+    "title": "How To Clean And Press",
+    "channel": "PureGym",
+    "duration": "1:03",
+    "description": "",
+    "canonicalSetup": [
+      "Assume a shoulder-width stance, with knees inside the arms. Now while keeping the back flat, bend at the knees and hips so that you can grab the bar with the arms fully extended and a pronated grip that is slightly wider than shoulder width. Point the elbows out to sides. The bar should be close to the shins. Position the shoulders over or slightly ahead of the bar. Establish a flat back posture. This will be your starting position.",
+      "Begin to pull the bar by extending the knees. Move your hips forward and raise the shoulders at the same rate while keeping the angle of the back constant; continue to lift the bar straight up while keeping it close to your body."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Close-Grip EZ Bar Curl",
+    "equipment": "barbell",
+    "id": "o74HeVd6BIw",
+    "title": "How To: Close-Grip EZ-Bar Curl",
+    "channel": "ScottHermanFitness",
+    "duration": "1:24",
+    "description": "",
+    "canonicalSetup": [
+      "Stand up with your torso upright while holding an E-Z Curl Bar at the closer inner handle. The palm of your hands should be facing forward and they should be slightly tilted inwards due to the shape of the bar. The elbows should be close to the torso. This will be your starting position.",
+      "While holding the upper arms stationary, curl the weights forward while contracting the biceps as you breathe out. Tip: Only the forearms should move."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Crunches",
+    "equipment": "bodyweight",
+    "id": "0t4t3IpiEao",
+    "title": "How To Do Crunches | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:07",
+    "description": "",
+    "canonicalSetup": [
+      "Lie flat on your back with your feet flat on the ground, or resting on a bench with your knees bent at a 90 degree angle. If you are resting your feet on a bench, place them three to four inches apart and point your toes inward so they touch.",
+      "Now place your hands lightly on either side of your head keeping your elbows in. Tip: Don't lock your fingers behind your head."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Decline Dumbbell Flyes",
+    "equipment": "dumbbell",
+    "id": "IMALXhhHRKM",
+    "title": "How to Do a Decline Dumbbell Fly",
+    "channel": "LIVESTRONG",
+    "duration": "1:22",
+    "description": "",
+    "canonicalSetup": [
+      "Secure your legs at the end of the decline bench and lie down with a dumbbell on each hand on top of your thighs. The palms of your hand will be facing each other.",
+      "Once you are laying down, move the dumbbells in front of you at shoulder width. The palms of the hands should be facing each other and the arms should be perpendicular to the floor and fully extended. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Dumbbell Shoulder Press",
+    "equipment": "dumbbell",
+    "id": "0JfYxMRsUCQ",
+    "title": "Dumbbell Shoulder Press | Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "1:02",
+    "description": "",
+    "canonicalSetup": [
+      "While holding a dumbbell in each hand, sit on a military press bench or utility bench that has back support. Place the dumbbells upright on top of your thighs.",
+      "Now raise the dumbbells to shoulder height one at a time using your thighs to help propel them up into position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Exercise Ball Crunch",
+    "equipment": "other",
+    "id": "Imui46JTe7s",
+    "title": "How To: Ball Crunch",
+    "channel": "ScottHermanFitness",
+    "duration": "2:03",
+    "description": "",
+    "canonicalSetup": [
+      "Lie on an exercise ball with your lower back curvature pressed against the spherical surface of the ball. Your feet should be bent at the knee and pressed firmly against the floor. The upper torso should be hanging off the top of the ball. The arms should either be kept alongside the body or crossed on top of your chest as these positions avoid neck strains (as opposed to the hands behind the back of the head position).",
+      "Lower your torso into a stretch position keeping the neck stationary at all times. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Flutter Kicks",
+    "equipment": "bodyweight",
+    "id": "ANVdMDaYRts",
+    "title": "How To: Flutter Kicks",
+    "channel": "ScottHermanFitness",
+    "duration": "2:01",
+    "description": "",
+    "canonicalSetup": [
+      "On a flat bench lie facedown with the hips on the edge of the bench, the legs straight with toes high off the floor and with the arms on top of the bench holding on to the front edge.",
+      "Squeeze your glutes and hamstrings and straighten the legs until they are level with the hips. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Front Dumbbell Raise",
+    "equipment": "dumbbell",
+    "id": "CH9JzDStL3U",
+    "title": "How to Do Dumbbell Front Raises | Proper Form & Tips",
+    "channel": "Colossus Fitness",
+    "duration": "2:21",
+    "description": "",
+    "canonicalSetup": [
+      "Pick a couple of dumbbells and stand with a straight torso and the dumbbells on front of your thighs at arms length with the palms of the hand facing your thighs. This will be your starting position.",
+      "While maintaining the torso stationary (no swinging), lift the left dumbbell to the front with a slight bend on the elbow and the palms of the hands always facing down. Continue to go up until you arm is slightly above parallel to the floor. Exhale as you execute this portion of the movement and pause for a second at the top. Inhale after the second pause."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Front Squat (Clean Grip)",
+    "equipment": "barbell",
+    "id": "tW2H0Ib_hQw",
+    "title": "Front Squat with Clean Grip | Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "1:32",
+    "description": "",
+    "canonicalSetup": [
+      "To begin, first set the bar in a rack slightly below shoulder level. Rest the bar on top of the deltoids, pushing into the clavicles, and lightly touching the throat. Your hands should be in a clean grip, touching the bar only with your fingers to help keep it in position.",
+      "Lift the bar off the rack by first pushing with your legs and at the same time straightening your torso. Step away from the rack and position your legs using a shoulder width medium stance with the toes slightly pointed out. Keep your head and elbows up at all times. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Hanging Pike",
+    "equipment": "bodyweight",
+    "id": "wVRlRmGsZ2w",
+    "title": "How To Do A Hanging Pike | Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "0:53",
+    "description": "",
+    "canonicalSetup": [
+      "Hang from a chin-up bar with your legs and feet together using an overhand grip (palms facing away from you) that is slightly wider than shoulder width. Tip: You may use wrist wraps in order to facilitate holding on to the bar.",
+      "Now bend your knees at a 90 degree angle and bring the upper legs forward so that the calves are perpendicular to the floor while the thighs remain parallel to it. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Hurdle Hops",
+    "equipment": "other",
+    "id": "SuddHMMcK5I",
+    "title": "Hurdle Hops Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:32",
+    "description": "",
+    "canonicalSetup": [
+      "Set up a row of hurdles or other small barriers, placing them a few feet apart.",
+      "Stand in front of the first hurdle with your feet shoulder width apart. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Internal Rotation with Band",
+    "equipment": "other",
+    "id": "MfjCK5_Ss5g",
+    "title": "How To Do An Internal Rotation with Band | Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "1:03",
+    "description": "",
+    "canonicalSetup": [
+      "Choke the band around a post. The band should be at the same height as your elbow. Stand with your right side to the band a couple of feet away.",
+      "Grasp the end of the band with your right hand, and keep your elbow pressed firmly to your side. We recommend you hold a pad or foam roll in place with your elbow to keep it firmly in position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Janda Sit-Up",
+    "equipment": "bodyweight",
+    "id": "UsFGTXPmPaI",
+    "title": "How To: Janda Sit-Up",
+    "channel": "ScottHermanFitness",
+    "duration": "1:53",
+    "description": "",
+    "canonicalSetup": [
+      "Position your body on the floor in the basic sit-up position; knees to a ninety degree angle with feet flat on the floor and arms either crossed over your chest or to the sides. This will be your starting position.",
+      "As you strongly tighten your glutes and hamstrings, fill your lungs with air and in a slow (three to six second count) ascent, slowly exhale. Tip: It is important to tighten the glutes and hamstrings as this will cause the hip flexors to be inactivated in a process called reciprocal inhibition, which basically means that opposite muscles to the contracted ones will relax."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Mountain Climbers",
+    "equipment": "other",
+    "id": "cnyTQDSE884",
+    "title": "How to Do Mountain Climbers | The Right Way | Well+Good",
+    "channel": "Well+Good",
+    "duration": "1:17",
+    "description": "",
+    "canonicalSetup": [
+      "Begin in a pushup position, with your weight supported by your hands and toes. Flexing the knee and hip, bring one leg until the knee is approximately under the hip. This will be your starting position.",
+      "Explosively reverse the positions of your legs, extending the bent leg until the leg is straight and supported by the toe, and bringing the other foot up with the hip and knee flexed. Repeat in an alternating fashion for 20-30 seconds."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "One-Arm Dumbbell Row",
+    "equipment": "dumbbell",
+    "id": "dFzUjzfih7k",
+    "title": "How to do the SINGLE ARM DUMBBELL ROW! | 2 Minute Tutorial",
+    "channel": "Max Euceda",
+    "duration": "2:00",
+    "description": "",
+    "canonicalSetup": [
+      "Choose a flat bench and place a dumbbell on each side of it.",
+      "Place the right leg on top of the end of the bench, bend your torso forward from the waist until your upper body is parallel to the floor, and place your right hand on the other end of the bench for support."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Preacher Curl",
+    "equipment": "barbell",
+    "id": "fIWP-FRFNU0",
+    "title": "Preacher Curls | How To Perform It Correctly",
+    "channel": "KAGED ",
+    "duration": "2:27",
+    "description": "",
+    "canonicalSetup": [
+      "To perform this movement you will need a preacher bench and an E-Z bar. Grab the E-Z curl bar at the close inner handle (either have someone hand you the bar which is preferable or grab the bar from the front bar rest provided by most preacher benches). The palm of your hands should be facing forward and they should be slightly tilted inwards due to the shape of the bar.",
+      "With the upper arms positioned against the preacher bench pad and the chest against it, hold the E-Z Curl Bar at shoulder length. This will be your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Reverse Flyes",
+    "equipment": "dumbbell",
+    "id": "3MKmYlhxgOo",
+    "title": "Reverse Fly Tutorial - Proper Form and Technique",
+    "channel": "Runna",
+    "duration": "0:37",
+    "description": "",
+    "canonicalSetup": [
+      "To begin, lie down on an incline bench with the chest and stomach pressing against the incline. Have the dumbbells in each hand with the palms facing each other (neutral grip).",
+      "Extend the arms in front of you so that they are perpendicular to the angle of the bench. The legs should be stationary while applying pressure with the ball of your toes. This is the starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Smith Machine Upright Row",
+    "equipment": "machine",
+    "id": "vcXkzN6QXbk",
+    "title": "How To: Smith Machine- Upright-Row",
+    "channel": "ScottHermanFitness",
+    "duration": "2:15",
+    "description": "",
+    "canonicalSetup": [
+      "To begin, set the bar on the smith machine to a height that is around the middle of your thighs. Once the correct height is chosen and the bar is loaded, grasp the bar using a pronated (palms forward) grip that is shoulder width apart. You may need some wrist wraps if using a significant amount of weight.",
+      "Lift the barbell up and fully extend your arms with your back straight. There should be a slight bend at the elbows. This is the starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Stairmaster",
+    "equipment": "machine",
+    "id": "SZU9Rm0sNOo",
+    "title": "HOW TO USE A STAIRMASTER | Beginner's Guide",
+    "channel": "Naomi Kong",
+    "duration": "2:45",
+    "description": "",
+    "canonicalSetup": [
+      "To begin, step onto the stairmaster and select the desired option from the menu. You can choose a manual setting, or you can select a program to run. Typically, you can enter your age and weight to estimate the amount of calories burned during exercise.",
+      "Pump your legs up and down in an established rhythm, driving the pedals down but not all the way to the floor. It is recommended that you maintain your grip on the handles so that you don't fall. The handles can be used to monitor your heart rate to help you stay at an appropriate intensity."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Standing Barbell Calf Raise",
+    "equipment": "barbell",
+    "id": "3UWi44yN-wM",
+    "title": "How To: Standing Barbell Calf Raise",
+    "channel": "ScottHermanFitness",
+    "duration": "1:21",
+    "description": "",
+    "canonicalSetup": [
+      "This exercise is best performed inside a squat rack for safety purposes. To begin, first set the bar on a rack that best matches your height. Once the correct height is chosen and the bar is loaded, step under the bar and place the bar on the back of your shoulders (slightly below the neck).",
+      "Hold on to the bar using both arms at each side and lift it off the rack by first pushing with your legs and at the same time straightening your torso."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Svend Press",
+    "equipment": "other",
+    "id": "cIoUZOnypS8",
+    "title": "Svend Press | Exercise Guide",
+    "channel": "Bodybuilding.com",
+    "duration": "0:50",
+    "description": "",
+    "canonicalSetup": [
+      "Begin in a standing position.",
+      "Press two lightweight plates together with your hands. Hold the plates together close to your chest to create an isometric contraction in your chest muscles. Your fingers should be pointed forward. This is your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Tate Press",
+    "equipment": "dumbbell",
+    "id": "IgSjoXbpy1M",
+    "title": "How To: Tate Press | INCREASE YOUR BENCH & BUILD BIGGER TRICEPS!",
+    "channel": "ScottHermanFitness",
+    "duration": "4:14",
+    "description": "",
+    "canonicalSetup": [
+      "Lie down on a flat bench with a dumbbell in each hand on top of your thighs. The palms of your hand will be facing each other.",
+      "By using your thighs to help you get the dumbbells up, clean the dumbbells one arm at a time so that you can hold them in front of you at shoulder width. Note: when holding the dumbbells in front of you, make sure your arms are wider than shoulder width apart from each other using a pronated (palms forward) grip. Allow your elbows to point out. This is your starting position."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Tire Flip",
+    "equipment": "other",
+    "id": "o14pB2rG2EQ",
+    "title": "How To Do A TIRE FLIP | Exercise Demonstration Video and Guide",
+    "channel": "Colossus Fitness",
+    "duration": "1:41",
+    "description": "",
+    "canonicalSetup": [
+      "Begin by gripping the bottom of the tire on the tread, and position your feet back a bit. Your chest should be driving into the tire.",
+      "To lift the tire, extend through the hips, knees, and ankles, driving into the tire and up."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Tricep Dumbbell Kickback",
+    "equipment": "dumbbell",
+    "id": "6SS6K3lAwZ8",
+    "title": "How To: Tricep Kickback (Dumbbell)",
+    "channel": "ScottHermanFitness",
+    "duration": "1:30",
+    "description": "",
+    "canonicalSetup": [
+      "Start with a dumbbell in each hand and your palms facing your torso. Keep your back straight with a slight bend in the knees and bend forward at the waist. Your torso should be almost parallel to the floor. Make sure to keep your head up. Your upper arms should be close to your torso and parallel to the floor. Your forearms should be pointed towards the floor as you hold the weights. There should be a 90-degree angle formed between your forearm and upper arm. This is your starting position.",
+      "Now, while keeping your upper arms stationary, exhale and use your triceps to lift the weights until the arm is fully extended. Focus on moving the forearm."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Upright Barbell Row",
+    "equipment": "barbell",
+    "id": "nIJGvsdNtFE",
+    "title": "How to Do Upright Barbell Rows",
+    "channel": "LIVESTRONG",
+    "duration": "1:36",
+    "description": "",
+    "canonicalSetup": [
+      "Grasp a barbell with an overhand grip that is slightly less than shoulder width. The bar should be resting on the top of your thighs with your arms extended and a slight bend in your elbows. Your back should also be straight. This will be your starting position.",
+      "Now exhale and use the sides of your shoulders to lift the bar, raising your elbows up and to the side. Keep the bar close to your body as you raise it. Continue to lift the bar until it nearly touches your chin. Tip: Your elbows should drive the motion, and should always be higher than your forearms. Remember to keep your torso stationary and pause for a second at the top of the movement."
+    ],
+    "status": "requires_variant_review"
+  },
+  {
+    "exercise": "Wide Stance Barbell Squat",
+    "equipment": "barbell",
+    "id": "JXdGBp_YYz0",
+    "title": "Wide-Stance Barbell Squat | Exercise Guide (F)",
+    "channel": "Bodybuilding.com",
+    "duration": "1:26",
+    "description": "",
+    "canonicalSetup": [
+      "This exercise is best performed inside a squat rack for safety purposes. To begin, first set the bar on a rack that best matches your height. Once the correct height is chosen and the bar is loaded, step under the bar and place the back of your shoulders (slightly below the neck) across it.",
+      "Hold on to the bar using both arms at each side and lift it off the rack by first pushing with your legs and at the same time straightening your torso."
+    ],
+    "status": "requires_variant_review"
+  }
+]

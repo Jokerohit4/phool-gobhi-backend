@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Cat-Cow",
+    "frames": 80,
+    "width": 180,
+    "height": 136,
+    "changedSamples": 14,
+    "sha256": "d6eea50a39eec8987b2a26fecbd789ff391ddda8d60a175f808d32691060d63d",
+    "reviewReason": "Reviewed side-view footage shows both spinal flexion and extension on hands and knees, matching Cat-Cow. Clip excludes the front-view transition."
+  },
+  {
+    "name": "Bodyweight Squat",
+    "frames": 80,
+    "width": 180,
+    "height": 180,
+    "changedSamples": 14,
+    "sha256": "61606dde90dd668c26a0844ef602ecef7a30b122c6c4e3e8a7f4a7bc93bbda03",
+    "reviewReason": "Reviewed unweighted squats through standing, descent and ascent with feet planted and arms forward, matching the catalogue movement."
+  },
+  {
+    "name": "Side Plank",
+    "frames": 80,
+    "width": 180,
+    "height": 96,
+    "changedSamples": 14,
+    "sha256": "4f5d504ecd118af3b269f174192a96c928f531840c689278b77c2b06bc2a3a73",
+    "reviewReason": "Reviewed lower side-view panel shows straight-leg side plank raised from the floor on one forearm, matching the unweighted catalogue hold."
+  },
+  {
+    "name": "Plank",
+    "frames": 80,
+    "width": 180,
+    "height": 96,
+    "changedSamples": 14,
+    "sha256": "27133c12644dd5af242ed53329f61a47fdafa2ff0910215ee805c46d04d0ff8a",
+    "reviewReason": "Reviewed lower side-view panel shows floor-to-forearm plank setup and straight-body hold supported by toes and forearms; no weights or leg lifts."
+  },
+  {
+    "name": "Face Pull",
+    "frames": 64,
+    "width": 180,
+    "height": 136,
+    "changedSamples": 13,
+    "sha256": "7169864f4db8c04fa97c3c2b23f4c4d9ab9fdc898389d55cd5f6f50c20d2faa2",
+    "reviewReason": "Reviewed standing cable rope face pulls show the rope drawn toward the face with elbows raised, then controlled extension; matches cable equipment."
+  },
+  {
+    "name": "Barbell Hip Thrust",
+    "frames": 96,
+    "width": 180,
+    "height": 102,
+    "changedSamples": 12,
+    "sha256": "cbc630d2f708b6fa9eec6af44b024d70d5f08c4a2ffe40a552a62f12d62ee5b2",
+    "reviewReason": "Reviewed barbell across padded hips, upper back supported on bench, feet planted and repeated hip extension; matches loaded barbell hip thrust."
+  },
+  {
+    "name": "Barbell Walking Lunge",
+    "frames": 80,
+    "width": 180,
+    "height": 116,
+    "changedSamples": 14,
+    "sha256": "36c4100c52ae5f67841640c6f01c7a91a1446026f9b130727a9b7047c69ea511",
+    "reviewReason": "Reviewed forward travelling alternating lunges with barbell on upper back, controlled knee descent and forward steps; matches the walking barbell variant."
+  }
+]

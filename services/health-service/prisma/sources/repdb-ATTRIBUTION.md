@@ -1,0 +1,31 @@
+# RepDB Free Tier — attribution snippets
+
+The free tier requires one visible attribution link in your app's about or
+credits screen, your project's README, or your website footer. Copy whichever
+format fits your project.
+
+## Markdown
+
+```md
+Exercise data by [RepDB](https://repdb.co)
+```
+
+## HTML
+
+```html
+Exercise data by <a href="https://repdb.co" rel="nofollow">RepDB (repdb.co)</a>
+```
+
+The `rel="nofollow"` is optional: keep it, drop it, or use any other `rel`
+value. The license leaves that choice to you.
+
+## Plain text / app credits
+
+```text
+Exercise data by RepDB (repdb.co)
+https://repdb.co
+```
+
+Keep the attribution visible to users. The full license is in `LICENSE.md`.
+For 1024px classic images, transparent backgrounds, SQLite, animations, or
+commercial use without attribution, see https://repdb.co/pricing.

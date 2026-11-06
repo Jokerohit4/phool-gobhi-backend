@@ -1,0 +1,235 @@
+{
+  "Alternating Dumbbell Curl": {
+    "freeId": "Dumbbell_Alternate_Bicep_Curl",
+    "reason": "Same alternating standing dumbbell curl."
+  },
+  "Barbell Floor Press": {
+    "freeId": "Floor_Press",
+    "reason": "Barbell press performed from the floor."
+  },
+  "Chair Dip": {
+    "freeId": "Bench_Dips",
+    "reason": "Bodyweight dip with the hands supported behind the torso on a stable raised seat."
+  },
+  "Chest-Supported Dumbbell Row": {
+    "freeId": "Dumbbell_Incline_Row",
+    "reason": "Chest supported on an incline bench; two dumbbells and a neutral grip."
+  },
+  "Close-Grip Lat Pulldown": {
+    "freeId": "Close-Grip_Front_Lat_Pulldown",
+    "reason": "Close-grip cable pulldown in front of the torso."
+  },
+  "Dumbbell Wrist Curl": {
+    "freeId": "Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench",
+    "reason": "Palms-up dumbbell wrist flexion with forearm support."
+  },
+  "Hip Flexor Stretch": {
+    "freeId": "Kneeling_Hip_Flexor",
+    "wgerId": 1867,
+    "reason": "Half-kneeling hip-flexor stretch."
+  },
+  "Landmine Row": {
+    "freeId": "Bent_Over_Two-Arm_Long_Bar_Row",
+    "reason": "Two-hand row of the loaded end of an anchored barbell."
+  },
+  "Pec Deck Fly": {
+    "freeId": "Butterfly",
+    "reason": "Seated machine chest fly."
+  },
+  "Reverse Pec Deck": {
+    "freeId": "Reverse_Machine_Flyes",
+    "reason": "Reverse seated machine fly for the rear deltoids."
+  },
+  "Seated Hamstring Stretch": {
+    "freeId": "Seated_Floor_Hamstring_Stretch",
+    "reason": "Seated bodyweight hamstring stretch on the floor."
+  },
+  "Calf Stretch": {
+    "freeId": "Calf_Stretch_Hands_Against_Wall",
+    "reason": "Wall-supported calf stretch with the rear heel down."
+  },
+  "Cable Pullover": {
+    "freeId": "Straight-Arm_Pulldown",
+    "reason": "Standing straight-arm cable shoulder extension; no elbow-curl substitution."
+  },
+  "Paused Bench Press": {
+    "freeId": "Barbell_Bench_Press_-_Medium_Grip",
+    "useInstructions": false,
+    "reason": "Still position reference only; the source does not teach the pause. Keep pause-specific instruction and motion capture in the backlog."
+  },
+  "Paused Squat": {
+    "freeId": "Barbell_Squat",
+    "useInstructions": false,
+    "reason": "Still position reference only; the source does not teach the pause. Keep pause-specific instruction and motion capture in the backlog."
+  },
+  "Side Plank": {
+    "freeId": "Side_Bridge",
+    "freeImageIndexes": [
+      1
+    ],
+    "wgerId": 580,
+    "reason": "Use the visually reviewed raised-hip forearm-plank still, not the lowered-hip starting frame."
+  },
+  "Forearm Side Plank": {
+    "freeId": "Side_Bridge",
+    "freeImageIndexes": [
+      1
+    ],
+    "wgerId": 580,
+    "reason": "Use the visually reviewed raised-hip forearm-plank still, not the lowered-hip starting frame."
+  },
+  "90-90 Hip Switch": {
+    "wgerId": 2613,
+    "reason": "Seated 90/90 hip transitions."
+  },
+  "Ankle Mobility Rock": {
+    "wgerId": 1804,
+    "useImages": false,
+    "reason": "Use the heel-down dorsiflexion description. Exclude the third-party branded screenshot pending direct source permission."
+  },
+  "Bird Dog": {
+    "wgerId": 1572,
+    "useImages": false,
+    "reason": "Use the quadruped contralateral-extension description. Exclude the unverified synthetic-looking illustration from production imagery."
+  },
+  "Bicycle Crunch": {
+    "wgerId": 1412,
+    "reason": "Alternating elbow-to-opposite-knee floor bicycle crunch."
+  },
+  "Cable Woodchopper": {
+    "freeId": "Standing_Cable_Wood_Chop",
+    "reason": "Standing high-to-low diagonal cable wood chop, both hands on a single handle, matching the canonical cable exercise."
+  },
+  "Cat-Cow": {
+    "wgerId": 1244,
+    "reason": "Both spinal flexion and extension on all fours; a cat-only stretch was rejected."
+  },
+  "Child Pose": {
+    "freeId": "Childs_Pose",
+    "reason": "Exact child pose: hands/knees setup followed by hips onto heels and arms forward. Public-domain source photos for the existing canonical bodyweight movement."
+  },
+  "Cobra Stretch": {
+    "wgerId": 1450,
+    "reason": "Prone supported spinal extension with hips down."
+  },
+  "Dumbbell Thruster": {
+    "wgerId": 1684,
+    "reason": "Front-racked dumbbell squat flowing into an overhead press."
+  },
+  "Dumbbell Hip Thrust": {
+    "wgerId": 1642,
+    "useImages": false,
+    "useInstructions": false,
+    "reason": "Retain source metadata only: branded high-resolution media needs its original rights source, and the text does not establish bench support."
+  },
+  "Figure Four Stretch": {
+    "wgerId": 1869,
+    "reason": "Supine ankle-over-knee glute stretch."
+  },
+  "High Knees": {
+    "wgerId": 983,
+    "useImages": false,
+    "reason": "Use the running-in-place description; the visually reviewed repeated-pose illustration is not a reliable alternating-movement sequence."
+  },
+  "High Plank": {
+    "wgerId": 1001,
+    "reason": "Straight-arm high plank rather than the forearm plank."
+  },
+  "Hollow Hold": {
+    "wgerId": 297,
+    "reason": "Supine hollow-body hold, keeping the lower back down."
+  },
+  "Jumping Jack": {
+    "wgerId": 320,
+    "reason": "Feet-apart, arms-overhead jumping jack; generated source images are excluded."
+  },
+  "Meadows Row": {
+    "wgerId": 1304,
+    "reason": "Unilateral overhand landmine row, preserving the named setup."
+  },
+  "Pike Push-up": {
+    "wgerId": 454,
+    "reason": "Pike-position bodyweight push-up; no exercise-ball substitution."
+  },
+  "Reverse Lunge": {
+    "wgerId": 999,
+    "useImages": false,
+    "reason": "Use the explicit step-back guide; the image sequence does not reliably establish reverse rather than forward stepping."
+  },
+  "Seated Knee Tuck": {
+    "wgerId": 1105,
+    "reason": "Floor-seated knee tuck with the hands behind the torso."
+  },
+  "Step Jack": {
+    "wgerId": 1962,
+    "reason": "Stepping jack without a jump; keep separate from a standard jumping jack."
+  },
+  "Suitcase Carry": {
+    "wgerId": 1776,
+    "reason": "One-sided dumbbell carry rather than a two-sided farmer carry."
+  },
+  "Tibialis Raise": {
+    "wgerId": 1200,
+    "reason": "Standing toe lift with heels grounded."
+  },
+  "Barbell Bench Press": {
+    "wgerId": 73,
+    "reason": "Barbell flat bench press; include its separately licensed H.264 MP4 demonstration."
+  },
+  "EZ-Bar Skull Crusher": {
+    "wgerId": 246,
+    "reason": "Lying EZ-bar triceps extension; include its separately licensed H.264 MP4 demonstration."
+  },
+  "Dips - Triceps Version": {
+    "wgerId": 194,
+    "reason": "Triceps-focused parallel-bar dip; include the source demonstration without claiming an instructional tutorial."
+  },
+  "Captain Chair Knee Raise": {
+    "wgerId": 2674,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Chest Doorway Stretch": {
+    "wgerId": 1713,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Kettlebell Deadlift": {
+    "wgerId": 1003,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Scapular Push-up": {
+    "wgerId": 2681,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Shoulder Cross-Body Stretch": {
+    "wgerId": 2685,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Squat Thrust": {
+    "wgerId": 616,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Wall Slide": {
+    "wgerId": 716,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Wrist Flexor Stretch": {
+    "wgerId": 2686,
+    "useImages": false,
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded."
+  },
+  "Bulgarian Split Squat": {
+    "freeId": "Split_Squat_with_Dumbbells",
+    "reason": "Dumbbell split squat with rear foot elevated, matching the Bulgarian variant and preserving existing catalogue equipment."
+  },
+  "Single-Arm Overhead Triceps Extension": {
+    "freeId": "Dumbbell_One-Arm_Triceps_Extension",
+    "reason": "Single dumbbell held above the head with one arm, elbow flexion/extension; source supports seated and standing setups."
+  }
+}

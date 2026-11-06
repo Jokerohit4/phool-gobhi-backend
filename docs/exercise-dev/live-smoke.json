@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-11-06T06:21:46.913296+00:00",
+  "url": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+  "revision": "health-service-dev-00190-coy",
+  "health": {
+    "status": "Health Service is healthy"
+  },
+  "libraryRows": 1103,
+  "missingGif": 0,
+  "probes": {
+    "Cat-Cow": {
+      "id": 290,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/references/753723/d6eea50a39eec8987b2a26fecbd789ff391ddda8d60a175f808d32691060d63d.gif",
+      "kind": "motion"
+    },
+    "March in Place": {
+      "id": 50,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/pose-references/e4fa000f7201f2324bbbe9c2561c15ce3b9d8e3020b72495c6e88dac3aa9993e.gif",
+      "kind": "schematic_pose_sequence"
+    },
+    "High Plank": {
+      "id": 231,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/pose-references/450ed5be00808f5c2bef25e45e4a4e6a0980364fd63aad3aaf8677724495d8b2.gif",
+      "kind": "hold_reference"
+    },
+    "Kettlebell Halo": {
+      "id": 184,
+      "demoGifUrl": "https://storage.googleapis.com/phool-gobhi-exercise-media-dev/pose-references/e0f84bf6d1fe1d6a0b7584f025ca347e49caea91d3881750686ca0a9260477d2.gif",
+      "kind": "pose_sequence"
+    }
+  },
+  "productionChanged": false
+}

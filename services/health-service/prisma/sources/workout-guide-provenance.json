@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/bryllim/workout-guide",
+  "revision": "aac599224bb9780305239607ef98540b7e0ce389",
+  "hashes": {
+    "packages/workout-guide/manifest.json": "b3d110d680a7d6cb94731b8b41ee3f82bfdbd2f9a358038f8c17d453b5fb632b",
+    "ATTRIBUTION.md": "0b0918808512e571072a976c4518b345f829425ab395acac6c9dbc3ec522a96b",
+    "LICENSES.md": "5e268191030abaa82f4f26630036427d8ab148bea0eb1b40aa821dbc7d065bc9",
+    "LICENSE-ASSETS": "b25de3faf3d7f163f842cb0e2c069da652705f738faa4c6232d45ed36fc29eb3"
+  },
+  "usage": "Research and movement review; no unreviewed assets integrated."
+}

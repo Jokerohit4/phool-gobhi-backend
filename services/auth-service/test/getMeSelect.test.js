@@ -20,7 +20,7 @@ function legacyMe(user, gymLinkSource) {
     wellnessDayPattern: user.wellnessDayPattern || null, wellnessSleepPattern: user.wellnessSleepPattern || null,
     wellnessSetupCompleted: user.wellnessSetupCompleted === true, trainingLocationPref: user.trainingLocationPref,
     trainingLocationOther: user.trainingLocationOther, appMode: user.appMode, persona: resolvePersona(user),
-    freeTimeWindow: user.freeTimeWindow, experiments: bucketFor(user.id), recommendedEquipment: user.recommendedEquipment ?? null,
+    freeTimeWindow: user.freeTimeWindow, gymSubscriptionEndDate: user.gymSubscriptionEndDate || null, experiments: bucketFor(user.id), recommendedEquipment: user.recommendedEquipment ?? null,
   };
 }
 

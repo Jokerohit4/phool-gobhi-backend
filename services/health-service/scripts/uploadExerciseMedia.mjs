@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { v2 as cloudinary } from 'cloudinary';
+import { isExerciseMediaUrl } from '../utils/exerciseMedia.js';
 
 const dir = process.argv[2];
 if (!dir) { console.error('usage: uploadExerciseMedia.mjs <media dir>'); process.exit(1); }
@@ -30,12 +31,17 @@ const upload = (path, publicId) =>
 
 let done = 0, skipped = 0;
 for (const [name, e] of Object.entries(data)) {
-  if (e.gifUrl && e.imageUrl) { skipped++; continue; }
-  const gif = join(dir, 'gif', e.gifFile), img = join(dir, 'img', e.imageFile);
-  if (!existsSync(gif) || !existsSync(img)) { console.warn(`missing local media for ${name}`); continue; }
+  const hasGif = isExerciseMediaUrl(e.gifUrl);
+  const hasImage = isExerciseMediaUrl(e.imageUrl);
+  if (hasGif && hasImage) { skipped++; continue; }
+  const gif = e.gifFile ? join(dir, 'gif', e.gifFile) : null;
+  const img = e.imageFile ? join(dir, 'img', e.imageFile) : null;
+  if ((!hasGif && (!gif || !existsSync(gif))) || (!hasImage && (!img || !existsSync(img)))) {
+    console.warn(`missing local media for ${name}`); continue;
+  }
   try {
-    e.gifUrl = e.gifUrl || await upload(gif, `${e.mediaId}-demo`);
-    e.imageUrl = e.imageUrl || await upload(img, `${e.mediaId}-thumb`);
+    if (!hasGif) e.gifUrl = await upload(gif, `${e.mediaId}-demo`);
+    if (!hasImage) e.imageUrl = await upload(img, `${e.mediaId}-thumb`);
     done++;
     writeFileSync(file, JSON.stringify(data, null, 1)); // persist progress
   } catch (err) { console.error(`FAILED ${name}: ${err.message}`); }

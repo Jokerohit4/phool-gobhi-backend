@@ -1,0 +1,16 @@
+{
+  "target": "dev",
+  "package": "in.phoolgobi.customer.dev",
+  "versionName": "1.0.0",
+  "versionCode": 5,
+  "deviceModel": "CPH2471",
+  "deviceLastUpdateTime": "2026-11-05 22:30:15 Asia/Calcutta",
+  "installCommand": "adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk",
+  "installResult": "Success",
+  "preservesAppData": true,
+  "apkSha256": "23e8c753df871aef64e57a5d4e1becaf7e790cc989d22c24a2efe88ef09b9579",
+  "focusedWidgetTestsPassed": 14,
+  "changedFileAnalysis": "No issues found",
+  "manualPlaybackOfEveryExercise": false,
+  "productionChanged": false
+}
