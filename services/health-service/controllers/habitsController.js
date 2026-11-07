@@ -1,5 +1,5 @@
 import { isoDayIST } from '../utils/sessionDay.js';
-import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater } from '../services/routineJourneyService.js';
+import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater, recordRoutineCheckIn } from '../services/routineJourneyService.js';
 import prisma from '../db/prisma.js';
 import * as habitsService from '../services/habitsService.js';
 import * as moodCheckInService from '../services/wellnessMoodCheckInService.js';
@@ -66,7 +66,11 @@ export const saveMoodCheckIn = async (req, res) => {
       support: req.body?.support,
       note: req.body?.note,
     });
-    return res.status(201).json({ data });
+    // The stored date: a night check-in after midnight belongs to its evening.
+    const reward = await recordRoutineCheckIn(prisma, {
+      userId: req.userId, kind: 'mood', localDate: data.localDate,
+    });
+    return res.status(201).json({ data, reward });
   } catch (err) {
     return fail(res, err, 'mood-checkins');
   }

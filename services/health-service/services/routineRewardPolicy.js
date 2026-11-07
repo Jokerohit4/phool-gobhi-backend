@@ -10,6 +10,10 @@ export function routineRewardPolicy(createdAt, now = new Date()) {
     waterLog: eligible && age < 7 ? 1 : 0,
     waterLogDailyCap: eligible && age < 7 ? 3 : 0,
     waterTarget: eligible && age < 14 ? 1 : 0,
+    // One coin per IST day for the first two weeks, same window as the water
+    // target: a saved sleep/body number and a saved mood check-in.
+    sleepLog: eligible && age < 14 ? 1 : 0,
+    moodLog: eligible && age < 14 ? 1 : 0,
     workout: eligible ? (age < 7 ? 2 : age < 14 ? 1 : 0) : 0,
     locationWorkout: eligible ? (age < 7 ? 4 : 3) : 0,
     waterIntervalMinutes: 60,

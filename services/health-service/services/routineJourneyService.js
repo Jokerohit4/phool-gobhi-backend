@@ -193,3 +193,33 @@ export async function recordRoutineWorkout(prisma, session) {
   return { starterAmount: policy.workout, verifiedAmount: policy.locationWorkout,
     startedAt: session.startedAt, endedAt: session.endedAt, gymId: session.gymId ?? null };
 }
+
+// One coin per IST day for a saved sleep/body number or mood check-in, paid
+// through the same durable claim as water: the claim key is the day, so saving
+// again (or the other mood slot) can never pay twice, and a timed-out credit
+// stays pending for the retry route. Never throws into the save that triggered
+// it: the check-in is the record, the coin is the side effect.
+const CHECKIN_REWARDS = {
+  sleep: { policyKey: 'sleepLog', description: 'Sleep and body logged' },
+  mood: { policyKey: 'moodLog', description: 'Mood check-in logged' },
+};
+
+export async function recordRoutineCheckIn(prisma, { userId, kind, localDate, now = new Date() }) {
+  const none = { coinsAwarded: 0, pending: false };
+  const reward = CHECKIN_REWARDS[kind];
+  if (!reward || !localDate) return none;
+  try {
+    const state = await routineState(prisma, userId);
+    if (!state) return none;
+    const policy = routineRewardPolicy(state.accountCreatedAt, now);
+    const amount = policy[reward.policyKey];
+    if (!policy.eligible || !amount || !await isFeatureEnabled('streaksCoins')) return none;
+    const key = `routine:${kind}:${userId}:${localDate}`;
+    await prisma.routineRewardClaim.upsert({
+      where: { key }, update: {}, create: { key, userId, amount, description: reward.description },
+    });
+    return await payRoutineClaims(prisma, userId);
+  } catch {
+    return none;
+  }
+}

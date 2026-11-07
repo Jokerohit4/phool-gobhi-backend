@@ -1,5 +1,8 @@
 import * as biometricService from '../services/biometricService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
+import prisma from '../db/prisma.js';
+import { recordRoutineCheckIn } from '../services/routineJourneyService.js';
+import { istDay } from '../services/routineRewardPolicy.js';
 
 const METRICS = Object.keys(biometricService.METRIC_UNITS);
 const SOURCES = ['manual', 'healthkit', 'health_connect'];
@@ -47,7 +50,17 @@ export const upsertEntries = async (req, res) => {
     }
 
     const saved = await biometricService.upsertManyService(req.userId, list, { localDate, source });
-    res.status(201).json({ data: serializeDecimals(saved) });
+    // Only a number the person typed today earns the coin: steps are measured,
+    // and a wearable sync (healthkit / health_connect) must never pay out.
+    const today = istDay();
+    const typedToday = list.some((entry) =>
+      entry.metric !== 'steps' &&
+      (entry.source ?? source ?? 'manual') === 'manual' &&
+      (entry.localDate ?? localDate ?? today) === today);
+    const reward = typedToday
+      ? await recordRoutineCheckIn(prisma, { userId: req.userId, kind: 'sleep', localDate: today })
+      : { coinsAwarded: 0, pending: false };
+    res.status(201).json({ data: serializeDecimals(saved), reward });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
