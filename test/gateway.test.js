@@ -200,6 +200,56 @@ test('client replay IDs require and preserve an immutable occurrence time', (t) 
   assert.equal(ingestCalls.length,2);
 });
 
+test('dropped client events are counted per reason and logged once, still answering 202', (t) => {
+  const now = Date.parse('2026-11-06T08:00:00Z');
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const warn = t.mock.method(console, 'warn', () => {});
+  ingestCalls.length = 0;
+  const ok = { event: 'otp_requested', distinct_id: 'u1', event_id: '00000000-0000-4000-8000-000000000001', occurred_at: new Date(now - 1000).toISOString() };
+  const batch = { events: [
+    ok,
+    { ...ok, event_id: '00000000-0000-4000-8000-000000000002', occurred_at: undefined },        // the 2026-11-03 outage shape
+    { ...ok, event_id: '00000000-0000-4000-8000-000000000003', occurred_at: 'not-a-date' },
+    { ...ok, event_id: '00000000-0000-4000-8000-000000000004', occurred_at: new Date(now - 8 * 86400000).toISOString() },
+    { ...ok, event_id: 12345 },
+    { event: 'definitely_not_registered_event', distinct_id: 'u1' },
+    null,
+  ] };
+  const res = makeRes();
+  eventsHandler(eventsReq(batch), res);
+
+  assert.equal(res.statusCode, 202);
+  assert.equal(ingestCalls.length, 1, 'only the valid event is ingested');
+  assert.equal(warn.mock.callCount(), 1, 'one log line per request, not one per drop');
+  const line = JSON.parse(warn.mock.calls[0].arguments[0]);
+  assert.equal(line.severity, 'WARNING');
+  assert.equal(line.message, 'client_events_dropped');
+  assert.equal(line.received, 7);
+  assert.deepEqual(line.drops, {
+    occurred_at_missing_or_invalid: 2,
+    occurred_at_out_of_window: 1,
+    event_id_not_string: 1,
+    not_allowlisted: 1,
+    malformed: 1,
+  });
+  assert.deepEqual(line.unregistered_events, ['definitely_not_registered_event']);
+});
+
+test('a fully valid batch logs nothing and never echoes event payloads', (t) => {
+  const now = Date.parse('2026-11-06T08:00:00Z');
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const warn = t.mock.method(console, 'warn', () => {});
+  ingestCalls.length = 0;
+  eventsHandler(eventsReq({ event: 'otp_requested', distinct_id: 'u1', event_id: '00000000-0000-4000-8000-000000000009', occurred_at: new Date(now).toISOString(), properties: { phone: '9999999999' } }), makeRes());
+  assert.equal(ingestCalls.length, 1);
+  assert.equal(warn.mock.callCount(), 0);
+
+  // A drop must log reasons and counts only, never distinct_id or properties.
+  eventsHandler(eventsReq({ event: 'otp_requested', distinct_id: 'secret-user', event_id: 'x', properties: { phone: '9999999999' } }), makeRes());
+  const text = String(warn.mock.calls[0].arguments[0]);
+  assert.ok(!text.includes('secret-user') && !text.includes('9999999999'));
+});
+
 test('eventsHandler: single allowed event is ingested with enrichment', () => {
   ingestCalls.length = 0;
   const res = makeRes();

@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { resolvePersona } from '../services/personaService.js';
 import { bucketFor } from '../services/experimentService.js';
 
-// Verbatim copy of the pre-change getMe response mapper.
+// Copy of the getMe response mapper from before the narrow select, plus the
+// fields added since (each marked below).
 function legacyMe(user, gymLinkSource) {
   return {
     id: user.id, phone: user.phone, name: user.name, email: user.email, role: user.role, type: user.type,
@@ -21,6 +22,8 @@ function legacyMe(user, gymLinkSource) {
     wellnessSetupCompleted: user.wellnessSetupCompleted === true, trainingLocationPref: user.trainingLocationPref,
     trainingLocationOther: user.trainingLocationOther, appMode: user.appMode, persona: resolvePersona(user),
     freeTimeWindow: user.freeTimeWindow, gymSubscriptionEndDate: user.gymSubscriptionEndDate || null, experiments: bucketFor(user.id), recommendedEquipment: user.recommendedEquipment ?? null,
+    // Added after the snapshot: the avatar the app reads from /me.
+    profileImageUrl: user.profileImageUrl || '',
   };
 }
 
@@ -34,8 +37,9 @@ function wideRow(overrides = {}) {
     wellnessDayPattern: null, wellnessSleepPattern: null, wellnessSetupCompleted: false,
     trainingLocationPref: 'home', trainingLocationOther: null, appMode: 'home_track', persona: null,
     freeTimeWindow: 'evening', recommendedEquipment: { items: ['mat'] },
+    profileImageUrl: 'https://img.example/me.jpg',
     // Columns /me must NOT depend on:
-    passwordHash: 'secret', fcmToken: 'tok', profileImageUrl: 'http://img', bankNote: 'x', createdAt: new Date(), updatedAt: new Date(),
+    passwordHash: 'secret', fcmToken: 'tok', bankNote: 'x', createdAt: new Date(), updatedAt: new Date(),
     ...overrides,
   };
 }

@@ -662,6 +662,8 @@ export const ME_SELECT = Object.fromEntries([
   'pendingGymPromptGymId', 'gymLinkNotice', 'firstVisitBadgeConsent', 'currentlyWorksOut', 'workoutIntent',
   'wellnessFocuses', 'wellnessDayPattern', 'wellnessSleepPattern', 'wellnessSetupCompleted',
   'trainingLocationPref', 'trainingLocationOther', 'appMode', 'persona', 'freeTimeWindow', 'recommendedEquipment', 'gymSubscriptionEndDate',
+  // The app reads the avatar from /me; without it every client saw "no photo".
+  'profileImageUrl',
 ].map((field) => [field, true]));
 
 const getMe = async (req, res) => {
@@ -732,6 +734,7 @@ const getMe = async (req, res) => {
       // is the constant control arm; see services/experimentService.js.
       experiments: bucketFor(user.id),
       recommendedEquipment: user.recommendedEquipment ?? null,
+      profileImageUrl: user.profileImageUrl || '',
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });

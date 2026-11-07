@@ -190,17 +190,28 @@ export function eventsHandler(req, res) {
 
     const body = req.body || {};
     const list = Array.isArray(body.events) ? body.events : [body];
+    // Drops stay invisible to the caller (still 202) but are counted per reason
+    // and logged once per request, so a client that is silently rejected shows
+    // up in Cloud Run logs instead of as an unexplained gap in the warehouse.
+    const drops = Object.create(null);
+    const unregistered = new Set();
+    const drop = (reason) => { drops[reason] = (drops[reason] || 0) + 1; };
     for (const e of list) {
-      if (!e || typeof e.event !== 'string') continue;
+      if (!e || typeof e.event !== 'string') { drop('malformed'); continue; }
       // Silently drop anything not in the registry — never tell the caller
       // which names are valid, that just makes probing easier. Still 202.
-      if (!CLIENT_EVENT_ALLOWLIST.has(e.event)) continue;
+      if (!CLIENT_EVENT_ALLOWLIST.has(e.event)) {
+        drop('not_allowlisted');
+        if (unregistered.size < 5) unregistered.add(e.event.slice(0, 64));
+        continue;
+      }
       if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
       const properties = e.properties;
       if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
-      if (e.event_id !== undefined && typeof e.event_id !== 'string') continue;
+      if (e.event_id !== undefined && typeof e.event_id !== 'string') { drop('event_id_not_string'); continue; }
       const occurrence = typeof e.occurred_at === 'string' ? Date.parse(e.occurred_at) : NaN;
-      if (e.event_id !== undefined && (!Number.isFinite(occurrence) || occurrence > Date.now()+300000 || occurrence < Date.now()-7*86400000)) continue;
+      if (e.event_id !== undefined && !Number.isFinite(occurrence)) { drop('occurred_at_missing_or_invalid'); continue; }
+      if (e.event_id !== undefined && (occurrence > Date.now()+300000 || occurrence < Date.now()-7*86400000)) { drop('occurred_at_out_of_window'); continue; }
       const eventId = e.event_id ? 'client:' + createHash('sha256').update(JSON.stringify([e.distinct_id,e.event,e.event_id])).digest('hex') : undefined;
 
       if (QUEUE_DIAGNOSTIC_EVENTS.has(e.event)) {
@@ -224,6 +235,16 @@ export function eventsHandler(req, res) {
       if (ip && enriched.ip == null) enriched.ip = ip;
 
       ingest({ event: e.event, distinctId: e.distinct_id, properties: enriched, source: 'client', ...(eventId ? { eventId, timestamp: e.occurred_at } : {}) });
+    }
+    if (Object.keys(drops).length) {
+      // Structured so Cloud Run indexes it as a WARNING with queryable fields.
+      console.warn(JSON.stringify({
+        severity: 'WARNING',
+        message: 'client_events_dropped',
+        received: list.length,
+        drops,
+        ...(unregistered.size ? { unregistered_events: [...unregistered] } : {}),
+      }));
     }
   } catch (_) {
     // swallow — analytics never fails the client
