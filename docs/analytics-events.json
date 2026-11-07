@@ -1142,6 +1142,22 @@
     "since": "2026-10-04",
     "notes": "props challenge_id, spawn_id, caught, reason (already_gone | too_far | lost_race | null), species_key, rarity, coins_awarded, distance_bucket. Every non-catch is recorded with its cause: too_far means the spawn was visible but out of reach (a spawn-radius or client-GPS problem), already_gone and lost_race are other users winning it. distance_bucket is rounded to 100m and capped at 50 so it can never become a location log"
   },
+  "workout_session_reopened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-11-07",
+    "notes": "an unfinished or check-in-drafted workout session was re-opened by id. No props. workout_started counts only brand-new sessions, so started + session_reopened together are every workout the user entered; a finish with neither was previously invisible"
+  },
+  "consent_prompt_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-11-07",
+    "notes": "a consent surface was put in front of the user. props consent_kind (health | ledger). health fires when the status loads and consent is not yet granted; ledger fires when the combined consent screen opens. The denominator for the *_consent_granted events: grants / prompts shown is the real consent rate"
+  },
   "workout_started": {
     "source": "client",
     "apps": [
