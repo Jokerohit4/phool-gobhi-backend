@@ -36,6 +36,10 @@ export async function autocomplete(input, sessionToken, location) {
   return (body.predictions || []).map((p) => ({
     placeId: p.place_id,
     description: p.description,
+    // Additive: lets a client show "Gold's Gym" over "Sector 29, Gurugram"
+    // without guessing where to split the description.
+    mainText: p.structured_formatting?.main_text ?? null,
+    secondaryText: p.structured_formatting?.secondary_text ?? null,
   }));
 }
 
@@ -178,11 +182,16 @@ export async function placeDetails(placeId, sessionToken) {
     components.find((c) => c.types.includes('administrative_area_level_2'))?.long_name ||
     '';
 
+  // A gym row needs a state; Places only gives it as an address component.
+  const state =
+    components.find((c) => c.types.includes('administrative_area_level_1'))?.long_name || '';
+
   return {
     placeId,
     name: result.name || '',
     address: result.formatted_address || '',
     city,
+    state,
     lat: result.geometry?.location?.lat ?? null,
     lng: result.geometry?.location?.lng ?? null,
     googleRating: result.rating ?? null,
