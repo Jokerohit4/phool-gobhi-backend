@@ -37,6 +37,7 @@ import {
   evictAppConfigBundle, evictLaunchGate,
 } from '../utils/settingsCaches.js';
 import { bucketFor } from '../services/experimentService.js';
+import { gymLinkStatus as linkStatusOf } from '../utils/gymLinkStatus.js';
 
 
 const signup = async (req, res) => {
@@ -678,14 +679,19 @@ const getMe = async (req, res) => {
     // How the active gym membership was made (QR vs self-declared), so the app
     // can render the linked-member home from /me alone. Null when the pointer
     // exists but there is no live GymLink row yet (pre-backfill accounts).
+    // gymLinkStatus is whether the gym has confirmed it ('pending' for a
+    // self-declared link nobody at the gym has answered yet), so the app can say
+    // "waiting for your gym" and keep saying it across restarts.
     let gymLinkSource = null;
+    let gymLinkStatus = null;
     if (user.linkedGymId) {
       const active = await prisma.gymLink.findFirst({
         where: { userId: user.id, removedAt: null },
         orderBy: { linkedAt: 'desc' },
-        select: { source: true },
+        select: { source: true, approvedAt: true, firstVerifiedCheckinAt: true },
       });
       gymLinkSource = active?.source ?? null;
+      gymLinkStatus = linkStatusOf(active);
     }
     res.json({
       id: user.id,
@@ -701,6 +707,7 @@ const getMe = async (req, res) => {
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
       gymLinkSource,
+      gymLinkStatus,
       trainerGymId: user.trainerGymId,
       leaderboardOptIn: user.leaderboardOptIn,
       // Coach-journey (B2) linked-member fields: which Home to route to, the
@@ -873,16 +880,17 @@ const countGymJoinedUsersByMonthInternal = async (req, res) => {
 // Roster shared by the gobhi attendance-SaaS view and the partner-facing member
 // list (coach-journey B2). Reads active GymLinks rather than scanning
 // User.linkedGymId, so it can apply the self-link visibility rule: a
-// self-declared member is not shown until a verified check-in confirms they
-// really go there, and even then only by first name (they never opted into
+// self-declared member is not shown until the gym approves them or a verified
+// check-in confirms they really go there, and even then only by first name (they never opted into
 // being named next to check-ins they did not make). QR members show in full.
 async function gymRoster(gymId, { includePhone }) {
   const links = await prisma.gymLink.findMany({
     where: { gymId, removedAt: null },
     orderBy: { linkedAt: 'asc' },
-    select: { userId: true, source: true, firstVerifiedCheckinAt: true },
+    select: { userId: true, source: true, firstVerifiedCheckinAt: true, approvedAt: true },
   });
-  const visible = links.filter((l) => l.source !== 'self' || l.firstVerifiedCheckinAt != null);
+  // A self link shows once the gym approved it or a verified check-in confirmed it.
+  const visible = links.filter((l) => l.source !== 'self' || l.firstVerifiedCheckinAt != null || l.approvedAt != null);
   const ids = [...new Set(visible.map((l) => l.userId))];
   if (!ids.length) return [];
   const users = await prisma.user.findMany({

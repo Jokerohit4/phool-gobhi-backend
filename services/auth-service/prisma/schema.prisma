@@ -714,6 +714,12 @@ model GymLink {
   // True when the gym (not the user) removed the link: the user may not
   // self-re-link to this gym without coming back through the gym's QR.
   selfRelinkBlocked      Boolean       @default(false)
+  // Gym-side confirmation of a `self` link. A self link is live immediately but
+  // sits in the partner's pending queue (approvedAt null, no verified check-in)
+  // until the gym approves it. Rejecting is removeMemberFromGym, not a field.
+  // gym_qr links never need it: the gym initiated them.
+  approvedAt             DateTime?
+  approvedByPartnerId    Int?
 
   // At most one active link per user is enforced by a partial unique index
   // (GymLink_userId_active_key, WHERE "removedAt" IS NULL) created in the

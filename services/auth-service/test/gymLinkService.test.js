@@ -16,6 +16,10 @@ import {
   dismissClaimPrompt,
   isSelfLinkGymEnabled,
   getActiveLink,
+  isPendingSelfLink,
+  listPendingSelfLinks,
+  approveSelfLink,
+  rejectSelfLink,
 } from '../services/gymLinkService.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -72,6 +76,9 @@ function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVers
         const row = state.users.find((u) => u.id === where.id);
         return row ? { ...row } : null;
       },
+      async findMany({ where }) {
+        return state.users.filter((u) => matches(where, u)).map((u) => ({ ...u }));
+      },
       async update({ where, data }) {
         const row = state.users.find((u) => u.id === where.id);
         Object.assign(row, data);
@@ -88,11 +95,11 @@ function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVers
         const hit = order(state.gymLinks.filter((l) => matches(where, l)), orderBy);
         return hit[0] ? { ...hit[0] } : null;
       },
-      async findMany({ where }) {
-        return state.gymLinks.filter((l) => matches(where, l)).map((l) => ({ ...l }));
+      async findMany({ where, orderBy }) {
+        return order(state.gymLinks.filter((l) => matches(where, l)), orderBy).map((l) => ({ ...l }));
       },
       async create({ data }) {
-        const row = { id: nextLinkId++, removedAt: null, removedByPartnerId: null, selfRelinkBlocked: false, firstVerifiedCheckinAt: null, ...data };
+        const row = { id: nextLinkId++, removedAt: null, removedByPartnerId: null, selfRelinkBlocked: false, firstVerifiedCheckinAt: null, approvedAt: null, approvedByPartnerId: null, ...data };
         state.gymLinks.push(row);
         return { ...row };
       },
@@ -425,4 +432,134 @@ test('dismissing the claim prompt clears it', async () => {
   const { prisma, state } = createFakePrisma({ users: [baseUser({ id: 1, pendingGymPromptGymId: 900 })] });
   await dismissClaimPrompt(prisma, 1);
   assert.equal(state.users[0].pendingGymPromptGymId, null);
+});
+
+// --- gym-side approval of self links ------------------------------------------
+
+const selfLink = (over = {}) => ({
+  id: 1, userId: 1, gymId: 7, source: 'self', linkedAt: new Date(Date.now() - DAY),
+  removedAt: null, removedByPartnerId: null, selfRelinkBlocked: false,
+  firstVerifiedCheckinAt: null, approvedAt: null, approvedByPartnerId: null, ...over,
+});
+
+test('only an active, unconfirmed self link is pending', () => {
+  assert.equal(isPendingSelfLink(selfLink()), true);
+  assert.equal(isPendingSelfLink(selfLink({ approvedAt: new Date() })), false, 'approved');
+  assert.equal(isPendingSelfLink(selfLink({ firstVerifiedCheckinAt: new Date() })), false, 'verified by a check-in');
+  assert.equal(isPendingSelfLink(selfLink({ removedAt: new Date() })), false, 'already ended');
+  assert.equal(isPendingSelfLink(selfLink({ source: 'gym_qr' })), false, 'the gym initiated a QR link');
+});
+
+test('a fresh self link is created pending, with no approval stamp', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser()] });
+  await linkGym(prisma, 1, 7, 'self');
+  assert.equal(state.gymLinks[0].approvedAt, null);
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), true);
+});
+
+test('the queue lists this gym\'s pending claims oldest first, first name only', async () => {
+  const { prisma } = createFakePrisma({
+    users: [
+      baseUser({ id: 1, name: 'Asha Verma' }),
+      baseUser({ id: 2, name: 'Ravi Kumar' }),
+      baseUser({ id: 3, name: 'Elsewhere Person' }),
+      baseUser({ id: 4, name: 'Confirmed Member' }),
+      baseUser({ id: 5, name: 'Qr Member' }),
+    ],
+    gymLinks: [
+      selfLink({ id: 1, userId: 2, linkedAt: new Date(Date.now() - 1 * DAY) }),
+      selfLink({ id: 2, userId: 1, linkedAt: new Date(Date.now() - 3 * DAY) }),
+      selfLink({ id: 3, userId: 3, gymId: 99 }),
+      selfLink({ id: 4, userId: 4, approvedAt: new Date() }),
+      selfLink({ id: 5, userId: 5, source: 'gym_qr' }),
+    ],
+  });
+  const queue = await listPendingSelfLinks(prisma, 7);
+  assert.deepEqual(queue.map((q) => [q.userId, q.name]), [[1, 'Asha'], [2, 'Ravi']]);
+  assert.ok(queue.every((q) => !('phone' in q)), 'no phone number leaves the service');
+});
+
+test('an empty queue is an empty list', async () => {
+  const { prisma } = createFakePrisma();
+  assert.deepEqual(await listPendingSelfLinks(prisma, 7), []);
+});
+
+test('approving stamps who and when, and takes the claim out of the queue', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ id: 1, name: 'Asha', linkedGymId: 7 })],
+    gymLinks: [selfLink()],
+  });
+  await approveSelfLink(prisma, 7, 1, 55);
+  assert.ok(state.gymLinks[0].approvedAt instanceof Date);
+  assert.equal(state.gymLinks[0].approvedByPartnerId, 55);
+  assert.deepEqual(await listPendingSelfLinks(prisma, 7), []);
+  assert.equal(state.users[0].linkedGymId, 7, 'approval never moves the user');
+});
+
+test('approving twice keeps the first stamp', async () => {
+  const first = new Date(Date.now() - DAY);
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ linkedGymId: 7 })],
+    gymLinks: [selfLink({ approvedAt: first, approvedByPartnerId: 55 })],
+  });
+  await approveSelfLink(prisma, 7, 1, 66);
+  assert.equal(state.gymLinks[0].approvedAt, first);
+  assert.equal(state.gymLinks[0].approvedByPartnerId, 55);
+});
+
+test('approving a QR link changes nothing', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ linkedGymId: 7 })],
+    gymLinks: [selfLink({ source: 'gym_qr' })],
+  });
+  await approveSelfLink(prisma, 7, 1, 55);
+  assert.equal(state.gymLinks[0].approvedAt, null);
+});
+
+test('approving a member who has already left is a 404 the partner UI can drop', async () => {
+  const { prisma } = createFakePrisma({
+    users: [baseUser()],
+    gymLinks: [selfLink({ removedAt: new Date() })],
+  });
+  await assert.rejects(approveSelfLink(prisma, 7, 1, 55), { status: 404, errorCode: 'LINK_NOT_FOUND' });
+});
+
+test('approval is scoped to the gym: another gym\'s claim is not found', async () => {
+  const { prisma } = createFakePrisma({
+    users: [baseUser({ linkedGymId: 99 })],
+    gymLinks: [selfLink({ gymId: 99 })],
+  });
+  await assert.rejects(approveSelfLink(prisma, 7, 1, 55), { errorCode: 'LINK_NOT_FOUND' });
+});
+
+test('rejecting a pending claim ends the link, blocks self-rejoin and leaves the removed notice', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ id: 1, linkedGymId: 7 })],
+    gymLinks: [selfLink()],
+  });
+  await rejectSelfLink(prisma, 7, 1, 55);
+  assert.ok(state.gymLinks[0].removedAt);
+  assert.equal(state.gymLinks[0].removedByPartnerId, 55);
+  assert.equal(state.gymLinks[0].selfRelinkBlocked, true);
+  assert.equal(state.users[0].linkedGymId, null);
+  assert.equal(state.users[0].gymLinkNotice, 'removed_by_gym');
+  // ...and the same user cannot just self-link again.
+  await assert.rejects(linkGym(prisma, 1, 7, 'self'), { errorCode: 'SELF_LINK_BLOCKED' });
+});
+
+test('reject cannot evict a confirmed member', async () => {
+  for (const over of [{ approvedAt: new Date() }, { firstVerifiedCheckinAt: new Date() }, { source: 'gym_qr' }]) {
+    const { prisma, state } = createFakePrisma({
+      users: [baseUser({ linkedGymId: 7 })],
+      gymLinks: [selfLink(over)],
+    });
+    await assert.rejects(rejectSelfLink(prisma, 7, 1, 55), { status: 409, errorCode: 'LINK_NOT_PENDING' }, JSON.stringify(over));
+    assert.equal(state.gymLinks[0].removedAt, null);
+    assert.equal(state.users[0].linkedGymId, 7);
+  }
+});
+
+test('rejecting with no active link is a 404', async () => {
+  const { prisma } = createFakePrisma({ users: [baseUser()] });
+  await assert.rejects(rejectSelfLink(prisma, 7, 1, 55), { status: 404, errorCode: 'LINK_NOT_FOUND' });
 });

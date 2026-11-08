@@ -247,6 +247,72 @@ export async function markGymCheckedIn(prisma, userId, gymId) {
   return { ok: true };
 }
 
+// A self link the gym has not yet confirmed: still active, no partner approval,
+// and no verified check-in (a real check-in confirms membership on its own, so
+// that person never needs the gym to click anything).
+export function isPendingSelfLink(link) {
+  return link.source === 'self' && !link.removedAt && !link.approvedAt && !link.firstVerifiedCheckinAt;
+}
+
+// The gym's approval queue: active, unconfirmed self links, oldest first. The
+// partner sees first name only (same privacy rule as the roster — a claim is
+// not yet a relationship) and never a phone number.
+export async function listPendingSelfLinks(prisma, gymId) {
+  const links = await prisma.gymLink.findMany({
+    where: { gymId, source: 'self', removedAt: null, approvedAt: null, firstVerifiedCheckinAt: null },
+    orderBy: { linkedAt: 'asc' },
+    select: { userId: true, linkedAt: true },
+  });
+  if (!links.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: links.map((l) => l.userId) } },
+    select: { id: true, name: true },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return links
+    .map((l) => {
+      const u = byId.get(l.userId);
+      if (!u) return null;
+      const first = typeof u.name === 'string' ? u.name.trim().split(/\s+/)[0] : '';
+      return { userId: l.userId, name: first || null, requestedAt: l.linkedAt };
+    })
+    .filter(Boolean);
+}
+
+// Partner confirms a self-declared member. Idempotent: approving an already
+// approved (or verified) link is a no-op success. A link that is gone (user left
+// or was removed) is a 404 so the partner's UI can drop the stale row.
+export async function approveSelfLink(prisma, gymId, userId, partnerId) {
+  const link = await prisma.gymLink.findFirst({
+    where: { userId, gymId, removedAt: null },
+    orderBy: { linkedAt: 'desc' },
+  });
+  if (!link) throw { status: 404, error: 'No active link request for this member', errorCode: 'LINK_NOT_FOUND' };
+  if (link.source !== 'self' || link.approvedAt) return { ok: true };
+  await prisma.gymLink.update({
+    where: { id: link.id },
+    data: { approvedAt: new Date(), approvedByPartnerId: partnerId },
+  });
+  return { ok: true };
+}
+
+// Partner declines a pending request. Same effect as removing the member —
+// the link closes, the user's gym pointer clears, they get the "removed by gym"
+// notice and cannot self-re-link (only the gym's QR brings them back) — but
+// only for a still-pending claim, so this route cannot be used to evict a
+// confirmed member (that is DELETE /gym/:gymId/members/:userId).
+export async function rejectSelfLink(prisma, gymId, userId, partnerId) {
+  const link = await prisma.gymLink.findFirst({
+    where: { userId, gymId, removedAt: null },
+    orderBy: { linkedAt: 'desc' },
+  });
+  if (!link) throw { status: 404, error: 'No active link request for this member', errorCode: 'LINK_NOT_FOUND' };
+  if (!isPendingSelfLink(link)) {
+    throw { status: 409, error: 'This member is already confirmed', errorCode: 'LINK_NOT_PENDING' };
+  }
+  return removeMemberFromGym(prisma, gymId, userId, partnerId);
+}
+
 // Gym-service tells us an unclaimed gym was claimed by a partner: everyone who
 // had it as their home unclaimed gym (or arrived through it) is prompted to
 // move to the now-claimable gym.

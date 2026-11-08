@@ -13,8 +13,13 @@ import {
   getActiveLink,
   acceptClaimPrompt,
   dismissClaimPrompt,
+  listPendingSelfLinks,
+  approveSelfLink,
+  rejectSelfLink,
 } from '../services/gymLinkService.js';
-import { assertPartnerOwnsGym } from '../services/authService.js';
+import { assertPartnerOwnsGym, fetchGymInternal } from '../services/authService.js';
+import { notifyUser } from '../utils/notifyUser.js';
+import { gymLinkStatus } from '../utils/gymLinkStatus.js';
 
 
 function requesterId(req) {
@@ -46,15 +51,49 @@ export const selfLink = async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const link = await getActiveLink(prisma, userId);
+    // The link is live straight away; `status` tells the app whether the gym has
+    // confirmed it yet so it can say "waiting for <gym>" instead of "verified".
+    const confirmed = gymLinkStatus(link) === 'approved';
     res.json({
       link: link
-        ? { gymId: link.gymId, source: link.source, linkedAt: link.linkedAt }
-        : { gymId, source: 'self', linkedAt: null },
+        ? {
+            gymId: link.gymId,
+            source: link.source,
+            linkedAt: link.linkedAt,
+            status: confirmed ? 'approved' : 'pending',
+          }
+        : { gymId, source: 'self', linkedAt: null, status: 'pending' },
     });
+    // Only a link this call just created is news to the gym; a repeat call from
+    // an already-linked user (first link wins) must not re-ping the owner.
+    if (link && link.gymId === gymId && !confirmed && Date.now() - new Date(link.linkedAt).getTime() < 60_000) {
+      void notifyGymOfLinkRequest(gymId);
+    }
   } catch (err) {
     fail(res, err);
   }
 };
+
+// Best-effort push to the gym owner that someone claimed membership. Never
+// throws: a missed push must not fail the customer's link. The body carries no
+// customer name — the gym reads that in the queue, behind their own login.
+async function notifyGymOfLinkRequest(gymId) {
+  try {
+    const gym = await fetchGymInternal(gymId);
+    if (!gym?.partnerId) return;
+    const partner = await prisma.user.findUnique({
+      where: { id: gym.partnerId },
+      select: { fcmToken: true },
+    });
+    await notifyUser(partner?.fcmToken, {
+      title: 'New member request',
+      body: 'Someone says they train at your gym. Review and confirm.',
+      data: { type: 'gym_link_request', gymId },
+    });
+  } catch (err) {
+    console.error('[gym-link] notify gym failed:', err?.message || err);
+  }
+}
 
 // DELETE /gym-links/self — customer leaves their gym. Flag-gated.
 export const leaveGymLink = async (req, res) => {
@@ -83,6 +122,52 @@ export const removeGymMember = async (req, res) => {
     }
     await assertPartnerOwnsGym(gymId, req.user.id);
     await removeMemberFromGym(prisma, gymId, userId, req.user.id);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// Shared guard for the three partner link-request routes. Not flag-gated: a gym
+// must always be able to see and answer claims already made in its name.
+async function partnerGymParams(req) {
+  if (req.user?.role !== 'partner') throw { status: 403, error: 'Forbidden' };
+  const gymId = parseInt(req.params.gymId);
+  if (!Number.isInteger(gymId) || gymId <= 0) throw { status: 400, error: 'gymId required' };
+  await assertPartnerOwnsGym(gymId, req.user.id);
+  const rawUserId = req.params.userId;
+  if (rawUserId === undefined) return { gymId };
+  const userId = parseInt(rawUserId);
+  if (!Number.isInteger(userId) || userId <= 0) throw { status: 400, error: 'userId required' };
+  return { gymId, userId };
+}
+
+// GET /gym/:gymId/link-requests — the gym's pending self-link queue.
+export const listLinkRequests = async (req, res) => {
+  try {
+    const { gymId } = await partnerGymParams(req);
+    res.json({ data: await listPendingSelfLinks(prisma, gymId) });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym/:gymId/link-requests/:userId/approve — confirm a self-declared member.
+export const approveLinkRequest = async (req, res) => {
+  try {
+    const { gymId, userId } = await partnerGymParams(req);
+    await approveSelfLink(prisma, gymId, userId, req.user.id);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym/:gymId/link-requests/:userId/reject — decline a pending claim.
+export const rejectLinkRequest = async (req, res) => {
+  try {
+    const { gymId, userId } = await partnerGymParams(req);
+    await rejectSelfLink(prisma, gymId, userId, req.user.id);
     res.status(204).end();
   } catch (err) {
     fail(res, err);

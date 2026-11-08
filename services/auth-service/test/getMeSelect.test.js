@@ -8,12 +8,13 @@ import { bucketFor } from '../services/experimentService.js';
 
 // Copy of the getMe response mapper from before the narrow select, plus the
 // fields added since (each marked below).
-function legacyMe(user, gymLinkSource) {
+function legacyMe(user, gymLinkSource, gymLinkStatus = null) {
   return {
     id: user.id, phone: user.phone, name: user.name, email: user.email, role: user.role, type: user.type,
     gender: user.gender, dateOfBirth: user.dateOfBirth, fitnessGoals: user.fitnessGoals,
     sportsPlayed: user.sportsPlayed ?? [], referralCode: user.referralCode, linkedGymId: user.linkedGymId,
-    gymLinkSource, trainerGymId: user.trainerGymId, leaderboardOptIn: user.leaderboardOptIn,
+    // gymLinkStatus (added with gym-side approval): whether the gym has confirmed the link.
+    gymLinkSource, gymLinkStatus, trainerGymId: user.trainerGymId, leaderboardOptIn: user.leaderboardOptIn,
     experienceLevel: user.experienceLevel ?? null, homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
     pendingGymPromptGymId: user.pendingGymPromptGymId ?? null, gymLinkNotice: user.gymLinkNotice ?? null,
     firstVisitBadgeConsent: user.firstVisitBadgeConsent ?? false, currentlyWorksOut: user.currentlyWorksOut ?? null,
@@ -82,7 +83,8 @@ test('unlinked user: /me is byte-identical to the legacy full-row mapper', async
 test('linked user: gymLinkSource and persona are byte-identical too', async () => {
   stored = wideRow({ linkedGymId: 7, trainingLocationPref: 'gym', persona: null }); linkRow = { source: 'qr' };
   const res = await call();
-  assert.equal(JSON.stringify(res.body), JSON.stringify(legacyMe(stored, 'qr')));
+  // Not a self link, so the gym's own doing: approved from the start.
+  assert.equal(JSON.stringify(res.body), JSON.stringify(legacyMe(stored, 'qr', 'approved')));
   assert.equal(res.body.persona, 'linked_gym');
   stored = wideRow({ linkedGymId: 7, persona: 'wellness', wellnessFocuses: ['sleep'] }); linkRow = null;
   assert.equal(JSON.stringify((await call()).body), JSON.stringify(legacyMe(stored, null)));
@@ -93,4 +95,27 @@ test('missing user still 404s; select keeps resolvePersona inputs', async () => 
   assert.equal((await call()).statusCode, 404);
   // resolvePersona() inputs must stay selectable.
   for (const k of ['persona', 'linkedGymId', 'homeUnclaimedGymId', 'appMode']) assert.ok(ME_SELECT[k], k);
+});
+
+test('gymLinkStatus: a self link nobody at the gym has answered is pending', async () => {
+  stored = wideRow({ linkedGymId: 7, trainingLocationPref: 'gym' });
+  linkRow = { source: 'self', approvedAt: null, firstVerifiedCheckinAt: null };
+  const res = await call();
+  assert.equal(res.body.gymLinkSource, 'self');
+  assert.equal(res.body.gymLinkStatus, 'pending');
+});
+
+test('gymLinkStatus: approval or a verified check-in makes a self link approved', async () => {
+  stored = wideRow({ linkedGymId: 7, trainingLocationPref: 'gym' });
+  linkRow = { source: 'self', approvedAt: new Date(), firstVerifiedCheckinAt: null };
+  assert.equal((await call()).body.gymLinkStatus, 'approved');
+  linkRow = { source: 'self', approvedAt: null, firstVerifiedCheckinAt: new Date() };
+  assert.equal((await call()).body.gymLinkStatus, 'approved');
+});
+
+test('gymLinkStatus: null with no gym, and with a pointer but no live link row', async () => {
+  stored = wideRow(); linkRow = null;
+  assert.equal((await call()).body.gymLinkStatus, null);
+  stored = wideRow({ linkedGymId: 7 }); linkRow = null;
+  assert.equal((await call()).body.gymLinkStatus, null);
 });

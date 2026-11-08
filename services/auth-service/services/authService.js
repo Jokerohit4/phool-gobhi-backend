@@ -68,6 +68,14 @@ async function fetchPartnerGymSummary(partnerId) {
 // duplicated per-service rather than shared since these are independent
 // microservices with no shared code layer.
 export async function assertPartnerOwnsGym(gymId, partnerId) {
+  const gym = await fetchGymInternal(gymId);
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
+// Gym-service's internal read of one gym. Throws 404 when it cannot be fetched,
+// so callers that only want to notify the owner can catch and carry on.
+export async function fetchGymInternal(gymId) {
   let gym;
   try {
     const res = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
@@ -82,7 +90,6 @@ export async function assertPartnerOwnsGym(gymId, partnerId) {
   } catch (_) {
     throw { status: 404, error: 'Gym not found' };
   }
-  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
   return gym;
 }
 

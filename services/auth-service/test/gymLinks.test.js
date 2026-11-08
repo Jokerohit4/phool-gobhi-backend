@@ -48,6 +48,9 @@ function createFakePrisma() {
         const row = state.users.find((u) => u.id === where.id);
         return row ? { ...row } : null;
       },
+      async findMany({ where }) {
+        return state.users.filter((u) => matches(where, u)).map((u) => ({ ...u }));
+      },
       async update({ where, data }) {
         const row = state.users.find((u) => u.id === where.id);
         Object.assign(row, data);
@@ -72,7 +75,7 @@ function createFakePrisma() {
         return state.gymLinks.filter((l) => matches(where, l)).map((l) => ({ ...l }));
       },
       async create({ data }) {
-        const row = { id: nextLinkId++, removedAt: null, removedByPartnerId: null, selfRelinkBlocked: false, firstVerifiedCheckinAt: null, ...data };
+        const row = { id: nextLinkId++, removedAt: null, removedByPartnerId: null, selfRelinkBlocked: false, firstVerifiedCheckinAt: null, approvedAt: null, approvedByPartnerId: null, ...data };
         state.gymLinks.push(row);
         return { ...row };
       },
@@ -131,6 +134,9 @@ let removeGymMember;
 let clearGymLinkNotice;
 let gymLinkCheckedIn;
 let unclaimedGymClaimed;
+let listLinkRequests;
+let approveLinkRequest;
+let rejectLinkRequest;
 
 test('setup: mock @prisma/client and authService once, import the controller once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -142,10 +148,15 @@ test('setup: mock @prisma/client and authService once, import the controller onc
         if (partnerOwnsBehavior) return partnerOwnsBehavior(...args);
         return { id: args[0] };
       },
+      // Used only for the best-effort "new member request" push; an empty gym
+      // (no partnerId) skips the push, which is all these tests need.
+      fetchGymInternal: async () => ({}),
     },
   });
-  ({ selfLink, leaveGymLink, removeGymMember, clearGymLinkNotice, gymLinkCheckedIn, unclaimedGymClaimed } =
-    await import('../controllers/gymLinkController.js'));
+  ({
+    selfLink, leaveGymLink, removeGymMember, clearGymLinkNotice, gymLinkCheckedIn, unclaimedGymClaimed,
+    listLinkRequests, approveLinkRequest, rejectLinkRequest,
+  } = await import('../controllers/gymLinkController.js'));
 });
 
 function reset({ users = [], gymLinks = [], userDevices = [] } = {}) {
@@ -189,6 +200,7 @@ test('selfLink returns the link shape on success', async () => {
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.link.gymId, 3);
   assert.equal(res.body.link.source, 'self');
+  assert.equal(res.body.link.status, 'pending', 'a fresh self link waits for the gym');
 });
 
 test('selfLink is a 404 when the user does not exist', async () => {
@@ -321,4 +333,94 @@ test('the unclaimed-claim hook prompts the affected customers', async () => {
   assert.equal(res.statusCode, 204);
   assert.equal(state.users.find((u) => u.id === 1).pendingGymPromptGymId, 900);
   assert.equal(state.users.find((u) => u.id === 2).pendingGymPromptGymId, 900);
+});
+
+// --- gym-side link requests (approve / reject) --------------------------------
+
+const pendingSelf = (over = {}) => ({
+  id: 1, userId: 9, gymId: 3, source: 'self', linkedAt: new Date(), removedAt: null,
+  selfRelinkBlocked: false, firstVerifiedCheckinAt: null, approvedAt: null, approvedByPartnerId: null, ...over,
+});
+const partnerReq = (params) => req({ user: { id: 7, role: 'partner' }, params });
+
+test('the link-request routes are partner-only', async () => {
+  for (const handler of [listLinkRequests, approveLinkRequest, rejectLinkRequest]) {
+    reset({ users: [user()] });
+    const res = fakeRes();
+    await handler(req({ user: { id: 7, role: 'customer' }, params: { gymId: '3', userId: '9' } }), res);
+    assert.equal(res.statusCode, 403);
+  }
+});
+
+test('the link-request routes check the partner owns the gym', async () => {
+  for (const handler of [listLinkRequests, approveLinkRequest, rejectLinkRequest]) {
+    reset({ users: [user()] });
+    partnerOwnsBehavior = () => { throw { status: 403, error: 'Forbidden' }; };
+    const res = fakeRes();
+    await handler(partnerReq({ gymId: '3', userId: '9' }), res);
+    assert.equal(res.statusCode, 403);
+  }
+});
+
+test('the link-request routes reject a nonsense id', async () => {
+  reset({ users: [user()] });
+  const bad = fakeRes();
+  await approveLinkRequest(partnerReq({ gymId: '3', userId: 'abc' }), bad);
+  assert.equal(bad.statusCode, 400);
+  const badGym = fakeRes();
+  await listLinkRequests(partnerReq({ gymId: 'x' }), badGym);
+  assert.equal(badGym.statusCode, 400);
+});
+
+test('listing returns the gym\'s pending claims as first name only, no phone', async () => {
+  reset({
+    users: [{ ...user(), id: 9, name: 'Asha Verma', phone: '+919999999999' }, user({ id: 7 })],
+    gymLinks: [pendingSelf(), pendingSelf({ id: 2, userId: 8, approvedAt: new Date() })],
+  });
+  const res = fakeRes();
+  await listLinkRequests(partnerReq({ gymId: '3' }), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.data.length, 1);
+  assert.equal(res.body.data[0].userId, 9);
+  assert.equal(res.body.data[0].name, 'Asha');
+  assert.ok(!('phone' in res.body.data[0]));
+});
+
+test('approving answers 204 and stamps the link', async () => {
+  reset({ users: [{ ...user(), id: 9, linkedGymId: 3 }, user({ id: 7 })], gymLinks: [pendingSelf()] });
+  const res = fakeRes();
+  await approveLinkRequest(partnerReq({ gymId: '3', userId: '9' }), res);
+  assert.equal(res.statusCode, 204);
+  assert.ok(state.gymLinks[0].approvedAt);
+  assert.equal(state.gymLinks[0].approvedByPartnerId, 7);
+});
+
+test('approving a claim that is gone is a 404 with a stable code', async () => {
+  reset({ users: [user({ id: 7 })], gymLinks: [] });
+  const res = fakeRes();
+  await approveLinkRequest(partnerReq({ gymId: '3', userId: '9' }), res);
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.body.code, 'LINK_NOT_FOUND');
+});
+
+test('rejecting answers 204, closes the link and blocks self-rejoin', async () => {
+  reset({ users: [{ ...user(), id: 9, linkedGymId: 3 }, user({ id: 7 })], gymLinks: [pendingSelf()] });
+  const res = fakeRes();
+  await rejectLinkRequest(partnerReq({ gymId: '3', userId: '9' }), res);
+  assert.equal(res.statusCode, 204);
+  assert.ok(state.gymLinks[0].removedAt);
+  assert.equal(state.gymLinks[0].selfRelinkBlocked, true);
+  assert.equal(state.users.find((u) => u.id === 9).linkedGymId, null);
+});
+
+test('rejecting an already-confirmed member is a 409 and changes nothing', async () => {
+  reset({
+    users: [{ ...user(), id: 9, linkedGymId: 3 }, user({ id: 7 })],
+    gymLinks: [pendingSelf({ approvedAt: new Date() })],
+  });
+  const res = fakeRes();
+  await rejectLinkRequest(partnerReq({ gymId: '3', userId: '9' }), res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.code, 'LINK_NOT_PENDING');
+  assert.equal(state.gymLinks[0].removedAt, null);
 });

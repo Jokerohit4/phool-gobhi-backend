@@ -10,6 +10,9 @@ import {
   unclaimedGymClaimed,
   acceptGymClaimPrompt,
   dismissGymClaimPrompt,
+  listLinkRequests,
+  approveLinkRequest,
+  rejectLinkRequest,
 } from '../controllers/gymLinkController.js';
 
 // Gym links (coach-journey B2) — mounted at '/' beside authRoutes/deviceRoutes
@@ -18,6 +21,9 @@ import {
 //   POST   /gym-links/self                        (verifyToken, flag-gated)  -> 200 { link }
 //   DELETE /gym-links/self                        (verifyToken, flag-gated)  -> 204
 //   DELETE /gym/:gymId/members/:userId            (verifyToken, partner-only) -> 204
+//   GET    /gym/:gymId/link-requests              (verifyToken, partner-only) -> 200 { data: [{userId,name,requestedAt}] }
+//   POST   /gym/:gymId/link-requests/:userId/approve (verifyToken, partner-only) -> 204
+//   POST   /gym/:gymId/link-requests/:userId/reject  (verifyToken, partner-only) -> 204
 //   POST   /me/notice/clear                       (verifyToken)              -> 204
 //   POST   /gym-links/claim-prompt/accept         (verifyToken)              -> 200 { linkedGymId }
 //   POST   /gym-links/claim-prompt/dismiss        (verifyToken)              -> 204
@@ -34,6 +40,9 @@ const router = Router();
 router.post('/gym-links/self', verifyToken, selfLink);
 router.delete('/gym-links/self', verifyToken, leaveGymLink);
 router.delete('/gym/:gymId/members/:userId', verifyToken, removeGymMember);
+router.get('/gym/:gymId/link-requests', verifyToken, listLinkRequests);
+router.post('/gym/:gymId/link-requests/:userId/approve', verifyToken, approveLinkRequest);
+router.post('/gym/:gymId/link-requests/:userId/reject', verifyToken, rejectLinkRequest);
 router.post('/me/notice/clear', verifyToken, clearGymLinkNotice);
 router.post('/gym-links/claim-prompt/accept', verifyToken, acceptGymClaimPrompt);
 router.post('/gym-links/claim-prompt/dismiss', verifyToken, dismissGymClaimPrompt);
