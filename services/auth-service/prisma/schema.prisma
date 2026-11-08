@@ -46,6 +46,11 @@ model User {
   // call. health-service's PersonalisationProfile.experienceLevel is a
   // different concept (the AI coach's training preference) and is unaffected.
   experienceLevel       ExperienceLevel?
+  // How long they have been training, asked as a follow-up to experienceLevel
+  // for everyone but new_to_gym. experienceLevel says what kind of history they
+  // have; this says how much of it, so "regularly for 2 months" and "regularly
+  // for 10 years" stop looking identical. Null = never asked (existing users).
+  trainingTenure        TrainingTenure?
   // --- Coach journey: gym-link state (2026-10-16) ------------------------
   // homeUnclaimedGymId is the user's own Places-sourced non-partner gym
   // (gym-service UnclaimedGym.id) — the Home screen's "your gym" target when
@@ -586,6 +591,15 @@ enum ExperienceLevel {
   just_started
   restarting_after_break
   experienced
+
+  @@schema("auth")
+}
+
+enum TrainingTenure {
+  under_3_months
+  three_to_12_months
+  one_to_3_years
+  over_3_years
 
   @@schema("auth")
 }

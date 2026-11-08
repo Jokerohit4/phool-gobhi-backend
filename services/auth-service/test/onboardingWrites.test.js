@@ -89,6 +89,54 @@ test('an invalid experienceLevel is a 400 and nothing is written', async () => {
   assert.equal(updateCalls.length, 0);
 });
 
+test('every trainingTenure value is saved', async () => {
+  for (const tenure of ['under_3_months', 'three_to_12_months', 'one_to_3_years', 'over_3_years']) {
+    reset();
+    const res = fakeRes();
+
+    await updateProfile(reqWith({ trainingTenure: tenure }), res);
+
+    assert.equal(res.statusCode, 200, tenure);
+    assert.equal(stored.trainingTenure, tenure);
+  }
+});
+
+test('trainingTenure is saved alongside experienceLevel in one write', async () => {
+  reset();
+  const res = fakeRes();
+
+  await updateProfile(reqWith({ experienceLevel: 'experienced', trainingTenure: 'over_3_years' }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(stored.experienceLevel, 'experienced');
+  assert.equal(stored.trainingTenure, 'over_3_years');
+});
+
+test('an invalid trainingTenure is a 400 and nothing is written', async () => {
+  reset();
+  const res = fakeRes();
+
+  await updateProfile(reqWith({ trainingTenure: 'forever' }), res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.error, /trainingTenure/);
+  assert.equal(updateCalls.length, 0);
+});
+
+test('trainingTenure null clears it, and leaving it out leaves it alone', async () => {
+  reset({ trainingTenure: 'one_to_3_years' });
+  const cleared = fakeRes();
+  await updateProfile(reqWith({ trainingTenure: null }), cleared);
+  assert.equal(cleared.statusCode, 200);
+  assert.equal(stored.trainingTenure, null);
+
+  reset({ trainingTenure: 'one_to_3_years' });
+  const untouched = fakeRes();
+  await updateProfile(reqWith({ experienceLevel: 'experienced' }), untouched);
+  assert.equal(untouched.statusCode, 200);
+  assert.equal(stored.trainingTenure, 'one_to_3_years');
+});
+
 test('homeUnclaimedGymId accepts a positive int and null, rejects garbage', async () => {
   reset();
   const ok = fakeRes();

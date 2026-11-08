@@ -48,6 +48,7 @@ export async function buildFullExportService(userId) {
       fitnessGoals: user.fitnessGoals,
       sportsPlayed: user.sportsPlayed,
       experienceLevel: user.experienceLevel,
+      trainingTenure: user.trainingTenure,
       weeklyFrequencyIntent: user.weeklyFrequencyIntent,
       wellnessFocuses: user.wellnessFocuses,
       wellnessDayPattern: user.wellnessDayPattern,

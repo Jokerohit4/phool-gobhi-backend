@@ -659,7 +659,7 @@ const updateStaffStatus = async (req, res) => {
 
 export const ME_SELECT = Object.fromEntries([
   'id', 'phone', 'name', 'email', 'role', 'type', 'gender', 'dateOfBirth', 'fitnessGoals', 'sportsPlayed',
-  'referralCode', 'linkedGymId', 'trainerGymId', 'leaderboardOptIn', 'experienceLevel', 'homeUnclaimedGymId',
+  'referralCode', 'linkedGymId', 'trainerGymId', 'leaderboardOptIn', 'experienceLevel', 'trainingTenure', 'homeUnclaimedGymId',
   'pendingGymPromptGymId', 'gymLinkNotice', 'firstVisitBadgeConsent', 'currentlyWorksOut', 'workoutIntent',
   'wellnessFocuses', 'wellnessDayPattern', 'wellnessSleepPattern', 'wellnessSetupCompleted',
   'trainingLocationPref', 'trainingLocationOther', 'appMode', 'persona', 'freeTimeWindow', 'recommendedEquipment', 'gymSubscriptionEndDate',
@@ -713,6 +713,7 @@ const getMe = async (req, res) => {
       // Coach-journey (B2) linked-member fields: which Home to route to, the
       // unclaimed-gym prompt/notice state, and the first-visit badge consent.
       experienceLevel: user.experienceLevel ?? null,
+      trainingTenure: user.trainingTenure ?? null,
       homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
       pendingGymPromptGymId: user.pendingGymPromptGymId ?? null,
       gymLinkNotice: user.gymLinkNotice ?? null,

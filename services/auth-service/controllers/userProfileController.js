@@ -1,5 +1,5 @@
 import prisma from '../db/prisma.js';
-import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, VALID_WORKOUT_INTENTS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
+import { VALID_GENDERS, VALID_FITNESS_GOALS, VALID_FREQUENCY_INTENTS, VALID_TRAINING_LOCATION_PREFS, VALID_FREE_TIME_WINDOWS, VALID_APP_MODES, VALID_EXPERIENCE_LEVELS, VALID_TRAINING_TENURES, VALID_WORKOUT_INTENTS, TRAINING_LOCATION_PREFS } from '../constants/userEnums.js';
 import { deriveAppMode } from '../services/appModeService.js';
 import { resolvePersona, switchPersona, personaForAppMode } from '../services/personaService.js';
 import { notifyPersonaChanged } from '../services/personaEvents.js';
@@ -170,6 +170,7 @@ function formatUser(user) {
     sportsPlayed: user.sportsPlayed || [],
     recommendedEquipment: user.recommendedEquipment ?? null,
     experienceLevel: user.experienceLevel || null,
+    trainingTenure: user.trainingTenure || null,
     weeklyFrequencyIntent: user.weeklyFrequencyIntent || null,
     referralCode: user.referralCode || null,
     linkedGymId: user.linkedGymId || null,
@@ -441,7 +442,7 @@ export const updateProfile = async (req, res) => {
     const {
       name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
-      weeklyFrequencyIntent, linkedGymId, experienceLevel, homeUnclaimedGymId,
+      weeklyFrequencyIntent, linkedGymId, experienceLevel, trainingTenure, homeUnclaimedGymId,
       wellnessFocuses, wellnessDayPattern, wellnessSleepPattern, wellnessSetupCompleted,
       firstVisitBadgeConsent, recommendedEquipment, sportsPlayed, gymSubscriptionEndDate,
     } = req.body;
@@ -531,6 +532,13 @@ export const updateProfile = async (req, res) => {
     if (experienceLevel !== undefined && experienceLevel !== null
         && !VALID_EXPERIENCE_LEVELS.includes(experienceLevel)) {
       return res.status(400).json({ error: `Invalid experienceLevel. Must be one of: ${VALID_EXPERIENCE_LEVELS.join(', ')}` });
+    }
+    // How long they have been training (the follow-up to experienceLevel). Same
+    // rule: validated against the Prisma enum so a bad value is a 400, and null
+    // clears it.
+    if (trainingTenure !== undefined && trainingTenure !== null
+        && !VALID_TRAINING_TENURES.includes(trainingTenure)) {
+      return res.status(400).json({ error: `Invalid trainingTenure. Must be one of: ${VALID_TRAINING_TENURES.join(', ')}` });
     }
     // The user's own Places-sourced (non-partner) gym, a bare gym-service id.
     // Accepts a positive integer or null (null = "no gym to show yet").
@@ -662,6 +670,7 @@ export const updateProfile = async (req, res) => {
       await linkGym(prisma, targetUserId, linkedGymId, 'gym_qr');
     }
     if (experienceLevel !== undefined) updates.experienceLevel = experienceLevel;
+    if (trainingTenure !== undefined) updates.trainingTenure = trainingTenure;
     if (homeUnclaimedGymId !== undefined) {
       updates.homeUnclaimedGymId = homeUnclaimedGymId === null ? null : Number(homeUnclaimedGymId);
     }

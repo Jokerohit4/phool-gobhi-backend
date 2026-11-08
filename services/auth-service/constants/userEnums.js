@@ -46,6 +46,14 @@ export const EXPERIENCE_LEVELS = {
   EXPERIENCED: 'experienced',
 };
 
+// How long the user has been training — the follow-up to the experience level.
+export const TRAINING_TENURES = {
+  UNDER_3_MONTHS: 'under_3_months',
+  THREE_TO_12_MONTHS: 'three_to_12_months',
+  ONE_TO_3_YEARS: 'one_to_3_years',
+  OVER_3_YEARS: 'over_3_years',
+};
+
 export const FREQUENCY_INTENTS = {
   ONE_TWO: 'one_two',
   THREE_FOUR: 'three_four',
@@ -58,6 +66,7 @@ export const VALID_GOBHI_TYPES = Object.values(GOBHI_TYPES);
 export const VALID_GENDERS = Object.values(GENDERS);
 export const VALID_FITNESS_GOALS = Object.values(FITNESS_GOALS);
 export const VALID_EXPERIENCE_LEVELS = Object.values(EXPERIENCE_LEVELS);
+export const VALID_TRAINING_TENURES = Object.values(TRAINING_TENURES);
 export const VALID_FREQUENCY_INTENTS = Object.values(FREQUENCY_INTENTS);
 
 // Older customer-app builds sent persona ids from the onboarding persona step

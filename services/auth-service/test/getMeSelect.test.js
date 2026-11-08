@@ -15,7 +15,9 @@ function legacyMe(user, gymLinkSource, gymLinkStatus = null) {
     sportsPlayed: user.sportsPlayed ?? [], referralCode: user.referralCode, linkedGymId: user.linkedGymId,
     // gymLinkStatus (added with gym-side approval): whether the gym has confirmed the link.
     gymLinkSource, gymLinkStatus, trainerGymId: user.trainerGymId, leaderboardOptIn: user.leaderboardOptIn,
-    experienceLevel: user.experienceLevel ?? null, homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
+    experienceLevel: user.experienceLevel ?? null,
+    // trainingTenure (added with the "how long?" follow-up): how long they have trained.
+    trainingTenure: user.trainingTenure ?? null, homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
     pendingGymPromptGymId: user.pendingGymPromptGymId ?? null, gymLinkNotice: user.gymLinkNotice ?? null,
     firstVisitBadgeConsent: user.firstVisitBadgeConsent ?? false, currentlyWorksOut: user.currentlyWorksOut ?? null,
     workoutIntent: user.workoutIntent || null, wellnessFocuses: user.wellnessFocuses || [],
@@ -33,7 +35,7 @@ function wideRow(overrides = {}) {
     id: 42, phone: '+919999999999', name: 'Asha', email: 'a@x.in', role: 'customer', type: 'general',
     gender: 'female', dateOfBirth: new Date('1995-05-05T00:00:00.000Z'), fitnessGoals: ['strength'],
     sportsPlayed: ['tennis'], referralCode: 'ASHA42', linkedGymId: null, trainerGymId: null, leaderboardOptIn: true,
-    experienceLevel: 'beginner', homeUnclaimedGymId: null, pendingGymPromptGymId: null, gymLinkNotice: null,
+    experienceLevel: 'beginner', trainingTenure: 'one_to_3_years', homeUnclaimedGymId: null, pendingGymPromptGymId: null, gymLinkNotice: null,
     firstVisitBadgeConsent: false, currentlyWorksOut: true, workoutIntent: 'strength', wellnessFocuses: [],
     wellnessDayPattern: null, wellnessSleepPattern: null, wellnessSetupCompleted: false,
     trainingLocationPref: 'home', trainingLocationOther: null, appMode: 'home_track', persona: null,
