@@ -2973,6 +2973,7 @@ async function computeTrainersOverview(gymId, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
     ? Number(days) : 30;
   const { fromDateString, todayString } = istDateWindow(n);
+  const fromDate = new Date(`${fromDateString}T00:00:00+05:30`);
 
   const [attendanceRows, sessionRows] = await Promise.all([
     prisma.trainerAttendance.findMany({
