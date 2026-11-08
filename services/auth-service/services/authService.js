@@ -976,26 +976,38 @@ export async function createTrainerService({ name, phone: rawPhone }, gymId, par
     throw { status: 400, error: 'name is required' };
   }
 
-  const existing = await prisma.user.findUnique({ where: { phone } });
-  if (existing) {
-    throw {
-      status: 409,
-      error: existing.role === ROLES.TRAINER
-        ? 'This phone number is already registered as a trainer.'
-        : `This phone number is already registered as a ${existing.role}. A phone number can only be one account.`,
-    };
-  }
-
-  const trainer = await prisma.user.create({
-    data: {
-      name: trimmedName,
-      phone,
-      role: ROLES.TRAINER,
-      type: 'general',
-      trainerGymId: gymId,
-      updatedAt: new Date(),
-    },
+  const phoneTaken = (existing) => ({
+    status: 409,
+    error: existing.role === ROLES.TRAINER
+      ? 'This phone number is already registered as a trainer.'
+      : `This phone number is already registered as a ${existing.role}. A phone number can only be one account.`,
   });
+
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) throw phoneTaken(existing);
+
+  let trainer;
+  try {
+    trainer = await prisma.user.create({
+      data: {
+        name: trimmedName,
+        phone,
+        role: ROLES.TRAINER,
+        type: 'general',
+        trainerGymId: gymId,
+        updatedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    // P2002 on the unique phone: a concurrent request (double-tap, client
+    // retry) created this number between the lookup above and this insert.
+    // That is the same "already registered" answer, not a server error.
+    if (err?.code === 'P2002') {
+      const winner = await prisma.user.findUnique({ where: { phone } });
+      if (winner) throw phoneTaken(winner);
+    }
+    throw err;
+  }
   track('trainer_account_created', partnerId, { trainerId: trainer.id, gymId });
   return { id: trainer.id, name: trainer.name, phone: trainer.phone, isActive: trainer.isActive, createdAt: trainer.createdAt };
 }
