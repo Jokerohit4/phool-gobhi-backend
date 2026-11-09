@@ -53,6 +53,9 @@ router.post('/unclaimed', requireAuth, requireFeatureFlag('nonPartnerAttendance'
 // feeds the same GPS check-in.
 router.post('/unclaimed/manual', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.addManualGym);
 router.get('/unclaimed', requireRole('gobhi'), unclaimedCtrl.listUnclaimedGymsAdmin);
+// The caller's own saved gym, for the app's "near the gym" check. Same flag as
+// the rest of the customer-facing half. Still ahead of `GET /:id`.
+router.get('/unclaimed/:id', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.getUnclaimedGymMine);
 router.put('/unclaimed/:id/claim-status', requireRole('gobhi'), unclaimedCtrl.updateClaimStatusAdmin);
 router.get('/edit-requests/:id', requireRole('gobhi'), ctrl.getEditRequestAdmin);
 router.put('/edit-requests/:id/approve', requireRole('gobhi'), ctrl.approveEditRequest);

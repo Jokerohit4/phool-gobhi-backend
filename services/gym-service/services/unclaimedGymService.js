@@ -223,6 +223,26 @@ export async function getUnclaimedGymService(id) {
   return gym;
 }
 
+/// The customer-facing read of a saved non-partner gym, so the app can judge
+/// "am I near it" before the person taps check-in. Only what the app needs: no
+/// Places id, no who-added-it.
+///
+/// A gym pinned by hand carries the coordinates of whoever pinned it, so it is
+/// readable only by them (anyone else gets the same 404 as a missing row — the
+/// id space must not be probeable). A Google Places gym is a public place.
+export async function getMyUnclaimedGymService(id, userId) {
+  const gym = await prisma.unclaimedGym.findUnique({ where: { id } });
+  if (
+    !gym ||
+    (gym.googlePlaceId.startsWith(MANUAL_PLACE_PREFIX) &&
+      gym.addedByUserId !== Number(userId))
+  ) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  const { name, address, city, lat, lng, claimStatus, claimedGymId } = gym;
+  return { id: gym.id, name, address, city, lat, lng, claimStatus, claimedGymId };
+}
+
 export async function listUnclaimedGymsService({ claimStatus } = {}) {
   return prisma.unclaimedGym.findMany({
     where: claimStatus ? { claimStatus } : undefined,

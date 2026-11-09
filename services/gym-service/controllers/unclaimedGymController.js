@@ -43,6 +43,19 @@ export const getUnclaimedGymInternal = async (req, res) => {
   }
 };
 
+// GET /unclaimed/:id — the caller's saved non-partner gym (name + coordinates),
+// so the app can show check-in only when they are near it.
+export const getUnclaimedGymMine = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid gym id' });
+    const gym = await unclaimedGymService.getMyUnclaimedGymService(id, req.userId);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
+  }
+};
+
 // Admin (gobhi): the partner-acquisition list — gyms our own users have told
 // us they already train at. This is the point of the whole feature beyond the
 // customer-facing half.
