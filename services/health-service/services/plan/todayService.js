@@ -2,6 +2,7 @@ import { isoDayIST } from '../../utils/sessionDay.js';
 import { weekDays, weekStartOf } from '../../utils/sessionDay.js';
 import { PrismaClient } from '@prisma/client';
 import { resolveDay } from './rowProgress.js';
+import { applyEffort } from './dayEffort.js';
 import { makeTemplateLoader } from './templateLoader.js';
 import { hasMedicalRecordsConsentService } from '../ledger/ledgerConsentService.js';
 import { getLayers, getOnLayerKeys } from './layerState.js';
@@ -173,13 +174,18 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   // the medical-records consent lookup started alongside the layer evaluation
   // (getOnLayerKeys used to run it as its own round-trip afterwards).
   const loadTemplate = makeTemplateLoader(prisma);
-  const [layers, sessions, medicalGranted] = await Promise.all([
+  const [layers, sessions, medicalGranted, moodCheckIns] = await Promise.all([
     timed('layers', () => getLayers(prisma, userId, { journey })),
     timed('sessions', () => getSessions(prisma, userId, resolvedDate, {
       wellnessOnly: journey.wellnessOnly === true,
       loadTemplate,
     })),
     timed('medical', () => hasMedicalRecordsConsentService(userId)),
+    // Today's mood check-ins: one row on the card, two points-worth a day.
+    timed('mood', () => prisma.wellnessMoodCheckIn.findMany({
+      where: { userId, localDate: resolvedDate },
+      select: { slot: true, mood: true, createdAt: true },
+    })),
   ]);
   lap('layersWall');
   const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers, medicalGranted });
@@ -189,14 +195,24 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
   const showedUpDays = journey.showedUpDates ?? [];
 
   // Re-extract resolved values from dayResolution
-  const { rows, bonus, earned, target, counts } = dayResolution;
+  const { rows: engineRows, bonus, earned, target, counts } = dayResolution;
+  // The card's rows and running points: the engine's, plus partial credit for
+  // work in progress and the mood row. `earned`/`target`/`score` below stay the
+  // engine's own, so the frozen daily score is unaffected (see dayEffort.js).
+  const { rows, effort } = applyEffort(dayResolution, moodCheckIns);
+  // The mood row is a row on the card, so the done/total it shows counts it.
+  const moodRow = rows.find((r) => r.kind === 'mood');
+  const cardCounts = {
+    done: counts.done + (moodRow?.done ? 1 : 0),
+    total: counts.total + 1,
+  };
 
   // Check easy start
   const easyStartUntil = journey.easyStartUntil ? todayIST() <= journey.easyStartUntil ? journey.easyStartUntil : null : null;
   const noMisses = easyStartUntil !== null || journey.easeBack === true;
 
   // Determine if today's workout is done
-  const todayWorkoutRow = rows.find((r) => r.kind === 'workout');
+  const todayWorkoutRow = engineRows.find((r) => r.kind === 'workout');
   if (sessions.today && todayWorkoutRow) {
     sessions.today.done = todayWorkoutRow.done;
   }
@@ -226,8 +242,8 @@ export async function buildToday(prisma, userId, { localDate } = {}) {
     pausedUntil: pauseState.pausedUntil,
     easyStartUntil: easyStartUntil,
     noMisses,
-    points: pauseState.paused ? null : { earned, target, bonus },
-    counts,
+    points: pauseState.paused ? null : { earned, target, bonus, effort },
+    counts: cardCounts,
     score: pauseState.paused ? { open: scoreOpen, live: scoreOpen } : { open: scoreOpen, live: liveScore },
     rows,
     session: sessions,

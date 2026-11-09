@@ -145,7 +145,7 @@ async function setup(t, date = DATE) {
       prescription: [{ userId: USER, stepsPerDay: 7000, sleepMinutes: 450,
         workoutSlots: [0, 2, 4].map((weekday) => ({ weekday, templateId: 14, title: 'Full body A' })) }],
       nutritionTarget: [{ userId: USER, effectiveFrom: '2026-10-01', kcal: 1900, proteinG: 110, waterMl: 2500, micros: {} }],
-      planItem: [], planItemCompletion: [],
+      planItem: [], planItemCompletion: [], wellnessMoodCheckIn: [],
       waterLog: [{ userId: USER, localDate: date, ml: 1200 }],
       dailyActivityMetric: [{ userId: USER, date, steps: 4200 }],
       biometricEntry: [{ userId: USER, localDate: date, metric: 'steps', value: 7000 },
@@ -174,7 +174,13 @@ async function agree(ctx) {
   assert.equal(payload.state, 'active');
   assert.equal(payload.counts.total, payload.rows.length);
   assert.equal(payload.counts.done, payload.rows.filter((r) => r.done).length);
-  assert.deepEqual(payload.rows, resolved.rows);
+  // The card's rows are the engine's plus the effort layer: a `credit` on each
+  // row and the mood row. Strip those and what is left must be the engine's
+  // rows, field for field (effort never changes what the engine decided).
+  const engineView = payload.rows.filter((r) => r.kind !== 'mood').map(({ credit, ...rest }) => rest);
+  assert.deepEqual(engineView, resolved.rows);
+  assert.ok(payload.rows.every((r) => Number.isInteger(r.credit) && r.credit >= (r.earned ?? 0) && r.credit <= r.points),
+    'credit is whole points, never below what the engine paid, never above the row');
   assert.equal(resolved.target, sum(resolved.rows));
   assert.equal(resolved.earned, resolved.rows.reduce((n, r) => n + (r.earned ?? (r.done ? r.points : 0)), 0));
   if (payload.paused) {
@@ -182,7 +188,9 @@ async function agree(ctx) {
     assert.equal(preview.close, payload.score.open);
     assert.deepEqual(preview.breakdown, []);
   } else {
-    assert.deepEqual(payload.points, { earned: resolved.earned, target: resolved.target, bonus: resolved.bonus });
+    assert.deepEqual({ ...payload.points, effort: undefined }, { earned: resolved.earned, target: resolved.target, bonus: resolved.bonus, effort: undefined });
+    assert.ok(payload.points.effort.earned >= resolved.earned, 'effort only ever adds to what the engine counted');
+    assert.equal(payload.points.effort.target, resolved.target + payload.rows.find((r) => r.kind === 'mood').points);
     const positive = preview.breakdown.filter((l) => l.points > 0);
     const bonus = positive.filter((l) => ['workout_unplanned', 'micros_met'].includes(l.key));
     assert.equal(sum(positive) - sum(bonus), payload.points.earned, 'earned engine lines match Today');
@@ -242,7 +250,7 @@ test('regular day: automatic progress, manual tick, engine preview and frozen cl
   assert.equal((await today(ctx)).points.earned, after.payload.points.earned, 'manual + auto counts once');
   assert.equal(fixture.tables.planItemCompletion[0].how, 'manual');
   assert.equal(after.payload.points.target, 75);
-  assert.deepEqual(after.payload.rows.map((r) => r.kind), ['workout', 'water', 'food', 'steps', 'sleep', 'supplement', 'doctor', 'own']);
+  assert.deepEqual(after.payload.rows.map((r) => r.kind), ['mood', 'workout', 'water', 'food', 'steps', 'sleep', 'supplement', 'doctor', 'own']);
   const { closed } = await freeze(ctx);
   assert.equal(closed.close, 320); // 312 + 35 - (3 water + 3 sleep + 3 supplement + 10 doctor + 8 kcal)
 });
@@ -412,7 +420,7 @@ test('disabled layers, revoked doctor consent and missing journey cannot earn', 
   fixture.journey.layers = fixture.journey.layers.filter((l) => l.layer === 1);
   fixture.medical = false;
   const { payload, preview } = await agree(ctx);
-  assert.deepEqual(payload.rows.map((r) => r.kind), ['workout', 'water', 'own']);
+  assert.deepEqual(payload.rows.map((r) => r.kind), ['mood', 'workout', 'water', 'own']);
   assert.ok(preview.openActions.find((a) => a.itemId === ctx.own.id));
   assert.equal(payload.points.target, 25);
   fixture.journey = null;

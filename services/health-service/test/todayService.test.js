@@ -35,6 +35,7 @@ test('setup: mock modules and import todayService once', async (t) => {
           this.weeklyGoal = { findUnique: async () => null };
           this.nutritionTarget = { findFirst: async () => null };
           this.workoutSession = { findMany: async () => [] };
+          this.wellnessMoodCheckIn = { findMany: async () => [] };
         }
       },
     },
@@ -110,6 +111,7 @@ test('setup: mock modules and import todayService once', async (t) => {
       coachConsent: { findUnique: async () => ({ revokedAt: null, scopes: ['basic'] }) },
       healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
       prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+      wellnessMoodCheckIn: { findMany: async () => [] },
     },
     1
   );
@@ -122,6 +124,7 @@ test('no_plan reason no_consent when consent missing', async () => {
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+    wellnessMoodCheckIn: { findMany: async () => [] },
   };
   const res = await buildToday(prisma, 1);
   assert.equal(res.state, 'no_plan');
@@ -137,6 +140,7 @@ test('no_plan reason no_journey when journey missing', async () => {
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+    wellnessMoodCheckIn: { findMany: async () => [] },
   };
   const res = await buildToday(prisma, 1);
   assert.equal(res.state, 'no_plan');
@@ -152,6 +156,7 @@ test('getJourney called exactly once on success', async () => {
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+    wellnessMoodCheckIn: { findMany: async () => [] },
   };
   await buildToday(prisma, 1);
   assert.equal(journeyCalls, 1);
@@ -164,6 +169,7 @@ test('payload shape includes rows points counts week from showedUpDays', async (
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+    wellnessMoodCheckIn: { findMany: async () => [] },
   };
   const res = await buildToday(prisma, 1, { localDate: '2026-10-14' });
   assert.equal(res.state, 'active');
@@ -187,6 +193,7 @@ test('session today/tomorrow present and paused gives points null', async () => 
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+    wellnessMoodCheckIn: { findMany: async () => [] },
   };
   const res = await buildToday(prisma, 1);
   assert.ok('session' in res);
@@ -200,6 +207,7 @@ test('buildPlanDefinition returns no_plan when no consent', async () => {
     coachConsent: { findUnique: async () => coachConsentRow },
     healthGoal: { findUnique: async () => ({ pausedFrom: null, pausedUntil: null }) },
     prescription: { findUnique: async () => ({ workoutSlots: [] }) },
+    wellnessMoodCheckIn: { findMany: async () => [] },
   };
   const res = await buildPlanDefinition(prisma, 1);
   assert.equal(res.state, 'no_plan');
