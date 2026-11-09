@@ -66,7 +66,7 @@ export async function createMoodCheckIn(prisma, { userId, ...input } = {}) {
   validateInput(data);
 
   const { day, hour, minute } = istParts();
-  // One night window starts at 18:00 and ends at 05:00 the next day.
+  // One night window starts at 20:00 and ends at 05:00 the next day.
   // Accept the calendar date from older clients, but store its evening date.
   const nightStart = hour < 5
     ? new Date(Date.parse(`${day}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
@@ -75,10 +75,10 @@ export async function createMoodCheckIn(prisma, { userId, ...input } = {}) {
   if (data.localDate !== day && data.localDate !== slotDate) {
     throw problem(409, 'Check-ins can only be saved for today.', 'MOOD_CHECKIN_DATE_CLOSED');
   }
-  // The morning window runs 05:00–15:30 IST; the night window 18:00–05:00.
+  // The morning window runs 05:00–15:30 IST; the night window 20:00–05:00.
   const slotOpen = data.slot === 'morning'
     ? hour >= 5 && (hour < 15 || (hour === 15 && minute < 30))
-    : hour >= 18 || hour < 5;
+    : hour >= 20 || hour < 5;
   if (!slotOpen) {
     throw problem(409, 'This check-in window has closed.', 'CHECKIN_WINDOW_CLOSED');
   }
