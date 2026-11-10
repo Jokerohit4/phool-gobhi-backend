@@ -171,16 +171,13 @@ test('the window boundary is inclusive on the day it ends, and closed the day af
   assert.ok(!userIds.includes(endings[0].userId), 'a window that ended yesterday is closed');
 });
 
-test('the IST day is what decides the window, not the UTC day', { skip: SKIP }, async () => {
+test('the customer day (4 AM IST) is what decides the window, not the UTC day', { skip: SKIP }, async () => {
   await prisma.healthGoal.deleteMany({ where: { userId: { gte: BASE } } });
 
-  // 19:00 UTC on the 10th is 00:30 IST on the 11th. The IST calendar has
-  // ALREADY moved to the 11th at that instant, even though the UTC date
-  // still says the 10th — so a window ending on the 10th is CLOSED (its
-  // end date has passed, exactly like a window ending yesterday closes at
-  // midnight), while a window ending on the 11th has opened. Asserting the
-  // 10th window "still open" would be asserting the UTC-day behaviour the
-  // title says must NOT happen.
+  // 19:00 UTC on the 10th is 00:30 IST on the 11th. The customer day has NOT
+  // turned over yet (it starts at 04:00 IST), even though both the UTC and IST
+  // calendar dates say the 11th — so a window ending on the 10th is still
+  // open. Only after the 4 AM boundary does it close.
   const lateUtc = new Date('2026-09-10T19:00:00Z');
   await prisma.healthGoal.createMany({
     data: [
@@ -193,9 +190,16 @@ test('the IST day is what decides the window, not the UTC day', { skip: SKIP }, 
   const rows = await nudge.findTargetGoalRowsService(lateUtc);
   const userIds = rows.map((r) => r.userId);
 
-  assert.ok(!userIds.includes(CASES.live.userId), 'the 10th window is closed at 00:30 IST on the 11th');
+  assert.ok(userIds.includes(CASES.live.userId), 'the 10th window is still open at 00:30 IST on the 11th');
   assert.ok(userIds.includes(BASE + 20), 'the 11th window has opened at 00:30 IST');
   assert.ok(!userIds.includes(BASE + 21), 'the 9th window closed days ago');
+
+  // 22:30 UTC on the 10th is 04:00 IST on the 11th — the customer day has now
+  // turned over, so the 10th window is closed.
+  const afterBoundary = new Date('2026-09-10T22:30:00Z');
+  const afterIds = (await nudge.findTargetGoalRowsService(afterBoundary)).map((r) => r.userId);
+  assert.ok(!afterIds.includes(CASES.live.userId), 'the 10th window is closed at 04:00 IST on the 11th');
+  assert.ok(afterIds.includes(BASE + 20), 'the 11th window is open at 04:00 IST');
 });
 
 test('every type the service offers is a value Postgres will actually store', { skip: SKIP }, async () => {
