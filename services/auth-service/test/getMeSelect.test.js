@@ -24,7 +24,11 @@ function legacyMe(user, gymLinkSource, gymLinkStatus = null) {
     wellnessDayPattern: user.wellnessDayPattern || null, wellnessSleepPattern: user.wellnessSleepPattern || null,
     wellnessSetupCompleted: user.wellnessSetupCompleted === true, trainingLocationPref: user.trainingLocationPref,
     trainingLocationOther: user.trainingLocationOther, appMode: user.appMode, persona: resolvePersona(user),
-    freeTimeWindow: user.freeTimeWindow, gymSubscriptionEndDate: user.gymSubscriptionEndDate || null, experiments: bucketFor(user.id), recommendedEquipment: user.recommendedEquipment ?? null,
+    freeTimeWindow: user.freeTimeWindow,
+    // weeklyFrequencyIntent (added with the /me frequency fix): the "how
+    // often" answer the Profile editor and the coach resume prefill from.
+    weeklyFrequencyIntent: user.weeklyFrequencyIntent ?? null,
+    gymSubscriptionEndDate: user.gymSubscriptionEndDate || null, experiments: bucketFor(user.id), recommendedEquipment: user.recommendedEquipment ?? null,
     // Added after the snapshot: the avatar the app reads from /me.
     profileImageUrl: user.profileImageUrl || '',
   };
@@ -39,7 +43,7 @@ function wideRow(overrides = {}) {
     firstVisitBadgeConsent: false, currentlyWorksOut: true, workoutIntent: 'strength', wellnessFocuses: [],
     wellnessDayPattern: null, wellnessSleepPattern: null, wellnessSetupCompleted: false,
     trainingLocationPref: 'home', trainingLocationOther: null, appMode: 'home_track', persona: null,
-    freeTimeWindow: 'evening', recommendedEquipment: { items: ['mat'] },
+    freeTimeWindow: 'evening', weeklyFrequencyIntent: 'three_four', recommendedEquipment: { items: ['mat'] },
     profileImageUrl: 'https://img.example/me.jpg',
     // Columns /me must NOT depend on:
     passwordHash: 'secret', fcmToken: 'tok', bankNote: 'x', createdAt: new Date(), updatedAt: new Date(),

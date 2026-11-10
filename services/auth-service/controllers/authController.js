@@ -662,7 +662,7 @@ export const ME_SELECT = Object.fromEntries([
   'referralCode', 'linkedGymId', 'trainerGymId', 'leaderboardOptIn', 'experienceLevel', 'trainingTenure', 'homeUnclaimedGymId',
   'pendingGymPromptGymId', 'gymLinkNotice', 'firstVisitBadgeConsent', 'currentlyWorksOut', 'workoutIntent',
   'wellnessFocuses', 'wellnessDayPattern', 'wellnessSleepPattern', 'wellnessSetupCompleted',
-  'trainingLocationPref', 'trainingLocationOther', 'appMode', 'persona', 'freeTimeWindow', 'recommendedEquipment', 'gymSubscriptionEndDate',
+  'trainingLocationPref', 'trainingLocationOther', 'appMode', 'persona', 'freeTimeWindow', 'weeklyFrequencyIntent', 'recommendedEquipment', 'gymSubscriptionEndDate',
   // The app reads the avatar from /me; without it every client saw "no photo".
   'profileImageUrl',
 ].map((field) => [field, true]));
@@ -735,6 +735,7 @@ const getMe = async (req, res) => {
       // challenge list should all branch on (services/personaService.js).
       persona: resolvePersona(user),
       freeTimeWindow: user.freeTimeWindow,
+      weeklyFrequencyIntent: user.weeklyFrequencyIntent ?? null,
       gymSubscriptionEndDate: user.gymSubscriptionEndDate || null,
       // Server-assigned experiment buckets (A1 hook, B14 owns the assignment).
       // Derived on every call rather than stored, so there is no per-user row
