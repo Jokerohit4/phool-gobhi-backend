@@ -1167,8 +1167,8 @@ test('logFood rejects malformed and distant future local dates before reading or
   }
 });
 
-test('logFood permits IST tomorrow across the UTC day boundary', async (t) => {
-  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-30T19:00:00Z') });
+test('logFood permits tomorrow after the customer day boundary', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-30T23:00:00Z') });
   const prisma = mockPrisma({ foodItem: { findUnique: async () => RICE } });
   const out = await logFood(prisma, { userId: 7, localDate: '2026-11-01', slot: 'lunch', foodItemId: 1, grams: 100 });
   assert.equal(out.localDate, '2026-11-01');

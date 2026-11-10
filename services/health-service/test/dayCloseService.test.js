@@ -59,12 +59,19 @@ test('setup: mock layerState + journey deps once, import day close deps once', a
   assert.equal(typeof runDayCloseSweep, 'function');
 });
 
-// 2026-09-30 20:00 UTC = 2026-10-01 01:30 IST - the workflow's own run time.
-const RUN_AT = new Date('2026-09-30T20:00:00.000Z');
+// 2026-09-30 23:00 UTC = 2026-10-01 04:30 IST, after the customer day starts.
+const RUN_AT = new Date('2026-09-30T23:00:00.000Z');
 
-test('IST day arithmetic: 01:30 IST on 1 Oct is "today = 1 Oct, yesterday = 30 Sep"', () => {
+test('IST day arithmetic: 04:30 IST on 1 Oct is "today = 1 Oct, yesterday = 30 Sep"', () => {
   assert.equal(serverTodayIST(RUN_AT), '2026-10-01');
   assert.equal(yesterdayIST(RUN_AT), '2026-09-30');
+});
+
+test('before 4 AM the prior logging day remains open', () => {
+  const before = new Date('2026-09-30T22:29:59Z');
+  assert.equal(serverTodayIST(before), '2026-09-30');
+  assert.equal(yesterdayIST(before), '2026-09-29');
+  assert.throws(() => resolveClientClose({ localDate: '2026-10-01', now: before }), e => e.code === 'FUTURE_DAY');
 });
 
 test('resolveClientClose: the server decides today, whatever the client thinks', () => {

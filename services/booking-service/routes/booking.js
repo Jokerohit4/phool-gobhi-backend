@@ -133,6 +133,7 @@ router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
 router.put('/:id/gym-cancel', requireRole('partner'), ctrl.cancelBookingByGym);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
 router.post('/gym/:gymId/self-checkin', requireRole('customer'), ctrl.selfCheckIn);
+router.post('/gym/:gymId/entrance-checkin', requireRole('customer'), ctrl.entranceCheckIn);
 // Non-partner gym check-in: GPS only, no booking, no QR. Distinct path prefix
 // from /gym/:gymId above because the id spaces are different (UnclaimedGym vs
 // Gym) and silently confusing them would credit attendance to the wrong place.

@@ -20,7 +20,8 @@ function matches(where, row) {
   if (where.linkedAt && !inRange(row.linkedAt, where.linkedAt)) return false;
   if (where.OR) {
     return where.OR.some((c) => c.source === row.source && inRange(row.linkedAt, c.linkedAt)
-      && (c.firstVerifiedCheckinAt === undefined || row.firstVerifiedCheckinAt != null));
+      && (c.firstVerifiedCheckinAt === undefined || row.firstVerifiedCheckinAt != null)
+      && (c.approvedAt === undefined || row.approvedAt != null));
   }
   return true;
 }
@@ -75,4 +76,19 @@ test('coming back months later is a new join', async () => {
 test('two different people are two joins', async () => {
   links = [qr(1, '2026-10-05T06:00:00Z'), qr(2, '2026-10-06T06:00:00Z')];
   assert.deepEqual(await countGymJoinedUsersByMonthService([7], '2026-10'), { 7: 2 });
+});
+
+test('a booked visit never bills an unapproved membership request', async () => {
+  links = [qr(1, '2026-10-01T06:00:00Z', {
+    source: 'self', firstVerifiedCheckinAt: new Date('2026-10-10T06:00:00Z'), approvedAt: null,
+  })];
+  assert.deepEqual(await countGymJoinedUsersByMonthService([7], '2026-10'), {});
+});
+
+test('a request qualifies only after gym approval, even when a booked visit was earlier', async () => {
+  links = [qr(1, '2026-10-01T06:00:00Z', {
+    source: 'self', firstVerifiedCheckinAt: new Date('2026-10-10T06:00:00Z'), approvedAt: new Date('2026-11-05T06:00:00Z'),
+  })];
+  assert.deepEqual(await countGymJoinedUsersByMonthService([7], '2026-10'), {});
+  assert.deepEqual(await countGymJoinedUsersByMonthService([7], '2026-11'), { 7: 1 });
 });

@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { saveDoctorPlanNote } from '../services/ledger/doctorPlanNoteService.js';
@@ -67,7 +68,7 @@ test('a storage failure never writes a document row', async () => {
 
 
 test('structured plans require confirmation and retire previous plans transactionally',async()=>{
-  const f=fixtures();const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});const events=[];
+  const f=fixtures();const today=isoDayIST();const events=[];
   f.prisma.$executeRaw=async()=>events.push('lock');
   f.prisma.medicalDocument.updateMany=async({where})=>{assert.equal(where.userId,7);assert.equal(where.supersededAt,null);events.push('retire');};
   const create=f.prisma.medicalDocument.create;

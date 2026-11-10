@@ -667,7 +667,7 @@ export const updateProfile = async (req, res) => {
     // poster can never reassign somebody to another gym. linkGym validates the
     // id, so an invalid value is simply ignored here.
     if (linkedGymId != null && !before.linkedGymId && await isLinkablePartnerGym(linkedGymId)) {
-      await linkGym(prisma, targetUserId, linkedGymId, 'gym_qr');
+      await linkGym(prisma, targetUserId, linkedGymId, 'qr_request');
     }
     if (experienceLevel !== undefined) updates.experienceLevel = experienceLevel;
     if (trainingTenure !== undefined) updates.trainingTenure = trainingTenure;

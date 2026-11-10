@@ -3,6 +3,7 @@ import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import {
   selfLink,
+  requestEntranceMembership,
   leaveGymLink,
   removeGymMember,
   clearGymLinkNotice,
@@ -38,6 +39,7 @@ import {
 const router = Router();
 
 router.post('/gym-links/self', verifyToken, selfLink);
+router.post('/gym-links/entrance-request', verifyToken, requestEntranceMembership);
 router.delete('/gym-links/self', verifyToken, leaveGymLink);
 router.delete('/gym/:gymId/members/:userId', verifyToken, removeGymMember);
 router.get('/gym/:gymId/link-requests', verifyToken, listLinkRequests);

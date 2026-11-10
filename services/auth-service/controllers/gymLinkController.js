@@ -20,6 +20,7 @@ import {
 import { assertPartnerOwnsGym, fetchGymInternal } from '../services/authService.js';
 import { notifyUser } from '../utils/notifyUser.js';
 import { gymLinkStatus } from '../utils/gymLinkStatus.js';
+import { findPartnerGym } from '../services/gymLookup.js';
 
 
 function requesterId(req) {
@@ -35,6 +36,28 @@ function fail(res, err) {
 }
 
 // POST /gym-links/self — customer self-declares a gym. Flag-gated.
+export const requestEntranceMembership = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user?.role !== 'customer') return res.status(403).json({ error: 'Customer account required' });
+    const gymId = Number(req.body?.gymId);
+    if (!Number.isInteger(gymId) || gymId <= 0) return res.status(400).json({ error: 'A valid gym is required' });
+    const gym = await findPartnerGym(gymId);
+    if (!gym || gym.isApproved !== true) return res.status(404).json({ error: 'Gym unavailable' });
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    if (!current) return res.status(404).json({ error: 'User not found' });
+    if (current.linkedGymId && current.linkedGymId !== gymId) {
+      return res.status(409).json({ error: 'Leave your current gym before requesting another membership.', code: 'ALREADY_LINKED' });
+    }
+    await linkGym(prisma, userId, gymId, 'qr_request');
+    const link = await getActiveLink(prisma, userId);
+    if (!link || link.gymId !== gymId) return res.status(409).json({ error: 'Membership request could not be created' });
+    res.json({ link: { gymId, source: link.source, linkedAt: link.linkedAt, status: gymLinkStatus(link) } });
+    if (!current.linkedGymId) void notifyGymOfLinkRequest(gymId);
+  } catch (err) { fail(res, err); }
+};
+
 export const selfLink = async (req, res) => {
   try {
     const userId = requesterId(req);

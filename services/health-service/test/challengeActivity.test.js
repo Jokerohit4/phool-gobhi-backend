@@ -5,11 +5,11 @@ import { challengeActivity } from '../services/challengeActivityService.js';
 const since = '2026-10-20T00:00:00Z';
 const now = new Date('2026-10-28T00:00:00Z');
 
-test('water and mood count distinct actual IST days, not backdated localDate or mood contents', async () => {
+test('water and mood count distinct actual customer days, not backdated localDate or mood contents', async () => {
   let query;
   const read = async args => {
     query = args;
-    return [{ createdAt: '2026-10-21T18:20:00Z' }, { createdAt: '2026-10-21T18:25:00Z' }, { createdAt: '2026-10-21T18:40:00Z' }];
+    return [{ createdAt: '2026-10-21T22:20:00Z' }, { createdAt: '2026-10-21T22:25:00Z' }, { createdAt: '2026-10-21T22:40:00Z' }];
   };
   const prisma = { waterLog: { findMany: read }, wellnessMoodCheckIn: { findMany: read } };
   for (const metric of ['water_consistency', 'mood_consistency']) {

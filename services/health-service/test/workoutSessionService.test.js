@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 // Covers the two pieces of the Fitness+ session-attach delta (2026-09-08)
 // that are actually risky to get wrong pre-launch: the auto-draft
 // idempotency (a retried/duplicate attendance event must never create a
@@ -165,7 +166,7 @@ test('provenance: first proof wins - a retried event cannot change how a visit w
 // ever see attendance-backed or already-finished sessions, and the Home
 // "resume" card has nothing to resume.
 
-const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const todayIST = () => isoDayIST();
 
 test('startSessionService: a session with no attendance still carries today\'s localDate', async () => {
   resetFakes();

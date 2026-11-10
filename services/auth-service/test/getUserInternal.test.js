@@ -15,6 +15,7 @@ function fakeRes() {
 
 let findUniqueImpl = async () => null;
 let getUserInternal;
+let membership = { source: 'gym_qr', approvedAt: null };
 
 test('setup: mock @prisma/client once, import the controller once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -22,6 +23,7 @@ test('setup: mock @prisma/client once, import the controller once', async (t) =>
       PrismaClient: class {
         constructor() {
           this.user = { findUnique: (...args) => findUniqueImpl(...args) };
+          this.gymLink = { findFirst: async () => membership };
         }
       },
       Prisma: {},
@@ -119,4 +121,17 @@ test('getUserInternal returns 500 on an unexpected DB error', async () => {
 
   assert.equal(res.statusCode, 500);
   assert.equal(res.body.error, 'connection lost');
+});
+
+test('internal membership status requires approval even after a booked visit', async () => {
+  findUniqueImpl = async ({ where: { id } }) => ({ id, linkedGymId: 9 });
+  membership = { source: 'self', approvedAt: null, firstVerifiedCheckinAt: new Date() };
+  let res = fakeRes();
+  await getUserInternal({ params: { id: '42' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.gymLinkStatus, 'pending');
+  membership = { source: 'self', approvedAt: new Date() };
+  res = fakeRes();
+  await getUserInternal({ params: { id: '42' } }, res);
+  assert.equal(res.body.gymLinkStatus, 'approved');
 });

@@ -545,6 +545,19 @@ export const getMyAttendanceWarnings = async (req, res) => {
   }
 };
 
+export const entranceCheckIn = async (req, res) => {
+  try {
+    const { resolveEntranceCheckIn } = await import('../services/entranceCheckInService.js');
+    const result = await resolveEntranceCheckIn({
+      gymId: Number(req.params.gymId), customerId: req.userId,
+      lat: req.body?.lat, lng: req.body?.lng, confirmEarly: req.body?.confirmEarly === true,
+    }, bookingService);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, confirmation: err.confirmation });
+  }
+};
+
 export const selfCheckIn = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);

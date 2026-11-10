@@ -578,12 +578,12 @@ test('the wire enum and the service type list cannot drift apart', () => {
   assert.deepEqual(values.sort(), [...nudge.NUDGE_TYPES].sort());
 });
 
-test('localDateIST turns over exactly at IST midnight, not UTC midnight', () => {
+test('localDateIST turns over exactly at 4 AM IST', () => {
   // 18:29 UTC is 23:59 IST the same day; 18:30 is 00:00 the next. The whole
   // target window is compared against this string, so an off-by-one here moves
   // every user's window by a day.
-  assert.equal(nudge.localDateIST(new Date('2026-09-10T18:29:00Z')), '2026-09-10');
-  assert.equal(nudge.localDateIST(new Date('2026-09-10T18:30:00Z')), '2026-09-11');
+  assert.equal(nudge.localDateIST(new Date('2026-09-10T22:29:00Z')), '2026-09-10');
+  assert.equal(nudge.localDateIST(new Date('2026-09-10T22:30:00Z')), '2026-09-11');
 });
 
 test('quiet hours is exactly the block the constants describe', () => {

@@ -111,12 +111,12 @@ test('gymLinkStatus: a self link nobody at the gym has answered is pending', asy
   assert.equal(res.body.gymLinkStatus, 'pending');
 });
 
-test('gymLinkStatus: approval or a verified check-in makes a self link approved', async () => {
+test('gymLinkStatus: approval is required even after a booked visit', async () => {
   stored = wideRow({ linkedGymId: 7, trainingLocationPref: 'gym' });
   linkRow = { source: 'self', approvedAt: new Date(), firstVerifiedCheckinAt: null };
   assert.equal((await call()).body.gymLinkStatus, 'approved');
   linkRow = { source: 'self', approvedAt: null, firstVerifiedCheckinAt: new Date() };
-  assert.equal((await call()).body.gymLinkStatus, 'approved');
+  assert.equal((await call()).body.gymLinkStatus, 'pending');
 });
 
 test('gymLinkStatus: null with no gym, and with a pointer but no live link row', async () => {

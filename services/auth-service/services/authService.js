@@ -15,6 +15,16 @@ import { linkGym } from './gymLinkService.js';
 import { isLinkablePartnerGym } from './gymLookup.js';
 import redis from '../utils/redisClient.js';
 
+// A public join URL is a membership claim, not approval. Failure to create a
+// request must not prevent an otherwise valid OTP login.
+async function requestJoinAtLogin(userId, gymId) {
+  try { return await linkGym(prisma, userId, gymId, 'qr_request'); }
+  catch (err) {
+    if (['SELF_LINK_BLOCKED', 'SELF_LINK_LIMIT'].includes(err.errorCode)) return null;
+    throw err;
+  }
+}
+
 const SKIP_OTP_CODE = '123456';
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_EXPIRY_SECONDS = 300; // 5 minutes
@@ -178,8 +188,8 @@ export async function runAttendanceSaasReengagementSweepService() {
 // Attendance-SaaS monthly bill: count of people (not GymLink rows) for each of the given
 // gyms whose *qualifying* date (in IST) falls in the month (YYYY-MM). A
 // `gym_qr` link qualifies the moment it is made; a `self` link only counts in
-// the month it becomes a real membership — the later of its first verified
-// check-in or 7 days after the link — and only if the link was still active at
+// the month it becomes an approved membership — the later of its first verified
+// check-in, gym approval, or 7 days after the link — and only if the link was still active at
 // that point (removed-before-qualifying never counts). Counts by qualifying
 // date, not by linkedAt, so a self-link made in September that only earns its
 // first check-in in October bills October. Returns a map of gymId -> count; a
@@ -198,10 +208,10 @@ export async function countGymJoinedUsersByMonthService(gymIds, month) {
       gymId: { in: gymIds },
       OR: [
         { source: 'gym_qr', linkedAt: { gte: start, lt: end } },
-        { source: 'self', linkedAt: { lt: end }, firstVerifiedCheckinAt: { not: null } },
+        { source: 'self', linkedAt: { lt: end }, firstVerifiedCheckinAt: { not: null }, approvedAt: { not: null } },
       ],
     },
-    select: { userId: true, gymId: true, source: true, linkedAt: true, firstVerifiedCheckinAt: true, removedAt: true },
+    select: { userId: true, gymId: true, source: true, linkedAt: true, firstVerifiedCheckinAt: true, approvedAt: true, removedAt: true },
   });
   // Earlier links of the same people to the same gyms, to spot a rejoin.
   const userIds = [...new Set(links.map((l) => l.userId))];
@@ -222,6 +232,7 @@ export async function countGymJoinedUsersByMonthService(gymIds, month) {
       link.source === 'self'
         ? new Date(Math.max(
             link.firstVerifiedCheckinAt.getTime(),
+            link.approvedAt.getTime(),
             link.linkedAt.getTime() + SELF_LINK_QUALIFY_MS,
           ))
         : link.linkedAt;
@@ -723,7 +734,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     // A join link must name a real, approved partner gym (a crafted id would
     // otherwise put the user on — and bill — any gym id they like).
     if (resolvedLinkedGymId && await isLinkablePartnerGym(resolvedLinkedGymId)) {
-      const linked = await linkGym(prisma, user.id, resolvedLinkedGymId, 'gym_qr');
+      const linked = await requestJoinAtLogin(user.id, resolvedLinkedGymId);
       if (linked) user = linked;
     }
   } else if (!user.isActive) {
@@ -740,7 +751,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     // A join link must name a real, approved partner gym (a crafted id would
     // otherwise put the user on — and bill — any gym id they like).
     if (resolvedLinkedGymId && await isLinkablePartnerGym(resolvedLinkedGymId)) {
-      const linked = await linkGym(prisma, user.id, resolvedLinkedGymId, 'gym_qr');
+      const linked = await requestJoinAtLogin(user.id, resolvedLinkedGymId);
       if (linked) user = linked;
     }
   }

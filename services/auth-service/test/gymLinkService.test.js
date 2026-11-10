@@ -445,7 +445,7 @@ const selfLink = (over = {}) => ({
 test('only an active, unconfirmed self link is pending', () => {
   assert.equal(isPendingSelfLink(selfLink()), true);
   assert.equal(isPendingSelfLink(selfLink({ approvedAt: new Date() })), false, 'approved');
-  assert.equal(isPendingSelfLink(selfLink({ firstVerifiedCheckinAt: new Date() })), false, 'verified by a check-in');
+  assert.equal(isPendingSelfLink(selfLink({ firstVerifiedCheckinAt: new Date() })), true, 'a visit is not membership approval');
   assert.equal(isPendingSelfLink(selfLink({ removedAt: new Date() })), false, 'already ended');
   assert.equal(isPendingSelfLink(selfLink({ source: 'gym_qr' })), false, 'the gym initiated a QR link');
 });
@@ -548,7 +548,7 @@ test('rejecting a pending claim ends the link, blocks self-rejoin and leaves the
 });
 
 test('reject cannot evict a confirmed member', async () => {
-  for (const over of [{ approvedAt: new Date() }, { firstVerifiedCheckinAt: new Date() }, { source: 'gym_qr' }]) {
+  for (const over of [{ approvedAt: new Date() }, { source: 'gym_qr' }]) {
     const { prisma, state } = createFakePrisma({
       users: [baseUser({ linkedGymId: 7 })],
       gymLinks: [selfLink(over)],
@@ -562,4 +562,16 @@ test('reject cannot evict a confirmed member', async () => {
 test('rejecting with no active link is a 404', async () => {
   const { prisma } = createFakePrisma({ users: [baseUser()] });
   await assert.rejects(rejectSelfLink(prisma, 7, 1, 55), { status: 404, errorCode: 'LINK_NOT_FOUND' });
+});
+
+test('entrance QR request is pending and only gym approval can allow attendance', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser()] });
+  await linkGym(prisma, 1, 7, 'qr_request');
+  assert.equal(state.gymLinks[0].source, 'self');
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), true);
+  await markGymCheckedIn(prisma, 1, 7);
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), true);
+  assert.equal((await listPendingSelfLinks(prisma, 7)).length, 1);
+  await approveSelfLink(prisma, 7, 1, 99);
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), false);
 });

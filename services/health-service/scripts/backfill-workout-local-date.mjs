@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
-import { isoDayIST } from '../utils/sessionDay.js';
+import { istDateString } from '../utils/sessionDay.js';
 
 // No dotenv loading. An operator must explicitly supply the target URL.
 // Dry-run by default. The migration performs the same null-only update in SQL.
@@ -15,7 +15,7 @@ export async function backfillWorkoutLocalDates(prisma, { apply = false, batchSi
     });
     if (!rows.length) break;
     for (const row of rows) {
-      const localDate = isoDayIST(row.startedAt);
+      const localDate = istDateString(row.startedAt);
       scanned++;
       if (apply) {
         const result = await prisma.workoutSession.updateMany({

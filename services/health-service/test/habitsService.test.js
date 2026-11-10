@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 // The daily habits (B11): water and supplements.
 //
 // What is pinned here:
@@ -24,7 +25,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const TODAY = isoDayIST();
 
 let svc;
 

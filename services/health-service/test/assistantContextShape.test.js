@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 // The attendance summary the model is given. Run with:
 //   node --experimental-test-module-mocks --test
 //
@@ -22,7 +23,7 @@ test('setup: stub Prisma, import the service once', async (t) => {
 // UTC instant the backend would actually store.
 function at(daysAgo, istHour, istMinute = 0) {
   const now = new Date();
-  const ist = new Date(now.getTime() + 5.5 * 3600 * 1000);
+  const ist = new Date(`${isoDayIST(now)}T00:00:00Z`);
   ist.setUTCDate(ist.getUTCDate() - daysAgo);
   ist.setUTCHours(istHour, istMinute, 0, 0);
   return { attendedAt: new Date(ist.getTime() - 5.5 * 3600 * 1000).toISOString() };

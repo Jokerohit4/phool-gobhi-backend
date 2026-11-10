@@ -199,6 +199,9 @@ describe('the app is told which source a date came from', () => {
       'utf8',
     );
     assert.match(screen, /isReportDateDetected/);
-    assert.match(screen, /Read from your report as/);
+    const messages = JSON.parse(readFileSync(join(appRepo, 'lib', 'l10n', 'app_en.arb'), 'utf8'));
+    const key = Object.keys(messages).find(key => typeof messages[key] === 'string' && messages[key].startsWith('Read from your report as'));
+    assert.ok(key, 'the report date provenance wording is translated');
+    assert.ok(screen.includes(`appL10n.${key}`), 'the detected date uses the report provenance translation');
   });
 });

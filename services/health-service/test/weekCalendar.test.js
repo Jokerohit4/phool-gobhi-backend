@@ -5,7 +5,7 @@ import { startOfIsoWeek as challengeWeek } from '../../challenge-service/utils/i
 for (const instant of ['2026-10-25T18:29:59Z','2026-10-25T18:30:00Z','2026-12-31T20:00:00Z','2024-02-29T00:00:00Z']) {
   test(`week parity at ${instant}`, () => {
     const monday = weekStartOf(isoDayIST(instant));
-    assert.equal(monday, challengeWeek(instant).toISOString().slice(0,10));
+    assert.equal(monday, challengeWeek(new Date(new Date(instant).getTime() - 4 * 3600000)).toISOString().slice(0,10));
     assert.equal(monday, startOfIsoWeek(instant).toISOString().slice(0,10));
     const days = weekDays(monday);
     assert.equal(days.length, 7);

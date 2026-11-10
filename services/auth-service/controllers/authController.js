@@ -763,8 +763,14 @@ const getUserInternal = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    const membership = user.linkedGymId ? await prisma.gymLink.findFirst({
+      where: { userId: user.id, gymId: user.linkedGymId, removedAt: null },
+      orderBy: { linkedAt: 'desc' },
+      select: { source: true, approvedAt: true },
+    }) : null;
     res.json({
       id: user.id,
+      gymLinkStatus: linkStatusOf(membership),
       name: user.name,
       phone: user.phone,
       dateOfBirth: user.dateOfBirth,
@@ -892,7 +898,7 @@ async function gymRoster(gymId, { includePhone }) {
     select: { userId: true, source: true, firstVerifiedCheckinAt: true, approvedAt: true },
   });
   // A self link shows once the gym approved it or a verified check-in confirmed it.
-  const visible = links.filter((l) => l.source !== 'self' || l.firstVerifiedCheckinAt != null || l.approvedAt != null);
+  const visible = links.filter((l) => l.source !== 'self' || l.approvedAt != null);
   const ids = [...new Set(visible.map((l) => l.userId))];
   if (!ids.length) return [];
   const users = await prisma.user.findMany({

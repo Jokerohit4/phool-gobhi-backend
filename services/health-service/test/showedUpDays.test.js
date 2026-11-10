@@ -69,8 +69,8 @@ test('show-up history uses the same qualification and retains incomplete-set evi
 
 test('history local-date fallback uses IST and merges booking days once', async () => {
   bookingDays = [];
-  sessions = [{ ...base, localDate: null, startedAt: new Date('2026-10-15T19:00:00Z'),
-    endedAt: new Date('2026-10-15T19:30:00Z') }];
+  sessions = [{ ...base, localDate: null, startedAt: new Date('2026-10-15T23:00:00Z'),
+    endedAt: new Date('2026-10-15T23:30:00Z') }];
   assert.deepEqual(await getShowedUpDays(1), ['2026-10-16']);
   bookingDays = ['2026-10-16'];
   assert.deepEqual(await getShowedUpDays(1), ['2026-10-16']);

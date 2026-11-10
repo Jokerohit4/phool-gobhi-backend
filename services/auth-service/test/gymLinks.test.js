@@ -129,6 +129,8 @@ function createFakePrisma() {
 }
 
 let selfLink;
+let requestEntranceMembership;
+let entranceGym = { id: 3, isApproved: true };
 let leaveGymLink;
 let removeGymMember;
 let clearGymLinkNotice;
@@ -153,8 +155,9 @@ test('setup: mock @prisma/client and authService once, import the controller onc
       fetchGymInternal: async () => ({}),
     },
   });
+  t.mock.module('../services/gymLookup.js', { exports: { findPartnerGym: async () => entranceGym } });
   ({
-    selfLink, leaveGymLink, removeGymMember, clearGymLinkNotice, gymLinkCheckedIn, unclaimedGymClaimed,
+    requestEntranceMembership, selfLink, leaveGymLink, removeGymMember, clearGymLinkNotice, gymLinkCheckedIn, unclaimedGymClaimed,
     listLinkRequests, approveLinkRequest, rejectLinkRequest,
   } = await import('../controllers/gymLinkController.js'));
 });
@@ -423,4 +426,56 @@ test('rejecting an already-confirmed member is a 409 and changes nothing', async
   assert.equal(res.statusCode, 409);
   assert.equal(res.body.code, 'LINK_NOT_PENDING');
   assert.equal(state.gymLinks[0].removedAt, null);
+});
+
+// The entrance is a public poster. Seeing it is not proof of membership.
+test('entrance request needs a customer and a real approved gym', async () => {
+  for (const [role, gym, expected] of [
+    ['partner', { id: 3, isApproved: true }, 403],
+    ['customer', null, 404],
+    ['customer', { id: 3, isApproved: false }, 404],
+  ]) {
+    reset({ users: [user()] });
+    entranceGym = gym;
+    const res = fakeRes();
+    await requestEntranceMembership(req({ user: { id: 7, role }, body: { gymId: 3 } }), res);
+    assert.equal(res.statusCode, expected);
+    assert.equal(state.gymLinks.length, 0);
+  }
+});
+
+test('entrance creates one pending request, then only the owning gym can approve', async () => {
+  reset({ users: [user()] });
+  entranceGym = { id: 3, isApproved: true };
+  const customer = req({ user: { id: 7, role: 'customer' }, body: { gymId: 3 } });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = fakeRes();
+    await requestEntranceMembership(customer, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.link.status, 'pending');
+  }
+  assert.equal(state.gymLinks.length, 1);
+  assert.equal(state.gymLinks[0].approvedAt, null);
+  partnerOwnsBehavior = () => { throw { status: 403, error: 'Not your gym' }; };
+  const partner = req({ user: { id: 50, role: 'partner' }, params: { gymId: '3', userId: '7' } });
+  let res = fakeRes();
+  await approveLinkRequest(partner, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(state.gymLinks[0].approvedAt, null);
+  partnerOwnsBehavior = null;
+  res = fakeRes();
+  await approveLinkRequest(partner, res);
+  assert.equal(res.statusCode, 204);
+  assert.ok(state.gymLinks[0].approvedAt instanceof Date);
+  assert.equal(state.gymLinks[0].approvedByPartnerId, 50);
+});
+
+test('entrance request cannot silently replace a different gym', async () => {
+  reset({ users: [user({ linkedGymId: 9 })] });
+  entranceGym = { id: 3, isApproved: true };
+  const res = fakeRes();
+  await requestEntranceMembership(req({ user: { id: 7, role: 'customer' }, body: { gymId: 3 } }), res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(state.users[0].linkedGymId, 9);
+  assert.equal(state.gymLinks.length, 0);
 });

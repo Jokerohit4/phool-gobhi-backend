@@ -60,10 +60,10 @@ const log = (p, at = now, options = {}) => recordRoutineWater(p, {
   userId: 7, localDate: '2026-10-26', targetMl: 2500, now: at, ...options,
 });
 
-test('calendar unlocks are 7/10/15 days, based on IST dates at midnight', () => {
+test('calendar unlocks are 7/10/15 days, based on customer dates at 4 AM', () => {
   assert.deepEqual(JOURNEY.layers.filter(l => l.unlock.type === 'elapsed_days').map(l => l.unlock.need), [7, 10, 15]);
-  assert.equal(elapsedJourneyDays('2026-10-26T18:29:00Z', new Date('2026-11-02T18:29:00Z')), 7);
-  assert.equal(elapsedJourneyDays('2026-10-26T18:29:00Z', new Date('2026-11-02T18:30:00Z')), 8);
+  assert.equal(elapsedJourneyDays('2026-10-26T18:29:00Z', new Date('2026-11-02T22:29:00Z')), 7);
+  assert.equal(elapsedJourneyDays('2026-10-26T18:29:00Z', new Date('2026-11-02T22:30:00Z')), 8);
 });
 test('small rewards taper at day 8 and day 15; old and future accounts cannot get starter coins', () => {
   assert.equal(routineRewardPolicy(createdAt, now).waterLog, 1);
@@ -121,6 +121,6 @@ test('empty/rest/instant sessions cannot earn starter workout coins', async () =
 test('midnight cannot reset the one-hour spacing', async () => {
   ledger.clear(); const p = fake();
   assert.equal((await log(p, new Date('2026-10-26T18:29:00Z'))).coinsAwarded, 1);
-  assert.equal((await log(p, new Date('2026-10-26T18:31:00Z'), { localDate: '2026-10-27' })).coinsAwarded, 0);
-  assert.equal((await log(p, new Date('2026-10-26T19:29:00Z'), { localDate: '2026-10-27' })).coinsAwarded, 1);
+  assert.equal((await log(p, new Date('2026-10-26T18:31:00Z'), { localDate: '2026-10-26' })).coinsAwarded, 0);
+  assert.equal((await log(p, new Date('2026-10-26T19:29:00Z'), { localDate: '2026-10-26' })).coinsAwarded, 1);
 });

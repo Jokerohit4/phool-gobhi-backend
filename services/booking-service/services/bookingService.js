@@ -3563,6 +3563,12 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
     throw { status: 403, error: 'This gym is not your linked gym', code: 'NOT_LINKED_GYM' };
   }
 
+  // Fail closed: a linkedGymId (or a successful booked visit) is not proof of
+  // membership. Auth owns the approval decision; the client cannot supply it.
+  if (user.gymLinkStatus !== 'approved') {
+    throw { status: 403, error: 'Your membership request is waiting for gym approval. Ask the gym owner to review it.', code: 'MEMBERSHIP_PENDING' };
+  }
+
   // 2. Geofence check (≤50m) — same radius as requestCheckIn's GPS check.
   if (typeof lat !== 'number' || typeof lng !== 'number') {
     throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };

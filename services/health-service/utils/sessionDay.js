@@ -1,3 +1,4 @@
+import { dayStartHour } from './loggingDayContext.js';
 // Single source of truth for the two things every session/day surface must
 // agree on, so a check-in, a workout and a streak can never land on different
 // days or count different sessions (audit 2026-10-08, P2 row 49):
@@ -45,7 +46,7 @@ export function addDays(date, days) {
 // week it belongs to, matching what the user's calendar says.
 export function startOfIsoWeek(date = new Date()) {
   const d = date instanceof Date ? date : new Date(date);
-  const ist = new Date(d.getTime() + IST_OFFSET_MS);
+  const ist = new Date(d.getTime() + IST_OFFSET_MS - dayStartHour() * 3600000);
   const day = (ist.getUTCDay() + 6) % 7; // 0 = Monday
   ist.setUTCDate(ist.getUTCDate() - day);
   ist.setUTCHours(0, 0, 0, 0);
@@ -73,7 +74,9 @@ export function countsAsSession(session) {
 
 
 // String-only calendar helpers: date strings are days, never instants.
-export const isoDayIST = istDateString;
+export function isoDayIST(value = new Date()) {
+  return istDateString(new Date(new Date(value).getTime() - dayStartHour() * 3600000));
+}
 export function shiftDay(localDate, days) {
   return dayString(addDays(dayToDate(localDate), days));
 }

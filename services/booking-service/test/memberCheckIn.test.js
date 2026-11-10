@@ -27,7 +27,7 @@ let notifyCalls = [];
 let nextAttendanceId = 1;
 
 function resetFakes() {
-  user = { id: 1, linkedGymId: GYM.id };
+  user = { id: 1, linkedGymId: GYM.id, gymLinkStatus: 'approved' };
   axiosGymOverride = null;
   gymLookupThrows = false;
   userLookupThrows = false;
@@ -155,7 +155,7 @@ test('gym lookup fails entirely -> Gym not found', async () => {
 
 test('gym has no lat/lng on file -> TOO_FAR (withinRange short-circuits false)', async () => {
   resetFakes();
-  user = { id: 1, linkedGymId: GYM_NO_COORDS.id };
+  user = { id: 1, linkedGymId: GYM_NO_COORDS.id, gymLinkStatus: 'approved' };
   await assert.rejects(
     () => memberCheckIn(GYM_NO_COORDS.id, 1, 28.4, 77.0),
     (err) => { assert.equal(err.code, 'TOO_FAR'); return true; }
@@ -319,3 +319,13 @@ test('getMemberAttendance exposes checkedOutAt (set after checkout, null before)
   assert.ok(after[0].checkedOutAt, 'checkedOutAt present after check-out');
   assert.equal(after[0].checkedInAt instanceof Date, true);
 });
+
+for (const status of ['pending', null, undefined]) {
+  test(`member attendance fails closed for membership status ${status}`, async () => {
+    resetFakes();
+    user.gymLinkStatus = status;
+    await assert.rejects(() => memberCheckIn(GYM.id, 1, GYM.lat, GYM.lng), e => e.code === 'MEMBERSHIP_PENDING');
+    assert.equal(memberAttendanceRows.size, 0);
+    assert.equal(notifyCalls.length, 0);
+  });
+}

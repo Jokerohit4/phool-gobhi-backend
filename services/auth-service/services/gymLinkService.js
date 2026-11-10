@@ -70,7 +70,7 @@ export async function getActiveLink(prisma, userId) {
  * @param {import('@prisma/client').PrismaClient} prisma
  * @param {number} userId
  * @param {number} gymId
- * @param {'self'|'gym_qr'} source
+ * @param {'self'|'gym_qr'|'qr_request'} source
  * @returns {Promise<import('@prisma/client').User|null>} the updated (or unchanged) user
  */
 export async function linkGym(prisma, userId, gymId, source) {
@@ -106,7 +106,7 @@ export async function linkGym(prisma, userId, gymId, source) {
  * is unchanged when they already have a gym (first link wins).
  */
 export async function linkGymTx(tx, userId, gymId, source, now = new Date()) {
-  const resolvedSource = source === 'self' ? 'self' : 'gym_qr';
+  const resolvedSource = source === 'self' || source === 'qr_request' ? 'self' : 'gym_qr';
   const user = await tx.user.findUnique({ where: { id: userId } });
   if (!user) return null;
   if (user.linkedGymId) return user;
@@ -142,7 +142,7 @@ async function assertSelfLinkAllowed(tx, userId, gymId) {
     select: { id: true },
   });
   if (blocked) {
-    throw { status: 409, error: 'This gym removed you. Scan the gym QR to rejoin.', errorCode: 'SELF_LINK_BLOCKED' };
+    throw { status: 409, error: 'This gym declined or removed your membership. Contact the gym owner for help.', errorCode: 'SELF_LINK_BLOCKED' };
   }
 
   // Cooldown: at most one self-link per 30 days.
@@ -231,9 +231,8 @@ export async function removeMemberFromGym(prisma, gymId, userId, partnerId) {
   return { ok: true };
 }
 
-// A verified check-in (booking attended or gym check-in) qualifies a
-// self-declared link: from here it is a real membership and shows in rosters /
-// counts. Idempotent — only the first stamp writes.
+// Record a verified visit for activity/billing history. This stamp never
+// grants membership approval; only approvedAt authorizes a self link.
 export async function markGymCheckedIn(prisma, userId, gymId) {
   const active = await prisma.gymLink.findFirst({
     where: { userId, gymId, removedAt: null },
@@ -247,11 +246,10 @@ export async function markGymCheckedIn(prisma, userId, gymId) {
   return { ok: true };
 }
 
-// A self link the gym has not yet confirmed: still active, no partner approval,
-// and no verified check-in (a real check-in confirms membership on its own, so
-// that person never needs the gym to click anything).
+// A self link stays pending until the owning gym approves it, including
+// when this person has attended a separately booked session.
 export function isPendingSelfLink(link) {
-  return link.source === 'self' && !link.removedAt && !link.approvedAt && !link.firstVerifiedCheckinAt;
+  return link.source === 'self' && !link.removedAt && !link.approvedAt;
 }
 
 // The gym's approval queue: active, unconfirmed self links, oldest first. The
@@ -259,7 +257,7 @@ export function isPendingSelfLink(link) {
 // not yet a relationship) and never a phone number.
 export async function listPendingSelfLinks(prisma, gymId) {
   const links = await prisma.gymLink.findMany({
-    where: { gymId, source: 'self', removedAt: null, approvedAt: null, firstVerifiedCheckinAt: null },
+    where: { gymId, source: 'self', removedAt: null, approvedAt: null },
     orderBy: { linkedAt: 'asc' },
     select: { userId: true, linkedAt: true },
   });

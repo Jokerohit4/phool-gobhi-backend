@@ -1,3 +1,4 @@
+import { isoDayIST } from '../utils/sessionDay.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -305,9 +306,9 @@ test('a recompute with no localDate keys the row to today, not to undefined', as
   // card says has no plan. The double here would have accepted undefined
   // happily, so the assertion is on the key it wrote, not on r.written alone.
   const prisma = fakePrisma({ goal: FULL_GOAL, weight: WEIGHT_READING });
-  const before = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const before = isoDayIST();
   const r = await recomputeTargets({ prisma, userId: 1 });
-  const after = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const after = isoDayIST();
 
   assert.equal(r.written, true);
   const written = prisma.calls.written[0];
