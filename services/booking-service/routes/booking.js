@@ -65,6 +65,7 @@ router.get('/gym/:gymId/attendance-heatmap', requireRole('partner'), ctrl.getGym
 // One dataset, sorted/sliced into several views client-side (see
 // bookingService.js's computeMemberActivity for why).
 router.get('/gym/:gymId/member-activity', requireRole('partner'), ctrl.getMemberActivityForGym);
+router.get('/gym/:gymId/members/:customerId/visit-patterns', requireRole('partner'), ctrl.getMemberVisitPatterns);
 router.get('/admin/gym/:gymId/member-activity', requireRole('gobhi'), ctrl.getMemberActivityAdmin);
 router.get('/admin/attendance-summary', requireRole('gobhi'), ctrl.getAdminAttendanceSummary);
 router.get('/admin/attendance-summary/by-gym', requireRole('gobhi'), ctrl.getAdminAttendanceByGym);

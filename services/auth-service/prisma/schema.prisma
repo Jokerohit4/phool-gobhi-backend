@@ -116,6 +116,12 @@ model User {
   freeTimeWindow FreeTimeWindow?
   // When the user's own-gym membership ends (future date when written).
   gymSubscriptionEndDate DateTime?
+  // Account archive (retain-everything deletion mode, see accountArchiveService).
+  // archivedAt is set when the user closes their account; archivedData holds the
+  // identifying fields that were moved out of the live columns so the phone and
+  // email can belong to a brand-new account. Null for every live user.
+  archivedAt      DateTime?
+  archivedData    Json?
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
@@ -714,6 +720,63 @@ enum GymLinkSource {
 // unenforced cross-service reference like the rest of the file. A link is
 // "active" while removedAt is null; removed rows are kept so a self-re-link can
 // be blocked and history survives a gym removing a member.
+// A gym owner's time-boxed "approve every join" window (1h / 8h / 24h). While
+// autoApproveUntil is in the future, a presence-verified entrance scan joins
+// the member as approved; otherwise it leaves a pending request for the owner.
+// One row per gym; closing a window deletes the row.
+model GymJoinWindow {
+  gymId             Int      @id
+  autoApproveUntil  DateTime
+  openedByPartnerId Int?
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@schema("auth")
+}
+
+// What a gym owner records about one of its own members, per (gym, member).
+// The phone is whatever the OWNER typed from their own records — the customer's
+// own phone is never exposed to partners. Dates are IST calendar dates
+// ('YYYY-MM-DD'), like the date columns elsewhere; money is in paise.
+model GymMemberRecord {
+  gymId                 Int
+  userId                Int
+  phone                 String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  lockerNumber          String?
+  joinedOn              String?
+  followUpOn            String?
+  amountDuePaise        Int?
+  notes                 String?
+  updatedByPartnerId    Int?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
+
+  @@id([gymId, userId])
+  @@index([userId])
+  @@schema("auth")
+}
+
+// A gym member's payment ledger. Members renew, so each payment is its own row;
+// "valid until" and lifetime paid are derived from it, never overwritten.
+model GymMemberPayment {
+  id                 Int      @id @default(autoincrement())
+  gymId              Int
+  userId             Int
+  amountPaise        Int
+  paidOn             String
+  paymentMode        String?
+  planName           String?
+  validUntil         String?
+  note               String?
+  createdByPartnerId Int?
+  createdAt          DateTime @default(now())
+
+  @@index([gymId, userId])
+  @@index([userId])
+  @@schema("auth")
+}
+
 model GymLink {
   id                     Int           @id @default(autoincrement())
   userId                 Int

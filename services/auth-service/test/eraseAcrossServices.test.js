@@ -6,6 +6,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+// This file pins the ERASE mode's guarantees (see accountDeletionMode in authService).
+// The default mode is archive; its tests are in accountArchive.test.js.
+process.env.ACCOUNT_DELETION_MODE = 'erase';
+
 let postCalls = [];
 let postBehaviour = () => ({ ok: true, status: 200, json: async () => ({ data: { erased: true } }) });
 let deletedUsers = [];

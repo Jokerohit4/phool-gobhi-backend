@@ -1,6 +1,22 @@
-// One poster, with eligibility resolved from server records. A failed booking
-// check never creates a membership or records attendance for an unapproved user.
-export async function resolveEntranceCheckIn({ gymId, customerId, lat, lng, confirmEarly = false }, deps) {
+// One poster, three behaviours, resolved from server records:
+//
+//   1. The customer has a usable booking  -> booking check-in (unchanged rules).
+//   2. The customer is an approved member -> member attendance.
+//   3. Neither                            -> they can ask to join:
+//        - a scan alone never links anyone (MEMBERSHIP_REQUIRED: a pay-per-
+//          session guest who scans the poster must not silently become a member);
+//        - with `join` (their explicit tap) the server first proves presence
+//          (inside the gym's geofence), then asks auth-service to link them.
+//          If the owner's "approve every join" window is open they are approved
+//          and checked in by the same request; otherwise a pending request is
+//          created and the answer is MEMBERSHIP_PENDING — no attendance, no
+//          billable membership, until the gym approves.
+//
+// A member the gym removed stays blocked (MEMBERSHIP_BLOCKED); a scan can never
+// override the owner. MEMBERSHIP_PENDING is also what an already-pending
+// customer gets on any later scan, so the client shows "waiting for the gym"
+// rather than asking them to join again.
+export async function resolveEntranceCheckIn({ gymId, customerId, lat, lng, confirmEarly = false, join = false }, deps) {
   if (!Number.isInteger(gymId) || gymId <= 0) {
     throw { status: 400, code: 'INVALID_GYM', error: 'A valid gym is required' };
   }
@@ -17,17 +33,37 @@ export async function resolveEntranceCheckIn({ gymId, customerId, lat, lng, conf
     if (!['NO_ACTIVE_BOOKING', 'BOOKING_PENDING_CONFIRMATION', 'SESSION_ENDED', 'SESSION_ALREADY_COMPLETED'].includes(err.code)) throw err;
     bookingError = err;
   }
+  let memberError;
   try {
-    const result = await deps.memberCheckIn(gymId, customerId, lat, lng);
-    return { ...result, kind: 'member', attendedAt: result.checkedInAt,
-      attendanceMethod: 'member_geofence', alreadyVerified: !!result.alreadyCheckedIn };
+    return memberResult(await deps.memberCheckIn(gymId, customerId, lat, lng), false);
   } catch (err) {
-    if (err.code === 'MEMBERSHIP_PENDING') throw err;
-    if (err.code !== 'NOT_LINKED_GYM') throw err;
-    // Keep useful booking messages. The client can offer a separate request
-    // action; claiming a booking itself never becomes a membership request.
-    if (bookingError.code !== 'NO_ACTIVE_BOOKING') throw bookingError;
-    throw { status: 403, code: 'MEMBERSHIP_REQUIRED',
-      error: 'No eligible booking or approved membership. If you are a member, request approval from the gym.' };
+    // NOT_LINKED_GYM: never linked. MEMBERSHIP_PENDING: asked, gym hasn't
+    // approved yet. Anything else (TOO_FAR, server errors) is surfaced as is.
+    if (err.code !== 'NOT_LINKED_GYM' && err.code !== 'MEMBERSHIP_PENDING') throw err;
+    memberError = err;
   }
+
+  // Keep useful booking messages (session ended, awaiting confirmation, ...):
+  // someone with a booking is a guest here, not asking to become a member.
+  if (bookingError.code !== 'NO_ACTIVE_BOOKING') throw bookingError;
+  if (!join) {
+    if (memberError.code === 'MEMBERSHIP_PENDING') throw membershipPending();
+    throw { status: 403, code: 'MEMBERSHIP_REQUIRED',
+      error: 'No booking for right now and not a member of this gym yet. Ask to join to check in.' };
+  }
+
+  await deps.assertAtGym(gymId, lat, lng);
+  const membership = await deps.joinGymViaQr(customerId, gymId);
+  if (membership.status !== 'approved') throw membershipPending();
+  return memberResult(await deps.memberCheckIn(gymId, customerId, lat, lng), membership.joined === true);
+}
+
+function membershipPending() {
+  return { status: 403, code: 'MEMBERSHIP_PENDING',
+    error: "Your request is with the gym. You'll be checked in once they approve, and we'll notify you." };
+}
+
+function memberResult(result, joined) {
+  return { ...result, kind: 'member', joined, attendedAt: result.checkedInAt,
+    attendanceMethod: 'member_geofence', alreadyVerified: !!result.alreadyCheckedIn };
 }

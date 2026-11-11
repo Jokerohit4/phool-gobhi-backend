@@ -10,6 +10,8 @@ import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyUser } from '../utils/notifyUser.js';
 import { eraseUserAcrossServices } from '../utils/eraseAcrossServices.js';
+import { archiveUserAcrossServices } from '../utils/archiveAcrossServices.js';
+import { archiveUserAccount } from './accountArchiveService.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
 import { linkGym } from './gymLinkService.js';
 import { isLinkablePartnerGym } from './gymLookup.js';
@@ -392,8 +394,44 @@ export async function loginService({ email, password }) {
 // downstream service fails, the account survives and the whole operation can
 // simply be retried — a user who is still able to press "delete" again is a
 // far better failure mode than silently orphaned personal data.
+// How "delete my account" behaves, set by ACCOUNT_DELETION_MODE:
+//   archive (default) — retain everything. The account is closed and neutralised in
+//                       place, the person disappears from everyone else's view, and
+//                       signing in again makes a brand-new user. See
+//                       accountArchiveService.
+//   erase             — the original behaviour: erase across services, then delete
+//                       the User row.
+// Archive is the default pending legal advice on what must actually be deleted;
+// flipping the variable to `erase` restores hard deletion with no code change.
+export function accountDeletionMode() {
+  return String(process.env.ACCOUNT_DELETION_MODE || 'archive').trim().toLowerCase() === 'erase' ? 'erase' : 'archive';
+}
+
+// Closing an account in archive mode. Same order as erasure: hide the person from
+// other users FIRST, neutralise the identity LAST, so a failure in between leaves
+// an account that can simply be retried (every step is idempotent).
+async function archiveAccount(userId) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
+  if (user.archivedAt) return { message: 'User deleted', archived: true };
+
+  const hidden = await archiveUserAcrossServices(userId);
+  if (!hidden.ok) {
+    console.error('deleteUserService: refusing to archive the account —', hidden.failures);
+    throw {
+      status: 502,
+      error: 'Could not close your account right now. Nothing was changed — please try again.',
+      errorCode: 'ARCHIVE_INCOMPLETE',
+      failedServices: hidden.failures.map((f) => f.service),
+    };
+  }
+  await archiveUserAccount(prisma, user);
+  return { message: 'User deleted', archived: true };
+}
+
 export async function deleteUserService(userId) {
   try {
+    if (accountDeletionMode() === 'archive') return await archiveAccount(userId);
     const erasure = await eraseUserAcrossServices(userId);
     if (!erasure.ok) {
       console.error('deleteUserService: refusing to delete User row —', erasure.failures);
@@ -430,13 +468,17 @@ export async function deleteUserService(userId) {
       // ids) both key on userId with no cascade, and both outlive as personal
       // data if left behind.
       prisma.gymLink.deleteMany({ where: { userId } }),
+      // What gyms recorded about this person (locker, notes, payments, ...) is
+      // personal data keyed on userId too.
+      prisma.gymMemberRecord.deleteMany({ where: { userId } }),
+      prisma.gymMemberPayment.deleteMany({ where: { userId } }),
       prisma.userDevice.deleteMany({ where: { userId } }),
       prisma.user.updateMany({ where: { referredByUserId: userId }, data: { referredByUserId: null } }),
       prisma.user.delete({ where: { id: userId } }),
     ]);
     return { message: 'User deleted', erased: erasure.results };
   } catch (err) {
-    if (err?.errorCode === 'ERASURE_INCOMPLETE') throw err;
+    if (err?.errorCode === 'ERASURE_INCOMPLETE' || err?.errorCode === 'ARCHIVE_INCOMPLETE' || err?.errorCode === 'USER_NOT_FOUND') throw err;
     if (err.name === 'PrismaClientInitializationError') {
       console.error('Database connection error:', err);
       throw { status: 500, error: ERROR_MESSAGES.SERVER_ERROR.message, errorCode: ERROR_MESSAGES.SERVER_ERROR.code };

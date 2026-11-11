@@ -20,6 +20,9 @@ import {
   listPendingSelfLinks,
   approveSelfLink,
   rejectSelfLink,
+  joinGymViaQr,
+  getJoinWindow,
+  setJoinWindow,
 } from '../services/gymLinkService.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -60,13 +63,14 @@ function order(rows, orderBy) {
   });
 }
 
-function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVersionSettings = [], appModeHistory = [] } = {}) {
+function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVersionSettings = [], appModeHistory = [], gymJoinWindows = [] } = {}) {
   const state = {
     users: users.map((u) => ({ ...u })),
     gymLinks: gymLinks.map((l) => ({ ...l })),
     userDevices: userDevices.map((d) => ({ ...d })),
     appVersionSettings: appVersionSettings.map((s) => ({ ...s })),
     appModeHistory: appModeHistory.map((h) => ({ ...h })),
+    gymJoinWindows: gymJoinWindows.map((w) => ({ ...w })),
   };
   let nextLinkId = state.gymLinks.reduce((m, l) => Math.max(m, l.id || 0), 0) + 1;
 
@@ -131,6 +135,23 @@ function createFakePrisma({ users = [], gymLinks = [], userDevices = [], appVers
       async findUnique({ where }) {
         const row = state.appVersionSettings.find((s) => s.id === where.id);
         return row ? { ...row } : null;
+      },
+    },
+    gymJoinWindow: {
+      async findUnique({ where }) {
+        const row = state.gymJoinWindows.find((w) => w.gymId === where.gymId);
+        return row ? { ...row } : null;
+      },
+      async upsert({ where, create, update }) {
+        const row = state.gymJoinWindows.find((w) => w.gymId === where.gymId);
+        if (row) { Object.assign(row, update); return { ...row }; }
+        state.gymJoinWindows.push({ ...create });
+        return { ...create };
+      },
+      async deleteMany({ where }) {
+        const before = state.gymJoinWindows.length;
+        state.gymJoinWindows = state.gymJoinWindows.filter((w) => !matches(where, w));
+        return { count: before - state.gymJoinWindows.length };
       },
     },
   };
@@ -562,6 +583,159 @@ test('reject cannot evict a confirmed member', async () => {
 test('rejecting with no active link is a 404', async () => {
   const { prisma } = createFakePrisma({ users: [baseUser()] });
   await assert.rejects(rejectSelfLink(prisma, 7, 1, 55), { status: 404, errorCode: 'LINK_NOT_FOUND' });
+});
+
+// --- joining from the entrance poster (presence already proven) ---------------
+
+const HOUR = 60 * 60 * 1000;
+const openWindow = (over = {}) => ({ gymId: 7, autoApproveUntil: new Date(Date.now() + HOUR), openedByPartnerId: 55, ...over });
+
+test('with no window, a poster join leaves a pending request and flags it for the owner', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser()] });
+  assert.deepEqual(await joinGymViaQr(prisma, 1, 7), { gymId: 7, status: 'pending', joined: true, requested: true });
+  assert.equal(state.gymLinks[0].source, 'self');
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), true, 'billing and attendance wait for the gym');
+});
+
+test('with the owner window open, a poster join is approved on the spot', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser()], gymJoinWindows: [openWindow()] });
+  assert.deepEqual(await joinGymViaQr(prisma, 1, 7), { gymId: 7, status: 'approved', joined: true, requested: false });
+  assert.equal(state.gymLinks[0].source, 'self', 'an ordinary self link, so billing treats it like an owner-approved one');
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), false);
+  assert.ok(state.gymLinks[0].approvedAt);
+  assert.equal(state.gymLinks[0].approvedByPartnerId, null);
+});
+
+test('an expired window behaves like no window', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser()], gymJoinWindows: [openWindow({ autoApproveUntil: new Date(Date.now() - 1000) })],
+  });
+  assert.equal((await joinGymViaQr(prisma, 1, 7)).status, 'pending');
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), true);
+});
+
+test("one gym's window never approves a join at another gym", async () => {
+  const { prisma } = createFakePrisma({ users: [baseUser()], gymJoinWindows: [openWindow({ gymId: 8 })] });
+  assert.equal((await joinGymViaQr(prisma, 1, 7)).status, 'pending');
+});
+
+test('joining the gym you already belong to is a no-op that reports joined=false', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser({ linkedGymId: 7 })], gymLinks: [selfLink({ approvedAt: new Date() })] });
+  assert.deepEqual(await joinGymViaQr(prisma, 1, 7), { gymId: 7, status: 'approved', joined: false, requested: false });
+  assert.equal(state.gymLinks.length, 1);
+});
+
+test('a repeat scan while still pending neither re-notifies nor approves', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser({ linkedGymId: 7 })], gymLinks: [selfLink()] });
+  assert.deepEqual(await joinGymViaQr(prisma, 1, 7), { gymId: 7, status: 'pending', joined: false, requested: false });
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), true);
+});
+
+test('an open window approves a request that was already waiting', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ linkedGymId: 7 })], gymLinks: [selfLink()], gymJoinWindows: [openWindow()],
+  });
+  assert.deepEqual(await joinGymViaQr(prisma, 1, 7), { gymId: 7, status: 'approved', joined: false, requested: false });
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), false);
+});
+
+test('a poster join never moves a member of another gym, window or not', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ linkedGymId: 3 })], gymLinks: [selfLink({ gymId: 3, source: 'gym_qr' })], gymJoinWindows: [openWindow()],
+  });
+  await assert.rejects(joinGymViaQr(prisma, 1, 7), { status: 409, errorCode: 'ALREADY_LINKED' });
+  assert.equal(state.users[0].linkedGymId, 3);
+});
+
+test('a scan cannot undo a gym removing the member, even inside an open window', async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser()], gymJoinWindows: [openWindow()],
+    gymLinks: [selfLink({ source: 'gym_qr', removedAt: new Date(), selfRelinkBlocked: true })],
+  });
+  await assert.rejects(joinGymViaQr(prisma, 1, 7), { status: 403, errorCode: 'MEMBERSHIP_BLOCKED' });
+  assert.equal(state.users[0].linkedGymId, null);
+  assert.equal(state.gymLinks.filter((l) => !l.removedAt).length, 0);
+});
+
+test('someone who left voluntarily can ask to rejoin by scanning', async () => {
+  const { prisma } = createFakePrisma({
+    users: [baseUser()],
+    gymLinks: [selfLink({ source: 'gym_qr', removedAt: new Date(Date.now() - 40 * DAY), linkedAt: new Date(Date.now() - 60 * DAY), selfRelinkBlocked: false })],
+  });
+  assert.equal((await joinGymViaQr(prisma, 1, 7)).joined, true);
+});
+
+test('the monthly self-link limit still applies to poster joins', async () => {
+  const { prisma } = createFakePrisma({
+    users: [baseUser()], gymJoinWindows: [openWindow()],
+    gymLinks: [selfLink({ gymId: 3, removedAt: new Date(), linkedAt: new Date(Date.now() - 2 * DAY) })],
+  });
+  await assert.rejects(joinGymViaQr(prisma, 1, 7), { errorCode: 'SELF_LINK_LIMIT' });
+});
+
+test('a poster join validates its input', async () => {
+  const { prisma } = createFakePrisma({ users: [baseUser()] });
+  await assert.rejects(joinGymViaQr(prisma, 1, 'nope'), { status: 400 });
+  await assert.rejects(joinGymViaQr(prisma, 99, 7), { status: 404 });
+});
+
+// --- the owner's approve-every-join window ------------------------------------
+
+test('a gym with no window reports it closed', async () => {
+  const { prisma } = createFakePrisma();
+  assert.deepEqual(await getJoinWindow(prisma, 7), { active: false, autoApproveUntil: null });
+});
+
+test('opening a window for 1, 8 or 24 hours ends that long from now', async () => {
+  for (const hours of [1, 8, 24]) {
+    const { prisma } = createFakePrisma();
+    const before = Date.now();
+    const result = await setJoinWindow(prisma, 7, 55, hours);
+    assert.equal(result.active, true);
+    const ms = result.autoApproveUntil.getTime() - before;
+    assert.ok(Math.abs(ms - hours * HOUR) < 5000, `${hours}h window`);
+    assert.equal((await getJoinWindow(prisma, 7)).active, true);
+  }
+});
+
+test("opening a window approves everyone already waiting, and only this gym's queue", async () => {
+  const { prisma, state } = createFakePrisma({
+    users: [baseUser({ id: 1, linkedGymId: 7 }), baseUser({ id: 2, linkedGymId: 7 }), baseUser({ id: 3, linkedGymId: 8 })],
+    gymLinks: [
+      selfLink({ id: 1, userId: 1 }),
+      selfLink({ id: 2, userId: 2 }),
+      selfLink({ id: 3, userId: 3, gymId: 8 }),
+    ],
+  });
+  const result = await setJoinWindow(prisma, 7, 55, 8);
+  assert.deepEqual(result.approvedUserIds.sort(), [1, 2]);
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), false);
+  assert.equal(isPendingSelfLink(state.gymLinks[1]), false);
+  assert.equal(state.gymLinks[0].approvedByPartnerId, 55);
+  assert.equal(isPendingSelfLink(state.gymLinks[2]), true, 'another gym is untouched');
+});
+
+test('re-opening replaces the previous window, and closing ends it at once', async () => {
+  const { prisma, state } = createFakePrisma({ gymJoinWindows: [openWindow()] });
+  await setJoinWindow(prisma, 7, 55, 24);
+  assert.equal(state.gymJoinWindows.length, 1);
+  const closed = await setJoinWindow(prisma, 7, 55, 0);
+  assert.deepEqual(closed, { active: false, autoApproveUntil: null, approvedUserIds: [] });
+  assert.equal((await getJoinWindow(prisma, 7)).active, false);
+});
+
+test('closing a window does not un-approve anyone who joined during it', async () => {
+  const { prisma, state } = createFakePrisma({ users: [baseUser()], gymJoinWindows: [openWindow()] });
+  await joinGymViaQr(prisma, 1, 7);
+  await setJoinWindow(prisma, 7, 55, 0);
+  assert.equal(isPendingSelfLink(state.gymLinks[0]), false);
+});
+
+test('only 0, 1, 8 and 24 hours are accepted', async () => {
+  const { prisma } = createFakePrisma();
+  for (const hours of [2, -1, 100, NaN, 0.5]) {
+    await assert.rejects(setJoinWindow(prisma, 7, 55, hours), { status: 400, errorCode: 'INVALID_WINDOW' });
+  }
 });
 
 test('entrance QR request is pending and only gym approval can allow attendance', async () => {

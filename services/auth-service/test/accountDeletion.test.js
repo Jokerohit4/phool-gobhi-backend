@@ -10,6 +10,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+// These tests pin the ORIGINAL hard-delete behaviour, which is now one of two modes
+// (see accountDeletionMode). The default is archive; see accountArchive.test.js.
+process.env.ACCOUNT_DELETION_MODE = 'erase';
+
 let ops;
 let txCalls;
 let erasureResult;

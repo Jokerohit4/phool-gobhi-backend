@@ -174,6 +174,112 @@ async function assertSelfLinkAllowed(tx, userId, gymId) {
   }
 }
 
+// --- The owner's "approve every join" window ----------------------------------
+//
+// A linked member is billable and gets attendance without paying per session,
+// so by default a join waits for the gym to approve it. An owner can open a
+// time-boxed window ("approve every join for the next 1 / 8 / 24 hours") for
+// moments like launch day, when many existing members scan at once. Only a
+// presence-verified scan ever reaches joinGymViaQr, and even inside a window
+// the link is an ordinary self link that is approved on the spot, so billing
+// treats it exactly like an owner-approved one.
+export const JOIN_WINDOW_HOURS = [1, 8, 24];
+
+export async function getJoinWindow(prisma, gymId) {
+  const row = await prisma.gymJoinWindow.findUnique({ where: { gymId } });
+  if (!row || new Date(row.autoApproveUntil).getTime() <= Date.now()) {
+    return { active: false, autoApproveUntil: null };
+  }
+  return { active: true, autoApproveUntil: row.autoApproveUntil };
+}
+
+/**
+ * Open (hours 1 / 8 / 24) or close (hours 0) the gym's window. Opening also
+ * approves every request already waiting in the queue — the owner has just said
+ * "approve everyone". Returns the approved user ids so the caller can tell them.
+ */
+export async function setJoinWindow(prisma, gymId, partnerId, hours) {
+  if (hours === 0) {
+    await prisma.gymJoinWindow.deleteMany({ where: { gymId } });
+    return { active: false, autoApproveUntil: null, approvedUserIds: [] };
+  }
+  if (!JOIN_WINDOW_HOURS.includes(hours)) {
+    throw { status: 400, error: 'hours must be 0, 1, 8 or 24', errorCode: 'INVALID_WINDOW' };
+  }
+  const now = new Date();
+  const autoApproveUntil = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  await prisma.gymJoinWindow.upsert({
+    where: { gymId },
+    create: { gymId, autoApproveUntil, openedByPartnerId: partnerId },
+    update: { autoApproveUntil, openedByPartnerId: partnerId },
+  });
+  const pendingWhere = { gymId, source: 'self', removedAt: null, approvedAt: null };
+  const pending = await prisma.gymLink.findMany({ where: pendingWhere, select: { userId: true } });
+  if (pending.length) {
+    await prisma.gymLink.updateMany({
+      where: pendingWhere,
+      data: { approvedAt: now, approvedByPartnerId: partnerId },
+    });
+  }
+  return { active: true, autoApproveUntil, approvedUserIds: pending.map((l) => l.userId) };
+}
+
+/**
+ * Join a gym from the entrance poster. The caller (booking-service) has already
+ * proven the customer is physically inside the gym's geofence; whether that is
+ * enough to be approved right now is the owner's choice:
+ *
+ *  - owner's window open  -> approved immediately
+ *  - otherwise            -> a pending request the owner approves
+ *
+ * Either way a scan can never override the gym:
+ *  - already linked to another gym -> 409 ALREADY_LINKED (first link wins)
+ *  - removed/declined by this gym  -> 403 MEMBERSHIP_BLOCKED
+ *
+ * @returns {Promise<{gymId:number, status:'approved'|'pending', joined:boolean, requested:boolean}>}
+ *   joined    — this call created the link;
+ *   requested — a *new* pending request was created (the owner should be told).
+ */
+export async function joinGymViaQr(prisma, userId, gymId) {
+  const resolvedGymId = toPositiveInt(gymId);
+  if (!resolvedGymId) throw { status: 400, error: 'A valid gym is required' };
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw { status: 404, error: 'User not found' };
+  if (user.linkedGymId && user.linkedGymId !== resolvedGymId) {
+    throw { status: 409, error: 'Leave your current gym before joining another one.', errorCode: 'ALREADY_LINKED' };
+  }
+
+  const windowOpen = (await getJoinWindow(prisma, resolvedGymId)).active;
+  const approveNow = (link) => prisma.gymLink.update({ where: { id: link.id }, data: { approvedAt: new Date() } });
+
+  const active = await getActiveLink(prisma, userId);
+  if (active && active.gymId === resolvedGymId) {
+    if (!isPendingSelfLink(active)) return { gymId: resolvedGymId, status: 'approved', joined: false, requested: false };
+    if (!windowOpen) return { gymId: resolvedGymId, status: 'pending', joined: false, requested: false };
+    await approveNow(active);
+    return { gymId: resolvedGymId, status: 'approved', joined: false, requested: false };
+  }
+
+  const blocked = await prisma.gymLink.findFirst({
+    where: { userId, gymId: resolvedGymId, removedAt: { not: null }, selfRelinkBlocked: true },
+    select: { id: true },
+  });
+  if (blocked) {
+    throw { status: 403, error: 'This gym removed your membership. Contact the gym owner to be added back.', errorCode: 'MEMBERSHIP_BLOCKED' };
+  }
+
+  const linked = await linkGym(prisma, userId, resolvedGymId, 'qr_request');
+  const link = linked && linked.linkedGymId === resolvedGymId ? await getActiveLink(prisma, userId) : null;
+  if (!link || link.gymId !== resolvedGymId) {
+    throw { status: 409, error: 'Could not join this gym', errorCode: 'JOIN_FAILED' };
+  }
+  if (windowOpen) {
+    await approveNow(link);
+    return { gymId: resolvedGymId, status: 'approved', joined: true, requested: false };
+  }
+  return { gymId: resolvedGymId, status: 'pending', joined: true, requested: true };
+}
+
 // Customer leaves their gym: close the link and clear the pointer. No re-link
 // block — leaving is voluntary, unlike a partner removal.
 export async function leaveGym(prisma, userId) {

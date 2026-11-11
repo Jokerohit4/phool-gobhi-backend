@@ -1,5 +1,6 @@
 import * as buddyService from '../services/buddyService.js';
 import * as erasureService from '../services/erasureService.js';
+import * as archiveService from '../services/archiveService.js';
 import * as exportService from '../services/exportService.js';
 import * as leagueService from '../services/leagueService.js';
 
@@ -389,6 +390,22 @@ export const eraseUser = async (req, res) => {
   }
 };
 
+
+// Account archive (retain-everything deletion mode) — called by auth-service's
+// account-deletion orchestration. Internal-only. Hides the person from everyone
+// else and ends their matches; deletes nothing (see services/archiveService.js).
+export const archiveUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric userId is required' });
+    }
+    const result = await archiveService.archiveUserService(userId);
+    res.json({ data: result });
+  } catch (err) {
+    sendError(res, err);
+  }
+};
 
 // ---- DPDPA access right (s.11) -------------------------------------------
 // Internal only: auth-service authenticates the user and fans out to every

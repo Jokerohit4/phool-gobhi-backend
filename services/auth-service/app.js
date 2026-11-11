@@ -11,6 +11,7 @@ import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
 import deviceRoutes from './routes/devices.js';
 import gymLinkRoutes from './routes/gymLinks.js';
+import gymMemberRoutes from './routes/gymMembers.js';
 import { startPickupDelivery, deliverPickupBatch, isExploreRequest } from './exploration/telemetry.js';
 import { deliverReceiptEvent } from './utils/analytics.js';
 
@@ -39,6 +40,7 @@ app.use('/users', userProfileRoutes);
 // under it.
 app.use('/', deviceRoutes);
 app.use('/', gymLinkRoutes);
+app.use('/', gymMemberRoutes);
 
 app.get('/health', async (req, res) => {
   try {

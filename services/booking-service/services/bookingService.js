@@ -5,6 +5,8 @@ import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, sessionEndedBefore, msUntilSlot, formatSlotTime, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
+import { clusterSameTimeVisits } from '../utils/visitClustering.js';
+import { summarizeVisitPatterns } from '../utils/visitPatterns.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
@@ -2633,12 +2635,6 @@ export async function getAdminAttendanceHeatmap(gymId, days) {
 // "always shows up around the same time", low means their visit times vary a
 // lot. Only meaningful with 2+ visits — a single visit trivially scores 1.0.
 const MEMBER_ACTIVITY_MAX_DAYS = 90;
-// A visit joins an existing "same time" cluster when its minute-of-day lands
-// within this tolerance of the cluster's running-mean center. 30m keeps a
-// realistic gym-going timeslot together (6:45/7:00/7:30) while still
-// separating genuinely different habits (7:00 vs 13:00).
-const MEMBER_ACTIVITY_TIME_TOLERANCE_MINUTES = 30;
-
 function minutesBetweenTimes(startTime, endTime) {
   const [sh, sm] = String(startTime).split(':').map(Number);
   const [eh, em] = String(endTime).split(':').map(Number);
@@ -2656,39 +2652,9 @@ function minutesOfDayIST(date) {
   return (d.getUTCHours() * 60 + d.getUTCMinutes() + 330) % 1440;
 }
 
-// Pure helper (unit-tested): group minute-of-day visit times into "same
-// time" clusters by greedy nearest-center join and report how dominant the
-// biggest cluster is. mostCommonHour is that cluster's mean time of day
-// rounded to the nearest hour (6:52 -> 7) — the hour shown on the partner
-// app's "Routine 7 AM" badge.
-export function clusterSameTimeVisits(times, tolerance = MEMBER_ACTIVITY_TIME_TOLERANCE_MINUTES) {
-  if (!times || times.length === 0) return { mostCommonHour: 0, consistencyRatio: 0 };
-  const clusters = [];
-  for (const t of times) {
-    let bestIdx = -1;
-    let bestDist = Infinity;
-    for (let i = 0; i < clusters.length; i += 1) {
-      const d = Math.abs(clusters[i].center - t);
-      if (d <= tolerance && d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
-      }
-    }
-    if (bestIdx >= 0) {
-      const c = clusters[bestIdx];
-      c.sum += t;
-      c.count += 1;
-      c.center = Math.round(c.sum / c.count);
-    } else {
-      clusters.push({ sum: t, count: 1, center: t });
-    }
-  }
-  const largest = clusters.reduce((best, c) => (c.count > best.count ? c : best), clusters[0]);
-  return {
-    mostCommonHour: Math.round(largest.center / 60),
-    consistencyRatio: largest.count / times.length,
-  };
-}
+// clusterSameTimeVisits now lives in utils/visitClustering.js (shared with the
+// member visit patterns); re-exported so existing importers keep working.
+export { clusterSameTimeVisits };
 
 async function computeMemberActivity(gymId, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= MEMBER_ACTIVITY_MAX_DAYS
@@ -2753,6 +2719,38 @@ export async function getMemberActivityForGym(gymId, partnerId, days) {
   try {
     await assertPartnerOwnsGym(gymId, partnerId);
     return computeMemberActivity(gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// One member's visit patterns at one gym, for the partner's member profile:
+// when they usually come, which days, how steady, how long they stay. Only this
+// gym's visits are read (never the customer's visits elsewhere), and the partner
+// must own the gym. Counts both kinds of verified visit — an attended booking and
+// a member check-in — the same two sources the roster's activity view uses.
+export async function getMemberVisitPatterns(gymId, customerId, partnerId, days) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    const requested = Number(days);
+    const windowDays = Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), 365) : 90;
+    const { fromDateString, todayString } = istDateWindow(windowDays);
+    const [bookings, memberCheckins] = await Promise.all([
+      prisma.booking.findMany({
+        where: { gymId, customerId, attendedAt: { not: null }, date: { gte: fromDateString, lte: todayString } },
+        select: { date: true, attendedAt: true },
+      }),
+      prisma.memberAttendance.findMany({
+        where: { gymId, customerId, date: { gte: fromDateString, lte: todayString } },
+        select: { date: true, checkedInAt: true, checkedOutAt: true },
+      }),
+    ]);
+    const visits = [
+      ...bookings.map((b) => ({ date: b.date, at: b.attendedAt, kind: 'booking' })),
+      ...memberCheckins.map((m) => ({ date: m.date, at: m.checkedInAt, kind: 'member', checkedOutAt: m.checkedOutAt })),
+    ];
+    return summarizeVisitPatterns(visits, { today: todayString, windowDays });
   } catch (err) {
     if (err.error) throw err;
     throw { status: 500, error: err.message || 'Server error' };
@@ -3544,6 +3542,50 @@ export async function getPublicAttendanceStats() {
   }
 }
 
+// Server-side presence proof shared by member check-in and QR join: the
+// reported position must be within 50 m of the gym. Returns the gym record so
+// callers can reuse it. (Coordinates are client-reported — the same trust the
+// booking self-check-in already places in them.)
+export async function assertAtGym(gymId, lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
+  }
+  let gym;
+  try {
+    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = gymRes.data?.data || gymRes.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  const withinRange = gym?.lat && gym?.lng ? distanceMeters(lat, lng, gym.lat, gym.lng) <= 50 : false;
+  if (!withinRange) {
+    throw { status: 400, error: "You don't seem to be at the gym yet — move closer and try again", code: 'TOO_FAR' };
+  }
+  return gym;
+}
+
+// Links the customer to the gym as an approved member. Only call this after
+// assertAtGym has passed: physical presence is what makes the link instant,
+// and auth-service owns every other rule (already linked elsewhere, removed by
+// the gym, gym not approved) and answers with a coded error.
+export async function joinGymViaQr(customerId, gymId) {
+  try {
+    const res = await axios.post(
+      `${AUTH_SERVICE_URL}/internal/gym-links/qr-join`,
+      { userId: customerId, gymId },
+      await internalHeadersFor(AUTH_SERVICE_URL),
+    );
+    return res.data;
+  } catch (err) {
+    const body = err.response?.data;
+    throw {
+      status: err.response?.status || 502,
+      error: body?.error || 'Could not join this gym right now',
+      code: body?.code || 'JOIN_FAILED',
+    };
+  }
+}
+
 // ─── Attendance-SaaS: booking-free member check-in ────────────────────
 // Linked members (User.linkedGymId) can check in without a pre-existing
 // booking. One attendance record per customer+gym+day (upserted), and — per
@@ -3570,20 +3612,7 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
   }
 
   // 2. Geofence check (≤50m) — same radius as requestCheckIn's GPS check.
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
-    throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
-  }
-  let gym;
-  try {
-    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-    gym = gymRes.data?.data || gymRes.data;
-  } catch (_) {
-    throw { status: 404, error: 'Gym not found' };
-  }
-  const withinRange = gym?.lat && gym?.lng ? distanceMeters(lat, lng, gym.lat, gym.lng) <= 50 : false;
-  if (!withinRange) {
-    throw { status: 400, error: "You don't seem to be at the gym yet — move closer and try again", code: 'TOO_FAR' };
-  }
+  const gym = await assertAtGym(gymId, lat, lng);
 
   // 3. One record per customer+gym+day. A same-day re-entry after checking
   // out re-nulls checkedOutAt in place — it must NOT create a second row (the

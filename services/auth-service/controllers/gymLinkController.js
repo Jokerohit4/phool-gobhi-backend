@@ -5,6 +5,9 @@
 import prisma from '../db/prisma.js';
 import {
   linkGym,
+  joinGymViaQr,
+  getJoinWindow,
+  setJoinWindow,
   leaveGym,
   removeMemberFromGym,
   markGymCheckedIn,
@@ -97,6 +100,26 @@ export const selfLink = async (req, res) => {
   }
 };
 
+// POST /internal/gym-links/qr-join — booking-service, after it verified the
+// customer is physically inside the gym. Links them as an approved member.
+export const qrJoinGym = async (req, res) => {
+  try {
+    const userId = Number(req.body?.userId);
+    const gymId = Number(req.body?.gymId);
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(gymId) || gymId <= 0) {
+      return res.status(400).json({ error: 'userId and gymId required' });
+    }
+    const gym = await findPartnerGym(gymId);
+    if (!gym || gym.isApproved !== true) return res.status(404).json({ error: 'Gym unavailable', code: 'GYM_UNAVAILABLE' });
+    const result = await joinGymViaQr(prisma, userId, gymId);
+    res.json(result);
+    // Only a brand-new pending request is news to the owner. A join approved by
+    // an open window is not pushed: on onboarding day that would be one push per
+    // member, and the owner already chose to approve them all.
+    if (result.requested) void notifyGymOfLinkRequest(gymId);
+  } catch (err) { fail(res, err); }
+};
+
 // Best-effort push to the gym owner that someone claimed membership. Never
 // throws: a missed push must not fail the customer's link. The body carries no
 // customer name — the gym reads that in the queue, behind their own login.
@@ -181,6 +204,7 @@ export const approveLinkRequest = async (req, res) => {
     const { gymId, userId } = await partnerGymParams(req);
     await approveSelfLink(prisma, gymId, userId, req.user.id);
     res.status(204).end();
+    void notifyMembersApproved(gymId, [userId]);
   } catch (err) {
     fail(res, err);
   }
@@ -192,6 +216,51 @@ export const rejectLinkRequest = async (req, res) => {
     const { gymId, userId } = await partnerGymParams(req);
     await rejectSelfLink(prisma, gymId, userId, req.user.id);
     res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// Best-effort push to customers whose request the gym just approved: it is the
+// only way someone who walked away from the poster learns they are in, and what
+// lets a waiting check-in screen continue. Never throws.
+async function notifyMembersApproved(gymId, userIds) {
+  try {
+    if (!userIds.length) return;
+    const gym = await fetchGymInternal(gymId);
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, fcmToken: true },
+    });
+    await Promise.all(users.map((u) => notifyUser(u.fcmToken, {
+      title: gym?.name ? `You're in at ${gym.name}` : "You're in",
+      body: 'The gym approved you. Scan the poster to check in.',
+      data: { type: 'gym_link_approved', gymId },
+    })));
+  } catch (err) {
+    console.error('[gym-link] notify members approved failed:', err?.message || err);
+  }
+}
+
+// GET /gym/:gymId/join-window — is the owner's "approve every join" window open?
+export const getGymJoinWindow = async (req, res) => {
+  try {
+    const { gymId } = await partnerGymParams(req);
+    res.json({ data: await getJoinWindow(prisma, gymId) });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// PUT /gym/:gymId/join-window { hours: 0 | 1 | 8 | 24 } — open or close it.
+// Opening also approves everyone already waiting.
+export const setGymJoinWindow = async (req, res) => {
+  try {
+    const { gymId } = await partnerGymParams(req);
+    const hours = Number(req.body?.hours);
+    const { approvedUserIds, ...window } = await setJoinWindow(prisma, gymId, req.user.id, hours);
+    res.json({ data: { ...window, approvedCount: approvedUserIds.length } });
+    void notifyMembersApproved(gymId, approvedUserIds);
   } catch (err) {
     fail(res, err);
   }

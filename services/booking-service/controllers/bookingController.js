@@ -545,12 +545,27 @@ export const getMyAttendanceWarnings = async (req, res) => {
   }
 };
 
+export const getMemberVisitPatterns = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const customerId = parseInt(req.params.customerId);
+    if (!Number.isInteger(gymId) || gymId <= 0 || !Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(400).json({ error: 'A valid gym and member are required' });
+    }
+    const data = await bookingService.getMemberVisitPatterns(gymId, customerId, req.userId, req.query.days);
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const entranceCheckIn = async (req, res) => {
   try {
     const { resolveEntranceCheckIn } = await import('../services/entranceCheckInService.js');
     const result = await resolveEntranceCheckIn({
       gymId: Number(req.params.gymId), customerId: req.userId,
       lat: req.body?.lat, lng: req.body?.lng, confirmEarly: req.body?.confirmEarly === true,
+      join: req.body?.join === true,
     }, bookingService);
     res.json({ data: result });
   } catch (err) {

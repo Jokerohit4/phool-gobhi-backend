@@ -38,6 +38,7 @@ import {
 } from '../utils/settingsCaches.js';
 import { bucketFor } from '../services/experimentService.js';
 import { gymLinkStatus as linkStatusOf } from '../utils/gymLinkStatus.js';
+import { rosterExtras } from '../services/gymMemberService.js';
 
 
 const signup = async (req, res) => {
@@ -891,11 +892,11 @@ const countGymJoinedUsersByMonthInternal = async (req, res) => {
 // self-declared member is not shown until the gym approves them or a verified
 // check-in confirms they really go there, and even then only by first name (they never opted into
 // being named next to check-ins they did not make). QR members show in full.
-async function gymRoster(gymId, { includePhone }) {
+async function gymRoster(gymId, { includePhone, includeRecord = false }) {
   const links = await prisma.gymLink.findMany({
     where: { gymId, removedAt: null },
     orderBy: { linkedAt: 'asc' },
-    select: { userId: true, source: true, firstVerifiedCheckinAt: true, approvedAt: true },
+    select: { userId: true, source: true, firstVerifiedCheckinAt: true, approvedAt: true, linkedAt: true },
   });
   // A self link shows once the gym approved it or a verified check-in confirmed it.
   const visible = links.filter((l) => l.source !== 'self' || l.approvedAt != null);
@@ -903,9 +904,12 @@ async function gymRoster(gymId, { includePhone }) {
   if (!ids.length) return [];
   const users = await prisma.user.findMany({
     where: { id: { in: ids } },
-    select: { id: true, name: true, createdAt: true, ...(includePhone ? { phone: true } : {}) },
+    select: { id: true, name: true, createdAt: true, ...(includePhone ? { phone: true } : {}), ...(includeRecord ? { profileImageUrl: true } : {}) },
   });
   const byId = new Map(users.map((u) => [u.id, u]));
+  // Partner view only: what the owner recorded (expiry, follow-up, balance, locker)
+  // so the roster can flag renewals at a glance. Additive fields; nothing removed.
+  const extras = includeRecord ? await rosterExtras(prisma, gymId, ids) : new Map();
   return visible
     .map((l) => {
       const u = byId.get(l.userId);
@@ -916,6 +920,10 @@ async function gymRoster(gymId, { includePhone }) {
         ...(includePhone ? { phone: u.phone } : {}),
         createdAt: u.createdAt,
         linkSource: l.source,
+        // memberSince: when they became this gym's member (approval for a self
+        // link, the link itself for a gym-QR one). The partner's "not seen in a
+        // week" list uses it so someone who joined two days ago is not flagged.
+        ...(includeRecord ? { photoUrl: u.profileImageUrl || null, memberSince: l.approvedAt ?? l.linkedAt ?? null, ...(extras.get(l.userId) ?? {}) } : {}),
       };
     })
     .filter(Boolean)
@@ -953,7 +961,7 @@ export const listGymMembersForPartner = async (req, res) => {
     if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
     const gymId = parseInt(req.params.gymId);
     await assertPartnerOwnsGym(gymId, req.user.id);
-    const members = await gymRoster(gymId, { includePhone: false });
+    const members = await gymRoster(gymId, { includePhone: false, includeRecord: true });
     res.json({ data: members });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
