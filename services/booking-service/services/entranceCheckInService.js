@@ -1,8 +1,10 @@
+import { describeUpcomingBooking } from '../utils/upcomingBooking.js';
+
 // One poster, three behaviours, resolved from server records:
 //
 //   1. The customer has a usable booking  -> booking check-in (unchanged rules).
 //   2. The customer is an approved member -> member attendance.
-//   3. Neither                            -> they can ask to join:
+//   3. Neither, and no booking at all     -> they can ask to join:
 //        - a scan alone never links anyone (MEMBERSHIP_REQUIRED: a pay-per-
 //          session guest who scans the poster must not silently become a member);
 //        - with `join` (their explicit tap) the server first proves presence
@@ -46,6 +48,17 @@ export async function resolveEntranceCheckIn({ gymId, customerId, lat, lng, conf
   // Keep useful booking messages (session ended, awaiting confirmation, ...):
   // someone with a booking is a guest here, not asking to become a member.
   if (bookingError.code !== 'NO_ACTIVE_BOOKING') throw bookingError;
+  // ...and that holds for a booking that is not usable right now too (one for
+  // tomorrow, or later today): they are a guest, so no request is ever raised for
+  // them, not even if the client asks for one. They are told about the booking
+  // instead ("Your session is tomorrow at 7:00 PM."). Only someone who has never
+  // linked is covered: a request already made is left to run its course.
+  if (memberError.code === 'NOT_LINKED_GYM') {
+    const booking = await deps.nextLiveBookingAtGym(customerId, gymId);
+    if (booking) {
+      throw { status: 409, code: 'UPCOMING_BOOKING', error: describeUpcomingBooking(booking), booking };
+    }
+  }
   if (!join) {
     if (memberError.code === 'MEMBERSHIP_PENDING') throw membershipPending();
     throw { status: 403, code: 'MEMBERSHIP_REQUIRED',

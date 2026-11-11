@@ -7,6 +7,7 @@ import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, sessionEndedBefore, msUntilSlot, formatSlotTime, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
 import { clusterSameTimeVisits } from '../utils/visitClustering.js';
 import { summarizeVisitPatterns } from '../utils/visitPatterns.js';
+import { shapeUpcomingBooking } from '../utils/upcomingBooking.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
@@ -3540,6 +3541,30 @@ export async function getPublicAttendanceStats() {
     console.error('getPublicAttendanceStats error:', err);
     throw { status: 500, error: err.message || 'Server error' };
   }
+}
+
+// Is this person a guest of the gym? Returns their soonest live booking there, or
+// null. Live means awaiting confirmation, confirmed, or in progress, for today or
+// a later day. Someone with a booking has no reason to become a member, so a
+// poster scan must never raise a membership request for them, whether or not the
+// booking happens to be usable at this very moment (it may be tomorrow, or later
+// today). Cancelled and completed bookings do not count: a past visit is not a
+// booking. The soonest one is returned so the scan can tell them about it.
+export async function nextLiveBookingAtGym(customerId, gymId) {
+  const today = todayDateStringIST();
+  const next = await prisma.booking.findFirst({
+    where: {
+      customerId,
+      gymId,
+      status: { in: ['pending', 'confirmed', 'started'] },
+      // `date` is an IST calendar-date string, so a string comparison is a date
+      // comparison.
+      date: { gte: today },
+    },
+    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    select: { date: true, startTime: true, endTime: true, status: true },
+  });
+  return next ? shapeUpcomingBooking(next, today) : null;
 }
 
 // Server-side presence proof shared by member check-in and QR join: the

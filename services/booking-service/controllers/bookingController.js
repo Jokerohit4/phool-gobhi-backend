@@ -569,7 +569,9 @@ export const entranceCheckIn = async (req, res) => {
     }, bookingService);
     res.json({ data: result });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, confirmation: err.confirmation });
+    // `booking` accompanies UPCOMING_BOOKING: the guest's soonest booking, so the
+    // client can say when it is.
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, confirmation: err.confirmation, booking: err.booking });
   }
 };
 

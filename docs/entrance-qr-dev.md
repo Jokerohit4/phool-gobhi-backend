@@ -62,6 +62,21 @@ as an owner-approved one (billable after approval and first verified check-in).
   per device);
 - gym missing or not approved → `404 GYM_UNAVAILABLE`.
 
+### Guests with a booking
+
+Someone who holds a live booking at the gym (awaiting confirmation, confirmed, or in
+progress, for today or a later day) is a **guest**, and a poster scan never raises a
+membership request for them, whether or not the booking is usable right now. This is
+enforced on the server in the entrance check-in, so it holds even if a client asks to
+join. A guest whose booking is for another time gets `409 UPCOMING_BOOKING` with the
+soonest booking attached (`date`, `startTime`, `endTime`, `status`, `daysFromToday`) and
+a plain sentence in `error`, e.g. "Your session is tomorrow at 7:00 PM." Cancelled and
+completed bookings do not count, and neither does a booking at another gym.
+
+Someone who has already asked to join is left to run their request. A brand-new account
+cannot hold a booking, so the app links only brand-new accounts at login (to skip the
+onboarding questions the link answers); everyone else's scan is settled here.
+
 ### The owner's window
 
 Table `auth.GymJoinWindow` (migration `20261111000000_gym_join_window`), one row
