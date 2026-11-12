@@ -40,8 +40,10 @@ function validateInput({ localDate, slot, mood, factors, support, note }) {
   if (support != null && !SUPPORT.has(support)) {
     throw problem(400, 'Choose a support option from the available list.', 'INVALID_MOOD_SUPPORT');
   }
-  if (typeof note !== 'string' || note.trim().length === 0 || note.length > 500) {
-    throw problem(400, 'Add a note of up to 500 characters to complete your check-in.', 'INVALID_MOOD_NOTE');
+  // The note is optional: a check-in is complete with just a mood. A missing or
+  // blank note is stored as an empty string, which is what the column defaults to.
+  if (typeof note !== 'string' || note.length > 500) {
+    throw problem(400, 'A note can be up to 500 characters.', 'INVALID_MOOD_NOTE');
   }
 }
 
@@ -62,7 +64,7 @@ export async function createMoodCheckIn(prisma, { userId, ...input } = {}) {
     mood: input.mood,
     factors: input.factors,
     support: input.support ?? null,
-    note: input.note,
+    note: input.note ?? '',
   };
   validateInput(data);
 
