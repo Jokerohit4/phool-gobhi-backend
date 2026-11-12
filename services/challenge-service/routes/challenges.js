@@ -73,6 +73,7 @@ router.post('/internal/coins/:userId/debit', requireInternal, requireFeatureFlag
 // section). Flag-gated like every other coin route: a harmless no-op until
 // streaksCoins is turned on.
 router.post('/internal/workout-credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditWorkoutInternal);
+router.post('/internal/presence', requireInternal, ctrl.recordPresenceInternal);
 
 // Subscription-discount redemption (wallet-service calls these at purchase
 // time — see wallet-service's purchaseSubscriptionWithWallet).

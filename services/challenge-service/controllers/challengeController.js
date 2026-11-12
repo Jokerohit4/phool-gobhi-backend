@@ -490,6 +490,22 @@ export const redeemCoinCatalogItemInternal = async (req, res) => {
 // Always 200 — "not verified" and "not credited" are normal outcomes, not
 // errors, so a caller that doesn't check the response body still behaves
 // correctly (it just never gets told it was rewarded).
+// booking-service reports every entrance and exit here. Not flag-gated: the
+// presence record must stay right even while coins are switched off, so that
+// turning them back on starts from the truth.
+export const recordPresenceInternal = async (req, res) => {
+  try {
+    const { userId, gymId, state, method, at, date } = req.body || {};
+    if (!userId || !gymId || !['in', 'out'].includes(state) || !method || !at || !date) {
+      return res.status(400).json({ error: 'userId, gymId, state (in|out), method, at and date are required' });
+    }
+    const { applyPresence } = await import('../services/gymPresenceService.js');
+    res.json({ data: await applyPresence({ userId, gymId, state, method, at, date }) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const creditWorkoutInternal = async (req, res) => {
   try {
     const { userId, sessionId, description, idempotencyKey, routinePolicy } = req.body || {};

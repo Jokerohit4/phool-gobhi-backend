@@ -132,6 +132,7 @@ const MATRIX = [
   // independently, so the route cannot be gated wholesale).
   ['POST', '/internal/attendance-events', null],
   ['GET', '/internal/attendance-events', null],
+  ['POST', '/internal/presence', null],
   // A refund must always be payable, or turning a feature off would strand
   // customers' money.
   ['POST', '/internal/coins/redemptions/:redemptionId/refund', null],

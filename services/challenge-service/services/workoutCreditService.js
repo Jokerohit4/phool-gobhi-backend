@@ -47,12 +47,37 @@ function istDay(date) {
 //
 // `now` is injectable purely so tests can pin the clock; every caller uses
 // the default.
-export async function verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, routinePolicy, now = new Date() }) {
+//
+// Check-out rule: a workout finished while the person is still checked in at a
+// gym earns nothing yet. Their credit is held, and paid when they check out by
+// scanning the gym poster the same day (see gymPresenceService.applyPresence).
+// Leaving without scanning is allowed; it just means the held coins are never
+// paid. A workout with no open gym visit (at home, or after a scanned
+// check-out) is credited as before. `checkoutGate: false` is for that release,
+// which replays the credit once the person is out. Switch the whole rule off
+// with WORKOUT_COINS_REQUIRE_CHECKOUT=false.
+export async function verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, routinePolicy, now = new Date(), checkoutGate = true }) {
   const day = istDay(now);
   const hasAttendanceToday = await prisma.attendanceEventLog.findFirst({
     where: { userId, attendedAt: { gte: day.start, lte: day.end } },
     select: { id: true },
   });
+  if (checkoutGate && process.env.WORKOUT_COINS_REQUIRE_CHECKOUT !== 'false') {
+    const presence = await prisma.gymPresence.findUnique({ where: { userId } });
+    if (presence && presence.state === 'in' && presence.day === day.key) {
+      const heldKey = idempotencyKey ?? `session:${sessionId}`;
+      await prisma.heldWorkoutCredit.upsert({
+        where: { userId_idempotencyKey: { userId, idempotencyKey: heldKey } },
+        create: {
+          userId, day: day.key, idempotencyKey: heldKey,
+          payload: { sessionId, description: description ?? null, idempotencyKey: idempotencyKey ?? null, routinePolicy: routinePolicy ?? null, finishedAt: now.toISOString() },
+        },
+        update: {},
+      });
+      track('workout_credit_held', userId, { gym_id: presence.gymId, day: day.key });
+      return { verified: !!hasAttendanceToday, credited: false, amount: 0, pendingCheckout: true, gymId: presence.gymId };
+    }
+  }
   if (routinePolicy != null) {
     if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: `workout-credit:${userId}:${day.key}` } })) {
       return { verified: !!hasAttendanceToday, credited: false, amount: 0 };

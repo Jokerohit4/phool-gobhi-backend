@@ -14,7 +14,11 @@ test('a verified booking wins without consulting membership or creating links', 
     selfCheckIn: async (...args) => { assert.deepEqual(args, [2, 7, 28.4, 77.1, true]); return { bookingId: 6 }; },
     memberCheckIn: async () => assert.fail('membership must not be consulted'),
   });
-  assert.deepEqual(result, { kind: 'booking', bookingId: 6 });
+  assert.equal(result.kind, 'booking');
+  assert.equal(result.bookingId, 6);
+  // A fresh arrival is inside, and can leave by scanning again.
+  assert.equal(result.presence.inside, true);
+  assert.equal(result.presence.canCheckOut, true);
 });
 
 test('approved members without a booking record attendance, including repeat scans', async () => {
@@ -220,4 +224,78 @@ test('invalid gym and coordinates never call check-in services', async () => {
   for (const patch of [{ gymId: -1 }, { gymId: 2.1 }, { lat: NaN }, { lng: Infinity }, { lat: 91 }]) {
     await assert.rejects(run({ ...input, ...patch }, {}), (e) => e.status === 400);
   }
+});
+
+// ── Checking out with the same poster ──────────────────────────────────────
+
+const inside = (extra = {}) => ({ inside: true, since: new Date('2026-11-12T10:00:00Z'), source: 'member', bookingId: null, ...extra });
+
+test('a scan by someone already inside changes nothing and offers the way out', async () => {
+  const result = await run(input, {
+    openPresence: async () => inside(),
+    selfCheckIn: async () => assert.fail('must not check in again'),
+    memberCheckIn: async () => assert.fail('must not check in again'),
+    recordPresence: async () => assert.fail('must not record anything'),
+  });
+  assert.equal(result.kind, 'member');
+  assert.equal(result.alreadyVerified, true);
+  assert.equal(result.presence.inside, true);
+  assert.equal(result.presence.canCheckOut, true);
+});
+
+test('a guest inside keeps the booking shape older clients read', async () => {
+  const result = await run(input, {
+    openPresence: async () => inside({ source: 'booking', bookingId: 41 }),
+  });
+  assert.equal(result.kind, 'booking');
+  assert.equal(result.bookingId, 41);
+  assert.equal(result.alreadyVerified, true);
+});
+
+test('checkout needs proof of presence at the gym, then checks out by scan', async () => {
+  const calls = [];
+  const result = await run({ ...input, checkout: true }, {
+    assertAtGym: async (...a) => { calls.push(['at', ...a]); },
+    checkOutByScan: async (a) => { calls.push(['out', a]); return { kind: 'checkout', coinsReleased: 15 }; },
+    selfCheckIn: async () => assert.fail('a checkout is not a check-in'),
+  });
+  assert.deepEqual(calls, [['at', 2, 28.4, 77.1], ['out', { gymId: 2, customerId: 7 }]]);
+  assert.equal(result.kind, 'checkout');
+  assert.equal(result.coinsReleased, 15);
+});
+
+test('checkout from far away is refused before anything is recorded', async () => {
+  await assert.rejects(run({ ...input, checkout: true }, {
+    assertAtGym: async () => { throw { status: 400, code: 'TOO_FAR', error: 'far' }; },
+    checkOutByScan: async () => assert.fail('must not check out'),
+  }), (e) => e.code === 'TOO_FAR');
+});
+
+test('checkout when not inside is refused', async () => {
+  await assert.rejects(run({ ...input, checkout: true }, {
+    assertAtGym: async () => {},
+    checkOutByScan: async () => { throw { status: 409, code: 'NOT_INSIDE', error: 'no' }; },
+  }), (e) => e.code === 'NOT_INSIDE');
+});
+
+test('coming back after leaving records a new entrance', async () => {
+  const recorded = [];
+  const result = await run(input, {
+    openPresence: async () => ({ inside: false, hasEventsToday: true }),
+    selfCheckIn: async () => ({ bookingId: 8, alreadyVerified: true, attendedAt: '2026-11-12T04:00:00Z' }),
+    recordPresence: async (e) => { recorded.push(e); },
+  });
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].kind, 'in');
+  assert.equal(recorded[0].source, 'booking');
+  assert.equal(recorded[0].bookingId, 8);
+  assert.equal(result.presence.inside, true);
+});
+
+test('a presence lookup that fails never blocks a check-in', async () => {
+  const result = await run(input, {
+    openPresence: async () => { throw new Error('db down'); },
+    selfCheckIn: async () => ({ bookingId: 6 }),
+  });
+  assert.equal(result.bookingId, 6);
 });

@@ -60,6 +60,9 @@ router.get('/gym/:gymId/analytics', requireRole('partner'), analyticsCtrl.getGym
 // computeAttendanceHeatmap for why `started` status / attendedAt is the
 // signal used.
 router.get('/gym/:gymId/live', requireRole('partner'), ctrl.getGymLiveOccupancy);
+// Real-time presence: who is inside now, who just came or went, today's flow and the
+// usual busy-ness for this hour. Built from entrances and exits (GymPresenceEvent).
+router.get('/gym/:gymId/presence', requireRole('partner'), ctrl.getGymLivePresence);
 router.get('/gym/:gymId/attendance-heatmap', requireRole('partner'), ctrl.getGymAttendanceHeatmap);
 // Per-member activity — most/least active, time spent, same-time vs varies.
 // One dataset, sorted/sliced into several views client-side (see

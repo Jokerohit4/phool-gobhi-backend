@@ -26,6 +26,8 @@ const ledger = new Map(); // idempotencyKey -> { idempotencyKey, userId }
 let creditCalls = [];
 let trackCalls = [];
 let economyConfig = { coinsPerVerifiedWorkout: 15 };
+const presence = new Map(); // userId -> { userId, gymId, state, since, day, method }
+let held = []; // HeldWorkoutCredit rows
 
 function setAttendance(userId, iso) {
   attendance.push({ userId, attendedAt: new Date(iso) });
@@ -37,9 +39,11 @@ function resetFakes() {
   creditCalls = [];
   trackCalls = [];
   economyConfig = { coinsPerVerifiedWorkout: 15 };
+  presence.clear();
+  held = [];
 }
 
-let verifyAndCreditWorkout;
+let verifyAndCreditWorkout, applyPresence;
 
 test('setup: mock dependencies once, import workoutCreditService once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -61,6 +65,28 @@ test('setup: mock dependencies once, import workoutCreditService once', async (t
           };
           this.coinLedgerEntry = {
             findUnique: async ({ where }) => ledger.get(where.idempotencyKey) ?? null,
+          };
+          this.gymPresence = {
+            findUnique: async ({ where }) => presence.get(where.userId) ?? null,
+            upsert: async ({ where, create, update }) => {
+              const row = presence.get(where.userId);
+              const next = row ? { ...row, ...update } : { ...create };
+              presence.set(where.userId, next);
+              return next;
+            },
+          };
+          this.heldWorkoutCredit = {
+            upsert: async ({ where, create }) => {
+              const k = where.userId_idempotencyKey;
+              const hit = held.find((h) => h.userId === k.userId && h.idempotencyKey === k.idempotencyKey);
+              if (hit) return hit;
+              const row = { id: held.length + 1, releasedAt: null, createdAt: new Date(held.length), ...create };
+              held.push(row);
+              return row;
+            },
+            findMany: async ({ where }) =>
+              held.filter((h) => h.userId === where.userId && h.day === where.day && h.releasedAt === null),
+            update: async ({ where, data }) => Object.assign(held.find((h) => h.id === where.id), data),
           };
         }
       },
@@ -88,6 +114,7 @@ test('setup: mock dependencies once, import workoutCreditService once', async (t
   });
 
   ({ verifyAndCreditWorkout } = await import('../services/workoutCreditService.js'));
+  ({ applyPresence } = await import('../services/gymPresenceService.js'));
   assert.equal(typeof verifyAndCreditWorkout, 'function');
 });
 
@@ -254,4 +281,121 @@ test('internal routine payout is bounded to four coins', async () => {
   resetFakes();
   await assert.rejects(() => verifyAndCreditWorkout({ userId: 7, sessionId: 1,
     routinePolicy: { starterAmount: 100, verifiedAmount: 100 } }), error => error.status === 400);
+});
+
+// ---- Check-out rule ---------------------------------------------------------
+// A workout finished while still checked in at a gym is held; a check-out by scan
+// pays it. Leaving without scanning is allowed and simply never pays.
+
+const NOON = new Date('2026-11-12T06:30:00.000Z'); // 12:00 IST on the 12th
+const arrive = (userId = 7, gymId = 9) =>
+  applyPresence({ userId, gymId, state: 'in', method: 'checkin', at: '2026-11-12T04:30:00.000Z', date: '2026-11-12' });
+const finish = (extra = {}) => verifyAndCreditWorkout({
+  userId: 7, sessionId: 1, description: 'Verified workout', idempotencyKey: 'workout-credit:1', now: NOON, ...extra,
+});
+const leave = (method, gymId = 9) =>
+  applyPresence({ userId: 7, gymId, state: 'out', method, at: NOON.toISOString(), date: '2026-11-12' });
+
+test('a workout finished while checked in is held, not paid', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await arrive();
+  const r = await finish();
+  assert.equal(r.credited, false);
+  assert.equal(r.amount, 0);
+  assert.equal(r.pendingCheckout, true);
+  assert.equal(r.verified, true);
+  assert.equal(creditCalls.length, 0);
+  assert.equal(held.length, 1);
+});
+
+test('finishing the same workout twice holds it once', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await arrive();
+  await finish();
+  await finish();
+  assert.equal(held.length, 1);
+});
+
+test('checking out by scan pays the held workout once, and reports the coins', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await arrive();
+  await finish();
+  const out = await leave('scan');
+  assert.equal(out.released, 15);
+  assert.equal(creditCalls.length, 1);
+  assert.equal(creditCalls[0].idempotencyKey, 'workout-credit:7:2026-11-12');
+  assert.notEqual(held[0].releasedAt, null);
+  // A second scan-out pays nothing more.
+  assert.equal((await leave('scan')).released, 0);
+  assert.equal(creditCalls.length, 1);
+});
+
+test('leaving without a scan pays nothing: a tap or the server closing the visit does not release coins', async () => {
+  for (const method of ['tap', 'auto']) {
+    resetFakes();
+    setAttendance(7, '2026-11-12T04:30:00.000Z');
+    await arrive();
+    await finish();
+    assert.equal((await leave(method)).released, 0, method);
+    assert.equal(creditCalls.length, 0, method);
+    assert.equal(held[0].releasedAt, null, method);
+  }
+});
+
+test('after a scanned check-out a later workout is paid normally', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await arrive();
+  await leave('scan');
+  assert.deepEqual(await finish(), { verified: true, credited: true, amount: 15 });
+});
+
+test('a workout with no gym visit (home) is paid exactly as before', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z'); // attendance exists, but nobody is marked inside
+  const r = await finish();
+  assert.equal(r.amount, 15);
+  assert.equal(held.length, 0);
+});
+
+test('an arrival nobody closed yesterday does not hold today', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await applyPresence({ userId: 7, gymId: 9, state: 'in', method: 'checkin', at: '2026-11-11T11:00:00.000Z', date: '2026-11-11' });
+  assert.equal((await finish()).amount, 15);
+});
+
+test('an exit reported for a different gym is ignored', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await arrive(7, 9);
+  await leave('scan', 3);
+  assert.equal(presence.get(7).state, 'in');
+  assert.equal((await finish()).pendingCheckout, true);
+});
+
+test('WORKOUT_COINS_REQUIRE_CHECKOUT=false switches the rule off', async () => {
+  resetFakes();
+  setAttendance(7, '2026-11-12T04:30:00.000Z');
+  await arrive();
+  process.env.WORKOUT_COINS_REQUIRE_CHECKOUT = 'false';
+  try {
+    assert.equal((await finish()).amount, 15);
+  } finally {
+    delete process.env.WORKOUT_COINS_REQUIRE_CHECKOUT;
+  }
+});
+
+test('a routine workout held at check-in pays its starter and location coins on scan-out', async () => {
+  resetFakes();
+  attendance.push({ userId: 7, gymId: 9, attendedAt: new Date('2026-11-12T05:00:00Z') });
+  await arrive(7, 9);
+  const routinePolicy = { starterAmount: 2, verifiedAmount: 4, startedAt: '2026-11-12T05:00:00Z', endedAt: '2026-11-12T05:40:00Z', gymId: 9 };
+  const r = await verifyAndCreditWorkout({ userId: 7, sessionId: 3, idempotencyKey: 'session:3', routinePolicy, now: NOON });
+  assert.equal(r.pendingCheckout, true);
+  assert.equal(creditCalls.length, 0);
+  assert.equal((await leave('scan')).released, 4);
 });

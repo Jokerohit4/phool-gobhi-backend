@@ -11,6 +11,7 @@ import { shapeUpcomingBooking } from '../utils/upcomingBooking.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
+import { recordPresence, liveSnapshot } from './presenceService.js';
 import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
 import * as checkinDaysService from './checkinDaysService.js';
@@ -106,6 +107,11 @@ export async function emitAttendanceSignals({ customerId, bookingId, gymId, city
     source, attendanceMethod,
     idempotencyKey: `booking:${bookingId}`,
   });
+  // A partner who completes a session without any scan did not see the person
+  // arrive, so that is not an entrance.
+  if (attendanceMethod !== 'manual_override') {
+    recordPresence({ gymId, customerId, kind: 'in', source: 'booking', method: 'checkin', bookingId });
+  }
 }
 
 // Attendance-SaaS twin of emitAttendanceSignals, for linked members
@@ -126,6 +132,7 @@ export async function emitMemberAttendanceSignals({ customerId, attendanceId, gy
     userId: customerId, memberAttendanceId: attendanceId, gymId, attendedAt: new Date().toISOString(),
     source: 'member_checkin', idempotencyKey: `member-checkin:${attendanceId}`,
   });
+  recordPresence({ gymId, customerId, kind: 'in', source: 'member', method: 'checkin' });
 }
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
@@ -2530,6 +2537,38 @@ export async function getAdminLiveOccupancy(gymId) {
   }
 }
 
+// ---- Live presence (who is in the gym right now, who just came or went) ----
+//
+// Unlike fetchLiveOccupancy above (a booked session that has not been completed),
+// this is built from entrances and exits, so it covers members and guests alike
+// and moves the moment someone scans in or out. The partner sees each person by
+// first name and photo only, the same minimum the roster shows: no phone, email
+// or date of birth ever leaves auth-service for this view.
+async function firstNamesOf(ids) {
+  const out = {};
+  try {
+    const res = await axios.post(
+      `${AUTH_SERVICE_URL}/internal/users/batch`,
+      { ids },
+      await internalHeadersFor(AUTH_SERVICE_URL),
+    );
+    for (const u of res.data?.data || []) {
+      out[u.id] = { name: u.name ? String(u.name).trim().split(/\s+/)[0] : null, photoUrl: u.profileImageUrl || null };
+    }
+  } catch (_) { /* names are a nicety: the counts still work without them */ }
+  return out;
+}
+
+export async function getGymLivePresence(gymId, partnerId) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    return await liveSnapshot(gymId, { nameOf: firstNamesOf });
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
 // ---- Attendance heatmap (which day, what time) -----------------------------
 //
 // Answers "which day had how much attendance at what time" directly: `cells`
@@ -3658,6 +3697,7 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
       // again, so the GymLink ping applies here too (idempotent on auth's
       // side, which is what makes re-pinging safe).
       pingGymLinkCheckedIn(customerId, gymId);
+      recordPresence({ gymId, customerId, kind: 'in', source: 'member', method: 'checkin' });
       return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: false };
     }
     return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: true };
@@ -3702,6 +3742,9 @@ export async function memberCheckOut(gymId, customerId) {
     where: { id: existing.id },
     data: { checkedOutAt: new Date() },
   });
+  // The in-app button proves nothing about where the person is, so it closes the
+  // visit on the live view but is not the scan that releases workout coins.
+  recordPresence({ gymId, customerId, kind: 'out', source: 'member', method: 'tap' });
 
   return { attendanceId: record.id, checkedInAt: record.checkedInAt, checkedOutAt: record.checkedOutAt, alreadyCheckedOut: false };
 }

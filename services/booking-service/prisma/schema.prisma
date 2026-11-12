@@ -368,3 +368,31 @@ model IndependentCheckIn {
   @@index([customerId, checkedInAt])
   @@schema("booking")
 }
+
+// Every time someone comes into or goes out of a gym, for members and for guests
+// with a booking alike. MemberAttendance keeps one row per day (a re-entry just
+// clears checkedOutAt), so it cannot say when anyone went out or came back; this
+// can. It feeds the partner's live occupancy and heat map, and decides whether a
+// finished workout's coins are paid (only a check-out by scan releases them).
+model GymPresenceEvent {
+  id         Int      @id @default(autoincrement())
+  gymId      Int
+  customerId Int
+  // "in" or "out".
+  kind       String
+  // Who the person was at the gym: "member" (attendance-SaaS link) or "booking".
+  source     String
+  // How it happened: "checkin" (an arrival), "scan" (checked out with the poster
+  // QR, present at the gym), "tap" (the in-app button, no proof of presence) or
+  // "auto" (closed by the server after the day ended). Only "scan" releases coins.
+  method     String
+  bookingId  Int?
+  // The IST calendar day, so "today" never depends on the server's own zone.
+  date       String
+  at         DateTime @default(now())
+
+  @@index([gymId, at])
+  @@index([gymId, date])
+  @@index([customerId, gymId, date, at])
+  @@schema("booking")
+}

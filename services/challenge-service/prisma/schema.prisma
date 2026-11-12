@@ -640,3 +640,39 @@ model SproutSpawn {
   @@index([challengeId, expiresAt])
   @@schema("challenge")
 }
+
+// Whether a person is inside a gym right now, as booking-service last told us.
+// One row per person. It exists for one rule: a workout finished while the person
+// is still checked in earns its coins only once they check out by scanning the
+// gym poster. `day` is the IST day of the arrival, so an arrival nobody closed
+// yesterday cannot hold today's workouts.
+model GymPresence {
+  userId    Int      @id
+  gymId     Int
+  // "in" or "out".
+  state     String
+  since     DateTime
+  day       String
+  // How the last change happened: checkin, scan, tap or auto.
+  method    String
+  updatedAt DateTime @updatedAt
+
+  @@schema("challenge")
+}
+
+// A workout credit that was set aside because the person was still checked in
+// when they finished. Paid when they check out by scan the same day; otherwise it
+// is simply never paid. `payload` is what the credit needs to be replayed.
+model HeldWorkoutCredit {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  day            String
+  idempotencyKey String
+  payload        Json
+  createdAt      DateTime  @default(now())
+  releasedAt     DateTime?
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, day])
+  @@schema("challenge")
+}

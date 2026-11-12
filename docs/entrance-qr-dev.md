@@ -165,3 +165,43 @@ Run the backend suites with `node --experimental-test-module-mocks --test`
 See the final report for current numbers. Not run: the website production build,
 and nothing has been exercised against a live dev deployment. No screen has been
 looked at on a device or in a browser.
+
+## Checking out with the same poster, and live presence
+
+The poster that checks people in also checks them out. Nothing about the printed
+QR changes.
+
+- A scan by someone already inside answers with `presence: { inside: true, since,
+  canCheckOut: true }` and changes nothing (the old `alreadyVerified` shape is kept
+  for older clients). The person confirms, and the client repeats the request with
+  `checkout: true` plus their location: `POST /api/bookings/gym/:gymId/entrance-checkin`.
+- A check-out needs the same proof of being at the gym (50 m) as a check-in, because
+  the poster is only a link. It answers `{ kind: 'checkout', checkedInAt,
+  checkedOutAt, minutesInside, coinsReleased }`; errors are `TOO_FAR`,
+  `LOCATION_REQUIRED` and `NOT_INSIDE` (409).
+- Members and guests with a booking both check out. A guest's booking stays
+  `started`: the partner still completes it, so earnings are unchanged.
+- Leaving without scanning is allowed. The in-app "check out" button still works
+  (`member-checkout`) and closes the visit on the live view, but it is not a scan.
+
+### Workout coins and the check-out rule (challenge-service)
+
+A workout finished while the person is still checked in is held, not paid
+(`gamification.pendingCheckout: true`, `gymId`, in the finish response). A check-out
+**by scan** the same day pays it, and the amount comes back as `coinsReleased`. A tap
+or the server closing the visit pays nothing, and a held credit that is never
+released is simply never paid. Workouts with no open gym visit (home, or after a
+scanned check-out) are credited as before. Switch the rule off with
+`WORKOUT_COINS_REQUIRE_CHECKOUT=false` on challenge-service.
+
+### Live presence (partner)
+
+`GET /api/bookings/gym/:gymId/presence` (partner of that gym). Built from
+`booking.GymPresenceEvent` (one row per entrance or exit): who is inside now (first
+name and photo only), the latest arrivals and departures, today's flow per IST hour,
+the usual average for this weekday and hour, and an 8-week weekday x hour heat map.
+People who never scan out drop off the live count after 6 hours, and count as a
+90-minute stay in the heat map. Clients poll; there is no push channel.
+
+Migrations are additive: `booking.GymPresenceEvent` and
+`challenge.GymPresence` / `challenge.HeldWorkoutCredit`.

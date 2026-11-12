@@ -299,6 +299,18 @@ export const getAdminLiveOccupancy = async (req, res) => {
   }
 };
 
+export const getGymLivePresence = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getGymLivePresence(gymId, req.userId);
+    // A live view must never be served from a cache.
+    res.set('Cache-Control', 'no-store');
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getGymAttendanceHeatmap = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
@@ -562,11 +574,12 @@ export const getMemberVisitPatterns = async (req, res) => {
 export const entranceCheckIn = async (req, res) => {
   try {
     const { resolveEntranceCheckIn } = await import('../services/entranceCheckInService.js');
+    const presence = await import('../services/presenceService.js');
     const result = await resolveEntranceCheckIn({
       gymId: Number(req.params.gymId), customerId: req.userId,
       lat: req.body?.lat, lng: req.body?.lng, confirmEarly: req.body?.confirmEarly === true,
-      join: req.body?.join === true,
-    }, bookingService);
+      join: req.body?.join === true, checkout: req.body?.checkout === true,
+    }, { ...bookingService, openPresence: presence.openPresence, checkOutByScan: presence.checkOutByScan, recordPresence: presence.recordPresence });
     res.json({ data: result });
   } catch (err) {
     // `booking` accompanies UPCOMING_BOOKING: the guest's soonest booking, so the

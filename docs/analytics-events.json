@@ -1112,6 +1112,18 @@
     "since": "2026-10-04",
     "notes": "health-service asked whether a finished workout session earns coins. props verified, credited, amount, economy_disabled. verified=false means no AttendanceEventLog row for that user today, so the workout and check-in surfaces have drifted apart. This is the most useful diagnostic in the file because it fires for every workout logged without a check-in"
   },
+  "workout_credit_held": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-11-14",
+    "notes": "props gym_id, day. A workout finished while the person was still checked in at a gym, so its coins were set aside until they check out by scanning the gym poster. A high count against workout_credit_released means people leave without scanning"
+  },
+  "workout_credit_released": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-11-14",
+    "notes": "props amount, day. Held workout coins paid out because the person checked out by scanning the gym poster"
+  },
   "paired_streak_opted_in": {
     "source": "server",
     "service": "challenge-service",
