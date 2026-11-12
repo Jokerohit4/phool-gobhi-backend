@@ -8,6 +8,7 @@ RUN npm install --omit=dev
 # thing an attacker could plant files into).
 COPY bootstrap-secrets.js index.js ./
 COPY utils ./utils
+COPY content ./content
 COPY docs/analytics-events.json ./docs/analytics-events.json
 EXPOSE 5000
 CMD ["node", "index.js"]

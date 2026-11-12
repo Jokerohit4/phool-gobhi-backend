@@ -14,6 +14,7 @@ import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
 import { QUEUE_DIAGNOSTIC_EVENTS, validQueueDiagnostic } from './utils/exploreQueueDiagnosticSchema.js';
 import { withGoogleIdToken, prewarmIdTokens } from './utils/googleIdToken.js';
+import { loaderFactsHandler } from './utils/loaderFacts.js';
 
 export const app = express();
 app.use(analyticsMiddleware());
@@ -73,6 +74,9 @@ const PUBLIC_ROUTES = [
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
   { method: 'GET', pattern: /^\/api\/bookings\/public\/attendance-stats(\?.*)?$/ },
+  // Content, not an API resource: served straight from the gateway so all
+  // clients (web BFFs + Flutter) read one canonical list.
+  { method: 'GET', pattern: /^\/content\/loader-facts$/ },
   { method: 'GET', pattern: /^\/health/ },
 ];
 
@@ -164,6 +168,11 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timestamp: new Date().toISOString() }));
+
+// Public, offset/limit-sliced content for loading screens. Clients keep a
+// 10-in-use / 10-prefetched rolling buffer, so this must stay cheap and
+// cacheable — no auth, no DB, no per-request work beyond filtering.
+app.get('/content/loader-facts', loaderFactsHandler);
 
 // Client analytics ingestion. Public (anonymous pre-login events are valid) and
 // fire-and-forget — the client must never be blocked or fail on analytics. The

@@ -400,3 +400,63 @@ test('Explore endpoints remain private and emit typed auth errors before proxyin
     }
   }
 });
+
+// ---- /content/loader-facts -------------------------------------------------
+
+test('isPublicRoute: loader facts are public GET-only', () => {
+  assert.equal(isPublicRoute('GET', '/content/loader-facts'), true);
+  assert.equal(isPublicRoute('POST', '/content/loader-facts'), false);
+});
+
+test('loader facts payload slices batches and wraps the cursor', async () => {
+  const { buildLoaderFactsPayload, LOADER_FACTS_TOTAL } = await import('../utils/loaderFacts.js');
+  assert.ok(LOADER_FACTS_TOTAL > 100);
+
+  const first = buildLoaderFactsPayload({ offset: 0, limit: 10, audience: 'customer' });
+  assert.equal(first.facts.length, 10);
+  assert.equal(first.offset, 0);
+  assert.equal(first.nextOffset, 10);
+  assert.equal(first.limit, 10);
+  assert.equal(first.total, LOADER_FACTS_TOTAL);
+  assert.ok(first.facts.every((f) => typeof f.id === 'string' && typeof f.text === 'string'));
+
+  const second = buildLoaderFactsPayload({ offset: first.nextOffset, limit: 10, audience: 'customer' });
+  assert.equal(second.offset, 10);
+  const ids = new Set(first.facts.map((f) => f.id));
+  assert.ok(second.facts.every((f) => !ids.has(f.id)), 'consecutive batches must not overlap');
+
+  const wrapped = buildLoaderFactsPayload({ offset: LOADER_FACTS_TOTAL, limit: 10, audience: 'customer' });
+  assert.equal(wrapped.offset, 0);
+});
+
+test('loader facts honor audience filters and clamp limit', async () => {
+  const { buildLoaderFactsPayload, LOADER_FACTS_TOTAL } = await import('../utils/loaderFacts.js');
+  const partner = buildLoaderFactsPayload({ offset: 0, limit: 50, audience: 'partner' });
+  assert.equal(partner.limit, 20, 'limit is clamped to MAX_LIMIT');
+  assert.ok(partner.total < LOADER_FACTS_TOTAL, 'brand-only facts are hidden from partners');
+  assert.ok(partner.facts.every((f) => !/phool gobhi/i.test(f.text)));
+});
+
+test('loader facts handler sets cache headers and answers If-None-Match with 304', async () => {
+  const { loaderFactsHandler } = await import('../utils/loaderFacts.js');
+  const headers = {};
+  const res = {
+    statusCode: 200,
+    body: null,
+    ended: false,
+    set(k, v) { headers[k.toLowerCase()] = v; return this; },
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+    end() { this.ended = true; return this; },
+  };
+  loaderFactsHandler({ query: {}, headers: {} }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.facts.length, 10);
+  assert.match(headers['cache-control'], /max-age=300/);
+  assert.ok(headers.etag);
+
+  const res304 = { ...res, body: null, ended: false, set() { return this; }, status(code) { this.statusCode = code; return this; }, end() { this.ended = true; return this; } };
+  loaderFactsHandler({ query: {}, headers: { 'if-none-match': headers.etag } }, res304);
+  assert.equal(res304.statusCode, 304);
+  assert.equal(res304.ended, true);
+});
