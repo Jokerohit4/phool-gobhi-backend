@@ -451,7 +451,7 @@ job is retention and health:
 | `workoutTracking` | **on** | the daily hook; ~150 sessions/user/year vs ~30 bookings |
 | `healthMetrics` | on | the differentiator Hevy has no answer for |
 | `healthVault` | **off** | legal sign-off pending on medical report upload |
-| `fitnessAssistant` | off until data density | cold-start: no users → empty prescriptions |
+| `fitnessAssistant` | **on** (owner decision 2026-11-12) | the Gobhi assistant is part of the launch product; the mood check-in, health score and home all lead into it. Still open: the disclaimer wording is unsigned, and with few users the model has little data to use. The app asks for consent before the first chat. Needs `healthMetrics` on. |
 | `runTracker` | off | not yet tuned; now at least reachable from the portal |
 | `streaksCoins` | **off until the coin sink exists** | `POST /coins/redeem` (`challenges.js:19`) is never called by the app and the catalog is non-interactive (`coin_wallet_screen.dart:282-329`); cheapest item is 50 coins at a 10-per-check-in earn rate. Enabling it today ships a visible earn loop with no spend loop. |
 | `challenges` | off outside Gurugram/Gorakhpur | `challengeCatalogService.js:28-44` hardcodes 2 cities; everyone else sees an empty list |

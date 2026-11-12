@@ -88,7 +88,7 @@ export const PROFILES = {
     on: () => ['badges'],
   },
   'launch-candidate': {
-    summary: 'marketplace + gym-buddy + referrals + workout log + health scores; medical/AI off',
+    summary: 'marketplace + gym-buddy + referrals + workout log + health scores + Gobhi assistant; medical off',
     // Mirrors the launch table in docs/FEATURE-FLAG-SPLIT.md §9, which is the
     // recorded product decision - this profile is that table made executable,
     // not a second opinion. Still a proposal until somebody signs it off.
@@ -105,15 +105,22 @@ export const PROFILES = {
     // the ledger holds records under a `medical_records` consent scope),
     // cycleTracking (reverses FR-27; consent wording unreviewed), fhirExport
     // (no HAPI validator run yet, so nobody should be handed a file labelled a
-    // government-standard record), healthPersonalisation and fitnessAssistant
-    // (the two AI surfaces, disclaimer wording unsigned, and personalisation
-    // is the only consent-bearing write in health-service), recapSharing and
+    // government-standard record), healthPersonalisation (an AI surface, and
+    // the only consent-bearing write in health-service), recapSharing and
     // runTracker (not the launch hook), and streaksCoins (its own registry
     // entry says DO NOT ENABLE until the coin sink exists - the app never calls
     // /coins/redeem), challenges (the catalogue is geo-fenced to two cities, so
     // this reads as a broken feature everywhere else) and buddyPairedStreaks
     // (known unmatch bug: coins keep accruing for a match that no longer
     // exists).
+    //
+    // fitnessAssistant was moved from off to ON by the owner on 2026-11-12: the
+    // Gobhi assistant is part of the launch product (the mood check-in, health
+    // score and home all hand people into it). The reasons it used to be off are
+    // not gone and are recorded here rather than forgotten: the app still asks
+    // for consent before the first chat, but the disclaimer wording has not been
+    // signed off, and with few users the model has little data to draw on. It is
+    // named explicitly, and it needs healthMetrics, which this profile enables.
     //
     // Note on deps, because it is easy to get backwards: `deps` makes a child
     // INERT while its parent is off. It never switches a child on. So enabling
@@ -132,6 +139,7 @@ export const PROFILES = {
     on: () => [
       'workoutTracking',
       'healthMetrics',
+      'fitnessAssistant',
       'buddy',
       'referral',
       'badges',

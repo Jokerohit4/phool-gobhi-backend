@@ -91,6 +91,7 @@ test('launch-candidate matches the launch table in docs/FEATURE-FLAG-SPLIT.md §
     'badges',
     'brandedOnboarding',
     'buddy',
+    'fitnessAssistant',
     'healthMetrics',
     'homeTrackHome',
     'nonPartnerAttendance',
@@ -99,9 +100,10 @@ test('launch-candidate matches the launch table in docs/FEATURE-FLAG-SPLIT.md §
   ]);
 });
 
-test('launch-candidate enables no medical or AI surface', () => {
-  // The whole point of the profile: the health SCORE ships, the consent-bearing
-  // and medical collection does not. Each of these is off for a recorded reason
+test('launch-candidate enables no medical surface and only the one named AI surface', () => {
+  // The whole point of the profile: the health SCORE and the Gobhi assistant
+  // ship (the assistant by an explicit owner decision on 2026-11-12), the
+  // consent-bearing and medical collection does not. Each of these is off for a recorded reason
   // in the registry - legal sign-off, an unreviewed disclaimer, a photo leaving
   // the device, or an unvalidated export format.
   const withheld = [
@@ -111,7 +113,6 @@ test('launch-candidate enables no medical or AI surface', () => {
     'cycleTracking',
     'fhirExport',
     'healthPersonalisation',
-    'fitnessAssistant',
     'recapSharing',
     'runTracker',
   ];
@@ -128,7 +129,9 @@ test('launch-candidate does not rely on deps auto-enabling anything', () => {
   const healthDependents = FEATURE_FLAGS.filter((f) => f.deps.includes('healthMetrics')).map((f) => f.name);
   assert.ok(healthDependents.length >= 5, 'sanity: several flags depend on healthMetrics');
   const enabledDependents = on('launch-candidate').filter((f) => healthDependents.includes(f));
-  assert.deepEqual(enabledDependents, [], 'only healthMetrics itself should be on among its dependents');
+  // The Gobhi assistant is the one dependent that is on, and it is named in the
+  // profile on purpose; nothing else may ride in on healthMetrics.
+  assert.deepEqual(enabledDependents, ['fitnessAssistant'], 'only the named fitnessAssistant should be on among healthMetrics dependents');
 });
 
 test('launch-candidate leaves the known-broken gamification flags off', () => {
