@@ -5,6 +5,7 @@
 // never hardcode the list; they cache batches of it). The endpoint is
 // offset/limit based so clients can keep a small rolling buffer (10 in use,
 // 10 prefetched) instead of shipping the whole corpus to every install.
+// Locale parameter accepted for future i18n (currently English only).
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -35,7 +36,9 @@ function clampInt(value, fallback, min, max) {
   return Math.min(Math.max(n, min), max);
 }
 
-export function buildLoaderFactsPayload({ offset, limit, audience } = {}) {
+export function buildLoaderFactsPayload({ offset, limit, audience, locale } = {}) {
+  // Locale parameter accepted for future i18n; currently English-only corpus.
+  // When Hindi facts are added, filter by locale here.
   const pool = factsForAudience(audience);
   const total = pool.length;
   const size = clampInt(limit, DEFAULT_LIMIT, 1, MAX_LIMIT);
@@ -68,6 +71,7 @@ export function loaderFactsHandler(req, res) {
     offset: req.query.offset,
     limit: req.query.limit,
     audience: typeof req.query.audience === 'string' ? req.query.audience : undefined,
+    locale: typeof req.query.locale === 'string' ? req.query.locale : undefined,
   });
 
   const etag = loaderFactsETag(payload);
