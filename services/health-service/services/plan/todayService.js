@@ -1,0 +1,368 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
+import { weekDays, weekStartOf } from '../../utils/sessionDay.js';
+import { PrismaClient } from '@prisma/client';
+import { resolveDay } from './rowProgress.js';
+import { applyEffort } from './dayEffort.js';
+import { makeTemplateLoader } from './templateLoader.js';
+import { hasMedicalRecordsConsentService } from '../ledger/ledgerConsentService.js';
+import { getLayers, getOnLayerKeys } from './layerState.js';
+import { getJourney, getUnlockedLayerKeys } from '../journey/journeyService.js';
+import { previousClose } from '../ledger/scoreService.js';
+import { isFeatureEnabled } from '../../middleware/requireFeatureFlag.js';
+import { listTemplatesService } from '../templateService.js';
+import { track } from '../../utils/analytics.js';
+
+/**
+ * Determines the "today" date the same way dayCloseService does.
+ * @returns {string} YYYY-MM-DD in IST
+ */
+function todayIST() {
+  return isoDayIST(new Date());
+}
+
+/**
+ * Checks if a date is in the future relative to today.
+ * @param {string} localDate - YYYY-MM-DD
+ * @returns {boolean}
+ */
+function isFutureDate(localDate) {
+  const today = todayIST();
+  return localDate > today;
+}
+
+/**
+ * Gets pause state for a user.
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {number} userId
+ * @param {string} localDate
+ * @returns {Promise<{paused: boolean, pausedUntil: string|null}>}
+ */
+async function getPauseState(prisma, userId, localDate) {
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
+  if (!goal?.pausedFrom || !goal?.pausedUntil) {
+    return { paused: false, pausedUntil: null };
+  }
+  const paused = localDate >= goal.pausedFrom && localDate <= goal.pausedUntil;
+  return { paused, pausedUntil: goal.pausedUntil };
+}
+
+/**
+ * Builds the Monday-start week array for the response.
+ * @param {string[]} showedUpDays - Array of YYYY-MM-DD dates (newest first from getShowedUpDays)
+ * @param {string} today - Today's date
+ * @returns {object[]} Week array with 7 entries Mon-Sun
+ */
+function buildWeek(showedUpDays, today) {
+  const showedUpSet = new Set(showedUpDays);
+  return weekDays(weekStartOf(today)).map(localDate => ({
+    localDate, showedUp: showedUpSet.has(localDate), isToday: localDate === today,
+  }));
+}
+
+/**
+ * Gets the session for today and tomorrow from the workout slots.
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {number} userId
+ * @param {string} today
+ * @returns {Promise<{today: object|null, tomorrow: object|null}>}
+ */
+async function getSessions(prisma, userId, today, { wellnessOnly = false, loadTemplate } = {}) {
+  loadTemplate ??= makeTemplateLoader(prisma);
+  // A prescription can outlive the journey branch that created it. Do not let
+  // stale workout slots leak back into the Home prompt for a wellbeing-only
+  // journey.
+  if (wellnessOnly) return { today: null, tomorrow: null };
+  const prescription = await prisma.prescription.findUnique({ where: { userId } });
+  const slots = prescription?.workoutSlots ?? [];
+  if (!slots.length) return { today: null, tomorrow: null };
+
+  const todayDate = new Date(`${today}T00:00:00Z`);
+  const todayWeekday = todayDate.getUTCDay(); // 0 = Sunday
+  const todayISOWeekday = todayWeekday === 0 ? 6 : todayWeekday - 1; // 0 = Monday
+
+  const tomorrowDate = new Date(todayDate);
+  tomorrowDate.setUTCDate(todayDate.getUTCDate() + 1);
+  const tomorrowWeekday = tomorrowDate.getUTCDay();
+  const tomorrowISOWeekday = tomorrowWeekday === 0 ? 6 : tomorrowWeekday - 1;
+
+  const todaySlot = slots.find((s) => Number(s.weekday) === todayISOWeekday);
+  const tomorrowSlot = slots.find((s) => Number(s.weekday) === tomorrowISOWeekday);
+
+  const formatSession = async (slot) => {
+    if (!slot) return null;
+    const template = await loadTemplate(slot.templateId);
+    return {
+      templateId: slot.templateId ?? null,
+      title: slot.title ?? template?.name ?? 'Workout',
+      moves: template?.exercises?.length ?? null,
+      done: false,
+    };
+  };
+
+  const [todaySession, tomorrowSession] = await Promise.all([formatSession(todaySlot), formatSession(tomorrowSlot)]);
+  return {
+    today: todaySession,
+    tomorrow: tomorrowSession,
+  };
+}
+
+/**
+ * Builds the GET /plan/today payload.
+ *
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {number} userId
+ * @param {{localDate?: string}} [options] optional and ignored if in the future
+ * @returns {Promise<object>} the /plan/today response body
+ */
+export async function buildToday(prisma, userId, { localDate } = {}) {
+  const startTime = Date.now();
+  const phases = [];
+  let mark = startTime;
+  const lap = (label) => {
+    const now = Date.now();
+    phases.push(`${label}=${now - mark}ms`);
+    mark = now;
+  };
+  const timed = async (label, fn) => {
+    const startedAt = Date.now();
+    try {
+      return await fn();
+    } finally {
+      phases.push(`${label}=${Date.now() - startedAt}ms`);
+    }
+  };
+
+  // Determine the date
+  let resolvedDate = localDate;
+  if (!resolvedDate || !/^\d{4}-\d{2}-\d{2}$/.test(resolvedDate) || isFutureDate(resolvedDate)) {
+    resolvedDate = todayIST();
+  }
+  // Check coach basic consent first — the gate must precede every other read
+  // on this path (the journey compute has side effects, and nothing else may be
+  // fetched for a user who never granted coach consent).
+  const coachConsent = await prisma.coachConsent.findUnique({ where: { userId } });
+  if (!coachConsent || coachConsent.revokedAt || !coachConsent.scopes?.includes('basic')) {
+    return {
+      state: 'no_plan',
+      reason: 'no_consent',
+    };
+  }
+  lap('consent');
+
+  // Get journey (exactly once - it syncs unlocks and rebuilds if needed). The
+  // journey doesn't feed the score-open / pause lookups, so they ride along
+  // instead of waiting behind it. They're cheap single-row reads; a user with
+  // consent but no journey yet wastes two of them, which is the rare case.
+  const [journey, scoreOpen, pauseState] = await Promise.all([
+    timed('journey', () => getJourney(userId)),
+    timed('prevClose', () => previousClose(prisma, { userId, localDate: resolvedDate })),
+    timed('pause', () => getPauseState(prisma, userId, resolvedDate)),
+  ]);
+  lap('journeyWall');
+
+  if (!journey) {
+    return {
+      state: 'no_plan',
+      reason: 'no_journey',
+    };
+  }
+
+  // One template loader shared by the session preview and the day resolver, and
+  // the medical-records consent lookup started alongside the layer evaluation
+  // (getOnLayerKeys used to run it as its own round-trip afterwards).
+  const loadTemplate = makeTemplateLoader(prisma);
+  const [layers, sessions, medicalGranted, moodCheckIns] = await Promise.all([
+    timed('layers', () => getLayers(prisma, userId, { journey })),
+    timed('sessions', () => getSessions(prisma, userId, resolvedDate, {
+      wellnessOnly: journey.wellnessOnly === true,
+      loadTemplate,
+    })),
+    timed('medical', () => hasMedicalRecordsConsentService(userId)),
+    // Today's mood check-ins: one row on the card, two points-worth a day.
+    timed('mood', () => prisma.wellnessMoodCheckIn.findMany({
+      where: { userId, localDate: resolvedDate },
+      select: { slot: true, mood: true, createdAt: true },
+    })),
+  ]);
+  lap('layersWall');
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers, medicalGranted });
+  lap('onLayerKeys');
+  const dayResolution = await resolveDay(prisma, { userId, localDate: resolvedDate, onLayerKeys, loadTemplate });
+  lap('resolveDay');
+  const showedUpDays = journey.showedUpDates ?? [];
+
+  // Re-extract resolved values from dayResolution
+  const { rows: engineRows, bonus, earned, target, counts } = dayResolution;
+  // The card's rows and running points: the engine's, plus partial credit for
+  // work in progress and the mood row. `earned`/`target`/`score` below stay the
+  // engine's own, so the frozen daily score is unaffected (see dayEffort.js).
+  const { rows, effort } = applyEffort(dayResolution, moodCheckIns);
+  // The mood row is a row on the card, so the done/total it shows counts it.
+  const moodRow = rows.find((r) => r.kind === 'mood');
+  const cardCounts = {
+    done: counts.done + (moodRow?.done ? 1 : 0),
+    total: counts.total + 1,
+  };
+
+  // Check easy start
+  const easyStartUntil = journey.easyStartUntil ? todayIST() <= journey.easyStartUntil ? journey.easyStartUntil : null : null;
+  const noMisses = easyStartUntil !== null || journey.easeBack === true;
+
+  // Determine if today's workout is done
+  const todayWorkoutRow = engineRows.find((r) => r.kind === 'workout');
+  if (sessions.today && todayWorkoutRow) {
+    sessions.today.done = todayWorkoutRow.done;
+  }
+  if (sessions.tomorrow && sessions.tomorrow.title === 'Rest day') {
+    sessions.tomorrow = null;
+  }
+
+  // Build week
+  const week = buildWeek(showedUpDays, resolvedDate);
+
+  // Build journey summary
+  const journeySummary = {
+    wellnessOnly: journey.wellnessOnly === true,
+    wellnessFocuses: journey.wellnessFocuses ?? [],
+    showedUpDays: showedUpDays.length,
+    steadyWeeks: journey.steadyWeeks,
+    easeBack: journey.easeBack,
+  };
+
+  const liveScore = scoreOpen + earned + bonus;
+
+  const payload = {
+    state: 'active',
+    wellnessOnly: journey.wellnessOnly === true,
+    localDate: resolvedDate,
+    paused: pauseState.paused,
+    pausedUntil: pauseState.pausedUntil,
+    easyStartUntil: easyStartUntil,
+    noMisses,
+    points: pauseState.paused ? null : { earned, target, bonus, effort },
+    counts: cardCounts,
+    score: pauseState.paused ? { open: scoreOpen, live: scoreOpen } : { open: scoreOpen, live: liveScore },
+    rows,
+    session: sessions,
+    layers,
+    week,
+    journey: journeySummary,
+  };
+
+  // Log duration
+  const duration = Date.now() - startTime;
+  if (duration > 300) {
+    console.warn(`[todayService] buildToday took ${duration}ms for user ${userId} ${phases.join(' ')}`);
+  }
+
+  return payload;
+}
+
+/**
+ * Builds the GET /plan payload (settings, bounds, slots, items, layers, templates).
+ *
+ * @param {import('@prisma/client').PrismaClient} prisma
+ * @param {number} userId
+ * @returns {Promise<object>} the /plan response body
+ */
+export async function buildPlanDefinition(prisma, userId) {
+  // Check coach basic consent
+  const coachConsent = await prisma.coachConsent.findUnique({ where: { userId } });
+  if (!coachConsent || coachConsent.revokedAt || !coachConsent.scopes?.includes('basic')) {
+    return {
+      state: 'no_plan',
+      reason: 'no_consent',
+    };
+  }
+
+  // Get journey
+  const journey = await getJourney(userId);
+  if (!journey) {
+    return {
+      state: 'no_plan',
+      reason: 'no_journey',
+    };
+  }
+
+  // Load data in parallel
+  // (plan items used to be fetched after all of this, as one more round-trip)
+  const [prescription, weeklyGoal, healthGoal, target, layers, templates, items, medicalGranted] = await Promise.all([
+    prisma.prescription.findUnique({ where: { userId } }),
+    prisma.weeklyGoal.findUnique({ where: { userId } }),
+    prisma.healthGoal.findUnique({ where: { userId } }),
+    prisma.nutritionTarget.findFirst({ where: { userId }, orderBy: { effectiveFrom: 'desc' } }),
+    getLayers(prisma, userId, { journey }),
+    listTemplatesService(userId),
+    // Build items (only user + doctor rows)
+    prisma.planItem.findMany({
+      where: { userId, active: true, origin: { in: ['user', 'doctor'] } },
+      orderBy: [{ kind: 'asc' }, { createdAt: 'asc' }],
+    }),
+    hasMedicalRecordsConsentService(userId),
+  ]);
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey, layers, medicalGranted });
+
+  // Build settings
+  const settings = {
+    kcal: target ? Number(target.kcal) : null,
+    stepsPerDay: prescription?.stepsPerDay ?? 6000,
+    sleepMinutes: prescription?.sleepMinutes ?? 420,
+    sessionsPerWeek: journey?.wellnessOnly ? 0 : weeklyGoal?.sessionsPerWeek ?? 3,
+  };
+
+  // Build bounds (from prescriptionService)
+  const bounds = {
+    kcal: { min: 1200, max: 4500, step: 50 },
+    stepsPerDay: { min: 2000, max: 25000, step: 500 },
+    sleepMinutes: { min: 300, max: 540, step: 15 },
+    sessionsPerWeek: { min: 1, max: 14, step: 1 },
+  };
+
+  // Build slots
+  const slots = (prescription?.workoutSlots ?? []).map((slot) => ({
+    weekday: Number(slot.weekday),
+    templateId: slot.templateId ?? null,
+    title: slot.title ?? '',
+    level: slot.level ?? null,
+    moves: slot.moves ?? null,
+  }));
+
+  const formattedItems = items.map((item) => ({
+    itemId: item.id,
+    kind: item.kind,
+    ownKind: item.ownKind ?? null,
+    layerKey: item.layerKey,
+    origin: item.origin,
+    title: item.title,
+    schedule: item.schedule,
+    targetValue: item.targetValue,
+    prescribedBy: item.prescribedBy,
+    prescribedNote: item.prescribedNote,
+    endsOn: item.endsOn,
+  }));
+
+  // Format templates for the editor (system + own)
+  const formattedTemplates = templates.map((t) => ({
+    id: t.id,
+    title: t.name,
+    level: t.level ?? 'beginner',
+    moves: t.exercises?.length ?? 0,
+    location: t.isSystem ? 'gym' : 'home',
+  }));
+
+  return {
+    state: 'active',
+    wellnessOnly: journey?.wellnessOnly === true,
+    settings,
+    bounds,
+    slots,
+    items: formattedItems,
+    layers,
+    templates: formattedTemplates,
+  };
+}
+
+export { todayIST, isFutureDate, buildWeek, getSessions };

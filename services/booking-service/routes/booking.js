@@ -1,12 +1,17 @@
 import { Router } from 'express';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
+import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import * as ctrl from '../controllers/bookingController.js';
 import * as analyticsCtrl from '../controllers/analyticsController.js';
 
 const router = Router();
 
 // Internal service-to-service endpoint (gym-service calls this to compute slot availability)
+router.post('/internal/daily-briefing', requireInternal, ctrl.sendDailyBriefing);
+router.post('/internal/auto-complete', requireInternal, ctrl.autoCompleteSessions);
+router.post('/internal/session-reminders', requireInternal, ctrl.sendSessionReminders);
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
+router.get('/internal/slot-counts/:gymId/range', requireInternal, ctrl.getSlotCountsRange);
 // DPDPA access right (s.11). Called by auth-service's platform-wide export
 // fan-out; internal only, never reachable through the gateway.
 router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
@@ -22,6 +27,12 @@ router.get('/internal/bookings/subscription/:id/last-visit-date', requireInterna
 // Internal (auth-service's attendance-SaaS re-engagement sweep — bulk "has this
 // customer ever completed a booking" check, batched to avoid N sequential calls)
 router.post('/internal/bookings/has-completed-batch', requireInternal, ctrl.getCustomerIdsWithCompletedBooking);
+// Internal (health-service's journey — showed-up days / steady weeks read the
+// distinct union of all three check-in surfaces; see checkinDaysService.js)
+router.get('/internal/users/:id/checkin-days', requireInternal, ctrl.getCheckinDaysInternal);
+// Internal (gym-service's unclaimed-gym-claimed hook — "which customers ever
+// checked in here", so auth can prompt them toward the now-partner gym)
+router.get('/internal/unclaimed-gyms/:id/customers', requireInternal, ctrl.getUnclaimedGymCustomersInternal);
 
 // Public, unauthenticated — marketing-site aggregate stat only. Must be
 // paired with a gateway PUBLIC_ROUTES entry (see index.js).
@@ -49,11 +60,15 @@ router.get('/gym/:gymId/analytics', requireRole('partner'), analyticsCtrl.getGym
 // computeAttendanceHeatmap for why `started` status / attendedAt is the
 // signal used.
 router.get('/gym/:gymId/live', requireRole('partner'), ctrl.getGymLiveOccupancy);
+// Real-time presence: who is inside now, who just came or went, today's flow and the
+// usual busy-ness for this hour. Built from entrances and exits (GymPresenceEvent).
+router.get('/gym/:gymId/presence', requireRole('partner'), ctrl.getGymLivePresence);
 router.get('/gym/:gymId/attendance-heatmap', requireRole('partner'), ctrl.getGymAttendanceHeatmap);
 // Per-member activity — most/least active, time spent, same-time vs varies.
 // One dataset, sorted/sliced into several views client-side (see
 // bookingService.js's computeMemberActivity for why).
 router.get('/gym/:gymId/member-activity', requireRole('partner'), ctrl.getMemberActivityForGym);
+router.get('/gym/:gymId/members/:customerId/visit-patterns', requireRole('partner'), ctrl.getMemberVisitPatterns);
 router.get('/admin/gym/:gymId/member-activity', requireRole('gobhi'), ctrl.getMemberActivityAdmin);
 router.get('/admin/attendance-summary', requireRole('gobhi'), ctrl.getAdminAttendanceSummary);
 router.get('/admin/attendance-summary/by-gym', requireRole('gobhi'), ctrl.getAdminAttendanceByGym);
@@ -65,6 +80,9 @@ router.get('/admin/attendance-heatmap', requireRole('gobhi'), ctrl.getAdminAtten
 // Admin-only: top-performing-gyms leaderboard — the mirror image of the
 // existing supply-health view (which finds the worst gyms).
 router.get('/admin/top-gyms', requireRole('gobhi'), ctrl.getTopPerformingGyms);
+// Gobhi-only: how many customers train at an unclaimed gym (admin portal's
+// claim queue). k-anonymous — the count reads as null while under 5 people.
+router.get('/admin/unclaimed-gyms/:id/people-count', requireRole('gobhi'), ctrl.getUnclaimedGymPeopleCount);
 
 // Trainer self-service (role='trainer', see auth-service's new trainer
 // account type) — their own check-in + logging which attended customer
@@ -85,6 +103,9 @@ router.get('/admin/gym/:gymId/trainers/:trainerId/sessions', requireRole('gobhi'
 // from analytics_events via a separate pool (see analyticsQueryService.js),
 // not this service's own Prisma-backed operational DB.
 router.get('/admin/analytics/onboarding-funnel', requireRole('gobhi'), analyticsCtrl.getOnboardingFunnel);
+// Customer signup funnel (per-step viewed vs completed) — the partner funnel
+// above is gym supply; this is demand.
+router.get('/admin/analytics/customer-onboarding-funnel', requireRole('gobhi'), analyticsCtrl.getCustomerOnboardingFunnel);
 router.get('/admin/analytics/approval-sla', requireRole('gobhi'), analyticsCtrl.getApprovalSla);
 router.get('/admin/analytics/conversion-funnel', requireRole('gobhi'), analyticsCtrl.getConversionFunnel);
 router.get('/admin/analytics/fulfillment-funnel', requireRole('gobhi'), analyticsCtrl.getFulfillmentFunnel);
@@ -113,11 +134,26 @@ router.get('/admin/analytics/location-reach', requireRole('gobhi'), analyticsCtr
 router.put('/:id/cancel', requireRole('customer'), ctrl.cancelBooking);
 router.post('/:id/request-checkin', requireRole('customer'), ctrl.requestCheckIn);
 router.put('/:id/confirm', requireRole('partner'), ctrl.confirmBooking);
+router.put('/:id/gym-cancel', requireRole('partner'), ctrl.cancelBookingByGym);
 router.post('/:id/verify-attendance', requireRole('partner'), ctrl.verifyAttendance);
 router.post('/gym/:gymId/self-checkin', requireRole('customer'), ctrl.selfCheckIn);
+router.post('/gym/:gymId/entrance-checkin', requireRole('customer'), ctrl.entranceCheckIn);
+// Non-partner gym check-in: GPS only, no booking, no QR. Distinct path prefix
+// from /gym/:gymId above because the id spaces are different (UnclaimedGym vs
+// Gym) and silently confusing them would credit attendance to the wrong place.
+router.post('/unclaimed-gym/:unclaimedGymId/checkin', requireRole('customer'), requireFeatureFlag('nonPartnerAttendance'), ctrl.independentCheckIn);
+// Reading your OWN past check-ins stays ungated, like health-service's
+// DELETE /me: switching a feature off must not hide data a user already
+// created from them.
+router.get('/mine/independent-checkins', requireRole('customer'), ctrl.myIndependentCheckIns);
 router.post('/gym/:gymId/member-checkin', requireRole('customer'), ctrl.memberCheckIn);
+// Check-out is intentionally ungated-geofence: there's no location to verify
+// (the member may already be walking out), just the linked-gym + same-day
+// check-in guards in bookingService.memberCheckOut.
+router.post('/gym/:gymId/member-checkout', requireRole('customer'), ctrl.memberCheckOut);
 router.get('/mine/member-attendance', requireRole('customer'), ctrl.getMemberAttendance);
 router.get('/gym/:gymId/leaderboard', requireRole('customer'), ctrl.getGymLeaderboard);
+router.get('/leaderboard/global', requireRole('customer'), ctrl.getGlobalLeaderboard);
 router.put('/:id/complete', requireRole('partner'), ctrl.completeBooking);
 
 export default router;

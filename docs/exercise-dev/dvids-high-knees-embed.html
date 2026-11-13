@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />        <link href="https://www.dvidshub.net/video/558574/high-knees" rel="canonical" />
+<link href="https://siteassets.dvidshub.net/libs/video-js/7.12.4/video-js.min.css" media="screen,print" rel="stylesheet" type="text/css" />
+<link href="https://siteassets.dvidshub.net/css/video.css" media="screen, print" rel="stylesheet" type="text/css" />
+<link href="https://siteassets.dvidshub.net/libs/videojs-thumbnails/videojs.thumbnails.css" media="screen, print" rel="stylesheet" type="text/css" />        <style type="text/css" media="screen">
+<!--
+
+body {
+    background-color: transparent;
+}
+-->
+</style>
+<style type="text/css" media="screen">
+<!--
+
+        .vjs-thumbnail-holder img {
+            max-width: none;
+        }
+-->
+</style>        <script type="text/javascript" src="https://siteassets.dvidshub.net/js/jquery.min.js"></script>
+<script type="text/javascript" src="https://siteassets.dvidshub.net/libs/video-js/7.12.4/video.min.js"></script>
+<script type="text/javascript" src="https://siteassets.dvidshub.net/libs/videojs-thumbnails/videojs.thumbnails.js"></script>
+<script type="text/javascript" src="https://siteassets.dvidshub.net/js/DVIDSVideoAnalytics.min.js"></script>                    <script src="https://www.googletagmanager.com/gtag/js?id=G-YT82FJTERG" type="text/javascript" async></script>
+            <script type="text/javascript">
+    //<![CDATA[
+              window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+
+          gtag('config', 'G-YT82FJTERG');
+
+          var sendAccountType = function(event, data) {
+            gtag('set', 'user_properties', {
+              member_type: data.accountType,
+            });
+          }
+
+          if (typeof dvids !== "undefined" && window.jQuery) {
+            $(document).bind(dvids.auth.events.query, sendAccountType);
+          }    //]]>
+</script>    </head>
+    <body style="margin: 0;">
+        
+
+        <div class="videoWrapper">
+            <video id="dvids-video-player-1" class="video-js vjs-default-skin vjs-big-play-centered" width="800" height="450" preload="metadata" controls  poster="https://d1ldvf68ux039x.cloudfront.net/thumbs/frames/video/1710/558574/800x450_q95.jpg">
+                <source src="/video/558574.m3u8" type="application/x-mpegURL" />                <source src="https://d34w7g4gy10iej.cloudfront.net/video/1710/DOD_104966749/DOD_104966749-1024x576-1769k.mp4" type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"' />                <track kind="captions" label="English closed captioning" src="/video/closedcaption/id/558574" srclang="en"></track> 
+            </video>
+        </div>
+
+        
+        <script>
+            var video = videojs('dvids-video-player-1');
+
+            var analyticsParams = {
+                domain: 'www.dvidshub.net',
+                type_id: "558574",
+                type: 'video',
+                original_referrer: "",
+                unit: "3032"            }
+
+            video.on('loadeddata', function() {
+                DVIDSVideoAnalytics.track('loaded', analyticsParams);
+
+                // Get all text tracks for the current video.
+                var tracks = video.textTracks();
+
+                for (var i = 0; i < tracks.length; i++) {
+                  var track = tracks[i];
+
+                  // Find the English subtitles track and mark it as "disabled".
+                  if (track.kind === 'subtitles' && track.language === 'en') {
+                    track.mode = 'disabled';
+                }
+              }
+            });
+            video.on('play', function() {
+                DVIDSVideoAnalytics.track('play', analyticsParams);
+            });
+            video.on('ended', function() {
+                DVIDSVideoAnalytics.track('ended', analyticsParams);
+            });
+                        video.thumbnails({"bifSrc": "https://d34w7g4gy10iej.cloudfront.net/video/1710/DOD_104966749/DOD_104966749-240.bif", "style": {"width": 240}});
+                    </script>
+
+            <a target="_blank" href="https://www.dvidshub.net/video/558574/high-knees">View on dvidshub.net</a>
+    </body>
+</html>

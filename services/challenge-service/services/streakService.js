@@ -1,15 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
-const prisma = new PrismaClient();
-
-function startOfIsoWeek(date) {
-  const d = new Date(date);
-  const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  d.setUTCDate(d.getUTCDate() - day);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
+import { track } from '../utils/analytics.js';
+import { startOfIsoWeek, istDayBounds } from '../utils/isoWeek.js';
 
 // Idempotent on idempotencyKey — booking-service's fire-and-forget call to
 // POST /internal/attendance-events can retry freely without double-counting
@@ -18,11 +11,38 @@ function startOfIsoWeek(date) {
 // since a booking-free attendance-SaaS check-in has no bookingId.
 export async function recordAttendanceEvent({ userId, bookingId, memberAttendanceId, gymId, attendedAt, source, idempotencyKey }) {
   const existing = await prisma.attendanceEventLog.findUnique({ where: { idempotencyKey } });
-  if (existing) return { alreadyRecorded: true };
+  if (existing) {
+    track('attendance_recorded', userId, {
+      checkin_source: source, gym_id: gymId ?? null, booking_id: bookingId ?? null,
+      member_attendance_id: memberAttendanceId ?? null,
+      already_recorded: true, coins_awarded: 0,
+    });
+    return { alreadyRecorded: true };
+  }
+
+  // One showing-up per IST day counts, whatever the source. Without this, a
+  // user could create several unclaimed "gyms" at home and check in at each,
+  // earning coins per gym per day and qualifying a whole week in one day.
+  // Later same-day check-ins are still logged (attendance history, the
+  // unlogged-workout feed) but neither count towards the week nor pay.
+  const day = istDayBounds(attendedAt);
+  const earlierToday = await prisma.attendanceEventLog.findFirst({
+    where: { userId, attendedAt: { gte: day.start, lt: day.end } },
+    select: { id: true },
+  });
 
   await prisma.attendanceEventLog.create({
     data: { userId, bookingId: bookingId ?? null, memberAttendanceId: memberAttendanceId ?? null, gymId, attendedAt: new Date(attendedAt), source, idempotencyKey },
   });
+  if (earlierToday) {
+    track('attendance_recorded', userId, {
+      checkin_source: source, gym_id: gymId ?? null, booking_id: bookingId ?? null,
+      member_attendance_id: memberAttendanceId ?? null,
+      already_recorded: false, same_day_repeat: true, coins_awarded: 0,
+    });
+    return { alreadyRecorded: false, sameDayRepeat: true };
+  }
+
   const weekStart = startOfIsoWeek(attendedAt);
   await prisma.userStreakWeek.upsert({
     where: { userId_weekStart: { userId, weekStart } },
@@ -35,9 +55,17 @@ export async function recordAttendanceEvent({ userId, bookingId, memberAttendanc
   // real check-in. Same rate regardless of source today (booking or
   // member_checkin) — a source-aware rate is deferred, see coinEconomyConfigService.
   const { coinsPerCheckin } = await loadEconomyConfig();
+  let coinsAwarded = 0;
   if (coinsPerCheckin > 0) {
     await creditCoinsService(userId, coinsPerCheckin, 'Check-in reward', `checkin-coins:${idempotencyKey}`);
+    coinsAwarded = coinsPerCheckin;
   }
+
+  track('attendance_recorded', userId, {
+    checkin_source: source, gym_id: gymId ?? null, booking_id: bookingId ?? null,
+    member_attendance_id: memberAttendanceId ?? null,
+    already_recorded: false, coins_awarded: coinsAwarded,
+  });
 
   return { alreadyRecorded: false };
 }
@@ -65,7 +93,9 @@ export async function closeWeek(weekStartDate) {
       update: {},
       create: { userId: week.userId, currentStreak: 0, longestStreak: 0 },
     });
-    const nextCurrent = qualified ? streak.currentStreak + 1 : 0;
+    // A grace week (the user switched persona during it, so the way they show
+    // up changed mid-week) neither extends nor breaks the streak.
+    const nextCurrent = qualified ? streak.currentStreak + 1 : (week.graceWeek ? streak.currentStreak : 0);
     const updated = await prisma.userStreak.update({
       where: { userId: week.userId },
       data: {
@@ -92,13 +122,46 @@ export async function closeWeek(weekStartDate) {
     }
 
     results.push({ userId: week.userId, qualified, currentStreak: updated.currentStreak });
+    track('streak_week_resulted', week.userId, {
+      week_start: weekStartKey,
+      qualified,
+      current_streak: updated.currentStreak,
+      checkin_count: week.checkinCount,
+    });
   }
+  // One anonymous row per cron run, so a missed or partial close-week is
+  // visible as a gap in the series instead of looking like a quiet week.
+  track('streak_week_closed', null, {
+    week_start: weekStartKey,
+    weeks_closed: results.length,
+    qualified: results.filter((r) => r.qualified).length,
+    broken: results.filter((r) => !r.qualified).length,
+  });
   return results;
+}
+
+// auth-service tells us a user switched persona (POST /internal/persona-changed).
+// The week they switched in becomes a grace week: someone who moved from a gym
+// to training at home part-way through a week should not lose a streak they
+// earned under the old routine.
+export async function applyPersonaSwitchGrace(userId, at = new Date()) {
+  const weekStart = startOfIsoWeek(at);
+  await prisma.userStreakWeek.upsert({
+    where: { userId_weekStart: { userId, weekStart } },
+    update: { graceWeek: true },
+    create: { userId, weekStart, checkinCount: 0, graceWeek: true },
+  });
+  return { ok: true };
 }
 
 export async function getStreakService(userId) {
   const streak = await prisma.userStreak.findUnique({ where: { userId } });
-  return streak || { userId, currentStreak: 0, longestStreak: 0, lastQualifiedWeekStart: null };
+  const resolved = streak || { userId, currentStreak: 0, longestStreak: 0, lastQualifiedWeekStart: null };
+  track('streak_viewed', userId, {
+    current_streak: resolved.currentStreak,
+    longest_streak: resolved.longestStreak,
+  });
+  return resolved;
 }
 
 // Read side of the attendance log, for health-service's "you attended but
@@ -108,11 +171,12 @@ export async function getStreakService(userId) {
 // table is the platform's single unified attendance signal - booking
 // check-ins, self-check-ins and attendance-SaaS member check-ins all land
 // in it, and a second implementation would inevitably cover fewer of them.
-export async function listAttendanceSinceService(since, { userId } = {}) {
+export async function listAttendanceSinceService(since, { userId, gymId } = {}) {
   return prisma.attendanceEventLog.findMany({
     where: {
       attendedAt: { gte: since },
       ...(userId ? { userId } : {}),
+      ...(gymId ? { gymId } : {}),
     },
     select: { userId: true, bookingId: true, gymId: true, attendedAt: true, source: true },
     orderBy: { attendedAt: 'asc' },

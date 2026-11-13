@@ -1,5 +1,8 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { structuredExercises, routineDescription } from './routineStructure.js';
+import prisma from '../db/prisma.js';
+import { equipmentFit, rankByFit } from './homeSetup.js';
+import { progressionFields } from './progressionService.js';
+import { createTtlCache } from '../utils/ttlCache.js';
 
 const includeExercises = {
   exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
@@ -9,38 +12,94 @@ const includeExercises = {
 // recent session actually started from this template — computed here
 // rather than denormalized onto WorkoutTemplate, since it's cheap (one
 // indexed query) and can never go stale.
-async function attachLastDone(templates) {
-  return Promise.all(
-    templates.map(async (t) => {
-      const lastSession = await prisma.workoutSession.findFirst({
-        where: { templateId: t.id },
-        orderBy: { startedAt: 'desc' },
-        select: { startedAt: true },
-      });
-      return { ...t, lastDoneAt: lastSession?.startedAt || null };
+//
+// Always scoped by userId (added 2026-09-11, alongside system templates
+// below): before a template could be shared, every session against a
+// template belonged to that template's own owner, so the missing userId
+// filter here was latent, not wrong. Once isSystem templates are visible to
+// every user, the same query without this filter would leak one user's
+// "last done" timestamp onto every OTHER user viewing the same shared
+// routine — this fixes that before it could ever happen.
+// One grouped query for every template (it used to be one findFirst per
+// template: 15-30 round trips for a user with the system routines). Served by
+// the (userId, templateId, startedAt) index.
+async function attachLastDone(templates, userId) {
+  if (templates.length === 0) return [];
+  const ids = [...new Set(templates.map((t) => t.id))];
+  const groups = await prisma.workoutSession.groupBy({
+    by: ['templateId'],
+    where: { userId, templateId: { in: ids } },
+    _max: { startedAt: true },
+  });
+  const lastByTemplate = new Map(groups.map((g) => [g.templateId, g._max.startedAt]));
+  return templates.map((t) => ({ ...t, lastDoneAt: lastByTemplate.get(t.id) || null }));
+}
+
+// System templates are identical for every user and only ever change when a
+// seed script (prisma/seed*Templates.js) is run - there is no API that writes
+// them (the user-facing create/update/delete are all scoped to the caller's own
+// templates). So they are cached in-process for 10 minutes per instance; after a
+// reseed an instance can serve the old set until its TTL lapses or it restarts.
+export const SYSTEM_TEMPLATES_TTL_MS = 10 * 60_000;
+export const systemTemplatesCache = createTtlCache({ ttlMs: SYSTEM_TEMPLATES_TTL_MS, maxEntries: 1 });
+const loadSystemTemplates = () => systemTemplatesCache.get('system', () => prisma.workoutTemplate.findMany({
+  where: { isSystem: true },
+  include: includeExercises,
+  orderBy: { name: 'asc' },
+}));
+
+// Returns the caller's own templates AND every system template (H-21) —
+// the 12 seeded no-equipment routines are visible to everyone this way,
+// with no per-user copy. System templates sort after the user's own (most
+// recently updated first, then system templates by name) so a user's
+// personal routines stay at the top of their own list.
+//
+// Home setup (onboarding audit P2): once a user has said what they train with,
+// every template carries `equipmentFit` ({ fits, missing }) for the badge, and
+// the SYSTEM routines are stably partitioned fits-first. The user's own
+// routines keep their order — they built those for themselves, and re-ranking
+// someone's own list by our guess would be presumptuous. Before the setup is
+// answered, equipmentFit is null and nothing moves.
+export async function listTemplatesService(userId) {
+  const [own, system, profile] = await Promise.all([
+    prisma.workoutTemplate.findMany({
+      where: { userId },
+      include: includeExercises,
+      orderBy: { updatedAt: 'desc' },
     }),
+    loadSystemTemplates(),
+    // Best-effort: a failed read costs the fit badge, never the list.
+    (async () => prisma.personalisationProfile.findUnique({
+      where: { userId }, select: { homeEquipment: true, homeSetupAt: true },
+    }))().catch(() => null),
+  ]);
+  const withFit = (t) => ({ ...t, equipmentFit: equipmentFit(t, profile) });
+  return attachLastDone(
+    [...own.map(withFit), ...rankByFit(system, profile).map(withFit)],
+    userId,
   );
 }
 
-export async function listTemplatesService(userId) {
-  const templates = await prisma.workoutTemplate.findMany({
-    where: { userId },
-    include: includeExercises,
-    orderBy: { updatedAt: 'desc' },
-  });
-  return attachLastDone(templates);
-}
-
 export async function createTemplateService(userId, body) {
-  const { name, exercises } = body || {};
+  const { name } = body || {};
+  const exercises = structuredExercises(body?.exercises);
+  const description = routineDescription(body || {});
   if (!name || !Array.isArray(exercises) || exercises.length === 0) {
     const err = new Error('name and a non-empty exercises array are required');
     err.status = 400;
     throw err;
   }
-  for (const ex of exercises) {
-    if (!ex.exerciseId || !ex.targetSets || !ex.targetReps) {
-      const err = new Error('each exercise needs exerciseId, targetSets and targetReps');
+  // targetReps XOR targetDurationSeconds, not both required — a duration
+  // exercise (plank, wall sit) has no meaningful rep count, and a
+  // sets_reps_weight exercise has no meaningful duration target. Requiring
+  // "at least one" rather than tying this to the exercise's own loggingType
+  // keeps the check here simple; a client that sends the wrong one for a
+  // given exercise gets a target that's just never read on that screen,
+  // not a 400 — same permissiveness the rest of this validation has.
+  const progression = exercises.map(progressionFields);
+  for (const [i, ex] of exercises.entries()) {
+    if (!ex.exerciseId || !ex.targetSets || (!progression[i].targetReps && !ex.targetDurationSeconds)) {
+      const err = new Error('each exercise needs exerciseId, targetSets and either targetReps or targetDurationSeconds');
       err.status = 400;
       throw err;
     }
@@ -49,14 +108,21 @@ export async function createTemplateService(userId, body) {
     data: {
       userId,
       name,
+      ...description,
       exercises: {
         create: exercises.map((ex, i) => ({
           exerciseId: ex.exerciseId,
           order: i,
+          phase: ex.phase,
+          instructions: ex.instructions,
           targetSets: ex.targetSets,
-          targetReps: ex.targetReps,
+          targetReps: progression[i].targetReps,
+          targetDurationSeconds: ex.targetDurationSeconds ?? null,
           restSeconds: ex.restSeconds ?? null,
           supersetGroup: ex.supersetGroup ?? null,
+          repMin: progression[i].repMin,
+          repMax: progression[i].repMax,
+          targetWeightKg: progression[i].targetWeightKg,
         })),
       },
     },
@@ -80,25 +146,34 @@ async function assertOwnsTemplate(templateId, userId) {
 // TemplateExercise rows is simpler and less error-prone than diffing.
 export async function updateTemplateService(templateId, userId, body) {
   await assertOwnsTemplate(templateId, userId);
-  const { name, exercises } = body || {};
+  const { name } = body || {};
+  const exercises = body?.exercises === undefined ? undefined : structuredExercises(body.exercises);
+  const description = routineDescription(body || {});
   return prisma.$transaction(async (tx) => {
     if (Array.isArray(exercises)) {
+      const progression = exercises.map(progressionFields);
       await tx.templateExercise.deleteMany({ where: { templateId } });
       await tx.templateExercise.createMany({
         data: exercises.map((ex, i) => ({
           templateId,
           exerciseId: ex.exerciseId,
           order: i,
+          phase: ex.phase,
+          instructions: ex.instructions,
           targetSets: ex.targetSets,
-          targetReps: ex.targetReps,
+          targetReps: progression[i].targetReps,
+          targetDurationSeconds: ex.targetDurationSeconds ?? null,
           restSeconds: ex.restSeconds ?? null,
           supersetGroup: ex.supersetGroup ?? null,
+          repMin: progression[i].repMin,
+          repMax: progression[i].repMax,
+          targetWeightKg: progression[i].targetWeightKg,
         })),
       });
     }
     return tx.workoutTemplate.update({
       where: { id: templateId },
-      data: { ...(name ? { name } : {}) },
+      data: { ...(name ? { name } : {}), ...description },
       include: includeExercises,
     });
   });

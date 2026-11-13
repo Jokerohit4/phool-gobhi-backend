@@ -1,5 +1,6 @@
 import * as consentService from '../services/consentService.js';
 import { recordAudit } from '../services/auditService.js';
+import { track } from '../utils/analytics.js';
 
 export const grantConsent = async (req, res) => {
   try {
@@ -10,6 +11,10 @@ export const grantConsent = async (req, res) => {
     // person consent, and under which policy version" is the question an
     // audit trail exists to answer.
     recordAudit({ userId: req.userId, actorId: req.userId, action: 'write', dataType: 'consent' });
+    track('health_consent_granted', req.userId, {
+      version: req.body?.policyVersion || null,
+      platform: req.body?.platform || null,
+    });
     res.status(201).json({ data: consent });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -22,6 +27,7 @@ export const revokeConsent = async (req, res) => {
     // Withdrawal is the half of the consent record most likely to be
     // disputed later, so it is logged as deliberately as the grant.
     recordAudit({ userId: req.userId, actorId: req.userId, action: 'write', dataType: 'consent' });
+    track('health_consent_revoked', req.userId, {});
     res.json({ data: consent });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

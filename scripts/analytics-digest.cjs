@@ -42,8 +42,9 @@ function loadUrl() {
 const FUNNEL = ['gym_viewed', 'slot_selected', 'book_tapped', 'booking_confirmed'];
 
 async function main() {
-  const url = loadUrl();
-  if (!url) {
+  const warehouse = (process.env.ANALYTICS_READ_PROVIDER || 'bigquery') === 'bigquery';
+  const url = warehouse ? null : loadUrl();
+  if (!warehouse && !url) {
     console.error(
       'No ANALYTICS_DATABASE_URL found.\n' +
         'Create scripts/.analytics.env (gitignored) with:\n' +
@@ -55,7 +56,7 @@ async function main() {
     process.exit(1);
   }
 
-  const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
+  const client = warehouse ? await require('./analytics-client.cjs').warehouseClient() : new Client({ connectionString: url, ssl: { rejectUnauthorized: true } });
   await client.connect();
   try {
     // Table may not exist yet if no events have ever been written.

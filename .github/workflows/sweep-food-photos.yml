@@ -1,0 +1,90 @@
+name: Sweep food photos (unconfirmed photos, expired research copies, cache)
+
+# Fires health-service's photo sweep (POST /internal/ledger/food-photos/sweep):
+#   - photos uploaded for recognition but never confirmed, after 24 hours;
+#   - opt-in research copies past their own expiry, and copies whose blob
+#     failed to delete on withdrawal (marked expired for retry);
+#   - expired duplicate-photo cache entries.
+# Before this workflow the sweep was admin-only and in practice never ran.
+#
+# Daily, because unconfirmed photos have a 24-hour lifetime. Idempotent: a
+# missed run costs nothing and a double run finds nothing the second time.
+# Same auth and secret pattern as sweep-health-retention.yml - read that file's
+# comments for why both the internal key and the ID token are needed.
+#
+# GitHub Actions `schedule` triggers fire ONLY from the default branch (`main`).
+# Until this file reaches `main`, run it with the workflow_dispatch button.
+
+on:
+  schedule:
+    - cron: '0 21 * * *'   # 21:00 UTC daily (02:30 IST)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sweep:
+    strategy:
+      matrix:
+        env: [dev, prod]
+      fail-fast: false   # one environment failing must not skip the other
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # health-service-secrets-<env> JSON payload, not as its own Secret
+      # Manager entry — the standalone internal-api-key-<env> secrets were
+      # retired in the 2026-08-26 consolidation (only internal-api-key-dev
+      # survives as a leftover, and nothing new should reference it).
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/health-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "health-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required and neither substitutes for the other: the
+      # x-internal-key header satisfies the app's requireInternal check, and
+      # this Google-signed ID token satisfies Cloud Run's IAM invoker check on
+      # a no-allow-unauthenticated service. Omitting the token yields a
+      # Google-generated 403 HTML page rather than an app error — which is
+      # precisely how process-subscription-lifecycle.yml failed silently every
+      # day until 2026-09-09.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      # The response counts what was deleted and what is still pending
+      # (blobs that failed to delete are retried next run).
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/ledger/food-photos/sweep"

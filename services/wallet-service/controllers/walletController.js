@@ -2,6 +2,7 @@ import {
   createWalletService,
   getWalletService,
   getWalletTransactionsService,
+  getWalletTransactionsPageService,
   creditWalletService,
   debitWalletService,
   getPartnerBalancesService,
@@ -11,6 +12,7 @@ import {
   getRazorpayOrderService,
   updateRazorpayOrderStatusService,
   claimRazorpayOrderService,
+  ensurePaymentCapturedService,
   purchaseSubscriptionWithWallet,
   getActiveSubscriptionService,
   getGiftEligibleLapsedSubscription,
@@ -33,11 +35,35 @@ import {
   getPendingBankSettlementsService,
   settleBankSettlementsService,
   getMyBankSettlementsService,
+  computeAttendanceSaasBillService,
+  computeAttendanceSaasBillsService,
+  applyAttendanceSaasBillService,
 } from '../services/walletService.js';
+import { creditReferralService, reconcileReferralPayoutsService, REFERRAL_CREDIT_KEY_PREFIX } from '../services/referralService.js';
 import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
+import { parseLimit, parseCursor } from '../utils/pagination.js';
+import { runReconcileThrottled, clearReconcileThrottle } from '../utils/reconcileThrottle.js';
+
+const TRANSACTIONS_DEFAULT_LIMIT = 50;
+const TRANSACTIONS_MAX_LIMIT = 100;
+
+// Lazy Razorpay top-up reconcile for the wallet read paths, throttled to once
+// per user per 30s (cleared on order create / verify / webhook so a just-paid
+// user is never delayed). Best-effort: never throws, and a reconcile that
+// throws is not recorded as done. Resolves to the reconcile summary, or null
+// when skipped/failed.
+async function lazyReconcile(userId) {
+  try {
+    const out = await runReconcileThrottled(userId, () => reconcilePendingRazorpayOrdersService({ userId }));
+    return out.skipped ? null : out.result;
+  } catch (err) {
+    console.error('Lazy wallet reconcile error:', err.message);
+    return null;
+  }
+}
 
 // Buffer-length mismatch makes crypto.timingSafeEqual throw rather than
 // return false, so a shorter/longer signature must be treated as "not
@@ -65,16 +91,24 @@ export const getMyWallet = async (req, res) => {
     // is the exact moment a paid-but-unsettled top-up should land, so settle
     // any stale PENDING orders first. Best-effort and never allowed to break
     // the wallet read: a DB or Razorpay hiccup here must not 500 the balance.
-    try {
-      await reconcilePendingRazorpayOrdersService({ userId: req.userId });
-    } catch (err) {
-      console.error('Lazy wallet reconcile error:', err.message);
-    }
-    let wallet;
-    try {
+    // The wallet read and the reconcile run together; the wallet is re-read
+    // only if the reconcile actually credited something.
+    const readWallet = async () => {
+      try {
+        return await getWalletService(req.userId);
+      } catch (_) {
+        try {
+          return await createWalletService(req.userId, req.userRole || 'customer');
+        } catch (createErr) {
+          // Lost a create race with the reconcile's credit path — it exists now.
+          return await getWalletService(req.userId).catch(() => { throw createErr; });
+        }
+      }
+    };
+    const [initial, reconciled] = await Promise.all([readWallet(), lazyReconcile(req.userId)]);
+    let wallet = initial;
+    if (reconciled && reconciled.credited > 0) {
       wallet = await getWalletService(req.userId);
-    } catch (_) {
-      wallet = await createWalletService(req.userId, req.userRole || 'customer');
     }
     res.json({ data: wallet });
   } catch (err) {
@@ -101,13 +135,11 @@ export const getWallet = async (req, res) => {
 
 export const getMyWalletTransactions = async (req, res) => {
   try {
-    try {
-      await reconcilePendingRazorpayOrdersService({ userId: req.userId });
-    } catch (err) {
-      console.error('Lazy wallet reconcile error:', err.message);
-    }
-    const transactions = await getWalletTransactionsService(req.userId);
-    res.json({ data: transactions });
+    await lazyReconcile(req.userId);
+    const limit = parseLimit(req.query?.limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await getWalletTransactionsPageService(req.userId, { limit, cursor });
+    res.json({ data: items, meta });
   } catch (err) {
     res.status(404).json({ error: err.message });
   }
@@ -117,8 +149,10 @@ export const getWalletTransactions = async (req, res) => {
   try {
     const { userId } = req.params;
     if (parseInt(userId) !== req.userId) return res.status(403).json({ error: 'Forbidden' });
-    const transactions = await getWalletTransactionsService(Number(userId));
-    res.json({ data: transactions });
+    const limit = parseLimit(req.query?.limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await getWalletTransactionsPageService(Number(userId), { limit, cursor });
+    res.json({ data: items, meta });
   } catch (err) {
     res.status(404).json({ error: err.message });
   }
@@ -128,6 +162,14 @@ export const creditWallet = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, description, idempotencyKey, userType, gymId } = req.body;
+    // Referral credits have their own endpoint (POST /internal/referrals/
+    // credit) because they must enforce the monthly cap and write the
+    // `bonus` type atomically across both sides. Only that endpoint may write
+    // referral-keyed credits — a caller that tries here is misusing the
+    // generic credit API (and would bypass the cap).
+    if (typeof idempotencyKey === 'string' && idempotencyKey.startsWith(REFERRAL_CREDIT_KEY_PREFIX)) {
+      return res.status(400).json({ error: 'Referral credits must go through /internal/referrals/credit' });
+    }
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'amount must be a positive finite number' });
     }
@@ -216,7 +258,10 @@ export const getSubscriptionsForGymForPartner = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
     await assertPartnerOwnsGym(gymId, req.userId);
-    const subscriptions = await getSubscriptionsForGymService(gymId);
+    // attendance-SaaS rows only — the partner roster is that wedge, and a
+    // linked member's marketplace purchases must not inflate their "lifetime
+    // spend" on the Members page.
+    const subscriptions = await getSubscriptionsForGymService(gymId, { onlyAttendanceSaas: true });
     res.json({ data: subscriptions });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -299,14 +344,84 @@ export const getMyBankSettlements = async (req, res) => {
   }
 };
 
+// Gobhi/partner: compute (not apply) the open attendance-SaaS bill for one
+// gym and month — how many users joined that month x the per-user flat fee.
+// Read-only; the apply endpoint below is what actually debits the wallet.
+export const getAttendanceSaasBill = async (req, res) => {
+  try {
+    const gymId = Number(req.params.gymId);
+    const { month } = req.query;
+    if (!Number.isFinite(gymId) || !/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'gymId and month (YYYY-MM) are required' });
+    }
+    const bill = await computeAttendanceSaasBillService(gymId, String(month));
+    res.json({ data: bill });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only batch: compute the open bill for every requested gym at once —
+// backs the admin /attendance-saas per-gym bill column.
+export const getAttendanceSaasBills = async (req, res) => {
+  try {
+    const gymIds = Array.isArray(req.body?.gymIds) ? req.body.gymIds.map(Number).filter(Number.isFinite) : [];
+    const { month } = req.body || {};
+    if (!/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'month (YYYY-MM) is required' });
+    }
+    const bills = await computeAttendanceSaasBillsService(gymIds, String(month));
+    res.json({ data: bills });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Gobhi-only: apply the (gym, month) bill — debit the partner wallet by
+// usersJoined x flatFee, negative-allowed + idempotent per (gym, month).
+export const applyAttendanceSaasBill = async (req, res) => {
+  try {
+    const gymId = Number(req.params.gymId);
+    const { month } = req.body;
+    if (!Number.isFinite(gymId) || !/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'gymId and month (YYYY-MM) are required' });
+    }
+    const result = await applyAttendanceSaasBillService(gymId, String(month));
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Partner-facing: compute the open bill for one of the partner's OWN gyms
+// (ownership-checked), for the partner-web wallet dues surface.
+export const getMyAttendanceSaasBill = async (req, res) => {
+  try {
+    const gymId = Number(req.params.gymId);
+    const { month } = req.query;
+    if (!Number.isFinite(gymId) || !/^\d{4}-\d{2}$/.test(month || '')) {
+      return res.status(400).json({ error: 'gymId and month (YYYY-MM) are required' });
+    }
+    await assertPartnerOwnsGym(gymId, req.userId);
+    const bill = await computeAttendanceSaasBillService(gymId, String(month));
+    res.json({ data: bill });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const createTopUpOrder = async (req, res) => {
   try {
-    // Partner wallets are credited only from the platform's share of
-    // completed bookings/subscriptions — dispersal to partners happens
-    // manually via payoutPartner. Partners must never be able to add their
-    // own money in, so top-up is customer-only.
-    if (req.userRole === 'partner') {
-      return res.status(403).json({ error: 'Partner wallets cannot be topped up. Balance is credited automatically from completed bookings.' });
+    // Only customers hold top-up wallets — same gate as verifyAndCreditWallet
+    // below (and therefore the webhook, which can only settle orders created
+    // here). Partner wallets are credited only from the platform's share of
+    // completed bookings/subscriptions (dispersal via payoutPartner); gobhi/
+    // trainer accounts get wallet features via admin internal paths. The old
+    // check blocked only `partner`, letting a gobhi/trainer account create and
+    // pay an order that /verify then 403'd — while the webhook credited it
+    // anyway, contradicting the customer-only invariant.
+    if (req.userRole !== 'customer') {
+      return res.status(403).json({ error: 'Only customer wallets can be topped up.' });
     }
     const { amount } = req.body;
     const userId = req.userId; // from JWT middleware
@@ -345,6 +460,7 @@ export const createTopUpOrder = async (req, res) => {
 
     // Store order in DB
     await createRazorpayOrderService(userId, order.id, amount);
+    clearReconcileThrottle(userId);
 
     track('wallet_topup_order_created', userId, { amount, order_id: order.id });
 
@@ -365,10 +481,13 @@ export const createTopUpOrder = async (req, res) => {
 export const verifyAndCreditWallet = async (req, res) => {
   try {
     // Defense-in-depth alongside the same guard in createTopUpOrder — a
-    // partner should never be able to credit their own wallet even with a
-    // forged/leaked orderId.
-    if (req.userRole === 'partner') {
-      return res.status(403).json({ error: 'Partner wallets cannot be topped up. Balance is credited automatically from completed bookings.' });
+// Only customers hold top-up wallets. Gobhi accounts get wallet-service
+    // features surfaced to them via the admin portal's internal paths, and
+    // partner balances accrue only from completed bookings �?" refusing any
+    // role other than customer here keeps a forged JWT (or a gobhi/trainer
+    // token pasted from another app) from silently crediting a wallet.
+    if (req.userRole !== 'customer') {
+      return res.status(403).json({ error: 'Only customer wallets can be topped up.' });
     }
     const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
     const userId = req.userId;
@@ -387,11 +506,31 @@ export const verifyAndCreditWallet = async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // An order created for one user must not be settleable by a different
+    // user �?" the signature above only proves the {order, payment} pair is
+    // genuine Razorpay data, not that the caller owns it. Without this check,
+    // anyone holding a leaked orderId+paymentId+signature triplet could credit
+    // their own wallet at another customer's expense.
+    if (order.userId !== userId) {
+      return res.status(403).json({ error: 'Order does not belong to this account' });
+    }
+    clearReconcileThrottle(userId);
+
+    // Captured before claiming, so a capture that fails leaves the order
+    // PENDING for the webhook or the reconciler rather than stuck PROCESSING.
+    // The signature proves the payment is real, not that the money is held.
+    if (!(await ensurePaymentCapturedService(razorpayPaymentId, order))) {
+      return res.status(409).json({
+        error: "Your payment hasn't completed yet. If money left your account it will be added to your wallet automatically.",
+        code: 'PAYMENT_NOT_CAPTURED',
+      });
+    }
+
     // Atomically claim the order so a concurrent webhook delivery for the
     // same order can't also credit it.
-    const claimed = await claimRazorpayOrderService(orderId);
+    const claimed = await claimRazorpayOrderService(orderId, { allowFailed: true });
     if (!claimed) {
-      // Lost the race — most likely the webhook already credited this order.
+      // Lost the race �?" most likely the webhook already credited this order.
       // If so, the top-up did succeed, so tell the client that instead of
       // surfacing an "already processed" error for money that did land.
       const latest = await getRazorpayOrderService(orderId);
@@ -404,11 +543,14 @@ export const verifyAndCreditWallet = async (req, res) => {
       return res.status(400).json({ error: 'Order already processed' });
     }
 
-    // Credit wallet (top-up)
-    const result = await creditWalletService(userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+    // Credit wallet (top-up) �?" idempotent on a per-order key, so a webhook
+    // redelivery or a reconcile sweep that also sees "payment succeeded" can
+    // never apply the same top-up twice.
+    const result = await creditWalletService(userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`, `razorpay-topup:${orderId}`);
 
     // Update order status
     await updateRazorpayOrderStatusService(orderId, 'SUCCESS', razorpayPaymentId);
+    clearReconcileThrottle(userId);
 
     track('wallet_topup_succeeded', userId, { amount: order.amount, order_id: orderId });
 
@@ -473,7 +615,8 @@ export const getActiveSubscriptionInternal = async (req, res) => {
   try {
     const customerId = parseInt(req.query.customerId);
     const gymId = parseInt(req.query.gymId);
-    let subscription = await getActiveSubscriptionService(customerId, gymId);
+    // The booked day, so coverage is judged for the session rather than today.
+    let subscription = await getActiveSubscriptionService(customerId, gymId, { onDate: req.query.date });
     let viaGiftDay = false;
     if (!subscription) {
       subscription = await getGiftEligibleLapsedSubscription(customerId, gymId);
@@ -518,6 +661,35 @@ export const reconcilePendingRazorpayOrdersInternal = async (req, res) => {
   try {
     const userId = req.body?.userId ? Number(req.body.userId) : undefined;
     const result = await reconcilePendingRazorpayOrdersService(userId ? { userId } : {});
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal (requireInternal): the single entry point for referral payouts.
+// booking-service calls this on a friend's first completed booking;
+// health-service calls it on the friend's 3rd showed-up day (behind the
+// referralHomeTrigger flag). The caller owns the trigger decision and passes
+// the referrer it already looked up — this endpoint owns the cap, the
+// `bonus` type, and the atomic two-sided write.
+export const creditReferral = async (req, res) => {
+  try {
+    const { referrerId, friendId, trigger } = req.body || {};
+    const result = await creditReferralService({ referrerId, friendId, trigger });
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.error || err.message || 'Referral credit failed' });
+  }
+};
+
+// Internal (requireInternal): periodic sweep that repairs half-paid referral
+// pairs (a crash between the old two-credit sequence could leave one side
+// credited and the other not). Runs from .github/workflows/referral-
+// reconcile.yml; safe to call ad hoc.
+export const reconcileReferralsInternal = async (req, res) => {
+  try {
+    const result = await reconcileReferralPayoutsService();
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -609,17 +781,27 @@ export const handleRazorpayWebhook = async (req, res) => {
     if (event === 'payment.authorized' || event === 'payment.captured') {
       const { id: paymentId, order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
+      if (order) clearReconcileThrottle(order.userId);
 
       // Razorpay orders are only ever created for wallet top-ups now —
       // subscriptions are paid out of wallet balance (see
       // purchaseSubscriptionWithWallet), never a direct Razorpay charge, so
       // there's no `purpose === 'subscription'` case to branch on here
       // anymore.
-      if (order) {
-        const claimed = await claimRazorpayOrderService(orderId);
+      // Credited only once captured (capturing an authorized payment here if
+      // the account does not auto-capture). Not captured yet => nothing to do;
+      // a later event or the reconciler settles it. A Razorpay error throws to
+      // the 500 below so Razorpay redelivers.
+      if (order && (await ensurePaymentCapturedService(paymentId, order))) {
+        const claimed = await claimRazorpayOrderService(orderId, { allowFailed: true });
         if (claimed) {
-          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`);
+          // Per-order idempotency key: if a redelivery or a reconcile sweep
+          // races this (or this request dies right after crediting and the
+          // catch below returns a 500 that makes Razorpay redeliver), the
+          // credit is still applied exactly once.
+          await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${orderId}`, `razorpay-topup:${orderId}`);
           await updateRazorpayOrderStatusService(orderId, 'SUCCESS', paymentId);
+          clearReconcileThrottle(order.userId);
           track('wallet_topup_succeeded', order.userId, { amount: order.amount, order_id: orderId, via: 'webhook' });
         }
       }
@@ -638,8 +820,14 @@ export const handleRazorpayWebhook = async (req, res) => {
 
     res.status(200).json({ received: true });
   } catch (err) {
+    // A 200 here used to swallow every failure so Razorpay wouldn't retry.
+    // That turned a transient DB/network error into money permanently in
+    // limbo: Razorpay collected it, the customer never got credited, and no
+    // redelivery would ever come. Return 500 instead and let Razorpay retry
+    // �?" the per-order idempotent credit makes redelivery safe against
+    // double-crediting.
     console.error('Webhook error:', err.message);
-    res.status(200).json({ received: true }); // Return 200 to prevent Razorpay retries
+    res.status(500).json({ received: false, error: 'Webhook processing failed' });
   }
 };
 

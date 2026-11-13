@@ -1,4 +1,5 @@
 name: Deploy to Cloud Run
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.one_plan_data != '' && inputs.one_plan_data != 'deploy' && format('One Plan dev data {0}', inputs.one_plan_data) || format('Deploy {0}', github.sha) }}
 
 on:
   push:
@@ -13,6 +14,17 @@ on:
       ref:
         description: 'Branch or commit SHA to deploy (default: current branch)'
         required: false
+      one_plan_data:
+        description: 'Dev-only One Plan data action; deploy retains normal deployment behavior'
+        type: choice
+        options: [deploy, dry-run, apply]
+        default: deploy
+      expected_sha:
+        description: 'Exact deployed dev SHA for a data action'
+        required: false
+      log_view:
+        description: 'Explicit dev-job log view resource for a data action'
+        required: false
 
 permissions:
   contents: read
@@ -20,6 +32,7 @@ permissions:
 
 jobs:
   changes:
+    if: github.event_name != 'workflow_dispatch' || !inputs.one_plan_data || inputs.one_plan_data == 'deploy'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
@@ -42,8 +55,131 @@ jobs:
       - id: detect
         run: node deploy/scripts/detect-changed-services.cjs "${{ steps.refs.outputs.base }}" "${{ steps.refs.outputs.head }}"
 
-  preflight:
+  unit-tests:
     needs: changes
+    if: needs.changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      # Resolve the service's real directory from deploy/services.json, exactly
+      # like the deploy job does — `matrix.service` alone is just the manifest
+      # key, not a path (e.g. "booking-service" lives at "services/booking-service").
+      - id: svcmeta
+        run: |
+          node -e "
+            const s = require('./deploy/services.json').services['${{ matrix.service }}'];
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'source-dir=' + s.sourceDir + '\n');
+          "
+      - uses: actions/setup-node@v4
+        with:
+          # The dev toolchain (and these tests, which use Node's experimental
+          # test module-mocks to stub @prisma/client) runs on Node 24; Node 20's
+          # mock loader cannot intercept the dual-published client's named
+          # exports, so every service suite failed under 20. Production still
+          # builds from node:20-alpine in its own Dockerfile.
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: '${{ steps.svcmeta.outputs.source-dir }}/package-lock.json'
+      - name: Install and test
+        run: |
+          cd "${{ steps.svcmeta.outputs.source-dir }}"
+          npm ci
+          # A service that uses Prisma needs its client generated: on a fresh
+          # checkout @prisma/client ships no PrismaClient export until "prisma
+          # generate" runs against its schema. Only run it when the project
+          # actually depends on prisma — "npx prisma" on a service that does
+          # not (like the root gateway) would fetch the latest release instead.
+          if [ -d "node_modules/prisma" ]; then npx prisma generate; fi
+          # Every changed service now defines a test script (the root gateway
+          # included); the guard below stays as a cheap tolerance for a
+          # future service that lands with no suite yet.
+          if [ "$(node -p "!!require('./package.json').scripts && !!require('./package.json').scripts.test")" = "true" ]; then
+            npm test
+          fi
+
+  # Real-database tests, against a real Postgres.
+  #
+  # The unit suite mocks Prisma, which is correct for logic and wrong for the
+  # things only Postgres can answer: a TEXT column holding 'YYYY-MM-DD' compared
+  # with `gte`, and an enum value that is accepted by the service and refused by
+  # the database. A mock agrees with both by construction, so those failures
+  # would otherwise ship and only show up as a 500 on the settings screen.
+  #
+  # Deliberately NOT gated on the changed-service matrix. A skipped job skips
+  # everything downstream in `needs`, so making this conditional would mean
+  # either never gating the deploy (advisory only) or rewriting the deploy
+  # job's condition. It costs one container, so it always runs and the gate is
+  # real. Only health-service has such tests today; the suite skips itself for
+  # anything else.
+  integration-tests:
+    needs: changes
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # 16 matches what Neon serves in production, which is the point: the
+        # text-comparison and enum behaviour under test is version-specific.
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: health_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/health_test
+      # Prisma reads DATABASE_URL from the schema; the tests read
+      # TEST_DATABASE_URL and set DATABASE_URL from it before importing the
+      # service, which builds its client at import time.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/health_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'services/health-service/package-lock.json'
+      - name: Install, generate client, apply migrations
+        working-directory: services/health-service
+        run: |
+          npm ci
+          npx prisma generate
+          # Without this every query fails on a missing relation rather than on
+          # the thing being tested.
+          npx prisma migrate deploy
+          # The food tests assert against the seeded catalogue, and the search
+          # bugs they exist to catch were only ever visible against real data:
+          # "tea" matched "Momos, steamed" because plain `includes` cannot tell a
+          # word from the middle of a longer one, and no mocked fixture contained
+          # the word "steamed". Idempotent, so re-running it on a warm database
+          # updates rather than duplicating.
+          npx prisma db seed
+      - name: Run the real-database tests
+        working-directory: services/health-service
+        run: node --test test/nudgeDb.test.js test/foodDb.test.js
+      # The drift audit normally needs a real environment and so cannot gate a
+      # pull request. Against the database this job just built it can, and that is
+      # the only place the index and column-default checks ever run - the four
+      # items it now reports were invisible to the previous version of the script
+      # for as long as it existed.
+      - name: Audit the schema against the database just migrated
+        working-directory: services/health-service
+        run: node scripts/check-schema-drift.mjs
+        env:
+          # Named DEV_ on purpose: a script reading DATABASE_URL picks up whatever
+          # the shell happens to have. The CI Postgres has no TLS, hence
+          # sslmode=disable.
+          DEV_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}?sslmode=disable
+
+  preflight:
+    needs: [changes, unit-tests, integration-tests]
     if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -70,13 +206,15 @@ jobs:
           else
             echo "deploy/scripts/check-undeclared-imports.cjs not present on this branch — skipping."
           fi
+      - name: Check canonical analytics modules
+        run: node tools/analytics/sync.mjs --check
 
   # PR events never deploy (the WIF provider's attribute-condition wouldn't
   # accept a PR merge ref anyway) — instead just prove each changed service's
   # Dockerfile still builds, catching a broken install/`prisma generate`
   # before merge with zero GCP access needed.
   build-validate:
-    needs: changes
+    needs: [changes, unit-tests]
     if: github.event_name == 'pull_request' && needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -129,10 +267,11 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      # gym-service footgun guard — CI port of .claude/commands/deploy.md's
-      # manual "/health before router" check (regressed once already, 3b3def4).
+      # health-before-router footgun guard — CI port of .claude/commands/deploy.md's
+      # manual check (regressed once already for gym-service, 3b3def4). Any service
+      # with healthCheckGuard=true gets validated.
       - if: steps.svcmeta.outputs.health-guard == 'true'
-        run: node deploy/scripts/check-gym-health-route-order.cjs
+        run: node deploy/scripts/check-gym-health-route-order.cjs ${{ matrix.service }}
 
       # Prisma migrations run from the runner (DB is externally reachable,
       # not Cloud SQL) BEFORE the new revision is deployed. Guard on the
@@ -170,6 +309,23 @@ jobs:
           else
             echo "No prisma/migrations directory for ${{ matrix.service }} yet — skipping migrate deploy."
           fi
+
+      # Re-seed the food catalogue. The test job seeds its own throwaway
+      # database, but the deploy job used to run only `migrate deploy`, so
+      # rows added to foods.seed.js after the last manual seed never reached
+      # the deployed database — search silently missed them (e.g. "Chia
+      # seeds") until someone re-created the food by hand through the AI
+      # lookup. The seeder is idempotent on (name, basis), only touches rows
+      # with createdByUserId null, and never overwrites verified or
+      # INDB-sourced rows, so running it on every health-service deploy is
+      # safe.
+      - if: matrix.service == 'health-service'
+        working-directory: ${{ steps.svcmeta.outputs.source-dir }}
+        env:
+          DATABASE_URL: ${{ steps.dburl.outputs.database-url }}
+        run: |
+          npx prisma generate
+          npm run seed:foods
 
       - id: flags
         run: node deploy/scripts/build-deploy-flags.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
@@ -256,3 +412,111 @@ jobs:
             --to-revisions="${{ steps.prev-revision.outputs.revision }}=100"
           echo "::error::Health check failed — rolled back ${{ matrix.service }}-${{ steps.env.outputs.ENV }} to ${{ steps.prev-revision.outputs.revision }}"
           exit 1
+
+  one-plan-dev-data:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev' && (inputs.one_plan_data == 'dry-run' || inputs.one_plan_data == 'apply')
+    concurrency:
+      group: one-plan-dev-data
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify requested dev revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          LOG_VIEW_RESOURCE: ${{ inputs.log_view }}
+        run: |
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          [[ "$LOG_VIEW_RESOURCE" =~ ^projects/phool-gobhi/locations/[a-z0-9-]+/buckets/_Default/views/one-plan-dev-data$ ]]
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve deployed dev image and job environment
+        id: config
+        run: |
+          gcloud run services describe health-service-dev --project=phool-gobhi --region=asia-south1 \
+            --format=json > "$RUNNER_TEMP/health-service-dev.json"
+          REVISION=$(node -p "const s=require(process.env.RUNNER_TEMP+'/health-service-dev.json'); if(s.status.latestReadyRevisionName!==s.status.latestCreatedRevisionName || !s.status.traffic.some(t=>t.revisionName===s.status.latestReadyRevisionName && t.percent===100)) throw Error('Dev revision is not Ready at 100% traffic'); s.status.latestReadyRevisionName")
+          gcloud run revisions describe "$REVISION" --project=phool-gobhi --region=asia-south1 \
+            --format=json > "$RUNNER_TEMP/health-revision.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const manifest = require('./deploy/services.json');
+          const service = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/health-service-dev.json'));
+          const revision = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/health-revision.json'));
+          const image = revision.status.imageDigest;
+          if (!image || !image.includes('@sha256:')) throw Error('An immutable deployed image is required');
+          const account = manifest.runtimeServiceAccounts.dev;
+          if (service.spec.template.spec.serviceAccountName !== account) throw Error('Unexpected dev runtime identity');
+          const secret = service.spec.template.spec.containers[0].env.find(v => v.name === 'SECRETS_JSON');
+          if (secret?.valueFrom?.secretKeyRef?.name !== 'health-service-secrets-dev') throw Error('Unexpected dev secret binding');
+          const env = {...manifest.services['health-service'].env.dev.plain,
+            ANALYTICS_PROVIDER: 'none', ONE_PLAN_MIGRATION_ENV: 'dev'};
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-env.json', JSON.stringify(env));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `image=${image}\naccount=${account}\nrevision=${service.status.latestReadyRevisionName}\n`);
+          NODE
+
+      - name: Run dev-only data verification job
+        env:
+          IMAGE: ${{ steps.config.outputs.image }}
+          RUNTIME_ACCOUNT: ${{ steps.config.outputs.account }}
+          APPLY: ${{ inputs.one_plan_data == 'apply' }}
+        run: |
+          ARGS="--import=./bootstrap-secrets.js,scripts/prepareOnePlanDev.js"
+          if [ "$APPLY" = true ]; then ARGS="$ARGS,--apply"; fi
+          gcloud run jobs deploy one-plan-dev-data --project=phool-gobhi --region=asia-south1 \
+            --image="$IMAGE" --service-account="$RUNTIME_ACCOUNT" --command=node --args="$ARGS" \
+            --env-vars-file="$RUNNER_TEMP/one-plan-dev-env.json" \
+            --set-secrets=SECRETS_JSON=health-service-secrets-dev:latest \
+            --tasks=1 --parallelism=1 --max-retries=0 --task-timeout=1800s --memory=512Mi --cpu=1 --quiet
+          gcloud run jobs execute one-plan-dev-data --project=phool-gobhi --region=asia-south1 \
+            --wait --format=json > "$RUNNER_TEMP/one-plan-dev-execution.json"
+
+      - name: Capture structured verification report
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          APPLY: ${{ inputs.one_plan_data == 'apply' }}
+          REVISION: ${{ steps.config.outputs.revision }}
+          IMAGE: ${{ steps.config.outputs.image }}
+          LOG_VIEW_RESOURCE: ${{ inputs.log_view }}
+        run: |
+          EXECUTION=$(node -p "require(process.env.RUNNER_TEMP+'/one-plan-dev-execution.json').metadata.name.split('/').pop()")
+          for attempt in $(seq 1 24); do
+            if ! gcloud logging read \
+              "resource.type=cloud_run_job AND resource.labels.job_name=one-plan-dev-data AND labels.\"run.googleapis.com/execution_name\"=\"$EXECUTION\" AND textPayload:\"ONE_PLAN_DEV_RESULT=\"" \
+              --project=phool-gobhi --resource-names="$LOG_VIEW_RESOURCE" \
+              --limit=5 --format=json > "$RUNNER_TEMP/one-plan-dev-result-logs.json"; then
+              # A newly granted view binding may take time to propagate.
+              sleep 5
+              continue
+            fi
+            if node -e "const r=require(process.env.RUNNER_TEMP+'/one-plan-dev-result-logs.json'); process.exit(r.some(x=>x.textPayload?.includes('ONE_PLAN_DEV_RESULT='))?0:1)"; then break; fi
+            sleep 5
+          done
+          node <<'NODE'
+          const fs = require('node:fs');
+          const entries = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-result-logs.json'));
+          const entry = entries.find(x => x.textPayload?.includes('ONE_PLAN_DEV_RESULT='));
+          if (!entry) throw Error('No completed migration report found; acceptance remains unverified');
+          const report = JSON.parse(entry.textPayload.split('ONE_PLAN_DEV_RESULT=')[1]);
+          const apply = process.env.APPLY === 'true';
+          if (report.mode !== (apply ? 'apply' : 'dry-run') || report.dryRun.errors.length || (apply && !report.verified)) throw Error('Migration acceptance failed');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/one-plan-dev-data.json', JSON.stringify({sha:process.env.EXPECTED_SHA,
+            revision:process.env.REVISION,image:process.env.IMAGE,report},null,2));
+          console.log(JSON.stringify(report,null,2));
+          NODE
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: one-plan-dev-data-${{ inputs.one_plan_data }}
+          path: |
+            ${{ runner.temp }}/one-plan-dev-data.json
+            ${{ runner.temp }}/one-plan-dev-execution.json
+          retention-days: 7

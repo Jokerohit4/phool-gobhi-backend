@@ -1,0 +1,332 @@
+// Gym-link HTTP layer (coach-journey B2). Thin: parse, guard, delegate to
+// services/gymLinkService.js, shape the response. Owns the Prisma client so
+// tests can inject an in-memory double (same pattern as deviceController.js).
+
+import prisma from '../db/prisma.js';
+import {
+  linkGym,
+  joinGymViaQr,
+  getJoinWindow,
+  setJoinWindow,
+  leaveGym,
+  removeMemberFromGym,
+  markGymCheckedIn,
+  applyUnclaimedGymClaim,
+  isSelfLinkGymEnabled,
+  getActiveLink,
+  acceptClaimPrompt,
+  dismissClaimPrompt,
+  listPendingSelfLinks,
+  approveSelfLink,
+  rejectSelfLink,
+} from '../services/gymLinkService.js';
+import { assertPartnerOwnsGym, fetchGymInternal } from '../services/authService.js';
+import { notifyUser } from '../utils/notifyUser.js';
+import { gymLinkStatus } from '../utils/gymLinkStatus.js';
+import { findPartnerGym } from '../services/gymLookup.js';
+
+
+function requesterId(req) {
+  const id = Number(req.user?.id ?? req.headers['x-user-id']);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function fail(res, err) {
+  res.status(err.status || 500).json({
+    error: err.error || err.message || 'Server error',
+    ...(err.errorCode ? { code: err.errorCode } : {}),
+  });
+}
+
+// POST /gym-links/self — customer self-declares a gym. Flag-gated.
+export const requestEntranceMembership = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.user?.role !== 'customer') return res.status(403).json({ error: 'Customer account required' });
+    const gymId = Number(req.body?.gymId);
+    if (!Number.isInteger(gymId) || gymId <= 0) return res.status(400).json({ error: 'A valid gym is required' });
+    const gym = await findPartnerGym(gymId);
+    if (!gym || gym.isApproved !== true) return res.status(404).json({ error: 'Gym unavailable' });
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    if (!current) return res.status(404).json({ error: 'User not found' });
+    if (current.linkedGymId && current.linkedGymId !== gymId) {
+      return res.status(409).json({ error: 'Leave your current gym before requesting another membership.', code: 'ALREADY_LINKED' });
+    }
+    await linkGym(prisma, userId, gymId, 'qr_request');
+    const link = await getActiveLink(prisma, userId);
+    if (!link || link.gymId !== gymId) return res.status(409).json({ error: 'Membership request could not be created' });
+    res.json({ link: { gymId, source: link.source, linkedAt: link.linkedAt, status: gymLinkStatus(link) } });
+    if (!current.linkedGymId) void notifyGymOfLinkRequest(gymId);
+  } catch (err) { fail(res, err); }
+};
+
+export const selfLink = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!(await isSelfLinkGymEnabled(prisma))) {
+      return res.status(403).json({ error: 'Self-linking is not available', code: 'FLAG_DISABLED' });
+    }
+    const gymId = Number(req.body?.gymId);
+    if (!Number.isInteger(gymId) || gymId <= 0) {
+      return res.status(400).json({ error: 'gymId required' });
+    }
+
+    const user = await linkGym(prisma, userId, gymId, 'self');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const link = await getActiveLink(prisma, userId);
+    // The link is live straight away; `status` tells the app whether the gym has
+    // confirmed it yet so it can say "waiting for <gym>" instead of "verified".
+    const confirmed = gymLinkStatus(link) === 'approved';
+    res.json({
+      link: link
+        ? {
+            gymId: link.gymId,
+            source: link.source,
+            linkedAt: link.linkedAt,
+            status: confirmed ? 'approved' : 'pending',
+          }
+        : { gymId, source: 'self', linkedAt: null, status: 'pending' },
+    });
+    // Only a link this call just created is news to the gym; a repeat call from
+    // an already-linked user (first link wins) must not re-ping the owner.
+    if (link && link.gymId === gymId && !confirmed && Date.now() - new Date(link.linkedAt).getTime() < 60_000) {
+      void notifyGymOfLinkRequest(gymId);
+    }
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /internal/gym-links/qr-join — booking-service, after it verified the
+// customer is physically inside the gym. Links them as an approved member.
+export const qrJoinGym = async (req, res) => {
+  try {
+    const userId = Number(req.body?.userId);
+    const gymId = Number(req.body?.gymId);
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(gymId) || gymId <= 0) {
+      return res.status(400).json({ error: 'userId and gymId required' });
+    }
+    const gym = await findPartnerGym(gymId);
+    if (!gym || gym.isApproved !== true) return res.status(404).json({ error: 'Gym unavailable', code: 'GYM_UNAVAILABLE' });
+    const result = await joinGymViaQr(prisma, userId, gymId);
+    res.json(result);
+    // Only a brand-new pending request is news to the owner. A join approved by
+    // an open window is not pushed: on onboarding day that would be one push per
+    // member, and the owner already chose to approve them all.
+    if (result.requested) void notifyGymOfLinkRequest(gymId);
+  } catch (err) { fail(res, err); }
+};
+
+// Best-effort push to the gym owner that someone claimed membership. Never
+// throws: a missed push must not fail the customer's link. The body carries no
+// customer name — the gym reads that in the queue, behind their own login.
+async function notifyGymOfLinkRequest(gymId) {
+  try {
+    const gym = await fetchGymInternal(gymId);
+    if (!gym?.partnerId) return;
+    const partner = await prisma.user.findUnique({
+      where: { id: gym.partnerId },
+      select: { fcmToken: true },
+    });
+    await notifyUser(partner?.fcmToken, {
+      title: 'New member request',
+      body: 'Someone says they train at your gym. Review and confirm.',
+      data: { type: 'gym_link_request', gymId },
+    });
+  } catch (err) {
+    console.error('[gym-link] notify gym failed:', err?.message || err);
+  }
+}
+
+// DELETE /gym-links/self — customer leaves their gym. Flag-gated.
+export const leaveGymLink = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!(await isSelfLinkGymEnabled(prisma))) {
+      return res.status(403).json({ error: 'Self-linking is not available', code: 'FLAG_DISABLED' });
+    }
+    await leaveGym(prisma, userId);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// DELETE /gym/:gymId/members/:userId — partner removes a member. Not flag-gated
+// (a gym must always be able to remove someone it says it didn't join).
+export const removeGymMember = async (req, res) => {
+  try {
+    if (req.user?.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
+    const gymId = parseInt(req.params.gymId);
+    const userId = parseInt(req.params.userId);
+    if (!Number.isInteger(gymId) || !Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'gymId and userId required' });
+    }
+    await assertPartnerOwnsGym(gymId, req.user.id);
+    await removeMemberFromGym(prisma, gymId, userId, req.user.id);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// Shared guard for the three partner link-request routes. Not flag-gated: a gym
+// must always be able to see and answer claims already made in its name.
+async function partnerGymParams(req) {
+  if (req.user?.role !== 'partner') throw { status: 403, error: 'Forbidden' };
+  const gymId = parseInt(req.params.gymId);
+  if (!Number.isInteger(gymId) || gymId <= 0) throw { status: 400, error: 'gymId required' };
+  await assertPartnerOwnsGym(gymId, req.user.id);
+  const rawUserId = req.params.userId;
+  if (rawUserId === undefined) return { gymId };
+  const userId = parseInt(rawUserId);
+  if (!Number.isInteger(userId) || userId <= 0) throw { status: 400, error: 'userId required' };
+  return { gymId, userId };
+}
+
+// GET /gym/:gymId/link-requests — the gym's pending self-link queue.
+export const listLinkRequests = async (req, res) => {
+  try {
+    const { gymId } = await partnerGymParams(req);
+    res.json({ data: await listPendingSelfLinks(prisma, gymId) });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym/:gymId/link-requests/:userId/approve — confirm a self-declared member.
+export const approveLinkRequest = async (req, res) => {
+  try {
+    const { gymId, userId } = await partnerGymParams(req);
+    await approveSelfLink(prisma, gymId, userId, req.user.id);
+    res.status(204).end();
+    void notifyMembersApproved(gymId, [userId]);
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym/:gymId/link-requests/:userId/reject — decline a pending claim.
+export const rejectLinkRequest = async (req, res) => {
+  try {
+    const { gymId, userId } = await partnerGymParams(req);
+    await rejectSelfLink(prisma, gymId, userId, req.user.id);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// Best-effort push to customers whose request the gym just approved: it is the
+// only way someone who walked away from the poster learns they are in, and what
+// lets a waiting check-in screen continue. Never throws.
+async function notifyMembersApproved(gymId, userIds) {
+  try {
+    if (!userIds.length) return;
+    const gym = await fetchGymInternal(gymId);
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, fcmToken: true },
+    });
+    await Promise.all(users.map((u) => notifyUser(u.fcmToken, {
+      title: gym?.name ? `You're in at ${gym.name}` : "You're in",
+      body: 'The gym approved you. Scan the poster to check in.',
+      data: { type: 'gym_link_approved', gymId },
+    })));
+  } catch (err) {
+    console.error('[gym-link] notify members approved failed:', err?.message || err);
+  }
+}
+
+// GET /gym/:gymId/join-window — is the owner's "approve every join" window open?
+export const getGymJoinWindow = async (req, res) => {
+  try {
+    const { gymId } = await partnerGymParams(req);
+    res.json({ data: await getJoinWindow(prisma, gymId) });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// PUT /gym/:gymId/join-window { hours: 0 | 1 | 8 | 24 } — open or close it.
+// Opening also approves everyone already waiting.
+export const setGymJoinWindow = async (req, res) => {
+  try {
+    const { gymId } = await partnerGymParams(req);
+    const hours = Number(req.body?.hours);
+    const { approvedUserIds, ...window } = await setJoinWindow(prisma, gymId, req.user.id, hours);
+    res.json({ data: { ...window, approvedCount: approvedUserIds.length } });
+    void notifyMembersApproved(gymId, approvedUserIds);
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /me/notice/clear — customer dismisses the "your gym removed you" notice.
+export const clearGymLinkNotice = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    await prisma.user.updateMany({ where: { id: userId }, data: { gymLinkNotice: null } });
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /internal/gym-links/checked-in — booking-service pings after an
+// attended booking or a member check-in to stamp the link's first verified
+// check-in (fire-and-forget on the caller's side).
+export const gymLinkCheckedIn = async (req, res) => {
+  try {
+    const userId = Number(req.body?.userId);
+    const gymId = Number(req.body?.gymId);
+    if (!Number.isInteger(userId) || !Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'userId and gymId required' });
+    }
+    await markGymCheckedIn(prisma, userId, gymId);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /internal/unclaimed-gym-claimed — gym-service tells us an unclaimed gym
+// was claimed; prompt its customers toward the real gym.
+export const unclaimedGymClaimed = async (req, res) => {
+  try {
+    await applyUnclaimedGymClaim(prisma, req.body ?? {});
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym-links/claim-prompt/accept — link to the gym the "your gym just
+// joined" prompt points at. 200 { linkedGymId }.
+export const acceptGymClaimPrompt = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const user = await acceptClaimPrompt(prisma, userId);
+    res.json({ linkedGymId: user.linkedGymId ?? null });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /gym-links/claim-prompt/dismiss — "Not now". 204.
+export const dismissGymClaimPrompt = async (req, res) => {
+  try {
+    const userId = requesterId(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    await dismissClaimPrompt(prisma, userId);
+    res.status(204).end();
+  } catch (err) {
+    fail(res, err);
+  }
+};

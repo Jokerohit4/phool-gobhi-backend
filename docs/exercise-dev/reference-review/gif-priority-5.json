@@ -1,0 +1,674 @@
+[
+  {
+    "sourceId": "1368",
+    "name": "ankle circles",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1368-uL9CsKm.gif",
+    "sha256": "9db2b9ac2818fd4f5de0cbcf18a1bf067e923e6f5ba2c1aeaa8a2eb711d79758",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0020",
+    "name": "balance board",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0020-xAySMB0.gif",
+    "sha256": "e88b92fa4a6a439d16c6775a5773ea9dccb60c2c8f8052147d3f649ae95ed4fb",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0293",
+    "name": "dumbbell bent over row",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0293-BJ0Hz5L.gif",
+    "sha256": "68b6a883f0232f4c3ee83f4b1f2e4589f50b0b2dbf57864675e610ecda63a544",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0157",
+    "name": "cable deadlift",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0157-eGDudUV.gif",
+    "sha256": "0237ed10d5bce25469de427008b805b4b18bc9baea1910523e36cea39713e832",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0186",
+    "name": "cable lying triceps extension v. 2",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0186-uxJcFUU.gif",
+    "sha256": "ccc3e29834487c792b7049d2504601ba33f45f5d9b4682cfc1ac7b127c4d3f45",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0231",
+    "name": "cable standing one arm triceps extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0231-sYCcnon.gif",
+    "sha256": "0f46cab651c709cb3566cffe05a07d5f422174f550175e1ad1ac1e7ef9f37924",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1724",
+    "name": "cable rope high pulley overhead tricep extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1724-NN8nSNT.gif",
+    "sha256": "8357e7d9c8ae77b982b6f8f847cddc5b0da564dc0f40adc51bf3670162a54920",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1377",
+    "name": "calf stretch with hands against wall",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1377-m0tCHqc.gif",
+    "sha256": "01446ed48b032bc85b69200151be5560970748ee627626d17d658ba4ffde2116",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1548",
+    "name": "chair leg extended stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1548-xGgAGPm.gif",
+    "sha256": "257310dc444d87aa419523395587eaf50c52785c21dec5b57b197f4256419045",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1271",
+    "name": "chest and front of shoulder stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1271-Uto7l43.gif",
+    "sha256": "03a4b637bdc4893a7841c924d832416aec9258cea3012c3c2a1a1a180f1841f0",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0284",
+    "name": "donkey calf raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0284-u5ESqzH.gif",
+    "sha256": "c7290a9b4ac5dd471179bdbe6b7f6f127026b5f5745c49bb67d4a2b77606174a",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1275",
+    "name": "drop push up",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1275-Q497lAE.gif",
+    "sha256": "d8a026092766bd37f4f50492d0edc8087c7521010ac3502637c41449a31108d9",
+    "framesSampled": [
+      0,
+      8,
+      16
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1167",
+    "name": "dynamic chest stretch (male)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1167-3uj0Ozg.gif",
+    "sha256": "5025b68b5d7625958def63bb0fa4a32f062ac13cf6b8b1c32044fe9226e2f443",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "2133",
+    "name": "farmers walk",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/2133-qPEzJjA.gif",
+    "sha256": "5c6ab66c33ba6361df648f851c1083f3169ec89e750b3bea764de5ca46527298",
+    "framesSampled": [
+      0,
+      8,
+      16
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0310",
+    "name": "dumbbell front raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0310-3eGE2JC.gif",
+    "sha256": "f103cfbe8f9c3249f46cb7b56d2a42189f672d4c36e3c17f31f50cded09ba264",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0466",
+    "name": "gironda sternum chin",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0466-IL0JUxR.gif",
+    "sha256": "130a70322d7ebe309d8bd16dc6f0b40b796fcc038d85133fed70eccb4f9f4d1d",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1511",
+    "name": "hamstring stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1511-99rWm7w.gif",
+    "sha256": "536d069f05a4001b47526656e1349861be60a3f524207ff5a6b9375060f5dd30",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1418",
+    "name": "hug keens to chest",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1418-znP9SIh.gif",
+    "sha256": "bafe95560d3dacb1e3a3e677b29f74ce06d5e683a3b56f1b53fb0dc26d970a29",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0492",
+    "name": "incline push up depth jump",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0492-CB8WET1.gif",
+    "sha256": "785250e1c36758073f605e68935f54a8c8d4d2485a253e0526bfeae93c67564d",
+    "framesSampled": [
+      0,
+      8,
+      16
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0498",
+    "name": "inverted row with straps",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0498-jdiExfW.gif",
+    "sha256": "29820e93b4ff1d0f345aeedb4ce5c8decff50aac23de16e8cfb668d794c8503e",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1419",
+    "name": "iron cross stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1419-pZwUsKB.gif",
+    "sha256": "701e29093947186bf4e27cce83a21c348b4317972285233326d7c2848163c0ae",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0558",
+    "name": "kipping muscle up",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0558-pM07UxU.gif",
+    "sha256": "8dcee4f9549da89d4eefb2ee7ef373caad6fb395414a56c2c73ced26cd431ac1",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1576",
+    "name": "leg up hamstring stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1576-sU5BrfP.gif",
+    "sha256": "803bad1c46a93ca8804fb19f3bfbb494f5c755941345793a6caa2e97ec1b01a0",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0627",
+    "name": "mixed grip chin-up",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0627-T8UpLkb.gif",
+    "sha256": "6d4c108027b12e0dae20a656b95f6921735ca3b23258f828dd61cbd41a23604a",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0628",
+    "name": "monster walk",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0628-O95afRA.gif",
+    "sha256": "37bb25d69b336b629d45762e40e03f6556a6564df272febe014039d0e8336f13",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0630",
+    "name": "mountain climber",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0630-RJgzwny.gif",
+    "sha256": "99f2367ac41ca7c88b391cfffb02951a74093d16a13c8eacbe399153f111cf7f",
+    "framesSampled": [
+      0,
+      8,
+      16
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0631",
+    "name": "muscle up",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0631-yJUHKTn.gif",
+    "sha256": "30efd5c8e9d84b6e47f6d1e387aca415a0bb7dea82948e696153b3727faf43f8",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1355",
+    "name": "one arm against wall",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1355-ZZTGMKh.gif",
+    "sha256": "6d4435af4402efc94d50a448c98603764858bc645d4390ee281f176ade5a3467",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0638",
+    "name": "one arm chin-up",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0638-HjdqmZa.gif",
+    "sha256": "c2f3d906fc97b3c112d9543fc1f61c5e6d72c7caa58691a5489b9377738743c1",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0344",
+    "name": "dumbbell lying one arm pronated triceps extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0344-wyaqzOS.gif",
+    "sha256": "f9f1281fb749d2458f4026f931aa3128a75580de9398de18a23961646a098c18",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0346",
+    "name": "dumbbell lying one arm supinated triceps extension",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0346-zZlORz6.gif",
+    "sha256": "a8c94327ba7987bec4aea6ddd37fccb1048c83fda61e6e40bc182290683957dc",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1285",
+    "name": "dumbbell one arm bench fly",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1285-o5Jsk92.gif",
+    "sha256": "f7ce3cb859bed354bc0b28632f7aaba778588dbcc55abfdf6a192aaba4bfeeac",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1422",
+    "name": "pelvic tilt into bridge",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1422-D9qe7CM.gif",
+    "sha256": "aefee553741ee7644eec4ae3d7d7148a59ceda670b4a6fc891f77fd997c6066d",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0370",
+    "name": "dumbbell peacher hammer curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0370-F1KxjBa.gif",
+    "sha256": "25068f9181f82bde17f7cd27e3172bb502d912ebce75f10e1ef6b4abeb82ad4b",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0074",
+    "name": "barbell rack pull",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0074-za9Ni4z.gif",
+    "sha256": "45fdc387861a0baeebb62a07ae606e3d279ec2623059e21a874792eac6a60d30",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0677",
+    "name": "ring dips",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0677-ezTvXcr.gif",
+    "sha256": "15b39a94eea2d69013c2276332289497941a603808fa16004194c43300e5e9e6",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0678",
+    "name": "rocky pull-up pulldown",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0678-cQ19bBP.gif",
+    "sha256": "c0ea1c322c5517b527774160a5b1fb22af4bafa8e3cbca2b54c19f6a5c5bd046",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1585",
+    "name": "runners stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1585-0mB6wHO.gif",
+    "sha256": "81989826cf52515f3ef7afd7b58e39a782c020bd00d34263e60c7dd6c82112aa",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0219",
+    "name": "cable shoulder press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0219-PzQanLE.gif",
+    "sha256": "54a8336bf3fdc2e51ab25def8e9afa01c4282a1c33d722c2e1e41f4042576095",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1390",
+    "name": "seated calf stretch (male)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1390-17bqEXD.gif",
+    "sha256": "021201135a98e527c2fc0648f31f0a0887887c2d82f87f21af010d96de194799",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0401",
+    "name": "dumbbell seated palms up wrist curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0401-2dImyQ8.gif",
+    "sha256": "f7eaa8f4b04e8d492b5077084d3f486521ef33c95187002f967cbf13874b2997",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0334",
+    "name": "dumbbell lateral raise",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0334-DsgkuIt.gif",
+    "sha256": "68de0e7c7727fa08a203f73b0d2935181a5c6489470d44b9028de4a7d10a17f1",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0716",
+    "name": "side push neck stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0716-oQRJYkC.gif",
+    "sha256": "17621fde363773b1b6b5e7473b56b1bd5c74c59341b93bb0c75ff36427f03496",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0720",
+    "name": "side-to-side chin",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0720-isAAZWA.gif",
+    "sha256": "ac8a687983255cb34e49835a200f2ec5d987d94f722adba6594bd4270a14153a",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1358",
+    "name": "side lying floor stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1358-jDOKRM5.gif",
+    "sha256": "4ba523f9dec47d2b0f762d6cb7a5cfb7484036514951fb416816a0b94691a5a7",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1363",
+    "name": "spine stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1363-JbC2iaV.gif",
+    "sha256": "38c85571636ee7061cbd2d7ed535da6fc64d4c734c83e756883a34a2eb258b52",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0794",
+    "name": "standing lateral stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0794-1jXLYEw.gif",
+    "sha256": "aafb01c423cfa3115df9a971430607a5f534046ea91510732af182e0a7109064",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1364",
+    "name": "standing pelvic tilt",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1364-cuKYxhu.gif",
+    "sha256": "936c82509afb29be7d8bf96dbaf5772b0358403ee1c143e4901439819b05a258",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0806",
+    "name": "suspended push-up",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0806-IaGQCrC.gif",
+    "sha256": "666227c5a2be2b52065ea6dfb425ff4c0c85cd03451c8621c9a5c20d61756aa0",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0807",
+    "name": "suspended reverse crunch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0807-R1WYG5D.gif",
+    "sha256": "6dea670ec5fd8f9c11a0bbfeb7e60890e2a52ad238c6cbed0ae8e266d36bc455",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0808",
+    "name": "suspended row",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0808-4OaumBr.gif",
+    "sha256": "77b1df0284603a99170be3f9ebbeee765f578aeeca00295aad880e99ebb04773",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0809",
+    "name": "suspended split squat",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0809-QpXqiq8.gif",
+    "sha256": "814d3deacf24dc88f2e11f1fb72e84ba57f59acd226b5b2948dca96087f4e41f",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0817",
+    "name": "triceps stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0817-uOV3Itw.gif",
+    "sha256": "d30f92fe5a73463751973283a0045a1881c0ec8d4451676eded321090a41ce31",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1365",
+    "name": "upper back stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1365-GSDioYu.gif",
+    "sha256": "f6e7cceb5b0c9c460914431c49be4d4b82e96e6ba45a735bfffb2336eb1e795b",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0832",
+    "name": "weighted crunch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0832-s8nrDXF.gif",
+    "sha256": "4ed2d3846faf55f8085987f9ad5fc85cabfbb05f4ca127107526233be2423193",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0122",
+    "name": "barbell wide bench press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0122-JsKq9so.gif",
+    "sha256": "3b6d27f86f4f5f2864325ed88da6a3248a56e7ec1c5f5fc2e1d26721706a55bf",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-11-06T06:18:45.402338+00:00",
+  "scope": "Read-only native resolver probe on Windows; not physical Android playback of every video. Signed stream URLs are not retained.",
+  "probes": [
+    {
+      "youtubeVideoId": "XqH46t5TD98",
+      "muxedStreams": 1,
+      "audioStreams": 36,
+      "videoStreams": 18,
+      "currentNativeResolverUsable": true
+    },
+    {
+      "youtubeVideoId": "MLfXovxCx6M",
+      "muxedStreams": 1,
+      "audioStreams": 3,
+      "videoStreams": 4,
+      "currentNativeResolverUsable": true
+    }
+  ]
+}

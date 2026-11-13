@@ -1,0 +1,96 @@
+{
+  "environment": "prod",
+  "results": [
+    {
+      "route": "/health",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 95,
+      "passed": true
+    },
+    {
+      "route": "/api/auth/app-config",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 1152,
+      "passed": true
+    },
+    {
+      "route": "/api/auth/me",
+      "status": 401,
+      "expected": 401,
+      "milliseconds": 43,
+      "passed": true
+    },
+    {
+      "route": "/api/auth/me",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 209,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/mine",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 2099,
+      "passed": true
+    },
+    {
+      "route": "/api/wallet/subscriptions/mine",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 804,
+      "passed": true
+    },
+    {
+      "route": "/api/health/health-profile",
+      "status": 404,
+      "expected": 404,
+      "milliseconds": 199,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/admin/analytics/activation",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 1186,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/admin/analytics/known-events",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 1168,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/admin/analytics/retention",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 1428,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/admin/analytics/website-traffic",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 7278,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/admin/analytics/location-reach",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 3993,
+      "passed": true
+    },
+    {
+      "route": "/api/bookings/admin/analytics/supply-health",
+      "status": 200,
+      "expected": 200,
+      "milliseconds": 1390,
+      "passed": true
+    }
+  ]
+}

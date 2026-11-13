@@ -1,20 +1,44 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { MUSCLE_GROUPS, EQUIPMENT, LOGGING_TYPES } from '../constants/healthEnums.js';
-const prisma = new PrismaClient();
+import { rankExercises } from './exerciseSearch.js';
+import { createTtlCache } from '../utils/ttlCache.js';
+import { withExerciseSource } from './exerciseSourceService.js';
 
 // The library is global (createdByUserId: null) plus this user's own custom
 // entries — never another user's custom exercises, which is what the OR
 // clause below enforces.
+//
+// The global catalogue is the same for everyone and only changes when
+// prisma/seed.js is run (no API writes a createdByUserId-null exercise), so it
+// is cached in-process for 10 minutes per instance - a reseed shows up on an
+// instance within the TTL or at its next restart. Only the caller's own custom
+// exercises are queried per request. Muscle/equipment filters are applied to the
+// cached catalogue in JS with the same equality the query used.
+export const SYSTEM_EXERCISES_TTL_MS = 10 * 60_000;
+export const systemExercisesCache = createTtlCache({ ttlMs: SYSTEM_EXERCISES_TTL_MS, maxEntries: 1 });
+const loadSystemExercises = () => systemExercisesCache.get('system', () => prisma.exercise.findMany({
+  where: { createdByUserId: null },
+  orderBy: { name: 'asc' },
+}));
+
 export async function searchExercisesService(userId, { q, muscleGroup, equipment } = {}) {
-  const where = {
-    AND: [
-      { OR: [{ createdByUserId: null }, { createdByUserId: userId }] },
-      q ? { name: { contains: q, mode: 'insensitive' } } : {},
-      muscleGroup ? { muscleGroup } : {},
-      equipment ? { equipment } : {},
-    ],
-  };
-  return prisma.exercise.findMany({ where, orderBy: { name: 'asc' } });
+  const [system, custom] = await Promise.all([
+    loadSystemExercises(),
+    prisma.exercise.findMany({
+      where: {
+        AND: [
+          { createdByUserId: userId },
+          muscleGroup ? { muscleGroup } : {},
+          equipment ? { equipment } : {},
+        ],
+      },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
+  const fits = (e) => (!muscleGroup || e.muscleGroup === muscleGroup) && (!equipment || e.equipment === equipment);
+  // rankExercises fully re-sorts (score, then name), so merge order only matters
+  // between identically-named rows.
+  return rankExercises([...system.filter(fits), ...custom], q);
 }
 
 export async function createCustomExerciseService(userId, body) {
@@ -84,11 +108,12 @@ async function computePersonalRecords(userId, exerciseId) {
 }
 
 export async function getExerciseDetailService(userId, exerciseId, lang) {
+  const videoLanguage = lang ? String(lang).replace('_', '-').toLowerCase().split('-')[0] : undefined;
   const exercise = await prisma.exercise.findUnique({
     where: { id: exerciseId },
     include: {
       formVideos: {
-        where: lang ? { languageCode: lang } : undefined,
+        where: videoLanguage ? { languageCode: videoLanguage } : undefined,
         orderBy: { order: 'asc' },
       },
     },
@@ -99,7 +124,16 @@ export async function getExerciseDetailService(userId, exerciseId, lang) {
     throw err;
   }
   const records = await computePersonalRecords(userId, exerciseId);
-  return { ...exercise, records };
+  const enriched = withExerciseSource(exercise, lang);
+  // Keep real English instruction available when a translation is absent.
+  // Preserve each video's actual language; clients label the returned cards.
+  if (videoLanguage && videoLanguage !== 'en' && !enriched.formVideos?.length) {
+    const english = await prisma.exerciseFormVideo.findMany({
+      where: { exerciseId: exercise.id, languageCode: 'en' }, orderBy: { order: 'asc' },
+    });
+    if (english.length) return { ...enriched, formVideos: english, formVideoRequestedLanguage: videoLanguage, formVideoFallbackLanguage: 'en', records };
+  }
+  return { ...enriched, records };
 }
 
 // Every logged set for this exercise across sessions, oldest -> newest —

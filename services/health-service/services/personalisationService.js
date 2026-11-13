@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 const EMPTY_PROFILE = {
   heightCm: null,
@@ -11,6 +10,9 @@ const EMPTY_PROFILE = {
   programmingMode: 'neutral',
   consentAt: null,
   privacyVersion: null,
+  homeEquipment: [],
+  trainingSpace: null,
+  homeSetupAt: null,
 };
 
 // Never 404s on "no profile yet" — a user who has skipped the whole setup is
@@ -31,14 +33,29 @@ export async function upsertProfileService(userId, patch) {
   for (const field of [
     'heightCm', 'setupWeightKg', 'experienceLevel',
     'injuryZones', 'energyPattern', 'preferredRestDay',
+    'homeEquipment', 'trainingSpace',
   ]) {
     if (patch[field] !== undefined) data[field] = patch[field];
   }
-  return prisma.personalisationProfile.upsert({
+  // Stamped by the server, never sent by the client: the home-setup sheet
+  // counts as answered the moment either of its fields arrives — including
+  // "no equipment" ([] or ['none']), which is an answer, not an absence.
+  // `homeSetupAnswered` lets the sheet's "Skip" record the same fact
+  // without inventing equipment, so a user who skips isn't asked again.
+  if (patch.homeEquipment !== undefined || patch.trainingSpace !== undefined
+      || patch.homeSetupAnswered === true) {
+    data.homeSetupAt = new Date();
+  }
+  const profile = await prisma.personalisationProfile.upsert({
     where: { userId },
-    create: { userId, injuryZones: [], ...data },
+    create: { userId, injuryZones: [], homeEquipment: [], ...data },
     update: data,
   });
+  if (['experienceLevel', 'preferredRestDay', 'homeEquipment', 'trainingSpace', 'injuryZones'].some((field) => patch[field] !== undefined)) {
+    const { refreshWorkoutSlotsForProfile } = await import('./ledger/starterPlanService.js');
+    await refreshWorkoutSlotsForProfile(prisma, userId);
+  }
+  return profile;
 }
 
 // FR-25/27's only write path for programming mode. Anything other than
@@ -56,11 +73,14 @@ export async function setProgrammingModeService(userId, mode, privacyVersion) {
   const data = mode === 'neutral'
     ? { programmingMode: 'neutral', consentAt: null, privacyVersion: null }
     : { programmingMode: mode, consentAt: new Date(), privacyVersion };
-  return prisma.personalisationProfile.upsert({
+  const profile = await prisma.personalisationProfile.upsert({
     where: { userId },
     create: { userId, injuryZones: [], ...data },
     update: data,
   });
+  const { refreshWorkoutSlotsForProfile } = await import('./ledger/starterPlanService.js');
+  await refreshWorkoutSlotsForProfile(prisma, userId);
+  return profile;
 }
 
 export async function deleteProfileService(userId) {

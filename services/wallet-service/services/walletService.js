@@ -1,11 +1,11 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import axios from 'axios';
 import Razorpay from 'razorpay';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { DEFAULT_WALLET_TOPUP_CONFIG, HARD_MAX_TOPUP_AMOUNT } from '../utils/walletConstants.js';
-const prisma = new PrismaClient();
+import { pageArgs, finishPage } from '../utils/pagination.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
@@ -110,38 +110,42 @@ export async function getUserLinkedGymId(userId) {
   }
 }
 
-// Attendance-SaaS wedge (finalized 2026-08-19): GymSubscription purchases no
-// longer share Gym.commissionPct with one-off marketplace bookings. Instead,
-// every gym gets a flat honeymoon window from its own
-// Gym.partnershipStartDate (set once, at first approval) during which
-// subscription purchases carry ZERO platform commission; after that window
-// the platform takes a flat cut — the platform default below, or a
+// Reads a user's referrer from auth-service's internal profile. Used only by
+// referralService's reconcile sweep, to learn the referrer for a friend whose
+// referrer credit is missing (the credit request carries referrerId; the
+// friend key alone does not). Best-effort like getUserLinkedGymId — a lookup
+// failure leaves that pair unpinned, to be retried on the next sweep.
+export async function getReferredByUserIdInternal(userId) {
+  try {
+    const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${userId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+    const referredBy = (res.data?.data || res.data)?.referredByUserId;
+    return referredBy == null ? null : Number(referredBy);
+  } catch (_) {
+    return null;
+  }
+}
+
+// Attendance-SaaS wedge (finalized 2026-08-19, honeymoon window removed
+// 2026-09-11): GymSubscription purchases don't share Gym.commissionPct with
+// one-off marketplace bookings — every subscription purchase carries a
+// platform commission from day one, either the platform default below or a
 // per-gym override via gym-service's admin-editable
-// Gym.subscriptionCommissionPct (PUT /:id/subscription-commission). This is
-// deliberately decoupled from commissionPct: a customer who also books
+// Gym.subscriptionCommissionPct (PUT /:id/subscription-commission) /
+// Gym.subscriptionFlatFeePerUser (PUT /:id/subscription-pricing-mode). This
+// is deliberately decoupled from commissionPct: a customer who also books
 // through the regular marketplace still pays that 20%-by-default rate on
 // those bookings separately (see bookingCommissionFields in booking-service,
 // unchanged by this).
-const SUBSCRIPTION_SAAS_HONEYMOON_DAYS = Number(process.env.SUBSCRIPTION_SAAS_HONEYMOON_DAYS) || 30;
 export const DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT = Number(process.env.SUBSCRIPTION_SAAS_COMMISSION_PERCENT) || 1;
 // Platform default when a gym is in flatPerUser pricing mode but hasn't been
 // given an explicit per-gym flat fee yet (Gym.subscriptionFlatFeePerUser is
 // null) — same "admin sets a per-gym override, else fall back to a platform
 // constant" convention as the percentage mode above.
-export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 10;
-
-// partnershipStartDate null (gym approved before this feature existed and
-// somehow missed the migration backfill) is treated as "no honeymoon" rather
-// than "always in honeymoon" — the safe direction if that ever happens is to
-// undercharge zero gyms for free, not to give every unbackfilled gym an
-// indefinite free ride. Shared by both pricing modes below — the honeymoon
-// is a property of the GYM (when it went live), not of which commission
-// formula it's since been set to.
-function isInSubscriptionSaasHoneymoon(partnershipStartDate) {
-  if (!partnershipStartDate) return false;
-  const honeymoonEndsAt = new Date(partnershipStartDate).getTime() + SUBSCRIPTION_SAAS_HONEYMOON_DAYS * 24 * 60 * 60 * 1000;
-  return Date.now() < honeymoonEndsAt;
-}
+export const DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER = Number(process.env.SUBSCRIPTION_FLAT_FEE_PER_USER) || 1;
+// Floor for a positive attendance-SaaS bill: if a gym's computed bill for a
+// month is under this, it is billed the minimum instead (a gym with zero
+// joiners still bills Rs 0 — see the NO_USERS_JOINED guard in apply).
+export const ATTENDANCE_SAAS_MIN_BILLED_AMOUNT = 99;
 
 // Admin-portal-editable wallet top-up options (presets + optional
 // custom-amount range). Cached briefly since createTopUpOrder reads this on
@@ -154,7 +158,7 @@ function isInSubscriptionSaasHoneymoon(partnershipStartDate) {
 const TOPUP_CONFIG_CACHE_TTL_MS = 30 * 1000;
 let walletTopupConfigCache = null; // { value, expiresAt }
 
-function serializeTopupConfig(row) {
+export function serializeTopupConfig(row) {
   if (!row) return { ...DEFAULT_WALLET_TOPUP_CONFIG, updatedAt: null };
   return {
     presets: row.presets,
@@ -254,15 +258,15 @@ const CASH_BONUS = {
 // read boundary, immediately after every Prisma read, so every caller past
 // this point (controllers, analytics, cross-service calls) just sees plain
 // numbers and never has to think about Decimal.
-function serializeWallet(wallet) {
+export function serializeWallet(wallet) {
   if (!wallet) return wallet;
   return { ...wallet, balance: Number(wallet.balance) };
 }
-function serializeTransaction(tx) {
+export function serializeTransaction(tx) {
   if (!tx) return tx;
   return { ...tx, amount: Number(tx.amount) };
 }
-function serializeOrder(order) {
+export function serializeOrder(order) {
   if (!order) return order;
   return { ...order, amount: Number(order.amount) };
 }
@@ -308,6 +312,22 @@ export async function getWalletService(userId) {
   return serializeWallet(wallet);
 }
 
+// Paginated (cursor) variant used by GET /wallet/transactions. Same order as
+// the unpaginated function (newest first) plus id as a tiebreaker so rows with
+// identical createdAt never duplicate/drop across a page boundary. Backed by
+// @@index([walletId, createdAt]). Returns { items, meta } — see utils/pagination.js.
+export async function getWalletTransactionsPageService(userId, { limit, cursor } = {}) {
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (!wallet) throw new Error('Wallet not found');
+  const rows = await prisma.walletTransaction.findMany({
+    where: { walletId: wallet.id },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    ...pageArgs({ limit, cursor }),
+  });
+  const { items, meta } = finishPage(rows, limit);
+  return { items: items.map(serializeTransaction), meta };
+}
+
 export async function getWalletTransactionsService(userId) {
   const wallet = await prisma.wallet.findUnique({
     where: { userId },
@@ -341,30 +361,49 @@ async function alreadyAppliedWallet(userId, idempotencyKey) {
 // error surfaced anywhere. Upserting closes that class of bug for every
 // caller of this function at once (booking payouts, subscription payouts,
 // cancellation refunds), not just the one call site that first hit it.
-export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer', gymId = null) {
+// The write half of a credit, against a caller-supplied Prisma client/tx.
+// creditWalletService wraps this in its own $transaction; referralService
+// calls it inside a single transaction that must also read/credit the other
+// side of a referral pair atomically (see referralService.js). This helper
+// deliberately does NOT do the idempotency pre-check — callers own that, so a
+// referral transaction can check the friend key and count the referrer's
+// month keys against the same tx it will write into. `type` defaults to
+// 'credit'; the referral path passes 'bonus' (see docs Money rules).
+export async function applyWalletCredit(tx, {
+  userId,
+  amount,
+  description,
+  idempotencyKey = null,
+  userType = 'customer',
+  gymId = null,
+  type = 'credit',
+}) {
+  await tx.wallet.upsert({ where: { userId }, update: {}, create: { userId, userType } });
+  const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
+  const updated = await tx.wallet.update({
+    where: { userId },
+    data: { balance: { increment: amount } }
+  });
+  await tx.walletTransaction.create({
+    data: {
+      walletId: wallet.id,
+      type,
+      amount,
+      description,
+      idempotencyKey,
+      gymId,
+    }
+  });
+  return serializeWallet(updated);
+}
+
+export async function creditWalletService(userId, amount, description, idempotencyKey = null, userType = 'customer', gymId = null, type = 'credit') {
   const already = await alreadyAppliedWallet(userId, idempotencyKey);
   if (already) return already;
   try {
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.wallet.upsert({ where: { userId }, update: {}, create: { userId, userType } });
-      const wallet = await tx.wallet.findUniqueOrThrow({ where: { userId } });
-      const updated = await tx.wallet.update({
-        where: { userId },
-        data: { balance: { increment: amount } }
-      });
-      await tx.walletTransaction.create({
-        data: {
-          walletId: wallet.id,
-          type: 'credit',
-          amount,
-          description,
-          idempotencyKey,
-          gymId,
-        }
-      });
-      return updated;
-    });
-    return serializeWallet(updated);
+    return await prisma.$transaction((tx) =>
+      applyWalletCredit(tx, { userId, amount, description, idempotencyKey, userType, gymId, type })
+    );
   } catch (err) {
     // Unique-violation on idempotencyKey — a concurrent identical call
     // already applied it between our check and our create/insert.
@@ -375,7 +414,11 @@ export async function creditWalletService(userId, amount, description, idempoten
   }
 }
 
-export async function debitWalletService(userId, amount, description, idempotencyKey = null, gymId = null) {
+// opts.allowNegative (attendance-SaaS monthly bill): permits the partner
+// wallet to go negative — the flat-per-user fee is owed regardless of
+// balance and settles against future earnings. Every other caller keeps the
+// default balance>=amount guard below.
+export async function debitWalletService(userId, amount, description, idempotencyKey = null, gymId = null, { allowNegative = false } = {}) {
   if (!Number.isFinite(amount) || amount <= 0) {
     // Defense in depth — the controller already rejects this, but a Decimal
     // wallet.balance compared against NaN/undefined via `<` would silently
@@ -396,12 +439,22 @@ export async function debitWalletService(userId, amount, description, idempotenc
       // same wallet is in flight — a plain findUnique-then-update let two
       // concurrent debits both pass the same balance check and both commit,
       // driving the balance negative. `wallet` above is only used for its
-      // id now, not for the balance check.
+      // id now, not for the balance check. The allowNegative path instead
+      // drops the guard so an owed bill can take the balance below zero
+      // (same row-lock atomicity via updateMany's WHERE).`
       const { count } = await tx.wallet.updateMany({
-        where: { userId, balance: { gte: amount } },
+        where: allowNegative ? { userId } : { userId, balance: { gte: amount } },
         data: { balance: { decrement: amount } },
       });
-      if (count === 0) throw new Error('Insufficient balance');
+      if (count === 0) {
+        // Carry status/code so controllers map this to 402 +
+        // INSUFFICIENT_BALANCE (routing clients to a top-up) instead of an
+        // opaque 500 — the message is preserved for older callers/tests.
+        const insuf = new Error('Insufficient balance');
+        insuf.status = 402;
+        insuf.code = 'INSUFFICIENT_BALANCE';
+        throw insuf;
+      }
       const updated = await tx.wallet.findUnique({ where: { userId } });
       await tx.walletTransaction.create({
         data: {
@@ -457,9 +510,9 @@ export async function getPayoutHistoryService() {
 }
 
 // Attendance-SaaS admin rollup: per-gym subscription counts + revenue,
-// keyed by gymId only — gym name/city/honeymoon status are resolved by the
-// admin-portal caller against gym-service (same split as the /attendance
-// admin page's by-gym view), so this stays a single-service, single-query
+// keyed by gymId only — gym name/city are resolved by the admin-portal
+// caller against gym-service (same split as the /attendance admin page's
+// by-gym view), so this stays a single-service, single-query
 // endpoint. status:'active' alone doesn't mean "currently in-window" (the
 // SubscriptionStatus enum only ever gets set to 'active' — nothing writes
 // 'cancelled' today, and a lapsed-but-unprocessed row stays 'active'
@@ -480,7 +533,6 @@ export async function getSubscriptionSummaryByGymService() {
         gymId: s.gymId,
         subscriptionCount: 0,
         activeCount: 0,
-        honeymoonSubscriptionCount: 0,
         totalRevenue: 0,
         // Commission the platform is owed across this gym's subscriptions
         // (price - partnerShare per subscription) — a ceiling realized
@@ -494,7 +546,6 @@ export async function getSubscriptionSummaryByGymService() {
     const partnerShare = Number(s.partnerShare);
     bucket.subscriptionCount += 1;
     if (s.status === 'active' && s.endDate >= now) bucket.activeCount += 1;
-    if (Number(s.commissionPct) === 0) bucket.honeymoonSubscriptionCount += 1;
     bucket.totalRevenue = Math.round((bucket.totalRevenue + price) * 100) / 100;
     bucket.totalPlatformShare = Math.round((bucket.totalPlatformShare + (price - partnerShare)) * 100) / 100;
   }
@@ -502,17 +553,22 @@ export async function getSubscriptionSummaryByGymService() {
   return [...byGym.values()].sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
-// Gobhi-only: individual GymSubscription rows for one gym, for the
+// Gobhi/partner: individual GymSubscription rows for one gym, for the
 // attendance-SaaS member roster (see getSubscriptionSummaryByGymService for
 // the aggregate rollup this complements). One row per purchase, not
 // deduped per customer — a repeat customer legitimately shows multiple rows.
-export async function getSubscriptionsForGymService(gymId) {
+// { onlyAttendanceSaas }: the partner-facing roster is the attendance-SaaS
+// wedge (same population as auth-service's linkedGymId members), so its
+// subscriptions should exclude a linked member's marketplace subscription
+// purchases — the gobhi admin path passes nothing and sees every row.
+export async function getSubscriptionsForGymService(gymId, { onlyAttendanceSaas = false } = {}) {
   const rows = await prisma.gymSubscription.findMany({
-    where: { gymId },
+    where: { gymId, ...(onlyAttendanceSaas ? { isAttendanceSaas: true } : {}) },
     orderBy: { startDate: 'desc' },
     select: {
       customerId: true, planType: true, price: true, commissionPct: true,
       partnerShare: true, startDate: true, endDate: true, status: true,
+      isAttendanceSaas: true, coinDiscountAmount: true, createdAt: true,
     },
   });
   return rows.map((r) => ({
@@ -520,6 +576,7 @@ export async function getSubscriptionsForGymService(gymId) {
     price: Number(r.price),
     commissionPct: Number(r.commissionPct),
     partnerShare: Number(r.partnerShare),
+    coinDiscountAmount: r.coinDiscountAmount != null ? Number(r.coinDiscountAmount) : null,
   }));
 }
 
@@ -602,6 +659,140 @@ export async function getMyBankSettlementsService(partnerId, gymId) {
     })),
     totalSettled: Math.round(settled.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
   };
+}
+
+// --- Attendance-SaaS monthly flat-per-user bill ---------------------------
+// The other half of the attendance-SaaS wedge: REGISTRATION is the product.
+// A user who joins a gym (User.linkedGymId set in auth-service at signup) is
+// billable at ₹1/user per month — no honeymoon, no cron. The bill is computed
+// on access (admin "charge" button on the /attendance-saas page, or any
+// read), idempotently applied per (gymId, month), and may drive the partner
+// wallet negative (settled out of future earnings). Quantity comes from
+// auth-service's joined-count endpoint; unit fee = gym's flatPerUser override
+// (Gym.subscriptionFlatFeePerUser) or the platform default below.
+
+// Idempotency key for a month's bill — deterministic per (gym, month) so a
+// double-clicked admin approve, or a retry after a crash, can never charge
+// the same month twice.
+function attendanceSaasBillIdempotencyKey(gymId, month) {
+  return `attendance-saas-bill-${gymId}-${month}`;
+}
+
+// Looks up whether / when a (gym, month) bill was already applied, via the
+// transaction row its debit created. Mirrors alreadyAppliedWallet but only
+// needs the transaction, not the wallet — so the read path can answer
+// "already billed?" without creating a wallet.
+export async function getAttendanceSaasBillAppliedAtService(gymId, month) {
+  const tx = await prisma.walletTransaction.findUnique({
+    where: { idempotencyKey: attendanceSaasBillIdempotencyKey(gymId, month) },
+    select: { createdAt: true },
+  });
+  return tx?.createdAt ?? null;
+}
+
+// Fetches the fee + billing posture for one gym from gym-service. Shared with
+// the apply path so compute and charge can never disagree about the rate.
+// Throws a friendly 404 if the gym doesn't exist (the caller validates that
+// upstream too via assertPartnerOwnsGym where a partner is involved).
+async function fetchGymBillingConfig(gymId) {
+  let gym;
+  try {
+    const res = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = res.data?.data || res.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  return {
+    partnerId: gym.partnerId,
+    attendanceSaasOptedOut: gym.attendanceSaasOptedOut === true,
+    subscriptionPricingMode: gym.subscriptionPricingMode === 'flatPerUser' ? 'flatPerUser' : 'percentage',
+    subscriptionFlatFeePerUser: gym.subscriptionFlatFeePerUser != null ? Number(gym.subscriptionFlatFeePerUser) : null,
+  };
+}
+
+// Computes the open bill for (gymId, month) WITHOUT applying it: how many
+// users joined that month x the per-user flat fee. Read-only — used by the
+// admin page per-gym column and the partner-web wallet dues surface. If the
+// bill is already applied, appliedAt is set and amountDue reflects it (the
+// caller shows "billed <date>" instead of an open amount).
+export async function computeAttendanceSaasBillService(gymId, month) {
+  const [bill] = await computeAttendanceSaasBillsService([gymId], month);
+  return bill;
+}
+
+// Batch form of the above: one auth-service joined-counts call and one
+// applied-key lookup for the whole set (the admin page computes every gym at
+// once), with the per-gym config fan-out in parallel. Callers must not pass
+// an empty list — a gym with no joiners simply yields usersJoined 0.
+export async function computeAttendanceSaasBillsService(gymIds, month) {
+  if (!gymIds.length) return [];
+  const keys = gymIds.map((id) => attendanceSaasBillIdempotencyKey(id, month));
+  const [configs, countsRes, appliedRows] = await Promise.all([
+    Promise.all(gymIds.map((id) => fetchGymBillingConfig(id))),
+    axios.post(`${AUTH_SERVICE_URL}/internal/attendance-saas/joined-counts`,
+      { gymIds, month }, await internalHeadersFor(AUTH_SERVICE_URL)),
+    prisma.walletTransaction.findMany({
+      where: { idempotencyKey: { in: keys } },
+      select: { idempotencyKey: true, createdAt: true },
+    }),
+  ]);
+  const counts = countsRes.data?.data?.counts ?? {};
+  const appliedByKey = new Map(appliedRows.map((r) => [r.idempotencyKey, r.createdAt]));
+  return gymIds.map((gymId, i) => {
+    const config = configs[i];
+    const usersJoined = counts[gymId] ?? 0;
+    const flatFeePerUser = config.subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER;
+    let amountDue = Math.round(usersJoined * flatFeePerUser * 100) / 100;
+    if (amountDue > 0 && amountDue < ATTENDANCE_SAAS_MIN_BILLED_AMOUNT) {
+      amountDue = ATTENDANCE_SAAS_MIN_BILLED_AMOUNT;
+    }
+    return {
+      gymId,
+      month,
+      usersJoined,
+      flatFeePerUser,
+      amountDue,
+      appliedAt: appliedByKey.get(attendanceSaasBillIdempotencyKey(gymId, month)) ?? null,
+      attendanceSaasOptedOut: config.attendanceSaasOptedOut,
+      subscriptionPricingMode: config.subscriptionPricingMode,
+    };
+  });
+}
+
+// Applies the (gymId, month) bill: debits the owning partner's wallet by
+// usersJoined x flatFee, negative-allowed and idempotent per (gym, month).
+// A gym that opted out of attendance-SaaS, or a month with zero joiners, has
+// nothing to charge — returns the computed bill with appliedAt null rather
+// than debiting 0.
+export async function applyAttendanceSaasBillService(gymId, month) {
+  const config = await fetchGymBillingConfig(gymId);
+  if (config.attendanceSaasOptedOut) {
+    const bill = await computeAttendanceSaasBillService(gymId, month);
+    return { ...bill, applied: false, reason: 'ATTENDANCE_SAAS_OPTED_OUT' };
+  }
+
+  const bill = await computeAttendanceSaasBillService(gymId, month);
+  if (bill.appliedAt) return { ...bill, applied: false, reason: 'ALREADY_APPLIED' };
+  if (bill.amountDue <= 0) return { ...bill, applied: false, reason: 'NO_USERS_JOINED' };
+
+  const description = `Attendance SaaS bill - Gym ${gymId} - ${month} (${bill.usersJoined} user${bill.usersJoined === 1 ? '' : 's'} x Rs ${bill.flatFeePerUser})`;
+  const wallet = await debitWalletService(
+    config.partnerId,
+    bill.amountDue,
+    description,
+    attendanceSaasBillIdempotencyKey(gymId, month),
+    gymId,
+    { allowNegative: true },
+  );
+  track('attendance_saas_bill_charged', config.partnerId, {
+    gym_id: gymId,
+    month,
+    users_joined: bill.usersJoined,
+    flat_fee_per_user: bill.flatFeePerUser,
+    amount_due: bill.amountDue,
+  });
+  return { ...bill, applied: true, balance: wallet.balance };
 }
 
 export async function payoutWalletService(userId, amount, description) {
@@ -687,12 +878,19 @@ export async function getRazorpayOrderService(orderId) {
   }
 }
 
-export async function claimRazorpayOrderService(orderId) {
+export async function claimRazorpayOrderService(orderId, { allowFailed = false } = {}) {
   // Atomic UPDATE...WHERE status='PENDING' — the DB row lock makes this the
   // single point of truth for "who gets to credit this order," so the client
   // /verify call and the webhook can never both credit the same top-up.
+  //
+  // `allowFailed` is for the success paths only. Razorpay Checkout retries
+  // inside one order (retry.max_count), so a first attempt can fire
+  // payment.failed - moving the order to FAILED - and a second attempt then
+  // succeed. FAILED used to be terminal, so that customer was charged and
+  // never credited. A success claims a FAILED order too; the credit is
+  // idempotent on razorpay-topup:<orderId>, so this can never double-credit.
   const result = await prisma.razorpayOrder.updateMany({
-    where: { orderId, status: 'PENDING' },
+    where: { orderId, status: { in: allowFailed ? ['PENDING', 'FAILED'] : ['PENDING'] } },
     data: { status: 'PROCESSING' }
   });
   return result.count === 1;
@@ -715,7 +913,7 @@ export async function updateRazorpayOrderStatusService(orderId, status, razorpay
 
 // Gym subscriptions ----------------------------------------------------------
 
-function serializeSubscription(sub) {
+export function serializeSubscription(sub) {
   if (!sub) return sub;
   return {
     ...sub,
@@ -753,10 +951,9 @@ export async function fetchGymForSubscription(gymId, planType) {
   return {
     partnerId: gym.partnerId,
     price: Number(price),
-    partnershipStartDate: gym.partnershipStartDate ?? null,
     subscriptionCommissionPct: gym.subscriptionCommissionPct != null ? Number(gym.subscriptionCommissionPct) : null,
     attendanceSaasOptedOut: gym.attendanceSaasOptedOut === true,
-    // Which formula to apply post-honeymoon — percentage-of-price
+    // Which formula to apply — percentage-of-price
     // (subscriptionCommissionPct above) or a flat fee regardless of price
     // (subscriptionFlatFeePerUser below). Defaults to 'percentage' if
     // absent (version-skew fallback, same posture as booking-service's
@@ -779,14 +976,35 @@ export async function fetchGymForSubscription(gymId, planType) {
 // top-up) rather than silently falling back to Razorpay — that's a
 // deliberate client-side decision, not something this function should make
 // on the caller's behalf.
-export async function purchaseSubscriptionWithWallet(customerId, gymId, planType, { coinCatalogItemKey } = {}) {
+// Two purchases for the same customer and gym run one after the other, never
+// together. The existingBefore/existingAfter checks below cannot see each
+// other's subscription - neither exists until gymSubscription.create at the
+// very end - and the synthetic order id differs per request, so the debit's
+// idempotency key did not stop a double-tap either: both debits landed and
+// two subscriptions were created. A transaction-scoped advisory lock on
+// (customerId, gymId) makes the second request wait, then see the first's
+// subscription in existingBefore and get a clean 409 with nothing charged.
+//
+// The transaction exists only to scope the lock - the purchase's own writes
+// go through their usual functions and connections. The timeout covers the
+// gym-service and challenge-service calls made while it is held. This is the
+// only advisory lock in the wallet database; a new one must not reuse the
+// two-int (customerId, gymId) key space.
+export async function purchaseSubscriptionWithWallet(customerId, gymId, planType, options = {}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${Number(customerId)}::int, ${Number(gymId)}::int)`;
+    return purchaseSubscriptionUnderLock(customerId, gymId, planType, options);
+  }, { maxWait: 10000, timeout: 30000 });
+}
+
+async function purchaseSubscriptionUnderLock(customerId, gymId, planType, { coinCatalogItemKey } = {}) {
   const existingBefore = await getActiveSubscriptionService(customerId, gymId);
   if (existingBefore) {
     throw { status: 409, error: 'You already have an active subscription for this gym' };
   }
 
   const {
-    partnerId, price, partnershipStartDate,
+    partnerId, price,
     subscriptionCommissionPct: subscriptionCommissionPctOverride,
     attendanceSaasOptedOut, subscriptionPricingMode, subscriptionFlatFeePerUser,
   } = await fetchGymForSubscription(gymId, planType);
@@ -830,110 +1048,168 @@ export async function purchaseSubscriptionWithWallet(customerId, gymId, planType
   }
   const chargeAmount = Math.max(0, price - discountAmount);
 
-  const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
-  if (!wallet || Number(wallet.balance) < chargeAmount) {
+  // chargeAmount is 0 when a coin discount covers the full price — the
+  // redemption above is the entire payment and debitWalletService rejects
+  // non-positive amounts, so skip the wallet debit entirely in that case.
+  if (chargeAmount > 0) {
+    const wallet = await prisma.wallet.findUnique({ where: { userId: customerId } });
+    if (!wallet || Number(wallet.balance) < chargeAmount) {
+      if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+      throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+    }
+
+    try {
+      await debitWalletService(
+        customerId, chargeAmount,
+        `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
+        `subscription-wallet-order-${syntheticOrderId}`,
+        gymId
+      );
+    } catch (err) {
+      // A concurrent debit on the same wallet (a booking, a purchase at a
+      // different gym, an admin payout) can land between the balance check
+      // above and this debit — the atomic updateMany inside
+      // debitWalletService then rejects. Without this catch the coin
+      // redemption was never reversed and the customer permanently lost
+      // coins for a purchase that never happened.
+      if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+      if (err && err.message === 'Insufficient balance') {
+        throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+      }
+      throw err;
+    }
+  }
+
+  // From here to gymSubscription.create, every failure must compensate the
+  // wallet debit (and coin redemption) — a DB error on the partner-wallet
+  // upsert or the subscription insert would otherwise strand the customer's
+  // money with no subscription and no record of what to reverse. The 409
+  // path compensates itself before throwing and must not double-refund.
+  try {
+    // A concurrent purchase (e.g. a double-tap racing this same function on
+    // another request) could have landed between the check above and this
+    // debit — guard again and reverse the wallet debit (and any coin
+    // redemption) if so.
+    const existingAfter = await getActiveSubscriptionService(customerId, gymId);
+    if (existingAfter) {
+      if (chargeAmount > 0) {
+        await creditWalletService(customerId, chargeAmount,
+          `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`,
+          null, 'customer', gymId);
+      }
+      if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
+      throw { status: 409, error: 'You already have an active subscription for this gym' };
+    }
+
+    // Every purchase that reaches this point is under the attendance-SaaS
+    // model (opted-out gyms were rejected above) — always true going
+    // forward. Historical rows can still be false from before opt-out was a
+    // hard gate; bookingCommissionFields/completeBooking in booking-service
+    // still reads this per-row for that reason.
+    const isAttendanceSaas = true;
+
+    let commissionAmount;
+    if (subscriptionPricingMode === 'flatPerUser') {
+      // A flat fee can't exceed the price itself — a cheap weekly plan at a
+      // gym with a flat fee set higher than that plan's price is an edge
+      // case admin can misconfigure, not one this function should let
+      // through as a negative partnerShare.
+      commissionAmount = Math.min(subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER, price);
+    } else {
+      const pct = subscriptionCommissionPctOverride ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
+      commissionAmount = Math.round(price * pct / 100 * 100) / 100;
+    }
+    // Always stored as the equivalent percentage, regardless of which mode
+    // actually computed commissionAmount — every existing consumer of
+    // GymSubscription.commissionPct (revenue-split summaries, etc.) reads it
+    // as a plain percentage and shouldn't need to branch on pricingMode to
+    // stay correct.
+    const commissionPct = price > 0 ? Math.round((commissionAmount / price) * 100 * 100) / 100 : 0;
+    // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
+    // partner is credited partnerShare/days per completed visit instead (see
+    // bookingCommissionFields/completeBooking in booking-service), so this
+    // customer's own already-collected revenue is what funds every visit
+    // (including any later gift-day make-up visits) and unused days are simply
+    // never paid out. Still upsert the partner's wallet row now so the first
+    // per-visit credit never fails on a missing wallet (the bug that used to
+    // strand a purchase in PROCESSING when a partner had no wallet yet).
+    // partnerShare is computed off the full, undiscounted price (both here and
+    // above via commissionAmount) — a coin discount (Gamification Phase 2) is
+    // Phool Gobhi's own acquisition spend out of its commission margin, never
+    // the partner's.
+    const partnerShare = Math.round((price - commissionAmount) * 100) / 100;
+    const days = PLAN_DAYS[planType];
+    const startDate = new Date();
+    const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
+
+    await prisma.wallet.upsert({
+      where: { userId: partnerId },
+      update: {},
+      create: { userId: partnerId, userType: 'partner' },
+    });
+
+    const subscription = await prisma.gymSubscription.create({
+      data: {
+        customerId,
+        gymId,
+        partnerId,
+        planType,
+        price,
+        commissionPct,
+        partnerShare,
+        isAttendanceSaas,
+        pricingMode: subscriptionPricingMode,
+        startDate,
+        endDate,
+        razorpayOrderId: syntheticOrderId,
+        payoutModel: 'perVisit',
+        coinDiscountAmount: redemption ? discountAmount : null,
+        coinDiscountCoins: redemption ? redemption.coinCost : null,
+      },
+    });
+
+    return serializeSubscription(subscription);
+  } catch (err) {
+    if (err && err.status === 409) throw err; // already compensated above
+    // Reverse whatever was taken before the failure. The compensating
+    // credit is best-effort with logging (same posture as
+    // refundCoinRedemption) — it must never mask the original error that's
+    // already unwinding the purchase.
+    try {
+      if (chargeAmount > 0) {
+        await creditWalletService(customerId, chargeAmount,
+          `Refund - subscription purchase failed (wallet order ${syntheticOrderId})`,
+          null, 'customer', gymId);
+      }
+    } catch (refundErr) {
+      console.error('purchaseSubscription compensation credit failed for order', syntheticOrderId, refundErr.message);
+    }
     if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
-    throw { status: 402, error: 'Insufficient wallet balance', code: 'INSUFFICIENT_BALANCE', price: chargeAmount };
+    throw err;
   }
-
-  await debitWalletService(
-    customerId, chargeAmount,
-    `Subscription purchase - Gym: ${gymId}, Plan: ${planType}`,
-    `subscription-wallet-order-${syntheticOrderId}`,
-    gymId
-  );
-
-  // A concurrent purchase (e.g. a double-tap racing this same function on
-  // another request) could have landed between the check above and this
-  // debit — guard again and reverse the wallet debit (and any coin
-  // redemption) if so.
-  const existingAfter = await getActiveSubscriptionService(customerId, gymId);
-  if (existingAfter) {
-    await creditWalletService(customerId, chargeAmount,
-      `Refund - already subscribed to gym ${gymId} (wallet order ${syntheticOrderId})`,
-      null, 'customer', gymId);
-    if (redemption) await refundCoinRedemption(redemption.redemptionId, `refund-${syntheticOrderId}`);
-    throw { status: 409, error: 'You already have an active subscription for this gym' };
-  }
-
-  // Every purchase that reaches this point is under the attendance-SaaS
-  // model (opted-out gyms were rejected above) — always true going
-  // forward. Historical rows can still be false from before opt-out was a
-  // hard gate; bookingCommissionFields/completeBooking in booking-service
-  // still reads this per-row for that reason.
-  const isAttendanceSaas = true;
-
-  let commissionAmount;
-  if (isInSubscriptionSaasHoneymoon(partnershipStartDate)) {
-    commissionAmount = 0;
-  } else if (subscriptionPricingMode === 'flatPerUser') {
-    // A flat fee can't exceed the price itself — a cheap weekly plan at a
-    // gym with a flat fee set higher than that plan's price is an edge
-    // case admin can misconfigure, not one this function should let
-    // through as a negative partnerShare.
-    commissionAmount = Math.min(subscriptionFlatFeePerUser ?? DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER, price);
-  } else {
-    const pct = subscriptionCommissionPctOverride ?? DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT;
-    commissionAmount = Math.round(price * pct / 100 * 100) / 100;
-  }
-  // Always stored as the equivalent percentage, regardless of which mode
-  // actually computed commissionAmount — every existing consumer of
-  // GymSubscription.commissionPct (revenue-split summaries, etc.) reads it
-  // as a plain percentage and shouldn't need to branch on pricingMode to
-  // stay correct.
-  const commissionPct = price > 0 ? Math.round((commissionAmount / price) * 100 * 100) / 100 : 0;
-  // partnerShare is the plan-lifetime ceiling, not a one-time payment — the
-  // partner is credited partnerShare/days per completed visit instead (see
-  // bookingCommissionFields/completeBooking in booking-service), so this
-  // customer's own already-collected revenue is what funds every visit
-  // (including any later gift-day make-up visits) and unused days are simply
-  // never paid out. Still upsert the partner's wallet row now so the first
-  // per-visit credit never fails on a missing wallet (the bug that used to
-  // strand a purchase in PROCESSING when a partner had no wallet yet).
-  // partnerShare is computed off the full, undiscounted price (both here and
-  // above via commissionAmount) — a coin discount (Gamification Phase 2) is
-  // Phool Gobhi's own acquisition spend out of its commission margin, never
-  // the partner's.
-  const partnerShare = Math.round((price - commissionAmount) * 100) / 100;
-  const days = PLAN_DAYS[planType];
-  const startDate = new Date();
-  const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
-
-  await prisma.wallet.upsert({
-    where: { userId: partnerId },
-    update: {},
-    create: { userId: partnerId, userType: 'partner' },
-  });
-
-  const subscription = await prisma.gymSubscription.create({
-    data: {
-      customerId,
-      gymId,
-      partnerId,
-      planType,
-      price,
-      commissionPct,
-      partnerShare,
-      isAttendanceSaas,
-      pricingMode: subscriptionPricingMode,
-      startDate,
-      endDate,
-      razorpayOrderId: syntheticOrderId,
-      payoutModel: 'perVisit',
-      coinDiscountAmount: redemption ? discountAmount : null,
-      coinDiscountCoins: redemption ? redemption.coinCost : null,
-    },
-  });
-
-  return serializeSubscription(subscription);
 }
 
 // Used by booking-service (internal, requireInternal) at booking-creation
 // time to decide whether to skip the per-session wallet debit.
-export async function getActiveSubscriptionService(customerId, gymId) {
-  const now = new Date();
+//
+// `onDate` ('YYYY-MM-DD', an IST calendar day) is the day being booked. A plan
+// covers a session on that day when the plan's window overlaps it. Without it
+// the check was against "now", so on a weekly plan's last day a customer could
+// book every day of the next week as covered - free sessions, each paying the
+// partner partnerShare/7 out of revenue the plan never collected. Omitted
+// (purchase-time "do they already have one?") it still means "active now".
+const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function getActiveSubscriptionService(customerId, gymId, { onDate } = {}) {
+  let from = new Date();
+  let to = from;
+  if (onDate && ISO_DAY.test(onDate)) {
+    from = new Date(Date.parse(`${onDate}T00:00:00Z`) - IST_OFFSET_MS); // IST midnight
+    to = new Date(from.getTime() + 24 * 60 * 60 * 1000 - 1);
+  }
   const sub = await prisma.gymSubscription.findFirst({
-    where: { customerId, gymId, status: 'active', startDate: { lte: now }, endDate: { gte: now } },
+    where: { customerId, gymId, status: 'active', startDate: { lte: to }, endDate: { gte: from } },
   });
   return serializeSubscription(sub);
 }
@@ -950,7 +1226,7 @@ async function fetchLastVisitDate(subscriptionId) {
   }
 }
 
-function daysSince(dateStr) {
+export function daysSince(dateStr) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / (24 * 60 * 60 * 1000));
 }
 
@@ -1188,29 +1464,73 @@ function razorpayClient() {
   });
 }
 
-// Settles one stale PENDING order against Razorpay's own payment records:
-//  - a captured/authorized payment => credit the wallet (same claim-then-
-//    credit path the client /verify and the webhook use, so the atomic
-//    PENDING->PROCESSING claim guarantees no double credit no matter which
-//    of the three settles it first);
+/**
+ * True once the payment is captured, capturing it here if it is only
+ * authorized. Every credit path calls this first.
+ *
+ * Crediting on "authorized" assumed the Razorpay account auto-captures. If it
+ * does not, an authorized payment is never captured, Razorpay auto-refunds it
+ * after a few days, and the wallet keeps credit for money that went back -
+ * or, credited only on "captured", the customer is never credited at all.
+ * Capturing explicitly makes both settings behave the same.
+ *
+ * Captures only a payment that belongs to this order and is for exactly the
+ * order's amount; anything else is left alone and reported as not captured.
+ * Throws on a Razorpay network error so the caller can retry (webhook 500 /
+ * reconciler leaves the order for next time) rather than treat it as failed.
+ */
+export async function ensurePaymentCapturedService(paymentId, order) {
+  const razorpay = razorpayClient();
+  const payment = await razorpay.payments.fetch(paymentId);
+  if (payment.order_id && payment.order_id !== order.orderId) return false;
+  if (payment.status === 'captured') return true;
+  if (payment.status !== 'authorized') return false;
+
+  const paise = Math.round(Number(order.amount) * 100);
+  if (Number(payment.amount) !== paise) return false;
+  try {
+    const captured = await razorpay.payments.capture(paymentId, paise, payment.currency || 'INR');
+    return captured?.status === 'captured';
+  } catch (err) {
+    // A concurrent path (webhook vs /verify vs reconciler, or a late
+    // auto-capture) may have captured it first, which makes this call fail.
+    const again = await razorpay.payments.fetch(paymentId);
+    if (again.status === 'captured') return true;
+    throw err;
+  }
+}
+
+// Settles one stale Razorpay order against Razorpay's own payment records:
+//  - a captured/authorized payment => credit the wallet;
 //  - only failed payments => mark the order FAILED;
 //  - no payment at all (checkout abandoned mid-flight) => leave PENDING for
 //    the next sweep, since the user may still complete it.
+//
+// The credit is idempotent on a per-order key (`razorpay-topup:<orderId>`,
+// see creditWalletService), so this function does NOT need the atomic
+// PENDING->PROCESSING claim the client /verify and webhook paths use: no
+// matter how many of them race, at most one credit lands. That idempotency is
+// also what lets the sweep safely pick up PROCESSING orders stranded by a
+// crashed process that claimed but never credited/marked SUCCESS (the old
+// sweep only ever looked at PENDING, so such an order was lost forever --
+// money collected by Razorpay, customer wallet never credited).
 async function settleRazorpayOrder(razorpay, order) {
   // fetchPayments throws if the order is unknown to Razorpay (e.g. created
-  // against a different key set) — the caller treats that as unresolved.
+  // against a different key set) �?" the caller treats that as unresolved.
   const payments = await razorpay.orders.fetchPayments(order.orderId);
   const list = payments?.items ?? [];
 
   const succeeded = list.find((p) => p.status === 'captured' || p.status === 'authorized');
   const anyFailed = list.length > 0 && list.every((p) => p.status === 'failed');
   if (!succeeded && !anyFailed) return 'unresolved';
-
-  const claimed = await claimRazorpayOrderService(order.orderId);
-  if (!claimed) return 'unresolved'; // client /verify or webhook settled it first
+  // A FAILED order is re-swept only to catch a later successful retry; still
+  // all-failed, there is nothing to write or report again.
+  if (!succeeded && order.status === 'FAILED') return 'failed';
 
   if (succeeded) {
-    await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`);
+    // Credited only once captured - see ensurePaymentCapturedService.
+    if (!(await ensurePaymentCapturedService(succeeded.id, order))) return 'unresolved';
+    await creditWalletService(order.userId, order.amount, `Top-up via Razorpay - Order: ${order.orderId}`, `razorpay-topup:${order.orderId}`);
     await updateRazorpayOrderStatusService(order.orderId, 'SUCCESS', succeeded.id);
     track('wallet_topup_succeeded', order.userId, { amount: Number(order.amount), order_id: order.orderId, via: 'reconcile' });
     return 'credited';
@@ -1221,18 +1541,31 @@ async function settleRazorpayOrder(razorpay, order) {
   return 'failed';
 }
 
-// Finds PENDING top-up orders older than the settle window and settles them
+// Finds unsettled top-up orders older than the settle window and settles them
 // against Razorpay. `userId` scopes it to one customer (the lazy on-read
 // path); omitting it reconciles everything (the periodic sweep / internal
-// trigger). Failures are swallowed per-order — a single bad order must never
+// trigger). Failures are swallowed per-order �?" a single bad order must never
 // stall the rest of the sweep.
+//
+// PENDING covers orders that were never claimed; PROCESSING covers orders a
+// crashed process claimed but never finished (see settleRazorpayOrder for why
+// re-processing those is safe). Orders deliberately settled (or marked failed)
+// by the client /verify or webhook are neither, so never re-swept.
 export async function reconcilePendingRazorpayOrdersService({ userId } = {}) {
   const cutoff = new Date(Date.now() - RECONCILE_ORDER_AFTER_MS);
+  // FAILED orders from the last 48h are re-checked too: a checkout retry can
+  // succeed after payment.failed marked the order FAILED, and if both /verify
+  // and the captured webhook were missed this sweep is the only thing left to
+  // credit it. Bounded so the sweep never re-reads every failure ever.
+  const failedSince = new Date(Date.now() - 48 * 60 * 60 * 1000);
   const candidates = await prisma.razorpayOrder.findMany({
     where: {
       purpose: 'topup',
-      status: 'PENDING',
       createdAt: { lt: cutoff },
+      OR: [
+        { status: { in: ['PENDING', 'PROCESSING'] } },
+        { status: 'FAILED', createdAt: { gte: failedSince } },
+      ],
       ...(userId ? { userId } : {}),
     },
     orderBy: { createdAt: 'asc' },

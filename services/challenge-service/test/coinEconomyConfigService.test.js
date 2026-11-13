@@ -43,6 +43,8 @@ const VALID_BASE = {
   milestones: { '2': 50, '4': 150, '12': 500 },
   pairedStreakWeeklyBonus: 15,
   coinsPerVerifiedWorkout: 15,
+  gymTrialMonthlyCap: 10,
+  gymTrialPerUserLimit: 1,
 };
 
 test('rejects qualifyingCheckinsPerWeek = 0 (below min)', async () => {
@@ -157,6 +159,8 @@ test('loadEconomyConfig returns defaults (incl. qualifyingCheckinsPerWeek: 2) wh
   const config = await loadEconomyConfig();
   assert.equal(config.qualifyingCheckinsPerWeek, 2);
   assert.equal(config.coinsPerCheckin, 10);
+  assert.equal(config.gymTrialMonthlyCap, 10);
+  assert.equal(config.gymTrialPerUserLimit, 1);
   assert.equal(config.updatedAt, null);
 });
 
@@ -164,12 +168,44 @@ test('loadEconomyConfig returns defaults (incl. qualifyingCheckinsPerWeek: 2) wh
 test('loadEconomyConfig returns the stored row when one exists', async () => {
   prismaMock.findUnique = async () => ({
     id: 1, coinsPerCheckin: 25, weeklyTargetBonus: 40, milestones: { '3': 99 },
-    pairedStreakWeeklyBonus: 5, qualifyingCheckinsPerWeek: 5, updatedAt: new Date('2026-08-27T00:00:00Z'),
+    pairedStreakWeeklyBonus: 5, qualifyingCheckinsPerWeek: 5, gymTrialMonthlyCap: 4, gymTrialPerUserLimit: 2,
+    updatedAt: new Date('2026-08-27T00:00:00Z'),
   });
   const config = await loadEconomyConfig();
   assert.equal(config.qualifyingCheckinsPerWeek, 5);
   assert.equal(config.coinsPerCheckin, 25);
   assert.deepEqual(config.milestones, { '3': 99 });
+  assert.equal(config.gymTrialMonthlyCap, 4);
+  assert.equal(config.gymTrialPerUserLimit, 2);
+});
+
+// The founder's own decision (D-06): a month-cap of exactly 0 is the honest
+// way to pause the gym-trial spend without touching every catalog item.
+test('accepts gymTrialMonthlyCap = 0 (deliberately allowed, unlike every other bounded field)', async () => {
+  prismaMock.upsert = async (args) => ({ ...args.create, updatedAt: new Date() });
+  const result = await updateEconomyConfig({ ...VALID_BASE, qualifyingCheckinsPerWeek: 2, gymTrialMonthlyCap: 0 });
+  assert.equal(result.gymTrialMonthlyCap, 0);
+});
+
+test('rejects gymTrialPerUserLimit = 0 — nobody could ever redeem a trial', async () => {
+  await assert.rejects(
+    () => updateEconomyConfig({ ...VALID_BASE, qualifyingCheckinsPerWeek: 2, gymTrialPerUserLimit: 0 }),
+    (err) => {
+      assert.equal(err.status, 400);
+      assert.match(err.error, /gymTrialPerUserLimit must be a whole number between 1 and 10/);
+      return true;
+    }
+  );
+});
+
+test('rejects gymTrialMonthlyCap above its sanity ceiling', async () => {
+  await assert.rejects(
+    () => updateEconomyConfig({ ...VALID_BASE, qualifyingCheckinsPerWeek: 2, gymTrialMonthlyCap: 1001 }),
+    (err) => {
+      assert.match(err.error, /gymTrialMonthlyCap must be a whole number between 0 and 1000/);
+      return true;
+    }
+  );
 });
 
 // Happy path — the mocked upsert actually "succeeds" and we assert on

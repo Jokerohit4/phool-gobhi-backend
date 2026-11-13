@@ -1,7 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { challengeMatchesAudience, isPersonalChallenge } from './challengeAudience.js';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { isWithinMaxChallengeRange } from '../utils/location.js';
-const prisma = new PrismaClient();
+import { track } from '../utils/analytics.js';
+import { evictPersonalProgress } from '../utils/personalProgressCache.js';
 
 // Same haversine formula as booking-service's self-check-in geofence check
 // — duplicated per-service by this repo's own convention (see e.g.
@@ -29,7 +31,7 @@ function inOffPeakWindow(attendedAt, windows) {
   return windows.some((w) => hour >= w.startHourIst && hour < w.endHourIst);
 }
 
-async function completeAndReward(enrollment, challenge) {
+async function completeAndReward(enrollment, challenge, via) {
   const updated = await prisma.challengeEnrollment.update({
     where: { id: enrollment.id },
     data: { status: 'completed', completedAt: new Date() },
@@ -45,30 +47,50 @@ async function completeAndReward(enrollment, challenge) {
     update: {},
     create: { enrollmentId: enrollment.id, rewardType: 'coins', coinAmount: challenge.rewardCoins },
   });
+  track('challenge_completed', enrollment.userId, {
+    challenge_id: challenge.id,
+    progress_count: updated.progressCount,
+    target_count: challenge.targetCount,
+    reward_coins: challenge.rewardCoins,
+    via,
+  });
   return updated;
 }
 
-export async function enrollService(userId, challengeId, { userLat, userLng } = {}) {
-  const challenge = await prisma.challenge.findUnique({ where: { id: Number(challengeId) } });
+export async function enrollService(userId, challengeId, { userLat, userLng, audience } = {}) {
+  const challenge = await prisma.challenge.findUnique({ where: { id: Number(challengeId) }, include: { challengeDefinition: true } });
   if (!challenge || challenge.status !== 'active') throw { status: 404, error: 'Challenge not found or inactive' };
 
   // Location gate — the 20km radius is enforced at enrollment too, so the
   // list filter can't be bypassed by deep-linking a far challenge's id. Fails
   // closed: no location headers (client hasn't shared/resolved GPS) or no
   // challenge anchor both reject rather than assume in-range.
-  if (userLat == null || userLng == null) {
+  if (!isPersonalChallenge(challenge) && (userLat == null || userLng == null)) {
     throw { status: 400, error: 'Location is required to join this challenge' };
   }
-  if (!isWithinMaxChallengeRange(userLat, userLng, challenge)) {
+  if (!isPersonalChallenge(challenge) && !isWithinMaxChallengeRange(userLat, userLng, challenge)) {
     throw { status: 403, error: 'This challenge is only available within 20km of your location' };
   }
 
   const existing = await prisma.challengeEnrollment.findUnique({
     where: { userId_challengeId: { userId, challengeId: challenge.id } },
   });
-  if (existing) return existing;
+  if (existing) {
+    track('challenge_enrolled', userId, {
+      challenge_id: challenge.id, already_enrolled: true,
+      target_count: challenge.targetCount, reward_coins: challenge.rewardCoins,
+    });
+    return existing;
+  }
 
-  return prisma.challengeEnrollment.create({ data: { userId, challengeId: challenge.id } });
+  if (!challengeMatchesAudience(challenge, audience)) throw { status: 403, error: 'This challenge is for a different training or wellbeing preference' };
+  const created = await prisma.challengeEnrollment.create({ data: { userId, challengeId: challenge.id } });
+  evictPersonalProgress(userId); // a fresh enrollment must never read a cached count
+  track('challenge_enrolled', userId, {
+    challenge_id: challenge.id, already_enrolled: false,
+    target_count: challenge.targetCount, reward_coins: challenge.rewardCoins,
+  });
+  return created;
 }
 
 export async function getMyEnrollmentService(userId, challengeId) {
@@ -92,11 +114,22 @@ export async function leaveChallengeService(userId, challengeId) {
     where: { userId_challengeId: { userId, challengeId: Number(challengeId) } },
   });
   if (!enrollment) throw { status: 400, error: 'Enroll in this challenge first' };
-  if (enrollment.status !== 'active') return enrollment;
-  return prisma.challengeEnrollment.update({
+  if (enrollment.status !== 'active') {
+    track('challenge_left', userId, {
+      challenge_id: Number(challengeId), prior_status: enrollment.status, abandoned: false,
+    });
+    return enrollment;
+  }
+  const updated = await prisma.challengeEnrollment.update({
     where: { id: enrollment.id },
     data: { status: 'abandoned' },
   });
+  evictPersonalProgress(userId);
+  track('challenge_left', userId, {
+    challenge_id: Number(challengeId), prior_status: 'active', abandoned: true,
+    progress_count: updated.progressCount,
+  });
+  return updated;
 }
 
 // Called from the customer-facing checkpoint endpoint for outside_gym_city
@@ -110,7 +143,13 @@ export async function visitCheckpointService(userId, challengeId, { code, lat, l
     include: { challenge: true },
   });
   if (!enrollment) throw { status: 400, error: 'Enroll in this challenge first' };
-  if (enrollment.status !== 'active') return enrollment;
+  if (enrollment.status !== 'active') {
+    track('challenge_checkpoint_visited', userId, {
+      challenge_id: Number(challengeId), replayed: false, accepted: false,
+      reason: 'enrollment_not_active', progress_after: enrollment.progressCount,
+    });
+    return enrollment;
+  }
 
   const spot = await prisma.challengeCheckpointSpot.findUnique({ where: { code } });
   if (!spot || spot.challengeId !== enrollment.challengeId) {
@@ -120,7 +159,13 @@ export async function visitCheckpointService(userId, challengeId, { code, lat, l
   const alreadyVisited = await prisma.challengeCheckpointVisit.findUnique({
     where: { enrollmentId_checkpointSpotId: { enrollmentId: enrollment.id, checkpointSpotId: spot.id } },
   });
-  if (alreadyVisited) return enrollment;
+  if (alreadyVisited) {
+    track('challenge_checkpoint_visited', userId, {
+      challenge_id: Number(challengeId), replayed: true, accepted: false,
+      reason: 'already_visited', progress_after: enrollment.progressCount,
+    });
+    return enrollment;
+  }
 
   const distance = distanceMeters(lat, lng, spot.lat, spot.lng);
   if (distance > spot.radiusMeters) {
@@ -135,8 +180,15 @@ export async function visitCheckpointService(userId, challengeId, { code, lat, l
     data: { progressCount: { increment: 1 } },
   });
 
-  if (updated.progressCount >= enrollment.challenge.targetCount) {
-    return completeAndReward(updated, enrollment.challenge);
+  const completed = updated.progressCount >= enrollment.challenge.targetCount;
+  track('challenge_checkpoint_visited', userId, {
+    challenge_id: enrollment.challengeId, replayed: false, accepted: true,
+    reason: null, progress_after: updated.progressCount,
+    target_count: enrollment.challenge.targetCount, completed,
+  });
+
+  if (completed) {
+    return completeAndReward(updated, enrollment.challenge, 'checkpoint');
   }
   return updated;
 }
@@ -151,14 +203,23 @@ export async function advanceOffPeakChallengesService(userId, attendedAt) {
     where: { userId, status: 'active', challenge: { challengeDefinition: { type: 'off_peak_hunter' } } },
     include: { challenge: true },
   });
+  let advanced = 0;
+  let completedCount = 0;
   for (const enrollment of enrollments) {
     if (!inOffPeakWindow(attendedAt, enrollment.challenge.offPeakWindows)) continue;
     const updated = await prisma.challengeEnrollment.update({
       where: { id: enrollment.id },
       data: { progressCount: { increment: 1 } },
     });
+    advanced += 1;
     if (updated.progressCount >= enrollment.challenge.targetCount) {
-      await completeAndReward(updated, enrollment.challenge);
+      completedCount += 1;
+      await completeAndReward(updated, enrollment.challenge, 'off_peak');
     }
+  }
+  if (advanced > 0) {
+    track('challenge_off_peak_advanced', userId, {
+      challenge_count: advanced, completed_count: completedCount,
+    });
   }
 }

@@ -37,3 +37,25 @@ export const getDailyActivity = async (req, res) => {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
+
+// Internal twin of getDailyActivity for booking-service's leaderboard score —
+// reads rows for a batch of user ids (never req.userId). `ids` is a
+// comma-separated list; bounded so a runaway caller can't do one giant `IN`.
+export const getDailyActivityInternal = async (req, res) => {
+  try {
+    const ids = String(req.query?.ids ?? '')
+      .split(',')
+      .map((s) => parseInt(s, 10))
+      .filter((n) => Number.isInteger(n));
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'ids is required (comma-separated user ids)' });
+    }
+    if (ids.length > 500) {
+      return res.status(400).json({ error: 'ids must contain at most 500 user ids' });
+    }
+    const activity = await activityService.getDailyActivityForUsersService(ids, req.query);
+    res.json({ data: serializeDecimals(activity) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};

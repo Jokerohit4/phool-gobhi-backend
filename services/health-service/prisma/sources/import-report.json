@@ -1,0 +1,4390 @@
+{
+  "sourceExercises": 876,
+  "originalExercises": 308,
+  "totalExercises": 1103,
+  "added": 795,
+  "mapped": 81,
+  "imageSequences": 873,
+  "decisions": [
+    {
+      "source": "3/4 Sit-Up",
+      "exercise": "3/4 Sit-Up",
+      "action": "added"
+    },
+    {
+      "source": "90/90 Hamstring",
+      "exercise": "90/90 Hamstring",
+      "action": "added"
+    },
+    {
+      "source": "Ab Crunch Machine",
+      "exercise": "Ab Crunch Machine",
+      "action": "added"
+    },
+    {
+      "source": "Ab Roller",
+      "exercise": "Ab Roller",
+      "action": "added"
+    },
+    {
+      "source": "Adductor",
+      "exercise": "Adductor",
+      "action": "added"
+    },
+    {
+      "source": "Adductor/Groin",
+      "exercise": "Adductor/Groin",
+      "action": "added"
+    },
+    {
+      "source": "Advanced Kettlebell Windmill",
+      "exercise": "Advanced Kettlebell Windmill",
+      "action": "added"
+    },
+    {
+      "source": "Air Bike",
+      "exercise": "Air Bike (Bicycle Crunch)",
+      "action": "added"
+    },
+    {
+      "source": "All Fours Quad Stretch",
+      "exercise": "All Fours Quad Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Alternate Hammer Curl",
+      "exercise": "Alternate Hammer Curl",
+      "action": "added"
+    },
+    {
+      "source": "Alternate Heel Touchers",
+      "exercise": "Alternate Heel Touchers",
+      "action": "added"
+    },
+    {
+      "source": "Alternate Incline Dumbbell Curl",
+      "exercise": "Alternate Incline Dumbbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Alternate Leg Diagonal Bound",
+      "exercise": "Alternate Leg Diagonal Bound",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Cable Shoulder Press",
+      "exercise": "Alternating Cable Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Deltoid Raise",
+      "exercise": "Alternating Deltoid Raise",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Floor Press",
+      "exercise": "Alternating Floor Press",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Hang Clean",
+      "exercise": "Alternating Hang Clean",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Kettlebell Press",
+      "exercise": "Alternating Kettlebell Press",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Kettlebell Row",
+      "exercise": "Alternating Kettlebell Row",
+      "action": "added"
+    },
+    {
+      "source": "Alternating Renegade Row",
+      "exercise": "Alternating Renegade Row",
+      "action": "added"
+    },
+    {
+      "source": "Ankle Circles",
+      "exercise": "Ankle Circles",
+      "action": "added"
+    },
+    {
+      "source": "Ankle On The Knee",
+      "exercise": "Ankle On The Knee",
+      "action": "added"
+    },
+    {
+      "source": "Anterior Tibialis-SMR",
+      "exercise": "Anterior Tibialis-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Anti-Gravity Press",
+      "exercise": "Anti-Gravity Press",
+      "action": "added"
+    },
+    {
+      "source": "Arm Circles",
+      "exercise": "Arm Circles",
+      "action": "added"
+    },
+    {
+      "source": "Arnold Dumbbell Press",
+      "exercise": "Arnold Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Around The Worlds",
+      "exercise": "Around The Worlds",
+      "action": "added"
+    },
+    {
+      "source": "Atlas Stone Trainer",
+      "exercise": "Atlas Stone Trainer",
+      "action": "added"
+    },
+    {
+      "source": "Atlas Stones",
+      "exercise": "Atlas Stones",
+      "action": "added"
+    },
+    {
+      "source": "Axle Deadlift",
+      "exercise": "Axle Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Back Flyes - With Bands",
+      "exercise": "Back Flyes - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Backward Drag",
+      "exercise": "Backward Drag",
+      "action": "added"
+    },
+    {
+      "source": "Backward Medicine Ball Throw",
+      "exercise": "Backward Medicine Ball Throw",
+      "action": "added"
+    },
+    {
+      "source": "Balance Board",
+      "exercise": "Balance Board",
+      "action": "added"
+    },
+    {
+      "source": "Ball Leg Curl",
+      "exercise": "Ball Leg Curl",
+      "action": "added"
+    },
+    {
+      "source": "Band Assisted Pull-Up",
+      "exercise": "Band Assisted Pull-Up",
+      "action": "added"
+    },
+    {
+      "source": "Band Good Morning",
+      "exercise": "Band Good Morning",
+      "action": "added"
+    },
+    {
+      "source": "Band Good Morning (Pull Through)",
+      "exercise": "Band Good Morning (Pull Through)",
+      "action": "added"
+    },
+    {
+      "source": "Band Hip Adductions",
+      "exercise": "Band Hip Adductions",
+      "action": "added"
+    },
+    {
+      "source": "Band Pull Apart",
+      "exercise": "Band Pull Apart",
+      "action": "added"
+    },
+    {
+      "source": "Band Skull Crusher",
+      "exercise": "Band Skull Crusher",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Ab Rollout",
+      "exercise": "Barbell Ab Rollout",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Ab Rollout - On Knees",
+      "exercise": "Barbell Ab Rollout - On Knees",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Bench Press - Medium Grip",
+      "exercise": "Barbell Bench Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Curl",
+      "exercise": "Barbell Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Curls Lying Against An Incline",
+      "exercise": "Barbell Curls Lying Against An Incline",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Deadlift",
+      "exercise": "Deadlift",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Full Squat",
+      "exercise": "Barbell Full Squat",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Glute Bridge",
+      "exercise": "Barbell Glute Bridge",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Guillotine Bench Press",
+      "exercise": "Barbell Guillotine Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Hack Squat",
+      "exercise": "Barbell Hack Squat",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Hip Thrust",
+      "exercise": "Barbell Hip Thrust",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Incline Bench Press - Medium Grip",
+      "exercise": "Barbell Incline Bench Press - Medium Grip",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Incline Shoulder Raise",
+      "exercise": "Barbell Incline Shoulder Raise",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Lunge",
+      "exercise": "Barbell Lunge",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Rear Delt Row",
+      "exercise": "Barbell Rear Delt Row",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Rollout from Bench",
+      "exercise": "Barbell Rollout from Bench",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Seated Calf Raise",
+      "exercise": "Barbell Seated Calf Raise",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Shoulder Press",
+      "exercise": "Barbell Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Shrug",
+      "exercise": "Barbell Shrug",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Shrug Behind The Back",
+      "exercise": "Barbell Shrug Behind The Back",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Side Bend",
+      "exercise": "Barbell Side Bend",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Side Split Squat",
+      "exercise": "Barbell Side Split Squat",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Squat",
+      "exercise": "Barbell Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Barbell Squat To A Bench",
+      "exercise": "Barbell Squat To A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Step Ups",
+      "exercise": "Barbell Step Ups",
+      "action": "added"
+    },
+    {
+      "source": "Barbell Walking Lunge",
+      "exercise": "Barbell Walking Lunge",
+      "action": "added"
+    },
+    {
+      "source": "Battling Ropes",
+      "exercise": "Battling Ropes",
+      "action": "added"
+    },
+    {
+      "source": "Bear Crawl Sled Drags",
+      "exercise": "Bear Crawl Sled Drags",
+      "action": "added"
+    },
+    {
+      "source": "Behind Head Chest Stretch",
+      "exercise": "Behind Head Chest Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Bench Dips",
+      "exercise": "Bench Dips",
+      "action": "added"
+    },
+    {
+      "source": "Bench Jump",
+      "exercise": "Bench Jump",
+      "action": "added"
+    },
+    {
+      "source": "Bench Press - Powerlifting",
+      "exercise": "Bench Press - Powerlifting",
+      "action": "added"
+    },
+    {
+      "source": "Bench Press - With Bands",
+      "exercise": "Bench Press - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Bench Press with Chains",
+      "exercise": "Bench Press with Chains",
+      "action": "added"
+    },
+    {
+      "source": "Bench Sprint",
+      "exercise": "Bench Sprint",
+      "action": "added"
+    },
+    {
+      "source": "Bent-Arm Barbell Pullover",
+      "exercise": "Bent-Arm Barbell Pullover",
+      "action": "added"
+    },
+    {
+      "source": "Bent-Arm Dumbbell Pullover",
+      "exercise": "Bent-Arm Dumbbell Pullover",
+      "action": "added"
+    },
+    {
+      "source": "Bent-Knee Hip Raise",
+      "exercise": "Bent-Knee Hip Raise",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over Barbell Row",
+      "exercise": "Bent Over Barbell Row",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over Dumbbell Rear Delt Raise With Head On Bench",
+      "exercise": "Bent Over Dumbbell Rear Delt Raise With Head On Bench",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over Low-Pulley Side Lateral",
+      "exercise": "Bent Over Low-Pulley Side Lateral",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over One-Arm Long Bar Row",
+      "exercise": "Bent Over One-Arm Long Bar Row",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over Two-Arm Long Bar Row",
+      "exercise": "Bent Over Two-Arm Long Bar Row",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over Two-Dumbbell Row",
+      "exercise": "Bent Over Two-Dumbbell Row",
+      "action": "added"
+    },
+    {
+      "source": "Bent Over Two-Dumbbell Row With Palms In",
+      "exercise": "Bent Over Two-Dumbbell Row With Palms In",
+      "action": "added"
+    },
+    {
+      "source": "Bent Press",
+      "exercise": "Bent Press",
+      "action": "added"
+    },
+    {
+      "source": "Bicycling",
+      "exercise": "Bicycling",
+      "action": "added"
+    },
+    {
+      "source": "Bicycling, Stationary",
+      "exercise": "Stationary Bike",
+      "action": "mapped"
+    },
+    {
+      "source": "Board Press",
+      "exercise": "Board Press",
+      "action": "added"
+    },
+    {
+      "source": "Body-Up",
+      "exercise": "Body-Up",
+      "action": "added"
+    },
+    {
+      "source": "Body Tricep Press",
+      "exercise": "Body Tricep Press",
+      "action": "added"
+    },
+    {
+      "source": "Bodyweight Flyes",
+      "exercise": "Bodyweight Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Bodyweight Mid Row",
+      "exercise": "Bodyweight Mid Row",
+      "action": "added"
+    },
+    {
+      "source": "Bodyweight Squat",
+      "exercise": "Bodyweight Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Bodyweight Walking Lunge",
+      "exercise": "Bodyweight Walking Lunge",
+      "action": "added"
+    },
+    {
+      "source": "Bosu Ball Cable Crunch With Side Bends",
+      "exercise": "Bosu Ball Cable Crunch With Side Bends",
+      "action": "added"
+    },
+    {
+      "source": "Bottoms-Up Clean From The Hang Position",
+      "exercise": "Bottoms-Up Clean From The Hang Position",
+      "action": "added"
+    },
+    {
+      "source": "Bottoms Up",
+      "exercise": "Bottoms Up",
+      "action": "added"
+    },
+    {
+      "source": "Box Jump (Multiple Response)",
+      "exercise": "Box Jump (Multiple Response)",
+      "action": "added"
+    },
+    {
+      "source": "Box Skip",
+      "exercise": "Box Skip",
+      "action": "added"
+    },
+    {
+      "source": "Box Squat",
+      "exercise": "Box Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Box Squat with Bands",
+      "exercise": "Box Squat with Bands",
+      "action": "added"
+    },
+    {
+      "source": "Box Squat with Chains",
+      "exercise": "Box Squat with Chains",
+      "action": "added"
+    },
+    {
+      "source": "Brachialis-SMR",
+      "exercise": "Brachialis-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Bradford/Rocky Presses",
+      "exercise": "Bradford/Rocky Presses",
+      "action": "added"
+    },
+    {
+      "source": "Butt-Ups",
+      "exercise": "Butt-Ups",
+      "action": "added"
+    },
+    {
+      "source": "Butt Lift (Bridge)",
+      "exercise": "Butt Lift (Bridge)",
+      "action": "added"
+    },
+    {
+      "source": "Butterfly",
+      "exercise": "Butterfly",
+      "action": "added"
+    },
+    {
+      "source": "Cable Chest Press",
+      "exercise": "Cable Chest Press",
+      "action": "added"
+    },
+    {
+      "source": "Cable Crossover",
+      "exercise": "Cable Crossover",
+      "action": "mapped"
+    },
+    {
+      "source": "Cable Crunch",
+      "exercise": "Cable Crunch",
+      "action": "mapped"
+    },
+    {
+      "source": "Cable Deadlifts",
+      "exercise": "Cable Deadlifts",
+      "action": "added"
+    },
+    {
+      "source": "Cable Hammer Curls - Rope Attachment",
+      "exercise": "Cable Hammer Curls - Rope Attachment",
+      "action": "added"
+    },
+    {
+      "source": "Cable Hip Adduction",
+      "exercise": "Cable Hip Adduction",
+      "action": "added"
+    },
+    {
+      "source": "Cable Incline Pushdown",
+      "exercise": "Cable Incline Pushdown",
+      "action": "added"
+    },
+    {
+      "source": "Cable Incline Triceps Extension",
+      "exercise": "Cable Incline Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Cable Internal Rotation",
+      "exercise": "Cable Internal Rotation",
+      "action": "added"
+    },
+    {
+      "source": "Cable Iron Cross",
+      "exercise": "Cable Iron Cross",
+      "action": "added"
+    },
+    {
+      "source": "Cable Judo Flip",
+      "exercise": "Cable Judo Flip",
+      "action": "added"
+    },
+    {
+      "source": "Cable Lying Triceps Extension",
+      "exercise": "Cable Lying Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Cable One Arm Tricep Extension",
+      "exercise": "Cable One Arm Tricep Extension",
+      "action": "added"
+    },
+    {
+      "source": "Cable Preacher Curl",
+      "exercise": "Cable Preacher Curl",
+      "action": "added"
+    },
+    {
+      "source": "Cable Rear Delt Fly",
+      "exercise": "Cable Rear Delt Fly",
+      "action": "added"
+    },
+    {
+      "source": "Cable Reverse Crunch",
+      "exercise": "Cable Reverse Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Cable Rope Overhead Triceps Extension",
+      "exercise": "Cable Rope Overhead Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Cable Rope Rear-Delt Rows",
+      "exercise": "Cable Rope Rear-Delt Rows",
+      "action": "added"
+    },
+    {
+      "source": "Cable Russian Twists",
+      "exercise": "Cable Russian Twists",
+      "action": "added"
+    },
+    {
+      "source": "Cable Seated Crunch",
+      "exercise": "Cable Seated Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Cable Seated Lateral Raise",
+      "exercise": "Cable Seated Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "Cable Shoulder Press",
+      "exercise": "Cable Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Cable Shrugs",
+      "exercise": "Cable Shrugs",
+      "action": "added"
+    },
+    {
+      "source": "Cable Wrist Curl",
+      "exercise": "Cable Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Calf-Machine Shoulder Shrug",
+      "exercise": "Calf-Machine Shoulder Shrug",
+      "action": "added"
+    },
+    {
+      "source": "Calf Press",
+      "exercise": "Calf Press",
+      "action": "added"
+    },
+    {
+      "source": "Calf Press On The Leg Press Machine",
+      "exercise": "Calf Press On The Leg Press Machine",
+      "action": "added"
+    },
+    {
+      "source": "Calf Raise On A Dumbbell",
+      "exercise": "Calf Raise On A Dumbbell",
+      "action": "added"
+    },
+    {
+      "source": "Calf Raises - With Bands",
+      "exercise": "Calf Raises - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Calf Stretch Elbows Against Wall",
+      "exercise": "Calf Stretch Elbows Against Wall",
+      "action": "added"
+    },
+    {
+      "source": "Calf Stretch Hands Against Wall",
+      "exercise": "Calf Stretch Hands Against Wall",
+      "action": "added"
+    },
+    {
+      "source": "Calves-SMR",
+      "exercise": "Calves-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Car Deadlift",
+      "exercise": "Car Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Car Drivers",
+      "exercise": "Car Drivers",
+      "action": "added"
+    },
+    {
+      "source": "Carioca Quick Step",
+      "exercise": "Carioca Quick Step",
+      "action": "added"
+    },
+    {
+      "source": "Cat Stretch",
+      "exercise": "Cat Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Catch and Overhead Throw",
+      "exercise": "Catch and Overhead Throw",
+      "action": "added"
+    },
+    {
+      "source": "Chain Handle Extension",
+      "exercise": "Chain Handle Extension",
+      "action": "added"
+    },
+    {
+      "source": "Chain Press",
+      "exercise": "Chain Press",
+      "action": "added"
+    },
+    {
+      "source": "Chair Leg Extended Stretch",
+      "exercise": "Chair Leg Extended Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Chair Lower Back Stretch",
+      "exercise": "Chair Lower Back Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Chair Squat",
+      "exercise": "Chair Squat",
+      "action": "added"
+    },
+    {
+      "source": "Chair Upper Body Stretch",
+      "exercise": "Chair Upper Body Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Chest And Front Of Shoulder Stretch",
+      "exercise": "Chest And Front Of Shoulder Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Chest Push from 3 point stance",
+      "exercise": "Chest Push from 3 point stance",
+      "action": "added"
+    },
+    {
+      "source": "Chest Push (multiple response)",
+      "exercise": "Chest Push (multiple response)",
+      "action": "added"
+    },
+    {
+      "source": "Chest Push (single response)",
+      "exercise": "Chest Push (single response)",
+      "action": "added"
+    },
+    {
+      "source": "Chest Push with Run Release",
+      "exercise": "Chest Push with Run Release",
+      "action": "added"
+    },
+    {
+      "source": "Chest Stretch on Stability Ball",
+      "exercise": "Chest Stretch on Stability Ball",
+      "action": "added"
+    },
+    {
+      "source": "Child's Pose",
+      "exercise": "Child's Pose",
+      "action": "added"
+    },
+    {
+      "source": "Chin-Up",
+      "exercise": "Chin-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Chin To Chest Stretch",
+      "exercise": "Chin To Chest Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Circus Bell",
+      "exercise": "Circus Bell",
+      "action": "added"
+    },
+    {
+      "source": "Clean",
+      "exercise": "Clean",
+      "action": "added"
+    },
+    {
+      "source": "Clean Deadlift",
+      "exercise": "Clean Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Clean Pull",
+      "exercise": "Clean Pull",
+      "action": "added"
+    },
+    {
+      "source": "Clean Shrug",
+      "exercise": "Clean Shrug",
+      "action": "added"
+    },
+    {
+      "source": "Clean and Jerk",
+      "exercise": "Clean and Jerk",
+      "action": "added"
+    },
+    {
+      "source": "Clean and Press",
+      "exercise": "Clean and Press",
+      "action": "added"
+    },
+    {
+      "source": "Clean from Blocks",
+      "exercise": "Clean from Blocks",
+      "action": "added"
+    },
+    {
+      "source": "Clock Push-Up",
+      "exercise": "Clock Push-Up",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip Barbell Bench Press",
+      "exercise": "Close-Grip Barbell Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip Dumbbell Press",
+      "exercise": "Close-Grip Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip EZ-Bar Curl with Band",
+      "exercise": "Close-Grip EZ-Bar Curl with Band",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip EZ-Bar Press",
+      "exercise": "Close-Grip EZ-Bar Press",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip EZ Bar Curl",
+      "exercise": "Close-Grip EZ Bar Curl",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip Front Lat Pulldown",
+      "exercise": "Close-Grip Front Lat Pulldown",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip Push-Up off of a Dumbbell",
+      "exercise": "Close-Grip Push-Up off of a Dumbbell",
+      "action": "added"
+    },
+    {
+      "source": "Close-Grip Standing Barbell Curl",
+      "exercise": "Close-Grip Standing Barbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Cocoons",
+      "exercise": "Cocoons",
+      "action": "added"
+    },
+    {
+      "source": "Conan's Wheel",
+      "exercise": "Conan's Wheel",
+      "action": "added"
+    },
+    {
+      "source": "Concentration Curls",
+      "exercise": "Concentration Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Cross-Body Crunch",
+      "exercise": "Cross-Body Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Cross Body Hammer Curl",
+      "exercise": "Cross-Body Hammer Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Cross Over - With Bands",
+      "exercise": "Cross Over - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Crossover Reverse Lunge",
+      "exercise": "Crossover Reverse Lunge",
+      "action": "added"
+    },
+    {
+      "source": "Crucifix",
+      "exercise": "Crucifix",
+      "action": "added"
+    },
+    {
+      "source": "Crunch - Hands Overhead",
+      "exercise": "Crunch - Hands Overhead",
+      "action": "added"
+    },
+    {
+      "source": "Crunch - Legs On Exercise Ball",
+      "exercise": "Crunch - Legs On Exercise Ball",
+      "action": "added"
+    },
+    {
+      "source": "Crunches",
+      "exercise": "Crunches",
+      "action": "added"
+    },
+    {
+      "source": "Cuban Press",
+      "exercise": "Cuban Press",
+      "action": "added"
+    },
+    {
+      "source": "Dancer's Stretch",
+      "exercise": "Dancer's Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Dead Bug",
+      "exercise": "Dead Bug",
+      "action": "mapped"
+    },
+    {
+      "source": "Deadlift with Bands",
+      "exercise": "Deadlift with Bands",
+      "action": "added"
+    },
+    {
+      "source": "Deadlift with Chains",
+      "exercise": "Deadlift with Chains",
+      "action": "added"
+    },
+    {
+      "source": "Decline Barbell Bench Press",
+      "exercise": "Decline Barbell Bench Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Decline Close-Grip Bench To Skull Crusher",
+      "exercise": "Decline Close-Grip Bench To Skull Crusher",
+      "action": "added"
+    },
+    {
+      "source": "Decline Crunch",
+      "exercise": "Decline Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Decline Dumbbell Bench Press",
+      "exercise": "Decline Dumbbell Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Decline Dumbbell Flyes",
+      "exercise": "Decline Dumbbell Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Decline Dumbbell Triceps Extension",
+      "exercise": "Decline Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Decline EZ Bar Triceps Extension",
+      "exercise": "Decline EZ Bar Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Decline Oblique Crunch",
+      "exercise": "Decline Oblique Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Decline Push-Up",
+      "exercise": "Decline Push-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Decline Reverse Crunch",
+      "exercise": "Decline Reverse Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Decline Smith Press",
+      "exercise": "Decline Smith Press",
+      "action": "added"
+    },
+    {
+      "source": "Deficit Deadlift",
+      "exercise": "Deficit Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Depth Jump Leap",
+      "exercise": "Depth Jump Leap",
+      "action": "added"
+    },
+    {
+      "source": "Dip Machine",
+      "exercise": "Dip Machine",
+      "action": "added"
+    },
+    {
+      "source": "Dips - Chest Version",
+      "exercise": "Dips - Chest Version",
+      "action": "added"
+    },
+    {
+      "source": "Dips - Triceps Version",
+      "exercise": "Dips - Triceps Version",
+      "action": "added"
+    },
+    {
+      "source": "Donkey Calf Raises",
+      "exercise": "Donkey Calf Raises",
+      "action": "added"
+    },
+    {
+      "source": "Double Kettlebell Alternating Hang Clean",
+      "exercise": "Double Kettlebell Alternating Hang Clean",
+      "action": "added"
+    },
+    {
+      "source": "Double Kettlebell Jerk",
+      "exercise": "Double Kettlebell Jerk",
+      "action": "added"
+    },
+    {
+      "source": "Double Kettlebell Push Press",
+      "exercise": "Double Kettlebell Push Press",
+      "action": "added"
+    },
+    {
+      "source": "Double Kettlebell Snatch",
+      "exercise": "Double Kettlebell Snatch",
+      "action": "added"
+    },
+    {
+      "source": "Double Kettlebell Windmill",
+      "exercise": "Double Kettlebell Windmill",
+      "action": "added"
+    },
+    {
+      "source": "Double Leg Butt Kick",
+      "exercise": "Double Leg Butt Kick",
+      "action": "added"
+    },
+    {
+      "source": "Downward Facing Balance",
+      "exercise": "Downward Facing Balance",
+      "action": "added"
+    },
+    {
+      "source": "Drag Curl",
+      "exercise": "Drag Curl",
+      "action": "added"
+    },
+    {
+      "source": "Drop Push",
+      "exercise": "Drop Push",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Alternate Bicep Curl",
+      "exercise": "Dumbbell Alternate Bicep Curl",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Bench Press",
+      "exercise": "Dumbbell Bench Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Dumbbell Bench Press with Neutral Grip",
+      "exercise": "Dumbbell Bench Press with Neutral Grip",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Bicep Curl",
+      "exercise": "Dumbbell Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Dumbbell Clean",
+      "exercise": "Dumbbell Clean",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Floor Press",
+      "exercise": "Dumbbell Floor Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Dumbbell Flyes",
+      "exercise": "Dumbbell Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Incline Row",
+      "exercise": "Dumbbell Incline Row",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Incline Shoulder Raise",
+      "exercise": "Dumbbell Incline Shoulder Raise",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Lunges",
+      "exercise": "Dumbbell Lunges",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Lying One-Arm Rear Lateral Raise",
+      "exercise": "Dumbbell Lying One-Arm Rear Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Lying Pronation",
+      "exercise": "Dumbbell Lying Pronation",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Lying Rear Lateral Raise",
+      "exercise": "Dumbbell Lying Rear Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Lying Supination",
+      "exercise": "Dumbbell Lying Supination",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell One-Arm Shoulder Press",
+      "exercise": "Dumbbell One-Arm Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell One-Arm Triceps Extension",
+      "exercise": "Dumbbell One-Arm Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell One-Arm Upright Row",
+      "exercise": "Dumbbell One-Arm Upright Row",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Prone Incline Curl",
+      "exercise": "Dumbbell Prone Incline Curl",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Raise",
+      "exercise": "Dumbbell Raise",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Rear Lunge",
+      "exercise": "Dumbbell Rear Lunge",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Scaption",
+      "exercise": "Dumbbell Scaption",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Seated Box Jump",
+      "exercise": "Dumbbell Seated Box Jump",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Seated One-Leg Calf Raise",
+      "exercise": "Dumbbell Seated One-Leg Calf Raise",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Shoulder Press",
+      "exercise": "Dumbbell Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Shrug",
+      "exercise": "Dumbbell Shrug",
+      "action": "mapped"
+    },
+    {
+      "source": "Dumbbell Side Bend",
+      "exercise": "Dumbbell Side Bend",
+      "action": "mapped"
+    },
+    {
+      "source": "Dumbbell Squat",
+      "exercise": "Dumbbell Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Dumbbell Squat To A Bench",
+      "exercise": "Dumbbell Squat To A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Step Ups",
+      "exercise": "Dumbbell Step Ups",
+      "action": "added"
+    },
+    {
+      "source": "Dumbbell Tricep Extension -Pronated Grip",
+      "exercise": "Dumbbell Tricep Extension -Pronated Grip",
+      "action": "added"
+    },
+    {
+      "source": "Dynamic Back Stretch",
+      "exercise": "Dynamic Back Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Dynamic Chest Stretch",
+      "exercise": "Dynamic Chest Stretch",
+      "action": "added"
+    },
+    {
+      "source": "EZ-Bar Curl",
+      "exercise": "EZ-Bar Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "EZ-Bar Skullcrusher",
+      "exercise": "EZ-Bar Skull Crusher",
+      "action": "mapped"
+    },
+    {
+      "source": "Elbow Circles",
+      "exercise": "Elbow Circles",
+      "action": "added"
+    },
+    {
+      "source": "Elbow to Knee",
+      "exercise": "Elbow to Knee",
+      "action": "added"
+    },
+    {
+      "source": "Elbows Back",
+      "exercise": "Elbows Back",
+      "action": "added"
+    },
+    {
+      "source": "Elevated Back Lunge",
+      "exercise": "Elevated Back Lunge",
+      "action": "added"
+    },
+    {
+      "source": "Elevated Cable Rows",
+      "exercise": "Elevated Cable Rows",
+      "action": "added"
+    },
+    {
+      "source": "Elliptical Trainer",
+      "exercise": "Elliptical",
+      "action": "mapped"
+    },
+    {
+      "source": "Exercise Ball Crunch",
+      "exercise": "Exercise Ball Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Exercise Ball Pull-In",
+      "exercise": "Exercise Ball Pull-In",
+      "action": "added"
+    },
+    {
+      "source": "Extended Range One-Arm Kettlebell Floor Press",
+      "exercise": "Extended Range One-Arm Kettlebell Floor Press",
+      "action": "added"
+    },
+    {
+      "source": "External Rotation",
+      "exercise": "External Rotation",
+      "action": "added"
+    },
+    {
+      "source": "External Rotation with Band",
+      "exercise": "External Rotation with Band",
+      "action": "added"
+    },
+    {
+      "source": "External Rotation with Cable",
+      "exercise": "External Rotation with Cable",
+      "action": "added"
+    },
+    {
+      "source": "Face Pull",
+      "exercise": "Face Pull",
+      "action": "mapped"
+    },
+    {
+      "source": "Farmer's Walk",
+      "exercise": "Farmer's Walk",
+      "action": "added"
+    },
+    {
+      "source": "Fast Skipping",
+      "exercise": "Fast Skipping",
+      "action": "added"
+    },
+    {
+      "source": "Finger Curls",
+      "exercise": "Finger Curls",
+      "action": "added"
+    },
+    {
+      "source": "Flat Bench Cable Flyes",
+      "exercise": "Flat Bench Cable Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Flat Bench Leg Pull-In",
+      "exercise": "Flat Bench Leg Pull-In",
+      "action": "added"
+    },
+    {
+      "source": "Flat Bench Lying Leg Raise",
+      "exercise": "Flat Bench Lying Leg Raise",
+      "action": "added"
+    },
+    {
+      "source": "Flexor Incline Dumbbell Curls",
+      "exercise": "Flexor Incline Dumbbell Curls",
+      "action": "added"
+    },
+    {
+      "source": "Floor Glute-Ham Raise",
+      "exercise": "Floor Glute-Ham Raise",
+      "action": "added"
+    },
+    {
+      "source": "Floor Press",
+      "exercise": "Floor Press",
+      "action": "added"
+    },
+    {
+      "source": "Floor Press with Chains",
+      "exercise": "Floor Press with Chains",
+      "action": "added"
+    },
+    {
+      "source": "Flutter Kicks",
+      "exercise": "Flutter Kicks",
+      "action": "added"
+    },
+    {
+      "source": "Foot-SMR",
+      "exercise": "Foot-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Forward Drag with Press",
+      "exercise": "Forward Drag with Press",
+      "action": "added"
+    },
+    {
+      "source": "Frankenstein Squat",
+      "exercise": "Frankenstein Squat",
+      "action": "added"
+    },
+    {
+      "source": "Freehand Jump Squat",
+      "exercise": "Freehand Jump Squat",
+      "action": "added"
+    },
+    {
+      "source": "Frog Hops",
+      "exercise": "Frog Hops",
+      "action": "added"
+    },
+    {
+      "source": "Frog Sit-Ups",
+      "exercise": "Frog Sit-Ups",
+      "action": "added"
+    },
+    {
+      "source": "Front Barbell Squat",
+      "exercise": "Front Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Front Barbell Squat To A Bench",
+      "exercise": "Front Barbell Squat To A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Front Box Jump",
+      "exercise": "Front Box Jump",
+      "action": "added"
+    },
+    {
+      "source": "Front Cable Raise",
+      "exercise": "Front Cable Raise",
+      "action": "added"
+    },
+    {
+      "source": "Front Cone Hops (or hurdle hops)",
+      "exercise": "Front Cone Hops (or hurdle hops)",
+      "action": "added"
+    },
+    {
+      "source": "Front Dumbbell Raise",
+      "exercise": "Front Dumbbell Raise",
+      "action": "added"
+    },
+    {
+      "source": "Front Incline Dumbbell Raise",
+      "exercise": "Front Incline Dumbbell Raise",
+      "action": "added"
+    },
+    {
+      "source": "Front Leg Raises",
+      "exercise": "Front Leg Raises",
+      "action": "added"
+    },
+    {
+      "source": "Front Plate Raise",
+      "exercise": "Front Plate Raise",
+      "action": "added"
+    },
+    {
+      "source": "Front Raise And Pullover",
+      "exercise": "Front Raise And Pullover",
+      "action": "added"
+    },
+    {
+      "source": "Front Squat (Clean Grip)",
+      "exercise": "Front Squat (Clean Grip)",
+      "action": "added"
+    },
+    {
+      "source": "Front Squats With Two Kettlebells",
+      "exercise": "Front Squats With Two Kettlebells",
+      "action": "added"
+    },
+    {
+      "source": "Front Two-Dumbbell Raise",
+      "exercise": "Front Two-Dumbbell Raise",
+      "action": "added"
+    },
+    {
+      "source": "Full Range-Of-Motion Lat Pulldown",
+      "exercise": "Full Range-Of-Motion Lat Pulldown",
+      "action": "added"
+    },
+    {
+      "source": "Gironda Sternum Chins",
+      "exercise": "Gironda Sternum Chins",
+      "action": "added"
+    },
+    {
+      "source": "Glute Ham Raise",
+      "exercise": "Glute Ham Raise",
+      "action": "added"
+    },
+    {
+      "source": "Glute Kickback",
+      "exercise": "Glute Kickback",
+      "action": "added"
+    },
+    {
+      "source": "Goblet Squat",
+      "exercise": "Kettlebell Goblet Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Good Morning",
+      "exercise": "Good Morning",
+      "action": "added"
+    },
+    {
+      "source": "Good Morning off Pins",
+      "exercise": "Good Morning off Pins",
+      "action": "added"
+    },
+    {
+      "source": "Gorilla Chin/Crunch",
+      "exercise": "Gorilla Chin/Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Groin and Back Stretch",
+      "exercise": "Groin and Back Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Groiners",
+      "exercise": "Groiners",
+      "action": "added"
+    },
+    {
+      "source": "Hack Squat",
+      "exercise": "Hack Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Hammer Curls",
+      "exercise": "Hammer Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Hammer Grip Incline DB Bench Press",
+      "exercise": "Hammer Grip Incline DB Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Hamstring-SMR",
+      "exercise": "Hamstring-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Hamstring Stretch",
+      "exercise": "Hamstring Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Handstand Push-Ups",
+      "exercise": "Handstand Push-Ups",
+      "action": "added"
+    },
+    {
+      "source": "Hang Clean",
+      "exercise": "Hang Clean",
+      "action": "added"
+    },
+    {
+      "source": "Hang Clean - Below the Knees",
+      "exercise": "Hang Clean - Below the Knees",
+      "action": "added"
+    },
+    {
+      "source": "Hang Snatch",
+      "exercise": "Hang Snatch",
+      "action": "added"
+    },
+    {
+      "source": "Hang Snatch - Below Knees",
+      "exercise": "Hang Snatch - Below Knees",
+      "action": "added"
+    },
+    {
+      "source": "Hanging Bar Good Morning",
+      "exercise": "Hanging Bar Good Morning",
+      "action": "added"
+    },
+    {
+      "source": "Hanging Leg Raise",
+      "exercise": "Hanging Leg Raise",
+      "action": "mapped"
+    },
+    {
+      "source": "Hanging Pike",
+      "exercise": "Hanging Pike",
+      "action": "added"
+    },
+    {
+      "source": "Heaving Snatch Balance",
+      "exercise": "Heaving Snatch Balance",
+      "action": "added"
+    },
+    {
+      "source": "Heavy Bag Thrust",
+      "exercise": "Heavy Bag Thrust",
+      "action": "added"
+    },
+    {
+      "source": "High Cable Curls",
+      "exercise": "High Cable Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Hip Circles (prone)",
+      "exercise": "Hip Circles (prone)",
+      "action": "added"
+    },
+    {
+      "source": "Hip Extension with Bands",
+      "exercise": "Hip Extension with Bands",
+      "action": "added"
+    },
+    {
+      "source": "Hip Flexion with Band",
+      "exercise": "Hip Flexion with Band",
+      "action": "added"
+    },
+    {
+      "source": "Hip Lift with Band",
+      "exercise": "Hip Lift with Band",
+      "action": "added"
+    },
+    {
+      "source": "Hug A Ball",
+      "exercise": "Hug A Ball",
+      "action": "added"
+    },
+    {
+      "source": "Hug Knees To Chest",
+      "exercise": "Hug Knees To Chest",
+      "action": "added"
+    },
+    {
+      "source": "Hurdle Hops",
+      "exercise": "Hurdle Hops",
+      "action": "added"
+    },
+    {
+      "source": "Hyperextensions (Back Extensions)",
+      "exercise": "Hyperextensions (Back Extensions)",
+      "action": "added"
+    },
+    {
+      "source": "Hyperextensions With No Hyperextension Bench",
+      "exercise": "Hyperextensions With No Hyperextension Bench",
+      "action": "added"
+    },
+    {
+      "source": "IT Band and Glute Stretch",
+      "exercise": "IT Band and Glute Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Iliotibial Tract-SMR",
+      "exercise": "Iliotibial Tract-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Inchworm",
+      "exercise": "Inchworm",
+      "action": "mapped"
+    },
+    {
+      "source": "Incline Barbell Triceps Extension",
+      "exercise": "Incline Barbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Incline Bench Pull",
+      "exercise": "Incline Bench Pull",
+      "action": "added"
+    },
+    {
+      "source": "Incline Cable Chest Press",
+      "exercise": "Incline Cable Chest Press",
+      "action": "added"
+    },
+    {
+      "source": "Incline Cable Flye",
+      "exercise": "Incline Cable Flye",
+      "action": "added"
+    },
+    {
+      "source": "Incline Dumbbell Bench With Palms Facing In",
+      "exercise": "Incline Dumbbell Bench With Palms Facing In",
+      "action": "added"
+    },
+    {
+      "source": "Incline Dumbbell Curl",
+      "exercise": "Incline Dumbbell Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Incline Dumbbell Flyes",
+      "exercise": "Incline Dumbbell Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Incline Dumbbell Flyes - With A Twist",
+      "exercise": "Incline Dumbbell Flyes - With A Twist",
+      "action": "added"
+    },
+    {
+      "source": "Incline Dumbbell Press",
+      "exercise": "Incline Dumbbell Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Incline Hammer Curls",
+      "exercise": "Incline Hammer Curls",
+      "action": "added"
+    },
+    {
+      "source": "Incline Inner Biceps Curl",
+      "exercise": "Incline Inner Biceps Curl",
+      "action": "added"
+    },
+    {
+      "source": "Incline Push-Up",
+      "exercise": "Incline Push-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Incline Push-Up Close-Grip",
+      "exercise": "Incline Push-Up Close-Grip",
+      "action": "added"
+    },
+    {
+      "source": "Incline Push-Up Depth Jump",
+      "exercise": "Incline Push-Up Depth Jump",
+      "action": "added"
+    },
+    {
+      "source": "Incline Push-Up Medium",
+      "exercise": "Incline Push-Up Medium",
+      "action": "added"
+    },
+    {
+      "source": "Incline Push-Up Reverse Grip",
+      "exercise": "Incline Push-Up Reverse Grip",
+      "action": "added"
+    },
+    {
+      "source": "Incline Push-Up Wide",
+      "exercise": "Incline Push-Up Wide",
+      "action": "added"
+    },
+    {
+      "source": "Intermediate Groin Stretch",
+      "exercise": "Intermediate Groin Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Intermediate Hip Flexor and Quad Stretch",
+      "exercise": "Intermediate Hip Flexor and Quad Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Internal Rotation with Band",
+      "exercise": "Internal Rotation with Band",
+      "action": "added"
+    },
+    {
+      "source": "Inverted Row",
+      "exercise": "Inverted Row",
+      "action": "mapped"
+    },
+    {
+      "source": "Inverted Row with Straps",
+      "exercise": "Inverted Row with Straps",
+      "action": "added"
+    },
+    {
+      "source": "Iron Cross",
+      "exercise": "Iron Cross",
+      "action": "added"
+    },
+    {
+      "source": "Iron Crosses (stretch)",
+      "exercise": "Iron Crosses (stretch)",
+      "action": "added"
+    },
+    {
+      "source": "Isometric Chest Squeezes",
+      "exercise": "Isometric Chest Squeezes",
+      "action": "added"
+    },
+    {
+      "source": "Isometric Neck Exercise - Front And Back",
+      "exercise": "Isometric Neck Exercise - Front And Back",
+      "action": "added"
+    },
+    {
+      "source": "Isometric Neck Exercise - Sides",
+      "exercise": "Isometric Neck Exercise - Sides",
+      "action": "added"
+    },
+    {
+      "source": "Isometric Wipers",
+      "exercise": "Isometric Wipers",
+      "action": "added"
+    },
+    {
+      "source": "JM Press",
+      "exercise": "JM Press",
+      "action": "added"
+    },
+    {
+      "source": "Jackknife Sit-Up",
+      "exercise": "Jackknife Sit-Up",
+      "action": "added"
+    },
+    {
+      "source": "Janda Sit-Up",
+      "exercise": "Janda Sit-Up",
+      "action": "added"
+    },
+    {
+      "source": "Jefferson Squats",
+      "exercise": "Jefferson Squats",
+      "action": "added"
+    },
+    {
+      "source": "Jerk Balance",
+      "exercise": "Jerk Balance",
+      "action": "added"
+    },
+    {
+      "source": "Jerk Dip Squat",
+      "exercise": "Jerk Dip Squat",
+      "action": "added"
+    },
+    {
+      "source": "Jogging, Treadmill",
+      "exercise": "Jogging, Treadmill",
+      "action": "added"
+    },
+    {
+      "source": "Keg Load",
+      "exercise": "Keg Load",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Arnold Press",
+      "exercise": "Kettlebell Arnold Press",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Dead Clean",
+      "exercise": "Kettlebell Dead Clean",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Figure 8",
+      "exercise": "Kettlebell Figure 8",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Halo",
+      "exercise": "Kettlebell Halo",
+      "action": "mapped"
+    },
+    {
+      "source": "Kettlebell Halo with Overhead Extension",
+      "exercise": "Kettlebell Halo with Overhead Extension",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Hang Clean",
+      "exercise": "Kettlebell Hang Clean",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell One-Legged Deadlift",
+      "exercise": "Kettlebell One-Legged Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Overhead Triceps Extension",
+      "exercise": "Kettlebell Overhead Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Pass Between The Legs",
+      "exercise": "Kettlebell Pass Between The Legs",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Pirate Ships",
+      "exercise": "Kettlebell Pirate Ships",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Pistol Squat",
+      "exercise": "Kettlebell Pistol Squat",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Seated Press",
+      "exercise": "Kettlebell Seated Press",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Seesaw Press",
+      "exercise": "Kettlebell Seesaw Press",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Sumo High Pull",
+      "exercise": "Kettlebell Sumo High Pull",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Thruster",
+      "exercise": "Kettlebell Thruster",
+      "action": "mapped"
+    },
+    {
+      "source": "Kettlebell Turkish Get-Up (Lunge style)",
+      "exercise": "Kettlebell Turkish Get-Up (Lunge style)",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Turkish Get-Up (Squat style)",
+      "exercise": "Kettlebell Turkish Get-Up (Squat style)",
+      "action": "added"
+    },
+    {
+      "source": "Kettlebell Windmill",
+      "exercise": "Kettlebell Windmill",
+      "action": "added"
+    },
+    {
+      "source": "Kipping Muscle Up",
+      "exercise": "Kipping Muscle Up",
+      "action": "added"
+    },
+    {
+      "source": "Knee Across The Body",
+      "exercise": "Knee Across The Body",
+      "action": "added"
+    },
+    {
+      "source": "Knee Circles",
+      "exercise": "Knee Circles",
+      "action": "added"
+    },
+    {
+      "source": "Knee/Hip Raise On Parallel Bars",
+      "exercise": "Knee/Hip Raise On Parallel Bars",
+      "action": "added"
+    },
+    {
+      "source": "Knee Tuck Jump",
+      "exercise": "Knee Tuck Jump",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Arm Drill",
+      "exercise": "Kneeling Arm Drill",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Cable Crunch With Alternating Oblique Twists",
+      "exercise": "Kneeling Cable Crunch With Alternating Oblique Twists",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Cable Triceps Extension",
+      "exercise": "Kneeling Cable Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Forearm Stretch",
+      "exercise": "Kneeling Forearm Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling High Pulley Row",
+      "exercise": "Kneeling High Pulley Row",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Hip Flexor",
+      "exercise": "Kneeling Hip Flexor",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Jump Squat",
+      "exercise": "Kneeling Jump Squat",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Single-Arm High Pulley Row",
+      "exercise": "Kneeling Single-Arm High Pulley Row",
+      "action": "added"
+    },
+    {
+      "source": "Kneeling Squat",
+      "exercise": "Kneeling Squat",
+      "action": "added"
+    },
+    {
+      "source": "Landmine 180's",
+      "exercise": "Landmine 180's",
+      "action": "added"
+    },
+    {
+      "source": "Landmine Linear Jammer",
+      "exercise": "Landmine Linear Jammer",
+      "action": "added"
+    },
+    {
+      "source": "Lateral Bound",
+      "exercise": "Lateral Bound",
+      "action": "added"
+    },
+    {
+      "source": "Lateral Box Jump",
+      "exercise": "Lateral Box Jump",
+      "action": "added"
+    },
+    {
+      "source": "Lateral Cone Hops",
+      "exercise": "Lateral Cone Hops",
+      "action": "added"
+    },
+    {
+      "source": "Lateral Raise - With Bands",
+      "exercise": "Lateral Raise - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Latissimus Dorsi-SMR",
+      "exercise": "Latissimus Dorsi-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Leg-Over Floor Press",
+      "exercise": "Leg-Over Floor Press",
+      "action": "added"
+    },
+    {
+      "source": "Leg-Up Hamstring Stretch",
+      "exercise": "Leg-Up Hamstring Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Leg Extensions",
+      "exercise": "Leg Extensions",
+      "action": "added"
+    },
+    {
+      "source": "Leg Lift",
+      "exercise": "Leg Lift",
+      "action": "added"
+    },
+    {
+      "source": "Leg Press",
+      "exercise": "Leg Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Leg Pull-In",
+      "exercise": "Leg Pull-In",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Chest Press",
+      "exercise": "Leverage Chest Press",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Deadlift",
+      "exercise": "Leverage Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Decline Chest Press",
+      "exercise": "Leverage Decline Chest Press",
+      "action": "added"
+    },
+    {
+      "source": "Leverage High Row",
+      "exercise": "Leverage High Row",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Incline Chest Press",
+      "exercise": "Leverage Incline Chest Press",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Iso Row",
+      "exercise": "Leverage Iso Row",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Shoulder Press",
+      "exercise": "Leverage Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Leverage Shrug",
+      "exercise": "Leverage Shrug",
+      "action": "added"
+    },
+    {
+      "source": "Linear 3-Part Start Technique",
+      "exercise": "Linear 3-Part Start Technique",
+      "action": "added"
+    },
+    {
+      "source": "Linear Acceleration Wall Drill",
+      "exercise": "Linear Acceleration Wall Drill",
+      "action": "added"
+    },
+    {
+      "source": "Linear Depth Jump",
+      "exercise": "Linear Depth Jump",
+      "action": "added"
+    },
+    {
+      "source": "Log Lift",
+      "exercise": "Log Lift",
+      "action": "added"
+    },
+    {
+      "source": "London Bridges",
+      "exercise": "London Bridges",
+      "action": "added"
+    },
+    {
+      "source": "Looking At Ceiling",
+      "exercise": "Looking At Ceiling",
+      "action": "added"
+    },
+    {
+      "source": "Low Cable Crossover",
+      "exercise": "Low Cable Crossover",
+      "action": "added"
+    },
+    {
+      "source": "Low Cable Triceps Extension",
+      "exercise": "Low Cable Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Low Pulley Row To Neck",
+      "exercise": "Low Pulley Row To Neck",
+      "action": "added"
+    },
+    {
+      "source": "Lower Back-SMR",
+      "exercise": "Lower Back-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Lower Back Curl",
+      "exercise": "Lower Back Curl",
+      "action": "added"
+    },
+    {
+      "source": "Lunge Pass Through",
+      "exercise": "Lunge Pass Through",
+      "action": "added"
+    },
+    {
+      "source": "Lunge Sprint",
+      "exercise": "Lunge Sprint",
+      "action": "added"
+    },
+    {
+      "source": "Lying Bent Leg Groin",
+      "exercise": "Lying Bent Leg Groin",
+      "action": "added"
+    },
+    {
+      "source": "Lying Cable Curl",
+      "exercise": "Lying Cable Curl",
+      "action": "added"
+    },
+    {
+      "source": "Lying Cambered Barbell Row",
+      "exercise": "Lying Cambered Barbell Row",
+      "action": "added"
+    },
+    {
+      "source": "Lying Close-Grip Bar Curl On High Pulley",
+      "exercise": "Lying Close-Grip Bar Curl On High Pulley",
+      "action": "added"
+    },
+    {
+      "source": "Lying Close-Grip Barbell Triceps Extension Behind The Head",
+      "exercise": "Lying Close-Grip Barbell Triceps Extension Behind The Head",
+      "action": "added"
+    },
+    {
+      "source": "Lying Close-Grip Barbell Triceps Press To Chin",
+      "exercise": "Lying Close-Grip Barbell Triceps Press To Chin",
+      "action": "added"
+    },
+    {
+      "source": "Lying Crossover",
+      "exercise": "Lying Crossover",
+      "action": "added"
+    },
+    {
+      "source": "Lying Dumbbell Tricep Extension",
+      "exercise": "Lying Dumbbell Tricep Extension",
+      "action": "added"
+    },
+    {
+      "source": "Lying Face Down Plate Neck Resistance",
+      "exercise": "Lying Face Down Plate Neck Resistance",
+      "action": "added"
+    },
+    {
+      "source": "Lying Face Up Plate Neck Resistance",
+      "exercise": "Lying Face Up Plate Neck Resistance",
+      "action": "added"
+    },
+    {
+      "source": "Lying Glute",
+      "exercise": "Lying Glute",
+      "action": "added"
+    },
+    {
+      "source": "Lying Hamstring",
+      "exercise": "Lying Hamstring",
+      "action": "added"
+    },
+    {
+      "source": "Lying High Bench Barbell Curl",
+      "exercise": "Lying High Bench Barbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Lying Leg Curls",
+      "exercise": "Lying Leg Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Lying Machine Squat",
+      "exercise": "Lying Machine Squat",
+      "action": "added"
+    },
+    {
+      "source": "Lying One-Arm Lateral Raise",
+      "exercise": "Lying One-Arm Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "Lying Prone Quadriceps",
+      "exercise": "Lying Prone Quadriceps",
+      "action": "added"
+    },
+    {
+      "source": "Lying Rear Delt Raise",
+      "exercise": "Lying Rear Delt Raise",
+      "action": "added"
+    },
+    {
+      "source": "Lying Supine Dumbbell Curl",
+      "exercise": "Lying Supine Dumbbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Lying T-Bar Row",
+      "exercise": "Lying T-Bar Row",
+      "action": "added"
+    },
+    {
+      "source": "Lying Triceps Press",
+      "exercise": "Lying Triceps Press",
+      "action": "added"
+    },
+    {
+      "source": "Machine Bench Press",
+      "exercise": "Machine Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Machine Bicep Curl",
+      "exercise": "Machine Bicep Curl",
+      "action": "added"
+    },
+    {
+      "source": "Machine Preacher Curls",
+      "exercise": "Machine Preacher Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Machine Shoulder (Military) Press",
+      "exercise": "Machine Shoulder (Military) Press",
+      "action": "added"
+    },
+    {
+      "source": "Machine Triceps Extension",
+      "exercise": "Machine Triceps Extension",
+      "action": "mapped"
+    },
+    {
+      "source": "Medicine Ball Chest Pass",
+      "exercise": "Medicine Ball Chest Pass",
+      "action": "added"
+    },
+    {
+      "source": "Medicine Ball Full Twist",
+      "exercise": "Medicine Ball Full Twist",
+      "action": "added"
+    },
+    {
+      "source": "Medicine Ball Scoop Throw",
+      "exercise": "Medicine Ball Scoop Throw",
+      "action": "added"
+    },
+    {
+      "source": "Middle Back Shrug",
+      "exercise": "Middle Back Shrug",
+      "action": "added"
+    },
+    {
+      "source": "Middle Back Stretch",
+      "exercise": "Middle Back Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Mixed Grip Chin",
+      "exercise": "Mixed Grip Chin",
+      "action": "added"
+    },
+    {
+      "source": "Monster Walk",
+      "exercise": "Monster Walk",
+      "action": "added"
+    },
+    {
+      "source": "Mountain Climbers",
+      "exercise": "Mountain Climbers",
+      "action": "added"
+    },
+    {
+      "source": "Moving Claw Series",
+      "exercise": "Moving Claw Series",
+      "action": "added"
+    },
+    {
+      "source": "Muscle Snatch",
+      "exercise": "Muscle Snatch",
+      "action": "added"
+    },
+    {
+      "source": "Muscle Up",
+      "exercise": "Muscle Up",
+      "action": "added"
+    },
+    {
+      "source": "Narrow Stance Hack Squats",
+      "exercise": "Narrow Stance Hack Squats",
+      "action": "added"
+    },
+    {
+      "source": "Narrow Stance Leg Press",
+      "exercise": "Narrow Stance Leg Press",
+      "action": "added"
+    },
+    {
+      "source": "Narrow Stance Squats",
+      "exercise": "Narrow Stance Squats",
+      "action": "added"
+    },
+    {
+      "source": "Natural Glute Ham Raise",
+      "exercise": "Natural Glute Ham Raise",
+      "action": "added"
+    },
+    {
+      "source": "Neck-SMR",
+      "exercise": "Neck-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Neck Press",
+      "exercise": "Neck Press",
+      "action": "added"
+    },
+    {
+      "source": "Oblique Crunches",
+      "exercise": "Oblique Crunches",
+      "action": "added"
+    },
+    {
+      "source": "Oblique Crunches - On The Floor",
+      "exercise": "Oblique Crunches - On The Floor",
+      "action": "added"
+    },
+    {
+      "source": "Olympic Squat",
+      "exercise": "Olympic Squat",
+      "action": "added"
+    },
+    {
+      "source": "On-Your-Back Quad Stretch",
+      "exercise": "On-Your-Back Quad Stretch",
+      "action": "added"
+    },
+    {
+      "source": "On Your Side Quad Stretch",
+      "exercise": "On Your Side Quad Stretch",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Dumbbell Row",
+      "exercise": "One-Arm Dumbbell Row",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Flat Bench Dumbbell Flye",
+      "exercise": "One-Arm Flat Bench Dumbbell Flye",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm High-Pulley Cable Side Bends",
+      "exercise": "One-Arm High-Pulley Cable Side Bends",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Incline Lateral Raise",
+      "exercise": "One-Arm Incline Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Clean",
+      "exercise": "One-Arm Kettlebell Clean",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Clean and Jerk",
+      "exercise": "One-Arm Kettlebell Clean and Jerk",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Floor Press",
+      "exercise": "One-Arm Kettlebell Floor Press",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Jerk",
+      "exercise": "One-Arm Kettlebell Jerk",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Military Press To The Side",
+      "exercise": "One-Arm Kettlebell Military Press To The Side",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Para Press",
+      "exercise": "One-Arm Kettlebell Para Press",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Push Press",
+      "exercise": "One-Arm Kettlebell Push Press",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Row",
+      "exercise": "One-Arm Kettlebell Row",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Snatch",
+      "exercise": "One-Arm Kettlebell Snatch",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Split Jerk",
+      "exercise": "One-Arm Kettlebell Split Jerk",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Split Snatch",
+      "exercise": "One-Arm Kettlebell Split Snatch",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Kettlebell Swings",
+      "exercise": "One-Arm Kettlebell Swings",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Long Bar Row",
+      "exercise": "One-Arm Long Bar Row",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Medicine Ball Slam",
+      "exercise": "One-Arm Medicine Ball Slam",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Open Palm Kettlebell Clean",
+      "exercise": "One-Arm Open Palm Kettlebell Clean",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Overhead Kettlebell Squats",
+      "exercise": "One-Arm Overhead Kettlebell Squats",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Side Deadlift",
+      "exercise": "One-Arm Side Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "One-Arm Side Laterals",
+      "exercise": "One-Arm Side Laterals",
+      "action": "added"
+    },
+    {
+      "source": "One-Legged Cable Kickback",
+      "exercise": "One-Legged Cable Kickback",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Against Wall",
+      "exercise": "One Arm Against Wall",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Chin-Up",
+      "exercise": "One Arm Chin-Up",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Dumbbell Bench Press",
+      "exercise": "One Arm Dumbbell Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Dumbbell Preacher Curl",
+      "exercise": "One Arm Dumbbell Preacher Curl",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Floor Press",
+      "exercise": "One Arm Floor Press",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Lat Pulldown",
+      "exercise": "One Arm Lat Pulldown",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Pronated Dumbbell Triceps Extension",
+      "exercise": "One Arm Pronated Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "One Arm Supinated Dumbbell Triceps Extension",
+      "exercise": "One Arm Supinated Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "One Half Locust",
+      "exercise": "One Half Locust",
+      "action": "added"
+    },
+    {
+      "source": "One Handed Hang",
+      "exercise": "One Handed Hang",
+      "action": "added"
+    },
+    {
+      "source": "One Knee To Chest",
+      "exercise": "One Knee To Chest",
+      "action": "added"
+    },
+    {
+      "source": "One Leg Barbell Squat",
+      "exercise": "One Leg Barbell Squat",
+      "action": "added"
+    },
+    {
+      "source": "Open Palm Kettlebell Clean",
+      "exercise": "Open Palm Kettlebell Clean",
+      "action": "added"
+    },
+    {
+      "source": "Otis-Up",
+      "exercise": "Otis-Up",
+      "action": "added"
+    },
+    {
+      "source": "Overhead Cable Curl",
+      "exercise": "Overhead Cable Curl",
+      "action": "added"
+    },
+    {
+      "source": "Overhead Lat",
+      "exercise": "Overhead Lat",
+      "action": "added"
+    },
+    {
+      "source": "Overhead Slam",
+      "exercise": "Overhead Slam",
+      "action": "added"
+    },
+    {
+      "source": "Overhead Squat",
+      "exercise": "Overhead Squat",
+      "action": "added"
+    },
+    {
+      "source": "Overhead Stretch",
+      "exercise": "Overhead Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Overhead Triceps",
+      "exercise": "Overhead Triceps",
+      "action": "added"
+    },
+    {
+      "source": "Pallof Press",
+      "exercise": "Pallof Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Pallof Press With Rotation",
+      "exercise": "Pallof Press With Rotation",
+      "action": "added"
+    },
+    {
+      "source": "Palms-Down Dumbbell Wrist Curl Over A Bench",
+      "exercise": "Palms-Down Dumbbell Wrist Curl Over A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Palms-Down Wrist Curl Over A Bench",
+      "exercise": "Palms-Down Wrist Curl Over A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Palms-Up Barbell Wrist Curl Over A Bench",
+      "exercise": "Palms-Up Barbell Wrist Curl Over A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Palms-Up Dumbbell Wrist Curl Over A Bench",
+      "exercise": "Palms-Up Dumbbell Wrist Curl Over A Bench",
+      "action": "added"
+    },
+    {
+      "source": "Parallel Bar Dip",
+      "exercise": "Parallel Bar Dip",
+      "action": "added"
+    },
+    {
+      "source": "Pelvic Tilt Into Bridge",
+      "exercise": "Pelvic Tilt Into Bridge",
+      "action": "added"
+    },
+    {
+      "source": "Peroneals-SMR",
+      "exercise": "Peroneals-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Peroneals Stretch",
+      "exercise": "Peroneals Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Physioball Hip Bridge",
+      "exercise": "Physioball Hip Bridge",
+      "action": "added"
+    },
+    {
+      "source": "Pin Presses",
+      "exercise": "Pin Presses",
+      "action": "added"
+    },
+    {
+      "source": "Piriformis-SMR",
+      "exercise": "Piriformis-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Plank",
+      "exercise": "Plank",
+      "action": "mapped"
+    },
+    {
+      "source": "Plate Pinch",
+      "exercise": "Plate Pinch",
+      "action": "added"
+    },
+    {
+      "source": "Plate Twist",
+      "exercise": "Plate Twist",
+      "action": "added"
+    },
+    {
+      "source": "Platform Hamstring Slides",
+      "exercise": "Platform Hamstring Slides",
+      "action": "added"
+    },
+    {
+      "source": "Plie Dumbbell Squat",
+      "exercise": "Plie Dumbbell Squat",
+      "action": "added"
+    },
+    {
+      "source": "Plyo Kettlebell Pushups",
+      "exercise": "Plyo Kettlebell Pushups",
+      "action": "added"
+    },
+    {
+      "source": "Plyo Push-up",
+      "exercise": "Plyo Push-up",
+      "action": "added"
+    },
+    {
+      "source": "Posterior Tibialis Stretch",
+      "exercise": "Posterior Tibialis Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Power Clean",
+      "exercise": "Power Clean",
+      "action": "added"
+    },
+    {
+      "source": "Power Clean from Blocks",
+      "exercise": "Power Clean from Blocks",
+      "action": "added"
+    },
+    {
+      "source": "Power Jerk",
+      "exercise": "Power Jerk",
+      "action": "added"
+    },
+    {
+      "source": "Power Partials",
+      "exercise": "Power Partials",
+      "action": "added"
+    },
+    {
+      "source": "Power Snatch",
+      "exercise": "Power Snatch",
+      "action": "added"
+    },
+    {
+      "source": "Power Snatch from Blocks",
+      "exercise": "Power Snatch from Blocks",
+      "action": "added"
+    },
+    {
+      "source": "Power Stairs",
+      "exercise": "Power Stairs",
+      "action": "added"
+    },
+    {
+      "source": "Preacher Curl",
+      "exercise": "Preacher Curl",
+      "action": "added"
+    },
+    {
+      "source": "Preacher Hammer Dumbbell Curl",
+      "exercise": "Preacher Hammer Dumbbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Press Sit-Up",
+      "exercise": "Press Sit-Up",
+      "action": "added"
+    },
+    {
+      "source": "Prone Manual Hamstring",
+      "exercise": "Prone Manual Hamstring",
+      "action": "added"
+    },
+    {
+      "source": "Prowler Sprint",
+      "exercise": "Prowler Sprint",
+      "action": "added"
+    },
+    {
+      "source": "Pull Through",
+      "exercise": "Pull Through",
+      "action": "added"
+    },
+    {
+      "source": "Pullups",
+      "exercise": "Pull-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Push-Up Wide",
+      "exercise": "Push-Up Wide",
+      "action": "added"
+    },
+    {
+      "source": "Push-Ups - Close Triceps Position",
+      "exercise": "Push-Ups - Close Triceps Position",
+      "action": "added"
+    },
+    {
+      "source": "Push-Ups With Feet Elevated",
+      "exercise": "Push-Ups With Feet Elevated",
+      "action": "added"
+    },
+    {
+      "source": "Push-Ups With Feet On An Exercise Ball",
+      "exercise": "Push-Ups With Feet On An Exercise Ball",
+      "action": "added"
+    },
+    {
+      "source": "Push Press",
+      "exercise": "Push Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Push Press - Behind the Neck",
+      "exercise": "Push Press - Behind the Neck",
+      "action": "added"
+    },
+    {
+      "source": "Push Up to Side Plank",
+      "exercise": "Push Up to Side Plank",
+      "action": "added"
+    },
+    {
+      "source": "Pushups",
+      "exercise": "Push-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Pushups (Close and Wide Hand Positions)",
+      "exercise": "Pushups (Close and Wide Hand Positions)",
+      "action": "added"
+    },
+    {
+      "source": "Pyramid",
+      "exercise": "Pyramid",
+      "action": "added"
+    },
+    {
+      "source": "Quad Stretch",
+      "exercise": "Quad Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Quadriceps-SMR",
+      "exercise": "Quadriceps-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Quick Leap",
+      "exercise": "Quick Leap",
+      "action": "added"
+    },
+    {
+      "source": "Rack Delivery",
+      "exercise": "Rack Delivery",
+      "action": "added"
+    },
+    {
+      "source": "Rack Pull with Bands",
+      "exercise": "Rack Pull with Bands",
+      "action": "added"
+    },
+    {
+      "source": "Rack Pulls",
+      "exercise": "Rack Pulls",
+      "action": "added"
+    },
+    {
+      "source": "Rear Leg Raises",
+      "exercise": "Rear Leg Raises",
+      "action": "added"
+    },
+    {
+      "source": "Recumbent Bike",
+      "exercise": "Recumbent Bike",
+      "action": "mapped"
+    },
+    {
+      "source": "Return Push from Stance",
+      "exercise": "Return Push from Stance",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Band Bench Press",
+      "exercise": "Reverse Band Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Band Box Squat",
+      "exercise": "Reverse Band Box Squat",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Band Deadlift",
+      "exercise": "Reverse Band Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Band Power Squat",
+      "exercise": "Reverse Band Power Squat",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Band Sumo Deadlift",
+      "exercise": "Reverse Band Sumo Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Barbell Curl",
+      "exercise": "Reverse Barbell Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Reverse Barbell Preacher Curls",
+      "exercise": "Reverse Barbell Preacher Curls",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Cable Curl",
+      "exercise": "Reverse Cable Curl",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Crunch",
+      "exercise": "Reverse Crunch",
+      "action": "mapped"
+    },
+    {
+      "source": "Reverse Flyes",
+      "exercise": "Reverse Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Flyes With External Rotation",
+      "exercise": "Reverse Flyes With External Rotation",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Grip Bent-Over Rows",
+      "exercise": "Reverse Grip Bent-Over Rows",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Grip Triceps Pushdown",
+      "exercise": "Reverse-Grip Triceps Pushdown",
+      "action": "mapped"
+    },
+    {
+      "source": "Reverse Hyperextension",
+      "exercise": "Reverse Hyperextension",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Machine Flyes",
+      "exercise": "Reverse Machine Flyes",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Plate Curls",
+      "exercise": "Reverse Plate Curls",
+      "action": "added"
+    },
+    {
+      "source": "Reverse Triceps Bench Press",
+      "exercise": "Reverse Triceps Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Rhomboids-SMR",
+      "exercise": "Rhomboids-SMR",
+      "action": "added"
+    },
+    {
+      "source": "Rickshaw Carry",
+      "exercise": "Rickshaw Carry",
+      "action": "added"
+    },
+    {
+      "source": "Rickshaw Deadlift",
+      "exercise": "Rickshaw Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Ring Dips",
+      "exercise": "Ring Dips",
+      "action": "added"
+    },
+    {
+      "source": "Rocket Jump",
+      "exercise": "Rocket Jump",
+      "action": "added"
+    },
+    {
+      "source": "Rocking Standing Calf Raise",
+      "exercise": "Rocking Standing Calf Raise",
+      "action": "added"
+    },
+    {
+      "source": "Rocky Pull-Ups/Pulldowns",
+      "exercise": "Rocky Pull-Ups/Pulldowns",
+      "action": "added"
+    },
+    {
+      "source": "Romanian Deadlift",
+      "exercise": "Romanian Deadlift",
+      "action": "mapped"
+    },
+    {
+      "source": "Romanian Deadlift from Deficit",
+      "exercise": "Romanian Deadlift from Deficit",
+      "action": "added"
+    },
+    {
+      "source": "Rope Climb",
+      "exercise": "Rope Climb",
+      "action": "added"
+    },
+    {
+      "source": "Rope Crunch",
+      "exercise": "Rope Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Rope Jumping",
+      "exercise": "Jump Rope",
+      "action": "mapped"
+    },
+    {
+      "source": "Rope Straight-Arm Pulldown",
+      "exercise": "Rope Straight-Arm Pulldown",
+      "action": "added"
+    },
+    {
+      "source": "Round The World Shoulder Stretch",
+      "exercise": "Round The World Shoulder Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Rowing, Stationary",
+      "exercise": "Rowing Machine",
+      "action": "mapped"
+    },
+    {
+      "source": "Runner's Stretch",
+      "exercise": "Runner's Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Running, Treadmill",
+      "exercise": "Treadmill Run",
+      "action": "mapped"
+    },
+    {
+      "source": "Russian Twist",
+      "exercise": "Russian Twist",
+      "action": "mapped"
+    },
+    {
+      "source": "Sandbag Load",
+      "exercise": "Sandbag Load",
+      "action": "added"
+    },
+    {
+      "source": "Scapular Pull-Up",
+      "exercise": "Scapular Pull-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Scissor Kick",
+      "exercise": "Scissor Kick",
+      "action": "added"
+    },
+    {
+      "source": "Scissors Jump",
+      "exercise": "Scissors Jump",
+      "action": "added"
+    },
+    {
+      "source": "Seated Band Hamstring Curl",
+      "exercise": "Seated Band Hamstring Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Barbell Military Press",
+      "exercise": "Seated Barbell Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Seated Barbell Twist",
+      "exercise": "Seated Barbell Twist",
+      "action": "added"
+    },
+    {
+      "source": "Seated Bent-Over One-Arm Dumbbell Triceps Extension",
+      "exercise": "Seated Bent-Over One-Arm Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Seated Bent-Over Rear Delt Raise",
+      "exercise": "Seated Bent-Over Rear Delt Raise",
+      "action": "added"
+    },
+    {
+      "source": "Seated Bent-Over Two-Arm Dumbbell Triceps Extension",
+      "exercise": "Seated Bent-Over Two-Arm Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Seated Biceps",
+      "exercise": "Seated Biceps",
+      "action": "added"
+    },
+    {
+      "source": "Seated Cable Rows",
+      "exercise": "Seated Cable Row",
+      "action": "mapped"
+    },
+    {
+      "source": "Seated Cable Shoulder Press",
+      "exercise": "Seated Cable Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Seated Calf Raise",
+      "exercise": "Seated Calf Raise",
+      "action": "mapped"
+    },
+    {
+      "source": "Seated Calf Stretch",
+      "exercise": "Seated Calf Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Seated Close-Grip Concentration Barbell Curl",
+      "exercise": "Seated Close-Grip Concentration Barbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Dumbbell Curl",
+      "exercise": "Seated Dumbbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Dumbbell Inner Biceps Curl",
+      "exercise": "Seated Dumbbell Inner Biceps Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Dumbbell Palms-Down Wrist Curl",
+      "exercise": "Seated Dumbbell Palms-Down Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Dumbbell Palms-Up Wrist Curl",
+      "exercise": "Seated Dumbbell Palms-Up Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Dumbbell Press",
+      "exercise": "Seated Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Seated Flat Bench Leg Pull-In",
+      "exercise": "Seated Flat Bench Leg Pull-In",
+      "action": "added"
+    },
+    {
+      "source": "Seated Floor Hamstring Stretch",
+      "exercise": "Seated Floor Hamstring Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Seated Front Deltoid",
+      "exercise": "Seated Front Deltoid",
+      "action": "added"
+    },
+    {
+      "source": "Seated Glute",
+      "exercise": "Seated Glute",
+      "action": "added"
+    },
+    {
+      "source": "Seated Good Mornings",
+      "exercise": "Seated Good Mornings",
+      "action": "added"
+    },
+    {
+      "source": "Seated Hamstring",
+      "exercise": "Seated Hamstring",
+      "action": "added"
+    },
+    {
+      "source": "Seated Hamstring and Calf Stretch",
+      "exercise": "Seated Hamstring and Calf Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Seated Head Harness Neck Resistance",
+      "exercise": "Seated Head Harness Neck Resistance",
+      "action": "added"
+    },
+    {
+      "source": "Seated Leg Curl",
+      "exercise": "Seated Leg Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Seated Leg Tucks",
+      "exercise": "Seated Leg Tucks",
+      "action": "added"
+    },
+    {
+      "source": "Seated One-Arm Dumbbell Palms-Down Wrist Curl",
+      "exercise": "Seated One-Arm Dumbbell Palms-Down Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated One-Arm Dumbbell Palms-Up Wrist Curl",
+      "exercise": "Seated One-Arm Dumbbell Palms-Up Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated One-arm Cable Pulley Rows",
+      "exercise": "Seated One-arm Cable Pulley Rows",
+      "action": "added"
+    },
+    {
+      "source": "Seated Overhead Stretch",
+      "exercise": "Seated Overhead Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Seated Palm-Up Barbell Wrist Curl",
+      "exercise": "Seated Palm-Up Barbell Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Palms-Down Barbell Wrist Curl",
+      "exercise": "Seated Palms-Down Barbell Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Seated Side Lateral Raise",
+      "exercise": "Seated Side Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "Seated Triceps Press",
+      "exercise": "Seated Triceps Press",
+      "action": "added"
+    },
+    {
+      "source": "Seated Two-Arm Palms-Up Low-Pulley Wrist Curl",
+      "exercise": "Seated Two-Arm Palms-Up Low-Pulley Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "See-Saw Press (Alternating Side Press)",
+      "exercise": "See-Saw Press (Alternating Side Press)",
+      "action": "added"
+    },
+    {
+      "source": "Shotgun Row",
+      "exercise": "Shotgun Row",
+      "action": "added"
+    },
+    {
+      "source": "Shoulder Circles",
+      "exercise": "Shoulder Circles",
+      "action": "added"
+    },
+    {
+      "source": "Shoulder Press - With Bands",
+      "exercise": "Shoulder Press - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Shoulder Raise",
+      "exercise": "Shoulder Raise",
+      "action": "added"
+    },
+    {
+      "source": "Shoulder Stretch",
+      "exercise": "Shoulder Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Side-Lying Floor Stretch",
+      "exercise": "Side-Lying Floor Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Side Bridge",
+      "exercise": "Side Bridge",
+      "action": "added"
+    },
+    {
+      "source": "Side Hop-Sprint",
+      "exercise": "Side Hop-Sprint",
+      "action": "added"
+    },
+    {
+      "source": "Side Jackknife",
+      "exercise": "Side Jackknife",
+      "action": "added"
+    },
+    {
+      "source": "Side Lateral Raise",
+      "exercise": "Side Lateral Raise",
+      "action": "added"
+    },
+    {
+      "source": "Side Laterals to Front Raise",
+      "exercise": "Side Laterals to Front Raise",
+      "action": "added"
+    },
+    {
+      "source": "Side Leg Raises",
+      "exercise": "Side Leg Raises",
+      "action": "added"
+    },
+    {
+      "source": "Side Lying Groin Stretch",
+      "exercise": "Side Lying Groin Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Side Neck Stretch",
+      "exercise": "Side Neck Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Side Standing Long Jump",
+      "exercise": "Side Standing Long Jump",
+      "action": "added"
+    },
+    {
+      "source": "Side To Side Chins",
+      "exercise": "Side To Side Chins",
+      "action": "added"
+    },
+    {
+      "source": "Side Wrist Pull",
+      "exercise": "Side Wrist Pull",
+      "action": "added"
+    },
+    {
+      "source": "Side to Side Box Shuffle",
+      "exercise": "Side to Side Box Shuffle",
+      "action": "added"
+    },
+    {
+      "source": "Single-Arm Cable Crossover",
+      "exercise": "Single-Arm Cable Crossover",
+      "action": "added"
+    },
+    {
+      "source": "Single-Arm Linear Jammer",
+      "exercise": "Single-Arm Linear Jammer",
+      "action": "added"
+    },
+    {
+      "source": "Single-Arm Push-Up",
+      "exercise": "Single-Arm Push-Up",
+      "action": "added"
+    },
+    {
+      "source": "Single-Cone Sprint Drill",
+      "exercise": "Single-Cone Sprint Drill",
+      "action": "added"
+    },
+    {
+      "source": "Single-Leg High Box Squat",
+      "exercise": "Single-Leg High Box Squat",
+      "action": "added"
+    },
+    {
+      "source": "Single-Leg Hop Progression",
+      "exercise": "Single-Leg Hop Progression",
+      "action": "added"
+    },
+    {
+      "source": "Single-Leg Lateral Hop",
+      "exercise": "Single-Leg Lateral Hop",
+      "action": "added"
+    },
+    {
+      "source": "Single-Leg Leg Extension",
+      "exercise": "Single-Leg Leg Extension",
+      "action": "added"
+    },
+    {
+      "source": "Single-Leg Stride Jump",
+      "exercise": "Single-Leg Stride Jump",
+      "action": "added"
+    },
+    {
+      "source": "Single Dumbbell Raise",
+      "exercise": "Single Dumbbell Raise",
+      "action": "added"
+    },
+    {
+      "source": "Single Leg Butt Kick",
+      "exercise": "Single Leg Butt Kick",
+      "action": "added"
+    },
+    {
+      "source": "Single Leg Glute Bridge",
+      "exercise": "Single-Leg Glute Bridge",
+      "action": "mapped"
+    },
+    {
+      "source": "Single Leg Push-off",
+      "exercise": "Single Leg Push-off",
+      "action": "added"
+    },
+    {
+      "source": "Sit-Up",
+      "exercise": "Sit-up",
+      "action": "mapped"
+    },
+    {
+      "source": "Sit Squats",
+      "exercise": "Sit Squats",
+      "action": "added"
+    },
+    {
+      "source": "Skating",
+      "exercise": "Skating",
+      "action": "added"
+    },
+    {
+      "source": "Sled Drag - Harness",
+      "exercise": "Sled Drag - Harness",
+      "action": "added"
+    },
+    {
+      "source": "Sled Overhead Backward Walk",
+      "exercise": "Sled Overhead Backward Walk",
+      "action": "added"
+    },
+    {
+      "source": "Sled Overhead Triceps Extension",
+      "exercise": "Sled Overhead Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Sled Push",
+      "exercise": "Sled Push",
+      "action": "added"
+    },
+    {
+      "source": "Sled Reverse Flye",
+      "exercise": "Sled Reverse Flye",
+      "action": "added"
+    },
+    {
+      "source": "Sled Row",
+      "exercise": "Sled Row",
+      "action": "added"
+    },
+    {
+      "source": "Sledgehammer Swings",
+      "exercise": "Sledgehammer Swings",
+      "action": "added"
+    },
+    {
+      "source": "Smith Incline Shoulder Raise",
+      "exercise": "Smith Incline Shoulder Raise",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Behind the Back Shrug",
+      "exercise": "Smith Machine Behind the Back Shrug",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Bench Press",
+      "exercise": "Smith Machine Bench Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Smith Machine Bent Over Row",
+      "exercise": "Smith Machine Bent Over Row",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Calf Raise",
+      "exercise": "Smith Machine Calf Raise",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Close-Grip Bench Press",
+      "exercise": "Smith Machine Close-Grip Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Decline Press",
+      "exercise": "Smith Machine Decline Press",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Hang Power Clean",
+      "exercise": "Smith Machine Hang Power Clean",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Hip Raise",
+      "exercise": "Smith Machine Hip Raise",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Incline Bench Press",
+      "exercise": "Smith Machine Incline Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Leg Press",
+      "exercise": "Smith Machine Leg Press",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine One-Arm Upright Row",
+      "exercise": "Smith Machine One-Arm Upright Row",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Overhead Shoulder Press",
+      "exercise": "Smith Machine Overhead Shoulder Press",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Pistol Squat",
+      "exercise": "Smith Machine Pistol Squat",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Reverse Calf Raises",
+      "exercise": "Smith Machine Reverse Calf Raises",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Squat",
+      "exercise": "Smith Machine Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Smith Machine Stiff-Legged Deadlift",
+      "exercise": "Smith Machine Stiff-Legged Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Smith Machine Upright Row",
+      "exercise": "Smith Machine Upright Row",
+      "action": "added"
+    },
+    {
+      "source": "Smith Single-Leg Split Squat",
+      "exercise": "Smith Single-Leg Split Squat",
+      "action": "added"
+    },
+    {
+      "source": "Snatch",
+      "exercise": "Snatch",
+      "action": "added"
+    },
+    {
+      "source": "Snatch Balance",
+      "exercise": "Snatch Balance",
+      "action": "added"
+    },
+    {
+      "source": "Snatch Deadlift",
+      "exercise": "Snatch Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Snatch Pull",
+      "exercise": "Snatch Pull",
+      "action": "added"
+    },
+    {
+      "source": "Snatch Shrug",
+      "exercise": "Snatch Shrug",
+      "action": "added"
+    },
+    {
+      "source": "Snatch from Blocks",
+      "exercise": "Snatch from Blocks",
+      "action": "added"
+    },
+    {
+      "source": "Speed Band Overhead Triceps",
+      "exercise": "Speed Band Overhead Triceps",
+      "action": "added"
+    },
+    {
+      "source": "Speed Box Squat",
+      "exercise": "Speed Box Squat",
+      "action": "added"
+    },
+    {
+      "source": "Speed Squats",
+      "exercise": "Speed Squats",
+      "action": "added"
+    },
+    {
+      "source": "Spell Caster",
+      "exercise": "Spell Caster",
+      "action": "added"
+    },
+    {
+      "source": "Spider Crawl",
+      "exercise": "Spider Crawl",
+      "action": "added"
+    },
+    {
+      "source": "Spider Curl",
+      "exercise": "Spider Curl",
+      "action": "added"
+    },
+    {
+      "source": "Spinal Stretch",
+      "exercise": "Spinal Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Split Clean",
+      "exercise": "Split Clean",
+      "action": "added"
+    },
+    {
+      "source": "Split Jerk",
+      "exercise": "Split Jerk",
+      "action": "added"
+    },
+    {
+      "source": "Split Jump",
+      "exercise": "Split Jump",
+      "action": "added"
+    },
+    {
+      "source": "Split Snatch",
+      "exercise": "Split Snatch",
+      "action": "added"
+    },
+    {
+      "source": "Split Squat with Dumbbells",
+      "exercise": "Split Squat with Dumbbells",
+      "action": "added"
+    },
+    {
+      "source": "Split Squats",
+      "exercise": "Split Squat Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Squat Jerk",
+      "exercise": "Squat Jerk",
+      "action": "added"
+    },
+    {
+      "source": "Squat with Bands",
+      "exercise": "Squat with Bands",
+      "action": "added"
+    },
+    {
+      "source": "Squat with Chains",
+      "exercise": "Squat with Chains",
+      "action": "added"
+    },
+    {
+      "source": "Squat with Plate Movers",
+      "exercise": "Squat with Plate Movers",
+      "action": "added"
+    },
+    {
+      "source": "Squats - With Bands",
+      "exercise": "Band Squat",
+      "action": "added"
+    },
+    {
+      "source": "Stairmaster",
+      "exercise": "Stairmaster",
+      "action": "added"
+    },
+    {
+      "source": "Standing Alternating Dumbbell Press",
+      "exercise": "Standing Alternating Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Standing Barbell Calf Raise",
+      "exercise": "Standing Barbell Calf Raise",
+      "action": "added"
+    },
+    {
+      "source": "Standing Barbell Press Behind Neck",
+      "exercise": "Standing Barbell Press Behind Neck",
+      "action": "added"
+    },
+    {
+      "source": "Standing Bent-Over One-Arm Dumbbell Triceps Extension",
+      "exercise": "Standing Bent-Over One-Arm Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Bent-Over Two-Arm Dumbbell Triceps Extension",
+      "exercise": "Standing Bent-Over Two-Arm Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Biceps Cable Curl",
+      "exercise": "Standing Biceps Cable Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing Biceps Stretch",
+      "exercise": "Standing Biceps Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Bradford Press",
+      "exercise": "Standing Bradford Press",
+      "action": "added"
+    },
+    {
+      "source": "Standing Cable Chest Press",
+      "exercise": "Standing Cable Chest Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Standing Cable Lift",
+      "exercise": "Standing Cable Lift",
+      "action": "added"
+    },
+    {
+      "source": "Standing Cable Wood Chop",
+      "exercise": "Standing Cable Wood Chop",
+      "action": "added"
+    },
+    {
+      "source": "Standing Calf Raises",
+      "exercise": "Standing Calf Raise",
+      "action": "mapped"
+    },
+    {
+      "source": "Standing Concentration Curl",
+      "exercise": "Standing Concentration Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing Dumbbell Calf Raise",
+      "exercise": "Standing Dumbbell Calf Raise",
+      "action": "added"
+    },
+    {
+      "source": "Standing Dumbbell Press",
+      "exercise": "Standing Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Standing Dumbbell Reverse Curl",
+      "exercise": "Standing Dumbbell Reverse Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing Dumbbell Straight-Arm Front Delt Raise Above Head",
+      "exercise": "Standing Dumbbell Straight-Arm Front Delt Raise Above Head",
+      "action": "added"
+    },
+    {
+      "source": "Standing Dumbbell Triceps Extension",
+      "exercise": "Standing Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Dumbbell Upright Row",
+      "exercise": "Standing Dumbbell Upright Row",
+      "action": "added"
+    },
+    {
+      "source": "Standing Elevated Quad Stretch",
+      "exercise": "Standing Elevated Quad Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Front Barbell Raise Over Head",
+      "exercise": "Standing Front Barbell Raise Over Head",
+      "action": "added"
+    },
+    {
+      "source": "Standing Gastrocnemius Calf Stretch",
+      "exercise": "Standing Gastrocnemius Calf Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Hamstring and Calf Stretch",
+      "exercise": "Standing Hamstring and Calf Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Hip Circles",
+      "exercise": "Standing Hip Circles",
+      "action": "added"
+    },
+    {
+      "source": "Standing Hip Flexors",
+      "exercise": "Standing Hip Flexors",
+      "action": "added"
+    },
+    {
+      "source": "Standing Inner-Biceps Curl",
+      "exercise": "Standing Inner-Biceps Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing Lateral Stretch",
+      "exercise": "Standing Lateral Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Leg Curl",
+      "exercise": "Standing Leg Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing Long Jump",
+      "exercise": "Standing Long Jump",
+      "action": "added"
+    },
+    {
+      "source": "Standing Low-Pulley Deltoid Raise",
+      "exercise": "Standing Low-Pulley Deltoid Raise",
+      "action": "added"
+    },
+    {
+      "source": "Standing Low-Pulley One-Arm Triceps Extension",
+      "exercise": "Standing Low-Pulley One-Arm Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Military Press",
+      "exercise": "Overhead Press",
+      "action": "mapped"
+    },
+    {
+      "source": "Standing Olympic Plate Hand Squeeze",
+      "exercise": "Standing Olympic Plate Hand Squeeze",
+      "action": "added"
+    },
+    {
+      "source": "Standing One-Arm Cable Curl",
+      "exercise": "Standing One-Arm Cable Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing One-Arm Dumbbell Curl Over Incline Bench",
+      "exercise": "Standing One-Arm Dumbbell Curl Over Incline Bench",
+      "action": "added"
+    },
+    {
+      "source": "Standing One-Arm Dumbbell Triceps Extension",
+      "exercise": "Standing One-Arm Dumbbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Overhead Barbell Triceps Extension",
+      "exercise": "Standing Overhead Barbell Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Palm-In One-Arm Dumbbell Press",
+      "exercise": "Standing Palm-In One-Arm Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Standing Palms-In Dumbbell Press",
+      "exercise": "Standing Palms-In Dumbbell Press",
+      "action": "added"
+    },
+    {
+      "source": "Standing Palms-Up Barbell Behind The Back Wrist Curl",
+      "exercise": "Standing Palms-Up Barbell Behind The Back Wrist Curl",
+      "action": "added"
+    },
+    {
+      "source": "Standing Pelvic Tilt",
+      "exercise": "Standing Pelvic Tilt",
+      "action": "added"
+    },
+    {
+      "source": "Standing Rope Crunch",
+      "exercise": "Standing Rope Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Soleus And Achilles Stretch",
+      "exercise": "Standing Soleus And Achilles Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Standing Toe Touches",
+      "exercise": "Standing Toe Touches",
+      "action": "added"
+    },
+    {
+      "source": "Standing Towel Triceps Extension",
+      "exercise": "Standing Towel Triceps Extension",
+      "action": "added"
+    },
+    {
+      "source": "Standing Two-Arm Overhead Throw",
+      "exercise": "Standing Two-Arm Overhead Throw",
+      "action": "added"
+    },
+    {
+      "source": "Star Jump",
+      "exercise": "Star Jump",
+      "action": "added"
+    },
+    {
+      "source": "Step-up with Knee Raise",
+      "exercise": "Step-up with Knee Raise",
+      "action": "added"
+    },
+    {
+      "source": "Step Mill",
+      "exercise": "Step Mill",
+      "action": "added"
+    },
+    {
+      "source": "Stiff-Legged Barbell Deadlift",
+      "exercise": "Stiff-Leg Deadlift",
+      "action": "mapped"
+    },
+    {
+      "source": "Stiff-Legged Dumbbell Deadlift",
+      "exercise": "Stiff-Legged Dumbbell Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Stiff Leg Barbell Good Morning",
+      "exercise": "Stiff Leg Barbell Good Morning",
+      "action": "added"
+    },
+    {
+      "source": "Stomach Vacuum",
+      "exercise": "Stomach Vacuum",
+      "action": "added"
+    },
+    {
+      "source": "Straight-Arm Dumbbell Pullover",
+      "exercise": "Straight-Arm Dumbbell Pullover",
+      "action": "added"
+    },
+    {
+      "source": "Straight-Arm Pulldown",
+      "exercise": "Straight-Arm Pulldown",
+      "action": "mapped"
+    },
+    {
+      "source": "Straight Bar Bench Mid Rows",
+      "exercise": "Straight Bar Bench Mid Rows",
+      "action": "added"
+    },
+    {
+      "source": "Straight Raises on Incline Bench",
+      "exercise": "Straight Raises on Incline Bench",
+      "action": "added"
+    },
+    {
+      "source": "Stride Jump Crossover",
+      "exercise": "Stride Jump Crossover",
+      "action": "added"
+    },
+    {
+      "source": "Sumo Deadlift",
+      "exercise": "Sumo Deadlift",
+      "action": "mapped"
+    },
+    {
+      "source": "Sumo Deadlift with Bands",
+      "exercise": "Sumo Deadlift with Bands",
+      "action": "added"
+    },
+    {
+      "source": "Sumo Deadlift with Chains",
+      "exercise": "Sumo Deadlift with Chains",
+      "action": "added"
+    },
+    {
+      "source": "Superman",
+      "exercise": "Superman",
+      "action": "mapped"
+    },
+    {
+      "source": "Supine Chest Throw",
+      "exercise": "Supine Chest Throw",
+      "action": "added"
+    },
+    {
+      "source": "Supine One-Arm Overhead Throw",
+      "exercise": "Supine One-Arm Overhead Throw",
+      "action": "added"
+    },
+    {
+      "source": "Supine Two-Arm Overhead Throw",
+      "exercise": "Supine Two-Arm Overhead Throw",
+      "action": "added"
+    },
+    {
+      "source": "Suspended Fallout",
+      "exercise": "Suspended Fallout",
+      "action": "added"
+    },
+    {
+      "source": "Suspended Push-Up",
+      "exercise": "Suspended Push-Up",
+      "action": "added"
+    },
+    {
+      "source": "Suspended Reverse Crunch",
+      "exercise": "Suspended Reverse Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Suspended Row",
+      "exercise": "Suspended Row",
+      "action": "added"
+    },
+    {
+      "source": "Suspended Split Squat",
+      "exercise": "Suspended Split Squat",
+      "action": "added"
+    },
+    {
+      "source": "Svend Press",
+      "exercise": "Svend Press",
+      "action": "added"
+    },
+    {
+      "source": "T-Bar Row with Handle",
+      "exercise": "T-Bar Row with Handle",
+      "action": "added"
+    },
+    {
+      "source": "Tate Press",
+      "exercise": "Tate Press",
+      "action": "added"
+    },
+    {
+      "source": "The Straddle",
+      "exercise": "The Straddle",
+      "action": "added"
+    },
+    {
+      "source": "Thigh Abductor",
+      "exercise": "Thigh Abductor",
+      "action": "added"
+    },
+    {
+      "source": "Thigh Adductor",
+      "exercise": "Thigh Adductor",
+      "action": "added"
+    },
+    {
+      "source": "Tire Flip",
+      "exercise": "Tire Flip",
+      "action": "added"
+    },
+    {
+      "source": "Toe Touchers",
+      "exercise": "Toe Touchers",
+      "action": "added"
+    },
+    {
+      "source": "Torso Rotation",
+      "exercise": "Torso Rotation",
+      "action": "added"
+    },
+    {
+      "source": "Trail Running/Walking",
+      "exercise": "Trail Running/Walking",
+      "action": "added"
+    },
+    {
+      "source": "Trap Bar Deadlift",
+      "exercise": "Trap Bar Deadlift",
+      "action": "added"
+    },
+    {
+      "source": "Tricep Dumbbell Kickback",
+      "exercise": "Tricep Dumbbell Kickback",
+      "action": "added"
+    },
+    {
+      "source": "Tricep Side Stretch",
+      "exercise": "Tricep Side Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Triceps Overhead Extension with Rope",
+      "exercise": "Triceps Overhead Extension with Rope",
+      "action": "added"
+    },
+    {
+      "source": "Triceps Pushdown",
+      "exercise": "Triceps Pushdown",
+      "action": "mapped"
+    },
+    {
+      "source": "Triceps Pushdown - Rope Attachment",
+      "exercise": "Triceps Pushdown - Rope Attachment",
+      "action": "added"
+    },
+    {
+      "source": "Triceps Pushdown - V-Bar Attachment",
+      "exercise": "Triceps Pushdown - V-Bar Attachment",
+      "action": "added"
+    },
+    {
+      "source": "Triceps Stretch",
+      "exercise": "Triceps Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Tuck Crunch",
+      "exercise": "Tuck Crunch",
+      "action": "added"
+    },
+    {
+      "source": "Two-Arm Dumbbell Preacher Curl",
+      "exercise": "Two-Arm Dumbbell Preacher Curl",
+      "action": "added"
+    },
+    {
+      "source": "Two-Arm Kettlebell Clean",
+      "exercise": "Two-Arm Kettlebell Clean",
+      "action": "added"
+    },
+    {
+      "source": "Two-Arm Kettlebell Jerk",
+      "exercise": "Two-Arm Kettlebell Jerk",
+      "action": "added"
+    },
+    {
+      "source": "Two-Arm Kettlebell Military Press",
+      "exercise": "Two-Arm Kettlebell Military Press",
+      "action": "added"
+    },
+    {
+      "source": "Two-Arm Kettlebell Row",
+      "exercise": "Two-Arm Kettlebell Row",
+      "action": "added"
+    },
+    {
+      "source": "Underhand Cable Pulldowns",
+      "exercise": "Underhand Cable Pulldowns",
+      "action": "added"
+    },
+    {
+      "source": "Upper Back-Leg Grab",
+      "exercise": "Upper Back-Leg Grab",
+      "action": "added"
+    },
+    {
+      "source": "Upper Back Stretch",
+      "exercise": "Upper Back Stretch",
+      "action": "added"
+    },
+    {
+      "source": "Upright Barbell Row",
+      "exercise": "Upright Barbell Row",
+      "action": "added"
+    },
+    {
+      "source": "Upright Cable Row",
+      "exercise": "Upright Cable Row",
+      "action": "added"
+    },
+    {
+      "source": "Upright Row - With Bands",
+      "exercise": "Upright Row - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Upward Stretch",
+      "exercise": "Upward Stretch",
+      "action": "added"
+    },
+    {
+      "source": "V-Bar Pulldown",
+      "exercise": "V-Bar Pulldown",
+      "action": "added"
+    },
+    {
+      "source": "V-Bar Pullup",
+      "exercise": "V-Bar Pullup",
+      "action": "added"
+    },
+    {
+      "source": "Vertical Swing",
+      "exercise": "Vertical Swing",
+      "action": "added"
+    },
+    {
+      "source": "Walking, Treadmill",
+      "exercise": "Treadmill Walk",
+      "action": "mapped"
+    },
+    {
+      "source": "Weighted Ball Hyperextension",
+      "exercise": "Weighted Ball Hyperextension",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Ball Side Bend",
+      "exercise": "Weighted Ball Side Bend",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Bench Dip",
+      "exercise": "Weighted Bench Dip",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Crunches",
+      "exercise": "Weighted Crunches",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Jump Squat",
+      "exercise": "Weighted Jump Squat",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Pull Ups",
+      "exercise": "Weighted Pull Ups",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Sissy Squat",
+      "exercise": "Weighted Sissy Squat",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Sit-Ups - With Bands",
+      "exercise": "Weighted Sit-Ups - With Bands",
+      "action": "added"
+    },
+    {
+      "source": "Weighted Squat",
+      "exercise": "Weighted Squat",
+      "action": "added"
+    },
+    {
+      "source": "Wide-Grip Barbell Bench Press",
+      "exercise": "Wide-Grip Barbell Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Wide-Grip Decline Barbell Bench Press",
+      "exercise": "Wide-Grip Decline Barbell Bench Press",
+      "action": "added"
+    },
+    {
+      "source": "Wide-Grip Decline Barbell Pullover",
+      "exercise": "Wide-Grip Decline Barbell Pullover",
+      "action": "added"
+    },
+    {
+      "source": "Wide-Grip Lat Pulldown",
+      "exercise": "Wide-Grip Lat Pulldown",
+      "action": "mapped"
+    },
+    {
+      "source": "Wide-Grip Pulldown Behind The Neck",
+      "exercise": "Wide-Grip Pulldown Behind The Neck",
+      "action": "added"
+    },
+    {
+      "source": "Wide-Grip Rear Pull-Up",
+      "exercise": "Wide-Grip Rear Pull-Up",
+      "action": "added"
+    },
+    {
+      "source": "Wide-Grip Standing Barbell Curl",
+      "exercise": "Wide-Grip Standing Barbell Curl",
+      "action": "added"
+    },
+    {
+      "source": "Wide Stance Barbell Squat",
+      "exercise": "Wide Stance Barbell Squat",
+      "action": "added"
+    },
+    {
+      "source": "Wide Stance Stiff Legs",
+      "exercise": "Wide Stance Stiff Legs",
+      "action": "added"
+    },
+    {
+      "source": "Wind Sprints",
+      "exercise": "Wind Sprints",
+      "action": "added"
+    },
+    {
+      "source": "Windmills",
+      "exercise": "Windmills",
+      "action": "added"
+    },
+    {
+      "source": "World's Greatest Stretch",
+      "exercise": "Worlds Greatest Stretch",
+      "action": "mapped"
+    },
+    {
+      "source": "Wrist Circles",
+      "exercise": "Wrist Circles",
+      "action": "added"
+    },
+    {
+      "source": "Wrist Roller",
+      "exercise": "Wrist Roller",
+      "action": "added"
+    },
+    {
+      "source": "Wrist Rotations with Straight Bar",
+      "exercise": "Wrist Rotations with Straight Bar",
+      "action": "added"
+    },
+    {
+      "source": "Yoke Walk",
+      "exercise": "Yoke Walk",
+      "action": "added"
+    },
+    {
+      "source": "Zercher Squats",
+      "exercise": "Zercher Squat",
+      "action": "mapped"
+    },
+    {
+      "source": "Zottman Curl",
+      "exercise": "Zottman Curl",
+      "action": "mapped"
+    },
+    {
+      "source": "Zottman Preacher Curl",
+      "exercise": "Zottman Preacher Curl",
+      "action": "added"
+    }
+  ]
+}

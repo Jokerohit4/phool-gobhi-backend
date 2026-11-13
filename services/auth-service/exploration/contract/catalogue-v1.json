@@ -1,0 +1,310 @@
+{
+  "catalogueVersion": 1,
+  "generatorVersion": 1,
+  "timezone": "Asia/Kolkata",
+  "source": "docs/explore-world-plan.md:151-180,C2,C5",
+  "hashRule": "SHA-256 of canonical UTF-8 JSON excluding only top-level contentHash; recursively sorted object keys; array order retained; JSON string escaping; compact separators; integers only; no BOM or trailing newline",
+  "items": [
+    {
+      "itemKey": "idli_sambar",
+      "foodDexNumber": 1,
+      "displayName": "Idli and sambar",
+      "displayNameKey": "foodFind_idli_sambar",
+      "family": "Dishes",
+      "rarity": "common",
+      "windowPools": [
+        "breakfast"
+      ],
+      "silhouette": "Plate with idli and small cup",
+      "assetKey": "food_find/idli_sambar"
+    },
+    {
+      "itemKey": "fruit_oats_bowl",
+      "foodDexNumber": 2,
+      "displayName": "Fruit and oats bowl",
+      "displayNameKey": "foodFind_fruit_oats_bowl",
+      "family": "Bowls",
+      "rarity": "common",
+      "windowPools": [
+        "breakfast"
+      ],
+      "silhouette": "Bowl with visible fruit pieces",
+      "assetKey": "food_find/fruit_oats_bowl"
+    },
+    {
+      "itemKey": "banana_protein_shake",
+      "foodDexNumber": 3,
+      "displayName": "Banana protein shake",
+      "displayNameKey": "foodFind_banana_protein_shake",
+      "family": "Shakes",
+      "rarity": "common",
+      "windowPools": [
+        "breakfast",
+        "evening"
+      ],
+      "silhouette": "Shaker bottle, banana accent",
+      "assetKey": "food_find/banana_protein_shake"
+    },
+    {
+      "itemKey": "berry_smoothie",
+      "foodDexNumber": 4,
+      "displayName": "Berry smoothie",
+      "displayNameKey": "foodFind_berry_smoothie",
+      "family": "Smoothies",
+      "rarity": "uncommon",
+      "windowPools": [
+        "breakfast",
+        "lunch"
+      ],
+      "silhouette": "Tall glass, berry accent",
+      "assetKey": "food_find/berry_smoothie"
+    },
+    {
+      "itemKey": "spinach_banana_smoothie",
+      "foodDexNumber": 5,
+      "displayName": "Spinach-banana smoothie",
+      "displayNameKey": "foodFind_spinach_banana_smoothie",
+      "family": "Smoothies",
+      "rarity": "rare",
+      "windowPools": [
+        "breakfast",
+        "evening"
+      ],
+      "silhouette": "Tall glass, green/banana accent",
+      "assetKey": "food_find/spinach_banana_smoothie"
+    },
+    {
+      "itemKey": "rice_dal_bowl",
+      "foodDexNumber": 6,
+      "displayName": "Rice and dal bowl",
+      "displayNameKey": "foodFind_rice_dal_bowl",
+      "family": "Bowls",
+      "rarity": "common",
+      "windowPools": [
+        "lunch",
+        "night"
+      ],
+      "silhouette": "Divided bowl, two contrasting fills",
+      "assetKey": "food_find/rice_dal_bowl"
+    },
+    {
+      "itemKey": "chana_bowl",
+      "foodDexNumber": 7,
+      "displayName": "Chana bowl",
+      "displayNameKey": "foodFind_chana_bowl",
+      "family": "Bowls",
+      "rarity": "common",
+      "windowPools": [
+        "lunch"
+      ],
+      "silhouette": "Bowl with chickpea shapes",
+      "assetKey": "food_find/chana_bowl"
+    },
+    {
+      "itemKey": "mango_smoothie",
+      "foodDexNumber": 8,
+      "displayName": "Mango smoothie",
+      "displayNameKey": "foodFind_mango_smoothie",
+      "family": "Smoothies",
+      "rarity": "uncommon",
+      "windowPools": [
+        "lunch",
+        "evening"
+      ],
+      "silhouette": "Tall glass, mango accent",
+      "assetKey": "food_find/mango_smoothie"
+    },
+    {
+      "itemKey": "paneer_vegetable_wrap",
+      "foodDexNumber": 9,
+      "displayName": "Paneer and vegetable wrap",
+      "displayNameKey": "foodFind_paneer_vegetable_wrap",
+      "family": "Dishes",
+      "rarity": "uncommon",
+      "windowPools": [
+        "lunch",
+        "night"
+      ],
+      "silhouette": "Cut wrap with visible filling",
+      "assetKey": "food_find/paneer_vegetable_wrap"
+    },
+    {
+      "itemKey": "sprouts_chaat_bowl",
+      "foodDexNumber": 10,
+      "displayName": "Sprouts chaat bowl",
+      "displayNameKey": "foodFind_sprouts_chaat_bowl",
+      "family": "Bowls",
+      "rarity": "uncommon",
+      "windowPools": [
+        "evening"
+      ],
+      "silhouette": "Bowl with sprout and lemon-wedge shapes",
+      "assetKey": "food_find/sprouts_chaat_bowl"
+    },
+    {
+      "itemKey": "cocoa_protein_shake",
+      "foodDexNumber": 11,
+      "displayName": "Cocoa protein shake",
+      "displayNameKey": "foodFind_cocoa_protein_shake",
+      "family": "Shakes",
+      "rarity": "common",
+      "windowPools": [
+        "evening",
+        "night"
+      ],
+      "silhouette": "Shaker bottle, cocoa accent",
+      "assetKey": "food_find/cocoa_protein_shake"
+    },
+    {
+      "itemKey": "dal_khichdi",
+      "foodDexNumber": 12,
+      "displayName": "Dal khichdi",
+      "displayNameKey": "foodFind_dal_khichdi",
+      "family": "Dishes",
+      "rarity": "rare",
+      "windowPools": [
+        "night"
+      ],
+      "silhouette": "Low dish with spoon accent",
+      "assetKey": "food_find/dal_khichdi"
+    }
+  ],
+  "fallbackDisplayNameKey": "foodFind_fallback",
+  "rarityWeights": {
+    "common": 60,
+    "uncommon": 30,
+    "rare": 10
+  },
+  "windowPools": {
+    "night": [
+      {
+        "itemKey": "rice_dal_bowl",
+        "weight": 60
+      },
+      {
+        "itemKey": "paneer_vegetable_wrap",
+        "weight": 30
+      },
+      {
+        "itemKey": "cocoa_protein_shake",
+        "weight": 60
+      },
+      {
+        "itemKey": "dal_khichdi",
+        "weight": 10
+      }
+    ],
+    "breakfast": [
+      {
+        "itemKey": "idli_sambar",
+        "weight": 60
+      },
+      {
+        "itemKey": "fruit_oats_bowl",
+        "weight": 60
+      },
+      {
+        "itemKey": "banana_protein_shake",
+        "weight": 60
+      },
+      {
+        "itemKey": "berry_smoothie",
+        "weight": 30
+      },
+      {
+        "itemKey": "spinach_banana_smoothie",
+        "weight": 10
+      }
+    ],
+    "lunch": [
+      {
+        "itemKey": "berry_smoothie",
+        "weight": 30
+      },
+      {
+        "itemKey": "rice_dal_bowl",
+        "weight": 60
+      },
+      {
+        "itemKey": "chana_bowl",
+        "weight": 60
+      },
+      {
+        "itemKey": "mango_smoothie",
+        "weight": 30
+      },
+      {
+        "itemKey": "paneer_vegetable_wrap",
+        "weight": 30
+      }
+    ],
+    "evening": [
+      {
+        "itemKey": "banana_protein_shake",
+        "weight": 60
+      },
+      {
+        "itemKey": "spinach_banana_smoothie",
+        "weight": 10
+      },
+      {
+        "itemKey": "mango_smoothie",
+        "weight": 30
+      },
+      {
+        "itemKey": "sprouts_chaat_bowl",
+        "weight": 30
+      },
+      {
+        "itemKey": "cocoa_protein_shake",
+        "weight": 60
+      }
+    ]
+  },
+  "windows": [
+    {
+      "window": 0,
+      "name": "night",
+      "start": "00:00",
+      "end": "06:00",
+      "pool": "night"
+    },
+    {
+      "window": 1,
+      "name": "breakfast",
+      "start": "06:00",
+      "end": "11:00",
+      "pool": "breakfast"
+    },
+    {
+      "window": 2,
+      "name": "lunch",
+      "start": "11:00",
+      "end": "16:00",
+      "pool": "lunch"
+    },
+    {
+      "window": 3,
+      "name": "evening",
+      "start": "16:00",
+      "end": "21:00",
+      "pool": "evening"
+    },
+    {
+      "window": 4,
+      "name": "late",
+      "start": "21:00",
+      "end": "24:00",
+      "pool": "night"
+    }
+  ],
+  "goldenOneIn": 0,
+  "dropConfiguration": {
+    "version": 1,
+    "drops": [],
+    "regionRules": [],
+    "dropSharePercent": 0
+  },
+  "dropConfigurationHash": "sha256:7c1c988c3a72e72eeb69f97ec43679aa0e345777980c371ce05b18c37d81980a",
+  "contentHash": "sha256:873d7b2a83f3916a1779e3dc0e0b4687e69d35190b22a8fc64763706658734f3"
+}

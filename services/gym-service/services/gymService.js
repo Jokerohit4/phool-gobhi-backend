@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
 import { generateTimeSlots, generateWindowedSlots } from '../utils/slots.js';
 import { getDayOfWeek } from '../utils/slotTiming.js';
 import * as placesService from './placesService.js';
 import { getRoadDistancesKm } from './roadDistanceService.js';
 
-const prisma = new PrismaClient();
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -44,12 +43,22 @@ const SUBSCRIPTION_PLANS = [
 // generateTimeSlots loop forever, since its termination check assumes a
 // positive step. Called with the FINAL values that will actually be stored
 // (post-defaulting on create), not the raw request body.
-function validateGymFields({ sessionPrice, quotedPrice, capacity, slotDuration, openTime, closeTime }) {
+function validateGymFields({ sessionPrice, quotedPrice, capacity, slotDuration, openTime, closeTime, weeklyPlanPrice, monthlyPlanPrice, quarterlyPlanPrice, sixMonthlyPlanPrice, yearlyPlanPrice } = {}) {
   if (sessionPrice !== undefined && (typeof sessionPrice !== 'number' || !(sessionPrice > 0))) {
     throw { status: 400, error: 'sessionPrice must be a positive number' };
   }
   if (quotedPrice !== undefined && quotedPrice !== null && (typeof quotedPrice !== 'number' || !(quotedPrice > 0))) {
     throw { status: 400, error: 'quotedPrice must be a positive number' };
+  }
+  // Subscription plan prices are user-facing: a zero-₹ "8 visits for free"
+  // plan is real revenue the platform owes the gym the moment a customer buys
+  // it, so a partner or buggy client must not be able to publish one. null
+  // clears a plan and is allowed.
+  const PLAN_PRICE_FIELDS = { weeklyPlanPrice, monthlyPlanPrice, quarterlyPlanPrice, sixMonthlyPlanPrice, yearlyPlanPrice };
+  for (const [name, value] of Object.entries(PLAN_PRICE_FIELDS)) {
+    if (value !== undefined && value !== null && (typeof value !== 'number' || !(value > 0))) {
+      throw { status: 400, error: `${name} must be a positive number` };
+    }
   }
   if (capacity !== undefined && (!Number.isInteger(capacity) || capacity <= 0)) {
     throw { status: 400, error: 'capacity must be a positive integer' };
@@ -281,10 +290,40 @@ export async function getNearestGymDistance(userLat, userLng) {
   return { nearestGymId: nearest?.gymId ?? null, nearestDistanceKm: nearest?.distanceKm ?? null };
 }
 
+const GYM_DETAIL_REVIEW_LIMIT = 10;
+
+// Narrow gym read for the slot/availability endpoints: they only need these
+// fields, not images or reviews. Same visibility rules (and 404) as
+// getGymById.
+export async function getGymForSlots(id) {
+  const gym = normalizeGymMoney(await prisma.gym.findUnique({
+    where: { id },
+    select: {
+      capacity: true,
+      slotDuration: true,
+      sessionPrice: true,
+      isActive: true,
+      isApproved: true,
+      marketplaceEnabled: true,
+    },
+  }));
+  if (!gym || !gym.isActive || !gym.isApproved || !gym.marketplaceEnabled) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  return gym;
+}
+
 export async function getGymById(id, userLat, userLng) {
   const gym = normalizeGymMoney(await prisma.gym.findUnique({
     where: { id },
-    include: { images: { orderBy: { id: 'asc' } }, reviews: true },
+    // Only the most recent reviews ride along on gym detail — the full list
+    // is unbounded and has its own endpoint (GET /:id/reviews). The gym's
+    // rating / ratingCount are stored aggregates on the Gym row (see
+    // recomputeGymRating), so trimming this list cannot change any average.
+    include: {
+      images: { orderBy: { id: 'asc' } },
+      reviews: { orderBy: { createdAt: 'desc' }, take: GYM_DETAIL_REVIEW_LIMIT },
+    },
   }));
 
   if (!gym || !gym.isActive || !gym.isApproved || !gym.marketplaceEnabled) {
@@ -385,54 +424,56 @@ export async function createGym(partnerId, data) {
     slotDuration: finalSlotDuration,
     openTime,
     closeTime,
+    weeklyPlanPrice,
+    monthlyPlanPrice,
+    quarterlyPlanPrice,
+    sixMonthlyPlanPrice,
+    yearlyPlanPrice,
   });
 
   const googleFields = await fetchGoogleRatingFields(googlePlaceId);
 
-  const gym = await prisma.gym.create({
-    data: {
-      partnerId,
-      name,
-      description,
-      address,
-      city,
-      state,
-      lat,
-      lng,
-      amenities: amenities || [],
-      phone,
-      sessionPrice,
-      quotedPrice: quotedPrice ?? null,
-      weeklyPlanPrice: weeklyPlanPrice ?? null,
-      monthlyPlanPrice: monthlyPlanPrice ?? null,
-      quarterlyPlanPrice: quarterlyPlanPrice ?? null,
-      sixMonthlyPlanPrice: sixMonthlyPlanPrice ?? null,
-      yearlyPlanPrice: yearlyPlanPrice ?? null,
-      established: established ?? null,
-      brandDocs: brandDocs || [],
-      openTime,
-      closeTime,
-      slotDuration: finalSlotDuration,
-      capacity: finalCapacity,
-      isApproved: false,
-      isActive: true,
-      googlePlaceId: googlePlaceId || null,
-      ...googleFields,
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const gym = await tx.gym.create({
+      data: {
+        partnerId,
+        name,
+        description,
+        address,
+        city,
+        state,
+        lat,
+        lng,
+        amenities: amenities || [],
+        phone,
+        sessionPrice,
+        quotedPrice: quotedPrice ?? null,
+        weeklyPlanPrice: weeklyPlanPrice ?? null,
+        monthlyPlanPrice: monthlyPlanPrice ?? null,
+        quarterlyPlanPrice: quarterlyPlanPrice ?? null,
+        sixMonthlyPlanPrice: sixMonthlyPlanPrice ?? null,
+        yearlyPlanPrice: yearlyPlanPrice ?? null,
+        established: established ?? null,
+        brandDocs: brandDocs || [],
+        openTime,
+        closeTime,
+        slotDuration: finalSlotDuration,
+        capacity: finalCapacity,
+        isApproved: false,
+        isActive: true,
+        googlePlaceId: googlePlaceId || null,
+        ...googleFields,
+      },
+    });
 
-  // Seed all 7 days with a single morning window reproducing openTime/
-  // closeTime — same convention as the backfill migration for pre-existing
-  // gyms, so getOperatingHours never needs its fallback for a gym created
-  // after this feature shipped. The partner can split/vary this later via
-  // the operating-hours editor.
-  await prisma.gymOperatingHours.createMany({
-    data: Array.from({ length: 7 }, (_, dayOfWeek) => ({
-      gymId: gym.id, dayOfWeek, morningStart: openTime, morningEnd: closeTime,
-    })),
-  });
+    await tx.gymOperatingHours.createMany({
+      data: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+        gymId: gym.id, dayOfWeek, morningStart: openTime, morningEnd: closeTime,
+      })),
+    });
 
-  return normalizeGymMoney(gym);
+    return normalizeGymMoney(gym);
+  });
 }
 
 // The actual write for a profile-field change — shared by updateGym (gym not
@@ -440,33 +481,27 @@ export async function createGym(partnerId, data) {
 // applies once a gobhi signs off on the pending request built from the same
 // payload shape).
 async function applyGymProfileUpdate(gymId, updateData) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  return prisma.$transaction(async (tx) => {
+    const gym = await tx.gym.findUnique({ where: { id: gymId } });
 
-  // Re-linking to a different (or first-time) Google place should show the
-  // new place's rating immediately, without waiting for a separate refresh
-  // click. Untouched saves (googlePlaceId unchanged) skip the extra API call.
-  if ('googlePlaceId' in updateData && updateData.googlePlaceId !== gym.googlePlaceId) {
-    Object.assign(updateData, await fetchGoogleRatingFields(updateData.googlePlaceId));
-  }
+    if ('googlePlaceId' in updateData && updateData.googlePlaceId !== gym.googlePlaceId) {
+      Object.assign(updateData, await fetchGoogleRatingFields(updateData.googlePlaceId));
+    }
 
-  const updated = normalizeGymMoney(await prisma.gym.update({
-    where: { id: gymId },
-    data: updateData,
-  }));
+    const updated = normalizeGymMoney(await tx.gym.update({
+      where: { id: gymId },
+      data: updateData,
+    }));
 
-  // Changing slotDuration shifts every day's slot boundaries (openTime/
-  // closeTime no longer drive slot generation directly — see
-  // GymOperatingHours below — but slotDuration remains one global value per
-  // gym), which can orphan GymSlotPrice rows whose startTime no longer
-  // occurs on any day. Clear those out so stale prices don't silently linger.
-  if ('slotDuration' in updateData) {
-    const validStartTimes = [...(await getAllPossibleStartTimes(gymId)).keys()];
-    await prisma.gymSlotPrice.deleteMany({
-      where: { gymId, startTime: { notIn: validStartTimes } },
-    });
-  }
+    if ('slotDuration' in updateData) {
+      const validStartTimes = [...(await getAllPossibleStartTimes(gymId, tx)).keys()];
+      await tx.gymSlotPrice.deleteMany({
+        where: { gymId, startTime: { notIn: validStartTimes } },
+      });
+    }
 
-  return updated;
+    return updated;
+  });
 }
 
 export async function updateGym(gymId, partnerId, data) {
@@ -811,14 +846,16 @@ async function applyGymDocDelete(gymId, { url }) {
   const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { brandDocs: true } });
   const remaining = (gym?.brandDocs || []).filter((d) => d !== url);
 
-  // Best-effort Cloudinary cleanup. brandDocs stores only URLs, so derive the
-  // public id; resource_type 'auto'/raw uploads need to be destroyed as such.
   const publicId = cloudinaryPublicIdFromUrl(url);
   if (publicId) {
     try {
       await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
     } catch (err) {
-      console.error('Error deleting doc from Cloudinary:', err.message);
+      try {
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+      } catch (err2) {
+        console.error('Error deleting doc from Cloudinary:', err2.message);
+      }
     }
   }
 
@@ -938,15 +975,18 @@ export async function deleteReview(gymId, reviewId) {
 }
 
 export async function getGymReviews(gymId) {
-  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  // Independent reads — run together; the visibility check still decides the
+  // outcome (a hidden gym's reviews are fetched and discarded, never returned).
+  const [gym, reviews] = await Promise.all([
+    prisma.gym.findUnique({ where: { id: gymId }, select: { isActive: true, isApproved: true } }),
+    prisma.gymReview.findMany({
+      where: { gymId },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
   if (!gym || !gym.isActive || !gym.isApproved) {
     throw { status: 404, error: 'Gym not found' };
   }
-
-  const reviews = await prisma.gymReview.findMany({
-    where: { gymId },
-    orderBy: { createdAt: 'desc' },
-  });
 
   return reviews;
 }
@@ -965,7 +1005,7 @@ export async function approveGym(gymId, { approved = true, reason = null } = {})
       isApproved: approved,
       rejectionReason: approved ? null : reason,
       // First approval only — a later reject/re-approve cycle must not reset
-      // the honeymoon clock the gym already started.
+      // when this gym first went live.
       ...(approved && !gym.partnershipStartDate ? { partnershipStartDate: new Date() } : {}),
     },
   }));
@@ -988,7 +1028,7 @@ export async function updateGymCommission(gymId, commissionPct) {
 }
 
 // gobhi-only, same shape as updateGymCommission — overrides the
-// attendance-SaaS post-honeymoon rate wallet-service applies to this gym's
+// attendance-SaaS rate wallet-service applies to this gym's
 // GymSubscription purchases when subscriptionPricingMode is 'percentage'
 // (see purchaseSubscriptionWithWallet). null resets to the platform default
 // instead of a fixed number.
@@ -1009,7 +1049,7 @@ export async function updateGymSubscriptionCommission(gymId, subscriptionCommiss
 }
 
 // gobhi-only, same shape as updateGymCommission — picks which formula
-// wallet-service applies to this gym's post-honeymoon GymSubscription
+// wallet-service applies to this gym's GymSubscription
 // commission: a percentage of the plan price (subscriptionCommissionPct
 // above), or a flat fee per registration regardless of price
 // (flatFeePerUser). flatFeePerUser is only meaningful when mode is
@@ -1030,12 +1070,29 @@ export async function updateGymSubscriptionPricingMode(gymId, mode, flatFeePerUs
   const gym = await prisma.gym.findUnique({ where: { id: gymId } });
   if (!gym) throw { status: 404, error: 'Gym not found' };
 
+return normalizeGymMoney(await prisma.gym.update({
+where: { id: gymId },
+data: {
+subscriptionPricingMode: mode,
+subscriptionFlatFeePerUser: flatFeePerUser ?? null,
+},
+}));
+}
+
+// Gobhi-only attendance-SaaS opt-out toggle (admin counterpart to the
+// partner's own switch inside updateGym). Same "keep at least one business
+// model enabled" guard so a gym can't end up with marketplace disabled AND
+// attendance-SaaS opted out at once.
+export async function setAttendanceSaasOptedOut(gymId, optOut) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  const nextOptOut = !!optOut;
+  if (!gym.marketplaceEnabled && nextOptOut) {
+    throw { status: 400, error: 'At least one business model (marketplace or attendance-SaaS) must stay enabled.' };
+  }
   return normalizeGymMoney(await prisma.gym.update({
     where: { id: gymId },
-    data: {
-      subscriptionPricingMode: mode,
-      subscriptionFlatFeePerUser: flatFeePerUser ?? null,
-    },
+    data: { attendanceSaasOptedOut: nextOptOut },
   }));
 }
 
@@ -1057,19 +1114,16 @@ export async function updateGymSubscriptionPricingMode(gymId, mode, flatFeePerUs
 const SINGLETON_CHANGE_TYPES = new Set(['profile', 'slot_prices']);
 
 async function createEditRequest(gymId, partnerId, changeType, payload) {
-  if (SINGLETON_CHANGE_TYPES.has(changeType)) {
-    // A partner is never blocked from resubmitting — the newest request for
-    // a given (gym, changeType) simply supersedes whatever was still
-    // pending, so duplicate pending rows never pile up and there's always
-    // exactly one pending request per changeType to review.
-    await prisma.gymEditRequest.updateMany({
-      where: { gymId, changeType, status: 'pending' },
-      data: { status: 'rejected', rejectionReason: 'Superseded by a newer request' },
+  return prisma.$transaction(async (tx) => {
+    if (SINGLETON_CHANGE_TYPES.has(changeType)) {
+      await tx.gymEditRequest.updateMany({
+        where: { gymId, changeType, status: 'pending' },
+        data: { status: 'rejected', rejectionReason: 'Superseded by a newer request' },
+      });
+    }
+    return tx.gymEditRequest.create({
+      data: { gymId, partnerId, changeType, payload },
     });
-  }
-
-  return prisma.gymEditRequest.create({
-    data: { gymId, partnerId, changeType, payload },
   });
 }
 
@@ -1261,15 +1315,24 @@ export async function getSlotBlocks(gymId, date) {
   });
 }
 
-async function applySlotBlockAdd(gymId, { date, startTime, endTime }) {
-  // Prevent duplicate blocks
-  const existing = await prisma.slotBlock.findFirst({
-    where: { gymId, date, startTime },
+// Blocks for a whole date range (inclusive; dates are zero-padded ISO strings
+// so string comparison orders them correctly) in one query.
+export async function getSlotBlocksInRange(gymId, from, to) {
+  return prisma.slotBlock.findMany({
+    where: { gymId, date: { gte: from, lte: to } },
+    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
   });
-  if (existing) return existing;
+}
 
-  return prisma.slotBlock.create({
-    data: { gymId, date, startTime, endTime },
+async function applySlotBlockAdd(gymId, { date, startTime, endTime }) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.slotBlock.findFirst({
+      where: { gymId, date, startTime },
+    });
+    if (existing) return existing;
+    return tx.slotBlock.create({
+      data: { gymId, date, startTime, endTime },
+    });
   });
 }
 
@@ -1374,16 +1437,32 @@ export async function getOperatingHours(gymId, dayOfWeek) {
   return { gymId, dayOfWeek, morningStart: gym.openTime, morningEnd: gym.closeTime, eveningStart: null, eveningEnd: null };
 }
 
+// All 7 days' hours in one query, with the same per-day legacy fallback as
+// getOperatingHours. No visibility check — callers have already resolved the gym.
+export async function getOperatingHoursAllDays(gymId) {
+  return readOperatingHours(gymId);
+}
+
 export async function getAllOperatingHours(gymId) {
-  const rows = await prisma.gymOperatingHours.findMany({ where: { gymId }, orderBy: { dayOfWeek: 'asc' } });
+  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { isActive: true, isApproved: true } });
+  if (!gym || !gym.isActive || !gym.isApproved) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  return readOperatingHours(gymId);
+}
+
+// Owner/admin mutations must also work for draft and inactive gyms. They use
+// this internal reader; public hours retain the visibility guard above.
+async function readOperatingHours(gymId, db = prisma) {
+  const rows = await db.gymOperatingHours.findMany({ where: { gymId }, orderBy: { dayOfWeek: 'asc' } });
   if (rows.length === 7) return rows;
 
   const byDay = new Map(rows.map(r => [r.dayOfWeek, r]));
-  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { openTime: true, closeTime: true } });
+  const gymMeta = await db.gym.findUnique({ where: { id: gymId }, select: { openTime: true, closeTime: true } });
   return Array.from({ length: 7 }, (_, dayOfWeek) => {
     if (byDay.has(dayOfWeek)) return byDay.get(dayOfWeek);
     console.error(`[operating-hours-fallback] gymId=${gymId} dayOfWeek=${dayOfWeek} has no GymOperatingHours row — falling back to legacy openTime/closeTime`);
-    return { gymId, dayOfWeek, morningStart: gym?.openTime ?? null, morningEnd: gym?.closeTime ?? null, eveningStart: null, eveningEnd: null };
+    return { gymId, dayOfWeek, morningStart: gymMeta?.openTime ?? null, morningEnd: gymMeta?.closeTime ?? null, eveningStart: null, eveningEnd: null };
   });
 }
 
@@ -1391,11 +1470,11 @@ export async function getAllOperatingHours(gymId) {
 // week — this is what "a valid slot for pricing purposes" means now that
 // windows vary by day (GymSlotPrice itself stays keyed only by startTime,
 // same value whichever day it's used on).
-export async function getAllPossibleStartTimes(gymId) {
-  const gym = normalizeGymMoney(await prisma.gym.findUnique({ where: { id: gymId } }));
+export async function getAllPossibleStartTimes(gymId, db = prisma) {
+  const gym = normalizeGymMoney(await db.gym.findUnique({ where: { id: gymId } }));
   if (!gym) throw { status: 404, error: 'Gym not found' };
 
-  const hours = await getAllOperatingHours(gymId);
+  const hours = await readOperatingHours(gymId, db);
   const map = new Map();
   for (const h of hours) {
     for (const s of generateWindowedSlots(h, gym.slotDuration)) {
@@ -1432,7 +1511,7 @@ async function applyOperatingHoursUpdate(gymId, days) {
   const validStartTimes = [...(await getAllPossibleStartTimes(gymId)).keys()];
   await prisma.gymSlotPrice.deleteMany({ where: { gymId, startTime: { notIn: validStartTimes } } });
 
-  return getAllOperatingHours(gymId);
+  return readOperatingHours(gymId);
 }
 
 export async function upsertOperatingHours(gymId, partnerId, days) {
@@ -1504,8 +1583,12 @@ export async function getClassForOccurrences(gymId, classId) {
 }
 
 export async function getGymClasses(gymId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { isActive: true, isApproved: true } });
+  if (!gym || !gym.isActive || !gym.isApproved) {
+    throw { status: 404, error: 'Gym not found' };
+  }
   const rows = await prisma.gymClass.findMany({
-    where: { gymId },
+    where: { gymId, isActive: true },
     include: { cancellations: { orderBy: { date: 'asc' } } },
     orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
   });
@@ -1668,20 +1751,20 @@ export async function getSlotPrices(gymId) {
 // may have changed (via a separately-approved profile or hours edit) in the
 // meantime.
 async function applySlotPrices(gymId, prices) {
-  const validSlots = await getAllPossibleStartTimes(gymId);
-
-  await prisma.$transaction(
-    prices
-      .filter(p => validSlots.has(p.startTime))
-      .map(p =>
-        prisma.gymSlotPrice.upsert({
-          where: { gymId_startTime: { gymId, startTime: p.startTime } },
-          update: { price: p.price },
-          create: { gymId, startTime: p.startTime, endTime: validSlots.get(p.startTime), price: p.price },
-        })
-      )
-  );
-
+  await prisma.$transaction(async (tx) => {
+    const validSlots = await getAllPossibleStartTimes(gymId, tx);
+    await Promise.all(
+      prices
+        .filter(p => validSlots.has(p.startTime))
+        .map(p =>
+          tx.gymSlotPrice.upsert({
+            where: { gymId_startTime: { gymId, startTime: p.startTime } },
+            update: { price: p.price },
+            create: { gymId, startTime: p.startTime, endTime: validSlots.get(p.startTime), price: p.price },
+          })
+        )
+    );
+  });
   return getSlotPrices(gymId);
 }
 
@@ -1723,18 +1806,21 @@ export async function upsertSlotPrices(gymId, partnerId, prices) {
 export async function getGymInternalWithSlotPrice(gymId, startTime, date) {
   const gym = await getGymByIdRaw(gymId);
 
+  // Slot price and operating hours are independent of each other.
+  const [priceRow, hours] = await Promise.all([
+    startTime
+      ? prisma.gymSlotPrice.findUnique({ where: { gymId_startTime: { gymId, startTime } } })
+      : Promise.resolve(null),
+    date && startTime ? getOperatingHours(gymId, getDayOfWeek(date)) : Promise.resolve(null),
+  ]);
+
   let resolvedSlotPrice = gym.sessionPrice;
   if (startTime) {
-    const row = await prisma.gymSlotPrice.findUnique({
-      where: { gymId_startTime: { gymId, startTime } },
-    });
-    resolvedSlotPrice = row ? Number(row.price) : gym.sessionPrice;
+    resolvedSlotPrice = priceRow ? Number(priceRow.price) : gym.sessionPrice;
   }
 
   let isValidSlot;
   if (date && startTime) {
-    const dayOfWeek = getDayOfWeek(date);
-    const hours = await getOperatingHours(gymId, dayOfWeek);
     const validTimes = new Set(generateWindowedSlots(hours, gym.slotDuration).map(s => s.startTime));
     isValidSlot = validTimes.has(startTime);
   }
@@ -1768,4 +1854,75 @@ export async function getSubscriptionPlans(gymId) {
     });
 
   return { gymId, priciestSlotPrice, plans };
+}
+
+// ── Leads (attendance-SaaS sales pipeline) ─────────────────────────────
+// Partner-owned follow-up rows. Every op re-checks the gym's partnerId so a
+// partner can never touch another gym's (or another partner's) leads.
+
+async function assertGymOwnedByPartner(gymId, partnerId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
+async function getLeadOwnedByPartner(id, partnerId) {
+  const lead = await prisma.gymLead.findUnique({ where: { id } });
+  if (!lead) throw { status: 404, error: 'Lead not found' };
+  await assertGymOwnedByPartner(lead.gymId, partnerId);
+  return lead;
+}
+
+export async function listLeads(gymId, partnerId, { status } = {}) {
+  await assertGymOwnedByPartner(gymId, partnerId);
+  const leads = await prisma.gymLead.findMany({
+    where: { gymId, ...(status ? { status } : {}) },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+  });
+  return leads;
+}
+
+export async function createLead(gymId, partnerId, { name, phone, notes, source, status } = {}) {
+  await assertGymOwnedByPartner(gymId, partnerId);
+  const allowed = ['new','contacted','scheduled_visit','converted','lost'];
+  const safeStatus = status && allowed.includes(status) ? status : 'new';
+  const lead = await prisma.gymLead.create({
+    data: {
+      gymId,
+      partnerId,
+      name: name?.trim() || null,
+      phone: phone?.trim() || null,
+      notes: notes?.trim() || null,
+      source: source?.trim() || 'walk_in',
+      status: safeStatus,
+    },
+  });
+  return lead;
+}
+
+export async function updateLead(id, partnerId, { name, phone, notes, source, status } = {}) {
+  await getLeadOwnedByPartner(id, partnerId);
+  const data = {};
+  if (name !== undefined) data.name = name.trim() || null;
+  if (phone !== undefined) data.phone = phone.trim() || null;
+  if (notes !== undefined) data.notes = notes.trim() || null;
+  if (source !== undefined) data.source = source.trim() || 'walk_in';
+  if (status !== undefined) {
+    const allowed = ['new','contacted','scheduled_visit','converted','lost'];
+    if (!allowed.includes(status)) {
+      throw { status: 400, error: 'Invalid lead status' };
+    }
+    data.status = status;
+  }
+  return prisma.gymLead.update({ where: { id }, data });
+}
+
+export async function deleteLead(id, partnerId) {
+  await getLeadOwnedByPartner(id, partnerId);
+  await prisma.gymLead.delete({ where: { id } });
+}
+
+export async function getLeadInternal(id) {
+  return prisma.gymLead.findUnique({ where: { id } });
 }

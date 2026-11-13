@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/AlexMollard/Open-Exercise-Art",
+  "revision": "0f11ea4680746970e58b83448cdcdb64e4fc2793",
+  "hashes": {
+    "catalogue.json": "c168ad58cae49c2b388c459953455c2b3af5ea34cc189660afcafc9f72809546",
+    "LICENSE-ARTWORK.md": "07226751ac243dcec2e67ed8d22d3be5a1916e41b91bcc5b912d86b1a52a2f27",
+    "ATTRIBUTION.md": "cb1f0a23accf497ecbd6498d808a5ba443f0731e0a1329aced49acd84255ddec",
+    "PROVENANCE.md": "38c4f59b7b006e80dc5fc5a4533f048e52ae1c277f7aa8310964f62475e7b3d5"
+  },
+  "usage": "Research and movement review; no unreviewed assets integrated."
+}

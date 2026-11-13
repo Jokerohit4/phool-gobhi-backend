@@ -1,0 +1,807 @@
+import { behavioralAverageForSnapshots } from './behavioralAverage.js';
+import { USE_CLOSED_DAY_BEHAVIORAL_AVERAGE } from './constants.js';
+import { isoDayIST, shiftDay } from '../../utils/sessionDay.js';
+// Freezing a day into a ScoreDaySnapshot, and reading the chain back.
+//
+// A snapshot is written once, at day close, and never recomputed. That is the
+// whole contract, and it is what makes the score mean anything: a chart whose
+// history can be rewritten by a later retune of the engine, a corrected food
+// value, or a changed target is not a record of anything.
+//
+// The consequence is that `rulesVersion` is stored on the row. A day scored
+// under v1 stays v1 forever, even after the formula changes, and "why is this
+// Tuesday worth what it is" is answerable from the breakdown that was written
+// next to it rather than by re-running today's code.
+//
+// Two things are deliberately NOT frozen:
+//   - calm mode. It is a display preference and lives on the goal, so toggling
+//     it cannot change a stored number. See calmMode in the schema.
+//   - the low-intake guard. checkForLowIntakeRun reads recent snapshots at
+//     read time, because it is a safety check about the user's current state,
+//     not a property of any one day.
+import { RULES_VERSION, DECIMAL_PLACES, roundTo, MAX_PAUSE_DAYS, BIOLOGICAL_TARGETS } from './constants.js';
+import { computeDay, checkForLowIntakeRun, computeBiologicalScore, computeBlendedHealthScore } from './scoreEngine.js';
+import { isScheduledFor } from './scoreEngine.js';
+import { openActions } from './remediation.js';
+import { assertGoal } from './goalGuard.js';
+import { isIsoDay } from './isoDay.js';
+import { resolveDay } from '../plan/rowProgress.js';
+import { getOnLayerKeys } from '../plan/layerState.js';
+import redis from '../../utils/redisClient.js';
+import { getDayTotals } from './nutritionService.js';
+import { currentNutritionTarget } from './currentTarget.js';
+import {
+  blendedScoreCacheKey,
+  invalidateBlendedScore,
+  blendedMemo,
+} from './blendedScoreCache.js';
+import { latestBiometricRows } from '../biometricLatest.js';
+
+const CACHE_TTL = 3600; // 1 hour
+
+// Returns null when the journey has not started or its read is unavailable.
+async function getScoringWindow(prisma, userId) {
+  try {
+    const { getScoringWindow: journeyGetScoringWindow } = await import('../journey/journeyService.js');
+    return await journeyGetScoringWindow(userId);
+  } catch {
+    return null;
+  }
+}
+
+// Scoring windows control close-day penalties. The caller supplies on layers.
+function deriveScoringFlags(scoringWindow, localDate) {
+  if (!scoringWindow) {
+    return { noMisses: true, foodNoPenalty: false };
+  }
+  const { easyStartUntil, inactiveSince, foodEarlyNoPenaltyUntilUnlock } = scoringWindow;
+  let noMisses = false;
+  if (easyStartUntil && localDate <= easyStartUntil) {
+    noMisses = true;
+  }
+  if (inactiveSince && localDate >= inactiveSince) {
+    noMisses = true;
+  }
+  return {
+    noMisses,
+    foodNoPenalty: foodEarlyNoPenaltyUntilUnlock === true,
+  };
+}
+
+/**
+ * Compute (but do not store) what a day is worth.
+ *
+ * Kept separate from `closeDay` so the app can show today's running score
+ * without a snapshot row existing for today. Only a closed day gets frozen.
+ */
+export async function previewDay(prisma, { userId, localDate, today, goal: knownGoal }) {
+  // Only resolveDay depends on another read (the on-layer keys); everything else
+  // is independent, so they all run together. `knownGoal` lets a caller that has
+  // already read the HealthGoal (the score target card) skip the second read.
+  const [scoringWindow, resolved, previous, goal] = await Promise.all([
+    getScoringWindow(prisma, userId),
+    getOnLayerKeys(prisma, userId).then((onLayerKeys) => resolveDay(prisma, { userId, localDate, onLayerKeys })),
+    previousClose(prisma, { userId, localDate }),
+    knownGoal !== undefined ? knownGoal : prisma.healthGoal.findUnique({
+      where: { userId },
+      select: { pausedFrom: true, pausedUntil: true },
+    }),
+  ]);
+  const closed = localDate < today;
+  const paused = isPausedOn(goal, localDate);
+  const scored = scoringWindow !== null && !paused;
+  const day = computeDay({
+    localDate, previousClose: previous,
+    rows: scored ? resolved.rows : [],
+    targets: scored ? resolved.nutritionTarget : null,
+    totals: scored ? resolved.totals : null,
+    unplannedWorkout: scored && resolved.unplannedWorkout,
+    closed: false, paused,
+  });
+  day.earned = scored ? resolved.earned : 0;
+  day.target = resolved.target;
+  day.bonus = scored ? resolved.bonus : 0;
+  // A live preview shows all earned points; caps apply only when freezing.
+  day.close = previous + day.earned + day.bonus;
+  day.high = Math.max(previous, day.close);
+  day.low = Math.min(previous, day.close);
+
+  return {
+    ...day,
+    openActions: previewActions({ ...resolved, localDate, closed }),
+  };
+}
+
+/**
+ * What is still open on `localDate`, for the day payload.
+ *
+ * The inputs have already been through `resolveDay`, which drops inactive
+ * items, items past their `endsOn`, and anything `isDueOn` says is not due. So
+ * there is nothing left for this to re-check, and it deliberately does not: a
+ * second copy of those rules here would be a place for them to drift away from
+ * the ones the day is actually scored with, and the drift would show up as the
+ * app telling somebody to do something the engine never asked for.
+ *
+ * `isScheduledFor` is passed anyway, so this stays correct if a caller ever
+ * hands it unfiltered items - and so the predicate under test is the engine's
+ * rather than a stand-in.
+ */
+function previewActions({ rows = [], food = null, localDate, closed }) {
+  // A frozen day gets nothing, and this is the one rule the module cannot infer
+  // for itself. A preview of a past date is a historical read: the snapshot will
+  // never be recomputed, so every action on it would be a tap that cannot work.
+  // The check lives here rather than in the caller because the caller is the
+  // only place that knows, and forgetting it there is exactly the bug.
+  if (closed) return [];
+  // `rows` are resolveDay's already-filtered rows, not raw plan items, so they
+  // carry no `active` flag - and `isScheduledFor` treats a missing flag as
+  // inactive. Annotate them active, the same shape the scoring call gets, or
+  // every open row is silently dropped. A done row is handed over as a
+  // completion so `openActions` leaves it out of the open list.
+  return openActions(
+    {
+      planItems: rows.map((r) => ({ ...r, active: true,
+        kind: r.kind === 'own' ? r.ownKind : r.kind === 'doctor' ? 'doctor_medication'
+          : ['water', 'steps', 'sleep', 'supplement'].includes(r.kind) ? 'habit' : r.kind,
+      })),
+      completions: rows.filter((r) => r.done).map((r) => ({ planItemId: r.itemId, localDate })),
+      localDate,
+    },
+    { isScheduledFor },
+  );
+}
+
+/**
+ * Close a day: compute it and write the one row that will never change.
+ *
+ * Idempotent by way of the (userId, localDate) unique. Re-closing a day returns
+ * the existing snapshot rather than overwriting it, because the second call is
+ * usually a retry from a client that did not see the first response - and
+ * silently replacing a frozen day is exactly the failure this design exists to
+ * prevent.
+ */
+export async function closeDay(prisma, { userId, localDate, today }) {
+  const existing = await prisma.scoreDaySnapshot.findUnique({
+    where: { userId_localDate: { userId, localDate } },
+  });
+  if (existing) {
+    // `openActions: []` is not decoration. A closed day has no open work - the
+    // plan moved on and the snapshot will never be recomputed - but the field
+    // has to be present so a client can tell "nothing is open" apart from
+    // "this response predates the field", which would otherwise read as a
+    // payload the app failed to understand.
+    return { ...existing, alreadyClosed: true, openActions: [] };
+  }
+
+  const onLayerKeys = await getOnLayerKeys(prisma, userId);
+  const resolved = await resolveDay(prisma, { userId, localDate, onLayerKeys });
+  const previous = await previousClose(prisma, { userId, localDate });
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
+
+  const scoringWindow = await getScoringWindow(prisma, userId);
+  const scoringFlags = deriveScoringFlags(scoringWindow, localDate);
+  const paused = isPausedOn(goal, localDate);
+  const scored = scoringWindow !== null && !paused;
+  const finalDay = computeDay({
+    localDate, previousClose: previous,
+    rows: scored ? resolved.rows : [],
+    targets: scored ? resolved.nutritionTarget : null,
+    totals: scored ? resolved.totals : null,
+    unplannedWorkout: scored && resolved.unplannedWorkout,
+    closed: true, paused,
+    noMisses: !scored || scoringFlags.noMisses,
+    unlockedLayerKeys: onLayerKeys,
+    foodNoPenalty: scoringFlags.foodNoPenalty,
+  });
+  if (scored && resolved.nutritionTarget?.doctorPlan?.targetFields?.length) finalDay.breakdown.push({
+    key: 'doctor_plan_targets', kind: 'nutrition', points: 0, label: 'User-confirmed doctor-plan targets',
+    documentId: resolved.nutritionTarget.doctorPlan.id, targetFields: resolved.nutritionTarget.doctorPlan.targetFields,
+    targets: Object.fromEntries(resolved.nutritionTarget.doctorPlan.targetFields.map(key => [key, Number(resolved.nutritionTarget[key])])),
+  });
+  const earned = scored ? resolved.earned : 0;
+  const bonus = scored ? resolved.bonus : 0;
+  const target = resolved.target;
+
+  // A day being closed is by definition closed, so the open list is empty.
+  // Spelled out rather than left to the reader, because "why is this always
+  // empty?" is the obvious question and the answer is not obvious.
+  let row;
+  try {
+    row = await prisma.scoreDaySnapshot.create({
+      data: {
+        userId,
+        localDate,
+        open: finalDay.open,
+        high: finalDay.high,
+        low: finalDay.low,
+        close: finalDay.close,
+        breakdown: finalDay.breakdown,
+        planSummary: {
+          done: resolved.counts.done, total: resolved.counts.total,
+          targetHit: earned >= target,
+        },
+        paused: finalDay.paused === true,
+        rulesVersion: finalDay.rulesVersion || RULES_VERSION,
+      },
+    });
+  } catch (err) {
+    // Lost a race to another closer. Since the server started closing
+    // yesterday on a schedule (dayCloseService), "two closers for the same day"
+    // is no longer only a double-tap: the nightly sweep and a user pressing
+    // close just after midnight can both pass the findUnique above. The
+    // (userId, localDate) unique rejects the second insert, and the right
+    // answer is the row that won - exactly what a plain retry gets. Never an
+    // overwrite, and never a 500 for a day that is in fact closed.
+    if (err?.code !== 'P2002') throw err;
+    const winner = await prisma.scoreDaySnapshot.findUnique({
+      where: { userId_localDate: { userId, localDate } },
+    });
+    if (!winner) throw err;
+    await invalidateBlendedScore(userId);
+    return { ...winner, alreadyClosed: true, openActions: [] };
+  }
+  // Closing a day changes the ledger close the blended score is built from
+  // (`ledgerClose` reads the latest snapshot). Without this the card can sit on
+  // an up-to-an-hour-old blended score right at the moment the day's number is
+  // most worth looking at (audit 2026-10-08, P2). Best-effort: a failed delete
+  // must never fail the close that triggered it.
+  await invalidateBlendedScore(userId);
+  
+  // Emit health_day_closed event
+  const { track } = await import('../../utils/analytics.js');
+  track('health_day_closed', userId, {
+    localDate,
+    earned,
+    target,
+    hit: earned >= target,
+  });
+
+  return { ...row, openActions: [], earned, bonus, target, hit: earned >= target };
+}
+
+export async function getBlendedScore(prisma, { userId }) {
+  // In-process single-flight + 60s memo (evicted by invalidateBlendedScore).
+  return blendedMemo.get(String(userId), () => computeBlendedScore(prisma, { userId }));
+}
+
+async function computeBlendedScore(prisma, { userId }) {
+  const cacheKey = blendedScoreCacheKey(userId);
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  // Parallelize the behavioral baseline and biological state fetches
+  const [latestSnapshot, bioEntries, averages] = await Promise.all([
+    // Only `close` is read below; skip dragging the `breakdown` Json.
+    prisma.scoreDaySnapshot.findFirst({
+      where: { userId },
+      orderBy: { localDate: 'desc' },
+      select: { close: true },
+    }),
+    // No `metric` filter on purpose. This used to pass
+    // Object.keys(BIOLOGICAL_TARGETS) — the blood-panel markers hba1c, ldl,
+    // hdl and triglycerides — but not one of those is a member of the
+    // BiometricMetric enum, and Prisma rejects the entire findMany when any
+    // value in `in` is not an enum member ("Invalid value for argument `in`.
+    // Expected BiometricMetric."), so every blended-score read threw instead
+    // of scoring. Filtering was never load-bearing: scoreEngine already skips
+    // any marker with no target (`if (!target) continue`), so reading the
+    // user's entries and letting the engine match them scores the same set
+    // today, and starts including the blood markers unchanged if the enum ever
+    // grows them.
+    //
+    // The `verified: true` that used to sit here went for the same class of
+    // reason: BiometricEntry has no such column (only FoodItem.verified and
+    // ReportExtraction.isVerified exist), so Prisma rejected the query with
+    // "Unknown argument 'verified'" on every read. It was never a real filter
+    // either — a row here is either typed by the user, or written by
+    // verifyExtractionService, which only writes once the user has confirmed
+    // the value. So every row is confirmed by construction.
+    // Newest row per metric only (grouped index pass + indexed fetch), not the
+    // whole history. "Newest" is by the day the value belongs to, not when it was
+    // typed or verified: confirming a 2024 report after a 2026 one must not make
+    // 2024 "latest". localDate is 'YYYY-MM-DD', so string order is date order.
+    latestBiometricRows(prisma, userId, { select: { value: true } }),
+    behavioralAverageStats(prisma, { userIds: [userId] }),
+  ]);
+
+  const ledgerClose = latestSnapshot ? Number(latestSnapshot.close) : 0;
+
+  // Group by marker to get only the latest for each
+  const latestBiomarkers = [];
+  const seen = new Set();
+  for (const entry of bioEntries) {
+    if (!seen.has(entry.metric)) {
+      latestBiomarkers.push({
+        marker: entry.metric,
+        value: Number(entry.value),
+      });
+      seen.add(entry.metric);
+    }
+  }
+
+  const bioScore = computeBiologicalScore(latestBiomarkers);
+  const blendedScore = computeBlendedHealthScore(ledgerClose, bioScore);
+
+  const result = {
+    blendedScore,
+    behavioralScore: ledgerClose,
+    // The 0-100 the blend actually used. behavioralScore is the ledger's raw
+    // running close (hundreds of points), which the card was printing as a
+    // percentage beside a biological score that really is 0-100.
+    behavioralPercent: Math.round(computeBlendedHealthScore(ledgerClose, null)),
+    biologicalScore: bioScore,
+    markers: latestBiomarkers,
+    // What the weekly-bonus bar shows, and the exact figure rewardService pays
+    // on. The app has always read this field; nothing ever sent it, so the bar
+    // sat at 0.0% for everyone.
+    behavioralAvg7Day: averages.get(userId)?.avgScore ?? (USE_CLOSED_DAY_BEHAVIORAL_AVERAGE ? null : 0),
+    closedDays: averages.get(userId)?.closedDays ?? 0,
+  };
+
+  await redis.set(cacheKey, JSON.stringify(result), 'EX', CACHE_TTL);
+  return result;
+}
+
+/**
+ * The chart series, oldest first, for the ledger chart.
+ *
+ * `calmMode` is returned alongside rather than applied here. The client decides
+ * how to paint it, and it must never be able to change a number by asking for a
+ * different view - so this function returns the same values either way.
+ */
+export async function getScoreSeries(prisma, { userId, limit = 90 }) {
+  const rows = await prisma.scoreDaySnapshot.findMany({
+    where: { userId },
+    orderBy: { localDate: 'desc' },
+    take: Math.min(Number(limit) || 90, 365),
+  });
+  // Oldest first is what a chart wants; the query takes newest-first for the
+  // limit to be meaningful.
+  return rows.reverse();
+}
+
+export const CONSISTENCY_WINDOW_DAYS = 7;
+
+export function todayIST(now = new Date()) {
+  return isoDayIST(now);
+}
+
+export { shiftDay } from '../../utils/sessionDay.js';
+
+/**
+ * The 7-day behavioural average, 0-100, for each user: the mean of the last
+ * seven CLOSED days' behaviour score (the same 0-100 normalisation the blend
+ * uses), with a day that has no snapshot counted as 0.
+ *
+ * One definition for three readers - the weekly-bonus bar on the Health Score
+ * card, the weekly coin reward, and buddy-service's consistency leagues - so
+ * the bar can never say "unlocked" for a number the reward does not pay on.
+ *
+ * Default remains division by 7. USE_CLOSED_DAY_BEHAVIORAL_AVERAGE gates
+ * division by closed days with at least four days; fewer means unknown.
+ * The comparison script must be reviewed before enabling that rule.
+ *
+ * This replaces reads of a `dailyScore` model that never existed in the
+ * schema, which made every reward evaluation and every league request throw.
+ */
+export async function behavioralAverageStats(prisma, { userIds, today = todayIST() }) {
+  const from = shiftDay(today, -CONSISTENCY_WINDOW_DAYS);
+  const snapshots = await prisma.scoreDaySnapshot.findMany({
+    where: { userId: { in: userIds }, localDate: { gte: from, lt: today } },
+    select: { userId: true, close: true },
+  });
+  const byUser = new Map();
+  for (const s of snapshots) {
+    if (!byUser.has(s.userId)) byUser.set(s.userId, []);
+    byUser.get(s.userId).push(s);
+  }
+  return new Map([...byUser].map(([id, rows]) => [id, behavioralAverageForSnapshots(rows)]));
+}
+
+// Preserve the numeric-map API used by rewards. The gated null means not
+// enough data and must never qualify for coins.
+export async function behavioralAverages(prisma, options) {
+  const stats = await behavioralAverageStats(prisma, options);
+  return new Map([...stats].map(([id, value]) => [id, value.avgScore]));
+}
+
+/**
+ * Fetches behavioral consistency for a list of users.
+ * Used by the buddy-service to build consistency leagues.
+ */
+export async function getBatchBehavioralConsistency(prisma, { userIds, today }) {
+  const stats = await behavioralAverageStats(
+    prisma, today == null ? { userIds } : { userIds, today },
+  );
+  return [...stats].map(([userId, value]) => ({ userId, ...value }));
+}
+
+/**
+ * Fetches the history of a specific biomarker. Every stored row is confirmed
+ * by construction (typed by the user, or written only after the user confirms
+ * an OCR extraction), so there is nothing to filter on here.
+ */
+export async function getBiomarkerTrajectory(prisma, { userId, marker, days = 90 }) {
+  const dateLimit = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const entries = await prisma.biometricEntry.findMany({
+    where: {
+      userId,
+      metric: marker,
+      createdAt: { gte: new Date(dateLimit) },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return entries.map(e => ({
+    date: e.createdAt.toISOString().split('T')[0],
+    value: Number(e.value),
+  }));
+}
+
+/**
+ * The frozen days only, which is what calm mode is allowed to paint.
+ */
+export async function getCalmSeries(prisma, { userId, limit = 90 }) {
+  const goal = await prisma.healthGoal.findUnique({ where: { userId } });
+  const series = await getScoreSeries(prisma, { userId, limit });
+  if (!goal?.calmMode) return { calmMode: false, series };
+
+  // One flat line at the starting close, with no per-day open/high/low. Not
+  // the average - the average of a chain nobody can see would still leak the
+  // shape through, and the point of calm mode is that the ups and downs stop
+  // being visible at all.
+  const start = series.length ? series[0].open : 0;
+  return {
+    calmMode: true,
+    series: series.map((row) => ({
+      localDate: row.localDate,
+      close: start,
+      open: start,
+      high: start,
+      low: start,
+      // Carried through deliberately. Calm mode flattens the value, and a flat
+      // pause day would be indistinguishable from a flat ordinary day, so the
+      // client would lose the one piece of information that explains why
+      // nothing moved. Flattening a number is not the same as erasing the
+      // reason it was flat.
+      paused: row.paused === true,
+      rulesVersion: row.rulesVersion,
+    })),
+  };
+}
+
+/**
+ * Is this user in a run of very low intake?
+ *
+ * Read at read time, not frozen, and deliberately not gated on there being a
+ * target. The guard is a safety check about the present; a user who has just
+ * started and has no target yet can still be eating far too little, and that is
+ * exactly when the check matters most.
+ */
+export async function getSafetyFlag(prisma, { userId }) {
+  const recent = await prisma.scoreDaySnapshot.findMany({
+    where: { userId },
+    orderBy: { localDate: 'desc' },
+    take: 30,
+  });
+  // The engine returns null when there is no run, and an object when there is.
+  // Normalised to a definite shape here so the client does not have to handle
+  // both "null" and "object with no keys" - the two are the same answer and
+  // should look the same on the wire.
+  const flag = checkForLowIntakeRun(recent.reverse());
+  const goal = await prisma.healthGoal.findUnique({ where: { userId } });
+  return {
+    active: flag != null,
+    ...(flag || {}),
+    calmMode: goal?.calmMode === true,
+  };
+}
+
+/**
+ * Toggle the eating-disorder guard. Never touches existing snapshots.
+ *
+ * `updateMany` rather than `update`, so this cannot throw P2025 on a user with no
+ * goal row - a user with no goal has no days being scored, so the setting has
+ * nothing to apply to, and a toggle that 500s is worse than one that quietly has
+ * no effect until there is a goal for it to apply to. Deliberately NOT a 409 like
+ * the window-creating writes: calm mode is a protection, and refusing to record
+ * that somebody asked for it because their setup is incomplete would be protecting
+ * them from the wrong thing.
+ */
+export async function setCalmMode(prisma, { userId, calmMode }) {
+  const wanted = calmMode === true;
+  const res = await prisma.healthGoal.updateMany({
+    where: { userId },
+    data: { calmMode: wanted },
+  });
+  // The response echoes what is STORED, not what was asked for. Those are the
+  // same thing whenever a goal row exists and different whenever it does not,
+  // and the difference is the whole problem: a user with no goal has nowhere to
+  // keep a display preference, so the write cannot be honoured, and returning
+  // `wanted` would tell the client to render a preference that does not exist.
+  //
+  // That is not hypothetical. The app reads this flag and deliberately renders
+  // the echo rather than the tap ("so a toggle cannot render a preference the
+  // server did not actually accept"), so echoing the request here would let a
+  // user switch calm mode on, see it stay on, and have it silently gone by the
+  // next launch. A toggle that lies is worse than one that refuses.
+  //
+  // `false` is the honest value rather than a second read, and not as a
+  // shortcut: `count === 0` means no row matched `{ userId }`, so a lookup by
+  // that same key would return null, and no row means no stored preference.
+  // `applied` is returned so a caller that wants to distinguish "you turned it
+  // off" from "there was nothing to turn it off on" can, without the client
+  // having to infer it from a false that might mean either.
+  return { calmMode: res?.count > 0 ? wanted : false, applied: res?.count > 0 };
+}
+
+// --- Pause ------------------------------------------------------------------
+
+/**
+ * Is `localDate` inside this user's pause? Inclusive at both ends.
+ *
+ * BOTH bounds are required. A row with only one of them set is treated as not
+ * paused at all, rather than as a pause with no end.
+ *
+ * This is the defensive direction, and it is deliberate. The two columns are
+ * always written together by setPause, so a half-written pause should not
+ * exist - but if one ever did, "paused from this date onward, forever" is the
+ * worst possible reading of it, because an unbounded pause is precisely what
+ * MAX_PAUSE_DAYS exists to prevent. Scoring a paused user normally is a
+ * recoverable annoyance; pausing them indefinitely is not. They can press
+ * pause again.
+ *
+ * An expired pause stops being paused on its own, with nothing to clear it: the
+ * comparison is against the day being scored, so a user who abandoned the app
+ * mid-pause is scored normally again the moment the window passes.
+ */
+export function isPausedOn(goal, localDate) {
+  if (!goal?.pausedFrom || !goal?.pausedUntil) return false;
+  if (localDate < goal.pausedFrom) return false;
+  if (localDate > goal.pausedUntil) return false;
+  return true;
+}
+
+/**
+ * The pause, plus what the client needs to render and validate against.
+ *
+ * `active` is computed against `today` rather than stored, so a pause that has
+ * run out reports itself as inactive without anything having to expire it.
+ * `daysLeft` is inclusive of today, so a pause ending today reads as 1, not 0 -
+ * telling someone they have "0 days left" on the day they can still use it is
+ * the kind of off-by-one that makes people think the app is broken.
+ */
+export async function getPauseState(prisma, { userId, today }) {
+  const goal = await prisma.healthGoal.findUnique({
+    where: { userId },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
+  const active = isPausedOn(goal, today);
+  return {
+    active,
+    // Present on the read for the same reason it is on the target read: "no goal"
+    // and "not paused" are different answers, and a client told only that a user
+    // is not paused cannot know whether pausing them would work.
+    hasGoal: goal != null,
+    pausedFrom: goal?.pausedFrom ?? null,
+    pausedUntil: goal?.pausedUntil ?? null,
+    daysLeft: active ? daysInclusive(goal.pausedUntil, today) : 0,
+    maxDays: MAX_PAUSE_DAYS,
+  };
+}
+
+/**
+ * Start a pause, capped at MAX_PAUSE_DAYS from the start date.
+ *
+ * `days` is clamped rather than rejected. Asking for 30 and silently getting 14
+ * is the right failure here: the user wanted a pause and got one, whereas a 422
+ * would leave them with a screen that refuses to help at the exact moment they
+ * asked for it. The response reports the real bounds and the cap, so the client
+ * can say what actually happened instead of showing 30 and being wrong.
+ *
+ * A pause cannot start in the past. Every day before today is already frozen
+ * into a snapshot, so a backdated pause could not take effect even if it were
+ * accepted - and accepting it would suggest otherwise. That is refused outright
+ * so the API never returns a pause that is quietly not doing anything.
+ */
+export async function setPause(prisma, { userId, days, today }) {
+  // Checked here as well as in the controller, because this function writes the
+  // column. A malformed `today` would produce a window that never matches a real
+  // day - a pause that reports itself as active and does nothing, which is worse
+  // than no pause at all.
+  if (!isIsoDay(today)) {
+    throw new Error('today must be YYYY-MM-DD');
+  }
+
+  const requested = Math.max(1, Math.min(Number(days) || MAX_PAUSE_DAYS, MAX_PAUSE_DAYS));
+  const until = addDaysLocal(today, requested - 1);
+
+  const goal = await prisma.healthGoal.findUnique({ where: { userId } });
+  // A 409 with a code, not a bare 500. See goalGuard: a pause needs the goal row
+  // the intake wizard creates, and the user is told to go and finish it rather
+  // than shown "Server error".
+  assertGoal(goal);
+  // Only a pause that is still IN PROGRESS is protected. An expired pause has
+  // already lapsed, and locking a user out of the feature because a fortnight
+  // ago they used it would be absurd - the check is isPausedOn(today), not
+  // merely "pausedFrom is in the past".
+  if (isPausedOn(goal, today)) {
+    throw new Error('A pause already in progress cannot be backdated');
+  }
+
+  const updated = await prisma.healthGoal.update({
+    where: { userId },
+    data: { pausedFrom: today, pausedUntil: until },
+    select: { pausedFrom: true, pausedUntil: true },
+  });
+
+  return {
+    active: true,
+    pausedFrom: updated.pausedFrom,
+    pausedUntil: updated.pausedUntil,
+    daysLeft: daysInclusive(updated.pausedUntil, today),
+    maxDays: MAX_PAUSE_DAYS,
+    // True when the request was longer than the cap, so the client can say so.
+    capped: requested < (Number(days) || 0),
+  };
+}
+
+/**
+ * Resume now. Clears both bounds, so the next day scores normally.
+ *
+ * `updateMany`, for the reason in goalGuard: `update` throws Prisma P2025 on a
+ * user with no goal row, and that error was reaching the client as a 500 whose
+ * body was the Prisma invocation. Resuming when there is nothing paused is not an
+ * error - it is the state the caller asked for - so it succeeds and says so.
+ *
+ * The row is read as well as written so the response can state `hasGoal` rather
+ * than assume it.
+ */
+export async function clearPause(prisma, { userId }) {
+  const goal = await prisma.healthGoal.findUnique({ where: { userId }, select: { userId: true } });
+
+  await prisma.healthGoal.updateMany({
+    where: { userId },
+    data: { pausedFrom: null, pausedUntil: null },
+  });
+
+  return {
+    active: false,
+    pausedFrom: null,
+    pausedUntil: null,
+    daysLeft: 0,
+    maxDays: MAX_PAUSE_DAYS,
+    hasGoal: goal != null,
+  };
+}
+
+// --- internals -------------------------------------------------------------
+
+// Re-exported from the shared module rather than defined here: the controller
+// and the nutrition service both need this exact notion of a valid day, and one
+// definition is what keeps the boundary from accepting what the writer rejects.
+// Kept on this namespace because callers have imported `scoreService.isIsoDay`
+// for a while.
+export { isIsoDay };
+
+// Local-date string arithmetic, in and out as 'YYYY-MM-DD'.
+//
+// Not reusing the addDays/daysBetween in goalService and ledgerIntakeService:
+// those are private to their modules and exchange `Date` objects, while a day
+// boundary here is a user's local day, and the value that goes into pausedFrom
+// and pausedUntil has to be the same string the rest of the ledger stores. A
+// Date that round-trips through a timezone is exactly the bug that makes a
+// pause start a day early.
+function addDaysLocal(localDate, days) {
+  const [y, m, d] = localDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Days from `from` to `to` inclusive of both ends, so one day reads as 1. */
+function daysInclusive(until, from) {
+  if (!until) return 0;
+  const [y1, m1, d1] = from.split('-').map(Number);
+  const [y2, m2, d2] = until.split('-').map(Number);
+  const ms = Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1);
+  return Math.floor(ms / 86400000) + 1;
+}
+
+/**
+ * The close the chain carried into `localDate` - i.e. the score as it stood
+ * before that day earned anything.
+ *
+ * Exported (it was private) for the score target, which needs "the score when
+ * this window started" and should get it from the same single definition rather
+ * than re-querying the last snapshot with subtly different ordering or
+ * bounds. Returns 0 for a user's first ever day: the score starts at 0
+ * deliberately, not at a baseline invented to make the first chart look
+ * encouraging.
+ */
+export async function previousClose(prisma, { userId, localDate }) {
+  const prev = await prisma.scoreDaySnapshot.findFirst({
+    where: { userId, localDate: { lt: localDate } },
+    orderBy: { localDate: 'desc' },
+    select: { close: true }, // every caller uses only the number
+  });
+  // Null for the first day ever. The score starts at 0, deliberately, rather
+  // than at a baseline invented to make the first chart look encouraging.
+  return prev ? Number(prev.close) : 0;
+}
+
+/**
+ * Returns the change in close value over the last 7 days (including today if
+ * closed, otherwise the previous 7 closed days). Used by the journey summary
+ * to show the weekly trend.
+ *
+ * Positive means the score went up over the week; negative means it went down.
+ * Returns null if there aren't enough snapshots to compute.
+ */
+export async function weekDelta(prisma, { userId, today }) {
+  const todayStr = today ?? isoDayIST(new Date());
+  const from = new Date(Date.UTC(
+    ...todayStr.split('-').map(Number)
+  ));
+  from.setUTCDate(from.getUTCDate() - 7);
+  const fromStr = from.toISOString().slice(0, 10);
+
+  const snapshots = await prisma.scoreDaySnapshot.findMany({
+    where: { userId, localDate: { gte: fromStr, lte: todayStr } },
+    orderBy: { localDate: 'asc' },
+    select: { localDate: true, close: true },
+  });
+
+  if (snapshots.length < 2) return null;
+
+  const firstClose = Number(snapshots[0].close);
+  const lastClose = Number(snapshots[snapshots.length - 1].close);
+  return lastClose - firstClose;
+}
+
+
+// Read-only batch used by search, portion confirmation and the meal review.
+export async function previewFoodScores(prisma, { userId, localDate, items, today }) {
+  if (!isIsoDay(localDate) || !Array.isArray(items) || !items.length || items.length > 30)
+    throw Object.assign(new Error('Choose a date and 1 to 30 foods.'), { status: 400 });
+  for (const item of items) {
+    if (!item || (item.replaceLogId != null && (!Number.isSafeInteger(item.replaceLogId) || item.replaceLogId <= 0)) || (item.logId != null ? !Number.isSafeInteger(item.logId) || item.logId <= 0 :
+      !Number.isSafeInteger(item.foodItemId) || item.foodItemId <= 0 ||
+      typeof item.grams !== 'number' || !Number.isFinite(item.grams) || item.grams <= 0 || item.grams > 5000 ||
+      !['breakfast','lunch','snack','dinner'].includes(item.slot)))
+      throw Object.assign(new Error('Check the selected food and portion.'), { status: 400 });
+  }
+  const unavailable = reason => items.map(() => ({ status: 'unavailable', reason }));
+  if (localDate !== today) return unavailable('Score previews are available for today; closed scores stay frozen.');
+  // getJourney can sync unlocks and trigger referral work. A food preview must
+  // be read-only, so resolve layers from the persisted journey snapshot.
+  const progress = await prisma.journeyProgress?.findUnique({ where: { userId } });
+  const journey = progress ? {
+    wellnessOnly: progress.wellnessOnly, wellnessFocuses: progress.wellnessFocuses,
+    layers: (Array.isArray(progress.unlocked) ? progress.unlocked : []).map(u => ({ layer: u.layer, unlocked: true, unlockedAt: u.at })),
+  } : null;
+  const [window, layers, goal, frozen] = await Promise.all([
+    getScoringWindow(prisma, userId), getOnLayerKeys(prisma, userId, { journey }),
+    prisma.healthGoal.findUnique({ where: { userId } }),
+    prisma.scoreDaySnapshot.findUnique({ where: { userId_localDate: { userId, localDate } } }),
+  ]);
+  if (frozen) return unavailable('This day’s score is frozen.');
+  if (!window || isPausedOn(goal, localDate)) return unavailable('Scoring is not active for this day.');
+  if (!layers.includes('food')) return unavailable('Food scoring is not active yet.');
+  const [{ logs }, target, foods] = await Promise.all([
+    getDayTotals(prisma, userId, localDate), currentNutritionTarget(prisma, userId, localDate),
+    prisma.foodItem.findMany({ where: { id: { in: items.filter(i => !i.logId).map(i => i.foodItemId) },
+      OR: [{ createdByUserId: null }, { createdByUserId: userId }] } }),
+  ]);
+  if (!target) return unavailable('Set up daily nutrition targets to see the impact.');
+  const { foodScoreImpact } = await import('./foodScoreImpact.js');
+  return items.map(item => {
+    const food = foods.find(f => f.id === item.foodItemId);
+    if (!item.logId && !food) return { status: 'unavailable', reason: 'Food is not available.' };
+    return foodScoreImpact({ ...item, food, logs, target, localDate });
+  });
+}

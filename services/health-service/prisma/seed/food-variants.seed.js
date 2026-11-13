@@ -1,0 +1,26 @@
+// Typical as-served estimates, not brand recipes or nutritionist sign-off.
+export const FOOD_VARIANTS = [
+  { name: 'Aloo burger', aliases: ['aloo burger', 'potato burger', 'aalo burger'], dietaryType: 'veg',
+    kcal: 250, proteinG: 5, carbsG: 36, fatG: 9, fibreG: 3 },
+  { name: 'Paneer burger', aliases: ['paneer burger', 'cottage cheese burger'], dietaryType: 'veg',
+    kcal: 275, proteinG: 10, carbsG: 27, fatG: 14, fibreG: 2 },
+  { name: 'Chicken burger', aliases: ['chicken burger'], dietaryType: 'non_veg',
+    kcal: 260, proteinG: 14, carbsG: 25, fatG: 12, fibreG: 2 },
+  { name: 'Egg burger', aliases: ['egg burger'], dietaryType: 'egg',
+    kcal: 235, proteinG: 10, carbsG: 25, fatG: 11, fibreG: 2 },
+  { name: 'Burger bun', aliases: ['burger bread', 'bun'], dietaryType: 'veg',
+    kcal: 280, proteinG: 9, carbsG: 50, fatG: 4, fibreG: 2 },
+  { name: 'Lettuce', aliases: ['lettuce leaf'], dietaryType: 'veg',
+    kcal: 15, proteinG: 1.4, carbsG: 2.9, fatG: 0.2, fibreG: 1.3 },
+  { name: 'Tomato ketchup', aliases: ['ketchup', 'tomato sauce'], dietaryType: 'veg',
+    kcal: 110, proteinG: 1, carbsG: 26, fatG: 0.1, fibreG: 0.3 },
+  { name: 'Mayonnaise, egg', aliases: ['egg mayonnaise', 'egg mayo'], dietaryType: 'egg',
+    kcal: 680, proteinG: 1, carbsG: 1, fatG: 75, fibreG: 0 },
+  { name: 'Mayonnaise, eggless', aliases: ['eggless mayonnaise', 'eggless mayo'], dietaryType: 'veg',
+    kcal: 600, proteinG: 0, carbsG: 10, fatG: 62, fibreG: 0 },
+  { name: 'Water', aliases: ['water'], dietaryType: 'veg',
+    kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fibreG: 0 },
+].map((food) => ({
+  ...food, basis: 'as_served', veg: food.dietaryType === 'veg', nonVeg: food.dietaryType !== 'veg',
+  servings: [{ label: /burger$/.test(food.name) ? '1 burger' : '100 g', grams: /burger$/.test(food.name) ? 180 : 100 }],
+}));

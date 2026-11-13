@@ -43,6 +43,11 @@ enum SwipeAction {
 enum MatchStatus {
   active
   unmatched
+  // Set by lazy expiry (see expireStaleMatches). Distinct from `unmatched`,
+  // which means a person ended it. Kept apart so "nobody replied to you" and
+  // "you unmatched them" stay distinguishable in the match list and in
+  // support conversations.
+  expired
 
   @@schema("buddy")
 }
@@ -71,8 +76,24 @@ model BuddyProfile {
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  publicCode     String @unique @default(dbgenerated("upper(substr(md5(random()::text || clock_timestamp()::text), 1, 12))")) @db.VarChar(12)
+  isShareable    Boolean @default(false)
+  records        BuddyPersonalRecord[]
+  followers      BuddyFollow[] @relation("BuddyFollowTarget")
+  following      BuddyFollow[] @relation("BuddyFollowSource")
   photos         BuddyPhoto[]
   filter         BuddyFilter?
+
+  // Moderation
+  moderationHoldAt      DateTime?
+
+  // Gender change tracking (synced from auth-service by profile sync)
+  genderChangedAt       DateTime?   // copied from auth by profile sync
+  genderChangedTo       Gender?     // copied from auth by profile sync
+  genderChangeClearedAt DateTime?   // admin only; sync never writes it
+
+  // Women-only mode guard
+  womenOnlyBlocked      Boolean @default(false)
 
   // NOTE (upgrade path, not built now): at scale, replace the lat/lng
   // BETWEEN pre-filter with a proper geo index (PostGIS earthdistance/GiST,
@@ -104,6 +125,7 @@ model BuddyFilter {
   maxAge       Int           @default(60)
   genders      Gender[]
   fitnessGoals FitnessGoal[]
+  womenOnly    Boolean @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -131,6 +153,12 @@ model Match {
   unmatchedBy Int?
   unmatchedAt DateTime?
   matchedAt   DateTime      @default(now())
+  // Last time this conversation saw activity — a message either way. Expiry is
+  // measured from here, NOT from matchedAt: a year-old match that was active
+  // last week must not be treated as stale, and matchedAt cannot express that.
+  // Defaults to matchedAt so an existing match is never born already expired,
+  // and bumped on sendMessage.
+  lastActivityAt DateTime    @default(now())
   messages    ChatMessage[]
 
   // Canonical min/max ordering + this unique constraint is the concurrency
@@ -138,6 +166,8 @@ model Match {
   @@unique([userLowId, userHighId])
   @@index([userLowId])
   @@index([userHighId])
+  // Supports the lazy-expiry sweep's WHERE status + lastActivityAt range.
+  @@index([status, lastActivityAt])
   @@schema("buddy")
 }
 
@@ -154,9 +184,9 @@ model ChatMessage {
   @@schema("buddy")
 }
 
-// Safety: minimal block support in v1. Full report-with-reason-taxonomy +
-// moderation queue is an explicit fast-follow (no admin console to review
-// reports into yet) — not modeled here.
+// Blocking: model, endpoints, and enforcement in both the discovery feed and
+// the swipe path, plus auto-unmatch so a block severs an existing conversation.
+// See Report below for the reporting side, which was added 2026-10-04.
 model BlockedUser {
   id        Int      @id @default(autoincrement())
   blockerId Int
@@ -166,5 +196,117 @@ model BlockedUser {
 
   @@unique([blockerId, blockedId])
   @@index([blockedId])
+  @@schema("buddy")
+}
+
+// Why someone was reported. A closed taxonomy, not free text: a gobhi triaging
+// a queue needs to filter "how many harassment reports are open", and free-text
+// reasons cannot be counted. `other` carries the user's own words in `details`,
+// which is the only place prose is allowed.
+enum ReportReason {
+  harassment
+  inappropriate_content
+  impersonation
+  spam
+  underage
+  scam
+  threat
+  other
+
+  @@schema("buddy")
+}
+
+enum ReportStatus {
+  open
+  // A gobhi looked and closed it with no action.
+  dismissed
+  // Action was taken against the reported user (typically blocked, possibly
+  // escalated). Kept distinct from `dismissed` so "we looked and did nothing"
+  // is never conflated with "we looked and acted" in a moderation metric.
+  actioned
+
+  @@schema("buddy")
+}
+
+// Severity level for a report — used to order the moderation queue.
+// Declaration order matters: Postgres orders enums by it, so
+// `orderBy: { severity: 'desc' }` puts high first (listReports).
+enum ReportSeverity {
+  normal
+  high
+
+  @@schema("buddy")
+}
+
+// A safety report about another user.
+//
+// Deliberately NOT a foreign key to either user, and both ids are plain
+// nullable Ints rather than relations. Two reasons:
+//   - buddy-service has no relation to auth-service's User table (separate
+//     services, separate schemas, no cross-service FK is possible), so the
+//     referential integrity is conventional everywhere else in this schema too.
+//   - erasureService nulls `reportedUserId` rather than deleting the row when
+//     the REPORTED user erases. A safety record has to outlive the account it
+//     describes, but so does the obligation to stop retaining a pointer to an
+//     erased person. Dropping the identifier satisfies both; deleting the row
+//     would destroy the record, and keeping it would retain erased personal
+//     data. `reporterId` is deleted outright — that is the reporter's own data,
+//     with no safety claim over it.
+model Report {
+  id Int @id @default(autoincrement())
+  // Set to NULL when the reported user erases their account. See above.
+  reportedUserId Int?
+  reporterId     Int
+  reason         ReportReason
+  // Free text. Only ever the `other` reason's elaboration; capped hard because
+  // this is unreviewed user prose going straight into an admin surface.
+  details String? @db.VarChar(1000)
+  status  ReportStatus @default(open)
+  // threat and underage are high (they top the admin queue); everything else
+  // is normal. Set at creation from the reason — see severityForReason.
+  severity ReportSeverity @default(normal)
+  // Null until a gobhi triages it, then the staff id. Distinct from
+  // `reporterId` so "who reported" and "who reviewed" can't be confused.
+  reviewedBy      Int?
+  reviewedAt      DateTime?
+  resolutionNote  String?     @db.VarChar(500)
+  createdAt       DateTime    @default(now())
+
+  // Triage queue: the only query that matters is "open reports, newest first".
+  @@index([status, createdAt])
+  // "Every report ever filed about this person" — the question you ask when
+  // deciding whether one more report tips into action.
+  @@index([reportedUserId])
+  // A reporter cannot spam the queue about one person.
+  @@unique([reporterId, reportedUserId])
+  @@schema("buddy")
+}
+
+
+model BuddyPersonalRecord {
+  id             Int @id @default(autoincrement())
+  buddyProfileId Int
+  exerciseId     Int
+  exerciseName   String @db.VarChar(150)
+  weight         Float
+  unit           String @db.VarChar(2)
+  reps           Int
+  mediaUrl       String?
+  mediaPublicId  String?
+  mediaType      String?
+  createdAt      DateTime @default(now())
+  buddyProfile   BuddyProfile @relation(fields: [buddyProfileId], references: [id], onDelete: Cascade)
+  @@index([buddyProfileId, createdAt])
+  @@schema("buddy")
+}
+
+model BuddyFollow {
+  followerId Int
+  targetId   Int
+  createdAt  DateTime @default(now())
+  follower   BuddyProfile @relation("BuddyFollowSource", fields: [followerId], references: [userId], onDelete: Cascade)
+  target     BuddyProfile @relation("BuddyFollowTarget", fields: [targetId], references: [userId], onDelete: Cascade)
+  @@id([followerId, targetId])
+  @@index([targetId])
   @@schema("buddy")
 }

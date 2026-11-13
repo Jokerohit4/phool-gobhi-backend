@@ -1,17 +1,27 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { creditCoinsService } from './coinLedgerService.js';
 import { loadEconomyConfig } from './coinEconomyConfigService.js';
-const prisma = new PrismaClient();
+import { track } from '../utils/analytics.js';
 
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
-function endOfDay(date) {
-  const d = new Date(date);
-  d.setUTCHours(23, 59, 59, 999);
-  return d;
+// Every check-in this service ever sees happened in India, so the day that
+// matters is the IST day. On the UTC day a 05:00 IST check-in sat in
+// "yesterday's" window, so the early-morning gym-goer — exactly the person
+// this reward exists for — was told their session didn't count. India
+// observes no DST, so the offset is a constant and the arithmetic needs no
+// ICU data (same reasoning as health-service's localDateIST).
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// The IST calendar day `date` falls on, as an inclusive window plus a
+// YYYY-MM-DD key for idempotency. Derived by shifting into "IST wall clock
+// as if it were UTC", flooring to the day, and shifting back.
+function istDay(date) {
+  const istMidnightUtc = Math.floor((date.getTime() + IST_OFFSET_MS) / DAY_MS) * DAY_MS;
+  return {
+    key: new Date(istMidnightUtc).toISOString().slice(0, 10),
+    start: new Date(istMidnightUtc - IST_OFFSET_MS),
+    end: new Date(istMidnightUtc + DAY_MS - 1 - IST_OFFSET_MS),
+  };
 }
 
 // The gamified layer's verification+credit step — one call from
@@ -25,20 +35,109 @@ function endOfDay(date) {
 // of source (booking, self-check-in, or attendance-SaaS member check-in) —
 // the same unified signal booking-service already feeds into this table,
 // reused rather than re-derived.
-export async function verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey }) {
-  const today = new Date();
+//
+// Two holes closed here (audit 2026-10-08, P1s):
+//   1. Coins once paid per *session*, keyed on the caller's session id, so a
+//      single check-in funded an unlimited number of finishes — dismissal of
+//      the quick-log sheet counted as a finish. The ledger key is now the
+//      IST day, so the first verified workout of the day pays and every
+//      later one is an idempotent replay (creditCoinsService re-checks the
+//      same key, so even two concurrent finishes can't both pay).
+//   2. The attendance window was UTC-based (see IST_OFFSET_MS above).
+//
+// `now` is injectable purely so tests can pin the clock; every caller uses
+// the default.
+//
+// Check-out rule: a workout finished while the person is still checked in at a
+// gym earns nothing yet. Their credit is held, and paid when they check out by
+// scanning the gym poster the same day (see gymPresenceService.applyPresence).
+// Leaving without scanning is allowed; it just means the held coins are never
+// paid. A workout with no open gym visit (at home, or after a scanned
+// check-out) is credited as before. `checkoutGate: false` is for that release,
+// which replays the credit once the person is out. Switch the whole rule off
+// with WORKOUT_COINS_REQUIRE_CHECKOUT=false.
+export async function verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, routinePolicy, now = new Date(), checkoutGate = true }) {
+  const day = istDay(now);
   const hasAttendanceToday = await prisma.attendanceEventLog.findFirst({
-    where: { userId, attendedAt: { gte: startOfDay(today), lte: endOfDay(today) } },
+    where: { userId, attendedAt: { gte: day.start, lte: day.end } },
     select: { id: true },
   });
+  if (checkoutGate && process.env.WORKOUT_COINS_REQUIRE_CHECKOUT !== 'false') {
+    const presence = await prisma.gymPresence.findUnique({ where: { userId } });
+    if (presence && presence.state === 'in' && presence.day === day.key) {
+      const heldKey = idempotencyKey ?? `session:${sessionId}`;
+      await prisma.heldWorkoutCredit.upsert({
+        where: { userId_idempotencyKey: { userId, idempotencyKey: heldKey } },
+        create: {
+          userId, day: day.key, idempotencyKey: heldKey,
+          payload: { sessionId, description: description ?? null, idempotencyKey: idempotencyKey ?? null, routinePolicy: routinePolicy ?? null, finishedAt: now.toISOString() },
+        },
+        update: {},
+      });
+      track('workout_credit_held', userId, { gym_id: presence.gymId, day: day.key });
+      return { verified: !!hasAttendanceToday, credited: false, amount: 0, pendingCheckout: true, gymId: presence.gymId };
+    }
+  }
+  if (routinePolicy != null) {
+    if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: `workout-credit:${userId}:${day.key}` } })) {
+      return { verified: !!hasAttendanceToday, credited: false, amount: 0 };
+    }
+    // Internal health-service supplies server-validated activity and policy.
+    // Bound both amounts here as defense in depth; this is never a public API.
+    const starter = routinePolicy.starterAmount;
+    const verifiedTotal = routinePolicy.verifiedAmount;
+    if (![starter, verifiedTotal].every(n => Number.isInteger(n) && n >= 0 && n <= 4) || verifiedTotal < starter) {
+      throw Object.assign(new Error('Invalid routine reward policy'), { status: 400 });
+    }
+    let amount = 0;
+    const creditOnce = async (suffix, value) => {
+      if (value <= 0) return;
+      const key = `routine:workout:${userId}:${day.key}:${suffix}`;
+      if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: key } })) return;
+      await creditCoinsService(userId, value, description || 'Workout activity', key);
+      amount += value;
+    };
+    const start = new Date(routinePolicy.startedAt);
+    const end = new Date(routinePolicy.endedAt);
+    const validWindow = Number.isFinite(start.getTime()) && Number.isFinite(end.getTime()) &&
+      end - start >= 10 * 60000 && end <= now && now - end <= 86400000;
+    const locationAttendance = validWindow && routinePolicy.gymId ? await prisma.attendanceEventLog.findFirst({
+      where: { userId, gymId: routinePolicy.gymId,
+        attendedAt: { gte: new Date(Math.max(day.start.getTime(), start.getTime() - 2 * 3600000)), lte: end } },
+      select: { id: true },
+    }) : null;
+    await creditOnce('activity', starter);
+    if (locationAttendance) await creditOnce('location', verifiedTotal - starter);
+    return { verified: !!locationAttendance, credited: amount > 0, amount };
+  }
   if (!hasAttendanceToday) {
+    track('workout_credited', userId, { verified: false, credited: false, amount: 0 });
     return { verified: false, credited: false, amount: 0 };
   }
 
   const { coinsPerVerifiedWorkout } = await loadEconomyConfig();
   if (coinsPerVerifiedWorkout <= 0) {
+    track('workout_credited', userId, { verified: true, credited: false, amount: 0, economy_disabled: true });
     return { verified: true, credited: false, amount: 0 };
   }
-  await creditCoinsService(userId, coinsPerVerifiedWorkout, description || 'Verified workout', idempotencyKey);
+
+  for (const suffix of ['activity', 'location']) {
+    if (await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: `routine:workout:${userId}:${day.key}:${suffix}` } })) {
+      return { verified: !!hasAttendanceToday, credited: false, amount: 0 };
+    }
+  }
+  const dailyKey = `workout-credit:${userId}:${day.key}`;
+  const paidToday = await prisma.coinLedgerEntry.findUnique({ where: { idempotencyKey: dailyKey } });
+  if (paidToday && paidToday.userId === userId) {
+    // Verified, but today's coins are already spent — reported as "not
+    // credited" so the app stays silent instead of promising a payment the
+    // ledger won't make. Narrow race window between this check and the
+    // credit below is closed by creditCoinsService's own key re-check.
+    track('workout_credited', userId, { verified: true, credited: false, amount: 0, daily_cap: true, day: day.key, caller_key: idempotencyKey ?? null });
+    return { verified: true, credited: false, amount: 0 };
+  }
+
+  await creditCoinsService(userId, coinsPerVerifiedWorkout, description || 'Verified workout', dailyKey);
+  track('workout_credited', userId, { verified: true, credited: true, amount: coinsPerVerifiedWorkout, day: day.key, caller_key: idempotencyKey ?? null });
   return { verified: true, credited: true, amount: coinsPerVerifiedWorkout };
 }

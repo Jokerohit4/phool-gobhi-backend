@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Health+ FR-04 / Tech S08. Both blueprints call an audit log P0 and
 // neither shipped one.

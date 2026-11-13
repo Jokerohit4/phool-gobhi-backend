@@ -1,6 +1,7 @@
 import { hash, compare } from 'bcrypt';
 import crypto from 'crypto';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { generateAccessToken } from '../utils/generateTokens.js';
 import { issueRefreshFamily, rotate as rotateRefreshToken, revokeByToken } from './refreshTokenService.js';
 import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
@@ -9,12 +10,32 @@ import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { notifyUser } from '../utils/notifyUser.js';
 import { eraseUserAcrossServices } from '../utils/eraseAcrossServices.js';
+import { archiveUserAcrossServices } from '../utils/archiveAcrossServices.js';
+import { archiveUserAccount } from './accountArchiveService.js';
 import { loadOtpProvider, isSkipAllowlisted } from './otpProviderService.js';
+import { linkGym } from './gymLinkService.js';
+import { isLinkablePartnerGym } from './gymLookup.js';
+import redis from '../utils/redisClient.js';
+
+// A public join URL is a membership claim, not approval. Failure to create a
+// request must not prevent an otherwise valid OTP login.
+async function requestJoinAtLogin(userId, gymId) {
+  try { return await linkGym(prisma, userId, gymId, 'qr_request'); }
+  catch (err) {
+    if (['SELF_LINK_BLOCKED', 'SELF_LINK_LIMIT'].includes(err.errorCode)) return null;
+    throw err;
+  }
+}
 
 const SKIP_OTP_CODE = '123456';
 const OTP_MAX_ATTEMPTS = 5;
+const OTP_EXPIRY_SECONDS = 300; // 5 minutes
+// The attempts counter must expire or it is a permanent lockout, not a
+// per-OTP one: nothing else ever deletes `otp_attempts:<phone>` on a
+// success path that was reached without the counter being reset, and a
+// fresh send-otp used to leave it in place. Bound it to the OTP lifetime.
+const OTP_ATTEMPTS_TTL_SECONDS = 300;
 
-const prisma = new PrismaClient();
 
 // Constant-time string compare — a plain !== on a guessable secret (an OTP
 // code here) leaks a timing signal proportional to how many leading
@@ -59,6 +80,14 @@ async function fetchPartnerGymSummary(partnerId) {
 // duplicated per-service rather than shared since these are independent
 // microservices with no shared code layer.
 export async function assertPartnerOwnsGym(gymId, partnerId) {
+  const gym = await fetchGymInternal(gymId);
+  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+  return gym;
+}
+
+// Gym-service's internal read of one gym. Throws 404 when it cannot be fetched,
+// so callers that only want to notify the owner can catch and carry on.
+export async function fetchGymInternal(gymId) {
   let gym;
   try {
     const res = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
@@ -73,7 +102,6 @@ export async function assertPartnerOwnsGym(gymId, partnerId) {
   } catch (_) {
     throw { status: 404, error: 'Gym not found' };
   }
-  if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
   return gym;
 }
 
@@ -159,6 +187,79 @@ export async function runAttendanceSaasReengagementSweepService() {
   return { candidates: candidates.length, nudged, alreadyActive };
 }
 
+// Attendance-SaaS monthly bill: count of people (not GymLink rows) for each of the given
+// gyms whose *qualifying* date (in IST) falls in the month (YYYY-MM). A
+// `gym_qr` link qualifies the moment it is made; a `self` link only counts in
+// the month it becomes an approved membership — the later of its first verified
+// check-in, gym approval, or 7 days after the link — and only if the link was still active at
+// that point (removed-before-qualifying never counts). Counts by qualifying
+// date, not by linkedAt, so a self-link made in September that only earns its
+// first check-in in October bills October. Returns a map of gymId -> count; a
+// gym with no qualifiers is simply absent, so callers should default missing
+// keys to 0.
+const SELF_LINK_QUALIFY_MS = 7 * 24 * 60 * 60 * 1000;
+// A member who leaves and comes back to the same gym within this window is
+// the same membership, not a new join: persona switching makes leave/rejoin
+// cheap, and the bill must count people joining, not link rows.
+const REJOIN_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function countGymJoinedUsersByMonthService(gymIds, month) {
+  const { start, end } = istMonthRange(month);
+  const links = await prisma.gymLink.findMany({
+    where: {
+      gymId: { in: gymIds },
+      OR: [
+        { source: 'gym_qr', linkedAt: { gte: start, lt: end } },
+        { source: 'self', linkedAt: { lt: end }, firstVerifiedCheckinAt: { not: null }, approvedAt: { not: null } },
+      ],
+    },
+    select: { userId: true, gymId: true, source: true, linkedAt: true, firstVerifiedCheckinAt: true, approvedAt: true, removedAt: true },
+  });
+  // Earlier links of the same people to the same gyms, to spot a rejoin.
+  const userIds = [...new Set(links.map((l) => l.userId))];
+  const earlier = userIds.length
+    ? await prisma.gymLink.findMany({
+      where: { gymId: { in: gymIds }, userId: { in: userIds }, linkedAt: { gte: new Date(start.getTime() - REJOIN_GRACE_MS), lt: end } },
+      select: { userId: true, gymId: true, linkedAt: true, removedAt: true },
+    })
+    : [];
+  const isRejoin = (link) => earlier.some((e) => e.userId === link.userId && e.gymId === link.gymId
+    && e.linkedAt < link.linkedAt
+    && link.linkedAt.getTime() - (e.removedAt ?? e.linkedAt).getTime() <= REJOIN_GRACE_MS);
+
+  const counted = new Set();
+  const counts = {};
+  for (const link of links) {
+    const qualifiesAt =
+      link.source === 'self'
+        ? new Date(Math.max(
+            link.firstVerifiedCheckinAt.getTime(),
+            link.approvedAt.getTime(),
+            link.linkedAt.getTime() + SELF_LINK_QUALIFY_MS,
+          ))
+        : link.linkedAt;
+    if (qualifiesAt < start || qualifiesAt >= end) continue;
+    if (link.removedAt && link.removedAt < qualifiesAt) continue;
+    const person = `${link.gymId}:${link.userId}`;
+    if (counted.has(person) || isRejoin(link)) continue;
+    counted.add(person);
+    counts[link.gymId] = (counts[link.gymId] || 0) + 1;
+  }
+  return counts;
+}
+
+// Turns 'YYYY-MM' into [start, end) UTC instants for the Indian business
+// month. Pure arithmetic, no tz library: IST is UTC+05:30, so the first
+// instant of the 1st is `Date.UTC(y, m-1, 1)` minus 5h30m.
+function istMonthRange(month) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw { status: 400, error: 'month must be YYYY-MM' };
+  const [y, m] = month.split('-').map(Number);
+  if (m < 1 || m > 12) throw { status: 400, error: 'month must be YYYY-MM' };
+  const start = new Date(Date.UTC(y, m - 1, 1) - 5.5 * 60 * 60 * 1000);
+  const end = new Date(Date.UTC(y, m, 1) - 5.5 * 60 * 60 * 1000);
+  return { start, end };
+}
+
 export async function signupService({ name, email, password, role, type, gobhiType }) {
   // Validate role and type
   if (!VALID_ROLES.includes(role)) {
@@ -176,12 +277,12 @@ export async function signupService({ name, email, password, role, type, gobhiTy
   try {
     const hashed = await hash(password, 10);
     const user = await prisma.user.create({
-      data: { 
-        name, 
-        email, 
-        password: hashed, 
-        role, 
-        type, 
+      data: {
+        name,
+        email,
+        password: hashed,
+        role,
+        type,
         gobhiType: role === ROLES.GOBHI ? gobhiType : null,
         updatedAt: new Date(), // Explicitly set updatedAt
       },
@@ -208,39 +309,39 @@ export async function signupService({ name, email, password, role, type, gobhiTy
       name: err.name,
       stack: err.stack?.substring(0, 500),
     }, null, 2));
-    
+
     if (err.name === 'PrismaClientInitializationError') {
       console.error('Database connection error:', err);
       throw { status: 500, error: ERROR_MESSAGES.SERVER_ERROR.message, errorCode: ERROR_MESSAGES.SERVER_ERROR.code };
     }
-    
+
     // Prisma unique constraint violation error code is 'P2002'
     if (err.code === 'P2002') {
       const targetFields = err.meta?.target || [];
       const isEmailError = Array.isArray(targetFields) && (
-        targetFields.includes('email') || 
+        targetFields.includes('email') ||
         targetFields.some(field => String(field).toLowerCase().includes('email'))
       );
-      
+
       if (isEmailError) {
         console.error('Signup error: Email already exists');
         throw { status: 400, error: ERROR_MESSAGES.EMAIL_EXISTS.message, errorCode: ERROR_MESSAGES.EMAIL_EXISTS.code };
       }
-      
+
       // Any unique constraint violation
       console.error('Signup error: Unique constraint violation');
       throw { status: 400, error: ERROR_MESSAGES.EMAIL_EXISTS.message, errorCode: ERROR_MESSAGES.EMAIL_EXISTS.code };
     }
-    
+
     // For any other Prisma error, include original error for debugging
     console.error('Signup error - Unhandled Prisma error:', {
       code: err.code,
       message: err.message,
       name: err.name,
     });
-    throw { 
-      status: 400, 
-      error: ERROR_MESSAGES.USER_EXISTS_OR_INVALID.message, 
+    throw {
+      status: 400,
+      error: ERROR_MESSAGES.USER_EXISTS_OR_INVALID.message,
       errorCode: ERROR_MESSAGES.USER_EXISTS_OR_INVALID.code,
       originalError: {
         code: err.code,
@@ -293,8 +394,44 @@ export async function loginService({ email, password }) {
 // downstream service fails, the account survives and the whole operation can
 // simply be retried — a user who is still able to press "delete" again is a
 // far better failure mode than silently orphaned personal data.
+// How "delete my account" behaves, set by ACCOUNT_DELETION_MODE:
+//   archive (default) — retain everything. The account is closed and neutralised in
+//                       place, the person disappears from everyone else's view, and
+//                       signing in again makes a brand-new user. See
+//                       accountArchiveService.
+//   erase             — the original behaviour: erase across services, then delete
+//                       the User row.
+// Archive is the default pending legal advice on what must actually be deleted;
+// flipping the variable to `erase` restores hard deletion with no code change.
+export function accountDeletionMode() {
+  return String(process.env.ACCOUNT_DELETION_MODE || 'archive').trim().toLowerCase() === 'erase' ? 'erase' : 'archive';
+}
+
+// Closing an account in archive mode. Same order as erasure: hide the person from
+// other users FIRST, neutralise the identity LAST, so a failure in between leaves
+// an account that can simply be retried (every step is idempotent).
+async function archiveAccount(userId) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
+  if (user.archivedAt) return { message: 'User deleted', archived: true };
+
+  const hidden = await archiveUserAcrossServices(userId);
+  if (!hidden.ok) {
+    console.error('deleteUserService: refusing to archive the account —', hidden.failures);
+    throw {
+      status: 502,
+      error: 'Could not close your account right now. Nothing was changed — please try again.',
+      errorCode: 'ARCHIVE_INCOMPLETE',
+      failedServices: hidden.failures.map((f) => f.service),
+    };
+  }
+  await archiveUserAccount(prisma, user);
+  return { message: 'User deleted', archived: true };
+}
+
 export async function deleteUserService(userId) {
   try {
+    if (accountDeletionMode() === 'archive') return await archiveAccount(userId);
     const erasure = await eraseUserAcrossServices(userId);
     if (!erasure.ok) {
       console.error('deleteUserService: refusing to delete User row —', erasure.failures);
@@ -308,10 +445,40 @@ export async function deleteUserService(userId) {
       };
     }
 
-    await prisma.user.delete({ where: { id: userId } });
+    // Auth-service's own rows go in ONE transaction with the User row.
+    // Four of these tables hold a foreign key to User with no ON DELETE
+    // CASCADE, so a bare user.delete threw a FK violation for anyone who had
+    // ever logged in (every account has RefreshToken rows) — deletion could
+    // never succeed for a real user. AppModeHistory has no FK at all, so it
+    // would otherwise have outlived the account as orphaned personal data.
+    // People this user referred keep their accounts; only the back-link to a
+    // now-deleted person is cleared. All-or-nothing: if any step fails the
+    // account is untouched and the user can simply try again.
+    await prisma.$transaction([
+      prisma.exploreReceiptEvent.deleteMany({ where: { userId } }),
+      prisma.refreshToken.deleteMany({ where: { userId } }),
+      prisma.exploreClaim.deleteMany({ where: { userId } }),
+      prisma.exploreLocationReceipt.deleteMany({ where: { userId } }),
+      prisma.exploreRewardReceipt.deleteMany({ where: { userId } }),
+      prisma.exploreProgress.deleteMany({ where: { userId } }),
+      prisma.savedAddress.deleteMany({ where: { userId } }),
+      prisma.partnerBankAccount.deleteMany({ where: { userId } }),
+      prisma.appModeHistory.deleteMany({ where: { userId } }),
+      // Coach-journey B2: GymLink (membership history) and UserDevice (install
+      // ids) both key on userId with no cascade, and both outlive as personal
+      // data if left behind.
+      prisma.gymLink.deleteMany({ where: { userId } }),
+      // What gyms recorded about this person (locker, notes, payments, ...) is
+      // personal data keyed on userId too.
+      prisma.gymMemberRecord.deleteMany({ where: { userId } }),
+      prisma.gymMemberPayment.deleteMany({ where: { userId } }),
+      prisma.userDevice.deleteMany({ where: { userId } }),
+      prisma.user.updateMany({ where: { referredByUserId: userId }, data: { referredByUserId: null } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
     return { message: 'User deleted', erased: erasure.results };
   } catch (err) {
-    if (err?.errorCode === 'ERASURE_INCOMPLETE') throw err;
+    if (err?.errorCode === 'ERASURE_INCOMPLETE' || err?.errorCode === 'ARCHIVE_INCOMPLETE' || err?.errorCode === 'USER_NOT_FOUND') throw err;
     if (err.name === 'PrismaClientInitializationError') {
       console.error('Database connection error:', err);
       throw { status: 500, error: ERROR_MESSAGES.SERVER_ERROR.message, errorCode: ERROR_MESSAGES.SERVER_ERROR.code };
@@ -328,21 +495,29 @@ export async function refreshTokenService(token) {
     // rotateRefreshToken verifies the JWT, looks up its RefreshToken row, and
     // either rotates it (issuing a new one) or rejects it (revoked/reused/
     // expired) — see refreshTokenService.js for the full state machine.
-    const { userId, refreshToken } = await rotateRefreshToken(token);
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
-    if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
+    let user;
+    const { refreshToken } = await rotateRefreshToken(token, {
+      beforeRotate: async (userId) => {
+        user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw { status: 404, error: 'User not found', errorCode: 'USER_NOT_FOUND' };
+        if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
+      },
+    });
     const accessToken = generateAccessToken(user.id, user.role, user.type);
     return { accessToken, refreshToken };
   } catch (err) {
     if (err.status) throw err;
-    throw { status: 403, error: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.message, errorCode: ERROR_MESSAGES.INVALID_OR_EXPIRED_REFRESH.code };
+    // A database/transaction failure is not evidence of an invalid session.
+    // Mobile clients discard their saved credentials on a 401/403, so this
+    // must remain retryable during a deployment or temporary DB outage.
+    console.error('Refresh token temporarily unavailable', { name: err.name, code: err.code });
+    throw { status: 503, error: 'Unable to refresh session right now. Please try again.', errorCode: 'REFRESH_UNAVAILABLE' };
   }
 }
 
 // Explicit logout — revokes the token's whole rotation family so it (and any
 // clone of it) stops working immediately, rather than waiting out its
-// natural 7-day expiry. Never throws on a bad/missing token: logout should
+// natural expiry. Never throws on a bad/missing token: logout should
 // always succeed from the caller's point of view.
 export async function logoutService(token) {
   if (token) {
@@ -355,10 +530,8 @@ export async function logoutService(token) {
   return { ok: true };
 }
 
-// OTP store lives in Postgres (OtpCode model, one row per phone) rather than
-// an in-memory Map — a Cloud Run cold start or scale-out to multiple
-// instances would otherwise silently invalidate in-flight OTPs, since each
-// instance would have its own empty Map.
+// OTP store lives in Redis for high performance and native TTL, preventing
+// database bloat and ensuring consistent verification across Cloud Run pods.
 
 // Canonical phone key for everything in this service — OTP-store lookups,
 // User.phone storage/matching, and both the OTP-store and Firebase verify
@@ -399,7 +572,8 @@ async function sendWhatsAppOtp(phone, code) {
         },
       }),
     });
-    if (!res.ok) { console.error('WhatsApp OTP failed:', await res.text()); return false; }
+    // log status only �?" the provider body can echo the recipient phone.
+    if (!res.ok) { console.error('WhatsApp OTP failed:', res.status); return false; }
     return true;
   } catch (err) {
     console.error('WhatsApp OTP error:', err.message);
@@ -419,10 +593,12 @@ async function sendFast2SmsOtp(phone, code) {
       headers: { 'cache-control': 'no-cache' },
     });
     const body = await res.json().catch(() => null);
-    // Fast2SMS sometimes returns HTTP 200 with {return:false} on logical failures
-    // (e.g. account gates) — res.ok alone isn't enough to detect that.
+// Fast2SMS sometimes returns HTTP 200 with {return:false} on logical failures
+    // (e.g. account gates) �?" res.ok alone isn't enough to detect that.
+    // Log the status only: the response body can echo the recipient phone
+    // number, which is PII we should not write to Cloud Logging.
     if (!res.ok || body?.return === false) {
-      console.error('Fast2SMS OTP failed:', res.status, body);
+      console.error('Fast2SMS OTP failed:', res.status);
       return false;
     }
     return true;
@@ -444,7 +620,7 @@ export async function sendOtpService(rawPhone) {
   // Firebase, and skip (see GET /otp-config, admin-editable via
   // /otp-config/admin) — but the switch previously only advised clients
   // which path to take; this function itself would still attempt a real
-  // WhatsApp/Fast2SMS send regardless. That let Fast2SMS fire (and silently
+  // WhatsApp/Fast2Sms send regardless. That let Fast2SMS fire (and silently
   // "succeed" per the 200 below even when delivery failed) for any caller of
   // this endpoint even while the platform is on Firebase.
   // Guard it here so "provider=firebase" is an actual guarantee, not just a
@@ -453,33 +629,49 @@ export async function sendOtpService(rawPhone) {
   if (provider === 'firebase') {
     throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
-  const existing = await prisma.otpCode.findUnique({ where: { phone } });
-  if (existing && Date.now() - existing.sentAt.getTime() < 60 * 1000) {
-    throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
-  }
-  // Skip mode only bypasses the real send for phones on the allowlist. No
-  // OtpCode row is written for a bypassed number since verifyOtpService
-  // short-circuits before ever reading one.
-  if (provider === 'skip' && await isSkipAllowlisted(phone)) {
-    return { message: 'OTP sent successfully' };
-  }
-  // Anyone else while provider is "skip" (i.e. not on the allowlist) must
-  // NOT get a real WhatsApp/Fast2SMS send — only an explicit provider of
-  // "fast2sms" is allowed to reach that below. Same error/code the
-  // "firebase" branch above throws, so callers handle both identically:
-  // fall back to the Firebase client-side phone-auth flow instead.
+
+  // Skip mode resolves entirely in Postgres (the allowlist lookup below) and
+  // never stores or delivers an OTP — so it must be answered BEFORE the Redis
+  // rate-limit check. That check used to run first, which made a provider that
+  // by design needs no OTP store hard-depend on REDIS_URL: with the env unset
+  // (auth-service dev/prod secrets carry only DATABASE_URL) the lazy Redis
+  // client threw and the caller got an opaque 500 "Server error" instead of
+  // the skip answer — while verify-otp, whose equivalent skipBypass check runs
+  // first, worked fine. Same ordering rationale as skipBypass in
+  // verifyOtpService below.
+  // Skip mode only bypasses the real send for phones on the allowlist.
   if (provider === 'skip') {
+    if (await isSkipAllowlisted(phone)) {
+      return { message: 'OTP sent successfully' };
+    }
+    // Anyone else while provider is "skip" (i.e. not on the allowlist) must
+    // NOT get a real WhatsApp/Fast2Sms send.
     throw { status: 400, error: 'OTP delivery is handled by Firebase phone auth — use verify-firebase-token, not send-otp.', errorCode: 'FIREBASE_OTP_ONLY' };
   }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const now = new Date();
-  await prisma.otpCode.upsert({
-    where: { phone },
-    create: { phone, code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
-    update: { code, expiresAt: new Date(now.getTime() + 5 * 60 * 1000), sentAt: now },
-  });
+
+  // Rate limit check using Redis
+  const lastSent = await redis.get(`otp_sent_at:${phone}`);
+  if (lastSent && Date.now() - parseInt(lastSent) < 60 * 1000) {
+    throw { status: 429, error: 'Please wait 60 seconds before requesting another OTP.', errorCode: 'OTP_RATE_LIMITED' };
+  }
+  // crypto.randomInt is a CSPRNG �?" an OTP must not come from Math.random
+  // (predictable from enough samples; this is a login credential for ~5 min).
+  const code = String(crypto.randomInt(100000, 1000000));
+  
+  // Store OTP and sent timestamp in Redis with TTL. Reset the attempts
+  // counter too — verifying a valid OTP deletes it, but a counter left over
+  // from an earlier expired/abandoned code would otherwise carry into this
+  // fresh one and lock the phone out early.
+  await redis.setex(`otp_code:${phone}`, OTP_EXPIRY_SECONDS, code);
+  await redis.setex(`otp_sent_at:${phone}`, 60, Date.now().toString());
+  await redis.del(`otp_attempts:${phone}`);
+  
   const sent = await sendWhatsAppOtp(phone, code) || await sendFast2SmsOtp(phone, code);
-  if (!sent) console.log(`OTP for ${phone}: ${code}`);
+  // NEVER log the code (or the raw phone) if delivery fails �?" the code is a
+  // live login credential and this log is readable by anyone with Cloud
+  // Logging access. A generic error keeps the incident signal without the
+  // account-takeover payload.
+  if (!sent) console.error('OTP delivery failed for every configured provider');
   return { message: 'OTP sent successfully' };
 }
 
@@ -487,8 +679,8 @@ export async function sendOtpService(rawPhone) {
 // the account's EXISTING role (not the role the requesting app sent), since
 // that's the account the phone number actually belongs to.
 // Shared by both the OTP-store path (verifyOtpService) and the Firebase
-// ID-token path (verifyFirebaseTokenService) — everything that happens once a
-// phone number is confirmed verified, regardless of how it got verified.
+// ID-token path (verifyFirebaseTokenService) — everything that happens once
+// a phone number is confirmed verified, regardless of how it got verified.
 // Deterministic own-code derivation — see the referralCode field's schema
 // comment. Called only after the row exists (needs a real id).
 function referralCodeFor(userId) {
@@ -554,7 +746,6 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
           type,
           gobhiType: role === ROLES.GOBHI ? gobhiType : null,
           referredByUserId,
-          linkedGymId: resolvedLinkedGymId,
           updatedAt: new Date(),
         },
       });
@@ -579,6 +770,15 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
       where: { id: user.id },
       data: { referralCode: referralCodeFor(user.id) },
     });
+    // Route the join-gym pointer through linkGym so the GymLink row (source
+    // gym_qr) is written alongside User.linkedGymId, exactly as a self-link or
+    // the existing-user backfill below does. Never throws for gym_qr.
+    // A join link must name a real, approved partner gym (a crafted id would
+    // otherwise put the user on — and bill — any gym id they like).
+    if (resolvedLinkedGymId && await isLinkablePartnerGym(resolvedLinkedGymId)) {
+      const linked = await requestJoinAtLogin(user.id, resolvedLinkedGymId);
+      if (linked) user = linked;
+    }
   } else if (!user.isActive) {
     throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
   }
@@ -590,11 +790,11 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     const resolvedLinkedGymId = Number.isInteger(Number(linkedGymId)) && Number(linkedGymId) > 0
       ? Number(linkedGymId)
       : null;
-    if (resolvedLinkedGymId) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { linkedGymId: resolvedLinkedGymId },
-      });
+    // A join link must name a real, approved partner gym (a crafted id would
+    // otherwise put the user on — and bill — any gym id they like).
+    if (resolvedLinkedGymId && await isLinkablePartnerGym(resolvedLinkedGymId)) {
+      const linked = await requestJoinAtLogin(user.id, resolvedLinkedGymId);
+      if (linked) user = linked;
     }
   }
 
@@ -649,24 +849,26 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
   const provider = await loadOtpProvider();
   const skipBypass = provider === 'skip' && otp === SKIP_OTP_CODE && await isSkipAllowlisted(phone);
   if (!skipBypass) {
-    const entry = await prisma.otpCode.findUnique({ where: { phone } });
-    if (!entry || Date.now() > entry.expiresAt.getTime()) {
-      if (entry) await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+    const cachedOtp = await redis.get(`otp_code:${phone}`);
+    if (!cachedOtp) {
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
-    if (entry.attempts >= OTP_MAX_ATTEMPTS) {
-      // Too many wrong guesses against this exact code — force a fresh
-      // resend rather than continuing to allow guesses for the rest of its
-      // 5-minute window. Previously the only ceiling here was the gateway's
-      // per-IP rate limit, which a distributed-IP attacker isn't bound by.
-      await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+    
+    const attempts = await redis.incr(`otp_attempts:${phone}`);
+    if (attempts === 1) {
+      // First attempt for this code — start the counter's own clock so it
+      // can never outlive the lockout window (see OTP_ATTEMPTS_TTL_SECONDS).
+      await redis.expire(`otp_attempts:${phone}`, OTP_ATTEMPTS_TTL_SECONDS);
+    }
+    if (attempts > OTP_MAX_ATTEMPTS) {
+      await redis.del(`otp_code:${phone}`, `otp_attempts:${phone}`);
       throw { status: 400, error: ERROR_MESSAGES.OTP_EXPIRED.message, errorCode: ERROR_MESSAGES.OTP_EXPIRED.code };
     }
-    if (!safeCompareStrings(entry.code, otp)) {
-      await prisma.otpCode.update({ where: { phone }, data: { attempts: { increment: 1 } } }).catch(() => {});
+    
+    if (!safeCompareStrings(cachedOtp, otp)) {
       throw { status: 400, error: ERROR_MESSAGES.INVALID_OTP.message, errorCode: ERROR_MESSAGES.INVALID_OTP.code };
     }
-    await prisma.otpCode.delete({ where: { phone } }).catch(() => {});
+    await redis.del(`otp_code:${phone}`, `otp_attempts:${phone}`);
   }
 
   return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode, linkedGymId });
@@ -827,26 +1029,38 @@ export async function createTrainerService({ name, phone: rawPhone }, gymId, par
     throw { status: 400, error: 'name is required' };
   }
 
-  const existing = await prisma.user.findUnique({ where: { phone } });
-  if (existing) {
-    throw {
-      status: 409,
-      error: existing.role === ROLES.TRAINER
-        ? 'This phone number is already registered as a trainer.'
-        : `This phone number is already registered as a ${existing.role}. A phone number can only be one account.`,
-    };
-  }
-
-  const trainer = await prisma.user.create({
-    data: {
-      name: trimmedName,
-      phone,
-      role: ROLES.TRAINER,
-      type: 'general',
-      trainerGymId: gymId,
-      updatedAt: new Date(),
-    },
+  const phoneTaken = (existing) => ({
+    status: 409,
+    error: existing.role === ROLES.TRAINER
+      ? 'This phone number is already registered as a trainer.'
+      : `This phone number is already registered as a ${existing.role}. A phone number can only be one account.`,
   });
+
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) throw phoneTaken(existing);
+
+  let trainer;
+  try {
+    trainer = await prisma.user.create({
+      data: {
+        name: trimmedName,
+        phone,
+        role: ROLES.TRAINER,
+        type: 'general',
+        trainerGymId: gymId,
+        updatedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    // P2002 on the unique phone: a concurrent request (double-tap, client
+    // retry) created this number between the lookup above and this insert.
+    // That is the same "already registered" answer, not a server error.
+    if (err?.code === 'P2002') {
+      const winner = await prisma.user.findUnique({ where: { phone } });
+      if (winner) throw phoneTaken(winner);
+    }
+    throw err;
+  }
   track('trainer_account_created', partnerId, { trainerId: trainer.id, gymId });
   return { id: trainer.id, name: trainer.name, phone: trainer.phone, isActive: trainer.isActive, createdAt: trainer.createdAt };
 }
@@ -872,8 +1086,11 @@ export async function updateTrainerStatusService(trainerId, isActive, gymId, par
   const updated = await prisma.user.update({
     where: { id: trainerId },
     data: { isActive },
-    select: { id: true, name: true, phone: true, isActive: true, createdAt: true },
+    select: { id: true, name: true, email: true, gobhiType: true, isActive: true, createdAt: true },
   });
-  track(isActive ? 'trainer_account_reactivated' : 'trainer_account_deactivated', partnerId, { trainerId, gymId });
+  track(
+      isActive ? 'trainer_account_reactivated' : 'trainer_account_deactivated',
+      partnerId,
+      { trainerId, gymId });
   return updated;
 }

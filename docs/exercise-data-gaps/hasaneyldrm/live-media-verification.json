@@ -1,0 +1,150 @@
+{
+  "checkedAssets": 16,
+  "scope": "Representative runtime URLs checked by HTTP GET; all 2648 source paths separately verified against the pinned Git tree.",
+  "results": [
+    {
+      "exercise": "Barbell Bench Press",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0025-EIeI8Vf.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Barbell Bench Press",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/0025-EIeI8Vf.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "Knee Push-up",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/3211-ZOuKWir.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Knee Push-up",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/3211-ZOuKWir.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "Crunch",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0274-TFqbd8t.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Crunch",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/0274-TFqbd8t.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "V-up",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0507-mbkgB44.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "V-up",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/0507-mbkgB44.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "Stair Climber",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/2311-j9Q5crt.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Stair Climber",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/2311-j9Q5crt.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "Advanced Kettlebell Windmill",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0517-Kal9cQQ.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Advanced Kettlebell Windmill",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/0517-Kal9cQQ.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "Dumbbell Skull Crusher",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0351-mpKZGWz.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Dumbbell Skull Crusher",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/0351-mpKZGWz.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    },
+    {
+      "exercise": "Smith Machine Reverse Calf Raises",
+      "kind": "gif",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0763-ywaNfuh.gif",
+      "status": 206,
+      "contentType": "image/gif",
+      "dimensions": [
+        180,
+        180
+      ]
+    },
+    {
+      "exercise": "Smith Machine Reverse Calf Raises",
+      "kind": "image",
+      "url": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/0763-ywaNfuh.jpg",
+      "status": 206,
+      "contentType": "image/jpeg"
+    }
+  ]
+}

@@ -1,9 +1,10 @@
 // Covers getGymLeaderboard: window filtering (weekly/monthly/all), opt-in
-// exclusion, and "my rank" computation. Run with:
+// exclusion, "my rank" computation, and the composite score ranking (trust
+// ladder feeds from challenge-service, steps from health-service). Run with:
 //   node --experimental-test-module-mocks --test
 //
 // bookingService.js, @prisma/client and axios are each mocked ONCE for this
-// file — same convention as memberCheckIn.test.js.
+// file -- same convention as memberCheckIn.test.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -13,11 +14,17 @@ import assert from 'node:assert/strict';
 let rows = [];
 let users = {}; // customerId -> {id, name, profileImageUrl, leaderboardOptIn}
 let batchFails = false;
+let attendanceEvents = []; // challenge-service AttendanceEventLog rows
+let activityRows = []; // health-service DailyActivityMetric rows (steps)
+let feedFails = false;
 
 function resetFakes() {
   rows = [];
   users = {};
   batchFails = false;
+  attendanceEvents = [];
+  activityRows = [];
+  feedFails = false;
 }
 
 let getGymLeaderboard;
@@ -51,6 +58,16 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
           const data = body.ids.map((id) => users[id]).filter(Boolean);
           return { data: { data } };
         },
+        get: async (url, config) => {
+          if (feedFails) throw new Error('feature downstream unreachable');
+          if (url.includes('/internal/attendance-events')) {
+            return { data: { data: attendanceEvents } };
+          }
+          if (url.includes('/internal/daily-activity')) {
+            return { data: { data: activityRows } };
+          }
+          throw new Error(`unexpected GET ${url}`);
+        },
       },
     },
   });
@@ -64,9 +81,13 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
 });
 
 const GYM = 9;
-const TODAY = new Date().toISOString().split('T')[0];
+// IST calendar days, matching attendanceScoreService's window - UTC keys run a
+// day behind IST from 18:30 to 00:00 UTC and failed the steps assertions then.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+const istKey = (ms) => new Date(ms + IST_OFFSET_MS).toISOString().split('T')[0];
+const TODAY = istKey(Date.now());
 
-test('only opted-in users appear, ranked by check-in count descending', async () => {
+test('only opted-in users appear, ranked by check-in count descending at equal scores', async () => {
   resetFakes();
   users = {
     1: { id: 1, name: 'Alice', profileImageUrl: 'a.jpg', leaderboardOptIn: true },
@@ -85,9 +106,12 @@ test('only opted-in users appear, ranked by check-in count descending', async ()
   assert.equal(result.entries.length, 2, 'Carol excluded for not opting in');
   assert.equal(result.entries[0].customerId, 1);
   assert.equal(result.entries[0].checkIns, 2);
+  assert.equal(result.entries[0].score, 0, 'no feed rows -> 0-attendance score');
   assert.equal(result.entries[0].rank, 1);
   assert.equal(result.entries[1].customerId, 2);
   assert.equal(result.entries[1].rank, 2);
+  assert.equal(result.me.score, 0);
+  assert.equal(result.windowDays, 90, 'all-time window is 90 score days');
 });
 
 test('a different gym\'s check-ins never leak into this gym\'s board', async () => {
@@ -199,4 +223,165 @@ test('auth-service unreachable -> fails safe with nobody ranked, opt-in unverifi
   assert.deepEqual(result.entries, []);
   assert.equal(result.me.rank, null);
   assert.equal(result.me.optedIn, false);
+});
+
+test('one booking check-in today scores 17 on the weekly board (trust x day-credit)', async () => {
+  resetFakes();
+  users = { 1: { id: 1, name: 'Alice', leaderboardOptIn: true } };
+  rows = [{ customerId: 1, gymId: GYM, date: TODAY }];
+  attendanceEvents = [{ userId: 1, gymId: GYM, attendedAt: new Date().toISOString(), source: 'booking' }];
+
+  const result = await getGymLeaderboard(GYM, 'weekly', 1);
+  // 70/4 x 0.9 (booking trust) = 15.75 attendance + 10/7 recent = 17.18 -> 17.
+  assert.equal(result.entries[0].score, 17);
+  assert.equal(result.entries[0].attendanceScore, 16);
+  assert.equal(result.entries[0].stepsScore, 0);
+  assert.equal(result.entries[0].recentScore, 1);
+  assert.equal(result.me.score, 17);
+  assert.equal(result.me.rank, 1);
+  assert.equal(result.me.ranks.attendance.rank, 1);
+  assert.equal(result.me.ranks.attendance.score, 16);
+  assert.equal(result.me.ranks.steps.rank, 1);
+  assert.equal(result.me.ranks.steps.score, 0);
+  assert.equal(result.me.ranks.recent.rank, 1);
+  assert.equal(result.me.ranks.recent.score, 1);
+});
+
+test('score is the primary sort: fewer visits but verified presence beat many unencoded check-ins', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true },
+    2: { id: 2, name: 'Bob', leaderboardOptIn: true },
+  };
+  // Bob checked in five times but has no score-feed rows; Alice once, with a
+  // high-trust partner QR check-in event.
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+  ];
+  attendanceEvents = [{ userId: 1, gymId: GYM, attendedAt: new Date().toISOString(), source: 'member_checkin' }];
+
+  const result = await getGymLeaderboard(GYM, 'weekly', 2);
+  assert.equal(result.entries[0].customerId, 1, 'Alice\'s verified presence ranks 1st over Bob\'s 5 check-ins');
+  assert.equal(result.entries[0].score, 19);
+  assert.equal(result.entries[1].customerId, 2);
+  assert.equal(result.entries[1].score, 0);
+  assert.equal(result.me.rank, 2);
+});
+
+test('per-criterion ranks are resolved within the same opted-in population', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true },
+    2: { id: 2, name: 'Bob', leaderboardOptIn: true },
+    3: { id: 3, name: 'Carol', leaderboardOptIn: true },
+  };
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 3, gymId: GYM, date: TODAY },
+  ];
+  // Alice: verified presence only. Bob: high steps, no presence event.
+  attendanceEvents = [{ userId: 1, gymId: GYM, attendedAt: new Date().toISOString(), source: 'member_checkin' }];
+  activityRows = Array.from({ length: 7 }, (_, i) => ({
+    userId: 2,
+    date: istKey(Date.now() - i * 86400000),
+    steps: 10000,
+  }));
+
+  const result = await getGymLeaderboard(GYM, 'weekly', 3);
+
+  // Composite: Bob's full steps bucket (20) leads, then Alice's verified
+  // presence (19), then Carol with nothing.
+  assert.equal(result.entries[0].customerId, 2);
+  assert.equal(result.entries[0].score, 20);
+  assert.equal(result.me.rank, 3, 'Carol ranks last on the composite');
+  // Attendance criterion: Alice #1, everyone else 0.
+  assert.equal(result.me.ranks.attendance.rank, 3);
+  assert.equal(result.me.ranks.attendance.score, 0);
+  assert.equal(result.entries.find((e) => e.customerId === 1).attendanceScore, 18);
+  // Steps criterion: Bob maxes it at 20, Carol still 0 but tied with Alice.
+  assert.equal(result.entries.find((e) => e.customerId === 2).stepsScore, 20);
+  assert.equal(result.entries.find((e) => e.customerId === 2).stepsScore, 20);
+  assert.equal(result.me.ranks.steps.score, 0);
+});
+
+test('a down score feed degrades to check-in-only rather than failing the board', async () => {
+  resetFakes();
+  feedFails = true;
+  users = { 1: { id: 1, name: 'Alice', leaderboardOptIn: true } };
+  rows = [{ customerId: 1, gymId: GYM, date: TODAY }];
+
+  const result = await getGymLeaderboard(GYM, 'weekly', 1);
+  assert.equal(result.entries.length, 1, 'board still renders with both feeds down');
+  assert.equal(result.entries[0].checkIns, 1);
+  assert.equal(result.entries[0].score, 0, 'no feed data -> zero composite');
+});
+
+test('others appear as initials only -- no full name or photo anywhere in the payload; own row keeps both', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Priya Sharma', profileImageUrl: 'priya.jpg', leaderboardOptIn: true },
+    2: { id: 2, name: 'Bob', profileImageUrl: 'bob.jpg', leaderboardOptIn: true },
+    3: { id: 3, name: null, profileImageUrl: 'x.jpg', leaderboardOptIn: true },
+    4: { id: 4, name: 'Carol Danvers', profileImageUrl: 'carol.jpg', leaderboardOptIn: false }, // opted out
+  };
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 3, gymId: GYM, date: TODAY },
+    { customerId: 4, gymId: GYM, date: TODAY },
+  ];
+
+  const result = await getGymLeaderboard(GYM, 'all', 2); // Bob is asking
+  const byId = Object.fromEntries(result.entries.map((e) => [e.customerId, e]));
+
+  assert.equal(byId[4], undefined, 'opt-out still honoured');
+  assert.equal(byId[1].displayName, 'P.S.');
+  assert.equal(byId[1].name, 'P.S.', 'legacy name field carries initials, never the full name');
+  assert.equal(byId[1].photoUrl, null);
+  assert.equal(byId[1].isMe, false);
+  assert.equal(byId[3].displayName, 'Member', 'no name -> Member');
+  assert.equal(byId[3].photoUrl, null);
+  assert.equal(byId[2].isMe, true);
+  assert.equal(byId[2].name, 'Bob');
+  assert.equal(byId[2].photoUrl, 'bob.jpg');
+
+  const json = JSON.stringify(result);
+  for (const leaked of ['Priya', 'Sharma', 'priya.jpg', 'x.jpg', 'Carol', 'carol.jpg']) {
+    assert.ok(!json.includes(leaked), `payload must not contain ${leaked}`);
+  }
+});
+
+test('ex-members keep their history but drop off the board', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true, linkedGymId: GYM },
+    2: { id: 2, name: 'Bob', leaderboardOptIn: true, linkedGymId: null }, // left the gym
+    3: { id: 3, name: 'Carol', leaderboardOptIn: true, linkedGymId: GYM + 1 }, // moved gyms
+  };
+  rows = [
+    { customerId: 1, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 2, gymId: GYM, date: TODAY },
+    { customerId: 3, gymId: GYM, date: TODAY },
+  ];
+  const result = await getGymLeaderboard(GYM, 'all', 1);
+  assert.deepEqual(result.entries.map((e) => e.customerId), [1]);
+});
+
+test('anyone can still read a board (gym detail shows it to browsers)', async () => {
+  resetFakes();
+  users = {
+    1: { id: 1, name: 'Alice', leaderboardOptIn: true, linkedGymId: GYM },
+    42: { id: 42, name: 'Stranger', leaderboardOptIn: true, linkedGymId: null },
+  };
+  rows = [{ customerId: 1, gymId: GYM, date: TODAY }];
+  const result = await getGymLeaderboard(GYM, 'all', 42);
+  assert.deepEqual(result.entries.map((e) => e.customerId), [1]);
 });

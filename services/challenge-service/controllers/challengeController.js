@@ -1,4 +1,6 @@
+import { loadChallengeAudience, loadChallengeAudienceCached } from '../services/challengeAudience.js';
 import * as coinLedgerService from '../services/coinLedgerService.js';
+import * as onboardingRewardService from '../services/onboardingRewardService.js';
 import * as erasureService from '../services/erasureService.js';
 import * as exportService from '../services/exportService.js';
 import * as streakService from '../services/streakService.js';
@@ -47,18 +49,76 @@ export const getMyCoinWallet = async (req, res) => {
   }
 };
 
+// Credits that were made but never celebrated in the app (a slow request, a
+// closed app). The app shows them once on its next launch.
+export const getUnrevealedRewards = async (req, res) => {
+  try {
+    res.json({ data: await coinLedgerService.getUnrevealedRewardsService(req.userId) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Marks credits as shown. Body {ids: [..]} marks those; no body marks all.
+export const revealRewards = async (req, res) => {
+  try {
+    const ids = req.body?.ids;
+    if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100 || !ids.every(Number.isInteger))) {
+      return res.status(400).json({ error: 'ids must be an array of up to 100 integers' });
+    }
+    res.json({ data: await coinLedgerService.markRewardsRevealedService(req.userId, { ids }) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const getCoinCatalog = async (req, res) => {
   try {
-    const items = await coinCatalogService.listActiveCatalogService();
+    // userId (not just "is authenticated") lets a gym_trial item come back
+    // with alreadyClaimedByUser correctly set for THIS user, not just the
+    // shared monthly count.
+    const items = await coinCatalogService.listActiveCatalogService(req.userId);
     res.json({ data: items });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 
+// The customer redemption route (H-16, D-06) — POST /coins/redeem. Unlike
+// getCoinCatalog above (read-only, safe to retry freely), this one spends a
+// scarce resource, so Idempotency-Key is required rather than optional; see
+// coinCatalogService.redeemCatalogItemByUserService for why.
+// Onboarding reward ladder - see onboardingRewardService for the rules.
+export const claimOnboardingReward = async (req, res) => {
+  try {
+    const result = await onboardingRewardService.claimOnboardingRewardService(req.userId, req.body?.step);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const redeemCoinCatalogItem = async (req, res) => {
+  try {
+    const { catalogItemKey } = req.body || {};
+    const idempotencyKey = req.headers['idempotency-key'];
+    if (!catalogItemKey) return res.status(400).json({ error: 'catalogItemKey is required' });
+    if (!idempotencyKey) return res.status(400).json({ error: 'Idempotency-Key header is required' });
+
+    const redemption = await coinCatalogService.redeemCatalogItemByUserService({
+      userId: req.userId,
+      catalogItemKey,
+      idempotencyKey,
+    });
+    res.json({ data: redemption });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code });
+  }
+};
+
 export const getChallenges = async (req, res) => {
   try {
-    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, ...parseLocation(req) });
+    const challenges = await challengeCatalogService.listActiveChallengesService({ userId: req.userId, audience: loadChallengeAudienceCached(req.userId), ...parseLocation(req) });
     res.json({ data: challenges });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -67,7 +127,7 @@ export const getChallenges = async (req, res) => {
 
 export const getChallengeDetail = async (req, res) => {
   try {
-    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, ...parseLocation(req) });
+    const detail = await challengeCatalogService.getChallengeDetailService(req.params.id, { userId: req.userId, audience: loadChallengeAudienceCached(req.userId), ...parseLocation(req) });
     res.json({ data: detail });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -76,7 +136,7 @@ export const getChallengeDetail = async (req, res) => {
 
 export const enrollInChallenge = async (req, res) => {
   try {
-    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id, parseLocation(req));
+    const enrollment = await challengeEnrollmentService.enrollService(req.userId, req.params.id, { ...parseLocation(req), audience: await loadChallengeAudience(req.userId) });
     res.status(201).json({ data: enrollment });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -135,6 +195,7 @@ export const getNearbySprouts = async (req, res) => {
     const spawns = await sproutSpawnService.getNearbySproutsService(req.params.id, {
       lat: Number.isNaN(lat) ? undefined : lat,
       lng: Number.isNaN(lng) ? undefined : lng,
+      userId: req.userId,
     });
     res.json({ data: spawns });
   } catch (err) {
@@ -302,10 +363,18 @@ export const updateCoinCatalogItemAdmin = async (req, res) => {
 // difference worth keeping visible.
 export const listAttendanceInternal = async (req, res) => {
   try {
+    // Defaults to a trailing window (hours) for the existing callers
+    // (health-service's fetchAttendance). booking-service's leaderboard
+    // score passes an explicit `from` (ISO date or datetime) so it can ask
+    // for up to a 90-day 'all' window without splitting it into 30-day
+    // chunks — a `from` overrides `hours`.
     const hours = Math.min(Math.max(parseInt(req.query?.hours ?? '48', 10) || 48, 1), 720);
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const from = req.query?.from
+      ? new Date(req.query.from)
+      : new Date(Date.now() - hours * 60 * 60 * 1000);
     const userId = req.query?.userId ? parseInt(req.query.userId, 10) : undefined;
-    const events = await streakService.listAttendanceSinceService(since, { userId });
+    const gymId = req.query?.gymId ? parseInt(req.query.gymId, 10) : undefined;
+    const events = await streakService.listAttendanceSinceService(from, { userId, gymId });
     res.json({ data: events });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -318,7 +387,15 @@ export const recordAttendanceEventInternal = async (req, res) => {
     if (!userId || !gymId || !attendedAt || !source || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, gymId, attendedAt, source and idempotencyKey are required' });
     }
-    if (!bookingId && !memberAttendanceId) {
+    // Independent (non-partner) check-ins carry NEITHER id: the customer
+    // tapped in at an unclaimed gym they happened to be at, so there is no
+    // booking and no attendance-SaaS member row to point at. booking-service
+    // identifies them by source 'independent_gym_geofence' with a caller-
+    // derived `independent-<id>` idempotencyKey (see its recordAttendanceEvent
+    // call right after IndependentCheckIn.create), so accept that source with
+    // both ids null. Every other source still needs one of the two ids.
+    const isIndependentCheckIn = source === 'independent_gym_geofence';
+    if (!bookingId && !memberAttendanceId && !isIndependentCheckIn) {
       return res.status(400).json({ error: 'One of bookingId or memberAttendanceId is required' });
     }
     let result = { alreadyRecorded: true };
@@ -346,6 +423,21 @@ export const closeWeekInternal = async (req, res) => {
       await pairedStreakService.advancePairedStreaksService(weekStart);
     }
     res.json({ data: results });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// auth-service: a user switched persona. Personal challenges need nothing
+// here — they re-read the persona whenever progress is credited (see
+// challengeCatalogService), so ones for the old persona simply stop moving.
+// The streak needs the switch week marked as grace.
+export const personaChangedInternal = async (req, res) => {
+  try {
+    const userId = Number(req.body?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'userId required' });
+    await streakService.applyPersonaSwitchGrace(userId);
+    res.status(204).end();
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -398,13 +490,29 @@ export const redeemCoinCatalogItemInternal = async (req, res) => {
 // Always 200 — "not verified" and "not credited" are normal outcomes, not
 // errors, so a caller that doesn't check the response body still behaves
 // correctly (it just never gets told it was rewarded).
+// booking-service reports every entrance and exit here. Not flag-gated: the
+// presence record must stay right even while coins are switched off, so that
+// turning them back on starts from the truth.
+export const recordPresenceInternal = async (req, res) => {
+  try {
+    const { userId, gymId, state, method, at, date } = req.body || {};
+    if (!userId || !gymId || !['in', 'out'].includes(state) || !method || !at || !date) {
+      return res.status(400).json({ error: 'userId, gymId, state (in|out), method, at and date are required' });
+    }
+    const { applyPresence } = await import('../services/gymPresenceService.js');
+    res.json({ data: await applyPresence({ userId, gymId, state, method, at, date }) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const creditWorkoutInternal = async (req, res) => {
   try {
-    const { userId, sessionId, description, idempotencyKey } = req.body || {};
+    const { userId, sessionId, description, idempotencyKey, routinePolicy } = req.body || {};
     if (!userId || !sessionId || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, sessionId and idempotencyKey are required' });
     }
-    const result = await workoutCreditService.verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey });
+    const result = await workoutCreditService.verifyAndCreditWorkout({ userId, sessionId, description, idempotencyKey, routinePolicy });
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

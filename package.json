@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "node tools/analytics/sync.mjs --check && node --experimental-test-module-mocks --test test/gateway.test.js test/exploreQueueDiagnosticSchema.test.js test/queueDiagnosticProvider.test.js test/analyticsTransport.test.js test/googleIdTokenPrewarm.test.js test/bigQueryAnalytics.test.js"
   },
   "dependencies": {
     "dotenv": "^16.5.0",
@@ -15,6 +16,7 @@
     "google-auth-library": "^10.9.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.0",
+    "sharp": "^0.35.5",
     "ua-parser-js": "^2.0.10"
   },
   "devDependencies": {

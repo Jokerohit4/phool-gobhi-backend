@@ -1,4 +1,5 @@
 import './bootstrap-secrets.js';
+import { analyticsMiddleware } from './utils/analyticsTransport.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { readFileSync } from 'fs';
@@ -7,12 +8,16 @@ import { dirname, join } from 'path';
 import express from 'express';
 import proxy from 'express-http-proxy';
 import jwt from 'jsonwebtoken';
+import { randomUUID, createHash } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { UAParser } from 'ua-parser-js';
 import { ingest } from './utils/analytics.js';
-import { withGoogleIdToken } from './utils/googleIdToken.js';
+import { QUEUE_DIAGNOSTIC_EVENTS, validQueueDiagnostic } from './utils/exploreQueueDiagnosticSchema.js';
+import { withGoogleIdToken, prewarmIdTokens } from './utils/googleIdToken.js';
+import { loaderFactsHandler } from './utils/loaderFacts.js';
 
-const app = express();
+export const app = express();
+app.use(analyticsMiddleware());
 
 // Single source of truth for valid event names (docs/analytics-events.json,
 // checked for drift by scripts/check-analytics-events.cjs). Only the
@@ -23,7 +28,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const analyticsEventsRegistry = JSON.parse(
   readFileSync(join(__dirname, 'docs', 'analytics-events.json'), 'utf8')
 );
-const CLIENT_EVENT_ALLOWLIST = new Set(
+export const CLIENT_EVENT_ALLOWLIST = new Set(
   Object.entries(analyticsEventsRegistry)
     .filter(([key, v]) => !key.startsWith('$') && v.source === 'client')
     .map(([key]) => key)
@@ -45,7 +50,8 @@ const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-serv
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|logout|forgot-password|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
+  { method: 'GET', pattern: /^\/api\/buddy\/public\/[A-Fa-f0-9]{12}$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/(signup|login|refresh-token|logout|send-otp|verify-otp|verify-firebase-token|google|pitch-access\/check|contact)$/ },
   { method: 'GET', pattern: /^\/api\/auth\/otp-config$/ },
   { method: 'GET', pattern: /^\/api\/auth\/app-config(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/auth\/launch-status(\?.*)?$/ },
@@ -68,14 +74,17 @@ const PUBLIC_ROUTES = [
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
   { method: 'GET', pattern: /^\/api\/bookings\/public\/attendance-stats(\?.*)?$/ },
+  // Content, not an API resource: served straight from the gateway so all
+  // clients (web BFFs + Flutter) read one canonical list.
+  { method: 'GET', pattern: /^\/content\/loader-facts$/ },
   { method: 'GET', pattern: /^\/health/ },
 ];
 
-function isPublicRoute(method, path) {
+export function isPublicRoute(method, path) {
   return PUBLIC_ROUTES.some(r => r.method === method && r.pattern.test(path));
 }
 
-function authMiddleware(req, res, next) {
+export function authMiddleware(req, res, next) {
   // Never let a client inject identity/internal headers — the gateway is the only
   // component allowed to set these, derived from a verified JWT.
   delete req.headers['x-user-id'];
@@ -85,7 +94,9 @@ function authMiddleware(req, res, next) {
 
   if (isPublicRoute(req.method, req.path)) return next();
   const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const exploreAuthFailure = () => res.status(401).json({ error: { code: 'AUTH_REQUIRED', messageKey: 'explore.error.auth_required', retryable: false, requestId: randomUUID() } });
+  const isExplore = req.path === '/api/auth/explore' || req.path.startsWith('/api/auth/explore/');
+  if (!token) return isExplore ? exploreAuthFailure() : res.status(401).json({ error: 'Unauthorized' });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.headers['x-user-id'] = String(payload.id);
@@ -96,6 +107,7 @@ function authMiddleware(req, res, next) {
     // An expired/invalid token is an authentication failure (401), not an
     // authorization failure (403). Returning 401 lets clients trigger their
     // refresh-token flow; 403 is reserved for authenticated-but-not-permitted.
+    if (isExplore) return exploreAuthFailure();
     const expired = err.name === 'TokenExpiredError';
     return res.status(401).json({
       error: expired ? 'Token expired' : 'Invalid token',
@@ -137,8 +149,14 @@ const eventsIngestLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many events' },
 });
+
+// Client replays are not dropped here. A client event_id is a stable id, and
+// the analytics sink de-duplicates on the eventId derived from it below, so a
+// replay is ingested with the same id and occurrence time and collapses
+// downstream. An in-process cache here dropped legitimate replays after a
+// restart-free window and its sweep timer kept the process (and tests) alive.
 const RATE_LIMITED_ROUTES = [
-  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact)$/, limiter: authAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact|refresh-token|google|verify-firebase-token)$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },
@@ -151,12 +169,17 @@ app.use((req, res, next) => {
 
 app.get('/health', (req, res) => res.json({ status: 'Gateway is healthy', timestamp: new Date().toISOString() }));
 
+// Public, offset/limit-sliced content for loading screens. Clients keep a
+// 10-in-use / 10-prefetched rolling buffer, so this must stay cheap and
+// cacheable — no auth, no DB, no per-request work beyond filtering.
+app.get('/content/loader-facts', loaderFactsHandler);
+
 // Client analytics ingestion. Public (anonymous pre-login events are valid) and
 // fire-and-forget — the client must never be blocked or fail on analytics. The
 // app sends its own distinct_id (anon id pre-login, userId after identify).
 // express.json is scoped to this route so it can't interfere with the proxied
 // request bodies below. Accepts a single event or { events: [...] }.
-app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
+export function eventsHandler(req, res) {
   try {
     // Parsed once per request (same header applies to every event in a
     // batch). This is a backstop, not the primary source: the apps already
@@ -176,14 +199,40 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
 
     const body = req.body || {};
     const list = Array.isArray(body.events) ? body.events : [body];
+    // Drops stay invisible to the caller (still 202) but are counted per reason
+    // and logged once per request, so a client that is silently rejected shows
+    // up in Cloud Run logs instead of as an unexplained gap in the warehouse.
+    const drops = Object.create(null);
+    const unregistered = new Set();
+    const drop = (reason) => { drops[reason] = (drops[reason] || 0) + 1; };
     for (const e of list) {
-      if (!e || typeof e.event !== 'string') continue;
+      if (!e || typeof e.event !== 'string') { drop('malformed'); continue; }
       // Silently drop anything not in the registry — never tell the caller
       // which names are valid, that just makes probing easier. Still 202.
-      if (!CLIENT_EVENT_ALLOWLIST.has(e.event)) continue;
+      if (!CLIENT_EVENT_ALLOWLIST.has(e.event)) {
+        drop('not_allowlisted');
+        if (unregistered.size < 5) unregistered.add(e.event.slice(0, 64));
+        continue;
+      }
       if (typeof e.distinct_id !== 'undefined' && (typeof e.distinct_id !== 'string' || e.distinct_id.length > 200)) continue;
       const properties = e.properties;
       if (properties != null && (typeof properties !== 'object' || Array.isArray(properties))) continue;
+      if (e.event_id !== undefined && typeof e.event_id !== 'string') { drop('event_id_not_string'); continue; }
+      const occurrence = typeof e.occurred_at === 'string' ? Date.parse(e.occurred_at) : NaN;
+      if (e.event_id !== undefined && !Number.isFinite(occurrence)) { drop('occurred_at_missing_or_invalid'); continue; }
+      if (e.event_id !== undefined && (occurrence > Date.now()+300000 || occurrence < Date.now()-7*86400000)) { drop('occurred_at_out_of_window'); continue; }
+      const eventId = e.event_id ? 'client:' + createHash('sha256').update(JSON.stringify([e.distinct_id,e.event,e.event_id])).digest('hex') : undefined;
+
+      if (QUEUE_DIAGNOSTIC_EVENTS.has(e.event)) {
+        // Separate default-off activation gate: schema registration is not
+        // approval of deployed retention/erasure or device acceptance.
+        if (process.env.EXPLORE_QUEUE_DIAGNOSTICS !== 'true' ||
+            typeof e.distinct_id !== 'string' || !e.distinct_id.trim() ||
+            !validQueueDiagnostic(e.event, properties)) continue;
+        // Preserve exactly the coarse seven fields. No IP/UA/device enrichment.
+        ingest({ event: e.event, distinctId: e.distinct_id, properties: { ...properties }, source: 'client', ...(eventId ? { eventId, timestamp: e.occurred_at } : {}) });
+        continue;
+      }
 
       const enriched = { ...(properties || {}) };
       if (userAgent && enriched.user_agent == null) enriched.user_agent = userAgent;
@@ -194,13 +243,25 @@ app.post('/api/events', express.json({ limit: '128kb' }), (req, res) => {
       }
       if (ip && enriched.ip == null) enriched.ip = ip;
 
-      ingest({ event: e.event, distinctId: e.distinct_id, properties: enriched, source: 'client' });
+      ingest({ event: e.event, distinctId: e.distinct_id, properties: enriched, source: 'client', ...(eventId ? { eventId, timestamp: e.occurred_at } : {}) });
+    }
+    if (Object.keys(drops).length) {
+      // Structured so Cloud Run indexes it as a WARNING with queryable fields.
+      console.warn(JSON.stringify({
+        severity: 'WARNING',
+        message: 'client_events_dropped',
+        received: list.length,
+        drops,
+        ...(unregistered.size ? { unregistered_events: [...unregistered] } : {}),
+      }));
     }
   } catch (_) {
     // swallow — analytics never fails the client
   }
   res.status(202).json({ ok: true });
-});
+}
+
+app.post('/api/events', express.json({ limit: '128kb' }), eventsHandler);
 
 // Each proxy call attaches a Google ID token scoped to that specific backend
 // service's URL (see utils/googleIdToken.js) — on Cloud Run this is what lets
@@ -248,11 +309,28 @@ app.use('/api/challenges', proxy(CHALLENGE_SERVICE_URL, {
 }));
 // Health & Activity (exercise records, routines, workout sessions, device
 // health sync): no public routes — same posture as /api/challenges and
-// /api/buddy, everything requires a verified JWT. Plain JSON only, no
-// raised limit needed.
+// /api/buddy, everything requires a verified JWT. Raised limit: this mount now
+// carries the workout-photo multipart upload (POST /sessions/:id/photo), which
+// must reach health-service's own multer cap rather than fail first in this
+// proxy's smaller default body buffer.
 app.use('/api/health', proxy(HEALTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(HEALTH_SERVICE_URL),
+  limit: '15mb',
 }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
-app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
+
+// Fail fast at boot if the gateway's own identity trust anchor is missing:
+// every proxied route verifies tokens against JWT_SECRET, and a gateway
+// without it would boot "fine" and then 500 on every single authenticated
+// request (or worse, accept nothing at all — jwt.verify throws on an
+// undefined secret). A clear startup error beats an opaque container crash.
+if (!process.env.JWT_SECRET) {
+  throw new Error('Gateway boot aborted: JWT_SECRET is not set (see .env.dev.example / SECRETS_JSON).');
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => console.log(`Gateway running on port ${PORT}`));
+  void prewarmIdTokens([AUTH_SERVICE_URL, WALLET_SERVICE_URL, GYM_SERVICE_URL, BOOKING_SERVICE_URL,
+    BUDDY_SERVICE_URL, CHALLENGE_SERVICE_URL, HEALTH_SERVICE_URL]);
+}

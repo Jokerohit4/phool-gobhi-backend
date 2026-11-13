@@ -1,0 +1,21 @@
+{
+  "project": "royal-dream-75131677",
+  "endpoint": "ep-dry-dawn-azk2yq66",
+  "state": "idle",
+  "suspendTimeoutSeconds": 0,
+  "operationalReferences": 0,
+  "effectiveSuspendTimeoutSeconds": 300,
+  "legacyAnalyticsReferences": 8,
+  "runtimeProvidersVerified": 16,
+  "preservedZeroTrafficDevValidationTags": [
+    {
+      "service": "auth-service-dev",
+      "tag": "partner-auth-validation",
+      "percent": 0
+    }
+  ],
+  "unchangedSourceSnapshotSeconds": 1378.450675,
+  "sourceDataRetained": true,
+  "devTransactionalComputeChanged": false,
+  "passed": true
+}

@@ -15,6 +15,7 @@ function fakeRes() {
 
 let findUniqueImpl = async () => null;
 let getUserInternal;
+let membership = { source: 'gym_qr', approvedAt: null };
 
 test('setup: mock @prisma/client once, import the controller once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -22,6 +23,7 @@ test('setup: mock @prisma/client once, import the controller once', async (t) =>
       PrismaClient: class {
         constructor() {
           this.user = { findUnique: (...args) => findUniqueImpl(...args) };
+          this.gymLink = { findFirst: async () => membership };
         }
       },
       Prisma: {},
@@ -60,6 +62,45 @@ test('getUserInternal returns linkedGymId: null for a user who is not linked to 
   assert.equal(res.body.linkedGymId, null);
 });
 
+test('getUserInternal carries the onboarding answers health-service reads', async () => {
+  // The coach context and comeback-nudge timing both read these; without them
+  // a home trainee gets gym advice and "late nights" means nothing.
+  findUniqueImpl = async ({ where: { id } }) => ({
+    id, name: 'Test User', phone: '9990001111', dateOfBirth: null, gender: null,
+    fitnessGoals: [], profileImageUrl: null, fcmToken: null, referredByUserId: null,
+    linkedGymId: null, currentlyWorksOut: false, trainingLocationPref: 'home',
+    appMode: 'gym_seeker', freeTimeWindow: 'evening',
+  });
+  const res = fakeRes();
+
+  await getUserInternal({ params: { id: '42' } }, res);
+
+  // false survives: "doesn't work out yet" is an answer, not "never asked".
+  assert.equal(res.body.currentlyWorksOut, false);
+  assert.equal(res.body.trainingLocationPref, 'home');
+  assert.equal(res.body.appMode, 'gym_seeker');
+  assert.equal(res.body.freeTimeWindow, 'evening');
+});
+
+test('getUserInternal includes the gender-change stamps buddy-service reads', async () => {
+  // buddy-service copies these into BuddyProfile so a gender changed to
+  // "female" can be kept out of women-only decks (W7).
+  const changedAt = new Date('2026-10-01T00:00:00.000Z');
+  findUniqueImpl = async ({ where: { id } }) => ({
+    id, name: 'Test User', phone: '9990001111', dateOfBirth: null, gender: 'female',
+    genderChangedAt: changedAt, genderChangedTo: 'female',
+    fitnessGoals: [], profileImageUrl: null, fcmToken: null, referredByUserId: null,
+    linkedGymId: null,
+  });
+  const res = fakeRes();
+
+  await getUserInternal({ params: { id: '42' } }, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.genderChangedAt, changedAt);
+  assert.equal(res.body.genderChangedTo, 'female');
+});
+
 test('getUserInternal returns 404 when the user does not exist', async () => {
   findUniqueImpl = async () => null;
   const req = { params: { id: '999' } };
@@ -80,4 +121,17 @@ test('getUserInternal returns 500 on an unexpected DB error', async () => {
 
   assert.equal(res.statusCode, 500);
   assert.equal(res.body.error, 'connection lost');
+});
+
+test('internal membership status requires approval even after a booked visit', async () => {
+  findUniqueImpl = async ({ where: { id } }) => ({ id, linkedGymId: 9 });
+  membership = { source: 'self', approvedAt: null, firstVerifiedCheckinAt: new Date() };
+  let res = fakeRes();
+  await getUserInternal({ params: { id: '42' } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.gymLinkStatus, 'pending');
+  membership = { source: 'self', approvedAt: new Date() };
+  res = fakeRes();
+  await getUserInternal({ params: { id: '42' } }, res);
+  assert.equal(res.body.gymLinkStatus, 'approved');
 });

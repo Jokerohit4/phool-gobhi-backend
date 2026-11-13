@@ -1,6 +1,10 @@
 import * as workoutSessionService from '../services/workoutSessionService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
-import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
+import { isAnyFeatureEnabled } from '../middleware/requireFeatureFlag.js';
+import { parseLimit, parseCursor } from '../utils/pagination.js';
+
+const SESSIONS_DEFAULT_LIMIT = 30;
+const SESSIONS_MAX_LIMIT = 100;
 
 export const startSession = async (req, res) => {
   try {
@@ -26,8 +30,10 @@ export const startSession = async (req, res) => {
 
 export const listSessions = async (req, res) => {
   try {
-    const sessions = await workoutSessionService.listSessionsService(req.userId);
-    res.json({ data: serializeDecimals(sessions) });
+    const limit = parseLimit(req.query?.limit, SESSIONS_DEFAULT_LIMIT, SESSIONS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await workoutSessionService.listSessionsPageService(req.userId, { limit, cursor });
+    res.json({ data: serializeDecimals(items), meta });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -86,6 +92,22 @@ export const addSetToExercise = async (req, res) => {
   }
 };
 
+export const uploadSessionPhoto = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    if (!Number.isInteger(sessionId)) return res.status(404).json({ error: 'Session not found' });
+    if (!req.file?.buffer?.length) return res.status(400).json({ error: 'photo is required', code: 'PHOTO_REQUIRED' });
+    const { data, reward } = await workoutSessionService.uploadSessionPhotoService(
+      sessionId,
+      req.userId,
+      { buffer: req.file.buffer, mimeType: req.file.mimetype },
+    );
+    res.json({ data: serializeDecimals(data), reward });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', ...(err.code ? { code: err.code } : {}) });
+  }
+};
+
 const WORKOUT_TYPES = ['strength', 'cardio', 'hiit', 'yoga_mobility', 'full_body', 'rest'];
 
 export const finishSession = async (req, res) => {
@@ -102,7 +124,10 @@ export const finishSession = async (req, res) => {
         return res.status(400).json({ error: 'rpe must be an integer between 1 and 10' });
       }
     }
-    const session = await workoutSessionService.finishSessionService(sessionId, req.userId, { type, rpe: parsedRpe });
+    // activeSeconds/pausedSeconds are telemetry: invalid values are ignored by
+    // the service rather than failing the finish.
+    const { activeSeconds, pausedSeconds } = req.body || {};
+    const session = await workoutSessionService.finishSessionService(sessionId, req.userId, { type, rpe: parsedRpe, activeSeconds, pausedSeconds });
     res.json({ data: serializeDecimals(session) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -113,18 +138,26 @@ export const finishSession = async (req, res) => {
 // notifyHealthService.recordAttendanceForWorkout there). Checks its own flag
 // rather than gating the whole route, same convention as challenge-service's
 // recordAttendanceEventInternal: booking-service can start calling this
-// immediately and it stays a harmless no-op until an admin turns
-// healthMetrics on.
+// immediately and it stays a harmless no-op until an admin turns workout
+// tracking on.
+//
+// This creates a draft WORKOUT SESSION, so it moved from `healthMetrics` to the
+// new `workoutTracking` flag on 2026-10-04. It keeps accepting either flag
+// during the rollout (isAnyFeatureEnabled) because booking-service fans this
+// out on every check-in from its own release schedule, which is independent of
+// the health-service deploy — flipping the check to the new flag alone would
+// have silently detached every check-in from the workout log until the backfill
+// landed.
 export const recordAttendanceForWorkoutInternal = async (req, res) => {
   try {
-    const { userId, bookingId, gymId, attendedAt, idempotencyKey } = req.body || {};
+    const { userId, bookingId, gymId, attendedAt, attendanceMethod, idempotencyKey } = req.body || {};
     if (!userId || !gymId || !attendedAt || !idempotencyKey) {
       return res.status(400).json({ error: 'userId, gymId, attendedAt and idempotencyKey are required' });
     }
-    if (!(await isFeatureEnabled('healthMetrics'))) {
+    if (!(await isAnyFeatureEnabled('workoutTracking', 'healthMetrics'))) {
       return res.json({ data: { attached: false } });
     }
-    const session = await workoutSessionService.getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt });
+    const session = await workoutSessionService.getOrCreateDraftForAttendanceService({ userId, bookingId, gymId, attendedAt, attendanceMethod });
     res.json({ data: { attached: true, sessionId: session.id } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

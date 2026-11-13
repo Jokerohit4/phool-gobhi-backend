@@ -1,11 +1,36 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
+import { hasMedicalRecordsConsentService } from './ledger/ledgerConsentService.js';
+import { currentNutritionTarget } from './ledger/currentTarget.js';
 
 // FR-16. One builder feeds both the JSON and CSV shapes — the BRD's "Robin
 // Hood rule" (Tech §8.3) is that an export and the on-screen numbers for the
 // same range must never disagree, which only holds if there's a single
 // implementation of "what happened in this range".
-export async function buildRangeSeriesService(userId, { from, to } = {}) {
+//
+// `include` (ABHA-FHIR-INTEGRATION.md §D.1) is opt-in and additive. With the
+// default `[]` the function makes exactly the two reads it always made and
+// returns exactly `{ sessions, biometrics }` with the same row shapes — the
+// FR-16 JSON/CSV download and buildFullExportService must not notice FHIR
+// exists. The FHIR serializer asks for more slices through the SAME builder
+// instead of querying tables itself: a second "what happened in this range"
+// query path is precisely how an export and the screen start to disagree.
+export const RANGE_INCLUDES = Object.freeze([
+  'provenance', 'exerciseRecords', 'dailyActivity', 'planCompletions',
+  'scoreSnapshots', 'foodDayTotals', 'cycleLogged',
+]);
+
+// `slim` is for callers that only need the session series (GET /stats): it skips
+// the biometric read (returned as []) and narrows the session include to the
+// fields the series maths reads. Ignored when `include` slices are requested,
+// and defaults off, so the export / FHIR callers see exactly what they always did.
+export async function buildRangeSeriesService(userId, { from, to } = {}, { include = [], slim = false } = {}) {
+  const lean = slim && include.length === 0;
+  const unknown = include.filter((k) => !RANGE_INCLUDES.includes(k));
+  if (unknown.length) {
+    // A typo'd slice name would silently produce an export missing a whole
+    // table, which reads as "the user had no data" — fail loudly instead.
+    throw Object.assign(new Error(`unknown include: ${unknown.join(', ')}`), { status: 400 });
+  }
   const dateFilter = from || to
     ? { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) }
     : undefined;
@@ -19,19 +44,21 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
       },
       include: {
         exercises: {
-          include: { exercise: { select: { name: true, muscleGroup: true } }, sets: true },
+          include: lean
+            ? { sets: { select: { completed: true, weightKg: true, reps: true } } }
+            : { exercise: { select: { name: true, muscleGroup: true } }, sets: true },
           orderBy: { order: 'asc' },
         },
       },
       orderBy: { startedAt: 'asc' },
     }),
-    prisma.biometricEntry.findMany({
+    lean ? [] : prisma.biometricEntry.findMany({
       where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
       orderBy: [{ localDate: 'asc' }, { metric: 'asc' }],
     }),
   ]);
 
-  return {
+  const base = {
     sessions: sessions.map((s) => {
       let volumeKg = 0;
       let completedSets = 0;
@@ -71,6 +98,203 @@ export async function buildRangeSeriesService(userId, { from, to } = {}) {
       source: b.source,
     })),
   };
+  if (include.length === 0) return base;
+  return withIncludes(userId, { from, to, dateFilter }, include, { base, sessions, biometrics });
+}
+
+// Day bounds in IST for tables that key on an instant rather than a
+// 'YYYY-MM-DD' localDate. The server already treats the platform timezone as "the
+// user's day" (biometricService/ledgerIntakeService), so a range means the
+// same calendar days here as it does for the localDate-keyed tables.
+function istDayBounds({ from, to }) {
+  if (!from && !to) return undefined;
+  return {
+    ...(from ? { gte: new Date(`${from}T00:00:00.000+05:30`) } : {}),
+    ...(to ? { lte: new Date(`${to}T23:59:59.999+05:30`) } : {}),
+  };
+}
+
+function isoDay(date) {
+  // @db.Date columns come back as UTC-midnight Dates; the calendar day is the
+  // UTC date part, never a local conversion (which would shift it a day west).
+  return date ? date.toISOString().slice(0, 10) : null;
+}
+
+// The opt-in slices. Each is a read of a table buildFullExportService already
+// exports, projected once here so every consumer of "this range" (today: the
+// FHIR bundle) sees identical numbers. Provenance travels with every row:
+// where the value came from (`source`) and when we were told (`recordedAt`),
+// because a day-precision localDate on its own says nothing about whether a
+// Tuesday was logged on Tuesday.
+async function withIncludes(userId, { from, to, dateFilter }, include, { base, sessions, biometrics }) {
+  const has = (k) => include.includes(k);
+  const instantFilter = istDayBounds({ from, to });
+  const [records, activity, completions, snapshots, foodLogs, cyclePhases] = await Promise.all([
+    has('exerciseRecords')
+      ? prisma.exerciseRecord.findMany({
+          where: { userId, ...(instantFilter ? { startedAt: instantFilter } : {}) },
+          orderBy: { startedAt: 'asc' },
+        })
+      : [],
+    has('dailyActivity')
+      ? prisma.dailyActivityMetric.findMany({
+          where: { userId, ...(dateFilter ? { date: dateFilter } : {}) },
+          orderBy: { date: 'asc' },
+        })
+      : [],
+    has('planCompletions')
+      ? prisma.planItemCompletion.findMany({
+          where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
+          // kind only, never the title: a doctor item's title is the name of a
+          // medicine or a test, and a completion row must not smuggle it out.
+          include: { planItem: { select: { kind: true } } },
+          orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [],
+    has('scoreSnapshots')
+      ? prisma.scoreDaySnapshot.findMany({
+          where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
+          orderBy: { localDate: 'asc' },
+        })
+      : [],
+    has('foodDayTotals')
+      ? prisma.foodLog.findMany({
+          where: { userId, ...(dateFilter ? { localDate: dateFilter } : {}) },
+          orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [],
+    has('cycleLogged')
+      ? prisma.cyclePhaseEntry.findMany({
+          // user_logged only. A prediction is our arithmetic, not something
+          // she told us, and must never leave the app looking like a fact.
+          where: {
+            userId,
+            source: 'user_logged',
+            ...(from || to
+              ? { startDate: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }
+              : {}),
+          },
+          orderBy: { startDate: 'asc' },
+        })
+      : [],
+  ]);
+
+  const out = { ...base };
+  if (has('provenance')) {
+    // Same rows, same order as base.sessions/base.biometrics - only a field is
+    // added, so JSON-vs-FHIR comparisons can zip them index for index.
+    out.sessions = base.sessions.map((row, i) => ({ ...row, recordedAt: sessions[i].endedAt }));
+    out.biometrics = base.biometrics.map((row, i) => ({ ...row, recordedAt: biometrics[i].createdAt }));
+  }
+  if (has('exerciseRecords')) {
+    out.exerciseRecords = records.map((r) => ({
+      recordId: r.id,
+      source: r.source,
+      type: r.type,
+      startedAt: r.startedAt,
+      endedAt: r.endedAt,
+      durationSeconds: r.durationSeconds,
+      caloriesBurned: r.caloriesBurned,
+      distanceMeters: r.distanceMeters == null ? null : Number(r.distanceMeters),
+      avgHeartRateBpm: r.avgHeartRateBpm,
+      recordedAt: r.createdAt,
+    }));
+  }
+  if (has('dailyActivity')) {
+    out.dailyActivity = activity.map((a) => ({
+      localDate: a.date,
+      steps: a.steps,
+      activeCalories: a.activeCalories,
+      distanceMeters: a.distanceMeters == null ? null : Number(a.distanceMeters),
+      restingHeartRateBpm: a.restingHeartRateBpm,
+      source: a.source,
+      recordedAt: a.syncedAt,
+    }));
+  }
+  if (has('planCompletions')) {
+    out.planCompletions = completions.map((c) => ({
+      localDate: c.localDate,
+      kind: c.planItem?.kind ?? null,
+      how: c.how,
+      points: c.points,
+      recordedAt: c.createdAt,
+    }));
+  }
+  if (has('scoreSnapshots')) {
+    // breakdown is deliberately not projected: its line labels are free text
+    // (plan titles, food names) and the point of this slice is the number.
+    out.scoreSnapshots = snapshots.map((s) => ({
+      localDate: s.localDate,
+      open: s.open,
+      high: s.high,
+      low: s.low,
+      close: s.close,
+      paused: s.paused,
+      rulesVersion: s.rulesVersion,
+      recordedAt: s.closedAt,
+    }));
+  }
+  if (has('foodDayTotals')) {
+    // Day totals, not individual meals: what a wellness record needs is "how
+    // much did I eat that day". Values are the snapshots taken at log time
+    // (nutritionService.computePortion), so a later catalogue edit can't
+    // rewrite history. They are app estimates, and the serializer says so.
+    const byDay = new Map();
+    for (const f of foodLogs) {
+      const day = byDay.get(f.localDate) || { localDate: f.localDate, kcal: 0, proteinG: 0, entries: 0, recordedAt: f.createdAt };
+      day.kcal += Number(f.nutrients?.kcal) || 0;
+      day.proteinG += Number(f.nutrients?.proteinG) || 0;
+      day.entries += 1;
+      if (f.createdAt > day.recordedAt) day.recordedAt = f.createdAt;
+      byDay.set(f.localDate, day);
+    }
+    out.foodDayTotals = [...byDay.values()].map((d) => ({
+      ...d,
+      kcal: Math.round(d.kcal),
+      proteinG: Math.round(d.proteinG * 10) / 10,
+    }));
+  }
+  if (has('cycleLogged')) {
+    out.cycleLogged = cyclePhases.map((e) => ({
+      startDate: isoDay(e.startDate),
+      endDate: isoDay(e.endDate),
+      phase: e.phase,
+      recordedAt: e.createdAt,
+    }));
+  }
+  return out;
+}
+
+// What a FHIR export leaves out, counted so the file can say so. Same spirit as
+// buildFullExportService's medicalRecords block: an export may be incomplete,
+// but never silently. Counts are account-wide, not ranged - "you have 2
+// conditions we never put in this file" is true whatever range was picked.
+export async function countFhirWithheldService(userId, { cycleIncluded = false, cycleReason } = {}) {
+  const [conditions, documents, cycle] = await Promise.all([
+    prisma.healthCondition.count({ where: { userId } }),
+    prisma.medicalDocument.count({ where: { userId } }),
+    cycleIncluded ? 0 : prisma.cyclePhaseEntry.count({ where: { userId, source: 'user_logged' } }),
+  ]);
+  const withheld = [
+    {
+      kind: 'HealthCondition',
+      count: conditions,
+      reason: 'conditions you told us about are kept in your own words and are never coded or emitted as a FHIR Condition; they are in your full data export',
+    },
+    {
+      kind: 'MedicalDocument',
+      count: documents,
+      reason: 'documents are not embedded in this file; download each one from the medical-documents screen',
+    },
+  ];
+  if (!cycleIncluded) {
+    withheld.push({
+      kind: 'CyclePhaseEntry',
+      count: cycle,
+      reason: cycleReason || 'cycle logs are included only when you choose them for this export',
+    });
+  }
+  return withheld;
 }
 
 // Minimal, dependency-free CSV writer. Quotes only when a value actually
@@ -120,21 +344,99 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, personalisation, weeklyGoal, templates, customExercises, records, activity, biometrics, feedback] =
+  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, cycleDayLogs, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent, moodCheckIns] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
+      prisma.ledgerConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
       prisma.weeklyGoal.findUnique({ where: { userId } }),
+      prisma.userActivePlan.findUnique({ where: { userId }, include: { plan: { select: { key: true, name: true } } } }),
       prisma.workoutTemplate.findMany({
         where: { userId },
         include: { exercises: { include: { exercise: { select: { name: true } } }, orderBy: { order: 'asc' } } },
         orderBy: { createdAt: 'asc' },
       }),
       prisma.exercise.findMany({ where: { createdByUserId: userId }, orderBy: { createdAt: 'asc' } }),
-      prisma.exerciseRecord.findMany({ where: { userId }, orderBy: { startedAt: 'asc' } }),
+      // include: runTrack — a GPS run's route/splits are personal data
+      // (run-tracker-spec.html §12) and must travel with the export the
+      // same as everything else here, not be a silent gap between what's
+      // shown on /export and what a deleted run actually removed.
+      prisma.exerciseRecord.findMany({ where: { userId }, include: { runTrack: true }, orderBy: { startedAt: 'asc' } }),
       prisma.dailyActivityMetric.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
       prisma.biometricEntry.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { metric: 'asc' }] }),
       prisma.suggestionFeedback.findMany({ where: { userId }, orderBy: { shownAt: 'asc' } }),
+      // The comment above this function is explicit that export and erasure
+      // must stay in step — we must not delete on request something we never
+      // showed on request. The assistant transcript is the clearest case of
+      // that: it is the most sensitive thing here and the thing a person is
+      // most likely to actually want a copy of.
+      prisma.assistantConsent.findUnique({ where: { userId } }),
+      prisma.assistantConversation.findMany({
+        where: { userId },
+        include: { messages: { orderBy: { createdAt: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.assistantMemory.findMany({ where: { userId }, orderBy: { updatedAt: 'asc' } }),
+      prisma.cycleTrackingProfile.findUnique({ where: { userId } }),
+      prisma.cyclePhaseEntry.findMany({ where: { userId }, orderBy: { startDate: 'asc' } }),
+      prisma.cycleDayLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+
+      // ---- Health ledger -------------------------------------------------
+      // Everything here is per-user health data, so all of it belongs in a
+      // data-portability export. The list mirrors deleteAllDataService, for the
+      // reason in the comment above this function: we must not delete on
+      // request something we never showed on request.
+      prisma.healthGoal.findUnique({ where: { userId } }),
+      currentNutritionTarget(prisma, userId),
+      // The user's own custom foods only. The seeded catalogue is ours, not
+      // theirs, and is not their data to take a copy of.
+      prisma.foodItem.findMany({ where: { createdByUserId: userId }, orderBy: { name: 'asc' } }),
+      prisma.foodLog.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { slot: 'asc' }] }),
+      prisma.savedMeal.findMany({
+        where: { userId },
+        include: { lines: { orderBy: { order: 'asc' } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.planItem.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }] }),
+      prisma.planItemCompletion.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }] }),
+      prisma.scoreDaySnapshot.findMany({ where: { userId }, orderBy: { localDate: 'asc' } }),
+      prisma.healthCondition.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.doctorAppointment.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.foodPhotoRequestLog.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      // Foods this person could not find, and what they typed instead. It is
+      // their data and it is erased with the account, so it is exported with it
+      // - the invariant this block is built on, that we never delete on request
+      // something we never showed on request.
+      prisma.foodRequest.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+
+      // Medical documents are the one slice NOT unconditionally exported: they
+      // sit behind a second, independent consent scope, and including them in a
+      // nutrition-consented export would hand out prescriptions to someone who
+      // never granted medical-records consent. See the medicalRecords block.
+      //
+      // Still fetched unconditionally, so the count can be reported. The rows
+      // are dropped from the output below when consent is absent - they are
+      // never written anywhere, and a fetch is not a disclosure.
+      prisma.medicalDocument.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      // The body-numbers consent record - that it was given, when, and under
+      // which wording. Erased with the account, so exported with it.
+      prisma.biometricConsent.findUnique({ where: { userId } }),
+      // Health profile (gamified onboarding v2). Every answer, including the
+      // substance ones: this is the person's OWN copy (DPDP s.11), and those
+      // answers are excluded from every other outward path, not from this.
+      prisma.healthProfile.findUnique({ where: { userId } }),
+      prisma.medicationReminder.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
+      prisma.healthProfileConsent.findUnique({ where: { userId } }),
+
+      // Coach journey (Gobhi the Coach, 2026-10): water logs, supplement
+      // schedules and logs, journey progress, and coach consent. Erased with
+      // the account in consentService.js, so exported with it.
+      prisma.waterLog.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }] }),
+      prisma.supplementSchedule.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.supplementLog.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { takenAt: 'asc' }] }),
+      prisma.journeyProgress.findUnique({ where: { userId } }),
+      prisma.coachConsent.findUnique({ where: { userId } }),
+      prisma.wellnessMoodCheckIn.findMany({ where: { userId }, orderBy: [{ localDate: 'asc' }, { createdAt: 'asc' }] }),
     ]);
 
   // Reuses the range builder with no range, so the session shape in a
@@ -143,18 +445,274 @@ export async function buildFullExportService(userId) {
   // formats.
   const { sessions } = await buildRangeSeriesService(userId);
 
+  // Read once. Two calls would be two chances for the answer to differ, and a
+  // consent check that flips mid-function could put document titles in an
+  // export that the surrounding branch said it was withholding.
+  const hasMedicalConsent = await hasMedicalRecordsConsentService(userId);
+
   return {
+    // ---- Health ledger -------------------------------------------------
+    ledger: {
+      // The goal, its constraints, and the targets derived from them. Decimals
+      // are converted to numbers because Prisma hands them back as strings and
+      // an export full of "1820" instead of 1820 is a file the recipient has to
+      // clean up before reading.
+      goal: healthGoal
+        ? {
+            // The whole set, in the user's order. A GDPR export that carried one
+            // of a user's goals would be both incomplete and misleading about what
+            // their targets were derived from.
+            goals: healthGoal.goals ?? [],
+            sex: healthGoal.sex,
+            age: healthGoal.age,
+            heightCm: healthGoal.heightCm,
+            startDate: healthGoal.startDate,
+            targetWeightKg: healthGoal.targetWeightKg === null ? null : Number(healthGoal.targetWeightKg),
+            targetDate: healthGoal.targetDate,
+            activity: healthGoal.activity,
+            diet: healthGoal.diet,
+            allergies: healthGoal.allergies,
+            // Whether the activity level is something we measured or something
+            // the user told us. It changes the calorie target, so a person
+            // disputing the target needs to see it.
+            activityIsMeasured: healthGoal.activityIsMeasured,
+            calmMode: healthGoal.calmMode,
+          }
+        : null,
+      targets: nutritionTarget
+        ? {
+            kcal: Number(nutritionTarget.kcal),
+            proteinG: Number(nutritionTarget.proteinG),
+            carbsG: Number(nutritionTarget.carbsG),
+            fatG: Number(nutritionTarget.fatG),
+            fibreG: Number(nutritionTarget.fibreG),
+            waterMl: Number(nutritionTarget.waterMl),
+            // `source` distinguishes a formula target from one the user typed.
+            // Without it, "1820 kcal" looks like a recommendation rather than a
+            // number this app computed.
+            source: nutritionTarget.source,
+            rulesVersion: nutritionTarget.rulesVersion,
+            // The input snapshot the target was computed from. Exported because
+            // it is the only way to tell whether a target is still right: a
+            // number derived from a 70 kg weight and one derived from 78 kg are
+            // the same kcal but a different claim, and the user is the only
+            // party who can see that the input changed.
+            inputs: nutritionTarget.inputs,
+            updatedAt: nutritionTarget.updatedAt,
+          }
+        : null,
+      // The numbers as they were eaten, including the snapshot. The snapshot is
+      // the record of what this app told them at the time; re-deriving it from
+      // the food catalogue today would show different values and quietly
+      // misrepresent their own history.
+      foodLogs: foodLogs.map((f) => ({
+        localDate: f.localDate,
+        slot: f.slot,
+        name: f.name,
+        nonVeg: f.nonVeg,
+        grams: f.grams === null ? null : Number(f.grams),
+        servings: f.servings === null ? null : Number(f.servings),
+        servingLabel: f.servingLabel,
+        nutrients: f.nutrients,
+        source: f.source,
+        photoCorrections: f.photoCorrections,
+        loggedAt: f.createdAt,
+      })),
+      // A count only, never names or labels. The catalogue is platform data;
+      // the user needs to know their own foods travelled with them, not a copy
+      // of our table.
+      customFoods: customFoods.map((f) => ({ name: f.name, basis: f.basis })),
+      savedMeals: savedMeals.map((m) => ({
+        name: m.name,
+        slot: m.slot,
+        createdAt: m.createdAt,
+        lines: m.lines.map((l) => ({
+          name: l.name, nonVeg: l.nonVeg, grams: Number(l.grams), servingLabel: l.servingLabel, nutrients: l.nutrients,
+        })),
+      })),
+      // `origin` and `prescribedBy` are exported deliberately. A plan is built
+      // partly out of things a doctor told the user, and a copy of that plan
+      // that dropped the doctor's name would be misleading - especially for
+      // someone taking it to another doctor.
+      planItems: planItems.map((p) => ({
+        title: p.title,
+        kind: p.kind,
+        schedule: p.schedule,
+        endsOn: p.endsOn,
+        origin: p.origin,
+        prescribedBy: p.prescribedBy,
+        prescribedNote: p.prescribedNote,
+        active: p.active,
+        // The generator's stable identity for a suggested row. A re-import
+        // (or a support conversation about "which plan line is this") needs
+        // it to survive a rebuild replacing the row.
+        sourceRef: p.sourceRef,
+        createdAt: p.createdAt,
+      })),
+      planCompletions: planCompletions.map((c) => ({
+        planItemId: c.planItemId,
+        localDate: c.localDate,
+        how: c.how,
+        points: c.points,
+        completedAt: c.createdAt,
+      })),
+      // The frozen daily scores, with the rules version each was computed
+      // under. Without rulesVersion a score is unexplainable later, when the
+      // scoring rules have changed.
+      scoreSnapshots: snapshots.map((s) => ({
+        localDate: s.localDate,
+        open: s.open,
+        high: s.high,
+        low: s.low,
+        close: s.close,
+        breakdown: s.breakdown,
+        rulesVersion: s.rulesVersion,
+        closedAt: s.closedAt,
+      })),
+      // `source` rides along so a condition the user typed is never confused
+      // with one the app inferred, and so a future reader can tell which
+      // statements here are self-reported.
+      conditions: conditions.map((c) => ({
+        label: c.label, source: c.source, createdAt: c.createdAt,
+      })),
+      appointments: appointments.map((a) => ({
+        doctorName: a.doctorName,
+        speciality: a.speciality,
+        localDate: a.localDate,
+        localTime: a.localTime,
+        followUpDate: a.followUpDate,
+        notes: a.notes,
+        createdAt: a.createdAt,
+      })),
+      // Per-user photo upload attempts. The row records that a request was made
+      // and nothing else - no image is retained, which is the whole reason this
+      // table is so thin and is worth showing in an export so the absence is
+      // explicable rather than looking like a gap.
+      photoRequests: photoLogs.map((p) => ({ requestedAt: p.requestedAt })),
+      // The foods this person searched for and could not find. `status` and
+      // `requestCount` are included because a pending request with a count of
+      // 9 is a fact about the state of our catalogue that their own copy should
+      // carry - it is why their suggestion has not turned into a searchable food
+      // yet.
+      foodRequests: foodRequests.map((r) => ({
+        name: r.name,
+        status: r.status,
+        requestCount: r.requestCount,
+        createdAt: r.createdAt,
+      })),
+    },
+    // Medical documents, behind their own consent.
+    //
+    // These are the most sensitive rows this service holds, and they are the
+    // one place where an export is allowed to be incomplete: the nutrition
+    // scope and the medical-records scope are separate consents, and a person
+    // who granted only the first has not asked for their prescriptions to be
+    // handed to them in a download. The export says what it left out and why,
+    // rather than quietly omitting the section - a silent gap here reads as
+    // "we hold nothing else" and is the opposite of the truth.
+    medicalRecords: {
+      consentGranted: hasMedicalConsent,
+      // When consent is absent we say how many documents are being withheld, not
+      // nothing. A silently-missing section reads as "we hold no medical
+      // records", and someone asking for a copy of their data needs to be able
+      // to tell the difference between "there are none" and "you did not ask".
+      documentsWithheld: hasMedicalConsent ? 0 : medicalDocuments.length,
+      documents: hasMedicalConsent
+        ? medicalDocuments.map((d) => ({
+            title: d.title,
+            kind: d.kind,
+            docDate: d.docDate,
+            mimeType: d.mimeType,
+            sizeBytes: d.sizeBytes,
+            notes: d.notes,
+            uploadedAt: d.createdAt,
+            // storagePath is a capability, not data, and signed links expire in
+            // minutes - so the export names the document and says where to get
+            // it rather than embedding a path that will not resolve later.
+            retrieveVia: 'GET /api/health/ledger/medical-documents',
+          }))
+        : [],
+      note: hasMedicalConsent
+        ? 'storage paths and download links are never included in an export; fetch each document through the medical-documents endpoint while your consent is in force'
+        : 'medical documents are withheld: medical-records consent is not currently granted. Grant it and export again to include them, or request deletion instead.',
+    },
+    // Cycle tracking. Included for the same reason as everything else here:
+    // we must not delete on request what we never showed on request, and this
+    // is the data a person is most entitled to a copy of.
+    cycleTracking: cycleProfile
+      ? {
+          consentAt: cycleProfile.consentAt,
+          averageCycleLengthDays: cycleProfile.averageCycleLengthDays,
+          averagePeriodLengthDays: cycleProfile.averagePeriodLengthDays,
+          lastPeriodStartDate: cycleProfile.lastPeriodStartDate,
+          // `source` rides along so a prediction is never mistaken in the
+          // export for something she reported.
+          dayLogs: cycleDayLogs.map((d) => ({
+            date: d.date,
+            flow: d.flow,
+            symptoms: d.symptoms,
+          })),
+          phases: cyclePhases.map((e) => ({
+            startDate: e.startDate,
+            endDate: e.endDate,
+            phase: e.phase,
+            source: e.source,
+          })),
+        }
+      : null,
+    assistant: {
+      consent: assistantConsent
+        ? {
+            grantedAt: assistantConsent.grantedAt,
+            revokedAt: assistantConsent.revokedAt,
+            policyVersion: assistantConsent.policyVersion,
+          }
+        : null,
+      // Full transcripts, both sides. policyVersion/promptVersion ride along
+      // so the export shows not just what was said but under which posture —
+      // which is the point of recording them per message.
+      conversations: assistantConversations.map((c) => ({
+        startedAt: c.createdAt,
+        title: c.title,
+        messages: c.messages.map((m) => ({
+          at: m.createdAt,
+          role: m.role,
+          content: m.content,
+          policyVersion: m.policyVersion,
+          promptVersion: m.promptVersion,
+        })),
+      })),
+      remembered: assistantMemories.map((m) => ({
+        key: m.key,
+        value: m.value,
+        source: m.source,
+        updatedAt: m.updatedAt,
+      })),
+    },
     consent: consent
       ? { grantedAt: consent.grantedAt, revokedAt: consent.revokedAt, policyVersion: consent.policyVersion, platform: consent.platform }
+      : null,
+    ledgerConsent: ledgerConsent
+      ? {
+          grantedAt: ledgerConsent.grantedAt,
+          revokedAt: ledgerConsent.revokedAt,
+          scopes: ledgerConsent.scopes,
+          scopeVersions: ledgerConsent.scopeVersions,
+        }
       : null,
     personalisation: personalisation
       ? {
           heightCm: personalisation.heightCm,
+          setupWeightKg: personalisation.setupWeightKg === null ? null : Number(personalisation.setupWeightKg),
           experienceLevel: personalisation.experienceLevel,
           injuryZones: personalisation.injuryZones,
           energyPattern: personalisation.energyPattern,
           preferredRestDay: personalisation.preferredRestDay,
           programmingMode: personalisation.programmingMode,
+          // Home setup (onboarding audit P2): theirs, so exported like the rest.
+          homeEquipment: personalisation.homeEquipment ?? [],
+          trainingSpace: personalisation.trainingSpace ?? null,
+          homeSetupAt: personalisation.homeSetupAt ?? null,
           // Records THAT consent was given and under which policy version.
           // There is deliberately nothing here about what was disclosed to
           // arrive at the mode, because that was never transmitted.
@@ -168,12 +726,19 @@ export async function buildFullExportService(userId) {
     weeklyGoal: weeklyGoal
       ? { sessionsPerWeek: weeklyGoal.sessionsPerWeek, setByUser: weeklyGoal.setByUser, updatedAt: weeklyGoal.updatedAt }
       : null,
+    // Which multi-week plan the user has active, and since when — not the
+    // day-by-day derived position (that's a live computation, not a stored
+    // fact about them; getActivePlanService is the source for "what day is
+    // it", this is only the source for "which plan, since when").
+    activePlan: activePlan
+      ? { planKey: activePlan.plan.key, planName: activePlan.plan.name, startedOn: activePlan.startedOn, completedAt: activePlan.completedAt }
+      : null,
     sessions,
     routines: templates.map((t) => ({
       name: t.name,
       createdAt: t.createdAt,
       exercises: t.exercises.map((te) => ({
-        name: te.exercise?.name ?? null, targetSets: te.targetSets, targetReps: te.targetReps, restSeconds: te.restSeconds,
+        name: te.exercise?.name ?? null, targetSets: te.targetSets, targetReps: te.targetReps, targetDurationSeconds: te.targetDurationSeconds, restSeconds: te.restSeconds,
       })),
     })),
     customExercises: customExercises.map((e) => ({
@@ -192,6 +757,109 @@ export async function buildFullExportService(userId) {
     })),
     biometrics: biometrics.map((b) => ({
       localDate: b.localDate, metric: b.metric, value: Number(b.value), unit: b.unit, source: b.source,
+    })),
+    // Consent for the hand-typed numbers above, kept separate from the device
+    // `consent` block because they are separate grants. Numbers logged before
+    // this consent existed are still exported in full: withdrawing or never
+    // granting it stops new entries, never access to your own history.
+    biometricConsent: biometricConsent
+      ? {
+          grantedAt: biometricConsent.grantedAt,
+          revokedAt: biometricConsent.revokedAt,
+          policyVersion: biometricConsent.policyVersion,
+        }
+      : null,
+    healthProfile: healthProfile
+      ? {
+          allergyStatus: healthProfile.allergyStatus,
+          allergies: healthProfile.allergies,
+          weightDeclined: healthProfile.weightDeclined,
+          heightDeclined: healthProfile.heightDeclined,
+          drinking: healthProfile.drinking,
+          smoking: healthProfile.smoking,
+          greens: healthProfile.greens,
+          otherSubstances: healthProfile.otherSubstances,
+          broughtHere: healthProfile.broughtHere,
+          mealsPerDay: healthProfile.mealsPerDay,
+          followsDiet: healthProfile.followsDiet,
+          dietType: healthProfile.dietType,
+          whoCooks: healthProfile.whoCooks,
+          occupation: healthProfile.occupation,
+          workingHours: healthProfile.workingHours,
+          healthSpend: healthProfile.healthSpend,
+          wearsSpectacles: healthProfile.wearsSpectacles,
+          spectaclesType: healthProfile.spectaclesType,
+          hometown: healthProfile.hometown,
+          medicationsStatus: healthProfile.medicationsStatus,
+          coinKeys: healthProfile.coinKeys,
+          basicsAnsweredAt: healthProfile.basicsAnsweredAt,
+          createdAt: healthProfile.createdAt,
+          updatedAt: healthProfile.updatedAt,
+        }
+      : null,
+    medicationReminders: medicationReminders.map((m) => ({
+      name: m.name, times: m.times, active: m.active, createdAt: m.createdAt,
+    })),
+    healthProfileConsent: healthProfileConsent
+      ? {
+          grantedAt: healthProfileConsent.grantedAt,
+          revokedAt: healthProfileConsent.revokedAt,
+          policyVersion: healthProfileConsent.policyVersion,
+        }
+      : null,
+    // Coach journey (Gobhi the Coach, 2026-10): water logs, supplement
+    // schedules and logs, journey progress, and coach consent. Erased with
+    // the account in consentService.js, so exported with it.
+    waterLogs: waterLogs.map((w) => ({
+      localDate: w.localDate,
+      ml: w.ml,
+      createdAt: w.createdAt,
+    })),
+    supplementSchedules: supplementSchedules.map((s) => ({
+      name: s.name,
+      times: s.times,
+      active: s.active,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    })),
+    supplementLogs: supplementLogs.map((l) => ({
+      name: l.name,
+      scheduleId: l.scheduleId ?? null,
+      localDate: l.localDate,
+      takenAt: l.takenAt,
+    })),
+    journeyProgress: journeyProgress
+      ? {
+          startLevel: journeyProgress.startLevel,
+          startedAt: journeyProgress.startedAt,
+          unlocked: journeyProgress.unlocked,
+          foodEarlyAt: journeyProgress.foodEarlyAt ?? null,
+          easyStartUntil: journeyProgress.easyStartUntil ?? null,
+          quitReason: journeyProgress.quitReason ?? null,
+          lastShowedUpDate: journeyProgress.lastShowedUpDate ?? null,
+          createdAt: journeyProgress.createdAt,
+          updatedAt: journeyProgress.updatedAt,
+        }
+      : null,
+    coachConsent: coachConsent
+      ? {
+          scopes: coachConsent.scopes,
+          policyVersions: coachConsent.policyVersions,
+          grantedAt: coachConsent.grantedAt,
+          revokedAt: coachConsent.revokedAt ?? null,
+          updatedAt: coachConsent.updatedAt,
+        }
+      : null,
+    // User-authored wellbeing reflections are sensitive personal data. They
+    // are included in the account export and deleted alongside the account.
+    wellnessMoodCheckIns: moodCheckIns.map((entry) => ({
+      localDate: entry.localDate,
+      slot: entry.slot,
+      mood: entry.mood,
+      factors: entry.factors,
+      support: entry.support,
+      note: entry.note,
+      createdAt: entry.createdAt,
     })),
     // Included because it is per-user behavioural data we hold, even though
     // it exists only to be aggregated away - see retentionService bucket 1.

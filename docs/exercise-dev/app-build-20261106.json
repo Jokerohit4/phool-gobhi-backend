@@ -1,0 +1,14 @@
+{
+  "target": "dev",
+  "package": "in.phoolgobi.customer.dev",
+  "built": true,
+  "apkSha256": "3da1df06b5386a48bb7ee299abff3dbbf55346d2bfda1ce14123296017790084",
+  "features": [
+    "Actual tutorial language labelled on video cards"
+  ],
+  "focusedFlutterTestsPassed": 14,
+  "changedFileAnalysis": "No issues found",
+  "installStatus": "Not installed: no connected adb device during this build",
+  "lastPreviouslyInstalledBuild": "See app-install.json for the 5 November build",
+  "productionChanged": false
+}

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /*
- * CI-runnable port of the manual `.claude/commands/deploy.md` gym-service
- * guard: gymRoutes is mounted at app.use('/', gymRoutes), so its GET /:id
- * swallows /health if the health route is registered after the mount
- * (this broke Cloud Run healthchecks once already, fixed in commit
- * 3b3def4 — this script exists so a regression fails CI instead of
- * surfacing as a live healthcheck outage).
+ * CI-runnable port of the manual `.claude/commands/deploy.md` health-route
+ * guard: a service mounts its router at app.use('/', router), so a GET /:id
+ * (or /:userId) swallows /health if the health route is registered after
+ * the mount (this broke Cloud Run healthchecks once already for gym-service,
+ * fixed in commit 3b3def4 — this script exists so a regression fails CI
+ * instead of surfacing as a live healthcheck outage).
  *
- * Usage: node deploy/scripts/check-gym-health-route-order.cjs
+ * Usage: node deploy/scripts/check-gym-health-route-order.cjs [service-name]
+ *        (defaults to 'gym-service')
  * Exit: 0 = /health registered before the router mount (or file layout
  *       doesn't match the pattern this checks — see stderr), 1 = /health
  *       comes after the mount and would be swallowed.
@@ -15,7 +16,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const APP_FILE = path.join(__dirname, '..', '..', 'services', 'gym-service', 'app.js');
+const service = process.argv[2] || 'gym-service';
+const APP_FILE = path.join(__dirname, '..', '..', 'services', service, 'app.js');
 
 const HEALTH_RE = /app\.(?:get|all)\(\s*['"]\/health['"]/;
 const MOUNT_RE = /app\.use\(\s*['"]\/['"]\s*,/;
@@ -38,7 +40,7 @@ if (mountLine === -1) {
 
 if (mountLine < healthLine) {
   console.error(
-    `gym-service/app.js:${mountLine + 1} mounts the router BEFORE /health is registered at line ${healthLine + 1} — ` +
+    `${service}/app.js:${mountLine + 1} mounts the router BEFORE /health is registered at line ${healthLine + 1} — ` +
     `GET /:id will swallow /health and Cloud Run healthchecks will fail. Move the /health route above the app.use('/', ...) mount.`
   );
   process.exit(1);

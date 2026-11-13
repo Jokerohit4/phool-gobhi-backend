@@ -1,0 +1,25 @@
+-- Records which privacy-policy wording each ledger consent scope was granted
+-- under, per scope.
+--
+-- Why this is a new column rather than a wider HealthConsent.policyVersion:
+-- policyVersion already records the DEVICE-level grant, which people consented
+-- to before the ledger surfaces existed. The nutrition and medical-records
+-- prompts describe different data and were added later, so a single version
+-- cannot describe both. Without this, the scopes array proves a user agreed,
+-- and nothing about what they agreed to.
+--
+-- Deliberately NOT a foreign key or a second table. The version is a property
+-- of the grant, the grant is this row, and a Json map keeps "which wording
+-- applied to which scope" readable in one place. A separate table would only
+-- earn a join to answer the same question.
+--
+-- Default '{}' rather than NULL: every pre-existing row is a real grant whose
+-- version was simply never recorded, and an empty map says exactly that. A
+-- NULL would be ambiguous between "never granted" and "granted before this
+-- column existed", and the two need different answers when the policy is
+-- revised. Rows written before this migration keep the empty map, so
+-- isScopeStale() reports them as needing a fresh grant rather than silently
+-- treating them as current — the safe direction, since we cannot prove which
+-- wording they saw.
+ALTER TABLE "health"."HealthConsent"
+  ADD COLUMN IF NOT EXISTS "scopeVersions" JSONB NOT NULL DEFAULT '{}'::JSONB;

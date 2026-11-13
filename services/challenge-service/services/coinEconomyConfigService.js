@@ -1,5 +1,11 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
+import { createTtlCache } from '../utils/ttlCache.js';
+
+// Read-only DISPLAY cache (GET /coins/catalog scarcity numbers). 30s in-process,
+// single-flight, failures not cached, evicted by updateEconomyConfig below.
+// Anything that decides a coin amount, a cap check or a redemption must keep
+// calling the uncached loadEconomyConfig — never this.
+const economyConfigDisplayCache = createTtlCache(30_000);
 
 // Placeholder numbers from the planning docs (explicitly flagged "guess"
 // there too) — shipped as the default so the feature isn't empty on day
@@ -17,12 +23,38 @@ export const DEFAULT_ECONOMY_CONFIG = {
   // bare check-in: logging a full structured session is more signal than
   // just showing up.
   coinsPerVerifiedWorkout: 15,
+  // Gym trials (D-05/D-06, docs/../sprint2/PG-HUNT-001). Real money — the
+  // founder personally pays each gym its own session rate per redemption —
+  // so this is a monthly spending decision, not a coin number: 10/month at
+  // typical Rs 300-600 trials is ~Rs 3,000-6,000/month, recurring. Shared
+  // across every gym_trial catalog item (all tiers combined), not per item —
+  // see coinCatalogService.redeemCatalogItemByUserService.
+  gymTrialMonthlyCap: 10,
+  // One trial per user, EVER — also shared across tiers, so a single
+  // enthusiast can't claim the neighbourhood, mid-tier AND premium trial in
+  // one month. 1, not a boolean, so it's editable from the same admin
+  // surface as every other coin figure without a schema change.
+  gymTrialPerUserLimit: 1,
 };
 
 const MAX_COIN_AMOUNT = 100_000; // sanity ceiling, mirrors wallet-service's HARD_MAX_TOPUP_AMOUNT convention
 // A week has 7 days — more than 7 qualifying check-ins in one week is not a
 // meaningful requirement, so this doubles as the sane upper bound.
 const MAX_QUALIFYING_CHECKINS_PER_WEEK = 7;
+// These are unit counts, not coin amounts, so MAX_COIN_AMOUNT is the wrong
+// ceiling for them — 1000 gym trials in a month would already be a
+// different business than the one this cap was designed for, and a
+// per-user limit above 10 stops meaningfully limiting anything.
+const MAX_GYM_TRIAL_MONTHLY_CAP = 1_000;
+const MAX_GYM_TRIAL_PER_USER_LIMIT = 10;
+
+function validateBoundedInt(value, label, min, max) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw { status: 400, error: `${label} must be a whole number between ${min} and ${max}` };
+  }
+  return n;
+}
 
 export async function loadEconomyConfig() {
   const row = await prisma.coinEconomyConfig.findUnique({ where: { id: 1 } });
@@ -34,8 +66,14 @@ export async function loadEconomyConfig() {
     pairedStreakWeeklyBonus: row.pairedStreakWeeklyBonus,
     qualifyingCheckinsPerWeek: row.qualifyingCheckinsPerWeek,
     coinsPerVerifiedWorkout: row.coinsPerVerifiedWorkout,
+    gymTrialMonthlyCap: row.gymTrialMonthlyCap,
+    gymTrialPerUserLimit: row.gymTrialPerUserLimit,
     updatedAt: row.updatedAt,
   };
+}
+
+export function loadEconomyConfigCached() {
+  return economyConfigDisplayCache.get('economy', loadEconomyConfig);
 }
 
 function validateAmount(value, label) {
@@ -47,7 +85,16 @@ function validateAmount(value, label) {
 }
 
 export async function updateEconomyConfig(
-  { coinsPerCheckin, weeklyTargetBonus, milestones, pairedStreakWeeklyBonus, qualifyingCheckinsPerWeek, coinsPerVerifiedWorkout },
+  {
+    coinsPerCheckin,
+    weeklyTargetBonus,
+    milestones,
+    pairedStreakWeeklyBonus,
+    qualifyingCheckinsPerWeek,
+    coinsPerVerifiedWorkout,
+    gymTrialMonthlyCap,
+    gymTrialPerUserLimit,
+  },
   updatedBy
 ) {
   const coinsPerCheckinValue = validateAmount(coinsPerCheckin, 'coinsPerCheckin');
@@ -58,6 +105,13 @@ export async function updateEconomyConfig(
   if (!Number.isInteger(qualifyingCheckinsPerWeekValue) || qualifyingCheckinsPerWeekValue < 1 || qualifyingCheckinsPerWeekValue > MAX_QUALIFYING_CHECKINS_PER_WEEK) {
     throw { status: 400, error: `qualifyingCheckinsPerWeek must be a whole number between 1 and ${MAX_QUALIFYING_CHECKINS_PER_WEEK}` };
   }
+  // A cap of 0 is deliberately allowed (min 0, not 1) — it's the honest way
+  // to switch gym trials off entirely (e.g. the founder pausing the budget
+  // for a month) without deactivating every gym_trial catalog item one by
+  // one. A per-user limit of 0 would be nonsensical (nobody could ever
+  // redeem one), so that floor stays at 1.
+  const gymTrialMonthlyCapValue = validateBoundedInt(gymTrialMonthlyCap, 'gymTrialMonthlyCap', 0, MAX_GYM_TRIAL_MONTHLY_CAP);
+  const gymTrialPerUserLimitValue = validateBoundedInt(gymTrialPerUserLimit, 'gymTrialPerUserLimit', 1, MAX_GYM_TRIAL_PER_USER_LIMIT);
   if (typeof milestones !== 'object' || milestones === null || Array.isArray(milestones)) {
     throw { status: 400, error: 'milestones must be an object mapping week-number strings to coin amounts' };
   }
@@ -76,6 +130,8 @@ export async function updateEconomyConfig(
     pairedStreakWeeklyBonus: pairedStreakWeeklyBonusValue,
     qualifyingCheckinsPerWeek: qualifyingCheckinsPerWeekValue,
     coinsPerVerifiedWorkout: coinsPerVerifiedWorkoutValue,
+    gymTrialMonthlyCap: gymTrialMonthlyCapValue,
+    gymTrialPerUserLimit: gymTrialPerUserLimitValue,
     updatedBy,
   };
   const updated = await prisma.coinEconomyConfig.upsert({
@@ -83,6 +139,7 @@ export async function updateEconomyConfig(
     create: { id: 1, ...data },
     update: data,
   });
+  economyConfigDisplayCache.evict('economy');
   return {
     coinsPerCheckin: updated.coinsPerCheckin,
     weeklyTargetBonus: updated.weeklyTargetBonus,
@@ -90,6 +147,8 @@ export async function updateEconomyConfig(
     pairedStreakWeeklyBonus: updated.pairedStreakWeeklyBonus,
     qualifyingCheckinsPerWeek: updated.qualifyingCheckinsPerWeek,
     coinsPerVerifiedWorkout: updated.coinsPerVerifiedWorkout,
+    gymTrialMonthlyCap: updated.gymTrialMonthlyCap,
+    gymTrialPerUserLimit: updated.gymTrialPerUserLimit,
     updatedAt: updated.updatedAt,
   };
 }

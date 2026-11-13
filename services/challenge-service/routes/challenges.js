@@ -11,6 +11,15 @@ const router = Router();
 router.get('/streak/me', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyStreak);
 router.get('/coins/wallet', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getMyCoinWallet);
 router.get('/coins/catalog', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getCoinCatalog);
+router.get('/coins/unrevealed', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.getUnrevealedRewards);
+router.post('/coins/reveal', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.revealRewards);
+// The customer redemption path (H-16, D-06) — separate from the internal
+// /internal/coins/redemptions route below, which only wallet-service calls
+// as a step inside a purchase it controls end to end. This one is reachable
+// directly by a client and enforces the gym_trial monthly cap + per-user
+// limit inside its own transaction; see coinCatalogService for why.
+router.post('/coins/redeem', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.redeemCoinCatalogItem);
+router.post('/coins/onboarding-reward', requireAuth, requireFeatureFlag('streaksCoins'), ctrl.claimOnboardingReward);
 router.get('/', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallenges);
 router.get('/:id', requireAuth, requireFeatureFlag('challenges'), ctrl.getChallengeDetail);
 router.post('/:id/enroll', requireAuth, requireFeatureFlag('challenges'), ctrl.enrollInChallenge);
@@ -54,6 +63,8 @@ router.post('/internal/attendance-events', requireInternal, ctrl.recordAttendanc
 // Read side, for health-service's unlogged feed and log-nudge.
 router.get('/internal/attendance-events', requireInternal, ctrl.listAttendanceInternal);
 router.post('/internal/streak/close-week', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.closeWeekInternal);
+// auth-service's persona-switch fan-out (services/personaEvents.js there).
+router.post('/internal/persona-changed', requireInternal, ctrl.personaChangedInternal);
 router.post('/internal/coins/:userId/credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditCoinsInternal);
 router.post('/internal/coins/:userId/debit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.debitCoinsInternal);
 
@@ -62,6 +73,7 @@ router.post('/internal/coins/:userId/debit', requireInternal, requireFeatureFlag
 // section). Flag-gated like every other coin route: a harmless no-op until
 // streaksCoins is turned on.
 router.post('/internal/workout-credit', requireInternal, requireFeatureFlag('streaksCoins'), ctrl.creditWorkoutInternal);
+router.post('/internal/presence', requireInternal, ctrl.recordPresenceInternal);
 
 // Subscription-discount redemption (wallet-service calls these at purchase
 // time — see wallet-service's purchaseSubscriptionWithWallet).

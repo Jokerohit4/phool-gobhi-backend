@@ -1,0 +1,146 @@
+[
+  {
+    "sourceId": "0087",
+    "name": "barbell seated bradford rocky press",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0087-0dCyly0.gif",
+    "sha256": "2ce792d0d22ebe31fac89f2edf5d1dc3ceb6c61625671418641c963be98a3c05",
+    "framesSampled": [
+      0,
+      6,
+      12
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0125",
+    "name": "barbell wrist curl v. 2",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0125-6kSxYnw.gif",
+    "sha256": "050888f3a41dd5dcde5959dc46dcc1041225cfe12d3e385e8752f0a52d069959",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0026",
+    "name": "barbell bench squat",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0026-W9pFVv1.gif",
+    "sha256": "e996fa2d173b12eabb2b36c2a5c9e26ac1383dc52d8c04a7ef93e2c5fa16fbb4",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0082",
+    "name": "barbell reverse wrist curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0082-LsZkfU6.gif",
+    "sha256": "81eeea24e351374f3049104b680bb25fe5ecef7be4b3b0c2c4da3ec34820395f",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0369",
+    "name": "dumbbell over bench wrist curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0369-D1xYJAU.gif",
+    "sha256": "99604197ae5b78a4c01449b248d99cbb2e19e9cf65ad59e03877be2228a7dac2",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0385",
+    "name": "dumbbell reverse wrist curl",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0385-BLCvwr2.gif",
+    "sha256": "7e8c7a0a99c61c6b8c17551f377f761c7f11f0be990a1aabaa3388112b502996",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1576",
+    "name": "leg up hamstring stretch",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1576-sU5BrfP.gif",
+    "sha256": "803bad1c46a93ca8804fb19f3bfbb494f5c755941345793a6caa2e97ec1b01a0",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0288",
+    "name": "dumbbell around pullover",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0288-vi8EhoE.gif",
+    "sha256": "1de319dea2ec149a69bfe8dbc505e769593b3ffc10bc8b3e5fbbb00773e59b07",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0602",
+    "name": "lever seated reverse fly",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0602-myfUsKf.gif",
+    "sha256": "67982491ac142252217ee9157cef9c3ed558149157b7a07a99de2b94a2bef8cf",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "0601",
+    "name": "lever seated reverse fly (parallel grip)",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/0601-xiHiJcA.gif",
+    "sha256": "b74669c3ba2a63e92ec9e5182909c039351503185efbd007565b223e6efdca4c",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1748",
+    "name": "ez bar lying close grip triceps extension behind head",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1748-6CKUx7o.gif",
+    "sha256": "e1350d08d63dd4a4fd24b37e4d2dbecd0732acdbf8454da67a8239fc1d1dd9df",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  },
+  {
+    "sourceId": "1753",
+    "name": "three bench dip",
+    "sourceUrl": "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/1753-DQ0cqkT.gif",
+    "sha256": "d8031b9a86056d0c42eda96af128af18b612815052942647b0e011c88c4d8bba",
+    "framesSampled": [
+      0,
+      4,
+      8
+    ],
+    "attribution": "\u00a9 Gym visual \u2014 https://gymvisual.com/"
+  }
+]

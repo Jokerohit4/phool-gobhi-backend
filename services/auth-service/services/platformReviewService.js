@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // Attaches each review's customer name (and, for the admin view, phone) —
 // PlatformReview only stores customerId, and this lives in the same DB/

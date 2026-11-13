@@ -1,0 +1,18 @@
+{
+  "repository": "rthepen/workout-database",
+  "revision": "ee61c50da94b60fd94b4a8fd5aefcc0fcaae28f7",
+  "files": {
+    "workout-database.json": {
+      "sourceUrl": "https://raw.githubusercontent.com/rthepen/workout-database/ee61c50da94b60fd94b4a8fd5aefcc0fcaae28f7/dist/all_exercises.json",
+      "sha256": "b698953ecf41829a01870c106aebb73045498a3c08fdbc15cfda65ced046a5d6"
+    },
+    "workout-database-LICENSE": {
+      "sourceUrl": "https://raw.githubusercontent.com/rthepen/workout-database/ee61c50da94b60fd94b4a8fd5aefcc0fcaae28f7/LICENSE",
+      "sha256": "e3bb912420170c61dc4dc07115ac034f46f962ba5de21ba751b9809e82e83411"
+    },
+    "workout-database-README.md": {
+      "sourceUrl": "https://raw.githubusercontent.com/rthepen/workout-database/ee61c50da94b60fd94b4a8fd5aefcc0fcaae28f7/README.md",
+      "sha256": "1877c061d392dddc1f5dea8df9250bbcf7c9e78cd221a8b2e3baf27a75380acd"
+    }
+  }
+}

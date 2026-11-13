@@ -1,0 +1,33 @@
+{
+  "preparedTutorials": 816,
+  "remainingTutorials": 287,
+  "originalCatalogueCovered": 308,
+  "lastAppliedAt": "2026-11-06T12:20:08.411Z",
+  "lastAppliedMissing": {
+    "demoGif": 0,
+    "photo": 0,
+    "tutorial": 287,
+    "sourceInstructions": 0
+  },
+  "lastApiCheck": {
+    "checkedAt": "2026-11-06T12:20:15.463Z",
+    "missing": {
+      "demoGif": 0,
+      "photo": 0,
+      "tutorial": 287,
+      "sourceInstructions": 0
+    },
+    "http": {
+      "url": "https://health-service-dev-pwixdiy6va-el.a.run.app",
+      "libraryRows": 1103,
+      "detailsChecked": 1103,
+      "failures": []
+    }
+  },
+  "runtimeRevision": "health-service-dev-00196-luc",
+  "instructionProfiles": 80,
+  "sourceCorrections": 8,
+  "focusedTestsPassed": 17,
+  "productionChanged": false,
+  "taskStatus": "Remaining 287 tutorials still require reviewed existing trainer-led references; all GIFs/photos/English source guides filled on dev."
+}

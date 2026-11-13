@@ -1,0 +1,627 @@
+import { isoDayIST } from '../../utils/sessionDay.js';
+// Intake for the health ledger: the "About you" and "Your routine" steps from
+// the plan, and the thing that makes target setup possible at all.
+//
+// Until this existed there was no writer for HealthGoal anywhere in the service
+// except scoreService toggling calmMode. The plan documents a four-step wizard,
+// targetService.resolveInputs reports exactly which inputs are missing so a
+// screen can "ask only for what's missing", and none of it could be completed —
+// a user who had never set a goal was stuck on "no targets" with no route out.
+//
+// Three rules shape everything here:
+//
+//   1. Weight is NOT written to this table. It is a time series in
+//      BiometricEntry(metric='weight'), and the schema says why in detail: a
+//      second copy here would go stale the moment someone lost weight, and the
+//      target would then describe a body that no longer exists. So a weight
+//      given at intake is written as a BiometricEntry, and
+//      targetService.latestWeightKg reads it from there like any other reading.
+//      A user who has been stepping on a scale for a month does not have their
+//      history replaced by whatever they typed today.
+//
+//   2. Age, sex and height are snapshotted here and never re-synced, because
+//      they are inputs to a historical calculation. That is the HealthGoal
+//      schema's own stated contract and this service honours it rather than
+//      quietly refreshing them from the auth profile on every save.
+//
+//   3. A SAVE IS NOT FINISHED UNTIL THE NUTRITION TARGET EXISTS. HealthGoal is
+//      the input to the calculation, not its output, and every reader of
+//      "does this person have a plan?" — the score card, the ledger hub, plan
+//      generation — asks GET /ledger/targets, which only ever reads the
+//      NutritionTarget row. That row had exactly one writer
+//      (POST /ledger/targets/recompute) and no client ever called it, so a
+//      completed wizard still left the app on "Set up your plan". The
+//      recompute therefore happens here, inside the save, where the answers
+//      are fresh and the wizard's own "Saved. Your targets are up to date."
+//      is the claim being made good.
+
+import { validateLocalDate } from '../biometricService.js';
+import { SAFETY } from './constants.js';
+import { isWellnessProfile } from '../../utils/persona.js';
+import { latestWeightKg, recomputeTargets, MISSING_REASONS } from './targetService.js';
+import { rebuildPlan } from '../plan/rebuildPlan.js';
+import { refreshWorkoutSlotsForProfile } from './starterPlanService.js';
+
+/**
+ * The user's own calendar day, used only as a fallback when a caller omits one.
+ *
+ * Derived from the validated day rather than from a clock read at each call
+ * site, for the reason that matters here: a weight written "today" is a row with
+ * a date on it, and the day has to be the one the user is living in (IST), not
+ * the UTC day the server happens to be in. A caller that already knows the
+ * user's localDate should pass it — targetService works the same way and takes
+ * no default at all.
+ */
+function todayLocalDate() {
+  return isoDayIST(new Date());
+}
+
+export const GOAL_TYPES = [
+  'build_muscle',
+  'lose_fat',
+  'recomp',
+  'endurance',
+  'general_health',
+  'doctor_plan',
+];
+export const SEXES = ['male', 'female', 'other'];
+// How many goals one person may hold. Four is a generous ceiling — real people
+// list two or three — and it exists so the engine's SUM over goals cannot be
+// used to stack an unsafe deficit. See validate('goals').
+export const MAX_GOALS = 4;
+export const ACTIVITY_LEVELS = ['sedentary', 'light', 'moderate', 'very_active'];
+export const DIET_PATTERNS = ['veg', 'egg', 'non_veg', 'vegan', 'jain'];
+
+// Bounds chosen to reject a typo or a hostile value without refusing a real
+// body. The engine independently range-checks what it consumes, so these are the
+// outer gate, not the only one.
+export const HEIGHT_CM_RANGE = { min: 90, max: 250 };
+// Same floor as requireAdult and auth-service's MIN_AGE_YEARS.
+export const MIN_INTAKE_AGE = 18;
+
+/**
+ * Whole years between a date of birth and a calendar day (both read as UTC
+ * dates, so no timezone drift). Null for anything unparseable or out of the
+ * intake range — a prefill we can't trust is worse than asking.
+ */
+export function ageFromDob(dateOfBirth, localDate) {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  const day = new Date(`${localDate}T00:00:00Z`);
+  if (Number.isNaN(dob.getTime()) || Number.isNaN(day.getTime())) return null;
+  let age = day.getUTCFullYear() - dob.getUTCFullYear();
+  const beforeBirthday =
+    day.getUTCMonth() < dob.getUTCMonth() ||
+    (day.getUTCMonth() === dob.getUTCMonth() && day.getUTCDate() < dob.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age >= MIN_INTAKE_AGE && age <= 100 ? age : null;
+}
+export const WEIGHT_KG_RANGE = { min: 25, max: 400 };
+
+/** The plain-language goal labels the plan specifies for the picker. */
+const GOAL_LABELS = {
+  build_muscle: 'Build muscle',
+  lose_fat: 'Lose fat',
+  recomp: 'Recomposition',
+  endurance: 'Build endurance',
+  general_health: 'Feel better day to day',
+  doctor_plan: "Follow my doctor's plan",
+};
+
+// --- validation ---------------------------------------------------------------
+
+/**
+ * Validates one submitted field.
+ *
+ * Returns a human sentence rather than a code, because this string is shown to
+ * the person filling the form. A field left out is not an error — the plan asks
+ * only for what is missing, and a value already stored elsewhere (a weight from
+ * the scale, a height from an older profile) is pre-filled rather than demanded.
+ */
+function validate(field, value) {
+  if (value === undefined || value === null || value === '') return null;
+
+  switch (field) {
+    case 'goals': {
+      if (!Array.isArray(value)) {
+        return 'Send your goals as a list.';
+      }
+      // An empty list is "not answered" rather than an error. A multi-select
+      // sends its chip selection with every save, so a form sitting untouched on
+      // this step would otherwise make every weight edit unsavable. The
+      // "you must pick one" case is still covered: saveIntake refuses to create a
+      // row at all without one, so a first-run user cannot end up goalless.
+      if (value.length === 0) return null;
+      // Capped because the engine SUMS the calorie adjustment. Four fat-loss
+      // goals in a row is not four pieces of information, it is one intent typed
+      // four times, and an uncapped list is a way to buy a deficit the safe-pace
+      // rule would otherwise clamp.
+      if (value.length > MAX_GOALS) {
+        return `Pick up to ${MAX_GOALS}. They are combined, not added up twice.`;
+      }
+      const unknown = value.filter((g) => !GOAL_TYPES.includes(g));
+      if (unknown.length) {
+        return 'One of those is not a goal we know about.';
+      }
+      if (new Set(value).size !== value.length) {
+        return 'That is the same goal twice.';
+      }
+      return null;
+    }
+    // Kept so an older client that still sends `goal` as a single value keeps
+    // working. It is the one-goal case of a set, which is exactly what it is,
+    // and the wizard has shipped with a single-select for months.
+    case 'goal': {
+      if (!GOAL_TYPES.includes(value)) return 'Choose one of the listed goals.';
+      return null;
+    }
+    case 'sex': {
+      if (SEXES.includes(value)) return null;
+      return 'Choose male, female, or other.';
+    }
+    case 'activity': {
+      if (ACTIVITY_LEVELS.includes(value)) return null;
+      return 'Choose how active a normal day is.';
+    }
+    case 'diet': {
+      if (DIET_PATTERNS.includes(value)) return null;
+      return 'Choose one of the listed diets.';
+    }
+    case 'age': {
+      const age = Number(value);
+      // Health+ is 18+ (requireAdult gates every consent grant, and DPDP
+      // s.9(3) bars behavioural monitoring of children). The engine itself
+      // tolerates 13+ for its formula, but a typed age here is a second door
+      // into the ledger, so it must hold the same line as the consent gate —
+      // otherwise a 16 typed at intake quietly contradicts an 18+ DOB.
+      if (!Number.isInteger(age) || age < MIN_INTAKE_AGE || age > 100) {
+        return `Enter an age between ${MIN_INTAKE_AGE} and 100.`;
+      }
+      return null;
+    }
+    case 'heightCm': {
+      const cm = Number(value);
+      if (!Number.isFinite(cm) || cm < HEIGHT_CM_RANGE.min || cm > HEIGHT_CM_RANGE.max) {
+        return `Enter a height between ${HEIGHT_CM_RANGE.min} and ${HEIGHT_CM_RANGE.max} cm.`;
+      }
+      return null;
+    }
+    case 'weightKg': {
+      const kg = Number(value);
+      if (!Number.isFinite(kg) || kg < WEIGHT_KG_RANGE.min || kg > WEIGHT_KG_RANGE.max) {
+        return `Enter a weight between ${WEIGHT_KG_RANGE.min} and ${WEIGHT_KG_RANGE.max} kg.`;
+      }
+      return null;
+    }
+    case 'startDate': {
+      // A start date is today or later — it is a plan, not a measurement.
+      const err = validateLocalDate(value, { allowFuture: true });
+      return err ?? null;
+    }
+    case 'targetDate': {
+      // Allow future explicitly: "lose 4 kg by December" is the whole point of
+      // the field, and the default rule (a reading cannot be dated ahead of
+      // today) would reject every real answer.
+      const err = validateLocalDate(value, { allowFuture: true });
+      if (err) return err;
+      // But a target that has already passed is not a target, and the safe-pace
+      // check deliberately does nothing about it (it would otherwise return
+      // nonsense for a negative interval), so it is refused here where the user
+      // can be told what to fix.
+      if (value < todayLocalDate()) return 'Choose a date that has not passed yet.';
+      return null;
+    }
+    case 'allergies': {
+      if (Array.isArray(value)) {
+        const tooLong = value.filter((a) => typeof a === 'string' && a.length > 60);
+        if (tooLong.length) return 'Keep each food or allergen under 60 characters.';
+        if (value.length > 30) return 'That is a lot of allergens — keep the list to 30.';
+        return null;
+      }
+      return 'Send the allergen list as a list of names.';
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The goal set a save is asking for, or undefined when the save did not touch
+ * goals at all.
+ *
+ * undefined and [] are deliberately different. `undefined` means "this save is
+ * not about goals", which must leave an existing set alone; [] would be an
+ * instruction to erase it, and a form that submits its empty multi-select on
+ * every other field would wipe a user's goals on a weight change.
+ */
+function normaliseIntakeGoals(input) {
+  if (Array.isArray(input.goals)) {
+    // Order preserved, because it is the user's ranking and it breaks the
+    // protein tie (see targetEngine.proteinSourceFor). Not sorted, not deduped
+    // here — validate() has already refused duplicates and unknown values, and a
+    // silently-deduped list would write a different set than the user chose.
+    const set = input.goals.filter((g) => typeof g === 'string' && g);
+    // An empty array reads as "not answered", not as "replace my goals with
+    // nothing". A multi-select form submits its chip selection with every save,
+    // so treating [] as a real instruction would erase a user's goals every time
+    // they changed something else on the same screen. validate() still refuses a
+    // first save with no goal, so nothing here can create a goalless row.
+    return set.length ? set : undefined;
+  }
+  if (typeof input.goal === 'string' && input.goal) return [input.goal];
+  return undefined;
+}
+
+/** Collects every problem at once, so the form can mark all its fields. */
+export function validateIntake(input = {}) {
+  const errors = {};
+  for (const [field, value] of Object.entries(input)) {
+    if (field === 'targetWeightKg' || field === 'deleteExisting') continue;
+    const err = validate(field, value);
+    if (err) errors[field] = err;
+  }
+  return errors;
+}
+
+/**
+ * Checks a requested target weight and date against the safe-pace rule.
+ *
+ * The plan states the limit up front — "we'll never set a target faster than
+ * 0.75 kg/week" — and the engine enforces the equivalent on the calorie deficit
+ * it computes. This is the other half: a target weight and a deadline are a
+ * promise about pace, and "60 kg by next Tuesday" has to be refused as the
+ * impossible request it is rather than accepted and quietly missed.
+ *
+ * Returns a refusal with the earliest honest date, so the screen can offer
+ * something achievable instead of just saying no.
+ */
+export function checkTargetPace({ startWeightKg, targetWeightKg, targetDate, startDate }) {
+  if (
+    !Number.isFinite(startWeightKg) ||
+    !Number.isFinite(targetWeightKg) ||
+    !targetDate ||
+    !startDate
+  ) {
+    return { ok: true };
+  }
+
+  const days = daysBetween(startDate, targetDate);
+  if (days === null || days <= 0) {
+    return { ok: true };
+  }
+
+  // Gaining is a different question from losing and the deficit cap does not
+  // speak to it, so only a requested LOSS is pace-checked.
+  const toLose = startWeightKg - targetWeightKg;
+  if (toLose <= 0) return { ok: true };
+
+  const maxWeekly = Math.min(
+    SAFETY.maxWeeklyLossKg,
+    SAFETY.maxWeeklyLossFractionOfBodyWeight * startWeightKg,
+  );
+  const weeks = days / 7;
+  const requiredWeekly = toLose / weeks;
+
+  if (requiredWeekly <= maxWeekly) return { ok: true };
+
+  const weeksNeeded = Math.ceil(toLose / maxWeekly);
+  const earliestDate = addDays(startDate, weeksNeeded * 7);
+
+  return {
+    ok: false,
+    code: 'TARGET_TOO_AGGRESSIVE',
+    // The two bounds, named, because "0.75 kg/week" and "1% of your weight"
+    // are different numbers for different people and the tighter one is the
+    // one that applies.
+    maxWeeklyLossKg: Number(maxWeekly.toFixed(2)),
+    limitedBy:
+      maxWeekly === SAFETY.maxWeeklyLossKg
+        ? 'max_weekly_loss_0.75kg'
+        : 'max_weekly_loss_pct_body_weight',
+    requiredWeeklyLossKg: Number(requiredWeekly.toFixed(2)),
+    weeksNeeded,
+    earliestDate,
+    error:
+      `That is about ${requiredWeekly.toFixed(1)} kg a week, which is faster ` +
+      `than the ${maxWeekly.toFixed(2)} kg/week limit. The earliest date we can ` +
+      `honour is ${earliestDate}.`,
+  };
+}
+
+function daysBetween(from, to) {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+function addDays(date, delta) {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+// --- reads --------------------------------------------------------------------
+
+/**
+ * What the setup screen needs to render itself.
+ *
+ * Prefills from everything already known — the auth profile for age and sex, the
+ * legacy height column, the most recent weight reading — so the plan's promise
+ * that "only what's missing is asked" is kept by the server rather than left to
+ * the client to guess.
+ */
+export async function getSetupState({ prisma, userId, localDate, fetchProfile = null }) {
+  const day = localDate || todayLocalDate();
+  const [goal, profile, weightKg, authUser] = await Promise.all([
+    prisma.healthGoal.findUnique({ where: { userId } }),
+    prisma.personalisationProfile.findUnique({
+      where: { userId },
+      // Only height lives here. Age and sex live on the auth-service user —
+      // read below through the injected fetchProfile, never from this table
+      // (asking for columns it does not have would throw), and HealthGoal is
+      // the only place this service may cache them (snapshot note at the top).
+      select: { heightCm: true },
+    }),
+    latestWeightKg({ prisma, userId, localDate: day }),
+    // The auth profile, for PREFILL ONLY — the DOB the user gave at signup and
+    // their gender. Injected (the controller passes fetchUserProfileInternal)
+    // so this service stays testable without a network, and best-effort: a
+    // null here just means the screen asks, exactly as before.
+    fetchProfile ? fetchProfile(userId).catch(() => null) : Promise.resolve(null),
+  ]);
+  // Allergies told at signup (health profile, 2026-10-01) prefill the intake
+  // when the goal has none of its own — the "only what's missing is asked"
+  // promise again. Optional-chained because the profile table is newer than
+  // most callers' test doubles, and a prefill must never fail the screen.
+  const healthProfile = goal?.allergies?.length
+    ? null
+    : await prisma.healthProfile?.findUnique({ where: { userId }, select: { allergyStatus: true, allergies: true } })
+        .catch(() => null);
+  const profileAllergies = healthProfile?.allergyStatus === 'has' ? healthProfile.allergies || [] : [];
+
+  // Prefill is not a write. The HealthGoal snapshot contract (header, rule 2)
+  // still holds: nothing is copied into HealthGoal until the user confirms the
+  // form, so a later DOB/gender edit never rewrites a historical calculation.
+  // It only stops the wizard re-asking for an age the user already gave as a
+  // date of birth, which is what this function's doc comment always promised.
+  const prefillAge = goal?.age ?? ageFromDob(authUser?.dateOfBirth, day);
+  const prefillSex = goal?.sex ?? (SEXES.includes(authUser?.gender) ? authUser.gender : null);
+
+  // Reuse explicit onboarding goals only where their meaning is equivalent.
+  // Wellness status alone does not imply a nutrition goal or an activity band.
+  const onboardingGoals = {
+    weight_loss: 'lose_fat', muscle_gain: 'build_muscle',
+    general_fitness: 'general_health', sports_training: 'endurance',
+  };
+  const persona = authUser?.persona || (isWellnessProfile(authUser) ? 'wellness' : null);
+  const trainingGoals = ['build_muscle', 'recomp', 'endurance'];
+  const nonTraining = ['wellness', 'explorer'].includes(persona);
+  const goals = goal?.goals?.length ? goal.goals
+    : [...new Set((authUser?.fitnessGoals || []).map(g => onboardingGoals[g]).filter(g => g && (!nonTraining || !trainingGoals.includes(g))))].slice(0, MAX_GOALS);
+  const prefill = {
+    goals, primaryHint: goals[0] ?? null, weightKg,
+    heightCm: goal?.heightCm ?? profile?.heightCm ?? null,
+    age: prefillAge, sex: prefillSex, activity: goal?.activity ?? null,
+    diet: goal?.diet ?? null,
+    allergies: goal?.allergies?.length ? goal.allergies : profileAllergies,
+    targetWeightKg: goal?.targetWeightKg == null ? null : Number(goal.targetWeightKg),
+    targetDate: goal?.targetDate ?? null,
+  };
+  const values = { goals: goals.length ? goals : null, weight: weightKg,
+    height: prefill.heightCm, age: prefill.age, sex: prefill.sex, activity: prefill.activity };
+  const reportedMissing = Object.keys(values).filter(field => values[field] == null);
+  // Keep saved choices visible so changing account type never silently clears
+  // an existing goal. Wellness users are not offered new training goals.
+  const offeredGoals = GOAL_TYPES.filter(value => !nonTraining
+    || !trainingGoals.includes(value) || goals.includes(value));
+
+  return {
+    hasGoal: Boolean(goal?.goals?.length),
+    persona,
+    // The full set, in the user's own order. `goal` was a scalar until the
+    // intake stopped forcing a single choice; it is reported as an array
+    // because two goals is the normal case now, and a scalar here is what made
+    // the wizard render one chip row for what is really a set of choices.
+    goals,
+    prefill,
+    // Only unanswered fields become questions. Prefill remains read-only until
+    // the user confirms setup, preserving historical target snapshots.
+    missing: reportedMissing,
+    reasons: Object.fromEntries(reportedMissing.map((f) => [f, MISSING_REASONS[f]])),
+    options: {
+      goals: offeredGoals.map((value) => ({ value, label: GOAL_LABELS[value] })),
+      sexes: SEXES,
+      activities: ACTIVITY_LEVELS,
+      diets: DIET_PATTERNS,
+    },
+    limits: {
+      // Sent so the screen can state the rule before the user picks a date,
+      // exactly as the plan's copy does, instead of refusing them afterwards.
+      maxWeeklyLossKg: SAFETY.maxWeeklyLossKg,
+      maxWeeklyLossPct: SAFETY.maxWeeklyLossFractionOfBodyWeight,
+    },
+  };
+}
+
+// --- writes -------------------------------------------------------------------
+
+/**
+ * Creates or updates the intake record.
+ *
+ * `goal` is required to create the row, because the schema requires it, but
+ * everything else is optional: a user who wants to log food without answering
+ * an activity question still gets a target, and the engine simply waits on the
+ * fields it genuinely cannot do without.
+ */
+export async function saveIntake({ prisma, userId, input = {}, localDate }) {
+  const day = localDate || todayLocalDate();
+  const errors = validateIntake(input);
+  if (Object.keys(errors).length) {
+    return { written: false, skipped: 'invalid', errors };
+  }
+
+  const existing = await prisma.healthGoal.findUnique({ where: { userId } });
+  // Accepts either shape: the set, or a single goal from a client that has not
+  // shipped the multi-select yet. `goals` wins when both are present, because a
+  // client that knows about sets has already told us the full answer and a
+  // leftover `goal` from its own form state is not more authoritative.
+  const incomingGoals = normaliseIntakeGoals(input);
+  if (!existing && !incomingGoals) {
+    // No row can be created without a goal, and inventing one would be the
+    // service picking a clinical objective on the user's behalf.
+    return {
+      written: false,
+      skipped: 'invalid',
+      errors: { goals: 'Choose what you are working towards.' },
+    };
+  }
+
+  const startDate = input.startDate ?? existing?.startDate ?? day;
+
+  // --- decide everything before writing anything ---------------------------
+  //
+  // The order here is load-bearing, and it was wrong in the first draft: the
+  // weight was written first and the safe-pace check ran afterwards. A refused
+  // save then left a weight reading behind with no goal to explain it, so
+  // targetService would pick the user up as "has a weight, has no goal" and the
+  // wizard would ask them to redo a step they had already answered. Both
+  // refusals now happen before the first write.
+
+  const currentWeightKg = await latestWeightKg({ prisma, userId, localDate: day });
+  const weightKg = input.weightKg != null ? Number(input.weightKg) : currentWeightKg;
+
+  const targetWeightKg =
+    input.targetWeightKg === undefined
+      ? undefined
+      : input.targetWeightKg === null
+        ? null
+        : Number(input.targetWeightKg);
+  const targetDate =
+    input.targetDate === undefined ? undefined : input.targetDate || null;
+
+  if (targetWeightKg != null) {
+    if (
+      !Number.isFinite(targetWeightKg) ||
+      targetWeightKg < WEIGHT_KG_RANGE.min ||
+      targetWeightKg > WEIGHT_KG_RANGE.max
+    ) {
+      return {
+        written: false,
+        skipped: 'invalid',
+        errors: {
+          targetWeightKg: `Enter a target weight between ${WEIGHT_KG_RANGE.min} and ${WEIGHT_KG_RANGE.max} kg.`,
+        },
+      };
+    }
+
+    const pace = checkTargetPace({
+      startWeightKg: weightKg,
+      targetWeightKg,
+      targetDate,
+      startDate,
+    });
+    if (!pace.ok) {
+      // Refused, and nothing is written. Accepting the pair and letting the
+      // engine quietly produce a slower number than the user asked for would
+      // leave them chasing a date the app had already decided was impossible.
+      return { written: false, skipped: 'target_too_aggressive', pace };
+    }
+  }
+
+  // --- the weight goes to the time series, not here -------------------------
+  let weightWritten = false;
+  if (input.weightKg != null) {
+    const todayReading = await prisma.biometricEntry.findUnique({
+      where: {
+        userId_metric_localDate: { userId, metric: 'weight', localDate: day },
+      },
+      select: { id: true },
+    });
+
+    if (todayReading) {
+      // Same day, so this is a correction of today's figure. Overwriting is
+      // correct: a mis-keyed 70.4 kg read as 104 kg would otherwise poison every
+      // later average.
+      await prisma.biometricEntry.update({
+        where: { id: todayReading.id },
+        data: { value: input.weightKg, unit: 'kg', source: 'manual' },
+      });
+    } else {
+      await prisma.biometricEntry.create({
+        data: {
+          userId,
+          metric: 'weight',
+          value: input.weightKg,
+          unit: 'kg',
+          source: 'manual',
+          localDate: day,
+        },
+      });
+    }
+    weightWritten = true;
+  }
+
+  // Only the fields actually supplied are written. An intake screen that
+  // pre-fills from the auth profile would otherwise send every field on every
+  // save, and a null for a field the user never touched would erase a value
+  // they set earlier.
+  const data = {};
+  const set = (key, value) => {
+    if (input[key] !== undefined) data[key] = value;
+  };
+
+  // Only when the save is actually about goals. `incomingGoals` being undefined
+  // covers both "this save said nothing about goals" and "this save sent an empty
+  // set" (see normaliseIntakeGoals), and neither may write the column — an
+  // explicit `data.goals = undefined` would still land as a key in the update
+  // payload, which on a partial save is the difference between "leave it alone"
+  // and "set it to nothing".
+  if (incomingGoals) data.goals = incomingGoals;
+  set('sex', input.sex ?? null);
+  set('age', input.age == null ? null : Number(input.age));
+  set('heightCm', input.heightCm == null ? null : Math.round(Number(input.heightCm)));
+  set('activity', input.activity ?? null);
+  set('diet', input.diet ?? null);
+  set('allergies', Array.isArray(input.allergies) ? input.allergies : undefined);
+  set('startDate', input.startDate ?? startDate);
+  set('targetWeightKg', targetWeightKg ?? null);
+  set('targetDate', targetDate ?? null);
+
+  const goal = existing
+    ? await prisma.healthGoal.update({ where: { userId }, data })
+    : await prisma.healthGoal.create({ data: { userId, startDate, ...data } });
+
+  // The half of setup the wizard's last screen claims to have done (rule 3 in
+  // the header). Deliberately a recompute and not a hand-built row: it refuses
+  // to clobber a target the user set by hand, it writes nothing when an input
+  // is still missing rather than half a formula, and it takes the weight from
+  // the time series written above instead of from the answer just sent.
+  //
+  // Errors are allowed to propagate. A save that wrote the goal and then
+  // failed here is retryable — the goal write is an update on the second pass —
+  // whereas swallowing it would return 200 and let the wizard announce targets
+  // that do not exist, which is the exact bug this replaced.
+  const target = await recomputeTargets({ prisma, userId, localDate: day });
+
+  // Goal changes also reshape workout recommendations. If a starter workout
+  // schedule exists, refreshWorkoutSlotsForProfile performs the shared plan
+  // rebuild; otherwise rebuild the nutrition and habit rows directly.
+  const workoutSlotsRefreshed = await refreshWorkoutSlotsForProfile(prisma, userId);
+  if (!workoutSlotsRefreshed) await rebuildPlan(prisma, userId, { reason: 'setup' });
+
+  return {
+    written: true,
+    goal,
+    // Reported so the response says whether setup is actually complete, rather
+    // than leaving every caller to infer it from `missing` on a separate read.
+    targetWritten: target.written === true,
+    targetSkipped: target.skipped ?? null,
+    // Reported so the screen can confirm what it did, including the fact that a
+    // weight typed at intake became a reading rather than a profile field.
+    weightWritten,
+    weightKg,
+  };
+}
+
+export { MISSING_REASONS };

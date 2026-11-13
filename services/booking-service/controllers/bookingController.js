@@ -1,5 +1,11 @@
 import * as bookingService from '../services/bookingService.js';
+import * as globalLeaderboardService from '../services/globalLeaderboardService.js';
 import * as exportService from '../services/exportService.js';
+import * as checkinDaysService from '../services/checkinDaysService.js';
+import { parseLimit, parseCursor } from '../utils/pagination.js';
+
+const MY_BOOKINGS_DEFAULT_LIMIT = 50;
+const MY_BOOKINGS_MAX_LIMIT = 100;
 
 export const createBooking = async (req, res) => {
   try {
@@ -17,8 +23,10 @@ export const createBooking = async (req, res) => {
 
 export const getMyBookings = async (req, res) => {
   try {
-    const bookings = await bookingService.getCustomerBookings(req.userId);
-    res.json({ data: bookings });
+    const limit = parseLimit(req.query?.limit, MY_BOOKINGS_DEFAULT_LIMIT, MY_BOOKINGS_MAX_LIMIT);
+    const cursor = parseCursor(req.query?.cursor);
+    const { items, meta } = await bookingService.getCustomerBookingsPage(req.userId, { limit, cursor });
+    res.json({ data: items, meta });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -35,7 +43,11 @@ export const getMyAttendanceSummary = async (req, res) => {
 
 export const getVisitedGyms = async (req, res) => {
   try {
-    const visitedGyms = await bookingService.getVisitedGyms(req.userId);
+    const version = req.query?.version ?? '1';
+    if (version !== '1' && version !== '2') {
+      return res.status(400).json({ error: 'Unsupported visited-gyms version' });
+    }
+    const visitedGyms = await bookingService.getVisitedGyms(req.userId, { version: Number(version) });
     res.json({ data: visitedGyms });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -66,6 +78,22 @@ export const getSlotCounts = async (req, res) => {
     const gymId = parseInt(req.params.gymId);
     const { date } = req.query;
     const counts = await bookingService.getSlotCounts(gymId, date);
+    res.json({ data: counts });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Internal batch variant: ?from=YYYY-MM-DD&to=YYYY-MM-DD -> { [date]: { [startTime]: n } }.
+export const getSlotCountsRange = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const { from, to } = req.query;
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isoDate.test(String(from || '')) || !isoDate.test(String(to || ''))) {
+      return res.status(400).json({ error: 'from and to (YYYY-MM-DD) are required' });
+    }
+    const counts = await bookingService.getSlotCountsRange(gymId, from, to);
     res.json({ data: counts });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -123,6 +151,67 @@ export const getLastVisitDateForSubscription = async (req, res) => {
     const subscriptionId = parseInt(req.params.id);
     const lastVisitDate = await bookingService.getLastVisitDateForSubscription(subscriptionId);
     res.json({ data: { lastVisitDate } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Coach-journey B3 — internal service-to-service:
+//
+//   GET /internal/users/:id/checkin-days?from=YYYY-MM-DD  (health-service's
+//   journey — the distinct union of Booking.attendedAt, MemberAttendance.date
+//   and IndependentCheckIn.date as IST calendar days, optionally from a day
+//   onwards)
+//
+// The response is the contract's bare { days } shape, like auth-service's B1
+// device endpoints — not wrapped in { data } (the consumer is another
+// service, and the contract spells the JSON out literally).
+export const getCheckinDaysInternal = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    if (!Number.isInteger(userId)) {
+      return res.status(400).json({ error: 'A numeric user id is required' });
+    }
+    const from = typeof req.query.from === 'string' && req.query.from.length ? req.query.from : null;
+    if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      return res.status(400).json({ error: 'from must be a YYYY-MM-DD date' });
+    }
+    const days = await checkinDaysService.getDays(userId, from);
+    res.json({ days });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Coach-journey B3 — internal, called by gym-service when an unclaimed gym is
+// claimed: which customers ever checked in there (IndependentCheckIn rows),
+// so auth-service can prompt them toward the real gym. Bare { customerIds }
+// per the contract; gym-service's hook accepts this shape.
+export const getUnclaimedGymCustomersInternal = async (req, res) => {
+  try {
+    const unclaimedGymId = parseInt(req.params.id);
+    if (!Number.isInteger(unclaimedGymId)) {
+      return res.status(400).json({ error: 'A numeric unclaimed gym id is required' });
+    }
+    const customerIds = await bookingService.getUnclaimedGymCustomerIds(unclaimedGymId);
+    res.json({ customerIds });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Coach-journey B3 — gobhi-only companion to the unclaimed-gym claim queue:
+// how many distinct customers have ever checked in at this unclaimed gym.
+// Returns { count: null } under 5 people — a count of 1-4 is effectively a
+// list of who they are, so small numbers stay unsaid.
+export const getUnclaimedGymPeopleCount = async (req, res) => {
+  try {
+    const unclaimedGymId = parseInt(req.params.id);
+    if (!Number.isInteger(unclaimedGymId)) {
+      return res.status(400).json({ error: 'A numeric unclaimed gym id is required' });
+    }
+    const count = await bookingService.getUnclaimedGymPeopleCount(unclaimedGymId);
+    res.json({ count });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -204,6 +293,18 @@ export const getAdminLiveOccupancy = async (req, res) => {
   try {
     const gymId = req.query.gymId ? parseInt(req.query.gymId) : undefined;
     const result = await bookingService.getAdminLiveOccupancy(gymId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const getGymLivePresence = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const result = await bookingService.getGymLivePresence(gymId, req.userId);
+    // A live view must never be served from a cache.
+    res.set('Cache-Control', 'no-store');
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -419,6 +520,21 @@ export const completeBooking = async (req, res) => {
   }
 };
 
+// The gym cancels a customer's session - always a full refund. Body: { gymId, reason? }.
+export const cancelBookingByGym = async (req, res) => {
+  try {
+    const bookingId = parseInt(req.params.id);
+    const gymId = parseInt(req.query.gymId || req.body?.gymId);
+    if (isNaN(gymId)) return res.status(400).json({ error: 'gymId is required' });
+    const booking = await bookingService.cancelBookingByGym(bookingId, gymId, req.userId, {
+      reason: req.body?.reason,
+    });
+    res.json({ data: booking });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const verifyAttendance = async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);
@@ -441,6 +557,37 @@ export const getMyAttendanceWarnings = async (req, res) => {
   }
 };
 
+export const getMemberVisitPatterns = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    const customerId = parseInt(req.params.customerId);
+    if (!Number.isInteger(gymId) || gymId <= 0 || !Number.isInteger(customerId) || customerId <= 0) {
+      return res.status(400).json({ error: 'A valid gym and member are required' });
+    }
+    const data = await bookingService.getMemberVisitPatterns(gymId, customerId, req.userId, req.query.days);
+    res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const entranceCheckIn = async (req, res) => {
+  try {
+    const { resolveEntranceCheckIn } = await import('../services/entranceCheckInService.js');
+    const presence = await import('../services/presenceService.js');
+    const result = await resolveEntranceCheckIn({
+      gymId: Number(req.params.gymId), customerId: req.userId,
+      lat: req.body?.lat, lng: req.body?.lng, confirmEarly: req.body?.confirmEarly === true,
+      join: req.body?.join === true, checkout: req.body?.checkout === true,
+    }, { ...bookingService, openPresence: presence.openPresence, checkOutByScan: presence.checkOutByScan, recordPresence: presence.recordPresence });
+    res.json({ data: result });
+  } catch (err) {
+    // `booking` accompanies UPCOMING_BOOKING: the guest's soonest booking, so the
+    // client can say when it is.
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error', code: err.code, confirmation: err.confirmation, booking: err.booking });
+  }
+};
+
 export const selfCheckIn = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
@@ -453,6 +600,37 @@ export const selfCheckIn = async (req, res) => {
       code: err.code,
       confirmation: err.confirmation,
     });
+  }
+};
+
+// Check in at a gym we have no partnership with. :unclaimedGymId is a
+// gym-service UnclaimedGym id, never a Gym id — the path segment is named for
+// that so a future reader can't mistake the two.
+export const independentCheckIn = async (req, res) => {
+  try {
+    const unclaimedGymId = parseInt(req.params.unclaimedGymId);
+    const { lat, lng } = req.body || {};
+    const result = await bookingService.independentCheckIn(
+      req.userId,
+      unclaimedGymId,
+      Number(lat),
+      Number(lng)
+    );
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+    });
+  }
+};
+
+export const myIndependentCheckIns = async (req, res) => {
+  try {
+    const rows = await bookingService.listIndependentCheckIns(req.userId);
+    res.json({ data: rows });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 
@@ -492,10 +670,43 @@ export const getMemberAttendance = async (req, res) => {
   }
 };
 
+// Mirror of memberCheckIn — records when a linked member leaves for the day.
+// No lat/lng (check-out is meaningful from anywhere), no geofence. Errors are
+// surfaced with their code (NOT_LINKED_GYM / NOT_CHECKED_IN) so the client
+// can distinguish "wrong gym" from "wasn't ever checked in today".
+export const memberCheckOut = async (req, res) => {
+  try {
+    const gymId = parseInt(req.params.gymId);
+    // A non-numeric id would otherwise sail through as NaN and surface a
+    // misleading NOT_LINKED_GYM ("not your linked gym") for what is really a
+    // malformed request — reject it up front.
+    if (!Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'Invalid gym id', code: 'INVALID_GYM_ID' });
+    }
+    const result = await bookingService.memberCheckOut(gymId, req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      code: err.code,
+    });
+  }
+};
+
 export const getGymLeaderboard = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
     const result = await bookingService.getGymLeaderboard(gymId, req.query.window, req.userId);
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+
+export const getGlobalLeaderboard = async (req, res) => {
+  try {
+    const result = await globalLeaderboardService.getGlobalLeaderboard(req.query.window, req.userId);
     res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -516,6 +727,44 @@ export const exportUserInternal = async (req, res) => {
     }
     const data = await exportService.buildExportService(userId);
     res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Daily 9am IST partner briefing fan-out. Called by Cloud Scheduler via
+// POST /internal/daily-briefing (x-internal-key); never gateway-reachable.
+export const sendDailyBriefing = async (req, res) => {
+  try {
+    const result = await bookingService.sendDailyBriefings();
+    res.json({ data: result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Hourly sweep completing verified sessions whose slot is over. Called by
+// .github/workflows/auto-complete-sessions.yml via POST /internal/auto-complete
+// (x-internal-key); never gateway-reachable.
+export const autoCompleteSessions = async (req, res) => {
+  try {
+    // The hourly settlement sweep: finish verified sessions, then retry any
+    // cancellation refund or partner payout that is owed but was never credited.
+    const result = await bookingService.autoCompleteEndedSessions();
+    const refunds = await bookingService.retryOwedRefunds();
+    const payouts = await bookingService.retryOwedPayouts();
+    res.json({ data: { ...result, refunds, payouts } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Hourly "your session starts soon" push. Called by
+// .github/workflows/send-session-reminders.yml via POST /internal/session-reminders.
+export const sendSessionReminders = async (req, res) => {
+  try {
+    const result = await bookingService.sendSessionReminders();
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

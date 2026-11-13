@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
+import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { uploadGymImage, uploadGymDoc } from '../utils/upload.js';
 import * as ctrl from '../controllers/gymController.js';
+import * as unclaimedCtrl from '../controllers/unclaimedGymController.js';
 
 const router = Router();
 
@@ -17,6 +19,14 @@ router.get('/', ctrl.listGyms);
 // that route first and parse "export" as a gym id. Same footgun app.js calls
 // out for this service's /health route.
 router.get('/internal/export/:userId', requireInternal, ctrl.exportUserInternal);
+// MUST stay above /internal/:id for the same reason /internal/export does —
+// registered after it, "unclaimed-gyms" would be parsed as a gym id.
+router.get('/internal/unclaimed-gyms/:id', requireInternal, unclaimedCtrl.getUnclaimedGymInternal);
+// Slot blocks for booking-service's createBooking. The partner-facing
+// GET /:id/blocks needs x-user-* headers a service caller does not have.
+// MUST stay above /internal/:id (kept explicit even though segment counts
+// differ today, so a future reorder cannot shadow it).
+router.get('/internal/blocks/:gymId', requireInternal, ctrl.getSlotBlocksInternal);
 router.get('/internal/:id', requireInternal, ctrl.getGymInternal);
 // Internal service-to-service: partner onboarding summary (auth-service, at login)
 router.get('/internal/partner/:partnerId/summary', requireInternal, ctrl.getPartnerGymSummaryInternal);
@@ -28,6 +38,25 @@ router.get('/internal/classes/:classId', requireInternal, ctrl.getClassInternal)
 // an `:id` value (same footgun class as this service's gym-health route
 // ordering). ?status=pending|approved|rejected
 router.get('/edit-requests', requireRole('gobhi'), ctrl.listEditRequestsAdmin);
+
+// Non-partner gyms. Same one-path-segment footgun as the routes above: all
+// three must stay ahead of `GET /:id`, or "unclaimed" is read as a gym id.
+// Flag-gated server-side, not just hidden in the app: resolvePlace calls
+// Google Places on every request (billable) and writes a new row, so it needs
+// a real kill switch rather than a client that can be asked nicely.
+//
+// The two gobhi routes are deliberately NOT gated — the acquisition list is
+// internal staff reporting over data already collected, and switching the
+// customer-facing feature off should not also blind sales to what it gathered.
+router.post('/unclaimed', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.resolvePlace);
+// Manual pin for a gym Google doesn't know. Same flag: it writes a row and
+// feeds the same GPS check-in.
+router.post('/unclaimed/manual', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.addManualGym);
+router.get('/unclaimed', requireRole('gobhi'), unclaimedCtrl.listUnclaimedGymsAdmin);
+// The caller's own saved gym, for the app's "near the gym" check. Same flag as
+// the rest of the customer-facing half. Still ahead of `GET /:id`.
+router.get('/unclaimed/:id', requireAuth, requireFeatureFlag('nonPartnerAttendance'), unclaimedCtrl.getUnclaimedGymMine);
+router.put('/unclaimed/:id/claim-status', requireRole('gobhi'), unclaimedCtrl.updateClaimStatusAdmin);
 router.get('/edit-requests/:id', requireRole('gobhi'), ctrl.getEditRequestAdmin);
 router.put('/edit-requests/:id/approve', requireRole('gobhi'), ctrl.approveEditRequest);
 // Body: {reason} (required)
@@ -42,6 +71,15 @@ router.get('/upload-signature', requireRole('partner'), ctrl.getUploadSignature)
 // see ctrl.getNearestGymDistance.
 router.get('/nearest-distance', ctrl.getNearestGymDistance);
 
+// Lead management (attendance-SaaS sales pipeline, partner-owned per gym) —
+// same footgun, same fix: `GET /leads` must stay above `GET /:id` or Express
+// treats "leads" as a gym id. ?gymId= required for list; ?status= optional
+// (new|contacted|scheduled_visit|converted|lost).
+router.get('/leads', requireRole('partner'), ctrl.listLeads);
+router.post('/leads', requireRole('partner'), ctrl.createLead);
+router.put('/leads/:id', requireRole('partner'), ctrl.updateLead);
+router.delete('/leads/:id', requireRole('partner'), ctrl.deleteLead);
+
 router.get('/:id', ctrl.getGym);
 router.get('/:id/slots', ctrl.getGymSlots);
 router.get('/:id/availability', ctrl.getGymAvailability);
@@ -53,6 +91,9 @@ router.get('/:id/subscription-plans', ctrl.getSubscriptionPlans);
 // generic need. Key lives only server-side; see services/placesService.js.
 router.get('/places/autocomplete', requireAuth, ctrl.placesAutocomplete);
 router.get('/places/details', requireAuth, ctrl.placesDetails);
+// Gym-only search for the own-gym picker. Gated with the feature it serves —
+// it's billable (Text/Nearby Search) and has no other caller.
+router.get('/places/gyms', requireAuth, requireFeatureFlag('nonPartnerAttendance'), ctrl.placesGymSearch);
 
 // Partner routes
 router.get('/partner/mine', requireRole('partner'), ctrl.getPartnerGyms);
@@ -78,11 +119,12 @@ router.put('/:id/approve', requireRole('gobhi'), ctrl.approveGym);
 // Body: {commissionPct: number} (0-100) — overrides this gym's platform commission rate (default 20).
 router.put('/:id/commission', requireRole('gobhi'), ctrl.updateGymCommission);
 // Body: {subscriptionCommissionPct: number|null} (0-100, null resets to platform default) — overrides
-// this gym's post-honeymoon attendance-SaaS commission on subscription purchases (see wallet-service).
+// this gym's attendance-SaaS commission on subscription purchases (see wallet-service).
 router.put('/:id/subscription-commission', requireRole('gobhi'), ctrl.updateGymSubscriptionCommission);
 // Body: {subscriptionPricingMode: 'percentage'|'flatPerUser', subscriptionFlatFeePerUser: number|null} —
-// picks which formula wallet-service applies to this gym's post-honeymoon attendance-SaaS commission.
+// picks which formula wallet-service applies to this gym's attendance-SaaS commission.
 router.put('/:id/subscription-pricing-mode', requireRole('gobhi'), ctrl.updateGymSubscriptionPricingMode);
+router.put('/admin/:id/attendance-saas-opt-out', requireRole('gobhi'), ctrl.setGymAttendanceSaasOptedOut);
 // List all gyms regardless of owner/approval status; ?status=pending|approved|rejected
 router.get('/admin/all', requireRole('gobhi'), ctrl.listGymsAdmin);
 // Single-gym lookup that doesn't 404 on pending/rejected gyms (unlike GET /:id above)

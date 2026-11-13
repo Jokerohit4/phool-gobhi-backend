@@ -1,0 +1,78 @@
+{
+  "selected": {
+    "Alternate Leg Diagonal Bound": {
+      "youtubeVideoId": "D9ly_xHKvAE",
+      "equipment": "other",
+      "language": "en",
+      "instructionFormat": "recorded_trainer_with_verified_english_audio",
+      "reviewType": "visual_setup_and_local_audio_instruction_review",
+      "contactSheet": "resume-bands-cables-contact.jpg",
+      "previewFrames": 4,
+      "instructionSummary": "Coach introduces a diagonal bounding variation and cues a roughly 45-degree travel direction during the filmed opposite-leg bounding demonstration.",
+      "reason": "Primary previews show the coach introducing and demonstrating diagonal alternating-leg bounds. A local machine transcript establishes spoken English coaching and a 45-degree direction cue despite the absent caption track. Speech evidence is combined with visual setup review; it does not generate or replace publisher narration, and no audio is rehosted.",
+      "audioSha256": "abe99a7fb1951759ee0e1fdd017e6099dc6dd42daf8f650c6a9ad40338cb1c62",
+      "transcriptSha256": "f4c6166e7c2e5991709808a49fb56046a36e1f73e2f621ec824ad8b6d7212f01"
+    },
+    "Gironda Sternum Chins": {
+      "youtubeVideoId": "UK5zf93oORc",
+      "equipment": "other",
+      "language": "en",
+      "instructionFormat": "recorded_trainer_with_verified_english_audio",
+      "reviewType": "visual_setup_and_local_audio_instruction_review",
+      "contactSheet": "resume-final-techniques-contact.jpg",
+      "previewFrames": 4,
+      "instructionSummary": "Coach teaches active-hang setup, chest-up backward lean, sternum-to-bar pull and controlled return, explicitly covering supinated as well as neutral and pronated grips.",
+      "reason": "Full publisher tutorial shows the arched sternum chin-up including underhand bar execution. Local English speech review confirms a step-by-step movement checklist and explicit supinated-grip option, unlike the rejected neutral/towel-only short. Existing publisher audio is not rehosted or generated.",
+      "audioSha256": "7741e442aae86cc4c64c242ae7bb39958d413b18b12fb6ba52e4fffedfad5713",
+      "transcriptSha256": "da22202b5983dab31c71e4755cafdda672c39adf87b0fda7b10a7f1d970af1d9"
+    }
+  },
+  "rejected": [
+    {
+      "exercise": "Chair Squat",
+      "youtubeVideoId": "l2SD7V-Dlzw",
+      "reason": "No spoken words detected; no explanatory on-screen cues established. A correct demo alone does not meet the instructional constraint."
+    },
+    {
+      "exercise": "Chain Handle Extension",
+      "youtubeVideoId": "4ORw2xgtA64",
+      "reason": "No spoken words detected; instructional narration not established."
+    },
+    {
+      "exercise": "Alternating Floor Press",
+      "youtubeVideoId": "aSaY66R0THM",
+      "reason": "No spoken words detected; bare filmed demonstration remains distinct from a tutorial."
+    },
+    {
+      "exercise": "Chest And Front Of Shoulder Stretch",
+      "youtubeVideoId": "U57SjQOUjdc",
+      "reason": "Spoken English is present, but the instructions and previews describe a supine ball-supported overhead stick stretch, not the canonical standing broomstick stretch. Language evidence cannot override a movement mismatch."
+    },
+    {
+      "exercise": "Gironda Sternum Chins",
+      "youtubeVideoId": "Sr_xLHaXmHM",
+      "reason": "Existing English coaching verified, but this short teaches neutral/towel grip variations rather than the canonical underhand bar grip. Retain as research while reviewing the full publisher tutorial."
+    },
+    {
+      "exercise": "Clock Push-Up",
+      "youtubeVideoId": "1n2IvDAW4Ao",
+      "reason": "Reference teaches stationary-body staggered clock hand positions; canonical exercise jumps the whole body around a circle."
+    },
+    {
+      "exercise": "Catch and Overhead Throw",
+      "youtubeVideoId": "y5Y4qaJEpPg",
+      "reason": "Existing spoken English is present, but the filmed throw is one-handed; canonical guide uses a two-handed overhead throw."
+    },
+    {
+      "exercise": "Chest Stretch on Stability Ball",
+      "youtubeVideoId": "1_8__iePZsA",
+      "reason": "Filmed kneeling both-hands thoracic extension does not match the canonical one-elbow lateral chest stretch over the ball."
+    },
+    {
+      "exercise": "Adductor/Groin",
+      "youtubeVideoId": "WKi2jF0eZCI",
+      "reason": "English coaching describes a unilateral leg-out stretch with hip stabilization, not the canonical partner-held bilateral raised straight-leg stretch."
+    }
+  ],
+  "method": "Existing public source audio is reviewed locally using automatic language detection, voice activity filtering and machine transcription, alongside primary filmed setup previews. Private audio/full transcripts are not published; hashes and manual selection reasons are retained. Source language or speech evidence alone never auto-approves a video."
+}

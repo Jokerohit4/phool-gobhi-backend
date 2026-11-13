@@ -3,9 +3,10 @@ import * as exportService from '../services/exportService.js';
 import * as placesService from '../services/placesService.js';
 import { generateWindowedSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
+import { sanitizeApiResponse } from '../utils/normalizeDecimal.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -24,7 +25,7 @@ export const listGyms = async (req, res) => {
       userLat: isNaN(userLat) ? null : userLat,
       userLng: isNaN(userLng) ? null : userLng,
     });
-    res.json({ data: gyms });
+    res.json({ data: sanitizeApiResponse(gyms) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -34,7 +35,7 @@ export const listGymsAdmin = async (req, res) => {
   try {
     const { status, partnerId } = req.query;
     const gyms = await gymService.listGymsAdmin({ status, partnerId });
-    res.json({ data: gyms });
+    res.json({ data: sanitizeApiResponse(gyms) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -45,7 +46,7 @@ export const listGymsAdmin = async (req, res) => {
 export const getGymAdmin = async (req, res) => {
   try {
     const gym = await gymService.getGymByIdRaw(parseInt(req.params.id));
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -60,7 +61,7 @@ export const getGym = async (req, res) => {
       isNaN(userLat) ? null : userLat,
       isNaN(userLng) ? null : userLng
     );
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -88,74 +89,170 @@ export const getGymInternal = async (req, res) => {
   try {
     const { startTime, date } = req.query;
     const gym = await gymService.getGymInternalWithSlotPrice(parseInt(req.params.id), startTime, date);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
 
-async function getAnnotatedSlotsForDate(gym, gymId, date) {
-  // A date-less call (no known caller today, but preserved for safety) has
-  // no day-of-week to resolve hours against — default to today's IST
-  // calendar day rather than guessing.
-  const dayOfWeek = getDayOfWeek(date || todayDateStringIST());
-  const hours = await gymService.getOperatingHours(gymId, dayOfWeek);
+// [includeUnbookable] keeps slots that exist and have capacity but start
+// inside the MIN_LEAD_MS booking window, returning them flagged
+// `bookable: false` instead of dropping them.
+//
+// Why opt-in rather than always-on: silently deleting them is a real UX bug
+// (at 18:20 the 19:00 slot just vanishes, and if every remaining slot today is
+// inside the window the whole date chip disappears — which reads as "this gym
+// is full", not "you're too late to pre-book"). But this same helper backs
+// getGymAvailability, and the website/partner slot grids treat every returned
+// slot as tappable. So the default stays byte-identical for existing callers,
+// and a client opts in only once it actually renders the disabled state.
+//
+// Safe to expose: booking creation independently re-checks the lead time
+// (booking-service bookingService.js, isSlotInPastOrTooSoon), so a client that
+// ignores the flag and posts anyway is still rejected server-side.
+// Upper bound on the booking-service slot-count lookup. It is best-effort
+// (counts default to empty), so a slow booking-service should degrade to
+// "all slots open" rather than stall the slot list.
+const SLOT_COUNTS_TIMEOUT_MS = 3000;
+// How many per-day slot-count calls the availability endpoint keeps in flight
+// when it has to fall back to the per-day route.
+const SLOT_COUNTS_FALLBACK_CONCURRENCY = 5;
+
+async function bookingInternalHeaders() {
+  return {
+    'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+    ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
+  };
+}
+
+// Best-effort booked counts for one date: { [startTime]: n }. Never throws.
+async function fetchSlotCounts(gymId, date) {
+  try {
+    const resp = await fetch(
+      `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`,
+      { headers: await bookingInternalHeaders(), signal: AbortSignal.timeout(SLOT_COUNTS_TIMEOUT_MS) }
+    );
+    if (resp.ok) {
+      const body = await resp.json();
+      return body.data || {};
+    }
+  } catch (_) {
+    // booking-service down — leave counts empty so slots still render
+  }
+  return {};
+}
+
+// Best-effort booked counts for a date range in one call:
+// { [date]: { [startTime]: n } }. Returns null (not {}) when the batch route
+// does not exist yet (404: gym-service deployed ahead of booking-service) so
+// the caller can fall back to per-day calls. Any other failure resolves to {}
+// — the same "treat everything as open" posture as the per-day lookup.
+async function fetchSlotCountsRange(gymId, from, to) {
+  try {
+    const resp = await fetch(
+      `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { headers: await bookingInternalHeaders(), signal: AbortSignal.timeout(SLOT_COUNTS_TIMEOUT_MS) }
+    );
+    if (resp.status === 404) return null;
+    if (resp.ok) {
+      const body = await resp.json();
+      return body.data || {};
+    }
+  } catch (_) {
+    // booking-service down
+  }
+  return {};
+}
+
+// Runs fn over items with at most `limit` in flight; results keep input order.
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+// Pure assembly of one day's annotated slots from already-fetched inputs.
+function annotateSlots({ gym, hours, priceMap, blockedTimes, counts, date, includeUnbookable }) {
   let slots = generateWindowedSlots(hours, gym.slotDuration);
 
   // Attach each slot's per-time-of-day price (same value every date),
   // falling back to the gym's flat sessionPrice where no explicit row exists.
-  const priceMap = await gymService.getSlotPriceMap(gymId);
   slots = slots.map(s => ({ ...s, price: priceMap.has(s.startTime) ? priceMap.get(s.startTime) : gym.sessionPrice }));
 
   // Filter out blocked slots for the requested date
   if (date) {
-    const blocks = await gymService.getSlotBlocks(gymId, date);
-    const blockedTimes = new Set(blocks.map(b => b.startTime));
     slots = slots.filter(s => !blockedTimes.has(s.startTime));
-  }
-
-  // Annotate each slot with real availability from existing bookings (best-effort).
-  // If booking-service is unreachable, fall back to assuming all slots are open.
-  let counts = {};
-  if (date) {
-    try {
-      const resp = await fetch(
-        `${BOOKING_SERVICE_URL}/internal/slot-counts/${gymId}?date=${encodeURIComponent(date)}`,
-        {
-          headers: {
-            'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
-            ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
-          },
-        }
-      );
-      if (resp.ok) {
-        const body = await resp.json();
-        counts = body.data || {};
-      }
-    } catch (_) {
-      // booking-service down — leave counts empty so slots still render
-    }
   }
 
   return slots
     .map(s => {
       const booked = counts[s.startTime] || 0;
       const available = Math.max(gym.capacity - booked, 0);
-      return { ...s, booked, available };
+      const bookable = !date || !isSlotInPastOrTooSoon(date, s.startTime);
+      return {
+        ...s,
+        booked,
+        available,
+        bookable,
+        ...(bookable ? {} : { unbookableReason: 'LEAD_TIME' }),
+      };
     })
+    // A full slot is genuinely gone — nothing the customer can do about it, so
+    // it stays filtered in both modes. Lead-time slots are different: they are
+    // bookable information ("too late for this one"), which is why only they
+    // survive when includeUnbookable is set.
     .filter(s => s.available > 0)
-    .filter(s => !date || !isSlotInPastOrTooSoon(date, s.startTime));
+    .filter(s => includeUnbookable || s.bookable);
+}
+
+async function getAnnotatedSlotsForDate(gym, gymId, date, { includeUnbookable = false } = {}) {
+  // A date-less call (no known caller today, but preserved for safety) has
+  // no day-of-week to resolve hours against — default to today's IST
+  // calendar day rather than guessing.
+  const dayOfWeek = getDayOfWeek(date || todayDateStringIST());
+  // Hours, prices, blocks and booked counts are independent reads — one
+  // round of latency instead of four. Best-effort counts annotate each slot
+  // with real availability; if booking-service is unreachable, fall back to
+  // assuming all slots are open.
+  const [hours, priceMap, blocks, counts] = await Promise.all([
+    gymService.getOperatingHours(gymId, dayOfWeek),
+    gymService.getSlotPriceMap(gymId),
+    date ? gymService.getSlotBlocks(gymId, date) : Promise.resolve([]),
+    date ? fetchSlotCounts(gymId, date) : Promise.resolve({}),
+  ]);
+  return annotateSlots({
+    gym, hours, priceMap, counts, date, includeUnbookable,
+    blockedTimes: new Set(blocks.map(b => b.startTime)),
+  });
 }
 
 export const getGymSlots = async (req, res) => {
   try {
     const gymId = parseInt(req.params.id);
     const { date } = req.query;
+    const includeUnbookable = req.query.includeUnbookable === 'true';
 
-    const gym = await gymService.getGymById(gymId);
-    const annotated = await getAnnotatedSlotsForDate(gym, gymId, date);
+    // Narrow read — only the fields slot generation uses (no images/reviews).
+    const gym = await gymService.getGymForSlots(gymId);
+    const annotated = await getAnnotatedSlotsForDate(gym, gymId, date, { includeUnbookable });
 
-    res.json({ data: { slots: annotated, capacity: gym.capacity } });
+    // leadTimeMinutes is echoed so a client can word its own "book at least N
+    // minutes ahead" copy from the server's rule instead of hardcoding 60 and
+    // silently drifting if the rule ever changes.
+    res.json({
+      data: sanitizeApiResponse({
+        slots: annotated,
+        capacity: gym.capacity,
+        leadTimeMinutes: MIN_LEAD_MINUTES,
+      }),
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -169,7 +266,7 @@ export const getGymAvailability = async (req, res) => {
     const gymId = parseInt(req.params.id);
     const days = Math.min(Math.max(parseInt(req.query.days) || 7, 1), 30);
 
-    const gym = await gymService.getGymById(gymId);
+    const gym = await gymService.getGymForSlots(gymId);
 
     // Anchor on the IST calendar day (not the server's UTC date) so this
     // stays aligned with isSlotInPastOrTooSoon's IST-based comparison —
@@ -180,15 +277,59 @@ export const getGymAvailability = async (req, res) => {
     const dates = Array.from({ length: days }, (_, i) =>
       new Date(anchor + i * 86400000).toISOString().split('T')[0]
     );
+    const from = dates[0];
+    const to = dates[dates.length - 1];
 
-    const results = await Promise.all(
-      dates.map(async date => ({
+    // Everything that does not vary per day is read once: the price map, all
+    // 7 weekdays' hours (one query), every block in the range (one query) and
+    // — preferably — every day's booked counts (one booking-service call).
+    const [hoursRows, priceMap, blockRows, rangeCounts] = await Promise.all([
+      gymService.getOperatingHoursAllDays(gymId),
+      gymService.getSlotPriceMap(gymId),
+      gymService.getSlotBlocksInRange(gymId, from, to),
+      fetchSlotCountsRange(gymId, from, to),
+    ]);
+    const hoursByDay = new Map(hoursRows.map(r => [r.dayOfWeek, r]));
+    const blockedByDate = new Map();
+    for (const b of blockRows) {
+      if (!blockedByDate.has(b.date)) blockedByDate.set(b.date, new Set());
+      blockedByDate.get(b.date).add(b.startTime);
+    }
+
+    // Older booking-service without the batch route: per-day calls, capped.
+    let countsByDate = rangeCounts;
+    if (countsByDate === null) {
+      const perDay = await mapWithConcurrency(dates, SLOT_COUNTS_FALLBACK_CONCURRENCY, d => fetchSlotCounts(gymId, d));
+      countsByDate = Object.fromEntries(dates.map((d, i) => [d, perDay[i]]));
+    }
+
+    const results = dates.map(date => {
+      // One pass including lead-time-blocked slots, so both facts come from
+      // the same data: `available` keeps its original meaning (something can
+      // actually be booked), while `hasSlots` says the gym is open then but
+      // every remaining slot is inside the booking lead.
+      //
+      // Without the second flag a client can't tell "this gym is shut today"
+      // from "you're too late to pre-book today", and the date chip vanishes
+      // either way — which is exactly what made the lead-time rule read as a
+      // bug rather than a rule.
+      const slots = annotateSlots({
+        gym,
+        hours: hoursByDay.get(getDayOfWeek(date)) ?? null,
+        priceMap,
+        blockedTimes: blockedByDate.get(date) ?? new Set(),
+        counts: countsByDate[date] || {},
         date,
-        available: (await getAnnotatedSlotsForDate(gym, gymId, date)).length > 0
-      }))
-    );
+        includeUnbookable: true,
+      });
+      return {
+        date,
+        available: slots.some(s => s.bookable),
+        hasSlots: slots.length > 0,
+      };
+    });
 
-    res.json({ data: { dates: results } });
+    res.json({ data: sanitizeApiResponse({ dates: results }) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -197,7 +338,7 @@ export const getGymAvailability = async (req, res) => {
 export const getPartnerGyms = async (req, res) => {
   try {
     const gyms = await gymService.getPartnerGyms(req.userId);
-    res.json({ data: gyms });
+    res.json({ data: sanitizeApiResponse(gyms) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -229,7 +370,7 @@ export const createGym = async (req, res) => {
 export const updateGym = async (req, res) => {
   try {
     const gym = await gymService.updateGym(parseInt(req.params.id), req.userId, req.body);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -238,7 +379,7 @@ export const updateGym = async (req, res) => {
 export const refreshGoogleRating = async (req, res) => {
   try {
     const gym = await gymService.refreshGoogleRating(parseInt(req.params.id), req.userId);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -247,7 +388,7 @@ export const refreshGoogleRating = async (req, res) => {
 export const deleteGym = async (req, res) => {
   try {
     const gym = await gymService.softDeleteGym(parseInt(req.params.id), req.userId);
-    res.json({ data: gym });
+    res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -499,7 +640,7 @@ export const addReview = async (req, res) => {
 export const getGymReviews = async (req, res) => {
   try {
     const reviews = await gymService.getGymReviews(parseInt(req.params.id));
-    res.json({ data: reviews });
+    res.json({ data: sanitizeApiResponse(reviews) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -555,6 +696,16 @@ export const updateGymSubscriptionPricingMode = async (req, res) => {
     const flatFee = subscriptionFlatFeePerUser === null || subscriptionFlatFeePerUser === undefined
       ? null : Number(subscriptionFlatFeePerUser);
     const gym = await gymService.updateGymSubscriptionPricingMode(parseInt(req.params.id), subscriptionPricingMode, flatFee);
+    res.json({ data: gym });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const setGymAttendanceSaasOptedOut = async (req, res) => {
+  try {
+    const { attendanceSaasOptedOut } = req.body ?? {};
+    const gym = await gymService.setAttendanceSaasOptedOut(parseInt(req.params.id), attendanceSaasOptedOut);
     res.json({ data: gym });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -643,6 +794,19 @@ export const getSubscriptionPlans = async (req, res) => {
   }
 };
 
+// Internal service-to-service read of a gym's blocks (booking-service's
+// createBooking). Same data as getSlotBlocks, guarded by requireInternal
+// instead of the partner role.
+export const getSlotBlocksInternal = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const blocks = await gymService.getSlotBlocks(parseInt(req.params.gymId), date);
+    res.json({ data: blocks });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message });
+  }
+};
+
 export const getSlotBlocks = async (req, res) => {
   try {
     const { date } = req.query;
@@ -727,21 +891,29 @@ export const getClassOccurrences = async (req, res) => {
     const istNow = new Date(Date.now() + IST_OFFSET_MS);
     const anchor = Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate());
 
+    // Same opt-in as GET /:id/slots — see getAnnotatedSlotsForDate. Dropping a
+    // lead-time-blocked occurrence is worse here than for a slot: because this
+    // loop fills up to `days` entries, removing today's silently promotes NEXT
+    // WEEK's date into its place, so a 7pm class at 6:20pm doesn't just vanish
+    // — the list confidently shows the same class seven days later with no
+    // indication that today's was skipped.
+    const includeUnbookable = req.query.includeUnbookable === 'true';
     const dates = [];
     for (let i = 0; dates.length < days && i < days * 7 + 7; i++) {
       const d = new Date(anchor + i * 86400000);
       if (d.getUTCDay() !== cls.dayOfWeek) continue;
       const dateStr = d.toISOString().split('T')[0];
       if (cancelledDates.has(dateStr)) continue;
-      if (isSlotInPastOrTooSoon(dateStr, cls.startTime)) continue;
-      dates.push(dateStr);
+      const bookable = !isSlotInPastOrTooSoon(dateStr, cls.startTime);
+      if (!bookable && !includeUnbookable) continue;
+      dates.push({ date: dateStr, bookable });
     }
 
     let counts = {};
     if (dates.length) {
       try {
         const resp = await fetch(
-          `${BOOKING_SERVICE_URL}/internal/class-counts/${classId}?dates=${encodeURIComponent(dates.join(','))}`,
+          `${BOOKING_SERVICE_URL}/internal/class-counts/${classId}?dates=${encodeURIComponent(dates.map(d => d.date).join(','))}`,
           {
             headers: {
               'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
@@ -758,15 +930,17 @@ export const getClassOccurrences = async (req, res) => {
       }
     }
 
-    const occurrences = dates.map(date => ({
+    const occurrences = dates.map(({ date, bookable }) => ({
       date,
       startTime: cls.startTime,
       endTime: cls.endTime,
       booked: counts[date] || 0,
       available: Math.max(cls.capacity - (counts[date] || 0), 0),
+      bookable,
+      ...(bookable ? {} : { unbookableReason: 'LEAD_TIME' }),
     }));
 
-    res.json({ data: occurrences });
+    res.json({ data: occurrences, leadTimeMinutes: MIN_LEAD_MINUTES });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -828,6 +1002,27 @@ export const placesAutocomplete = async (req, res) => {
   }
 };
 
+// GET /places/gyms?q=&lat=&lng= — gyms only, nearest first. `q` empty means
+// "gyms near me" (needs lat/lng). Separate from placesAutocomplete on purpose:
+// that one predicts addresses and must keep doing so for address entry.
+export const placesGymSearch = async (req, res) => {
+  try {
+    const { q, lat, lng } = req.query;
+    const query = typeof q === 'string' ? q.trim() : '';
+    if (query.length > 80) return res.status(400).json({ error: 'q is too long' });
+    const latN = Number(lat);
+    const lngN = Number(lng);
+    const location =
+      lat !== undefined && lng !== undefined && Number.isFinite(latN) && Number.isFinite(lngN)
+        ? { lat: latN, lng: lngN }
+        : null;
+    const results = await placesService.searchGyms({ query, location });
+    res.json({ data: results });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
 export const placesDetails = async (req, res) => {
   try {
     const { placeId, sessiontoken } = req.query;
@@ -855,6 +1050,53 @@ export const exportUserInternal = async (req, res) => {
     }
     const data = await exportService.buildExportService(userId);
     res.json({ data });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// ---- Leads (attendance-SaaS sales pipeline, partner-owned) ----------------
+export const listLeads = async (req, res) => {
+  try {
+    const gymId = parseInt(req.query.gymId);
+    if (!Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'gymId query param is required' });
+    }
+    const leads = await gymService.listLeads(gymId, req.userId, {
+      status: req.query.status,
+    });
+    res.json({ data: leads });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const createLead = async (req, res) => {
+  try {
+    const gymId = parseInt(req.body.gymId);
+    if (!Number.isInteger(gymId)) {
+      return res.status(400).json({ error: 'gymId is required' });
+    }
+    const lead = await gymService.createLead(gymId, req.userId, req.body);
+    res.status(201).json({ data: lead });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const updateLead = async (req, res) => {
+  try {
+    const lead = await gymService.updateLead(parseInt(req.params.id), req.userId, req.body);
+    res.json({ data: lead });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const deleteLead = async (req, res) => {
+  try {
+    const deleted = await gymService.deleteLead(parseInt(req.params.id), req.userId);
+    res.json({ data: deleted });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

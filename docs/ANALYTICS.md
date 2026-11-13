@@ -1,9 +1,11 @@
+> Warehouse migration (26 October 2026): BigQuery replaces the PostgreSQL analytics sink. See [audit and plan](analytics-bigquery-audit-and-plan.md) and [operations runbook](analytics-bigquery-runbook.md) for current architecture, configuration, validation and rollback. Earlier rollout notes below describe historical deployments.
+
 # Phool Gobhi — Eventing & Funnels
 
 How product events are captured across the Flutter apps and the Node backend, and
 how they roll up into the funnels that matter for the business.
 
-> **Status (updated 2026-07-23):** instrumentation shipped (backend + both apps
+> **Status (updated 2026-09-24):** instrumentation shipped (backend + both apps
 > + website). The **active sink is first-party Postgres** — events are written
 > to an `analytics_events` table we own (no third party). Server events write
 > directly; client events POST to the gateway `/api/events` route, which now
@@ -13,10 +15,14 @@ how they roll up into the funnels that matter for the business.
 > `node scripts/check-analytics-events.cjs` to check for drift (it's a hard
 > gate in `/deploy`). A dashboard now lives in the admin portal at `/analytics`
 > (Supply/Conversion/Fulfillment/Activation/Wallet/Buddy tabs), backed by new
-> `GET /api/bookings/admin/analytics/*` endpoints (see §8); the SQL there
-> remains useful for anything not yet on that page. **Production is still
-> pending a dedicated analytics DB** (§6) — until that lands, `/analytics` and
-> the SQL below only reflect dev traffic.
+> `GET /api/bookings/admin/analytics/*` endpoints (see §8). **Production is
+> LIVE:** all 8 prod services + the gateway run `ANALYTICS_PROVIDER=postgres`
+> against a dedicated Neon analytics DB (verified flowing 2026-09-24 — 6,570
+> events / 1,073 users cumulative), so `/analytics` and the SQL below reflect
+> real prod traffic. `challenge-service` and `health-service` prod secrets were
+> missing `ANALYTICS_DATABASE_URL` until 2026-09-24 — added and both services
+> redeployed; keep that key in every `*-secrets-prod` payload (`DATABASE_URL`
+> is not a substitute).
 
 ---
 
@@ -123,7 +129,7 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `booking_confirmed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `start_time` |
 | `booking_failed` | booking | customerId | `gym_id`, `reason` (`slot_full`/`insufficient_balance`), `amount` |
 | `booking_cancelled` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
-| `booking_completed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date` |
+| `booking_completed` | booking | customerId | `booking_id`, `gym_id`, `amount`, `date`, `completed_by` (`partner` / `auto`) |
 | `referral_credited` | booking | customerId | `booking_id`, `referrer_id` |
 | `checkin_requested` | booking | customerId | `booking_id`, `gym_id`, `location_verified` |
 | `wallet_topup_order_created` | wallet | userId | `amount`, `order_id` |
@@ -219,6 +225,35 @@ note on `ip`):
 | `os_name` / `browser_name` / `browser_version` / `device_type` | gateway, parsed from `user_agent` via `ua-parser-js` | **backstop only** — the gateway fills these only when the event doesn't already carry them, so it never overwrites the richer app-supplied fields above; this is the primary source of OS/browser info for website traffic |
 | `ip` | gateway, from `req.ip` | every client event, via the gateway's `/api/events` handler |
 | `geo_country` / `geo_city` | website's `/api/events` BFF route (added 2026-08-24), from Vercel's `x-vercel-ip-country`/`x-vercel-ip-city` edge headers | country stored as its readable name (`'India'`, via `Intl.DisplayNames`) so filters don't need an ISO-code lookup; absent outside Vercel (local dev) and on rows that predate it. This is the visitor's real location — unlike `ip`, which for website traffic is the BFF's own egress address. Powers the admin traffic view's country/city filters (`?country=&city=` on `/admin/analytics/website-traffic`) |
+
+### One plan (added 2026-10-15)
+
+The "one plan" work replaces the old wander-through-every-layer health
+experience with a single plan that spans a few layers at a time, unlocked as
+the user shows up. These events are what the plan's own churn and its
+unlock/activation gap are measured with. Names are in
+`docs/analytics-events.json`; the table below is the human-readable view.
+
+**Server-emitted (health-service):**
+
+| Event | distinct_id | Key properties |
+|---|---|---|
+| `plan_built` | userId | `reason` (`start`/`unlock`/`consent`/`setup`/`edit`/`supplements`/`migrate`), `on_layers` (how many layers the plan now spans), `created`, `updated`, `deactivated` — every plan write funnels through `rebuildPlan`, so this is all plan churn, and the funnel for whether the UB5 migration actually rebuilt anyone. A no-op rebuild still fires, with `created=0 updated=0 deactivated=0` |
+| `layer_turned_on` | userId | `layer` (layerKey), `reason` (`setup`/`coach`/`migrate`) — fires on the transition only, never re-fires an already-on layer. `plan_built.on_layers` is the stock level; this is the flow into it |
+| `layer_unlocked` | userId | `layer`, `how` (`showed_up`/`steady_weeks`/`early`/`existing_data`/`start_level`) — unlock is not activation: this is the gate opening, `layer_turned_on` is the user walking through it |
+| `plan_item_completed` | userId | `row_kind` (PlanItemKind), `layer` (layerKey) — **manual ticks only.** Auto-satisfied completions (`how='auto'`) were deleted by the UB5 migration and the generator no longer writes them, so this is the honest count of what the user chose to do |
+| `plan_edited` | userId | `what` (`settings`/`slots`/`item_added`/`item_removed`) — settings/slots fire alongside `plan_built` with `reason=edit`; added/removed are the user asserting ownership over the list (the `own` layer) |
+
+`health_day_closed` (pre-existing) now also carries `earned`, `target`, and
+`hit` — the one-plan daily score frozen at day close (`frozen` still means the
+call was a no-op on an already-closed day).
+
+**Client-emitted (customer app):**
+
+| Event | When |
+|---|---|
+| `today_row_tapped` | A row on the Today card was tapped (`row_kind`, `action` = `open_detail`/`tick`/`expand`). Client-side because the point is the tap on the card face, before any server call — the gap to `plan_item_completed` is the retry/expiry story |
+| `today_target_hit` | The Today card showed its target-reached celebration (`earned`, `target`). Fires optimistically, before `health_day_closed` freezes the day server-side — the pair brackets the day-close race the way `book_tapped`/`booking_confirmed` does |
 
 ---
 
@@ -492,3 +527,16 @@ point of the facade.
   Indian data residency becomes mandatory.
 - A consent gate can wrap `AnalyticsService` (return the no-op sink until the user
   accepts) without touching call sites.
+
+## Customer signup onboarding funnel (2026-10-01)
+
+Customer app events (`app = phool_gobhi`), enum properties only — never DOB, gender or free text:
+
+| Event | When | Properties |
+|---|---|---|
+| `onboarding_step_viewed` | a step comes on screen (once per step per run) | `step` (details / training / permissions), `surface` (signup / resume / profile_edit) |
+| `onboarding_step_completed` | a step is saved | `step`, `surface`, and for `training`: `currently_works_out`, `training_location`, `weekly_frequency`, `free_time_window` |
+| `onboarding_permission_result` | the OS answered a permission prompt | `permission` (location / notifications), `granted` |
+| `onboarding_completed` | wizard finished, or training answers saved from the resume prompt / Profile | `surface`, `currently_works_out`, `training_location` |
+
+`onboarding_step_completed` is shared with the partner app's gym wizard, so the partner funnel (`GET /admin/analytics/onboarding-funnel`) now excludes `properties->>'app' = 'phool_gobhi'`. The customer funnel is `GET /admin/analytics/customer-onboarding-funnel?days=30` (booking-service, gobhi-only): per step and surface, distinct users who viewed vs completed (drop-off = viewed − completed), permission grant rates, and completions by training location. No admin-portal view renders it yet.

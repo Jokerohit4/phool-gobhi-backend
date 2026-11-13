@@ -1,0 +1,137 @@
+import * as assistantService from '../services/assistant/assistantService.js';
+import * as memoryService from '../services/assistant/memoryService.js';
+import { DISCLAIMER } from '../services/assistant/assistantPolicy.js';
+import { getSuggestionsService } from '../services/assistant/suggestionService.js';
+
+export const getSuggestions = async (req, res) => {
+  try {
+    const { conversationId, draft } = req.body || {};
+    const data = await getSuggestionsService(req.userId, { conversationId, draft });
+    res.set('Cache-Control', 'no-store');
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+function fail(res, err) {
+  res.status(err.status || 500).json({
+    error: err.error || err.message || 'Server error',
+    code: err.code,
+    retryAfterSeconds: err.retryAfterSeconds,
+  });
+}
+
+/// The disclaimer text plus this user's consent state, in one call — the chat
+/// screen needs both before it can decide whether to show the gate, and two
+/// round trips to open a screen is one too many.
+export const getConsent = async (req, res) => {
+  try {
+    const status = await assistantService.getConsentStatusService(req.userId);
+    res.json({ data: { ...status, disclaimer: DISCLAIMER } });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const grantConsent = async (req, res) => {
+  try {
+    // Deliberately ignores any policyVersion in the body — see
+    // assistantService.grantConsentService.
+    const status = await assistantService.grantConsentService(req.userId);
+    res.json({ data: status });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const revokeConsent = async (req, res) => {
+  try {
+    const status = await assistantService.revokeConsentService(req.userId);
+    res.json({ data: status });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const listConversations = async (req, res) => {
+  try {
+    const data = await assistantService.listConversationsService(req.userId);
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const getConversation = async (req, res) => {
+  try {
+    const data = await assistantService.getConversationService(
+      req.userId,
+      parseInt(req.params.id)
+    );
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const deleteConversation = async (req, res) => {
+  try {
+    const data = await assistantService.deleteConversationService(
+      req.userId,
+      parseInt(req.params.id)
+    );
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const sendMessage = async (req, res) => {
+  try {
+    const { message, conversationId } = req.body || {};
+    const data = await assistantService.sendMessageService(req.userId, {
+      message,
+      conversationId: conversationId ? parseInt(conversationId) : undefined,
+    });
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// ---- What the coach remembers ---------------------------------------------
+//
+// Memories are written by the model, from things the user said. That makes
+// showing them back non-optional: a fact nobody can see is a fact nobody can
+// correct, and it is replayed into every future prompt.
+
+export const listMemories = async (req, res) => {
+  try {
+    const data = await memoryService.listMemoriesService(req.userId);
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+/// Upsert a fact the user states directly. Recorded as 'user_confirmed', which
+/// is the difference between something they told us and something we inferred.
+export const confirmMemory = async (req, res) => {
+  try {
+    const { key, value } = req.body || {};
+    const data = await memoryService.confirmMemoryService(req.userId, key, value);
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+export const forgetMemory = async (req, res) => {
+  try {
+    const data = await memoryService.forgetMemoryService(req.userId, parseInt(req.params.id));
+    res.json({ data });
+  } catch (err) {
+    fail(res, err);
+  }
+};

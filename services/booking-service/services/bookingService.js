@@ -1,13 +1,23 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import axios from 'axios';
-import { notifyPartner } from '../utils/notifyPartner.js';
+import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
-import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, shiftedSlotForNow, todayDateStringIST, getDayOfWeek } from '../utils/slotTiming.js';
+import { isSlotInPastOrTooSoon, hoursUntilSlot, isSessionActiveNow, isBeforeSessionWindow, isSessionEnded, sessionEndedBefore, msUntilSlot, formatSlotTime, shiftedSlotForNow, todayDateStringIST, getDayOfWeek, IST_OFFSET_MS } from '../utils/slotTiming.js';
+import { clusterSameTimeVisits } from '../utils/visitClustering.js';
+import { summarizeVisitPatterns } from '../utils/visitPatterns.js';
+import { shapeUpcomingBooking } from '../utils/upcomingBooking.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
+import { recordPresence, liveSnapshot } from './presenceService.js';
 import { recordAttendanceForWorkout } from '../utils/notifyHealthService.js';
+import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
+import * as checkinDaysService from './checkinDaysService.js';
+import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
+import { pageArgs, finishPage } from '../utils/pagination.js';
+import { createTtlCache } from '../utils/ttlCache.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -18,7 +28,20 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-const prisma = new PrismaClient();
+// Inclusive [from, today] window of IST calendar days, as the bare
+// "YYYY-MM-DD" strings every date column here stores (Booking.date,
+// MemberAttendance.date, TrainerAttendance.date). Every analytics query used
+// to derive this from Date#toISOString, i.e. the UTC day — which is 5h30m
+// behind IST, so after 18:30 IST the "today" upper bound was still yesterday
+// and today's attendance/revenue silently vanished from every report.
+function istDateWindow(days) {
+  const todayString = todayDateStringIST();
+  const todayMs = new Date(`${todayString}T00:00:00+05:30`).getTime();
+  const fromMs = todayMs - days * 24 * 60 * 60 * 1000;
+  const fromDateString = new Date(fromMs + IST_OFFSET_MS).toISOString().slice(0, 10);
+  return { fromDateString, todayString };
+}
+
 
 // "First-ever visit to this gym" spans BOTH attendance tables — a customer
 // who's booked at gym X and later does their first member-checkin at that
@@ -54,7 +77,18 @@ export async function hasPriorVisitAtGym({ customerId, gymId, excludeBookingId, 
 // branch — so all three verification methods count equally. Originally only
 // selfCheckIn emitted badge_earned (Wave 1's known undercounting gap); this
 // closes it for all three at once.
-export async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source }) {
+//
+// `attendanceMethod` and `attendedAt` are the values just persisted on the
+// Booking row, passed through to health-service so it can snapshot HOW the
+// visit was proven next to the session it drafts. That provenance is what the
+// insurer-grade score labels each visit with (qr_scan = gym staff scanned a
+// signed QR, qr_geofence_self = poster QR + location, manual_override = the
+// partner completed without any scan). The attendedAt sent is the booking's
+// own, not a fresh `new Date()`: the two differ by however long the badge
+// check above took, and the booking row is the record of truth. Both are
+// optional so an older caller degrades to the previous behaviour (null
+// provenance, which health-service treats as "unknown", never as verified).
+export async function emitAttendanceSignals({ customerId, bookingId, gymId, city, source, attendanceMethod = null, attendedAt = null }) {
   try {
     const hadPriorVisit = await hasPriorVisitAtGym({ customerId, gymId, excludeBookingId: bookingId });
     if (!hadPriorVisit) {
@@ -68,9 +102,16 @@ export async function emitAttendanceSignals({ customerId, bookingId, gymId, city
     idempotencyKey: `booking:${bookingId}`,
   });
   recordAttendanceForWorkout({
-    userId: customerId, bookingId, gymId, attendedAt: new Date().toISOString(), source,
+    userId: customerId, bookingId, gymId,
+    attendedAt: attendedAt ? new Date(attendedAt).toISOString() : new Date().toISOString(),
+    source, attendanceMethod,
     idempotencyKey: `booking:${bookingId}`,
   });
+  // A partner who completes a session without any scan did not see the person
+  // arrive, so that is not an entrance.
+  if (attendanceMethod !== 'manual_override') {
+    recordPresence({ gymId, customerId, kind: 'in', source: 'booking', method: 'checkin', bookingId });
+  }
 }
 
 // Attendance-SaaS twin of emitAttendanceSignals, for linked members
@@ -91,13 +132,18 @@ export async function emitMemberAttendanceSignals({ customerId, attendanceId, gy
     userId: customerId, memberAttendanceId: attendanceId, gymId, attendedAt: new Date().toISOString(),
     source: 'member_checkin', idempotencyKey: `member-checkin:${attendanceId}`,
   });
+  recordPresence({ gymId, customerId, kind: 'in', source: 'member', method: 'checkin' });
 }
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
+// Upper bound on the small sibling reads createBooking fans out (profile,
+// slot blocks, subscription candidate).
+const SIBLING_CALL_TIMEOUT_MS = 3000;
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
+const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
-const REFERRAL_BONUS = 50;
 
 // Booking's money fields are Decimal in Postgres (see schema.prisma) — every
 // read site below runs the fetched/created/updated row through this
@@ -112,6 +158,7 @@ function normalizeBookingMoney(booking) {
   if (out.amount != null) out.amount = Number(out.amount);
   if (out.commissionPct != null) out.commissionPct = Number(out.commissionPct);
   if (out.partnerShare != null) out.partnerShare = Number(out.partnerShare);
+  if (out.payoutAmount != null) out.payoutAmount = Number(out.payoutAmount);
   return out;
 }
 
@@ -120,7 +167,7 @@ function normalizeBookingMoney(booking) {
 // older gym-service revision) — the real rate is per-gym, gym-service's
 // Gym.commissionPct (admin-editable, defaults to 20 there too). This rate is
 // untouched by the attendance-SaaS wedge — GymSubscription purchases now
-// carry their own separate honeymoon/1%-or-flat-fee commission computed in
+// carry their own separate percentage-or-flat-fee commission computed in
 // wallet-service (purchaseSubscriptionWithWallet), independent of this
 // constant and of commissionPct.
 const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT) || 20;
@@ -132,6 +179,85 @@ const BOOKING_COMMISSION_PERCENT = Number(process.env.BOOKING_COMMISSION_PERCENT
 // async (internally cached/refreshed, so this is cheap).
 async function internalHeadersFor(targetUrl) {
   return { headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(targetUrl)) } };
+}
+
+// Coach-journey B3: fire-and-forget ping to auth-service after a member
+// check-in or a booking is marked attended. Auth flips the customer's active
+// GymLink.firstVerifiedCheckinAt from null if this was their first verified
+// visit to their linked gym — that's what makes a self-linked member visible
+// on the partner roster (B2). Idempotent on auth's side, so a redundant ping
+// is a no-op there; never awaited by the caller and never allowed to throw,
+// the same contract as notifyCustomer's catch-and-drop usage.
+function pingGymLinkCheckedIn(userId, gymId) {
+  internalHeadersFor(AUTH_SERVICE_URL)
+    .then((headers) => axios.post(`${AUTH_SERVICE_URL}/internal/gym-links/checked-in`, { userId, gymId }, headers))
+    .catch((err) => {
+      console.error(`gym-link checked-in ping failed for user ${userId} gym ${gymId}:`, err.message);
+    });
+}
+
+// Coach-journey B3: the partner "first visit" badge. firstVisit is true only
+// when the customer opted in (User.firstVisitBadgeConsent, auth-service) AND
+// this booking's attendance is their first-ever check-in at ANY gym — no
+// earlier attended booking, MemberAttendance or IndependentCheckIn exists.
+//
+// Map of customerId -> earliest attendance instant (ms) across all three
+// check-in sources, batched over the list's customers (getGymBookings) or a
+// single id (verifyAttendance).
+async function firstVisitEarliestByCustomer(customerIds) {
+  const [bookingMins, memberMins, independentMins] = await Promise.all([
+    prisma.booking.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds }, attendedAt: { not: null } },
+      _min: { attendedAt: true },
+    }),
+    prisma.memberAttendance.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds } },
+      _min: { checkedInAt: true },
+    }),
+    prisma.independentCheckIn.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds } },
+      _min: { checkedInAt: true },
+    }),
+  ]);
+  const earliest = new Map();
+  const consider = (customerId, at) => {
+    if (at == null) return;
+    const t = new Date(at).getTime();
+    const cur = earliest.get(customerId);
+    if (cur == null || t < cur) earliest.set(customerId, t);
+  };
+  for (const g of bookingMins) consider(g.customerId, g._min.attendedAt);
+  for (const g of memberMins) consider(g.customerId, g._min.checkedInAt);
+  for (const g of independentMins) consider(g.customerId, g._min.checkedInAt);
+  return earliest;
+}
+
+// True iff `booking` is the customer's first-ever attendance (its attendedAt
+// IS the earliest instant across the union) and they consented to the badge.
+function isFirstVisit(booking, consent, earliestByCustomer) {
+  if (!consent || !booking.attendedAt) return false;
+  const earliest = earliestByCustomer.get(booking.customerId);
+  if (earliest == null) return false;
+  return new Date(booking.attendedAt).getTime() === earliest;
+}
+
+// Best-effort single-booking flag for verifyAttendance's response. Any
+// failure degrades to false — the verification itself already succeeded, so
+// the badge lookup must never be what fails it.
+async function firstVisitFlagForBooking(booking) {
+  try {
+    const [profileRes, earliest] = await Promise.all([
+      axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL)),
+      firstVisitEarliestByCustomer([booking.customerId]),
+    ]);
+    const consent = profileRes.data?.firstVisitBadgeConsent === true;
+    return isFirstVisit(booking, consent, earliest);
+  } catch (_) {
+    return false;
+  }
 }
 
 // Shared by every partner-facing, gym-scoped read (bookings, sales summary,
@@ -186,6 +312,73 @@ async function getGymCity(gymId) {
   } catch (_) {
     return null;
   }
+}
+
+// Small in-process "gym card" cache for the customer-facing lists that need
+// a gym's display fields for every booking/visit/warning row
+// (getCustomerBookings, getVisitedGyms, getMyAttendanceWarnings). Without it
+// each request makes one gym-service call per distinct gym, and each of those
+// loads the full gym + all images. Per-instance only (no shared store), so
+// staleness is bounded by the TTL: a renamed gym or new cover photo shows up
+// in these lists within GYM_CARD_CACHE_TTL_MS. Concurrent misses for the same
+// gym share one in-flight request; failures are never cached.
+const GYM_CARD_CACHE_TTL_MS = 5 * 60 * 1000;
+const GYM_CARD_CACHE_MAX = 500;
+const GYM_CARD_FETCH_TIMEOUT_MS = 5000;
+const gymCardCache = new Map(); // gymId -> { card, expiresAt }
+const gymCardInflight = new Map(); // gymId -> Promise<card|null>
+
+// Test hook: drop all cached/in-flight cards.
+export function _resetGymCardCache() {
+  gymCardCache.clear();
+  gymCardInflight.clear();
+}
+
+function rememberGymCard(gymId, card) {
+  if (gymCardCache.size >= GYM_CARD_CACHE_MAX) {
+    const now = Date.now();
+    for (const [k, v] of gymCardCache) if (v.expiresAt <= now) gymCardCache.delete(k);
+    // Still full of live entries: evict the oldest insertion.
+    if (gymCardCache.size >= GYM_CARD_CACHE_MAX) gymCardCache.delete(gymCardCache.keys().next().value);
+  }
+  gymCardCache.set(gymId, { card, expiresAt: Date.now() + GYM_CARD_CACHE_TTL_MS });
+}
+
+// Resolves to { id, name, address, city, lat, lng, imageUrl } or null when the
+// gym could not be loaded (never throws).
+function getGymCard(gymId) {
+  const hit = gymCardCache.get(gymId);
+  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.card);
+  const pending = gymCardInflight.get(gymId);
+  if (pending) return pending;
+  const p = (async () => {
+    try {
+      const res = await axios.get(
+        `${GYM_SERVICE_URL}/internal/${gymId}`,
+        { ...(await internalHeadersFor(GYM_SERVICE_URL)), timeout: GYM_CARD_FETCH_TIMEOUT_MS }
+      );
+      // Wrapped ({data}) or bare body; an explicit `data: null` means no gym.
+      const gym = res.data && Object.hasOwn(res.data, 'data') ? res.data.data : res.data;
+      if (!gym) return null;
+      const card = {
+        id: gym.id,
+        name: gym.name,
+        address: gym.address,
+        city: gym.city,
+        lat: gym.lat,
+        lng: gym.lng,
+        imageUrl: gym.images?.[0]?.url || null,
+      };
+      rememberGymCard(gymId, card);
+      return card;
+    } catch (_) {
+      return null;
+    } finally {
+      gymCardInflight.delete(gymId);
+    }
+  })();
+  gymCardInflight.set(gymId, p);
+  return p;
 }
 
 const RESERVE_MAX_ATTEMPTS = 4;
@@ -402,7 +595,10 @@ async function notifyOnConfirmation(booking, { customerId, gymId, date, startTim
   notifyPartner(gymId, booking).catch(() => {});
   notifyCustomer(customerId, {
     title: 'Booking confirmed',
-    body: `Your session on ${booking.date} at ${booking.startTime} is confirmed. ₹${booking.amount} debited.`,
+    // A plan-covered session charges nothing; "₹299 debited" there was false.
+    body: subscriptionId
+      ? `Your session on ${booking.date} at ${formatSlotTime(booking.startTime)} is confirmed. Covered by your plan.`
+      : `Your session on ${booking.date} at ${formatSlotTime(booking.startTime)} is confirmed. ₹${booking.amount} paid from your wallet.`,
     data: { type: 'booking_confirmed', bookingId: booking.id, date: booking.date },
   }).catch(() => {});
 }
@@ -522,21 +718,41 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       };
     }
 
+    // 1a/1b/1c. Three independent reads — profile (auth-service), slot block
+    // (gym-service) and subscription candidate (wallet-service) — started
+    // together instead of back to back, then evaluated below in the original
+    // order so error precedence is unchanged: profile (fail-closed 400s)
+    // first, then the 409 block, then the subscription lookup (any failure
+    // falls through to the normal paid flow). A short timeout bounds each so
+    // one slow dependency can't stall the booking.
+    //
+    // A class with a set price is always charged that amount regardless of
+    // subscription status (see amount above) — it must never even look up a
+    // candidate subscription, so it can never accidentally consume the
+    // daily subscription quota.
+    const classIsAlwaysPaid = !!(classId && cls.price != null);
+    const [profileSettled, blocksSettled, subSettled] = await Promise.allSettled([
+      (async () => axios.get(
+        `${AUTH_SERVICE_URL}/internal/${customerId}`,
+        { ...(await internalHeadersFor(AUTH_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS }
+      ))(),
+      (async () => axios.get(
+        `${GYM_SERVICE_URL}/internal/blocks/${gymId}?date=${encodeURIComponent(date)}`,
+        { ...(await internalHeadersFor(GYM_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS }
+      ))(),
+      classIsAlwaysPaid
+        ? Promise.resolve(null)
+        : (async () => axios.get(
+            `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}&date=${encodeURIComponent(date)}`,
+            { ...(await internalHeadersFor(WALLET_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS }
+          ))(),
+    ]);
+
     // 1a. Require a complete profile (name + date of birth) before booking —
     // both are optional at OTP signup, so a customer can otherwise reach
     // this endpoint before ever filling them in. Mirrors the app's own
     // pre-booking check, enforced here too since that check is client-side only.
-    try {
-      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
-      const profile = profileRes.data;
-      if (!profile?.name?.trim() || !profile?.dateOfBirth) {
-        throw {
-          status: 400,
-          error: 'Please add your name and date of birth before booking'
-        };
-      }
-    } catch (err) {
-      if (err.status) throw err;
+    if (profileSettled.status === 'rejected') {
       // auth-service unreachable — fail closed, same as a missing profile,
       // rather than silently letting an unverifiable booking through.
       throw {
@@ -544,25 +760,35 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         error: 'Could not verify your profile — please try again'
       };
     }
+    {
+      const profile = profileSettled.value.data;
+      if (!profile?.name?.trim() || !profile?.dateOfBirth) {
+        throw {
+          status: 400,
+          error: 'Please add your name and date of birth before booking'
+        };
+      }
+    }
 
     // 1b. Check if the slot is blocked — shared with class bookings too: a
     // gym-wide SlotBlock at this date/startTime (e.g. "closed for
     // maintenance") closes a class occurrence at that same time as well,
     // same physical location. One-off class-only cancellations use
     // GymClassCancellation instead (checked above via cancelledDates).
-    try {
-      const blockRes = await axios.get(
-        `${GYM_SERVICE_URL}/${gymId}/blocks?date=${date}`,
-        await internalHeadersFor(GYM_SERVICE_URL)
+    // Uses gym-service's internal read route (the partner-only /:id/blocks
+    // route rejects service callers). A failed lookup is non-critical and
+    // lets the booking proceed, but is logged so it is visible.
+    if (blocksSettled.status === 'rejected') {
+      console.warn(
+        `slot-block check failed for gym ${gymId} ${date} — allowing booking:`,
+        blocksSettled.reason?.message || blocksSettled.reason
       );
-      const blocks = blockRes.data?.data || [];
-      const isBlocked = blocks.some(b => b.startTime === effectiveStartTime);
+    } else {
+      const blocks = blocksSettled.value?.data?.data;
+      const isBlocked = Array.isArray(blocks) && blocks.some(b => b.startTime === effectiveStartTime);
       if (isBlocked) {
         throw { status: 409, error: 'This slot has been blocked by the gym' };
       }
-    } catch (err) {
-      if (err.error) throw err;
-      // If block check fails, allow booking (non-critical)
     }
 
     // 1c. Subscription entitlement check — does this customer have an active
@@ -574,28 +800,14 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // subscription-covered is decided atomically inside reserveBookingSlot's
     // transaction (see there for why), so don't trust this subscriptionId
     // for anything money-related below; use reservation.subscriptionId.
-    // A class with a set price is always charged that amount regardless of
-    // subscription status (see amount above) — it must never even look up a
-    // candidate subscription, so it can never accidentally consume the
-    // daily subscription quota.
-    const classIsAlwaysPaid = !!(classId && cls.price != null);
     let candidateSubscription = null;
     let candidateSubscriptionId = null;
     let candidateViaGiftDay = false;
-    if (!classIsAlwaysPaid) {
-      try {
-        const subRes = await axios.get(
-          `${WALLET_SERVICE_URL}/internal/subscriptions/active?customerId=${customerId}&gymId=${gymId}`,
-          await internalHeadersFor(WALLET_SERVICE_URL)
-        );
-        if (subRes.data?.data?.active) {
-          candidateSubscription = subRes.data.data.subscription;
-          candidateSubscriptionId = candidateSubscription.id;
-          candidateViaGiftDay = !!subRes.data.data.viaGiftDay;
-        }
-      } catch (_) {
-        // wallet-service unreachable — fall through to the paid flow
-      }
+    if (subSettled.status === 'fulfilled' && subSettled.value?.data?.data?.active) {
+      const subData = subSettled.value.data.data;
+      candidateSubscription = subData.subscription;
+      candidateSubscriptionId = candidateSubscription.id;
+      candidateViaGiftDay = !!subData.viaGiftDay;
     }
 
     // A class with no price (price null) is a subscription-only perk, not
@@ -679,7 +891,12 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
         // idempotency key before assuming it didn't: deleting a reservation
         // the customer was actually charged for would be worse than the bug
         // this whole mechanism exists to prevent.
+        // A 4xx is wallet-service answering "no" (insufficient balance, bad
+        // request) - a definite not-charged. Anything else (timeout, dropped
+        // connection, 5xx) means the debit may have committed.
+        const walletRefused = err.response?.status >= 400 && err.response?.status < 500;
         let actuallyCharged = false;
+        let chargeUnknown = false;
         try {
           const check = await axios.get(
             `${WALLET_SERVICE_URL}/internal/transactions/by-key/${debitIdempotencyKey(reservation.id)}`,
@@ -687,9 +904,23 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
           );
           actuallyCharged = !!check.data?.data;
         } catch (_) {
-          // Can't tell right now — fall through and release below. If it
-          // did land, the slot stays reserved (`pending`) and
-          // reconcileStalePendingBooking will handle it if needed.
+          chargeUnknown = !walletRefused;
+        }
+
+        if (chargeUnknown) {
+          // Neither the debit nor the lookup gave an answer. This used to
+          // delete the reservation and say "Insufficient wallet balance" -
+          // so a customer whose debit had landed lost both the money and the
+          // slot, with nothing left to reconcile. Keep it `pending` instead;
+          // reconcileStalePendingBooking settles it by the same idempotency
+          // key once wallet-service answers (confirm if charged, release if
+          // not), and the customer is told to check rather than told no.
+          track('booking_failed', customerId, { gym_id: gymId, class_id: classId || undefined, reason: 'payment_unconfirmed', amount, city: gym.city });
+          throw {
+            status: 503,
+            error: "We couldn't confirm your payment yet. Check My sessions in a minute before booking again.",
+            code: 'PAYMENT_UNCONFIRMED',
+          };
         }
 
         if (!actuallyCharged) {
@@ -706,20 +937,30 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       }
     }
 
-    // 5. Payment succeeded (or wasn't needed) — booking stays pending,
-    // awaiting partner confirmation. Notify customer that payment was taken.
+    // 5. Payment succeeded (or wasn't needed) — the booking is confirmed now.
+    // Instant confirmation (2026-10-08): a paid booking is a booking; the gym
+    // is told, not asked. It used to wait `pending` for a partner tap that the
+    // 2-minute stale-pending self-heal overrode anyway - so customers saw
+    // "pending gym confirmation" for a booking nobody would ever reject, and a
+    // cancel in those two minutes got a different refund than one after.
     track('booking_created', customerId, {
       booking_id: reservation.id, gym_id: gymId, class_id: classId || undefined, amount: reservation.amount, date, start_time: effectiveStartTime,
       via: subscriptionId ? 'subscription' : 'wallet', city: gym.city,
     });
 
-    notifyCustomer(customerId, {
-      title: classId ? 'Class booking request sent' : 'Booking request sent',
-      body: `Your ${classId ? cls.name : 'session'} on ${reservation.date} at ${reservation.startTime} is pending gym confirmation.${subscriptionId ? '' : ` ₹${reservation.amount} debited.`}`,
-      data: { type: 'booking_created', bookingId: reservation.id, date: reservation.date },
-    }).catch(() => {});
+    // One round trip on the normal path: update() with the same status guard
+    // the old updateMany had, returning the row. When the guard does not match
+    // (already confirmed/cancelled concurrently) or the row is gone, update()
+    // throws P2025 - which maps to exactly the old behaviour: no write, then
+    // return whatever the row currently is (or the reservation if deleted).
+    const confirmed = normalizeBookingMoney(await confirmReservation(prisma, reservation));
 
-    const confirmed = normalizeBookingMoney(reservation);
+    // booking_confirmed event, the partner's push and the customer's
+    // "Booking confirmed" push - the same as a partner confirmation sends.
+    await notifyOnConfirmation(confirmed, {
+      customerId, gymId, date, startTime: confirmed.startTime, subscriptionId, city: gym.city,
+    });
+
     return { ...confirmed, qrToken: signQrToken(confirmed.id, confirmed.gymId) };
   } catch (err) {
     if (err.error) throw err;
@@ -744,10 +985,34 @@ const DEFAULT_CANCELLATION_TIERS = [
   { maxHoursNotice: null, blocked: false, refundRate: 1.0 },
 ];
 
+// createBooking's final pending -> confirmed step. Exported (with the client
+// injectable) so test/confirmReservationDb.test.js can run it against a real DB.
+export async function confirmReservation(db, reservation) {
+  try {
+    return await db.booking.update({
+      where: { id: reservation.id, status: 'pending' },
+      data: { status: 'confirmed' },
+    });
+  } catch (e) {
+    if (e?.code !== 'P2025') throw e;
+    return (await db.booking.findUnique({ where: { id: reservation.id } })) ?? reservation;
+  }
+}
+
 export async function getCancellationPolicy() {
   const row = await prisma.cancellationPolicySetting.findUnique({ where: { id: 1 } });
   return { tiers: row ? row.tiers : DEFAULT_CANCELLATION_TIERS, updatedAt: row?.updatedAt ?? null };
 }
+
+// cancelBooking's refund tiers are read on every cancel; cache them briefly.
+// Per-instance cache: updateCancellationPolicy evicts on the instance that
+// served the write, but OTHER Cloud Run instances only converge when their
+// entry expires - hence the short 15s TTL (worst-case staleness window).
+// Failures are never cached (see utils/ttlCache.js). Only cancelBooking's
+// refund calc uses the cache; the admin GET endpoint always reads fresh.
+const POLICY_CACHE_KEY = 'cancellation-policy';
+const policyCache = createTtlCache(15_000);
+export function clearCancellationPolicyCache() { policyCache.clear(); }
 
 export async function updateCancellationPolicy(tiers, updatedBy) {
   if (!Array.isArray(tiers) || !tiers.length) {
@@ -763,11 +1028,14 @@ export async function updateCancellationPolicy(tiers, updatedBy) {
     create: { id: 1, tiers, updatedBy },
     update: { tiers, updatedBy },
   });
+  // Evict after the write commits. evict() also detaches any in-flight read
+  // that started before the write so it cannot repopulate the old tiers.
+  policyCache.evict(POLICY_CACHE_KEY);
   return { tiers: saved.tiers, updatedAt: saved.updatedAt };
 }
 
 async function cancellationRefundRate(hoursUntil) {
-  const { tiers } = await getCancellationPolicy();
+  const { tiers } = await policyCache.get(POLICY_CACHE_KEY, getCancellationPolicy);
   for (const tier of tiers) {
     if (tier.maxHoursNotice === null || hoursUntil < tier.maxHoursNotice) {
       return tier.blocked ? null : tier.refundRate;
@@ -840,10 +1108,21 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
     // be completed (crediting the partner too) or cancelled again (a second
     // customer credit). `updateMany` + `count === 1` makes a concurrent
     // second cancel attempt no-op instead of double-crediting.
+    // Nothing is owed for a subscription-covered booking: the customer paid
+    // for the plan, not this session, so `amount` is the slot's list price.
+    // Returning amount * rate here used to tell them "₹299 refunded" for a
+    // refund that never happened.
+    const refundAmount = booking.subscriptionId
+      ? 0
+      : Math.round(booking.amount * refundRate * 100) / 100;
+
     const { count } = await prisma.booking.updateMany({
       where: { id: bookingId, customerId, status: { in: ['pending', 'confirmed'] } },
       data: {
         status: 'cancelled',
+        // Recorded with the flip, so the settlement sweep can always find a
+        // refund that is owed even if this process dies before crediting it.
+        ...(refundAmount > 0 ? { refundDueAmount: refundAmount } : {}),
         // Written in the same conditional update as the status flip, so a
         // reason can never be recorded against a booking that wasn't
         // actually cancelled by this call.
@@ -859,28 +1138,14 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
     }
 
     // 5. Refund — only reached once the status flip has already committed.
-    // Skipped when this booking was covered by an active subscription: the
-    // customer never spent wallet balance on it (they paid for the
-    // subscription itself, separately, upfront), so crediting them here
-    // would be free money for a session they didn't pay for individually.
-    // If this fails, the booking stays correctly cancelled but unrefunded —
-    // a known reconciliation gap (same class as the best-effort partner
-    // payout in completeBooking below), logged clearly for manual follow-up
-    // rather than building a full saga/outbox for it.
-    const refundAmount = Math.round(booking.amount * refundRate * 100) / 100;
-    if (!booking.subscriptionId) {
-      try {
-        await axios.post(`${WALLET_SERVICE_URL}/${customerId}/credit`, {
-          amount: refundAmount,
-          description: `Booking cancellation refund (${Math.round(refundRate * 100)}%)`
-        }, await internalHeadersFor(WALLET_SERVICE_URL));
-      } catch (err) {
-        console.error('Refund failed for cancelled booking', bookingId, err.message);
-        throw {
-          status: 502,
-          error: 'Booking was cancelled but the refund failed — contact support'
-        };
-      }
+    // A failed credit is no longer a dead end: the booking already carries
+    // refundDueAmount, and retryOwedRefunds (the hourly settlement sweep)
+    // credits it under the same idempotency key. The cancellation itself
+    // succeeded, so the customer is told that - with the refund marked as on
+    // its way - rather than a "could not cancel" for a booking that is gone.
+    let refundPending = false;
+    if (refundAmount > 0) {
+      refundPending = !(await creditOwedRefund({ id: bookingId, customerId, refundDueAmount: refundAmount }, refundRate));
     }
 
     const updatedBooking = {
@@ -888,25 +1153,37 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
       status: 'cancelled',
       refundAmount,
       refundRate,
+      refundPending,
       cancellationReason: feedback.cancellationReason ?? null,
       nextVisitIntent: feedback.nextVisitIntent ?? null,
     };
 
-    track('booking_cancelled', customerId, {
+    // The gym city is analytics-only. On a cache hit it is read synchronously
+    // (event emitted inline, as before); on a miss the gym-service lookup runs
+    // in the background so the customer's cancel response never waits on it.
+    const emitCancelled = (city) => track('booking_cancelled', customerId, {
       booking_id: booking.id, gym_id: booking.gymId, amount: booking.amount, date: booking.date,
       refund_rate: refundRate, refund_amount: refundAmount, hours_until_slot: hoursUntil,
-      city: await getGymCity(booking.gymId),
+      city,
       // FR-14: null here is meaningful data too (the customer skipped the
       // prompt), which is why these are always emitted rather than omitted.
       cancellation_reason: feedback.cancellationReason ?? null,
       next_visit_intent: feedback.nextVisitIntent ?? null,
     });
+    const cachedCity = gymCityCache.get(booking.gymId);
+    if (cachedCity && cachedCity.expiresAt > Date.now()) {
+      emitCancelled(cachedCity.city);
+    } else {
+      getGymCity(booking.gymId).then(emitCancelled).catch(() => {});
+    }
 
     notifyCustomer(customerId, {
       title: 'Booking cancelled',
-      body: booking.subscriptionId
+      body: refundAmount === 0
         ? `Your session on ${booking.date} was cancelled.`
-        : `Your session on ${booking.date} was cancelled. ₹${refundAmount} (${Math.round(refundRate * 100)}%) refunded to your wallet.`,
+        : refundPending
+          ? `Your session on ${booking.date} was cancelled. Your ₹${refundAmount} refund is on its way to your wallet.`
+          : `Your session on ${booking.date} was cancelled. ₹${refundAmount} (${Math.round(refundRate * 100)}%) refunded to your wallet.`,
       data: { type: 'booking_cancelled', bookingId: booking.id, date: booking.date },
     }).catch(() => {});
 
@@ -920,6 +1197,314 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
       error: err.message || 'Server error'
     };
   }
+}
+
+// The gym cancels a session - it has to close, a trainer is out, the slot was
+// double-sold offline. Until this existed only the customer could cancel, so
+// the gym's only option was to let the customer turn up to a locked door.
+//
+// Always a full refund (the customer did nothing wrong, so no tier applies),
+// any notice period, and never once attendance has been verified - a session
+// that has started is the gym's to complete, not to cancel. Same claim and
+// refund machinery as the customer path: status flip with refundDueAmount
+// first, then the idempotent credit, retried by the settlement sweep if it
+// fails.
+export async function cancelBookingByGym(bookingId, gymId, partnerId, { reason } = {}) {
+  try {
+    const booking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: bookingId } }));
+    if (!booking) throw { status: 404, error: 'Booking not found' };
+    if (booking.gymId !== gymId) throw { status: 403, error: 'Forbidden' };
+
+    let gym;
+    try {
+      const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+      gym = gymRes.data?.data || gymRes.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+    if (!gym || gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+    if (!['pending', 'confirmed'].includes(booking.status)) {
+      throw {
+        status: 400,
+        error: booking.status === 'cancelled'
+          ? 'This booking is already cancelled'
+          : 'A session that has started or finished cannot be cancelled',
+      };
+    }
+
+    const note = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
+    const refundAmount = booking.subscriptionId ? 0 : booking.amount;
+
+    const { count } = await prisma.booking.updateMany({
+      where: { id: bookingId, gymId, status: { in: ['pending', 'confirmed'] } },
+      data: {
+        status: 'cancelled',
+        cancelledByGymAt: new Date(),
+        gymCancelReason: note || null,
+        ...(refundAmount > 0 ? { refundDueAmount: refundAmount } : {}),
+      },
+    });
+    if (count !== 1) throw { status: 400, error: 'Booking cannot be cancelled' };
+
+    let refundPending = false;
+    if (refundAmount > 0) {
+      refundPending = !(await creditOwedRefund({ id: bookingId, customerId: booking.customerId, refundDueAmount: refundAmount }, 1));
+    }
+
+    track('booking_cancelled', booking.customerId, {
+      booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+      refund_rate: 1, refund_amount: refundAmount, cancelled_by: 'gym', city: gym.city,
+    });
+
+    const when = `${booking.date} at ${formatSlotTime(booking.startTime)}`;
+    notifyCustomer(booking.customerId, {
+      title: `${gym.name || 'Your gym'} cancelled your session`,
+      body: [
+        `Your session on ${when} was cancelled by the gym${note ? `: ${note}` : '.'}`,
+        refundAmount > 0
+          ? (refundPending
+            ? `Your full ₹${refundAmount} refund is on its way to your wallet.`
+            : `₹${refundAmount} has been refunded to your wallet.`)
+          : null,
+      ].filter(Boolean).join(' '),
+      data: { type: 'booking_cancelled', bookingId: booking.id, date: booking.date },
+    }).catch(() => {});
+
+    return { ...booking, status: 'cancelled', refundAmount, refundPending, gymCancelReason: note || null };
+  } catch (err) {
+    if (err.error) throw err;
+    console.error('cancelBookingByGym error:', err);
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// Credits a cancelled booking's owed refund and stamps refundedAt. Keyed on
+// the booking, so the cancel path and every retry by the sweep credit it once.
+// Never throws; returns whether the refund is now settled.
+async function creditOwedRefund(booking, refundRate = null) {
+  const amount = Number(booking.refundDueAmount);
+  try {
+    await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
+      amount,
+      description: refundRate != null
+        ? `Booking cancellation refund (${Math.round(refundRate * 100)}%)`
+        : 'Booking cancellation refund',
+      idempotencyKey: `booking-refund-${booking.id}`,
+    }, await internalHeadersFor(WALLET_SERVICE_URL));
+  } catch (err) {
+    console.error('Refund failed for cancelled booking', booking.id, err.message);
+    return false;
+  }
+  await prisma.booking.update({ where: { id: booking.id }, data: { refundedAt: new Date() } })
+    .catch((err) => console.error('refundedAt stamp failed for booking', booking.id, err.message));
+  return true;
+}
+
+// Retries every cancellation refund that is owed but not yet credited. Run by
+// the hourly settlement sweep (POST /internal/auto-complete) alongside
+// auto-completion. Safe to run any number of times: the credit is keyed on
+// booking-refund-<id>, so a refund whose stamp was lost is not paid twice.
+export async function retryOwedRefunds() {
+  const owed = await prisma.booking.findMany({
+    where: { status: 'cancelled', refundDueAmount: { not: null }, refundedAt: null },
+    orderBy: { id: 'asc' },
+    take: 200,
+  });
+  let refunded = 0;
+  for (const booking of owed) {
+    if (await creditOwedRefund(booking)) refunded++;
+  }
+  return { owed: owed.length, refunded };
+}
+
+// Credits one completion's partner share to the partner's wallet and stamps
+// payoutCreditedAt. Keyed on the booking (booking-payout-<id>), so the manual
+// completion path and every retry by the sweep credit it most once. Never
+// throws; returns whether the payout is now settled.
+async function creditBookingPayout({ id, gymId, partnerId, amount }) {
+  if (!partnerId) return false;
+  try {
+    await axios.post(`${WALLET_SERVICE_URL}/${partnerId}/credit`, {
+      amount,
+      description: 'Gym session payout',
+      userType: 'partner',
+      gymId,
+      // One payout per session, whichever path completed it. The status flip
+      // is already race-guarded; this makes a retried credit safe too.
+      idempotencyKey: `booking-payout-${id}`,
+    }, await internalHeadersFor(WALLET_SERVICE_URL));
+  } catch (err) {
+    console.error('Partner payout failed for booking', id, err.message);
+    return false;
+  }
+  await prisma.booking.update({ where: { id }, data: { payoutCreditedAt: new Date() } })
+    .catch((err) => console.error('payoutCreditedAt stamp failed for booking', id, err.message));
+  return true;
+}
+
+// Retries every completion payout that is owed but not yet credited. Run by the
+// hourly settlement sweep (POST /internal/auto-complete) alongside refunds and
+// auto-completion. Safe to run any number of times: the credit is keyed on
+// booking-payout-<id>, so a payout whose stamp was lost is not paid twice.
+export async function retryOwedPayouts() {
+  const owed = await prisma.booking.findMany({
+    where: { status: 'completed', payoutAmount: { not: null }, payoutCreditedAt: null },
+    orderBy: { id: 'asc' },
+    take: 200,
+  });
+  const gyms = new Map();
+  let paid = 0;
+  for (const booking of owed) {
+    let partnerId = null;
+    try {
+      if (!gyms.has(booking.gymId)) {
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        gyms.set(booking.gymId, gymRes.data?.data || gymRes.data);
+      }
+      partnerId = gyms.get(booking.gymId)?.partnerId ?? null;
+    } catch (err) {
+      // Gym-service hiccup — leave the payout owed and pick it up next run.
+      console.error('payout retry gym lookup failed for booking', booking.id, err.message);
+      continue;
+    }
+    const amount = Number(booking.payoutAmount);
+    if (!partnerId || !Number.isFinite(amount) || amount < 0) continue;
+    // A failed bank-ledger record must retry the bank route, never credit
+    // the in-app wallet. Zero-share bookings only need a settlement stamp.
+    if (amount === 0 || (booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null)) {
+      try {
+        if (amount > 0) {
+          await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
+            partnerId, gymId: booking.gymId, bookingId: booking.id,
+            subscriptionId: booking.subscriptionId, amount,
+          }, await internalHeadersFor(WALLET_SERVICE_URL));
+        }
+        await prisma.booking.update({ where: { id: booking.id }, data: { payoutCreditedAt: new Date() } });
+        paid++;
+      } catch (err) {
+        console.error('Partner bank settlement retry failed for booking', booking.id, err.message);
+      }
+    } else if (await creditBookingPayout({ id: booking.id, gymId: booking.gymId, partnerId, amount })) {
+      paid++;
+    }
+  }
+  return { owed: owed.length, paid };
+}
+
+// Everything that follows a booking flipping to 'completed': the partner's
+// money, the referral bonus, the funnel event and the customer's push. Shared
+// by the partner's own "complete" tap and the auto-complete sweep, so a session
+// the sweep finishes pays out exactly as one the partner finished by hand.
+// Every step is best-effort and never throws - the status flip has already
+// committed, and a failed side effect is logged for follow-up, not rolled back.
+async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, completedBy = 'partner' }) {
+  const bookingId = booking.id;
+
+  // 7. Credit partner wallet — best-effort, never blocks completion.
+  // partnerShare is null for bookings created before this field existed —
+  // fall back to the full amount for those rather than paying out `null`.
+  // Skipped ONLY for a subscription booking whose commission fields came
+  // back null from bookingCommissionFields — that happens exclusively for
+  // legacy "upfront" subscriptions, where the partner was already paid the
+  // full plan share in one shot at purchase (see purchaseSubscriptionWithWallet's
+  // payoutModel branch); crediting again here would pay them twice for the
+  // same subscription. Current "perVisit" subscriptions DO have a real
+  // (non-null) partnerShare snapshotted at booking-creation time — those
+  // pay out here exactly like a normal paid booking.
+  const payoutOwed = booking.partnerShare ?? booking.amount;
+  const skipPayout = booking.subscriptionId && booking.partnerShare == null;
+  // Attendance-SaaS subscription visit: this partner share is settled
+  // directly to the partner's bank account by admin, never credited to
+  // their in-app wallet (see PartnerBankSettlement in wallet-service).
+  // Everything else — one-off marketplace bookings, and subscriptions at
+  // an opted-out gym — keeps crediting the wallet exactly as before.
+  const isSaasBankSettlement = booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null;
+  if (isSaasBankSettlement) {
+    try {
+      if (gym.partnerId) {
+        await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
+          partnerId: gym.partnerId,
+          gymId,
+          bookingId,
+          subscriptionId: booking.subscriptionId,
+          amount: payoutOwed,
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
+        // Not owed through the wallet path — mark settled so retryOwedPayouts
+        // never chases it. (The bank ledger has its own admin reconciliation.)
+        await prisma.booking.update({ where: { id: bookingId }, data: { payoutCreditedAt: new Date() } })
+          .catch((err) => console.error('payoutCreditedAt stamp failed for booking', bookingId, err.message));
+      }
+    } catch (payoutErr) {
+      console.error('Partner bank settlement record failed for booking', bookingId, payoutErr.message);
+    }
+  } else if (!skipPayout) {
+    // Given to creditBookingPayout, which stamps payoutCreditedAt on success so
+    // the sweep can retry exactly the bookings whose credit failed.
+    await creditBookingPayout({ id: bookingId, gymId, partnerId: gym.partnerId, amount: payoutOwed });
+  }
+
+  // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
+  // very first completed booking (never re-fires on later sessions) and
+  // only if they were referred. Same fire-and-forget, error-logged-not-
+  // thrown pattern as the partner payout above. Since B4 the two credits
+  // live behind wallet's POST /internal/referrals/credit — the single
+  // writer of referral-credit-* keys, which also enforces the monthly
+  // referrer cap and writes the `bonus` transaction type atomically; the
+  // old two-call shape here is now a 400 on wallet's generic credit route.
+  try {
+    // Identified by "earliest-booked (lowest id) session that is now
+    // completed", not a count — a plain count of completed bookings taken
+    // after this row's own status flip can read as 2 on BOTH sides of a
+    // customer's first two sessions completing at nearly the same instant
+    // (each sees the other's already-committed row too), so neither would
+    // fire. Only one booking can ever be the minimum id among currently-
+    // completed rows, so at most one concurrent completion can match this
+    // check — race-safe without needing a transaction.
+    const firstCompleted = await prisma.booking.findFirst({
+      where: { customerId: booking.customerId, status: 'completed' },
+      orderBy: { id: 'asc' },
+      select: { id: true },
+    });
+    if (firstCompleted?.id === booking.id) {
+      const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
+      const referredByUserId = profileRes.data?.referredByUserId;
+      if (referredByUserId) {
+        // Idempotent on wallet's side (the friend-side key dedupes a
+        // retried call), and capped/already_credited are both legitimate
+        // outcomes, not failures — only fire the analytics event when this
+        // call actually moved money ('credited' pays both sides, 'capped'
+        // still pays the friend when the referrer is over the monthly cap).
+        const res = await axios.post(`${WALLET_SERVICE_URL}/internal/referrals/credit`, {
+          referrerId: referredByUserId,
+          friendId: booking.customerId,
+          trigger: 'first_booking',
+        }, await internalHeadersFor(WALLET_SERVICE_URL));
+        const status = res.data?.data?.status;
+        if (status === 'credited' || status === 'capped') {
+          track('referral_credited', booking.customerId, {
+            booking_id: booking.id, referrer_id: referredByUserId,
+          });
+        }
+      }
+    }
+  } catch (referralErr) {
+    console.error('Referral credit failed for booking', bookingId, referralErr.message);
+  }
+
+  // Fulfillment funnel: the session actually happened (partner verified at the gym).
+  track('booking_completed', booking.customerId, {
+    booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
+    commission_pct: booking.commissionPct, partner_share: booking.partnerShare,
+    attendance_method: updatedBooking.attendanceMethod, city: gym.city,
+    completed_by: completedBy,
+  });
+
+  notifyCustomer(booking.customerId, {
+    title: 'Session completed',
+    body: `Your session on ${booking.date} is marked complete. See you next time!`,
+    data: { type: 'booking_completed', bookingId: booking.id, date: booking.date },
+  }).catch(() => {});
 }
 
 export async function completeBooking(bookingId, gymId, partnerId, { override = false, overrideReason } = {}) {
@@ -1002,9 +1587,15 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // 'confirmed' so two concurrent completion requests (double-tap, two
     // devices) can't both pass the check above and both trigger a payout;
     // only one update actually matches and the loser sees count === 0.
+    // payoutAmount is stamped in the same update (null when nothing is owed by
+    // the wallet path: an "upfront" subscription with partnerShare null) so a
+    // failed credit leaves a durable "owed but unpaid" row for retryOwedPayouts.
+    const payoutOwed = booking.subscriptionId && booking.partnerShare == null
+      ? null
+      : (booking.partnerShare ?? booking.amount);
     const { count } = await prisma.booking.updateMany({
       where: { id: bookingId, status: { in: ['confirmed', 'started'] } },
-      data: { status: 'completed', ...attendanceData }
+      data: { status: 'completed', ...attendanceData, payoutAmount: payoutOwed }
     });
     if (count === 0) {
       throw { status: 400, error: 'Booking cannot be completed' };
@@ -1016,111 +1607,16 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
     // earlier), that scan already emitted this exact signal once; firing
     // again here would double-count the attendance event and the badge check.
     if (!booking.attendedAt) {
-      await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override' });
-    }
-
-    // 7. Credit partner wallet — best-effort, never blocks completion.
-    // partnerShare is null for bookings created before this field existed —
-    // fall back to the full amount for those rather than paying out `null`.
-    // Skipped ONLY for a subscription booking whose commission fields came
-    // back null from bookingCommissionFields — that happens exclusively for
-    // legacy "upfront" subscriptions, where the partner was already paid the
-    // full plan share in one shot at purchase (see purchaseSubscriptionWithWallet's
-    // payoutModel branch); crediting again here would pay them twice for the
-    // same subscription. Current "perVisit" subscriptions DO have a real
-    // (non-null) partnerShare snapshotted at booking-creation time — those
-    // pay out here exactly like a normal paid booking.
-    const payoutAmount = booking.partnerShare ?? booking.amount;
-    const skipPayout = booking.subscriptionId && booking.partnerShare == null;
-    // Attendance-SaaS subscription visit: this partner share is settled
-    // directly to the partner's bank account by admin, never credited to
-    // their in-app wallet (see PartnerBankSettlement in wallet-service).
-    // Everything else — one-off marketplace bookings, and subscriptions at
-    // an opted-out gym — keeps crediting the wallet exactly as before.
-    const isSaasBankSettlement = booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null;
-    if (isSaasBankSettlement) {
-      try {
-        if (gym.partnerId) {
-          await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
-            partnerId: gym.partnerId,
-            gymId,
-            bookingId,
-            subscriptionId: booking.subscriptionId,
-            amount: payoutAmount,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-        }
-      } catch (payoutErr) {
-        console.error('Partner bank settlement record failed for booking', bookingId, payoutErr.message);
-      }
-    } else if (!skipPayout) {
-      try {
-        if (gym.partnerId) {
-          await axios.post(`${WALLET_SERVICE_URL}/${gym.partnerId}/credit`, {
-            amount: payoutAmount,
-            description: 'Gym session payout',
-            userType: 'partner',
-            gymId,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-        }
-      } catch (payoutErr) {
-        console.error('Partner payout failed for booking', bookingId, payoutErr.message);
-      }
-    }
-
-    // 7b. Referral bonus — ₹50 to both sides, but only on this customer's
-    // very first completed booking (never re-fires on later sessions) and
-    // only if they were referred. Same fire-and-forget, error-logged-not-
-    // thrown pattern as the partner payout above; idempotency keys make a
-    // retried completeBooking call (or a duplicate updateMany race) safe.
-    try {
-      // Identified by "earliest-booked (lowest id) session that is now
-      // completed", not a count — a plain count of completed bookings taken
-      // after this row's own status flip can read as 2 on BOTH sides of a
-      // customer's first two sessions completing at nearly the same instant
-      // (each sees the other's already-committed row too), so neither would
-      // fire. Only one booking can ever be the minimum id among currently-
-      // completed rows, so at most one concurrent completion can match this
-      // check — race-safe without needing a transaction.
-      const firstCompleted = await prisma.booking.findFirst({
-        where: { customerId: booking.customerId, status: 'completed' },
-        orderBy: { id: 'asc' },
-        select: { id: true },
+      await emitAttendanceSignals({
+        customerId: booking.customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'manual_override',
+        attendanceMethod: updatedBooking.attendanceMethod, attendedAt: updatedBooking.attendedAt,
       });
-      if (firstCompleted?.id === booking.id) {
-        const profileRes = await axios.get(`${AUTH_SERVICE_URL}/internal/${booking.customerId}`, await internalHeadersFor(AUTH_SERVICE_URL));
-        const referredByUserId = profileRes.data?.referredByUserId;
-        if (referredByUserId) {
-          await axios.post(`${WALLET_SERVICE_URL}/${referredByUserId}/credit`, {
-            amount: REFERRAL_BONUS,
-            description: 'Referral bonus',
-            idempotencyKey: `referral-credit-referrer-${referredByUserId}-for-${booking.customerId}`,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-          await axios.post(`${WALLET_SERVICE_URL}/${booking.customerId}/credit`, {
-            amount: REFERRAL_BONUS,
-            description: 'Referral bonus',
-            idempotencyKey: `referral-credit-referred-${booking.customerId}`,
-          }, await internalHeadersFor(WALLET_SERVICE_URL));
-          track('referral_credited', booking.customerId, {
-            booking_id: booking.id, referrer_id: referredByUserId,
-          });
-        }
-      }
-    } catch (referralErr) {
-      console.error('Referral credit failed for booking', bookingId, referralErr.message);
+      // Attendance was just recorded for the first time here (not by a
+      // scan) — same GymLink.firstVerifiedCheckinAt ping as the scans send.
+      pingGymLinkCheckedIn(booking.customerId, gymId);
     }
 
-    // Fulfillment funnel: the session actually happened (partner verified at the gym).
-    track('booking_completed', booking.customerId, {
-      booking_id: booking.id, gym_id: gymId, amount: booking.amount, date: booking.date,
-      commission_pct: booking.commissionPct, partner_share: booking.partnerShare,
-      attendance_method: updatedBooking.attendanceMethod, city: gym.city,
-    });
-
-    notifyCustomer(booking.customerId, {
-      title: 'Session completed',
-      body: `Your session on ${booking.date} is marked complete. See you next time!`,
-      data: { type: 'booking_completed', bookingId: booking.id, date: booking.date },
-    }).catch(() => {});
+    await settleCompletedBooking({ booking, updatedBooking, gym, gymId });
 
     return { ...updatedBooking, locationVerified: booking.locationVerified ?? false };
   } catch (err) {
@@ -1131,6 +1627,163 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
       error: err.message || 'Server error'
     };
   }
+}
+
+// How long after a slot ends before the sweep completes it. Gives the partner
+// the first chance to tap "complete" themselves, and absorbs a session that
+// ran over its booked end time.
+export const AUTO_COMPLETE_GRACE_MS = 60 * 60000;
+const AUTO_COMPLETE_BATCH = 200;
+
+// A session the sweep may finish: attendance was verified (a QR scan or a
+// geofenced self check-in moved it to 'started') and the slot ended more than
+// the grace period ago. A still-'confirmed' booking is never auto-completed -
+// nobody proved the customer turned up, so paying the partner for it would be
+// paying for a no-show.
+export function isDueForAutoComplete(booking, nowMs = Date.now(), graceMs = AUTO_COMPLETE_GRACE_MS) {
+  return booking.status === 'started'
+    && booking.attendedAt != null
+    && sessionEndedBefore(booking.date, booking.endTime, graceMs, nowMs);
+}
+
+// Completes every verified session whose slot is over, so a partner who
+// forgets to tap "complete" still gets paid, the customer's first-session
+// referral bonus still fires, and the customer still hears it was logged.
+//
+// Without this a 'started' booking not completed on its own day was stuck for
+// good: completeBooking only accepts today's sessions, so after midnight there
+// was no path to pay it out at all.
+//
+// Driven by .github/workflows/auto-complete-sessions.yml through
+// POST /internal/auto-complete, for the same reason as every other sweep here:
+// Cloud Run gives a setInterval no CPU between requests. Safe to run twice -
+// each row is claimed with a status-conditioned updateMany, so overlapping
+// runs (or a partner tapping at the same moment) complete it once, and the
+// payout carries an idempotency key on top.
+export async function autoCompleteEndedSessions({ nowMs = Date.now() } = {}) {
+  const today = todayDateStringIST();
+  const candidates = (await prisma.booking.findMany({
+    where: { status: 'started', attendedAt: { not: null }, date: { lte: today } },
+    // Oldest session first ('YYYY-MM-DD' and 'HH:MM' sort as strings), so
+    // still-running sessions sit at the end of the batch and can never crowd
+    // out ones that are due.
+    orderBy: [{ date: 'asc' }, { endTime: 'asc' }],
+    take: AUTO_COMPLETE_BATCH,
+  })).map(normalizeBookingMoney);
+  const due = candidates.filter((b) => isDueForAutoComplete(b, nowMs));
+
+  const gyms = new Map();
+  const failures = [];
+  let completed = 0;
+
+  for (const booking of due) {
+    try {
+      if (!gyms.has(booking.gymId)) {
+        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+        gyms.set(booking.gymId, gymRes.data?.data || gymRes.data);
+      }
+      const gym = gyms.get(booking.gymId);
+      if (!gym) throw new Error('gym not found');
+
+      const payoutOwed = booking.subscriptionId && booking.partnerShare == null
+        ? null
+        : (booking.partnerShare ?? booking.amount);
+      const { count } = await prisma.booking.updateMany({
+        where: { id: booking.id, status: 'started' },
+        data: { status: 'completed', payoutAmount: payoutOwed },
+      });
+      if (count === 0) continue; // completed or cancelled by someone else meanwhile
+
+      const updatedBooking = normalizeBookingMoney(await prisma.booking.findUnique({ where: { id: booking.id } }));
+      await settleCompletedBooking({ booking, updatedBooking, gym, gymId: booking.gymId, completedBy: 'auto' });
+      completed++;
+    } catch (err) {
+      // Per-booking and best-effort: one gym-service hiccup must not strand
+      // every other partner's payout. The row stays 'started', so the next run
+      // picks it up again.
+      console.error('autoComplete failed for booking', booking.id, err?.message);
+      failures.push({ bookingId: booking.id, error: err?.message || 'unknown' });
+    }
+  }
+
+  return { scanned: candidates.length, due: due.length, completed, failures };
+}
+
+// The reminder window: a confirmed session starting between 30 minutes and 2
+// hours from now. The sweep runs hourly, so every session falls inside the
+// window on exactly one run - early enough to leave home, late enough to be
+// remembered. Under 30 minutes a reminder is noise; the customer is either on
+// the way or not coming.
+export const REMINDER_MIN_LEAD_MS = 30 * 60000;
+export const REMINDER_MAX_LEAD_MS = 120 * 60000;
+
+export function isDueForReminder(booking, nowMs = Date.now()) {
+  if (booking.status !== 'confirmed' || booking.reminderSentAt != null) return false;
+  const lead = msUntilSlot(booking.date, booking.startTime, nowMs);
+  return lead >= REMINDER_MIN_LEAD_MS && lead <= REMINDER_MAX_LEAD_MS;
+}
+
+// "Your session at Iron Temple starts at 6:00 PM" - the cheapest no-show
+// reduction there is. Driven hourly by .github/workflows/send-session-reminders.yml
+// via POST /internal/session-reminders.
+//
+// Each booking is claimed (reminderSentAt stamped through a null-conditioned
+// updateMany) BEFORE the push goes out, so overlapping or retried runs can
+// never remind twice. The trade is deliberate: a push that fails after the
+// claim is not retried, and one missed reminder beats a duplicate.
+export async function sendSessionReminders({ nowMs = Date.now() } = {}) {
+  const today = todayDateStringIST(nowMs);
+  const todayMs = new Date(`${today}T00:00:00+05:30`).getTime();
+  const tomorrowMs = todayMs + 24 * 60 * 60 * 1000;
+  const tomorrow = new Date(tomorrowMs + IST_OFFSET_MS).toISOString().slice(0, 10);
+  // Today and tomorrow cover every slot up to 2h ahead, including just after
+  // midnight IST.
+  const candidates = await prisma.booking.findMany({
+    where: { status: 'confirmed', reminderSentAt: null, date: { in: [today, tomorrow] } },
+    orderBy: { id: 'asc' },
+    take: 500,
+  });
+  const due = candidates.filter((b) => isDueForReminder(b, nowMs));
+
+  const gymNames = new Map();
+  const failures = [];
+  let sent = 0;
+
+  for (const booking of due) {
+    try {
+      const { count } = await prisma.booking.updateMany({
+        where: { id: booking.id, status: 'confirmed', reminderSentAt: null },
+        data: { reminderSentAt: new Date(nowMs) },
+      });
+      if (count === 0) continue;
+
+      if (!gymNames.has(booking.gymId)) {
+        // The name makes the push; without it the reminder still goes out.
+        let name = null;
+        try {
+          const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${booking.gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+          name = (gymRes.data?.data || gymRes.data)?.name || null;
+        } catch (_) { /* fall through to the nameless copy */ }
+        gymNames.set(booking.gymId, name);
+      }
+      const gymName = gymNames.get(booking.gymId);
+      const at = formatSlotTime(booking.startTime);
+
+      await notifyCustomer(booking.customerId, {
+        title: 'Your session is coming up',
+        body: gymName
+          ? `${gymName} at ${at}. Your QR is ready in My sessions.`
+          : `Your session starts at ${at}. Your QR is ready in My sessions.`,
+        data: { type: 'booking_reminder', bookingId: booking.id, date: booking.date },
+      });
+      sent++;
+    } catch (err) {
+      console.error('session reminder failed for booking', booking.id, err?.message);
+      failures.push({ bookingId: booking.id, error: err?.message || 'unknown' });
+    }
+  }
+
+  return { scanned: candidates.length, due: due.length, sent, failures };
 }
 
 // Partner scans the customer's QR (a signed token, not a bare booking id —
@@ -1175,6 +1828,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
         attendedAt: booking.attendedAt,
         attendanceMethod: booking.attendanceMethod,
         alreadyVerified: true,
+        firstVisit: await firstVisitFlagForBooking(booking),
       };
     }
 
@@ -1268,21 +1922,30 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
         attendedAt: current.attendedAt,
         attendanceMethod: current.attendanceMethod,
         alreadyVerified: true,
+        firstVisit: await firstVisitFlagForBooking(current),
       };
     }
 
     const updated = await prisma.booking.findUnique({ where: { id: bookingId } });
 
+    // This booking was just marked attended — auth may need to flip the
+    // customer's GymLink.firstVerifiedCheckinAt (roster visibility, B2).
+    pingGymLinkCheckedIn(booking.customerId, gymId);
+
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', booking.customerId, {
       booking_id: booking.id, gym_id: gymId, method: attendanceMethod, city: gym.city,
     });
-    await emitAttendanceSignals({ customerId: booking.customerId, bookingId: booking.id, gymId, city: gym.city, source: 'partner_verified' });
+    await emitAttendanceSignals({
+      customerId: booking.customerId, bookingId: booking.id, gymId, city: gym.city, source: 'partner_verified',
+      attendanceMethod: updated.attendanceMethod, attendedAt: updated.attendedAt,
+    });
 
     return {
       bookingId: updated.id,
       attendedAt: updated.attendedAt,
       attendanceMethod: updated.attendanceMethod,
       alreadyVerified: false,
+      firstVisit: await firstVisitFlagForBooking(updated),
       ...(slotShift ? { slotShifted: true, newStartTime: slotShift.newStartTime, newEndTime: slotShift.newEndTime } : {}),
     };
   } catch (err) {
@@ -1429,8 +2092,12 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
     // partner recorded this"; self-check-in has no verifying partner, and
     // attendanceMethod='qr_geofence_self' already says who/how.
     const updated = await prisma.$transaction(async (tx) => {
-      const result = await tx.booking.update({
-        where: { id: booking.id },
+      // Conditioned on still being 'confirmed'. The status was read before the
+      // geofence and slot-shift checks; a cancel landing in between used to be
+      // overwritten here, turning a cancelled-and-refunded booking into a
+      // 'started' one that auto-complete would then pay the partner for.
+      const { count } = await tx.booking.updateMany({
+        where: { id: booking.id, status: 'confirmed' },
         data: {
           status: 'started',
           attendedAt: new Date(),
@@ -1440,6 +2107,10 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
             : {}),
         },
       });
+      if (count === 0) {
+        throw { status: 409, error: 'This booking was cancelled or already checked in' };
+      }
+      const result = await tx.booking.findUnique({ where: { id: booking.id } });
       if (slotShift) {
         await tx.attendanceWarning.create({
           data: {
@@ -1461,7 +2132,14 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
     });
 
-    await emitAttendanceSignals({ customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin' });
+    await emitAttendanceSignals({
+      customerId, bookingId: booking.id, gymId, city: gym?.city, source: 'self_checkin',
+      attendanceMethod: updated.attendanceMethod, attendedAt: updated.attendedAt,
+    });
+
+    // This booking was just marked attended — auth may need to flip the
+    // customer's GymLink.firstVerifiedCheckinAt (roster visibility, B2).
+    pingGymLinkCheckedIn(customerId, gymId);
 
     return {
       bookingId: updated.id,
@@ -1515,12 +2193,22 @@ export async function requestCheckIn(bookingId, customerId, lat, lng) {
   }
 }
 
-export async function getCustomerBookings(customerId) {
+// Legacy shape: just the (first page of) bookings as an array.
+export async function getCustomerBookings(customerId, opts = {}) {
+  return (await getCustomerBookingsPage(customerId, opts)).items;
+}
+
+// Cursor-paginated (see utils/pagination.js): createdAt desc with id desc as a
+// tiebreaker, backed by the (customerId, createdAt) index. Only the page's
+// gyms are enriched. Returns { items, meta }.
+export async function getCustomerBookingsPage(customerId, { limit = 50, cursor = null } = {}) {
   try {
-    let bookings = (await prisma.booking.findMany({
+    const { items: pageRows, meta } = finishPage(await prisma.booking.findMany({
       where: { customerId },
-      orderBy: { createdAt: 'desc' }
-    })).map(normalizeBookingMoney);
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...pageArgs({ limit, cursor }),
+    }), limit);
+    let bookings = pageRows.map(normalizeBookingMoney);
 
     // Self-heal: a booking stuck at `pending` (process died between
     // reserving the slot and confirming payment) gets resolved the next
@@ -1541,32 +2229,40 @@ export async function getCustomerBookings(customerId) {
     const uniqueGymIds = [...new Set(bookings.map(b => b.gymId))];
     const gymMap = {};
     await Promise.all(uniqueGymIds.map(async (gymId) => {
-      try {
-        const resp = await fetch(`${GYM_SERVICE_URL}/internal/${gymId}`, {
-          headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(GYM_SERVICE_URL)) }
-        });
-        if (resp.ok) {
-          const body = await resp.json();
-          const gym = body.data || body;
-          gymMap[gymId] = {
-            id: gym.id,
-            name: gym.name,
-            address: gym.address,
-            city: gym.city,
-            imageUrl: gym.images?.[0]?.url || null,
-          };
-        }
-      } catch (_) { /* leave gym undefined for this id */ }
+      const card = await getGymCard(gymId);
+      if (card) {
+        gymMap[gymId] = {
+          id: card.id,
+          name: card.name,
+          address: card.address,
+          city: card.city,
+          imageUrl: card.imageUrl,
+        };
+      }
     }));
 
-    // Strip the partner's internal override note — it's about the customer,
-    // not for them (e.g. "phone dead, verified manually"). Every booking gets
-    // a signed check-in token regardless of status — verifyAttendance's own
-    // status/date checks are what actually gate a successful scan.
-    return bookings.map(b => {
-      const { attendanceOverrideReason, ...safe } = b;
+    // Strip partner-internal fields before this reaches the customer. Two
+    // families:
+    //   - the partner's private override note ("phone dead, verified manually")
+    //     and who verified attendance — about the customer, not for them;
+    //   - the platform/partner commercial split (commissionPct, partnerShare,
+    //     walletTxId): the customer paid `amount`, and how much of it the gym
+    //     keeps versus the platform is not theirs to see. Spreading the raw
+    //     row leaked all of these on the app's own booking list.
+    // Every booking gets a signed check-in token regardless of status —
+    // verifyAttendance's own status/date checks are what actually gate a
+    // successful scan.
+    // meta was computed from the raw page above, so a stale-pending booking
+    // dropped by the self-heal never breaks the cursor chain.
+    const items = bookings.map(b => {
+      const {
+        attendanceOverrideReason, attendanceVerifiedBy,
+        commissionPct, partnerShare, walletTxId, payoutAmount, payoutCreditedAt,
+        ...safe
+      } = b;
       return { ...safe, gym: gymMap[b.gymId] || null, qrToken: signQrToken(b.id, b.gymId) };
     });
+    return { items, meta };
   } catch (err) {
     console.error('getCustomerBookings error:', err);
     throw {
@@ -1592,6 +2288,25 @@ export async function getSlotCounts(gymId, date) {
     counts[b.startTime] = (counts[b.startTime] || 0) + 1;
   }
   return counts;
+}
+
+// Internal batch variant of getSlotCounts for gym-service's availability
+// endpoint: one grouped query for an inclusive date range instead of one call
+// per day. Returns { [date]: { [startTime]: count } }; dates with no bookings
+// are absent. Same filter as getSlotCounts (plain slots only, not cancelled).
+// Booking.date is a zero-padded ISO string, so string range comparison orders
+// correctly.
+export async function getSlotCountsRange(gymId, from, to) {
+  const rows = await prisma.booking.groupBy({
+    by: ['date', 'startTime'],
+    where: { gymId, classId: null, status: { not: 'cancelled' }, date: { gte: from, lte: to } },
+    _count: { _all: true },
+  });
+  const byDate = {};
+  for (const r of rows) {
+    (byDate[r.date] ||= {})[r.startTime] = r._count._all;
+  }
+  return byDate;
 }
 
 // Internal: booking counts for a single recurring class across a set of
@@ -1664,7 +2379,13 @@ export async function getBookingCountForGym(gymId) {
 // strips slotShiftWarning, which is customer-facing only. Originally
 // inlined once in getGymBookings; now shared by the live-occupancy and
 // admin bookings-explorer reads too.
-async function enrichBookingsWithCustomerInfo(bookings) {
+//
+// { withFirstVisit: true } adds the coach-journey B3 "first visit" badge to
+// each row (see firstVisitEarliestByCustomer) — only the partner booking
+// list passes it, per the contract. The consent flag rides the same
+// /internal/users/batch call the names already use, so the badge adds no
+// extra auth round trip.
+async function enrichBookingsWithCustomerInfo(bookings, { withFirstVisit = false } = {}) {
   const uniqueCustomerIds = [...new Set(bookings.map(b => b.customerId))];
   const customerMap = {};
   if (uniqueCustomerIds.length) {
@@ -1676,9 +2397,26 @@ async function enrichBookingsWithCustomerInfo(bookings) {
       );
       const users = batchRes.data?.data || [];
       for (const u of users) {
-        customerMap[u.id] = { name: u.name || null, photoUrl: u.profileImageUrl || null };
+        customerMap[u.id] = {
+          name: u.name || null,
+          photoUrl: u.profileImageUrl || null,
+          firstVisitBadgeConsent: u.firstVisitBadgeConsent === true,
+        };
       }
     } catch (_) { /* leave customerMap empty — graceful degradation */ }
+  }
+
+  // First-visit badge: earliest attendance instant per customer across all
+  // three check-in sources. Computed only when asked for — the admin/live/
+  // member-activity lists don't carry the badge and shouldn't pay for it.
+  let earliestByCustomer = null;
+  if (withFirstVisit && uniqueCustomerIds.length) {
+    try {
+      earliestByCustomer = await firstVisitEarliestByCustomer(uniqueCustomerIds);
+    } catch (err) {
+      console.error('firstVisit earliest-attendance lookup failed:', err.message);
+      earliestByCustomer = null;
+    }
   }
 
   return bookings.map(b => {
@@ -1687,6 +2425,13 @@ async function enrichBookingsWithCustomerInfo(bookings) {
       ...safe,
       customerName: customerMap[b.customerId]?.name ?? null,
       customerPhotoUrl: customerMap[b.customerId]?.photoUrl ?? null,
+      ...(withFirstVisit
+        ? {
+            firstVisit: earliestByCustomer
+              ? isFirstVisit(b, customerMap[b.customerId]?.firstVisitBadgeConsent === true, earliestByCustomer)
+              : false,
+          }
+        : {}),
     };
   });
 }
@@ -1695,12 +2440,20 @@ export async function getGymBookings(gymId, partnerId) {
   try {
     await assertPartnerOwnsGym(gymId, partnerId);
 
+    // Latest-first, capped at a bounded window. The partner-web bookings
+    // table renders recent sessions, not an archive — returning every booking
+    // a long-lived gym has no cap on creates an unbounded payload that grows
+    // with age and eventually times out the screen's fetch.
     let bookings = await prisma.booking.findMany({
       where: { gymId },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 200,
     });
     bookings = bookings.map(normalizeBookingMoney);
-    return enrichBookingsWithCustomerInfo(bookings);
+    // withFirstVisit: the partner booking list carries the coach-journey B3
+    // "first visit" badge per booking (contract: "partner booking list /
+    // verify responses").
+    return enrichBookingsWithCustomerInfo(bookings, { withFirstVisit: true });
   } catch (err) {
     if (err.error) throw err;
     console.error('getGymBookings error:', err);
@@ -1784,6 +2537,38 @@ export async function getAdminLiveOccupancy(gymId) {
   }
 }
 
+// ---- Live presence (who is in the gym right now, who just came or went) ----
+//
+// Unlike fetchLiveOccupancy above (a booked session that has not been completed),
+// this is built from entrances and exits, so it covers members and guests alike
+// and moves the moment someone scans in or out. The partner sees each person by
+// first name and photo only, the same minimum the roster shows: no phone, email
+// or date of birth ever leaves auth-service for this view.
+async function firstNamesOf(ids) {
+  const out = {};
+  try {
+    const res = await axios.post(
+      `${AUTH_SERVICE_URL}/internal/users/batch`,
+      { ids },
+      await internalHeadersFor(AUTH_SERVICE_URL),
+    );
+    for (const u of res.data?.data || []) {
+      out[u.id] = { name: u.name ? String(u.name).trim().split(/\s+/)[0] : null, photoUrl: u.profileImageUrl || null };
+    }
+  } catch (_) { /* names are a nicety: the counts still work without them */ }
+  return out;
+}
+
+export async function getGymLivePresence(gymId, partnerId) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    return await liveSnapshot(gymId, { nameOf: firstNamesOf });
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
 // ---- Attendance heatmap (which day, what time) -----------------------------
 //
 // Answers "which day had how much attendance at what time" directly: `cells`
@@ -1798,10 +2583,14 @@ const HEATMAP_MAX_DAYS = 90;
 async function computeAttendanceHeatmap(baseWhere, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= HEATMAP_MAX_DAYS
     ? Number(days) : 30;
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - n);
-  const fromDateString = fromDate.toISOString().split('T')[0];
-  const todayString = new Date().toISOString().split('T')[0];
+  // Booking.date is an IST calendar day ("YYYY-MM-DD"), so the window bounds
+  // must be IST calendar days too. Deriving them from Date#toISOString gave
+  // UTC days, which are 5h30m behind IST: after 18:30 IST the UTC "today" is
+  // still yesterday, dropping every check-in booked for today from the grid.
+  const todayString = todayDateStringIST();
+  const todayMs = new Date(`${todayString}T00:00:00+05:30`).getTime();
+  const fromMs = todayMs - n * 24 * 60 * 60 * 1000;
+  const fromDateString = new Date(fromMs + IST_OFFSET_MS).toISOString().slice(0, 10);
 
   const rows = await prisma.booking.groupBy({
     by: ['date', 'startTime'],
@@ -1817,7 +2606,8 @@ async function computeAttendanceHeatmap(baseWhere, days) {
 
   const byWeekdayHour = new Map();
   for (const cell of cells) {
-    const weekday = new Date(`${cell.date}T00:00:00Z`).getUTCDay(); // 0 = Sunday
+    const istMs = new Date(`${cell.date}T00:00:00Z`).getTime() + IST_OFFSET_MS;
+    const weekday = new Date(istMs).getUTCDay(); // 0 = Sunday, in IST
     const key = `${weekday}-${cell.hour}`;
     byWeekdayHour.set(key, (byWeekdayHour.get(key) || 0) + cell.count);
   }
@@ -1858,18 +2648,33 @@ export async function getAdminAttendanceHeatmap(gymId, days) {
 // every one of those views is really just a different sort/reverse of the
 // same per-member rows.
 //
-// "Time spent" is the sum of each attended booking's BOOKED slot duration
+// Population: the attendance-SaaS wedge ONLY — the same set served on the
+// partner Members page's roster. Two sources, both included and merged per
+// customer:
+//   1. Bookings covered by a subscription (isAttendanceSaas=true) that were
+//      verified attended (attendedAt set).
+//   2. QR/link geofence member check-ins (MemberAttendance) — these never
+//      create a Booking row, so a read of just Booking used to silently drop
+//      anyone who joined via the QR/link without pre-booking.
+// Marketplace (non-SaaS) bookings are deliberately excluded so the leaderboard
+// describes exactly the members shown in the roster above it.
+//
+// "Time spent" is the sum of each verified booking's BOOKED slot duration
 // (endTime - startTime), not a measured presence duration — there's no
 // check-out event anywhere in the system (see fetchLiveOccupancy's comment),
 // so this is the closest real proxy: how much session time this member
-// attended, not how long they were physically in the building.
+// attended, not how long they were physically in the building. A bare
+// QR/link check-in has no slot, so it contributes a visit + time-of-day but
+// zero minutes.
 //
-// consistencyRatio: for each member, the fraction of their visits that fall
-// in their single most-common hour-of-day. Close to 1 means "always shows
-// up around the same time"; low means their visit times vary a lot. Only
-// meaningful with 2+ visits — a single visit trivially scores 1.0.
+// "Same-time-ness" (consistencyRatio) is computed from the member's ARRIVAL
+// time — the attendance timestamp (attendedAt / checkedInAt, converted to
+// IST) — not the booked slot's startTime, so "Routine 7 AM" reflects when
+// they actually showed up. Clustered with a fixed time tolerance rather than
+// bucketed by clock hour (see clusterSameTimeVisits); close to 1 means
+// "always shows up around the same time", low means their visit times vary a
+// lot. Only meaningful with 2+ visits — a single visit trivially scores 1.0.
 const MEMBER_ACTIVITY_MAX_DAYS = 90;
-
 function minutesBetweenTimes(startTime, endTime) {
   const [sh, sm] = String(startTime).split(':').map(Number);
   const [eh, em] = String(endTime).split(':').map(Number);
@@ -1877,40 +2682,67 @@ function minutesBetweenTimes(startTime, endTime) {
   return Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
 }
 
+// IST = UTC + 5:30. Minutes-of-day of a stored attendance timestamp — all
+// service timestamps persist as UTC, and "what hour did they really come"
+// must be read in the gym's local day, not UTC.
+function minutesOfDayIST(date) {
+  if (!date) return 0;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return 0;
+  return (d.getUTCHours() * 60 + d.getUTCMinutes() + 330) % 1440;
+}
+
+// clusterSameTimeVisits now lives in utils/visitClustering.js (shared with the
+// member visit patterns); re-exported so existing importers keep working.
+export { clusterSameTimeVisits };
+
 async function computeMemberActivity(gymId, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= MEMBER_ACTIVITY_MAX_DAYS
     ? Number(days) : 7;
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - n);
-  const fromDateString = fromDate.toISOString().split('T')[0];
-  const todayString = new Date().toISOString().split('T')[0];
+  const { fromDateString, todayString } = istDateWindow(n);
 
-  const bookings = await prisma.booking.findMany({
-    where: { gymId, attendedAt: { not: null }, date: { gte: fromDateString, lte: todayString } },
-    select: { customerId: true, startTime: true, endTime: true },
-  });
+  const [bookings, memberCheckins] = await Promise.all([
+    prisma.booking.findMany({
+      where: { gymId, attendedAt: { not: null }, isAttendanceSaas: true, date: { gte: fromDateString, lte: todayString } },
+      select: { customerId: true, startTime: true, endTime: true, attendedAt: true },
+    }),
+    prisma.memberAttendance.findMany({
+      where: { gymId, date: { gte: fromDateString, lte: todayString } },
+      select: { customerId: true, checkedInAt: true },
+    }),
+  ]);
 
   const byCustomer = new Map();
+  const accountFor = (customerId) => {
+    const entry = byCustomer.get(customerId) ?? { customerId, visitCount: 0, totalMinutes: 0, visitTimes: [], lastVisitAt: null };
+    byCustomer.set(customerId, entry);
+    return entry;
+  };
   for (const b of bookings) {
-    const entry = byCustomer.get(b.customerId) ?? { customerId: b.customerId, visitCount: 0, totalMinutes: 0, hourCounts: {} };
+    const entry = accountFor(b.customerId);
     entry.visitCount += 1;
     entry.totalMinutes += minutesBetweenTimes(b.startTime, b.endTime);
-    const hour = parseInt(String(b.startTime).split(':')[0], 10) || 0;
-    entry.hourCounts[hour] = (entry.hourCounts[hour] || 0) + 1;
-    byCustomer.set(b.customerId, entry);
+    entry.visitTimes.push(minutesOfDayIST(b.attendedAt));
+    // Churn-radar input: the latest verified visit, across both wedges,
+    // so the partner app can flag "hasn't been in for N days" members.
+    if (!entry.lastVisitAt || b.attendedAt > entry.lastVisitAt) entry.lastVisitAt = b.attendedAt;
+  }
+  for (const m of memberCheckins) {
+    const entry = accountFor(m.customerId);
+    entry.visitCount += 1;
+    entry.visitTimes.push(minutesOfDayIST(m.checkedInAt));
+    if (!entry.lastVisitAt || m.checkedInAt > entry.lastVisitAt) entry.lastVisitAt = m.checkedInAt;
   }
 
   const rows = [...byCustomer.values()].map((e) => {
-    const hourEntries = Object.entries(e.hourCounts);
-    const [mostCommonHour, mostCommonCount] = hourEntries.reduce(
-      (best, cur) => (cur[1] > best[1] ? cur : best), ['0', 0],
-    );
+    const { mostCommonHour, consistencyRatio } = clusterSameTimeVisits(e.visitTimes);
     return {
       customerId: e.customerId,
       visitCount: e.visitCount,
       totalMinutes: e.totalMinutes,
-      mostCommonHour: Number(mostCommonHour),
-      consistencyRatio: e.visitCount ? mostCommonCount / e.visitCount : 0,
+      mostCommonHour,
+      consistencyRatio,
+      lastVisitAt: e.lastVisitAt instanceof Date ? e.lastVisitAt.toISOString() : e.lastVisitAt,
     };
   });
 
@@ -1927,6 +2759,38 @@ export async function getMemberActivityForGym(gymId, partnerId, days) {
   try {
     await assertPartnerOwnsGym(gymId, partnerId);
     return computeMemberActivity(gymId, days);
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+// One member's visit patterns at one gym, for the partner's member profile:
+// when they usually come, which days, how steady, how long they stay. Only this
+// gym's visits are read (never the customer's visits elsewhere), and the partner
+// must own the gym. Counts both kinds of verified visit — an attended booking and
+// a member check-in — the same two sources the roster's activity view uses.
+export async function getMemberVisitPatterns(gymId, customerId, partnerId, days) {
+  try {
+    await assertPartnerOwnsGym(gymId, partnerId);
+    const requested = Number(days);
+    const windowDays = Number.isFinite(requested) && requested > 0 ? Math.min(Math.floor(requested), 365) : 90;
+    const { fromDateString, todayString } = istDateWindow(windowDays);
+    const [bookings, memberCheckins] = await Promise.all([
+      prisma.booking.findMany({
+        where: { gymId, customerId, attendedAt: { not: null }, date: { gte: fromDateString, lte: todayString } },
+        select: { date: true, attendedAt: true },
+      }),
+      prisma.memberAttendance.findMany({
+        where: { gymId, customerId, date: { gte: fromDateString, lte: todayString } },
+        select: { date: true, checkedInAt: true, checkedOutAt: true },
+      }),
+    ]);
+    const visits = [
+      ...bookings.map((b) => ({ date: b.date, at: b.attendedAt, kind: 'booking' })),
+      ...memberCheckins.map((m) => ({ date: m.date, at: m.checkedInAt, kind: 'member', checkedOutAt: m.checkedOutAt })),
+    ];
+    return summarizeVisitPatterns(visits, { today: todayString, windowDays });
   } catch (err) {
     if (err.error) throw err;
     throw { status: 500, error: err.message || 'Server error' };
@@ -2012,10 +2876,7 @@ export async function getMyTrainerAttendance(trainerId, gymId, days) {
     await assertTrainerBelongsToGym(trainerId, gymId);
     const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
       ? Number(days) : 30;
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - n);
-    const fromDateString = fromDate.toISOString().split('T')[0];
-    const todayString = new Date().toISOString().split('T')[0];
+    const { fromDateString, todayString } = istDateWindow(n);
 
     const rows = await prisma.trainerAttendance.findMany({
       where: { trainerId, gymId, date: { gte: fromDateString, lte: todayString } },
@@ -2149,10 +3010,8 @@ export async function getTrainerSessionsAdmin(trainerId, gymId, days) {
 async function computeTrainersOverview(gymId, days) {
   const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= TRAINER_ATTENDANCE_MAX_DAYS
     ? Number(days) : 30;
-  const fromDate = new Date();
-  fromDate.setDate(fromDate.getDate() - n);
-  const fromDateString = fromDate.toISOString().split('T')[0];
-  const todayString = new Date().toISOString().split('T')[0];
+  const { fromDateString, todayString } = istDateWindow(n);
+  const fromDate = new Date(`${fromDateString}T00:00:00+05:30`);
 
   const [attendanceRows, sessionRows] = await Promise.all([
     prisma.trainerAttendance.findMany({
@@ -2223,10 +3082,7 @@ export async function getTopPerformingGyms(days, limit) {
     const n = Number.isFinite(Number(days)) && Number(days) > 0 && Number(days) <= 365
       ? Number(days) : 30;
     const cappedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - n);
-    const fromDateString = fromDate.toISOString().split('T')[0];
-    const todayString = new Date().toISOString().split('T')[0];
+    const { fromDateString, todayString } = istDateWindow(n);
 
     const [revenueGroups, attendanceGroups] = await Promise.all([
       prisma.booking.groupBy({
@@ -2341,14 +3197,18 @@ export async function getGymSalesSummary(gymId, partnerId) {
     const gym = await assertPartnerOwnsGym(gymId, partnerId);
     const effectiveCommissionPct = gym.commissionPct ?? BOOKING_COMMISSION_PERCENT;
 
-    const today = new Date();
-    // All buckets key off the session `date` (YYYY-MM-DD string) for consistency.
+    // All buckets key off the session `date` (YYYY-MM-DD string) for consistency,
+    // and that date is ALWAYS an IST calendar date (see slotTiming.js). "Today"
+    // must therefore be today-in-IST, not today-in-UTC — between IST 00:00 and
+    // 05:29 the two differ, and reporting yesterday as "today" (or rolling the
+    // week/month/year windows back a day) shifted the partner-app revenue tiles
+    // by a day every IST night.
     // YYYY-MM-DD sorts lexicographically, so string >= comparisons are valid date ranges.
     const toDateString = (d) => d.toISOString().split('T')[0];
-    const todayString = toDateString(today);
-    const weekAgoString = toDateString(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000));
-    const monthAgoString = toDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000));
-    const yearAgoString = toDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000));
+    const todayString = todayDateStringIST();
+    const weekAgoString = toDateString(new Date(Date.now() + IST_OFFSET_MS - 7 * 24 * 60 * 60 * 1000));
+    const monthAgoString = toDateString(new Date(Date.now() + IST_OFFSET_MS - 30 * 24 * 60 * 60 * 1000));
+    const yearAgoString = toDateString(new Date(Date.now() + IST_OFFSET_MS - 365 * 24 * 60 * 60 * 1000));
 
     // One fetch, bucketed in JS — cheaper than 5 near-identical aggregate
     // queries, and (more importantly) lets `net` be summed from each
@@ -2399,7 +3259,7 @@ export async function getGymSalesSummary(gymId, partnerId) {
     // (subscription-covered — the attendance-SaaS "someone registered with
     // this gym and is visiting under a plan" revenue) — split purely on
     // subscriptionId, regardless of whether that subscription is under the
-    // honeymoon/SaaS commission or an opted-out gym's standard rate, since
+    // attendance-SaaS commission or an opted-out gym's standard rate, since
     // from the partner's perspective both are still "a member visiting
     // under a plan," not a one-off marketplace booking.
     function bucketFor(predicate) {
@@ -2430,13 +3290,17 @@ export async function getGymSalesSummary(gymId, partnerId) {
 }
 
 function attendanceDateBuckets() {
-  const today = new Date();
-  const toDateString = (d) => d.toISOString().split('T')[0];
+  // Anchor on IST, not the server's UTC clock: `booking.date` is always an
+  // IST calendar date (slotTiming.js), so a raw UTC "today" mislabels every
+  // booking between IST 00:00 and 05:29 as yesterday's — the same off-by-one
+  // todayDateStringIST() exists to prevent.
+  const todayIstMs = Date.now() + IST_OFFSET_MS;
+  const toDateString = (ms) => new Date(ms).toISOString().split('T')[0];
   return {
-    todayString: toDateString(today),
-    weekAgoString: toDateString(new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)),
-    monthAgoString: toDateString(new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)),
-    yearAgoString: toDateString(new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000)),
+    todayString: toDateString(todayIstMs),
+    weekAgoString: toDateString(todayIstMs - 7 * 24 * 60 * 60 * 1000),
+    monthAgoString: toDateString(todayIstMs - 30 * 24 * 60 * 60 * 1000),
+    yearAgoString: toDateString(todayIstMs - 365 * 24 * 60 * 60 * 1000),
   };
 }
 
@@ -2555,25 +3419,27 @@ export async function getAdminAttendanceByGym(period = 'monthly') {
 // a day", timezone, and grace-period rules are exactly the kind of thing
 // that shouldn't be locked into the API prematurely. This just returns raw
 // facts (totals + recent attended dates) for a client to compute with.
+//
+// Coach-journey B3: the totals now count all three check-in sources
+// (verified bookings, MemberAttendance, IndependentCheckIn) through
+// checkinDaysService — a linked member who never books must not look like
+// they never show up. Totals are distinct showed-up days, not a flat row
+// sum, so a booking and a same-day member check-in can't double count.
 export async function getCustomerAttendanceSummary(customerId) {
   try {
     const { todayString } = attendanceDateBuckets();
     const monthStart = `${todayString.slice(0, 7)}-01`;
-    const [totalAttended, thisMonthAttended, recent] = await Promise.all([
-      prisma.booking.count({ where: { customerId, attendedAt: { not: null } } }),
-      prisma.booking.count({ where: { customerId, attendedAt: { not: null }, date: { gte: monthStart } } }),
-      prisma.booking.findMany({
-        where: { customerId, attendedAt: { not: null } },
-        orderBy: { attendedAt: 'desc' },
-        take: 90,
-        select: { date: true, gymId: true, attendedAt: true },
-      }),
+    const [days, lastAttendedAt] = await Promise.all([
+      checkinDaysService.getDays(customerId),
+      checkinDaysService.getLatestCheckInAt(customerId),
     ]);
     return {
-      totalAttended,
-      thisMonthAttended,
-      lastAttendedAt: recent[0]?.attendedAt ?? null,
-      attendedDates: recent.map((r) => r.date),
+      totalAttended: days.length,
+      thisMonthAttended: days.filter((d) => d >= monthStart).length,
+      lastAttendedAt,
+      // Keep the historical cap and ordering: the 90 most recent days,
+      // newest first (was: the 90 most recent attended bookings' dates).
+      attendedDates: days.slice(-90).reverse(),
     };
   } catch (err) {
     console.error('getCustomerAttendanceSummary error:', err);
@@ -2581,34 +3447,81 @@ export async function getCustomerAttendanceSummary(customerId) {
   }
 }
 
-// Gamification wave 1: lifetime per-gym visit rollup for the badge shelf /
-// fog-of-war map. Deliberately a separate endpoint from
-// getCustomerAttendanceSummary rather than extending it — that endpoint caps
-// at the 90 most recent attended dates and drops gymId, both wrong for a
-// lifetime "every gym you've ever badged" list.
-export async function getVisitedGyms(customerId) {
+// Lifetime venue badges, derived only from persisted attendance. One visit
+// per venue per IST day, including across booking/member sources. Booking
+// days use attendedAt (not the scheduled slot date), matching checkinDaysService;
+// member/independent rows already store the verified IST day in date.
+// This projection never emits attendance signals or writes score/payment data.
+//
+// v1 keeps {gymId, firstVisitedAt, visitCount, gym} for partner gyms only.
+// GET /mine/visited-gyms?version=2 opts into all venues, adding venueId
+// ("partner:<id>" / "unclaimed:<id>") and nullable unclaimedGymId/gymId.
+// UnclaimedGym.id is NOT a Gym.id: never merge by numeric id, name, location,
+// or a later claim. Clients should key v2 badges by venueId, and refresh this
+// read on return from any check-in flow; no separate badge state is persisted.
+export async function getVisitedGyms(customerId, { version = 1 } = {}) {
+  if (version !== 1 && version !== 2) {
+    throw { status: 400, error: 'Unsupported visited-gyms version' };
+  }
   try {
-    const rows = await prisma.booking.groupBy({
-      by: ['gymId'],
-      where: { customerId, attendedAt: { not: null } },
-      _min: { attendedAt: true },
-      _count: { _all: true },
-    });
+    const [bookings, members, independent] = await Promise.all([
+      prisma.booking.findMany({
+        where: { customerId, attendedAt: { not: null } },
+        select: { gymId: true, attendedAt: true },
+      }),
+      prisma.memberAttendance.findMany({
+        where: { customerId },
+        select: { gymId: true, date: true, checkedInAt: true },
+      }),
+      version === 2 ? prisma.independentCheckIn.findMany({
+        where: { customerId },
+        select: { unclaimedGymId: true, date: true, checkedInAt: true },
+      }) : [],
+    ]);
 
-    const gymById = {};
-    await Promise.all(rows.map(async ({ gymId }) => {
-      try {
-        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-        const gym = gymRes.data?.data || gymRes.data;
-        gymById[gymId] = gym ? { name: gym.name, lat: gym.lat, lng: gym.lng, city: gym.city } : null;
-      } catch (_) { /* leave gym metadata null for this id */ }
-    }));
+    const venues = new Map();
+    function addVisit(type, id, day, at) {
+      const venueId = `${type}:${id}`;
+      let venue = venues.get(venueId);
+      if (!venue) {
+        venue = { venueId, type, id, firstVisitedAt: at, days: new Set() };
+        venues.set(venueId, venue);
+      }
+      venue.days.add(day);
+      if (at < venue.firstVisitedAt) venue.firstVisitedAt = at;
+    }
+    for (const row of bookings) {
+      const day = new Date(row.attendedAt.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+      addVisit('partner', row.gymId, day, row.attendedAt);
+    }
+    for (const row of members) addVisit('partner', row.gymId, row.date, row.checkedInAt);
+    for (const row of independent) addVisit('unclaimed', row.unclaimedGymId, row.date, row.checkedInAt);
 
-    return rows.map((r) => ({
-      gymId: r.gymId,
-      firstVisitedAt: r._min.attendedAt,
-      visitCount: r._count._all,
-      gym: gymById[r.gymId] ?? null,
+    // Metadata is best-effort enrichment; missing/deleted gyms retain a badge.
+    const rows = [...venues.values()].sort((a, b) => a.type.localeCompare(b.type) || a.id - b.id);
+    return await Promise.all(rows.map(async (venue) => {
+      let gym = null;
+      if (venue.type === 'partner') {
+        // Partner gyms go through the shared gym-card cache.
+        const card = await getGymCard(venue.id);
+        if (card) gym = { name: card.name, lat: card.lat, lng: card.lng, city: card.city };
+      } else {
+        try {
+          const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/unclaimed-gyms/${venue.id}`, await internalHeadersFor(GYM_SERVICE_URL));
+          const metadata = gymRes.data && Object.hasOwn(gymRes.data, 'data') ? gymRes.data.data : gymRes.data;
+          if (metadata) gym = { name: metadata.name, lat: metadata.lat, lng: metadata.lng, city: metadata.city };
+        } catch (_) { /* leave gym metadata null for this id */ }
+      }
+      return {
+        ...(version === 2 ? {
+          venueId: venue.venueId,
+          unclaimedGymId: venue.type === 'unclaimed' ? venue.id : null,
+        } : {}),
+        gymId: venue.type === 'partner' ? venue.id : null,
+        firstVisitedAt: venue.firstVisitedAt,
+        visitCount: venue.days.size,
+        gym,
+      };
     }));
   } catch (err) {
     console.error('getVisitedGyms error:', err);
@@ -2629,11 +3542,8 @@ export async function getMyAttendanceWarnings(customerId) {
     const uniqueGymIds = [...new Set(warnings.map((w) => w.gymId))];
     const gymNameById = {};
     await Promise.all(uniqueGymIds.map(async (gymId) => {
-      try {
-        const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-        const gym = gymRes.data?.data || gymRes.data;
-        gymNameById[gymId] = gym?.name || null;
-      } catch (_) { /* leave gym name null for this id */ }
+      const card = await getGymCard(gymId);
+      if (card) gymNameById[gymId] = card.name || null;
     }));
 
     return {
@@ -2672,6 +3582,74 @@ export async function getPublicAttendanceStats() {
   }
 }
 
+// Is this person a guest of the gym? Returns their soonest live booking there, or
+// null. Live means awaiting confirmation, confirmed, or in progress, for today or
+// a later day. Someone with a booking has no reason to become a member, so a
+// poster scan must never raise a membership request for them, whether or not the
+// booking happens to be usable at this very moment (it may be tomorrow, or later
+// today). Cancelled and completed bookings do not count: a past visit is not a
+// booking. The soonest one is returned so the scan can tell them about it.
+export async function nextLiveBookingAtGym(customerId, gymId) {
+  const today = todayDateStringIST();
+  const next = await prisma.booking.findFirst({
+    where: {
+      customerId,
+      gymId,
+      status: { in: ['pending', 'confirmed', 'started'] },
+      // `date` is an IST calendar-date string, so a string comparison is a date
+      // comparison.
+      date: { gte: today },
+    },
+    orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+    select: { date: true, startTime: true, endTime: true, status: true },
+  });
+  return next ? shapeUpcomingBooking(next, today) : null;
+}
+
+// Server-side presence proof shared by member check-in and QR join: the
+// reported position must be within 50 m of the gym. Returns the gym record so
+// callers can reuse it. (Coordinates are client-reported — the same trust the
+// booking self-check-in already places in them.)
+export async function assertAtGym(gymId, lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
+  }
+  let gym;
+  try {
+    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
+    gym = gymRes.data?.data || gymRes.data;
+  } catch (_) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  const withinRange = gym?.lat && gym?.lng ? distanceMeters(lat, lng, gym.lat, gym.lng) <= 50 : false;
+  if (!withinRange) {
+    throw { status: 400, error: "You don't seem to be at the gym yet — move closer and try again", code: 'TOO_FAR' };
+  }
+  return gym;
+}
+
+// Links the customer to the gym as an approved member. Only call this after
+// assertAtGym has passed: physical presence is what makes the link instant,
+// and auth-service owns every other rule (already linked elsewhere, removed by
+// the gym, gym not approved) and answers with a coded error.
+export async function joinGymViaQr(customerId, gymId) {
+  try {
+    const res = await axios.post(
+      `${AUTH_SERVICE_URL}/internal/gym-links/qr-join`,
+      { userId: customerId, gymId },
+      await internalHeadersFor(AUTH_SERVICE_URL),
+    );
+    return res.data;
+  } catch (err) {
+    const body = err.response?.data;
+    throw {
+      status: err.response?.status || 502,
+      error: body?.error || 'Could not join this gym right now',
+      code: body?.code || 'JOIN_FAILED',
+    };
+  }
+}
+
 // ─── Attendance-SaaS: booking-free member check-in ────────────────────
 // Linked members (User.linkedGymId) can check in without a pre-existing
 // booking. One attendance record per customer+gym+day (upserted), and — per
@@ -2691,28 +3669,37 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
     throw { status: 403, error: 'This gym is not your linked gym', code: 'NOT_LINKED_GYM' };
   }
 
-  // 2. Geofence check (≤50m) — same radius as requestCheckIn's GPS check.
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
-    throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
-  }
-  let gym;
-  try {
-    const gymRes = await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, await internalHeadersFor(GYM_SERVICE_URL));
-    gym = gymRes.data?.data || gymRes.data;
-  } catch (_) {
-    throw { status: 404, error: 'Gym not found' };
-  }
-  const withinRange = gym?.lat && gym?.lng ? distanceMeters(lat, lng, gym.lat, gym.lng) <= 50 : false;
-  if (!withinRange) {
-    throw { status: 400, error: "You don't seem to be at the gym yet — move closer and try again", code: 'TOO_FAR' };
+  // Fail closed: a linkedGymId (or a successful booked visit) is not proof of
+  // membership. Auth owns the approval decision; the client cannot supply it.
+  if (user.gymLinkStatus !== 'approved') {
+    throw { status: 403, error: 'Your membership request is waiting for gym approval. Ask the gym owner to review it.', code: 'MEMBERSHIP_PENDING' };
   }
 
-  // 3. Upsert — one record per customer+gym+day.
+  // 2. Geofence check (≤50m) — same radius as requestCheckIn's GPS check.
+  const gym = await assertAtGym(gymId, lat, lng);
+
+  // 3. One record per customer+gym+day. A same-day re-entry after checking
+  // out re-nulls checkedOutAt in place — it must NOT create a second row (the
+  // unique index below enforces that anyway) and must NOT re-notify
+  // challenge-service: the day already earned its coin/streak signal on the
+  // first check-in, and re-entry is the same visit day, not a new one.
   const todayString = todayDateStringIST();
   const existing = await prisma.memberAttendance.findUnique({
     where: { customerId_gymId_date: { customerId, gymId, date: todayString } },
   });
   if (existing) {
+    if (existing.checkedOutAt) {
+      await prisma.memberAttendance.update({
+        where: { id: existing.id },
+        data: { checkedOutAt: null },
+      });
+      // A real re-entry, not a duplicate tap — the member is checked in
+      // again, so the GymLink ping applies here too (idempotent on auth's
+      // side, which is what makes re-pinging safe).
+      pingGymLinkCheckedIn(customerId, gymId);
+      recordPresence({ gymId, customerId, kind: 'in', source: 'member', method: 'checkin' });
+      return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: false };
+    }
     return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, alreadyCheckedIn: true };
   }
   const record = await prisma.memberAttendance.create({
@@ -2721,7 +3708,45 @@ export async function memberCheckIn(gymId, customerId, lat, lng) {
 
   await emitMemberAttendanceSignals({ customerId, attendanceId: record.id, gymId, city: gym?.city });
 
+  // A member check-in counts as a verified visit for the GymLink roster
+  // exactly like a booked session does — ping auth so it can flip
+  // firstVerifiedCheckinAt on the customer's active link (B2). Skipped on
+  // the alreadyCheckedIn branch above: nothing happened just now.
+  pingGymLinkCheckedIn(customerId, gymId);
+
   return { attendanceId: record.id, checkedInAt: record.checkedInAt, alreadyCheckedIn: false };
+}
+
+// Records when a linked member leaves for the day — the mirror of
+// memberCheckIn. No lat/lng: check-out is meaningful from anywhere (the
+// member may already be walking out), so there's no geofence to verify.
+// There must be a same-day check-in to check out of; otherwise it's a 400
+// (the app's toggle only offers "Check out" while checked in, so this is a
+// belt-and-braces guard against a stale/mismatched client).
+export async function memberCheckOut(gymId, customerId) {
+  // No "still linked to this gym" check: today's check-in row at this gym is
+  // the proof that matters, and requiring the link stranded anyone who left
+  // the gym (or switched persona) mid-session — checked in with no way out.
+  // Stamp checkedOutAt on today's attendance row.
+  const todayString = todayDateStringIST();
+  const existing = await prisma.memberAttendance.findUnique({
+    where: { customerId_gymId_date: { customerId, gymId, date: todayString } },
+  });
+  if (!existing) {
+    throw { status: 400, error: "You haven't checked in at this gym today", code: 'NOT_CHECKED_IN' };
+  }
+  if (existing.checkedOutAt) {
+    return { attendanceId: existing.id, checkedInAt: existing.checkedInAt, checkedOutAt: existing.checkedOutAt, alreadyCheckedOut: true };
+  }
+  const record = await prisma.memberAttendance.update({
+    where: { id: existing.id },
+    data: { checkedOutAt: new Date() },
+  });
+  // The in-app button proves nothing about where the person is, so it closes the
+  // visit on the live view but is not the scan that releases workout coins.
+  recordPresence({ gymId, customerId, kind: 'out', source: 'member', method: 'tap' });
+
+  return { attendanceId: record.id, checkedInAt: record.checkedInAt, checkedOutAt: record.checkedOutAt, alreadyCheckedOut: false };
 }
 
 // Attendance history for a linked member — returns all their attendance
@@ -2752,26 +3777,60 @@ export async function getMemberAttendance(customerId) {
     gymName: gymNameById[r.gymId] ?? null,
     date: r.date,
     checkedInAt: r.checkedInAt,
+    checkedOutAt: r.checkedOutAt ?? null,
   }));
 }
 
-// ─── Attendance leaderboard: per-gym, opt-in, ranked by check-in count ──────
-// Reads the same MemberAttendance rows memberCheckIn writes -- "check-in
-// count" is literally "how many distinct days has this user checked in at
-// this gym". Opt-in (User.leaderboardOptIn, auth-service) -- a check-in is
-// otherwise private, so non-opted-in users are excluded from the visible
-// list entirely rather than shown anonymized. Three windows, all reading the
-// same underlying rows: weekly/monthly reset (filtered by date), all-time
-// never does (no filter) -- no separate reward-cycle bucket, per the 2026-09
-// decision to keep the periodic-prize idea unbuilt for now.
+// ─── Attendance leaderboard: per-gym, opt-out, ranked by composite score ────
+// Ranks by the 70/20/10 score from attendanceScoreService.js (verified
+// presence at THIS gym via challenge-service's AttendanceEventLog trust
+// ladder, steps from health-service's DailyActivityMetric, recent-week
+// bonus), with check-in day count as the tie-break. The MemberAttendance
+// rows are still the source for `checkIns` (the one-per-customer-gym-day
+// record memberCheckIn self-check-in / partner-verify writes) — the score
+// layers proof-of-presence weight on top of that same presence. On by default
+// (User.leaderboardOptIn, auth-service, default true); users who opted out
+// are excluded from the visible list entirely rather than shown anonymized.
+// Three windows, all reading the same underlying rows:
+// weekly/monthly reset (filtered by date), all-time never does (no filter).
+// Both cross-service feeds are best-effort: a down challenge-service or
+// health-service silently degrades the score to whatever it can still see
+// (check-ins + steps, or check-ins alone) rather than failing the board.
 const LEADERBOARD_TOP_N = 50;
+// Internal read of the two score feeds. Each defaults to graceful degradation
+// (return []) so a flaky sibling never takes the whole leaderboard down.
+async function fetchGymAttendanceEvents(gymId, fromUtc) {
+  try {
+    const res = await axios.get(`${CHALLENGE_SERVICE_URL}/internal/attendance-events`, {
+      params: { gymId, from: fromUtc.toISOString() },
+      ...(await internalHeadersFor(CHALLENGE_SERVICE_URL)),
+    });
+    return res.data?.data ?? [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function fetchDailyActivityRows(userIds, fromKey, toKey) {
+  if (userIds.length === 0) return [];
+  try {
+    const res = await axios.get(`${HEALTH_SERVICE_URL}/internal/daily-activity`, {
+      params: { ids: userIds.join(','), from: fromKey, to: toKey },
+      ...(await internalHeadersFor(HEALTH_SERVICE_URL)),
+    });
+    return res.data?.data ?? [];
+  } catch (_) {
+    return [];
+  }
+}
 
 function currentWeekStartIST() {
   const todayString = todayDateStringIST();
-  const today = new Date(`${todayString}T00:00:00Z`);
-  const daysSinceMonday = (today.getUTCDay() + 6) % 7; // Monday=0..Sunday=6
-  today.setUTCDate(today.getUTCDate() - daysSinceMonday);
-  return today.toISOString().split('T')[0];
+  const todayMs = new Date(`${todayString}T00:00:00+05:30`).getTime();
+  const dayOfWeek = new Date(todayMs + IST_OFFSET_MS).getUTCDay(); // 0=Sun..6=Sat in IST
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  const mondayMs = todayMs - daysSinceMonday * 24 * 60 * 60 * 1000;
+  return new Date(mondayMs + IST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
 async function checkInCountsByCustomer(gymId, window) {
@@ -2813,30 +3872,324 @@ export async function getGymLeaderboard(gymId, window, requestingCustomerId) {
     return { window: validWindow, entries: [], me: { rank: null, checkIns: 0, optedIn: false } };
   }
 
+  // A gym's board ranks its current members. Reading it stays open (the gym
+  // detail screen shows it to anyone browsing, with other people as initials
+  // only). Older auth-services don't send linkedGymId on the batch — skip the
+  // rule then rather than emptying every board.
+  const membershipKnown = Object.values(userById).some((u) => 'linkedGymId' in u);
+  const isMember = (id) => !membershipKnown || Number(userById[id]?.linkedGymId) === Number(gymId);
+
+  // Score feeds for the same window the board shows (weekly=7 / monthly=30 /
+  // all=90), across everyone who could appear + the requester.
+  const { startKey, startUtc } = scoreWindow(new Date(), validWindow);
+  const todayKey = todayDateStringIST();
+  const [eventRows, activityRows] = await Promise.all([
+    fetchGymAttendanceEvents(gymId, startUtc),
+    fetchDailyActivityRows(customerIds, startKey, todayKey),
+  ]);
+  const scores = computeScores({
+    gymId,
+    attendanceEvents: eventRows,
+    dailyActivityRows: activityRows,
+    userIds: customerIds,
+    window: validWindow,
+  });
+
   const ranked = allRows
-    .filter((r) => userById[r.customerId]?.leaderboardOptIn === true)
+    // Ex-members (left, removed, or switched persona) keep their attendance
+    // history but no longer rank on the gym's board.
+    .filter((r) => userById[r.customerId]?.leaderboardOptIn === true && isMember(r.customerId))
+    .map((r) => {
+      const s = scores[r.customerId] ?? { score: 0, attendance: 0, steps: 0, recent: 0 };
+      return {
+        customerId: r.customerId,
+        checkIns: r.checkIns,
+        score: s.score,
+        attendanceScore: s.attendance,
+        stepsScore: s.steps,
+        recentScore: s.recent,
+      };
+    })
+    .sort((a, b) => b.score - a.score || b.checkIns - a.checkIns)
     .map((r, i) => ({
       rank: i + 1,
       customerId: r.customerId,
-      name: userById[r.customerId]?.name || 'Anonymous',
-      photoUrl: userById[r.customerId]?.profileImageUrl || null,
+      // Others as initials only, no photo; own row keeps name + photo.
+      ...leaderboardIdentity(userById[r.customerId], Number(r.customerId) === Number(requestingCustomerId)),
       checkIns: r.checkIns,
+      score: r.score,
+      attendanceScore: r.attendanceScore,
+      stepsScore: r.stepsScore,
+      recentScore: r.recentScore,
     }));
 
   // The requester's own position within that same opted-in ranking, computed
   // whether or not they're actually opted in -- so someone deciding whether
-  // to opt in can see where they'd land first.
+  // to opt in can see where they'd land first. Ranked the same way entries
+  // are: score desc, check-ins as the tie-break.
+  const myScores = scores[requestingCustomerId] ?? { score: 0, attendance: 0, steps: 0, recent: 0 };
   const myCheckIns = allRows.find((r) => r.customerId === requestingCustomerId)?.checkIns ?? 0;
+  const strictlyAbove = ranked.filter(
+    (r) => r.score > myScores.score || (r.score === myScores.score && r.checkIns > myCheckIns),
+  ).length;
   const myListedRank = ranked.findIndex((r) => r.customerId === requestingCustomerId) + 1;
-  const myRank = myListedRank || ranked.filter((r) => r.checkIns > myCheckIns).length + 1;
+  const myRank = myListedRank || strictlyAbove + 1;
+
+  // Per-criterion ranks within the same opted-in population -- "where do I
+  // stand on attendance alone / steps alone / recent-week alone". Ranked by
+  // each component (score desc, check-ins as the tie-break), the user found
+  // whether or not they're opted in, never invited.
+  const CRITERIA = ['attendance', 'steps', 'recent'];
+  const meRanks = {};
+  for (const key of CRITERIA) {
+    const keyScore = `${key}Score`;
+    const myCriterionScore = myScores[key];
+    const byCriterion = [...ranked].sort(
+      (a, b) => b[keyScore] - a[keyScore] || b.checkIns - a.checkIns,
+    );
+    const myIndex = byCriterion.findIndex((r) => r.customerId === requestingCustomerId) + 1;
+    const strictlyAboveCriterion = byCriterion.filter(
+      (r) => r[keyScore] > myCriterionScore || (r[keyScore] === myCriterionScore && r.checkIns > myCheckIns),
+    ).length;
+    meRanks[key] = {
+      rank: myIndex || strictlyAboveCriterion + 1,
+      score: myCriterionScore,
+    };
+  }
 
   return {
     window: validWindow,
+    windowDays: windowDaysFor(validWindow),
     entries: ranked.slice(0, LEADERBOARD_TOP_N),
     me: {
       rank: myRank,
       checkIns: myCheckIns,
+      score: myScores.score,
+      attendanceScore: myScores.attendance,
+      stepsScore: myScores.steps,
+      recentScore: myScores.recent,
+      ranks: meRanks,
       optedIn: userById[requestingCustomerId]?.leaderboardOptIn === true,
     },
   };
+}
+
+// --- Non-partner gym check-in (2026-09-18) ----------------------------------
+
+// Same radius as the customer self-check-in against a partner gym. Kept as its
+// own constant rather than shared so the two can diverge: a partner gym's
+// coordinates were entered by its owner and verified during approval, while an
+// unclaimed gym's come from a Google Places pin nobody has checked.
+const INDEPENDENT_CHECKIN_RADIUS_METERS = 300;
+
+/// A customer checking in at a gym Phool Gobhi has no partnership with.
+///
+/// No Booking is created or touched: there is no slot, no price, no capacity
+/// and no partner to pay. GPS inside the geofence is the entire proof, which is
+/// weaker than a partner's QR scan and deliberately so — the alternative for
+/// this user is no record at all.
+///
+/// [unclaimedGymId] is a gym-service UnclaimedGym id, NOT a Gym id. The two
+/// live in separate id spaces; `source` on the emitted attendance event is
+/// what tells a later reader which table to resolve gymId against.
+export async function independentCheckIn(customerId, unclaimedGymId, lat, lng) {
+  try {
+    let gym;
+    try {
+      const res = await axios.get(
+        `${GYM_SERVICE_URL}/internal/unclaimed-gyms/${unclaimedGymId}`,
+        await internalHeadersFor(GYM_SERVICE_URL)
+      );
+      gym = res.data?.data || res.data;
+    } catch (_) {
+      throw { status: 404, error: 'Gym not found' };
+    }
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || gym?.lat == null || gym?.lng == null) {
+      throw { status: 400, error: 'Location is required to check in', code: 'LOCATION_REQUIRED' };
+    }
+    if (distanceMeters(lat, lng, gym.lat, gym.lng) > INDEPENDENT_CHECKIN_RADIUS_METERS) {
+      throw {
+        status: 400,
+        error: `You need to be at ${gym.name} to check in`,
+        code: 'TOO_FAR',
+      };
+    }
+
+    const date = todayDateStringIST();
+
+    // Checking in twice in a day is a normal thing for a person to do (they
+    // reopened the app, the first tap looked like it failed). It is not an
+    // error and must not read as one — return the existing row and let the UI
+    // say "you're already checked in today".
+    const existing = await prisma.independentCheckIn.findUnique({
+      where: { customerId_unclaimedGymId_date: { customerId, unclaimedGymId, date } },
+    });
+    if (existing) {
+      return { checkIn: existing, alreadyCheckedIn: true };
+    }
+
+    let checkIn;
+    try {
+      checkIn = await prisma.independentCheckIn.create({
+        // lat/lng are verified above and deliberately not persisted — see
+        // the IndependentCheckIn model comment.
+        data: { customerId, unclaimedGymId, date },
+      });
+    } catch (err) {
+      // Two taps racing each other land here (P2002 on the unique index).
+      // Same outcome as the read above — the day is already recorded.
+      if (err?.code === 'P2002') {
+        const row = await prisma.independentCheckIn.findUnique({
+          where: { customerId_unclaimedGymId_date: { customerId, unclaimedGymId, date } },
+        });
+        return { checkIn: row, alreadyCheckedIn: true };
+      }
+      throw err;
+    }
+
+    // Only on a genuinely new check-in, so a duplicate tap can't inflate a
+    // streak. Fire-and-forget, like every other attendance emission here.
+    recordAttendanceEvent({
+      userId: customerId,
+      bookingId: null,
+      memberAttendanceId: null,
+      gymId: unclaimedGymId,
+      attendedAt: checkIn.checkedInAt,
+      source: 'independent_gym_geofence',
+      idempotencyKey: `independent-${checkIn.id}`,
+    });
+
+    track('independent_checkin', customerId, {
+      unclaimed_gym_id: unclaimedGymId,
+      date,
+    });
+
+    return { checkIn, alreadyCheckedIn: false };
+  } catch (err) {
+    if (err.error) throw err;
+    throw { status: 500, error: err.message || 'Server error' };
+  }
+}
+
+/// This customer's own non-partner check-in history, newest first.
+export async function listIndependentCheckIns(customerId, { limit = 60 } = {}) {
+  return prisma.independentCheckIn.findMany({
+    where: { customerId },
+    orderBy: { checkedInAt: 'desc' },
+    take: Math.min(Math.max(limit, 1), 200),
+  });
+}
+
+// Coach-journey B3: which customers have ever checked in at an unclaimed
+// gym. Internal only — gym-service's unclaimed-gym-claimed hook (B6) passes
+// this list to auth-service so those customers get the "your gym joined,
+// book it properly" prompt when the place becomes a partner gym.
+export async function getUnclaimedGymCustomerIds(unclaimedGymId) {
+  const rows = await prisma.independentCheckIn.findMany({
+    where: { unclaimedGymId },
+    distinct: ['customerId'],
+    select: { customerId: true },
+  });
+  return rows.map((r) => r.customerId);
+}
+
+// Gobhi-only companion for the admin portal's unclaimed-gym claim queue: how
+// many distinct customers ever checked in there. Returns null under 5 —
+// "4 people" would identify them just as well as a list would, so small
+// counts stay unsaid (the same k-anonymity idea as the public attendance
+// stats, which expose no small-number breakdowns either).
+export async function getUnclaimedGymPeopleCount(unclaimedGymId) {
+  const count = await prisma.independentCheckIn.findMany({
+    where: { unclaimedGymId },
+    distinct: ['customerId'],
+    select: { customerId: true },
+  });
+  return count.length < 5 ? null : count.length;
+}
+
+// ---- Daily partner briefing (9am IST push) -------------------------------
+//
+// The product principle behind this: deeper insight isn't more charts, it's
+// computed conclusions that arrive without being asked. A gym owner who
+// never opens the app still hears "yesterday: ₹1,240 · 14 check-ins" every
+// morning. The message is intentionally two short facts + one optional
+// pattern — never three sentences, never a metric without a word.
+
+const BRIEFING_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function briefingHourLabel(hour) {
+  return hour === 0 ? '12am' : hour < 12 ? `${hour}am` : hour === 12 ? '12pm' : `${hour - 12}pm`;
+}
+
+/// Pure: compose the briefing body from the facts. Exported for tests.
+/// revenue = gross bookings completed yesterday (₹, what members paid);
+/// checkins = verified attendance events yesterday (bookings attended +
+/// bare QR/link member check-ins); peak = { weekday, hour, count } | null
+/// from the last-30-day weekday-hour pattern.
+export function composeDailyBriefing({ revenue, checkins, peak }) {
+  const facts = [];
+  if (revenue > 0) facts.push(`₹${Math.round(revenue)} in bookings`);
+  if (checkins > 0) facts.push(`${checkins} check-in${checkins === 1 ? '' : 's'}`);
+  if (!facts.length) {
+    return 'No check-ins yesterday — share your gym to fill today.';
+  }
+  let body = `Yesterday: ${facts.join(' · ')}`;
+  if (peak && peak.count > 0) {
+    body += `. Busiest: ${BRIEFING_WEEKDAYS[peak.weekday]} ${briefingHourLabel(peak.hour)}`;
+  }
+  return body;
+}
+
+/// Send the daily briefing to every gym with any booking activity in the
+/// last 30 days (a truly dead gym doesn't want a daily reminder of that).
+/// Called by POST /internal/daily-briefing (Cloud Scheduler, 9am IST).
+/// Best-effort per gym: one gym's failure never blocks the rest.
+export async function sendDailyBriefings() {
+  const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+  const yesterdayIST = new Date(Date.now() + IST_OFFSET_MS - 24 * 60 * 60 * 1000)
+    .toISOString().split('T')[0];
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const activeGyms = await prisma.booking.groupBy({
+    by: ['gymId'],
+    where: { createdAt: { gte: since } },
+  });
+
+  let sent = 0;
+  const failures = [];
+  for (const { gymId } of activeGyms) {
+    try {
+      const [revAgg, attendedBookings, memberCheckins, heatmap] = await Promise.all([
+        prisma.booking.aggregate({
+          _sum: { amount: true },
+          where: { gymId, date: yesterdayIST, status: 'completed' },
+        }),
+        prisma.booking.count({
+          where: { gymId, date: yesterdayIST, attendedAt: { not: null } },
+        }),
+        prisma.memberAttendance.count({ where: { gymId, date: yesterdayIST } }),
+        computeAttendanceHeatmap({ gymId }, 30),
+      ]);
+
+      let peak = null;
+      for (const cell of heatmap.weekdayHourPattern) {
+        if (!peak || cell.count > peak.count) peak = cell;
+      }
+
+      const body = composeDailyBriefing({
+        revenue: revAgg._sum.amount ?? 0,
+        checkins: attendedBookings + memberCheckins,
+        peak,
+      });
+
+      const ok = await sendPartnerPush(gymId, 'Your gym yesterday', body, {
+        type: 'daily_briefing',
+      });
+      if (ok) sent += 1;
+    } catch (err) {
+      failures.push({ gymId, error: err.message });
+    }
+  }
+  return { sent, gyms: activeGyms.length, failures };
 }

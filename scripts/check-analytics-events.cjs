@@ -46,12 +46,80 @@ function walk(dir, exts, out = []) {
   return out;
 }
 
+// Blanks out comments, preserving offsets and line breaks so every reported
+// line number stays correct.
+//
+// Without this, a call name mentioned in prose ("...all funnel through
+// post()...") is matched as a real call site, and the scanner then grabs the
+// first quoted string in the following 200 characters — which in one case was
+// 'undefined', from a `typeof window === 'undefined'` several lines below. A
+// checker that reports a phantom event teaches people to ignore it, which
+// costs more than the drift it exists to catch.
+//
+// A `//` inside a string literal (a URL, say) is left alone: it only starts a
+// comment when it is not currently inside quotes.
+function stripComments(text) {
+  let out = '';
+  let i = 0;
+  let inBlock = false;
+  let quote = null;
+  while (i < text.length) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inBlock) {
+      if (ch === '*' && next === '/') {
+        out += '  ';
+        i += 2;
+        inBlock = false;
+        continue;
+      }
+      out += ch === '\n' ? '\n' : ' ';
+      i++;
+      continue;
+    }
+    if (quote) {
+      out += ch;
+      if (ch === '\\') {
+        out += text[i + 1] ?? '';
+        i += 2;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      out += ch;
+      i++;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      out += '  ';
+      i += 2;
+      inBlock = true;
+      continue;
+    }
+    if (ch === '/' && next === '/') {
+      while (i < text.length && text[i] !== '\n') {
+        out += ' ';
+        i++;
+      }
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 // Extracts quoted snake_case-looking string literals that appear as an
 // argument to track(/ingest(/trackEvent(/sendEvent(/etc, including the simple
 // two-branch ternary pattern actually used in this codebase, e.g.:
 //   track(isNewUser ? 'signup_completed' : 'login_completed', ...)
 //   track(gym.isApproved ? 'gym_approved' : 'gym_rejected', ...)
-function findEventCallsInText(text, callNames = ['track', 'ingest', 'trackEvent', 'sendEvent']) {
+function findEventCallsInText(rawText, callNames = ['track', 'ingest', 'trackEvent', 'sendEvent']) {
+  const text = stripComments(rawText);
   const found = [];
   const callRe = new RegExp(`\\b(?:${callNames.join('|')})\\s*\\(`, 'g');
   let m;

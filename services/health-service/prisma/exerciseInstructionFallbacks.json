@@ -1,0 +1,1560 @@
+{
+  "Air Bike": {
+    "equipment": "machine",
+    "language": "en",
+    "instructions": [
+      "Sit on the air bike and grip the moving handles.",
+      "Place your feet on the pedals and brace your core.",
+      "Push and pull the handles while pedaling at a steady pace.",
+      "Drive with both arms and legs to maintain power output.",
+      "Continue for the desired duration or distance."
+    ],
+    "provider": "RepDB",
+    "sourceId": "air-bike",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Bear Plank": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Start on hands and knees with the hands under the shoulders and the knees under the hips.",
+      "Tuck the toes under and brace the abdominals so the back is flat.",
+      "Press into the hands and lift the knees a couple of inches off the floor.",
+      "Hold the position with the hips level and the head in line with the spine.",
+      "Breathe steadily, then lower the knees to rest."
+    ],
+    "provider": "RepDB",
+    "sourceId": "bear-plank-hold",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Boat Hold": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Sit on the floor with the knees bent and the feet flat, hands resting behind the thighs.",
+      "Lean back until you balance just behind the sit bones and lift the chest so the spine stays long.",
+      "Lift the shins until they are parallel to the floor, then straighten the legs as far as the back stays flat.",
+      "Reach the arms forward beside the legs and hold the position for the prescribed time.",
+      "Lower the feet under control to finish."
+    ],
+    "provider": "RepDB",
+    "sourceId": "boat-pose",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Cable Reverse Fly": {
+    "equipment": "cable",
+    "language": "en",
+    "instructions": [
+      "Set both pulleys at about shoulder height and stand centred between the two cable towers.",
+      "Take the left handle in your right hand and the right handle in your left hand, so the cables cross in front of you.",
+      "Stand tall with your arms reaching forward at shoulder height and a slight bend in the elbows.",
+      "Sweep your arms out and back in a wide arc, leading with the elbows, until they are in line with your shoulders.",
+      "Squeeze your shoulder blades together briefly without arching your lower back.",
+      "Bring the handles back to the crossed start position slowly and repeat for the planned repetitions."
+    ],
+    "provider": "RepDB",
+    "sourceId": "cable-reverse-fly",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Chest-Supported Machine Row": {
+    "equipment": "machine",
+    "language": "en",
+    "instructions": [
+      "Adjust the seat so the handles sit at lower-chest height, then sit with your chest against the pad and your feet planted.",
+      "Reach forward and take the handles with your arms extended and your shoulders relaxed.",
+      "Brace your trunk, then pull the handles back by driving your elbows behind you.",
+      "Squeeze your shoulder blades together at the end of the pull without lifting your chest off the pad.",
+      "Pause briefly, then extend your arms to return the handles forward under control.",
+      "Repeat for the planned repetitions, keeping your chest on the pad throughout."
+    ],
+    "provider": "RepDB",
+    "sourceId": "chest-supported-machine-row",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Cossack Squat": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand in a wide stance with toes turned slightly out.",
+      "Shift your weight to one side, bending that knee and sinking into a deep squat.",
+      "Keep the trailing leg straight with the heel down and toes up.",
+      "Sink as low as your mobility allows, keeping the chest tall.",
+      "Drive through the bent leg back to center, then repeat to the other side."
+    ],
+    "provider": "RepDB",
+    "sourceId": "cossack-squat",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Cycling": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Adjust the saddle so your knee is only slightly bent when the pedal is at the bottom of the stroke.",
+      "Sit on the saddle with your hands on the handlebars, elbows slightly bent and shoulders relaxed.",
+      "Place the balls of your feet over the pedal axles.",
+      "Push each pedal down and forward, then let it come up and over the top in a smooth circle.",
+      "Keep a steady cadence and choose a gear that lets you pedal without bouncing on the saddle.",
+      "Ride for the planned time or distance, easing the pace for the last few minutes to cool down."
+    ],
+    "provider": "RepDB",
+    "sourceId": "cycling",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Outdoor Cycling": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Adjust the saddle so your knee is only slightly bent when the pedal is at the bottom of the stroke.",
+      "Sit on the saddle with your hands on the handlebars, elbows slightly bent and shoulders relaxed.",
+      "Place the balls of your feet over the pedal axles.",
+      "Push each pedal down and forward, then let it come up and over the top in a smooth circle.",
+      "Keep a steady cadence and choose a gear that lets you pedal without bouncing on the saddle.",
+      "Ride for the planned time or distance, easing the pace for the last few minutes to cool down."
+    ],
+    "provider": "RepDB",
+    "sourceId": "cycling",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Deep Squat Hold": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with the feet slightly wider than the shoulders and the toes turned out.",
+      "Clasp the hands in front of the chest and sit the hips down between the heels.",
+      "Lower until the hips are below the knees while the heels stay flat on the floor.",
+      "Keep the chest up and press the elbows against the knees to push them out.",
+      "Hold the position, breathing steadily, then stand up."
+    ],
+    "provider": "RepDB",
+    "sourceId": "deep-squat-hold",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Downward Dog": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Start on all fours with hands slightly ahead of your shoulders.",
+      "Tuck your toes and lift your hips up and back.",
+      "Straighten your legs and press your heels toward the floor.",
+      "Hold for 20 to 30 seconds, breathing steadily."
+    ],
+    "provider": "RepDB",
+    "sourceId": "downward-dog",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Hip Thrust": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Sit on the floor with your upper back against a bench, knees bent, feet flat, and a dumbbell across your hips.",
+      "Brace your core and drive through your heels, lifting your hips off the floor until your body forms a straight line from shoulders to knees.",
+      "Squeeze your glutes powerfully at the top of the movement, ensuring full hip extension.",
+      "Slowly lower your hips back down to the starting position with control, maintaining tension.",
+      "Repeat for the desired number of repetitions."
+    ],
+    "provider": "RepDB",
+    "sourceId": "dumbbell-hip-thrust",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Sumo Squat": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Stand with feet wider than shoulder-width, toes turned out about 30 degrees.",
+      "Hold one dumbbell vertically by its top end with both hands, letting it hang between your legs.",
+      "Brace the core and keep the chest up.",
+      "Bend at the hips and knees to sit straight down into a deep squat.",
+      "Drive through the heels to return to standing.",
+      "Repeat for the desired number of reps."
+    ],
+    "provider": "RepDB",
+    "sourceId": "db-sumo-squat",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Hanging Knee Raise": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Hang from a pull-up bar with an overhand grip, arms fully extended.",
+      "Engage your core and raise your knees toward your chest.",
+      "Hold briefly at the top.",
+      "Lower your legs slowly back to the starting position.",
+      "Repeat for the desired reps."
+    ],
+    "provider": "RepDB",
+    "sourceId": "hanging-knee-raise",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Kettlebell Clean and Press": {
+    "equipment": "kettlebell",
+    "language": "en",
+    "instructions": [
+      "Stand with two kettlebells on the floor between your feet, feet about hip-width apart, and hinge at the hips to grip one handle in each hand.",
+      "Drive through your legs and extend your hips explosively to pull both kettlebells up, then rotate your elbows under and catch the bells in the racked position at the front of your shoulders.",
+      "Brace your core and press both kettlebells overhead until your arms are fully locked out.",
+      "Lower the kettlebells back to the racked position, then down to the floor under control.",
+      "Repeat for the desired number of reps."
+    ],
+    "provider": "RepDB",
+    "sourceId": "double-kettlebell-clean-and-press",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Kettlebell Reverse Lunge": {
+    "equipment": "kettlebell",
+    "language": "en",
+    "instructions": [
+      "Stand tall holding a kettlebell by the horns at your chest, elbows tucked in (goblet hold).",
+      "Step one leg straight back, lowering your hips until both knees are bent at approximately 90 degrees.",
+      "Keep your front shin vertical and your chest upright, ensuring your back knee hovers just above the floor.",
+      "Drive through your front heel to return to the starting position.",
+      "Complete all reps per side before switching to the other side."
+    ],
+    "provider": "RepDB",
+    "sourceId": "kettlebell-reverse-lunge",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Kettlebell Strict Press": {
+    "equipment": "kettlebell",
+    "language": "en",
+    "instructions": [
+      "Hold a kettlebell in the racked position at one shoulder.",
+      "Stand tall with feet hip-width apart.",
+      "Press the kettlebell straight overhead until your arm is locked out.",
+      "Keep your core tight throughout.",
+      "Lower the kettlebell back to the rack position with control.",
+      "Complete reps on one side, then switch."
+    ],
+    "provider": "RepDB",
+    "sourceId": "one-arm-kettlebell-shoulder-press",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Nordic Hamstring Curl": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Kneel on a pad with your ankles anchored under a fixed support.",
+      "Keep your torso upright and your hips extended.",
+      "Slowly lower your body forward by resisting with your hamstrings.",
+      "Catch yourself with your hands just before hitting the floor.",
+      "Push back up and pull yourself to the starting position.",
+      "Repeat for the desired number of reps."
+    ],
+    "provider": "RepDB",
+    "sourceId": "nordic-hamstring-curl",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "One-Arm Kettlebell Swings": {
+    "equipment": "kettlebell",
+    "language": "en",
+    "instructions": [
+      "Stand with feet shoulder-width apart and a kettlebell on the floor in front of you.",
+      "Hinge at the hips and grip the kettlebell with one hand.",
+      "Hike the kettlebell back between your legs.",
+      "Drive your hips forward to swing the kettlebell to chest height.",
+      "Let gravity bring the kettlebell back between your legs.",
+      "Complete reps on one side, then switch."
+    ],
+    "provider": "RepDB",
+    "sourceId": "one-arm-kettlebell-swing",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Paused Bench Press": {
+    "equipment": "barbell",
+    "language": "en",
+    "instructions": [
+      "Lie on a flat bench and grip the barbell slightly wider than shoulder-width.",
+      "Unrack the bar and lower it to your chest.",
+      "Pause on your chest for 1-2 seconds.",
+      "Press the bar back up until your arms are fully extended.",
+      "Control the descent on every rep.",
+      "Repeat for the desired number of reps."
+    ],
+    "provider": "RepDB",
+    "sourceId": "paused-bench-press",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Paused Squat": {
+    "equipment": "barbell",
+    "language": "en",
+    "instructions": [
+      "Unrack a barbell and rest it across your upper back.",
+      "Stand with feet shoulder-width apart.",
+      "Squat down until your thighs are parallel to the floor.",
+      "Hold the bottom position for 2-3 seconds.",
+      "Drive through your heels to stand back up.",
+      "Repeat for the desired number of reps."
+    ],
+    "provider": "RepDB",
+    "sourceId": "pause-squat",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Push Press": {
+    "equipment": "barbell",
+    "language": "en",
+    "instructions": [
+      "Stand with a barbell racked on your front deltoids.",
+      "Dip slightly at the knees.",
+      "Drive up with your legs and press the bar overhead.",
+      "Lock out fully.",
+      "Lower to the start.",
+      "Repeat."
+    ],
+    "provider": "RepDB",
+    "sourceId": "push-press",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Renegade Row": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Start in a high plank with a hand on each of two dumbbells, shoulder-width apart, and the feet set wide for stability.",
+      "Brace the trunk so the body forms a straight line from head to heels.",
+      "Row one dumbbell up toward the hip, driving the elbow back along the ribs.",
+      "Keep the hips square to the floor and do not let the body twist.",
+      "Lower the dumbbell to the floor under control.",
+      "Repeat on the other side and keep alternating."
+    ],
+    "provider": "RepDB",
+    "sourceId": "renegade-row",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Running": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Start from an easy jog and build into your pace over the first few minutes rather than setting off at target speed.",
+      "Land with your foot under your hips, not out in front, and keep the contact with the ground short and quiet.",
+      "Run tall through the hips with a slight forward lean from the ankles, not a fold at the waist.",
+      "Bend your elbows to about ninety degrees and drive your arms forward and back, keeping them off your chest.",
+      "Breathe rhythmically and keep your shoulders, jaw and hands loose.",
+      "Hold the pace for the desired time or distance, then jog and walk for a few minutes to finish."
+    ],
+    "provider": "RepDB",
+    "sourceId": "running",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Single-Leg Press": {
+    "equipment": "machine",
+    "language": "en",
+    "instructions": [
+      "Sit in a leg press machine with one foot placed on the platform.",
+      "Keep the other leg off the platform, resting to the side.",
+      "Release the safeties and lower the platform by bending your knee.",
+      "Stop when your knee is near a 90-degree angle.",
+      "Drive through the heel to press the platform back up.",
+      "Complete reps on one side, then switch."
+    ],
+    "provider": "RepDB",
+    "sourceId": "single-leg-press",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Single-Leg Squat to Bench": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand in front of a sturdy box or bench that is about knee height, with your back to it.",
+      "Shift your weight onto one leg and lift the other leg out in front of you, with your arms stretched forward for balance.",
+      "Push your hips back and bend the standing knee, lowering yourself under control toward the box.",
+      "Sit lightly on the box without dropping onto it, keeping your chest up and the free leg off the floor.",
+      "Press through the whole standing foot and straighten that leg to stand up again.",
+      "Complete the planned repetitions, then repeat on the other leg."
+    ],
+    "provider": "RepDB",
+    "sourceId": "single-leg-box-squat",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Standing Quad Stretch": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand on one leg, holding a wall for balance if needed.",
+      "Bend the other knee and grab that ankle behind you.",
+      "Pull the heel toward your glute, keeping knees together.",
+      "Hold for 20 to 30 seconds, breathing steadily.",
+      "Switch sides and repeat."
+    ],
+    "provider": "RepDB",
+    "sourceId": "standing-quad-stretch",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "T-Bar Row": {
+    "equipment": "barbell",
+    "language": "en",
+    "instructions": [
+      "Straddle the loaded T-bar with feet shoulder-width apart.",
+      "Hinge at the hips until your torso is around 45 degrees.",
+      "Grip the handles and keep your back flat.",
+      "Pull the bar up toward your chest by driving your elbows back.",
+      "Squeeze your shoulder blades at the top.",
+      "Lower the bar under control and repeat."
+    ],
+    "provider": "RepDB",
+    "sourceId": "t-bar-row",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Wall Sit": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with back against a wall.",
+      "Slide down until thighs are parallel to the floor.",
+      "Hold the position.",
+      "Stand back up when done."
+    ],
+    "provider": "RepDB",
+    "sourceId": "wall-sit",
+    "sourceUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/exercises.json",
+    "attribution": "Exercise data by RepDB (repdb.co) · https://repdb.co · free-tier in-app license",
+    "rights": "repdb_free_in_app",
+    "licenseUrl": "https://github.com/RepDB/exercise-dataset/blob/66c4298af8d99b9dc397dad6699e508fb871d249/LICENSE-DATA.md",
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Aerobic Dance": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Clear a level space and stand with your knees soft and your feet about hip-width apart.",
+      "Begin with easy side steps, letting your arms swing naturally as you warm up.",
+      "Combine comfortable steps, gentle knee lifts and arm movements in a rhythm you can sustain.",
+      "Land softly, keep your knees aligned with your feet, and reduce the step size if you lose control.",
+      "Gradually return to easy steps and slow your breathing to finish."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Assisted Pistol Squat": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand beside a fixed support that can safely take your weight and hold it for balance.",
+      "Balance on one foot and extend the other leg in front of you.",
+      "Bend the standing knee and sit your hips back and down, using the support only as much as needed.",
+      "Keep your standing heel grounded and your knee following the direction of your toes; lower only as far as you can control.",
+      "Press through the standing foot and use the support to return upright. Complete the repetitions, then change legs."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Bayesian Cable Curl": {
+    "equipment": "cable",
+    "language": "en",
+    "instructions": [
+      "Attach a single handle to a low cable pulley and select a light load.",
+      "Face away from the stack in a stable split stance, holding the handle with your arm slightly behind your torso.",
+      "Keep your upper arm still and curl the handle by bending your elbow without rolling the shoulder forward.",
+      "Lower slowly to a comfortable elbow extension while keeping your ribs stacked over your pelvis.",
+      "Finish the repetitions, return the weight stack gently, and repeat with the other arm."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Belt Squat": {
+    "equipment": "machine",
+    "language": "en",
+    "instructions": [
+      "Set the belt-squat machine stops and platform for your height, attach the belt securely around your hips and choose a manageable load.",
+      "Stand with your feet about shoulder-width apart and hold the support handles lightly for balance.",
+      "Release the machine catch as directed by its controls and bend your hips and knees to squat down under control.",
+      "Keep your whole foot planted, your knees tracking with your toes and your torso comfortably upright.",
+      "Push through your feet to stand, then engage the catch before unloading or removing the belt."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Brisk Walking": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Choose a clear, level route and start walking at an easy pace.",
+      "Stand tall, relax your shoulders and let your bent arms swing naturally.",
+      "Increase to a purposeful pace with quick, comfortable steps rather than reaching far ahead with your feet.",
+      "Keep a pace at which you can still speak in sentences and adjust it to the terrain.",
+      "Slow to an easy walk for the last few minutes."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Butt Kick": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand tall with feet hip-width apart and your arms relaxed by your sides.",
+      "Jog gently in place and bend one knee to bring that heel toward your buttock.",
+      "Place that foot down softly and alternate legs, keeping the knees pointing down rather than driving them forward.",
+      "Keep your trunk steady and use a comfortable rhythm; the heel does not have to touch your buttock.",
+      "Reduce to a march before stopping."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Crab Walk": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Sit on the floor with knees bent, feet flat and hands planted behind your hips in a comfortable wrist position.",
+      "Press through your hands and feet to lift your hips clear of the floor.",
+      "Take small steps with a hand and the opposite foot, then alternate to travel forward or backward.",
+      "Keep your hips lifted without forcing an arch in the lower back, and move only as far as your shoulders and wrists allow.",
+      "Stop moving and lower your hips to the floor under control."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Clean and Press": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Stand with feet hip-width apart and a dumbbell in each hand; keep the space overhead clear.",
+      "Hinge at the hips with soft knees and hold the dumbbells close to your legs.",
+      "Extend your hips and knees to bring the dumbbells upward, then guide your elbows underneath to catch them at your shoulders without striking your wrists.",
+      "Set your balance, brace your trunk and press the dumbbells overhead without leaning backward.",
+      "Lower to your shoulders and then to the starting position with control before beginning the next repetition."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Dead Bug": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Lie on your back and hold a light dumbbell securely with both hands over your chest.",
+      "Lift your hips and knees to about ninety degrees and keep your ribs down and lower back gently supported by the floor.",
+      "Keep the dumbbell steady while slowly extending one leg away from you, stopping before your back arches.",
+      "Bring the leg back, then extend the other leg while continuing to breathe.",
+      "Place both feet down and lower the dumbbell safely to finish."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Devil Press": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Place two stable, non-rolling dumbbells on the floor about shoulder-width apart and stand behind them.",
+      "Grip the handles, step or jump back into a plank and lower your chest toward the floor with control.",
+      "Press back up and bring your feet forward outside the dumbbells to a stable hip-hinge position.",
+      "Drive through your legs and hips, keeping the weights close as you guide them overhead; finish balanced without leaning backward.",
+      "Lower the dumbbells under control to your shoulders and then to the floor before repeating."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Lateral Lunge": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Stand tall holding a dumbbell in each hand by your sides.",
+      "Take a comfortable step to one side, bend that knee and push your hips backward while keeping the other leg relatively straight.",
+      "Keep the stepping foot flat and its knee aligned with its toes; let the dumbbells hang without rounding your back.",
+      "Push through the stepping foot to return to the starting stance.",
+      "Repeat to the other side, using a depth you can control."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Squeeze Press": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Lie on a flat bench with your feet planted and hold two dumbbells above your chest with palms facing each other.",
+      "Bring the dumbbells together and maintain gentle inward pressure throughout the repetition.",
+      "Bend your elbows to lower the weights toward your mid-chest, keeping your forearms controlled and shoulders stable.",
+      "Press upward while continuing to squeeze the dumbbells together, without bouncing them off your chest.",
+      "After the final repetition, lower the weights safely and sit up with control."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Fast Feet": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with feet about hip-width apart, knees slightly bent and your trunk upright.",
+      "Begin taking short, quick alternating steps in place, lifting the feet only slightly off the floor.",
+      "Keep the contacts light, your shoulders relaxed and your body centred over your feet.",
+      "Use a rhythm you can maintain without stumbling or letting your knees collapse inward.",
+      "Gradually slow the steps and return to standing."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Frog Pump": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Lie on your back, bring the soles of your feet together and let your knees open comfortably to the sides.",
+      "Keep your feet close enough to your hips to stay comfortable and rest your arms on the floor.",
+      "Brace your abdomen and squeeze your glutes to lift your hips without arching your lower back.",
+      "Pause briefly, then lower your hips with control while keeping the soles together.",
+      "Repeat within a comfortable hip range, then lower fully to finish."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Hiking": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Choose a route suited to your experience, check the footing and begin at an easy walking pace.",
+      "Keep your body tall and use shorter, steady steps on climbs rather than leaning far forward from the waist.",
+      "Place each foot deliberately on uneven ground and keep your knees soft when descending.",
+      "Adjust your pace to the slope and conditions, and stop in a stable place when you need a rest.",
+      "Finish with easy walking on level ground where possible."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Hip Airplane": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand beside a fixed support and hold it lightly for balance.",
+      "Balance on one leg with a soft knee and hinge forward at the hip, extending the free leg behind you.",
+      "Keep your trunk and free leg moving together as you gently rotate your pelvis open away from the standing leg.",
+      "Rotate the pelvis back toward the floor without twisting the standing knee or collapsing its arch.",
+      "Return upright under control and repeat on the other side."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Jogging": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Begin with several minutes of easy walking on a clear route.",
+      "Move into a gentle jog using short, comfortable steps and relaxed arm swings.",
+      "Keep your posture tall and let your feet land close to underneath your body rather than reaching forward.",
+      "Maintain an easy pace you can sustain while speaking, and return to walking whenever needed.",
+      "Slow to a walk for a few minutes before stopping."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Kettlebell Romanian Deadlift": {
+    "equipment": "kettlebell",
+    "language": "en",
+    "instructions": [
+      "Stand with feet about hip-width apart, holding a kettlebell with both hands in front of your thighs.",
+      "Soften your knees, brace your trunk and push your hips backward while keeping the bell close to your legs.",
+      "Lower only until you feel hamstring tension and can still keep your back steady; the bell need not touch the floor.",
+      "Press through your feet and bring your hips forward to stand without leaning backward at the top.",
+      "Repeat with a controlled lowering phase, then set the bell down safely."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Landmine Press": {
+    "equipment": "barbell",
+    "language": "en",
+    "instructions": [
+      "Secure one end of a barbell in a landmine attachment and kneel on one knee facing the free end.",
+      "Hold the free end at the shoulder on the side of the kneeling leg and plant the other foot firmly in front.",
+      "Brace your abdomen and squeeze the glute on the kneeling side to keep your trunk upright.",
+      "Press the bar forward and upward along its arc without leaning or rotating, then lower it to your shoulder with control.",
+      "Complete the repetitions and change sides; support the bar safely when finishing."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Lateral Lunge": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with feet hip-width apart and hands held comfortably in front of your chest.",
+      "Step to one side and sit your hips back as you bend the stepping knee.",
+      "Keep the stepping foot flat, the opposite leg relatively straight and your chest lifted.",
+      "Push through the stepping foot to return upright without twisting the knee.",
+      "Alternate sides using a comfortable step width and depth."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Leaning Lateral Raise": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Hold a fixed support with one hand and a light dumbbell in the other.",
+      "Keep your feet planted and lean your body slightly away from the support, maintaining a straight, braced trunk.",
+      "With a soft elbow, raise the dumbbell out to the side to about shoulder height or a lower comfortable position.",
+      "Keep your shoulder away from your ear and lower the weight slowly without swinging.",
+      "Return upright before changing sides."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Low-Impact Skater": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with feet hip-width apart, knees soft and your trunk slightly inclined forward.",
+      "Step sideways onto one foot, then lightly tap the opposite foot behind and across it.",
+      "Push gently from the supporting foot and step to the other side, again tapping the trailing foot behind.",
+      "Keep one foot in contact with the floor at all times and let your arms counterbalance the steps.",
+      "Slow the side steps before returning to standing."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Machine Hip Thrust": {
+    "equipment": "machine",
+    "language": "en",
+    "instructions": [
+      "Adjust the hip-thrust machine back support and foot platform, then secure its padded belt or lap restraint across your hips.",
+      "Plant your feet so your shins are close to vertical at the top of the movement, and release the catch using the machine controls.",
+      "Brace your trunk and drive through your whole feet to extend your hips.",
+      "Stop when your shoulders, hips and knees form a comfortable line; avoid arching your lower back.",
+      "Lower under control, then engage the catch before undoing the restraint and leaving the machine."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Machine Low Row": {
+    "equipment": "machine",
+    "language": "en",
+    "instructions": [
+      "Adjust the seat and any chest pad so the low-row handles are reachable with your feet firmly supported.",
+      "Hold the handles and sit tall with your arms extended and shoulders relaxed.",
+      "Pull the handles toward your lower ribs by driving your elbows back, keeping your trunk steady.",
+      "Pause without shrugging, then let your arms extend slowly without letting the weight stack crash.",
+      "Finish the repetitions and return the handles safely."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "March in Place": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand tall with feet about hip-width apart and use a fixed support for balance if needed.",
+      "Lift one knee to a comfortable height while keeping your trunk upright.",
+      "Place that foot down gently and lift the other knee, continuing to alternate.",
+      "Swing your arms naturally and keep a steady rhythm without leaning backward.",
+      "Lower the knee height and slow to standing to finish."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Medicine Ball Russian Twist": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Sit on the floor holding a light medicine ball near your chest, with knees bent and feet planted.",
+      "Lean back slightly from your hips while keeping your chest lifted and your back controlled.",
+      "Rotate your ribcage and carry the ball toward one hip without reaching or pulling with your arms alone.",
+      "Return through the centre and rotate to the other side, keeping your knees relatively still.",
+      "Keep both feet down for stability and return upright before setting the ball aside."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Prone T Raise": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Lie face down on a mat with your neck in a comfortable neutral position.",
+      "Extend your arms out to the sides in a T shape with your thumbs pointing upward.",
+      "Gently draw your shoulder blades back and lift your hands and arms a small distance off the floor.",
+      "Keep your ribs and pelvis supported and avoid lifting your head or arching your lower back.",
+      "Lower slowly and repeat without adding weight."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Prone Y Raise": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Lie face down on a mat with your neck relaxed and your legs resting on the floor.",
+      "Reach your arms diagonally overhead to form a Y, with thumbs pointing upward.",
+      "Keep your shoulders away from your ears and lift your arms gently without forcing the range.",
+      "Keep your ribs and pelvis on the mat rather than extending your lower back.",
+      "Lower the arms under control and repeat."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Shadow Boxing": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand in a comfortable staggered boxing stance with your knees soft, hands near your face and space clear around you.",
+      "Begin with light, controlled straight punches into the air and return each hand to your guard.",
+      "Rotate your hips and pivot your feet naturally with the punches rather than twisting a planted knee.",
+      "Keep your wrists straight, do not snap your elbows into a hard lock, and add small balanced steps as comfortable.",
+      "Reduce the pace and return to a relaxed stance to finish."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Side Jackknife": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Lie on one side with legs extended, your lower arm resting on the floor for balance and your top hand lightly beside your head.",
+      "Brace your abdomen and lift your upper torso and legs toward each other in a small controlled side crunch.",
+      "Keep your neck relaxed and avoid pulling your head with your hand or rolling your torso backward.",
+      "Lower your torso and legs slowly to the starting position.",
+      "Complete the repetitions and repeat on the other side."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Single-Arm Cable Row": {
+    "equipment": "cable",
+    "language": "en",
+    "instructions": [
+      "Set a cable pulley around lower-chest height, attach a single handle and stand facing it in a stable split stance.",
+      "Hold the handle with your arm extended and brace your trunk so your hips and shoulders face forward.",
+      "Pull the handle toward the same-side lower ribs by moving your elbow back without shrugging or rotating.",
+      "Let the arm extend slowly while keeping your torso steady.",
+      "Finish the repetitions, return the handle safely and switch arms."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Single-Arm Cable Shoulder Press": {
+    "equipment": "cable",
+    "language": "en",
+    "instructions": [
+      "Attach a single handle to a low pulley and take a stable split stance facing away from the stack.",
+      "Bring the handle to shoulder height with your wrist above your elbow and the cable passing clear of your body.",
+      "Brace your trunk and press the handle overhead without leaning back or letting your torso rotate.",
+      "Lower slowly to shoulder height within a comfortable range.",
+      "Return the handle safely after the repetitions and repeat with the other arm."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Sprawl": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with feet about hip-width apart and knees soft, leaving clear space behind you.",
+      "Bend your hips and knees and place your hands on the floor beneath your shoulders.",
+      "Step or jump both feet backward into a straight-arm plank, keeping your abdomen braced rather than dropping your hips.",
+      "Bring your feet back toward your hands and stand upright under control.",
+      "Repeat at a manageable pace; this version finishes without a push-up or jump."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Stability Ball Rollout": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Kneel on a mat with a stability ball in front of you and place your forearms on the ball.",
+      "Brace your abdomen and keep your hips, ribs and head aligned.",
+      "Roll the ball slowly forward by opening at the shoulders and hips, keeping your knees supported.",
+      "Stop before your lower back arches, then use your abdomen and shoulders to bring the ball back.",
+      "Use a short controlled range and sit back before moving away from the ball."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Standing Hamstring Stretch": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand beside a fixed support and place one heel a short distance in front of you with the toes lifted.",
+      "Keep that knee soft and bend the supporting knee slightly.",
+      "Hinge forward from your hips with a long back until you feel a gentle stretch behind the extended thigh.",
+      "Hold without bouncing or rounding down toward your toes, breathing steadily.",
+      "Return upright and change legs."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Standing Knee Drive": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand tall with feet hip-width apart and keep a fixed support nearby if needed.",
+      "Brace your trunk and drive one knee upward to a comfortable height while balancing on the other leg.",
+      "Keep your pelvis level and avoid leaning backward or pulling the knee with your hands.",
+      "Lower the foot softly and alternate legs at a controlled rhythm.",
+      "Slow the movement and return to standing to finish."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Step Aerobics": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Place a low, stable exercise step on a non-slip surface with clear space around it.",
+      "Stand facing the step and place your whole lead foot on the platform.",
+      "Step up with the other foot, then step back down one foot at a time while keeping your knees aligned with your toes.",
+      "Alternate the leading leg and use a pace and step height that let you land softly without losing balance.",
+      "Reduce the pace and finish with easy marching on the floor."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Step-Back Lunge": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand tall with feet about hip-width apart and hands held comfortably for balance.",
+      "Step one foot backward, keeping the feet on separate tracks rather than a tightrope line.",
+      "Bend both knees and lower the back knee toward the floor while keeping the front foot planted.",
+      "Keep your front knee following your toes and push through the front foot to return upright.",
+      "Alternate legs or finish the planned repetitions before switching sides."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Step-up": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand facing a low, stable bench or step and place one whole foot on its surface.",
+      "Lean forward slightly from the hips and press through the raised foot to lift your body.",
+      "Bring the trailing foot up lightly without jumping or pushing hard off the floor.",
+      "Step down slowly, keeping the lead knee aligned with its toes and your pelvis level.",
+      "Complete the repetitions and change the leading leg."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Swimming": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Use a supervised swimming area suitable for your ability and begin with easy movement in the water.",
+      "Choose a stroke you already know and keep your head and trunk aligned rather than forcing your neck upward.",
+      "Coordinate comfortable arm strokes, a gentle kick and regular breathing at a pace you can control.",
+      "Take rests at the pool edge as needed and avoid holding your breath for long distances.",
+      "Ease the pace and finish at a secure pool edge; this general entry does not teach a specific swimming stroke."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Thoracic Rotation": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Start on hands and knees with your hands under your shoulders and knees under your hips.",
+      "Place one hand lightly behind your head without pulling on your neck.",
+      "Rotate your upper back to bring that elbow gently toward the opposite supporting arm.",
+      "Then rotate the upper chest open and lift the elbow toward the ceiling, keeping your hips relatively still.",
+      "Return under control, complete the repetitions and change sides."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Walking Lunge": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Stand tall holding a dumbbell in each hand at your sides, with enough clear space to walk forward.",
+      "Take a comfortable step forward and bend both knees to lower your body while keeping the front foot flat.",
+      "Keep your trunk steady, your front knee following its toes and the rear knee clear of the floor.",
+      "Push through the front foot and bring the rear leg forward into the next lunge.",
+      "Continue alternating with controlled steps, then stand still before setting the dumbbells down."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Wall Angel": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Stand with your back near a wall, feet a short distance forward and knees soft.",
+      "Keep your ribs down and bring your arms into a bent-elbow goalpost position as close to the wall as comfortable.",
+      "Slide your arms upward slowly without forcing your wrists or elbows against the wall.",
+      "Stop before your lower back arches or your shoulders shrug, then lower to the goalpost position.",
+      "Repeat within your comfortable shoulder range."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Yoga Flow": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Start on hands and knees with hands under shoulders and knees under hips on a comfortable mat.",
+      "Breathe in as you gently lift your chest and tip your pelvis forward without compressing your lower back.",
+      "Breathe out as you round your upper back and gently tuck your pelvis, keeping the movement comfortable.",
+      "Continue this slow cat-cow flow with your breathing rather than forcing your neck or spine.",
+      "Return to a neutral back and rest; this catalogue entry uses a simple cat-cow flow, not a full yoga class."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": null,
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Exact canonical name/equipment and setup checked; source/app fallback only, not approved coach instructions or trainer certification."
+  },
+  "Dumbbell Lying Pronation": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Lie securely on a bench and support the working forearm on the bench, with the hand free beyond its edge.",
+      "Hold a very light dumbbell securely and keep your elbow and upper arm still; use only a load you can control through forearm rotation.",
+      "Rotate the forearm slowly toward a palm-down position without bending your wrist or rolling your shoulder.",
+      "Stop within a comfortable range and rotate back slowly, keeping the forearm supported.",
+      "Complete the repetitions, set the weight down safely and change arms."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=cFN80sNHFTs",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Canonical photos and forearm target show supported forearm pronation; retained text incorrectly describes shoulder rotation. Correct the joint action while preserving the lying bench setup.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Canonical photos and forearm target show supported forearm pronation; retained text incorrectly describes shoulder rotation. Correct the joint action while preserving the lying bench setup.",
+    "replacementSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Lying_Pronation.json"
+  },
+  "Dumbbell Lying Supination": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Lie securely on your side on a bench and support the working forearm, leaving the hand free to rotate beyond the bench edge.",
+      "Hold a very light dumbbell securely and keep your elbow and upper arm still; use only a load you can control through forearm rotation.",
+      "Rotate the forearm slowly toward a palm-up position without bending your wrist or rolling your shoulder.",
+      "Stop within a comfortable range and rotate back slowly, keeping the forearm supported.",
+      "Complete the repetitions, set the weight down safely and change arms."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=4Om83PMgZAg",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Canonical photos and forearm target show supported forearm supination; retained text incorrectly describes shoulder rotation. Correct the joint action while preserving the lying bench setup.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Canonical photos and forearm target show supported forearm supination; retained text incorrectly describes shoulder rotation. Correct the joint action while preserving the lying bench setup.",
+    "replacementSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Lying_Supination.json"
+  },
+  "Band Hip Adductions": {
+    "equipment": "other",
+    "language": "en",
+    "instructions": [
+      "Secure a resistance band to a fixed support near ankle height and stand side-on to the anchor, holding a stable support for balance if needed.",
+      "Place the band around the ankle of the leg nearest the anchor and step away until there is light tension.",
+      "Keep your torso steady and the working knee comfortably straight as you draw that leg inward across the front of the standing leg.",
+      "Return slowly toward the anchor without letting the band pull your body sideways.",
+      "Complete the repetitions, remove the band safely and turn around to work the other side."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=Vce3tIYpzhc",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Retained text describes outward hip abduction, but the exercise name, target muscles and inspected canonical photos show inward hip adduction with the band on the leg nearest the anchor.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Retained text describes outward hip abduction, but the exercise name, target muscles and inspected canonical photos show inward hip adduction with the band on the leg nearest the anchor.",
+    "replacementSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Band_Hip_Adductions.json"
+  },
+  "Towel Row": {
+    "equipment": "bodyweight",
+    "language": "en",
+    "instructions": [
+      "Loop a strong towel around a fixed support that is designed to bear your body weight, around chest height, and check that the towel and support cannot slip.",
+      "Hold both ends securely, place your feet in front of the support and lean back with your body in a straight line and arms extended.",
+      "Bend your elbows to draw your chest toward the support, keeping your shoulders controlled and your body straight.",
+      "Extend your arms slowly to lean back again without dropping your hips or jerking on the towel.",
+      "Make the movement easier by standing more upright, and step back to a stable standing position before releasing the towel."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://res.cloudinary.com/dgbydysk2/image/upload/v1793560856/phool-gobhi/exercises/uTv34oq-thumb.jpg",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Licensed canonical media shows a standing lean-back row using a towel anchored to fixed rungs. Retained English and Hindi text omit the anchor and describe unsupported towel pulling.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Licensed canonical media shows a standing lean-back row using a towel anchored to fixed rungs. Retained English and Hindi text omit the anchor and describe unsupported towel pulling.",
+    "replacementSourceUrl": "https://github.com/hasaneyldrm/exercises-dataset/blob/7455efae41b330c265e7cd4b78dfa848e7ce5ebd/data/exercises.json",
+    "replaceSourceLanguages": [
+      "en",
+      "hi"
+    ]
+  },
+  "Cable External Rotation": {
+    "equipment": "cable",
+    "language": "en",
+    "instructions": [
+      "Set a cable pulley around elbow height and stand side-on to it, holding the handle in the hand farther from the stack.",
+      "Bend that elbow to about ninety degrees and keep your upper arm gently beside your ribs.",
+      "Rotate your forearm away from your body without lifting the elbow or turning your trunk.",
+      "Use a light load and a comfortable shoulder range, then return slowly.",
+      "Finish the repetitions, return the handle safely and change sides."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=Qnp0VOXMpXk",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Retained text placed the arm straight in front; the named side-elbow cable rotation and reviewed footage use a bent elbow beside the ribs.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Retained text placed the arm straight in front; the named side-elbow cable rotation and reviewed footage use a bent elbow beside the ribs."
+  },
+  "Single-Arm Triceps Pushdown": {
+    "equipment": "cable",
+    "language": "en",
+    "instructions": [
+      "Attach a single handle to a high cable pulley and stand facing the stack in a stable stance.",
+      "Take the handle in one hand and bring your upper arm beside your ribs, with the elbow bent.",
+      "Keep your upper arm still and straighten the elbow to press the handle down without leaning on it.",
+      "Allow the elbow to bend slowly to return the handle, keeping your wrist comfortable and trunk steady.",
+      "Complete the repetitions, return the handle safely and change arms."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=FSD-tbnEX2k",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Retained generic text specified a straight bar at chest height rather than the high-pulley single-handle setup of the named exercise.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Retained generic text specified a straight bar at chest height rather than the high-pulley single-handle setup of the named exercise."
+  },
+  "Close-Grip Dumbbell Press": {
+    "equipment": "dumbbell",
+    "language": "en",
+    "instructions": [
+      "Lie lengthways on a flat bench with your feet planted and support a manageable dumbbell securely above your chest with both hands.",
+      "Keep your hands close together, wrists steady and elbows pointing comfortably toward your sides.",
+      "Bend your elbows to lower the dumbbell toward your mid-chest without lowering it behind your head.",
+      "Press back up under control, keeping your shoulders supported and avoiding a bounce off your chest.",
+      "Finish the repetitions and lower the weight safely before sitting up."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=axxSCgMwrzM",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Retained instructions describe a perpendicular-bench pullover rather than a close-grip chest press.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Retained instructions describe a perpendicular-bench pullover rather than a close-grip chest press."
+  },
+  "Neck Press": {
+    "equipment": "barbell",
+    "language": "en",
+    "instructions": [
+      "Use a flat bench inside a rack with safety stops set to prevent the bar reaching your neck, and use a spotter for the lift.",
+      "Take a comfortable overhand grip, plant your feet and keep your upper back supported on the bench.",
+      "Lower a light bar toward the upper chest only within a range you can control; never rest or press the bar onto your neck.",
+      "Keep your wrists supported over the elbows and press the bar upward without forcing shoulder range or bouncing.",
+      "Rack the bar securely after the set; stop the movement if you cannot maintain clearance and a comfortable shoulder position."
+    ],
+    "provider": "Phool Gobhi",
+    "sourceId": null,
+    "sourceUrl": "https://www.youtube.com/watch?v=JIECaET8nt4",
+    "attribution": "Phool Gobhi · original English exercise guidance",
+    "rights": "phool_gobhi_original",
+    "licenseUrl": null,
+    "reviewType": "implementation_content_check",
+    "reviewNotes": "Retained guillotine-style bench instructions told users to contact the neck with the bar; that contact instruction is removed. This is a bench-press variant, not a neck/overhead press.",
+    "mode": "replace_incompatible_source",
+    "replacementReason": "Retained guillotine-style bench instructions told users to contact the neck with the bar; that contact instruction is removed. This is a bench-press variant, not a neck/overhead press."
+  }
+}

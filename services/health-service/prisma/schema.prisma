@@ -36,16 +36,27 @@ model HealthConsent {
   revokedAt     DateTime?
   policyVersion String
   platform      Platform
-  // FR-09. Which classes of health data the grant covers. Today the only
-  // one the product can act on is `logs` - nothing shares health data
-  // with a coach, a partner or a leaderboard, because none of those
-  // surfaces exist (FR-21 is deferred).
-  //
-  // So this is storage and a gate, not a settings screen: a scope is
-  // added when the surface needing it ships, and the app only offers a
-  // toggle for a scope that can change something. Offering "share with
-  // your coach" today would imply a data flow that cannot happen.
+  // Device-health access scopes only. In-app ledger scopes are stored in
+  // LedgerConsent and must not depend on this OS-level permission.
   scopes        String[]  @default(["logs"])
+  // Used by device-health scope migrations; ledger wording versions live in
+  // LedgerConsent.scopeVersions.
+  scopeVersions Json       @default("{}")
+
+  @@schema("health")
+}
+
+// In-app ledger consent is independent from permission to read HealthKit or
+// Health Connect. These scopes describe data stored by this service and must
+// remain available even when device health access was never granted.
+model LedgerConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  scopes        String[]  @default([])
+  scopeVersions Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@schema("health")
 }
@@ -101,7 +112,14 @@ model Exercise {
   loggingType      LoggingType
   primaryMuscles   String[]
   secondaryMuscles String[]
+  // "beginner" | "intermediate" | "advanced". Null for an entry nobody has
+  // tagged yet — a null is "unclassified", not "beginner".
+  difficulty       String?
   demoImageUrl     String?
+  // Looping demo animation (GIF). Licensed media — keep mediaAttribution
+  // alongside it wherever the GIF is shown.
+  demoGifUrl       String?
+  mediaAttribution String?
   createdByUserId  Int?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -140,17 +158,39 @@ model ExerciseFormVideo {
 // A reusable routine — "Push Day," "Leg Day." What a user starts a session
 // from (or an "empty workout" skips this entirely — WorkoutSession.templateId
 // is nullable for exactly that case).
+//
+// userId nullable + isSystem (docs/../sprint2/PG-HUNT-001 H-21, added
+// 2026-09-11): a system template has no owner and is visible to every
+// user, the same way a user's own template is visible only to them. This is
+// how the 12 seeded no-equipment routines (prisma/seedHomeTrack.js) are
+// shared without copying a row per user — templateService.listTemplatesService
+// unions `userId = caller` with `isSystem = true`.
 model WorkoutTemplate {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int            @id @default(autoincrement())
+  userId      Int?
+  isSystem    Boolean        @default(false)
+  name        String
+  // System templates only — shown on the routine picker. Null for a user's
+  // own templates; they don't need to describe a workout to themselves.
+  description String?
+  estMinutes  Int?
+  level       TemplateLevel?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   exercises TemplateExercise[]
   sessions  WorkoutSession[]
+  planDays  WorkoutPlanDay[]
 
   @@index([userId])
+  @@index([isSystem])
+  @@schema("health")
+}
+
+enum TemplateLevel {
+  beginner
+  intermediate
+
   @@schema("health")
 }
 
@@ -159,18 +199,105 @@ model WorkoutTemplate {
 // even though the v1 Create Routine screen doesn't expose pairing yet, so
 // adding that UI later needs no migration.
 model TemplateExercise {
-  id            Int             @id @default(autoincrement())
-  templateId    Int
-  template      WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  exerciseId    Int
-  exercise      Exercise        @relation(fields: [exerciseId], references: [id])
-  order         Int
-  targetSets    Int
-  targetReps    Int
-  restSeconds   Int?
-  supersetGroup Int?
+  phase String @default("main")
+  instructions String?
+  id                    Int             @id @default(autoincrement())
+  templateId            Int
+  template              WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId            Int
+  exercise              Exercise        @relation(fields: [exerciseId], references: [id])
+  order                 Int
+  targetSets            Int
+  // Exactly one of targetReps/targetDurationSeconds is meaningful per row —
+  // which one depends on the exercise's own loggingType (sets_reps_weight
+  // vs duration), same split WorkoutSet already has for the real logged
+  // values (reps vs durationSeconds). targetReps was NOT-NULL until
+  // 2026-09-11: fine while every template exercise was sets_reps_weight,
+  // wrong the moment a duration exercise (plank, wall sit — see the home
+  // track's seeded routines) needed a target with no rep count at all.
+  targetReps            Int?
+  targetDurationSeconds Int?
+  restSeconds           Int?
+  supersetGroup         Int?
+  // Double progression. Opt-in per exercise: a row with no repMax never
+  // progresses (every routine saved before 2026-10-21 is like that).
+  //   repMin..repMax  the rep range; targetReps is the goal right now, and
+  //                   climbs one rep at a time from repMin to repMax.
+  //   targetWeightKg  the working weight; null until set or first learned from
+  //                   a finished workout. Float, not Decimal: it is shown and
+  //                   edited as a plain number and Decimal serialises to a
+  //                   string in JSON.
+  // Hit repMax on every set and the weight goes up one step and targetReps
+  // resets to repMin. See services/progressionService.js.
+  repMin                Int?
+  repMax                Int?
+  targetWeightKg        Float?
 
   @@index([templateId])
+  @@schema("health")
+}
+
+// A multi-week sequence of templates (D-02/H-22) — a thin wrapper, not a
+// new logging concept. Every session it schedules is a normal
+// WorkoutSession started from a normal WorkoutTemplate; this only says
+// which template belongs on which day.
+//
+// Free, not sold — see D-02 (docs/../sprint2/PG-HUNT-001): pricing this in
+// coins would strand anyone who installed organically rather than through
+// the QR-hunt chain, since coins are gym-only per D-01.
+model WorkoutPlan {
+  id          Int      @id @default(autoincrement())
+  // Stable machine key, same convention as CoinCatalogItem.key — referenced
+  // by the client and by any future admin tooling; never reuse a key for a
+  // different plan.
+  key         String   @unique
+  name        String
+  description String?
+  weeks       Int
+  isSystem    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  days      WorkoutPlanDay[]
+  activeFor UserActivePlan[]
+
+  @@schema("health")
+}
+
+model WorkoutPlanDay {
+  id         Int              @id @default(autoincrement())
+  planId     Int
+  plan       WorkoutPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  weekIndex  Int // 1-based
+  dayIndex   Int // 1-7, 1-based, matches ISO weekday order
+  // Null = a scheduled rest day. Deliberately a real day in the plan, not
+  // an absence — see planService.getActivePlanService, which always
+  // returns exactly `weeks * 7` days so the client never has to guess
+  // whether a missing day means "rest" or "not seeded yet".
+  templateId Int?
+  template   WorkoutTemplate? @relation(fields: [templateId], references: [id])
+
+  @@unique([planId, weekIndex, dayIndex])
+  @@schema("health")
+}
+
+// One row per user — a user can be actively on at most one plan at a time,
+// same simplicity constraint as the rest of this v1. startedOn is the only
+// state kept; the current day/week is always DERIVED from calendar days
+// elapsed since then (planService), never stored as a separate pointer that
+// could desync from it — same "derive on read" principle
+// consistencyStreakService already uses for the same reason (a second
+// source of truth for a number that's cheap to recompute is a bug waiting
+// to happen, not a feature).
+model UserActivePlan {
+  userId      Int         @id
+  planId      Int
+  plan        WorkoutPlan @relation(fields: [planId], references: [id])
+  startedOn   DateTime
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
   @@schema("health")
 }
 
@@ -207,6 +334,23 @@ model WorkoutSession {
   // for any session started with no known booking context at all.
   bookingId    Int?
   gymId        Int?
+  // Attendance provenance, snapshotted from booking-service at event time
+  // (the /internal/attendance-events payload) - HOW this visit was proven and
+  // WHEN the gym recorded it. Only the internal route writes these; the
+  // client can set bookingId at session start, which is exactly why bookingId
+  // alone must never be read as "attended". Values mirror booking-service's
+  // AttendanceMethod enum (qr_scan / qr_geofence_self / manual_verify /
+  // manual_override) but are stored as text, not a health-side enum: a second
+  // copy of another service's enum drifts the day a value is added there, and
+  // an unknown incoming value is dropped to null (unknown provenance) by the
+  // service rather than rejected by Postgres mid-event.
+  //
+  // Null on every row written before this existed. That is deliberate and must
+  // stay that way - there is no backfill. A null here means "we cannot prove
+  // how this visit was verified", and the insurer-grade score reports it as
+  // unknown provenance, never as verified.
+  attendedAt       DateTime?
+  attendanceMethod String?
   // 'YYYY-MM-DD' in the user's tz at entry — NOT derived from startedAt at
   // read time, so a session logged just after midnight (or backfilled while
   // travelling) keys to the day the user experienced, not the server's UTC
@@ -232,12 +376,27 @@ model WorkoutSession {
   // the finish call can never double-credit, independent of the ledger's own
   // idempotencyKey check (belt-and-suspenders, cheap to keep in sync).
   coinsAwarded Boolean          @default(false)
+  // Time actually training vs paused, reported by the client at finish. Null
+  // for sessions finished by an older client.
+  activeSeconds Int?
+  pausedSeconds Int?
+  // Snapshot of the user's latest weight biometric at finish, so history keeps
+  // the body weight of THAT day rather than whatever they weigh later.
+  bodyWeightKg  Float?
+  // Post-workout photo, private bucket (path only - signed URLs are minted on
+  // read, never persisted). photoRewardCoins is the server-rolled 1-5 coin
+  // reward; null means no reward has been paid, which is also the retry guard.
+  photoStoragePath  String?
+  photoUploadedAt   DateTime?
+  photoRewardCoins  Int?
 
   exercises SessionExercise[]
 
   @@index([userId, startedAt])
   @@index([userId, bookingId])
   @@index([userId, localDate])
+  // "Last done" per template (GET /templates): groupBy templateId, max(startedAt).
+  @@index([userId, templateId, startedAt])
   @@schema("health")
 }
 
@@ -245,6 +404,9 @@ model WorkoutSession {
 // template if the user swapped/added something mid-workout (see
 // POST /sessions/:id/exercises).
 model SessionExercise {
+  restSeconds Int?
+  phase String @default("main")
+  instructions String?
   id            Int            @id @default(autoincrement())
   sessionId     Int
   session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -275,6 +437,10 @@ model WorkoutSet {
   durationSeconds   Int?
   distanceMeters    Decimal?        @db.Decimal(8, 2)
   completed         Boolean         @default(false)
+  // Rest taken AFTER this set, in seconds, reported by the client.
+  restSeconds       Int?
+  // Set when `completed` flips to true, cleared when it flips back.
+  completedAt       DateTime?
   updatedAt         DateTime        @updatedAt
 
   @@index([sessionExerciseId])
@@ -285,6 +451,11 @@ enum ExerciseRecordSource {
   manual
   healthkit
   health_connect
+  // Our own GPS run tracker (run-tracker-spec.html §10) — distinct from
+  // healthkit/health_connect because those are device-synced summaries with
+  // no route, while this source always carries a RunTrack. adminService's
+  // adoption count treats it separately from "synced" for that reason.
+  gps_tracker
 
   @@schema("health")
 }
@@ -293,7 +464,10 @@ enum ExerciseRecordSource {
 // strength (that's WorkoutSession now). Duration-based cardio/yoga/other,
 // self-reported or synced. externalId is the source's own record id, used
 // only for synced rows (null for manual) so re-syncing the same HealthKit
-// workout is a no-op upsert, not a duplicate.
+// workout is a no-op upsert, not a duplicate. For gps_tracker rows,
+// externalId is the app's own clientRunId (a UUID it generates when the run
+// starts), which makes a retried/offline-queued upload idempotent the same
+// way a re-synced HealthKit workout is.
 model ExerciseRecord {
   id              Int                  @id @default(autoincrement())
   userId          Int
@@ -307,9 +481,41 @@ model ExerciseRecord {
   distanceMeters  Decimal?             @db.Decimal(8, 2)
   avgHeartRateBpm Int?
   createdAt       DateTime             @default(now())
+  runTrack        RunTrack?
 
   @@unique([userId, source, externalId])
   @@index([userId, startedAt])
+  @@schema("health")
+}
+
+// One row per GPS-tracked run/walk/cycle, 1:1 with its ExerciseRecord — kept out
+// of that table so a plain list of records never drags the polyline along.
+// See run-tracker-spec.html §10 for the full field-by-field reasoning
+// (splits, polyline precision, why weightKgUsed is frozen at save time).
+model RunTrack {
+  id               Int            @id @default(autoincrement())
+  exerciseRecordId Int            @unique
+  exerciseRecord   ExerciseRecord @relation(fields: [exerciseRecordId], references: [id], onDelete: Cascade)
+  // Google encoded polyline, precision 5, Douglas-Peucker simplified
+  // client-side (~2 m tolerance) before upload.
+  polyline         String         @db.Text
+  // A small (<=40 point), further-simplified polyline for list thumbnails,
+  // so GET /runs never has to ship the full-resolution route.
+  thumbPolyline    String         @db.Text
+  // [{ km: 1, seconds: 392 }, ...] — one entry per completed kilometre.
+  splits           Json
+  movingSeconds    Int
+  elapsedSeconds   Int
+  avgPaceSecPerKm  Int?
+  bestKmSeconds    Int?
+  pauseCount       Int            @default(0)
+  pointCount       Int
+  hadGap           Boolean        @default(false)
+  weightKgUsed     Decimal?       @db.Decimal(5, 1)
+  appVersion       String?
+  platform         Platform?
+  createdAt        DateTime       @default(now())
+
   @@schema("health")
 }
 
@@ -341,6 +547,24 @@ model DailyActivityMetric {
 // Fitness+ FR-12 (weight, body_fat) and Health+ Phase-1 FR-01 (resting HR,
 // sleep, steps, stress, HRV) rather than two separate tables — see the
 // BiometricEntry comment for why.
+//
+// The blood-panel markers are the third limb of that union, and the reason
+// every member here is lowercase snake_case: BIOLOGICAL_TARGETS in
+// services/ledger/constants.js keys the score engine's clinical ranges by
+// exactly these names, and the engine looks a stored marker up in it with
+// `marker.toLowerCase()`. A camelCase member would be writable but unscoreable.
+//
+// These four were absent until 2026-10-04. Because the lookup missed,
+// computeBiologicalScore found no target for any stored row, totalWeightUsed
+// stayed 0, it returned null, and the biological 60% of the blended score
+// (weightBio, scoreEngine.js) contributed nothing for every user — silently,
+// with no error to notice it by.
+//
+// Adding a member here is necessary but NOT sufficient on its own. The HTTP
+// allow-list is METRIC_UNITS in services/biometricService.js, from which
+// biometricController derives METRICS; METRIC_BOUNDS is keyed the same way and
+// rejects any value it has no range for. All three must agree, and
+// test/schemaMigrationParity.test.js asserts that they do.
 enum BiometricMetric {
   weight
   body_fat
@@ -349,6 +573,10 @@ enum BiometricMetric {
   steps
   hrv
   stress
+  hba1c
+  ldl
+  hdl
+  triglycerides
 
   @@schema("health")
 }
@@ -399,6 +627,32 @@ model BiometricEntry {
 
   @@unique([userId, metric, localDate])
   @@index([userId, metric, localDate])
+  @@schema("health")
+}
+
+// Consent to store the body numbers a person TYPES IN (weight, body fat, and
+// the Health+ quick-add metrics), kept apart from HealthConsent on purpose.
+//
+// HealthConsent is the device-access grant: it has a required `platform` and
+// describes reading HealthKit / Health Connect. Someone logging their weight by
+// hand has never been asked about device access, and may never want it, so
+// hanging this off HealthConsent (as the ledger scopes do) would force a
+// person to connect Apple Health before they could type "72 kg". That is the
+// wrong consent answering the wrong question.
+//
+// Same shape as AssistantConsent, and for the same reason: the version is
+// stamped by the server from biometricConsentService.BIOMETRIC_POLICY_VERSION,
+// never accepted from the client, which is what makes "ask again when the
+// wording changes" enforceable. Revoke is soft (revokedAt), so "did this person
+// ever agree, and when" survives a withdrawal.
+model BiometricConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  policyVersion String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
   @@schema("health")
 }
 
@@ -485,6 +739,13 @@ model PersonalisationProfile {
   // time series, so there's exactly one source of truth for "what does this
   // user weigh" instead of a setup copy that immediately goes stale.
   heightCm         Int?
+  // Pre-existing bug fixed 2026-09-11:
+  // personalisationService/personalisationController have read and written
+  // setupWeightKg since this model was built, but the column never existed
+  // — any client that actually sent it would have hit a Prisma "Unknown
+  // argument" error. Decimal(8,2) to match BiometricEntry.value and every
+  // other weight field in this schema.
+  setupWeightKg    Decimal?         @db.Decimal(8, 2)
   experienceLevel  ExperienceLevel?
   // Free-form list from a fixed chip set (knee/shoulder/lower_back/wrist/…).
   // Used only to bias volume/impact away from those zones — never rendered
@@ -499,6 +760,18 @@ model PersonalisationProfile {
   // what was disclosed to arrive at the mode.
   consentAt        DateTime?
   privacyVersion   String?
+  // Home setup (onboarding audit P2, 2026-10-01): asked once at the first
+  // "Start workout" on the home track. Values are the fixed sets in
+  // services/homeSetup.js — what a person HAS, which is not the same list as
+  // Exercise.equipment (what a move USES). Read by the routine list (fit
+  // badge + ordering), the suggestion engine and the coach, so nothing here
+  // is collected without a reader.
+  homeEquipment    String[]         @default([])
+  trainingSpace    String?
+  // When the home-setup sheet was answered. Separate from the two fields
+  // because "I have nothing" is an answer ([] / 'none'), and without this the
+  // app could not tell it from "never asked" — it would ask again forever.
+  homeSetupAt      DateTime?
   updatedAt        DateTime         @updatedAt
 
   @@schema("health")
@@ -551,12 +824,52 @@ model WeeklyGoal {
   @@schema("health")
 }
 
+// The three adjustable numbers behind the app's "Your plan" screen - the
+// calorie budget, the step target and the sleep window.
+//
+// Deliberately NOT a home for the macros. Protein, carbs, fat, fibre and water
+// are derived from the kcal on this row plus the NutritionTarget's inputs, and
+// are computed on read rather than stored: a second copy of them is a second
+// number that can disagree with the first the moment either is written. The
+// client is forbidden from sending them for the same reason - see
+// prescriptionService.js.
+//
+// sessionsPerWeek is NOT here either. It already has a home (WeeklyGoal, the
+// ring on the home screen) and two sources of truth for one number is how the
+// plan screen and the ring come to disagree. The prescription reads and writes
+// that row.
+model Prescription {
+  userId       Int      @id
+  // Null until height + weight give a NutritionTarget. A null budget is not a
+  // zero-calorie plan — it is the state where the plan can be built but its
+  // numbers cannot, so the app shows a setup prompt instead of a target.
+  kcal         Int?
+  stepsPerDay  Int
+  sleepMinutes Int
+  // [{ "weekday":0-6, "templateId":Int|null, "title":String, "level":
+  // "beginner"|"intermediate"|"advanced" }]. The week's workout shape, written
+  // by the plan generator. Null for a prescription built before slots existed.
+  workoutSlots Json?
+  // Bumped when the rules that turn these three into a plan change, so a
+  // saved plan stays explicable after a retune - the same contract
+  // NutritionTarget.rulesVersion and ScoreDaySnapshot carry.
+  rulesVersion String   @default("v1")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@schema("health")
+}
+
 // FR-08. Which nudge types a user has switched off. A row means "stop
 // sending me this one" — absence means allowed, so the default is opt-in
 // without needing a row per user per type.
 enum NudgeType {
   log
   comeback
+  // "You are behind the score target you set." Added last; the opt-out join
+  // keys on (userId, type) and stores the value by name, so order is
+  // irrelevant.
+  target
 
   @@schema("health")
 }
@@ -605,5 +918,1553 @@ model HealthDataAuditLog {
   at       DateTime @default(now())
 
   @@index([userId, at])
+  @@schema("health")
+}
+
+// --- Fitness assistant (2026-09-18) -----------------------------------------
+//
+// Lives in health-service rather than a new service on purpose: the gateway
+// already proxies /api/health wholesale (no gateway change), this service is
+// already a registered DPDPA erasure/export target (no new fan-out entry), and
+// the chat has to read the workout sessions and injuryZones that live here
+// anyway. A new service would have meant repeating the manual GCP secret
+// bootstrap that has already caused one prod incident, for no isolation gain.
+
+enum AssistantRole {
+  user
+  assistant
+
+  @@schema("health")
+}
+
+model AssistantConversation {
+  id                         Int       @id @default(autoincrement())
+  userId                     Int
+  title                      String?
+  // Rolling compression of everything before summarizedThroughMessageId.
+  // This is what keeps the prompt bounded as a conversation grows, instead of
+  // the cost per turn climbing with its length.
+  summary                    String?   @db.Text
+  summarizedThroughMessageId Int?
+  archivedAt                 DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  messages AssistantMessage[]
+
+  @@index([userId, updatedAt])
+  @@schema("health")
+}
+
+model AssistantMessage {
+  id               Int                   @id @default(autoincrement())
+  conversationId   Int
+  conversation     AssistantConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  // Denormalised so a per-user read or erasure never needs the join.
+  userId           Int
+  role             AssistantRole
+  content          String                @db.Text
+  // Which posture and prompt were in force when this was said. Recorded on
+  // every turn because the product's advice scope is a decision that has
+  // changed once and can change again — without this, "what did we tell this
+  // person, under which policy" is unanswerable after the fact.
+  policyVersion    String?
+  promptVersion    String?
+  providerModel    String?
+  tokensIn         Int?
+  tokensOut        Int?
+  // Part of tokensIn, not additional to it: how much of the prompt the
+  // provider served from its prefix cache. Cached tokens are discounted and
+  // exempt from the provider rate limit, so this is what says how much quota
+  // headroom is really left. Null means the provider did not report it.
+  tokensCached     Int?
+  latencyMs        Int?
+  // An audit of what the prompt actually saw (counts and ids, never the
+  // content itself) — enough to reconstruct why an answer was what it was,
+  // without copying the sensitive rows it was built from.
+  usedContext      Json?
+  // The system prompt verbatim, exactly as the model received it. usedContext
+  // above says how MUCH fed an answer; this says WHAT, which is the only form
+  // that helps when a user reports the coach saying something wrong. Entirely
+  // derived from rows this service already holds, on a table already in the
+  // erasure and export paths, beside the user's own free text - so it opens no
+  // exposure that was not already open.
+  usedSystemPrompt String?               @db.Text
+  createdAt        DateTime              @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([userId, createdAt])
+  @@schema("health")
+}
+
+// Separate from HealthConsent (device sync) and PersonalisationProfile.consentAt
+// (non-neutral programming). This one gates a specific thing: that an AI may
+// read your training history and answer questions about your body.
+model AssistantConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  // Stamped server-side from assistantPolicy.CURRENT_POLICY_VERSION, never
+  // accepted from the client — which is what makes "re-consent when the
+  // wording changes" enforceable here, unlike HealthConsent.policyVersion
+  // (a free-text string the client supplies and nothing validates).
+  policyVersion String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// Free-text context the assistant itself learned mid-conversation: goals,
+// dietary preferences, allergies, available equipment.
+//
+// Deliberately NOT the same store as PersonalisationProfile.injuryZones. That
+// field has its own consent gate and drives real programming decisions; if the
+// assistant wrote into it directly it would be an unaudited side channel into
+// a field other features trust. Injuries mentioned in chat land here and are
+// used in-session only, until the user explicitly promotes them.
+model AssistantMemory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  // 'goal' | 'injury_mentioned' | 'allergy' | 'equipment' | 'preference'
+  key       String
+  value     String
+  // 'extracted' (the model inferred it) | 'user_confirmed'
+  source    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // (userId, key, VALUE), not (userId, key): allergies and injuries are
+  // additive, and keying on the pair alone made every new one silently
+  // overwrite the last. Cardinality is now declared per key in
+  // memoryService.KEY_POLICY — 'one' keys replace on write, 'many' accumulate
+  // up to their cap. Including value also makes restating a fact idempotent.
+  @@unique([userId, key, value])
+  @@index([userId, key])
+  @@schema("health")
+}
+
+// One row per accepted message, read as a rolling-window count.
+//
+// DB-backed rather than in-process because every service here runs with
+// min-instances=0: an in-memory counter resets on every cold start and is not
+// shared across instances, so it would enforce nothing precisely when load
+// made it matter. Same reasoning already applied to OtpCode's cooldown and
+// NudgeLog's frequency budget.
+model AssistantRateLimitLog {
+  id     Int      @id @default(autoincrement())
+  userId Int
+  sentAt DateTime @default(now())
+
+  @@index([userId, sentAt])
+  @@schema("health")
+}
+
+// --- Cycle tracking (2026-09-18) --------------------------------------------
+//
+// RECORDED OVERRIDE. FR-27 (decision dated 2026-09-08) deliberately kept ZERO
+// cycle/pregnancy columns server-side: a life-stage disclosure resolved
+// ON-DEVICE into a ProgrammingMode enum, and only that coarse mode ever
+// reached the server. The stated rationale was that the medical fact itself
+// should never be transmitted or stored.
+//
+// On 2026-09-18 the decision was taken to store cycle dates, predictions and
+// phase history server-side, knowingly departing from that. These tables are
+// the result. Three things keep that departure contained and reversible:
+//
+//   1. Their own feature flag (cycleTracking) AND their own consent scope
+//      ('cycle_tracking' in HealthConsent.scopes) — two independent gates,
+//      because "the feature does not exist" and "this user has not opted in"
+//      are different states that must fail differently.
+//   2. ProgrammingMode remains the ONLY thing that touches training load.
+//      Cycle data feeds it through one derivation; no suggestion code reads
+//      CyclePhaseEntry directly. Switch the flag off and the training engine
+//      behaves exactly as it does today.
+//   3. Both tables are in the DPDPA erasure and export paths from the first
+//      commit, not added later.
+//
+// This is the most sensitive data the platform holds. Treat it accordingly.
+
+enum CyclePhase {
+  menstrual
+  follicular
+  ovulation
+  luteal
+
+  @@schema("health")
+}
+
+enum CycleEntrySource {
+  // The user said so.
+  user_logged
+  // We derived it from their average cycle length. Kept distinct because a
+  // prediction must never be shown back as though it were a fact she reported.
+  predicted
+
+  @@schema("health")
+}
+
+model CycleTrackingProfile {
+  userId                  Int       @id
+  // Set when the user opts in. Null means the row exists (from an earlier
+  // opt-in) but consent is currently withdrawn.
+  consentAt               DateTime?
+  privacyVersion          String?
+  averageCycleLengthDays  Int?
+  averagePeriodLengthDays Int?
+  lastPeriodStartDate     DateTime? @db.Date
+  // Whether cycle sync owns PersonalisationProfile.programmingMode for this
+  // user.
+  //
+  // Without this, the "don't downgrade a user-chosen low-impact mode" guard
+  // cannot tell a mode the USER set after an injury from one THIS SERVICE set
+  // during her last period — so the first logged period would pin her to
+  // low-impact permanently, which is both wrong and unexplainable to her.
+  // Set the first time sync legitimately takes ownership; never set when it
+  // declined to overwrite a mode it did not set.
+  managesProgrammingMode  Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+model CyclePhaseEntry {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  startDate DateTime         @db.Date
+  endDate   DateTime?        @db.Date
+  phase     CyclePhase
+  source    CycleEntrySource
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId, startDate])
+  @@schema("health")
+}
+
+// Per-day symptom log (flow, symptoms). One row per user per day.
+//
+// Mood is deliberately NOT here: it lives in WellnessMoodCheckIn, once. A
+// second mood column in the most sensitive table would be a second copy that
+// the mood history never sees, tied to cycle consent instead of its own.
+// Same containment as the tables above: behind the cycleTracking flag AND the
+// cycle_tracking consent scope, and in erasure + export from the first commit.
+// Values are validated against fixed allowlists in cycleTrackingService; free
+// text is deliberately not accepted, so nothing a person types can land here.
+model CycleDayLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  date      DateTime @db.Date
+  flow      String?
+  symptoms  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@schema("health")
+}
+
+// --- Health Ledger (2026-09-27) ---------------------------------------------
+//
+// See C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-ledger-plan-20260927.html.
+//
+// The shape of this whole block is dictated by ONE decision, recorded 2026-09-27
+// and load-bearing everywhere below: the app TRACKS the doctor's plan, it never
+// WRITES one. Software that generates a plan because of a condition is a
+// regulated medical device under CDSCO; software that manages a general wellness
+// goal is not. Everything in this schema exists to make that line structural
+// rather than a matter of care in a prompt or a UI string:
+//
+//   - NutritionTarget.source is `formula` or `user_edited`. There is no third
+//     value, and no field anywhere holds "because you have anemia, eat iron".
+//     A target is computed from body numbers and a goal TYPE, nothing else.
+//   - PlanItem.prescribedBy is free text the USER typed. The generator
+//     (planGenerator.js) structurally cannot write a row with origin `doctor`:
+//     it is the one writer that is not allowed, and the tests assert it.
+//   - PlanItem carries no nutrient, dose or biomarker claim of any kind. A
+//     doctor item is "Iron tablet, after lunch" — a string the user owns —
+//     not "65 mg elemental iron".
+//   - MedicalDocument is a record. It is never read, OCR'd or interpreted by
+//     anything in this service; there is no code path from a stored document
+//     to a target or a plan item.
+//
+// The three consent scopes this adds (`nutrition`, `medical_records`, and the
+// photo request log below) follow the location_routes pattern: separate,
+// separately withdrawable, and both erased and exported from the first commit.
+
+enum Sex {
+  male
+  female
+  other
+
+  @@schema("health")
+}
+
+// The six goals the intake offers. All six are WELLNESS goals in the CDSCO
+// sense. There is deliberately no goal type that names a condition — "follow
+// my doctor's plan" (doctor_plan) takes the user down the records path, where
+// their own doctor's instructions become plan items, rather than asking the
+// engine to treat anything.
+enum HealthGoalType {
+  build_muscle
+  lose_fat
+  // Same weight on the scale, more muscle and less fat. Replaces the
+  // narrower "gain_weight", which carried a *larger* surplus than
+  // build_muscle and so pulled a beginner towards fat gain.
+  recomp
+  endurance
+  general_health
+  doctor_plan
+
+  @@schema("health")
+}
+
+// Starting activity guess from the intake, replaced by MEASURED activity
+// (workouts, runs, steps) after 14 days of data. Same reason
+// PersonalisationProfile.preferredRestDay is stored rather than derived from
+// the day: a number that silently moves under someone is a bug, and the whole
+// point of asking is that they answered.
+enum ActivityLevel {
+  sedentary
+  light
+  moderate
+  very_active
+
+  @@schema("health")
+}
+
+enum DietPattern {
+  veg
+  egg
+  non_veg
+  vegan
+  jain
+
+  @@schema("health")
+}
+
+enum MealSlot {
+  breakfast
+  lunch
+  snack
+  dinner
+
+  @@schema("health")
+}
+
+// How a food entered the log. `photo_confirmed` is the only one that implies
+// a model was involved, and it still means the USER confirmed every row —
+// the model proposes ids from our own FoodItem table, it never invents a
+// food and never writes a nutrient value.
+//
+// `photo_unmatched` is the rows from a confirmed photo that the catalogue did
+// not cover. They carry the name + grams + photo provenance and a `nutrients`
+// snapshot of `{ "unknown": true }` — present but value-less, never a
+// fabricated zero — so a day's totals count them while refusing to sum them.
+// The name also feeds the missing-food queue, which is how an unseen dish
+// becomes a demand signal instead of a dead end.
+enum FoodLogSource {
+  search
+  photo_confirmed
+  saved_meal
+  custom
+  photo_unmatched
+
+  @@schema("health")
+}
+
+// Whether a target came out of the formula or out of the user's own edit.
+// A `user_edited` target is never silently overwritten by a recompute — see
+// nutritionService.recomputeTargets, which refuses to clobber it.
+enum TargetSource {
+  formula
+  user_edited
+
+  @@schema("health")
+}
+
+enum PlanItemKind {
+  nutrition
+  workout
+  habit
+  doctor_medication
+  doctor_test
+  doctor_appointment
+  rest
+
+  @@schema("health")
+}
+
+// Where a plan item came from. This is the field that makes the medical line
+// visible in the product: the user always sees which of these produced the
+// thing they are being asked to do.
+enum PlanItemOrigin {
+  suggested
+  doctor
+  user
+
+  @@schema("health")
+}
+
+// --- Goal intake ------------------------------------------------------------
+
+// One row per user. The intake is the only writer, and every field is
+// nullable/skippable: "skipped the whole setup" must be a valid state that
+// the rest of the feature can read without special-casing.
+model HealthGoal {
+  userId             Int            @id
+  // Every goal the user is working towards, in the order THEY ranked them.
+  //
+  // This was one scalar and the app forced a single choice, which was a lie:
+  // people routinely want two things at once (build muscle AND run further),
+  // and the only multi-word option, `recomp`, does not cover those pairs. So
+  // the user is not asked to lie-by-category any more.
+  //
+  // Order is meaningful and is the tie-break: when two goals ask for the same
+  // protein-per-kg, the one listed first wins, because that is the one they
+  // said mattered more. Not a primary-goal column, because nothing consumes one
+  // as a driver any more — the engine reads every entry — and a field that
+  // claims to be the main goal while changing no number is worse than none.
+  //
+  // The macro maths is in targetEngine.js: the calorie adjustments SUM and are
+  // then clamped by the same safe-pace bound a single goal is clamped by, and
+  // protein comes from the single most demanding goal rather than from
+  // summing grams of chicken.
+  goals              HealthGoalType[] @default([])
+  // Sex and age are cached here rather than read from auth-service on every
+  // target recompute. They are copied ONCE, at intake, and never re-synced:
+  // they are inputs to a historical calculation, and a target that silently
+  // re-derives itself when someone edits their profile is exactly the
+  // "number moving under them" failure the app is meant to avoid.
+  sex                Sex?
+  age                Int?
+  // Height is cached here once, at intake, and never re-synced, on the same
+  // terms as sex and age above. computeTargets() cannot produce a number
+  // without it.
+  //
+  // This is where PersonalisationProfile.heightCm was always meant to end up —
+  // its own comment says it is "a deliberate placeholder, not the long-term
+  // home" pending PG-HEALTH-001 FR-02. That column is left in place and still
+  // read as a fallback by ledger/targetService.js, because dropping a populated
+  // column is a data migration and not something a feature branch should do
+  // silently. Once the fallback is retired, the placeholder can go.
+  heightCm           Int?
+  //
+  // There is deliberately NO weightKg here. Weight is a time series in
+  // BiometricEntry(metric='weight'), and PersonalisationProfile already
+  // records the decision in a comment: "Weight is deliberately NOT here: it
+  // lives in BiometricEntry as a time series, so there's exactly one source of
+  // truth for 'what does this user weigh' instead of a setup copy that
+  // immediately goes stale." A second copy on this table would reintroduce
+  // precisely that staleness — a user who loses weight would recompute against
+  // the weight they set their goal at, and the target would stop matching the
+  // body in front of them. targetService resolves weight from BiometricEntry
+  // and returns "missing: ['weight']" when there is no reading.
+  // 'YYYY-MM-DD' in the user's tz, same convention as BiometricEntry.localDate
+  // and WorkoutSession.localDate. A string, not a timestamp, because the day
+  // boundary is the user's day and IST midnight is a different instant from
+  // UTC midnight for most of the day.
+  startDate          String
+  targetWeightKg     Decimal?       @db.Decimal(5, 1)
+  targetDate         String?
+  activity           ActivityLevel?
+  diet               DietPattern?
+  // Free text, the user's own words ("peanuts", "shellfish"). Used only to
+  // WARN on search results — never to filter, never to constrain a target.
+  // An allergy list that silently removed foods would make the log lie.
+  allergies          String[]       @default([])
+  // Populated once measured activity supersedes the `activity` guess, so the
+  // targets screen can say which of the two produced the number.
+  activityIsMeasured Boolean        @default(false)
+  // Calm mode: the whole chart renders as one green line with no red candles.
+  //
+  // This is the plan's eating-disorder guard made switchable — "the whole chart
+  // can be switched to calm mode (no red, just the green line)". Calorie
+  // tracking plus red loss days is a known trigger, and a user who has decided
+  // the numbers are hurting them must be able to turn that off without
+  // deleting their history or leaving the feature.
+  //
+  // Default false, because the ledger is worthless without the misses and
+  // nobody should be opted out of information by default. It is one tap from
+  // the chart header, and turning it on is never buried in settings.
+  //
+  // This is a DISPLAY preference, not a scoring rule. computeDay still computes
+  // the same numbers; calm mode only changes how they are painted, so toggling
+  // it can never rewrite a stored snapshot or change a user's total.
+  calmMode           Boolean        @default(false)
+  // A pause is the score's off-ramp, and it exists because a cumulative line
+  // that only ever moves down has no exit for the exact people who most need
+  // to come back: someone ill, injured, travelling, or simply in a bad stretch.
+  // Without it the comeback nudge is asking a user who is already being
+  // punished every day to also respond to a notification.
+  //
+  // A paused day is NEUTRAL, not skipped: it earns nothing, is charged no
+  // misses, and the chain passes through it unchanged, so a flat snapshot row is
+  // still written and the next day resumes from the same close. The pause stays
+  // visible in the series rather than being hidden, so a flat stretch is
+  // explained by the pause instead of looking like the app lost the user's data.
+  //
+  // Inclusive on both ends, and both are the user's local day string, the same
+  // convention as BiometricEntry.localDate. PausedUntil is capped at start +
+  // MAX_PAUSE_DAYS by scoreService.setPause - the cap lives in the service, not
+  // only in the client, so the score cannot be paused indefinitely by calling
+  // the API directly.
+  pausedFrom         String?
+  pausedUntil        String?
+  // The score the user is aiming at, and the window they gave themselves to
+  // reach it in. This is the answer to "what number am I trying to hit", which
+  // is a question the score engine cannot ask itself: it produces a number every
+  // day but has no opinion about what any of them are for.
+  //
+  // A threshold on the RUNNING TOTAL, not on points earned within the window.
+  // The distinction matters and is easy to get backwards. The score is cumulative
+  // and can fall - a missed doctor item is -10, a missed workout -15, a day can
+  // lose 40 - so progress toward this target can go backwards too. That is the
+  // honest reading of a running total, and it is why the card reports pace
+  // against the user's own target rather than a streak the app could keep on
+  // their behalf.
+  //
+  // `scoreTargetPoints` is absolute rather than relative, so "get to 400" means
+  // 400 on the chain and not 400 more than wherever the user happened to be. The
+  // two readings differ by the whole history, and the absolute one is what a
+  // person means when they look at a number on a chart.
+  //
+  // The window is stored as two local day strings rather than a day count,
+  // because a count has no end: it would have to be re-derived against today's
+  // date on every read and would silently change meaning. ScoreTargetFrom is the
+  // day the clock started, so the baseline is knowable after the fact.
+  //
+  // Pause interaction: paused days do NOT extend this window. A pause freezes the
+  // score, and the target is measured on the score, so extending the deadline
+  // would be extending a deadline because the thing being measured stopped
+  // moving. What a pause does do is stop the days counting as lost - see
+  // scoreTargetService, which subtracts paused days from the elapsed count rather
+  // than from the deadline, so the pace maths stays honest and the user is never
+  // shown as behind for a fortnight they were explicitly told to stop.
+  scoreTargetPoints   Int?
+  scoreTargetFrom     String?
+  scoreTargetUntil    String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  // Derived entirely from the goal, so it is deleted with it rather than
+  // orphaned. See NutritionTarget.goalRow for the back-reference.
+  //
+  // One-to-many, not one-to-one: NutritionTarget is an append-only history, so
+  // one goal set has produced many targets over time and only the newest row is
+  // current. Reading the current target is a findFirst ordered by
+  // effectiveFrom, never this field.
+  targets NutritionTarget[]
+
+  @@schema("health")
+}
+
+// Conditions in the user's OWN words. No codes, no ontology, no lookup table.
+//
+// That is the whole design. A coded condition list is what turns "I track your
+// doctor" into "I diagnose you", and it is also a re-identification vector:
+// a rare coded condition plus a gym check-in is a person. Free text is
+// storable, exportable and erasable, and it feeds nothing.
+model HealthCondition {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  label     String
+  // 'user_stated' is the only value today and is kept explicit so that if a
+  // future clinician-entered source is ever added, "who said this" is
+  // answerable per row rather than unknowable.
+  source    String   @default("user_stated")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@schema("health")
+}
+
+// A HISTORY of targets, not a single current row.
+//
+// The primary key used to be userId, which contradicted everything the service
+// does: recomputeTargets() orders by `effectiveFrom` to find the latest row and
+// then CREATES a new one, so a second recompute collided with the primary key.
+// The two never agreed, and the hand-rolled test double hid it by ignoring the
+// `where` clause and inventing an `id` the table did not have.
+//
+// So the table now says what it is. Every recompute appends a row, the app
+// reads the newest, and `inputs` + rulesVersion on that row are why a target
+// can still explain itself months later — which only means anything if the
+// superseded rows are kept rather than overwritten.
+//
+// A user_edited row is never recomputed over (see TargetSource), so it stays
+// the newest row until the user clears it; that is the behaviour the service
+// has always documented.
+model NutritionTarget {
+  id            Int            @id @default(autoincrement())
+  userId        Int
+  // The goal set this row was computed FOR — a snapshot, not a read-through,
+  // so changing your goals later cannot retroactively relabel the targets they
+  // produced. The array, because "why these numbers?" has to be able to say
+  // that two goals moved the calories and one of them set the protein.
+  goals         HealthGoalType[] @default([])
+  // The day this target took effect, 'YYYY-MM-DD' in the user's tz. Same
+  // convention as HealthGoal.startDate and BiometricEntry.localDate, and
+  // deliberately a string rather than a timestamp: the boundary that matters is
+  // the user's midnight, which is not UTC's.
+  effectiveFrom String
+  kcal         Int
+  proteinG     Int
+  carbsG       Int
+  fatG         Int
+  fibreG       Int
+  waterMl      Int
+  // The micronutrient RDA the plan actually shows (iron, magnesium, calcium,
+  // zinc, ...). Always the normal daily allowance for the user's age and sex
+  // from ICMR-NIN 2020 — never a therapeutic dose, never elevated because of
+  // a condition. Storing them in one map rather than a column each is what
+  // makes "never a treatment level" checkable: there is exactly one place a
+  // nutrient level can come from, and it is the RDA table.
+  micros       Json
+  // Every input the formula used, so "Why these numbers?" can always explain
+  // itself months later without re-deriving from data that has since changed.
+  // This is the difference between a target that can answer for itself and one
+  // that has to guess.
+  inputs       Json
+  source       TargetSource   @default(formula)
+  // Bumped when the formula changes, so a frozen historical day's score stays
+  // explicable even after the engine is retuned. Stored on ScoreDaySnapshot
+  // too; the two must be allowed to differ and that is the point.
+  rulesVersion String         @default("v1")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // The back-reference for HealthGoal. Named `goalRow` because the `goal` above
+  // is the goal TYPE — the input the formula ran with, and it is a snapshot for
+  // the reason given on that column. The relation is on userId alone, not
+  // (userId, goal): a user has ONE goal set, and every row in this history was
+  // derived from whatever that set was at the time.
+  goalRow HealthGoal @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  // One target per user per day. This is what makes an append-only history
+  // possible: a second recompute on the same day updates that day's row rather
+  // than adding a duplicate, so re-running the formula after a weight change
+  // does not leave two conflicting targets for the same day.
+  @@unique([userId, effectiveFrom])
+  // No @@index([userId]) here, and its absence is deliberate. It was declared
+  // and never created by any migration, so `prisma migrate diff` reported it as
+  // missing on every run and trained people to ignore that output. It was also
+  // never needed: the unique constraint above is a btree with userId as its
+  // LEADING column, so it already serves every `userId = ?` lookup this table
+  // has. A second index on the same leading column would be a duplicate tree
+  // maintained on every insert and delete in exchange for nothing.
+  @@schema("health")
+}
+
+// --- Food database ----------------------------------------------------------
+
+// Per 100 g, raw or as-cooked depending on `basis`. Serving sizes are
+// household units (katori, roti, glass) because "150 g of poha" is not an
+// instruction anyone follows at 7am.
+model FoodItem {
+  id              Int      @id @default(autoincrement())
+  name            String
+  // Hinglish and regional aliases, searched alongside the name. "poha",
+  // "chipta", "kanda poha" all have to find the same row or the food log is
+  // unusable for the people it is actually for.
+  aliases         String[] @default([])
+  // 'raw' | 'cooked' | 'as_served' — an oil-soaked aloo bhaji and a boiled
+  // potato are the same food and a 3x calorie difference.
+  basis           String   @default("cooked")
+  kcal            Decimal  @db.Decimal(8, 2)
+  proteinG        Decimal  @db.Decimal(8, 2)
+  carbsG          Decimal  @db.Decimal(8, 2)
+  fatG            Decimal  @db.Decimal(8, 2)
+  fibreG          Decimal  @db.Decimal(8, 2)
+  // Key micronutrients per 100 g. Sparse on purpose — only the ones the
+  // targets screen actually shows, so the column is not a nutrition database
+  // pretending to be a curated one.
+  ironMg          Decimal? @db.Decimal(8, 2)
+  magnesiumMg     Decimal? @db.Decimal(8, 2)
+  calciumMg       Decimal? @db.Decimal(8, 2)
+  zincMg          Decimal? @db.Decimal(8, 2)
+  // [{ label: 'katori', grams: 150 }, { label: 'plate', grams: 200 }]
+  servings        Json?
+  veg             Boolean  @default(true)
+  // Non-veg foods are marked rather than hidden so a search for "curry" can
+  // still find them with a visible flag.
+  nonVeg          Boolean  @default(false)
+  // A custom food the user created. Never shared, never seeded over, and
+  // erased with the account.
+  createdByUserId Int?
+  dietaryType     String   @default("unknown")
+  ingredients     Json     @default("[]")
+  ingredientsEstimated Boolean @default(true)
+  baseFoodItemId   Int?
+
+  // Where the nutrient numbers came from: 'ifct2017', 'usda', 'label-scan',
+  // 'user-entered', 'estimate'. Provenance, not authority — a row can be
+  // perfectly traceable and still unverified.
+  //
+  // This exists because "verified: false" alone cannot tell a reviewing
+  // nutritionist whether a value was looked up in IFCT or typed from memory.
+  // A seed value nobody can trace is worse than no value, because it looks
+  // like data.
+  source          String?
+  // Signed off by a qualified nutritionist against `source`. False for every
+  // seeded row until that happens, and the food search filters on it by
+  // default — an unverified row is still findable with an explicit flag, for
+  // the user who wants to log a katori of something we do not carry.
+  verified        Boolean  @default(false)
+  // Who signed it off, when, and what they said. Without these, `verified` is a
+  // flag some script flipped and "a qualified nutritionist checked this" is not
+  // a claim anyone can check. Nullable because every seeded row is unverified
+  // and the three must be written together by the sign-off path.
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  reviewNote      String?
+  // Denormalised haystack: `name` plus every alias, lowercased and
+  // space-joined. Maintained by the seeder and by buildSearchText, never by
+  // hand — a row whose searchText is stale searches wrong, which is the failure
+  // this column exists to remove. See foodMatch.js for why the aliases column
+  // alone cannot do this job.
+  searchText      String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  logs FoodLog[]
+
+  @@index([name])
+  @@index([createdByUserId])
+  @@index([baseFoodItemId])
+  @@index([searchText])
+  @@schema("health")
+}
+
+// The text half of the on-device photo matcher: a cached vector for each
+// catalogue food, so the app can rank a dish against the catalogue without
+// calling a vision model on every photo.
+//
+// This is deliberately NOT the photo half. Embedding a row of text is a one-off
+// (recomputed only when the catalogue changes); embedding a photograph happens
+// on-device, per photo, using a small clip-style model shipped in the app. The
+// shared embedding space is what lets an on-device vector for "what is on this
+// plate" be compared against these rows locally, and a phrase that clears the
+// confidence bar short-circuits the paid cloud call entirely — which is the
+// closest this loop gets to a photo that costs nothing.
+//
+// Values are computed by foodEmbeddingService.refreshAll, never by hand. The
+// model id is stored with the row so a model change shows up as fresh rows
+// rather than silently re-serving an old space.
+model FoodEmbedding {
+  id         Int      @id @default(autoincrement())
+  foodItemId Int
+  model      String
+  // A float vector in the provider's embedding space, e.g. 768 numbers for
+  // the text-embedding models. Stored as JSON; consumed by the Flutter app.
+  embedding  Json
+  // No DEFAULT — written by the Prisma client, like every @updatedAt here.
+  updatedAt  DateTime @updatedAt
+
+  @@unique([foodItemId, model])
+  @@index([foodItemId])
+  @@schema("health")
+}
+
+// A food a user could not find, submitted from the picker's empty state.
+//
+// This exists because the catalogue is finite and the app is not. A user who
+// searches "omelette" and gets nothing has three bad options: give up on
+// logging, log something adjacent and wrong, or write the same note in the
+// "anything missing?" free-text field nobody reads. The third is what this
+// captures, and it is also the input list for growing the catalogue: these rows
+// are a prioritised, real-demand-ordered backlog rather than a guess at what
+// people eat.
+//
+// It is NOT an entry point into FoodItem. Nothing here writes a catalogue row,
+// and that is the point — a request is a request, and turning one into a nutrient
+// value is a job for somebody who can source it.
+model FoodRequest {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  // What they typed. Trimmed, and capped in length by the service, so this is
+  // never an unbounded free-text store.
+  name            String
+  // The search string that came back empty, when it came from the picker. Kept
+  // because "omelette" and "omlet" and "anda bhurji" are one request with three
+  // spellings, and collapsing them by name is the difference between three
+  // rows in the backlog and one.
+  query           String?
+  // Free-text detail: the dish, the brand, the recipe, or just "no idea, it
+  // was at a wedding". Optional and nullable — a bare dish name is a useful
+  // request on its own.
+  detail          String?
+  // Where the demand came from: 'picker' is a user who searched and could not
+  // find it, 'photo' is a dish that was on a plate the user confirmed and
+  // logged as photo_unmatched. The queue reviewer sees both, and sorting by
+  // source tells "people keep typing this name" from "people keep eating this
+  // thing" — which is the difference between an alias we are missing and a
+  // food we are missing.
+  source          String    @default("picker")
+  status          FoodRequestStatus @default(pending)
+  // Set when the request is resolved. Which way, not only whether: a rejected
+  // request still tells the user something, and the reviewer's note says why.
+  resolvedAt      DateTime?
+  // The reviewer's note on rejection, or on why an item exists already.
+  reviewNote      String?
+  // How many times this dish has been asked for, across every request row for
+  // it. Not a timestamped vote table - a hundred people wanting omelette is one
+  // backlog entry with a hundred on it, and the queue is reviewed by a person
+  // reading names, not by summing rows.
+  requestCount    Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status, createdAt])
+  // The queue read: pending, most-wanted first. requestCount has to be in the
+  // index or every poll on the queue is a sort of the whole table.
+  @@index([status, requestCount])
+  @@schema("health")
+}
+
+enum FoodRequestStatus {
+  pending
+  // A catalogue row now exists for it.
+  resolved
+  // We are not adding it. Either it already exists under another name, or it is
+  // a dish rather than an ingredient and has no single nutrient profile.
+  declined
+
+  @@schema("health")
+}
+
+// What was eaten, on which day, in which meal.
+//
+// `nutrients` is a SNAPSHOT of the FoodItem's values at log time, copied onto
+// the row. The alternative — reading through to FoodItem on read — means an
+// admin correcting a seed value silently rewrites what someone ate three
+// months ago, and the day statement stops being a true statement. A score
+// chart that can change after the fact is not a ledger.
+model FoodLog {
+  id               Int           @id @default(autoincrement())
+  userId           Int
+  foodItemId       Int?
+  foodItem         FoodItem?     @relation(fields: [foodItemId], references: [id], onDelete: SetNull)
+  localDate        String
+  slot             MealSlot
+  grams            Decimal       @db.Decimal(8, 2)
+  // 'plate' | 'katori' | '2 rotis' — what the user actually said, kept next to
+  // the resolved grams so the portion can be corrected by name.
+  servingLabel     String?
+  servings         Decimal?      @db.Decimal(5, 2)
+  // { kcal, proteinG, carbsG, fatG, fibreG, ironMg, ... } at log time.
+  nutrients        Json
+  source           FoodLogSource
+  // The user edited what the model proposed. Tracked as a number so the
+  // photo feature can be judged on it (the plan's own launch metric: if more
+  // than half of photo logs get corrected, the feature is not earning its
+  // cost).
+  photoCorrections Int           @default(0)
+  // Set only when the log came from a photo, and only after the user confirmed
+  // it. GCS object path, never a URL: the bucket has no public access, so a path
+  // on its own cannot become a picture without minting a signed link per read.
+  // See foodPhotoStorage.js.
+  photoPath         String?
+  // What the model proposed for this line, retained AFTER confirmation. The
+  // counter above says how often the model was wrong; this is what makes that
+  // number debuggable, because "corrected 4 times" cannot tell you whether it
+  // swapped dal for rice or misread an entire plate.
+  photoProposedName String?
+  // The provider's confidence in its own proposal, 0..1, or null when it did not
+  // report one. Kept so a confidence threshold can be chosen from real numbers
+  // later instead of guessed now.
+  photoConfidence   Float?
+  // Which model produced the proposal. Prompt and model version move together,
+  // and without this an accuracy regression cannot be dated.
+  photoModel        String?
+  // Name and veg flag copied at log time, alongside `nutrients`. The same
+  // reason as the nutrient snapshot, extended to presentation: a day's log
+  // renders without a join, and the label survives the FoodItem being deleted
+  // (which is a SetNull, so the relation really does go away).
+  //
+  // The snapshot is the source of truth for VALUES. These two are for display,
+  // which is why they are plain strings rather than a resolved relation.
+  name            String
+  nonVeg          Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([userId, localDate])
+  @@index([userId, createdAt])
+  @@schema("health")
+}
+
+// A one-tap repeat meal. The reason most food logs die is that logging the
+// same breakfast five days running is still five decisions; this makes the
+// fifth one a single tap.
+model SavedMeal {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  slot      MealSlot
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines SavedMealLine[]
+
+  @@index([userId])
+  @@schema("health")
+}
+
+model SavedMealLine {
+  id           Int       @id @default(autoincrement())
+  savedMealId  Int
+  savedMeal    SavedMeal @relation(fields: [savedMealId], references: [id], onDelete: Cascade)
+  foodItemId   Int?
+  // Name and nutrients are copied here for the same reason as FoodLog: a
+  // saved meal that changes when someone edits a custom food is a saved meal
+  // that quietly stops being what you ate.
+  name         String
+  nonVeg       Boolean  @default(false)
+  grams        Decimal   @db.Decimal(8, 2)
+  servingLabel String?
+  nutrients    Json
+  // Preserves the order lines were logged in, so a repeated meal reads the way
+  // it was eaten rather than in an arbitrary order.
+  order        Int       @default(0)
+
+  // Relation to the source food is intentionally NOT declared. SavedMealLine
+  // copies name and nutrients, so it stays correct even if the custom food it
+  // was built from is later edited or deleted — a saved meal that silently
+  // changed shape would be worse than one that cannot be re-resolved.
+  @@index([savedMealId])
+  @@schema("health")
+}
+
+// --- Plan -------------------------------------------------------------------
+
+model PlanItem {
+  id             Int            @id @default(autoincrement())
+  userId         Int
+  kind           PlanItemKind
+  // Which journey layer this item belongs to ('workout' | 'water' | 'food' |
+  // 'steps' | 'sleep' | 'supplements' | 'health' | 'medicine'). Null for items
+  // created before the journey existed, and for anything with no layer.
+  layerKey       String?
+  // Free text, always shown to the user. For a doctor item this is EXACTLY
+  // what they typed off the prescription — there is no medicine picker
+  // anywhere in the product, because a picker is us suggesting a dose.
+  title          String
+  // 'daily' | 'weekly' | ISO weekday list | a specific 'YYYY-MM-DD' for a
+  // one-off test or appointment.
+  schedule       String         @default("daily")
+  origin         PlanItemOrigin @default(suggested)
+  // Who prescribed it, in the user's words. Null for everything else. Free
+  // text, never a doctor directory lookup, never validated.
+  prescribedBy   String?
+  prescribedNote String?
+  // Nutrition-target items (e.g. "hit 130 g protein") point here rather than
+  // hardcoding a number, so editing the target retargets the plan item
+  // instead of leaving a stale goal in the plan. Null for non-nutrition items.
+  nutrientKey    String?
+  targetValue    Decimal?       @db.Decimal(8, 2)
+  // 0 = every day. 1 = alternate days. A plan with 20 items turns every day
+  // red, so the intake and generator both keep it small and the user can
+  // remove anything.
+  active         Boolean        @default(true)
+  // Items the generator created, so a regenerate can replace them without
+  // touching a doctor item or a user item. This is what makes "regenerate
+  // the plan" safe rather than destructive.
+  autoGenerated  Boolean        @default(false)
+  // A soft end date — "until 20 Dec" off a prescription. The item stops
+  // scoring after it but is never auto-deleted, because stopping someone's
+  // course of tablets because a date passed is not this service's call.
+  endsOn         String?
+  // Stable-identity key for suggested rows the generator owns, e.g.
+  // 'supplement:<scheduleId>'. Rebuild matches desired rows to existing ones by
+  // (kind, layerKey, schedule, sourceRef ?? ''), so a schedule edit updates the
+  // row in place and today's ticks survive. Null for user and doctor rows.
+  sourceRef      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  completions PlanItemCompletion[]
+
+  @@index([userId, active])
+  @@index([userId, sourceRef])
+  @@schema("health")
+}
+
+model PlanItemCompletion {
+  id         Int      @id @default(autoincrement())
+  planItemId Int
+  planItem   PlanItem @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+  userId     Int
+  localDate  String
+  // Points this specific tick contributed, 0 for an auto-satisfied item
+  // (a workout that the session log already credited) and 0 for a
+  // backfilled tick older than the late-logging window.
+  points     Int      @default(0)
+  // 'manual' | 'auto' — whether the user tapped it or a log satisfied it.
+  how        String   @default("manual")
+  createdAt  DateTime @default(now())
+
+  @@unique([planItemId, localDate])
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// --- Medical records (storage only) -----------------------------------------
+
+// A private document the user chose to keep. It is NEVER read: no OCR, no
+// model, no parse. The column is a storage path and a description, and
+// nothing in this service ever opens the object for anything except handing
+// the user a signed link to it.
+//
+// Kept out of Cloudinary on purpose — those buckets are public-by-URL and
+// content-addressed for profile pictures, which is the wrong shape for a lab
+// report.
+model MedicalDocument {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  // Object path, never a signed URL. A signed URL in a database row expires,
+  // and a permanently valid one in a log is a leak.
+  storagePath String
+  kind        String // 'prescription' | 'lab_report' | 'scan' | 'other'
+  title       String
+  docDate     String?
+  notes       String?
+  // Explicit user-confirmed instructions; legacy text notes remain records only.
+  structuredPlan Json?
+  supersededAt DateTime?
+  mimeType    String?
+  sizeBytes   Int?
+  // Set when the file was scanned or uploaded against a doctor appointment.
+  // Optional: most documents belong to no appointment. Deleting the appointment
+  // keeps the document (it is still the user's record) and just unlinks it.
+  appointmentId Int?
+  appointment   DoctorAppointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([appointmentId])
+  @@schema("health")
+}
+
+model DoctorAppointment {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  doctorName   String
+  speciality   String?
+  // 'YYYY-MM-DD' + 'HH:mm' in the user's own tz. A doctor's appointment is
+  // not a UTC instant — 10:30 at a clinic in Gurugram is a wall-clock time
+  // and a reminder has to fire against it.
+  localDate    String
+  localTime    String?
+  followUpDate String?
+  notes        String?
+  documents    MedicalDocument[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// --- The ledger itself ------------------------------------------------------
+
+// One FROZEN row per day, written at day close and never recomputed.
+//
+// The freeze is the product. A running score that recalculates when a rule
+// changes is a mood, not a ledger — and a candle whose open/high/low/close
+// can move tomorrow is not a candle. `breakdown` keeps every line item that
+// moved the score so the day statement can always be reconstructed, and
+// `rulesVersion` records which engine produced it so a rule change is visible
+// as a discontinuity rather than a silent rewrite of history.
+model ScoreDaySnapshot {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  localDate    String
+  // Yesterday's close. Null for the first day ever — the score starts at 0,
+  // and the plan is explicit that it starts at 0 rather than at a baseline
+  // invented to look flattering.
+  open         Int
+  high         Int
+  low          Int
+  close        Int
+  // [{ key, label, kind, points, detail }] — every line, earned and lost.
+  breakdown    Json
+  // Frozen plan counts/target decision; null for legacy days that cannot be reconstructed.
+  planSummary Json?
+  rulesVersion String
+  // A day inside a pause. The OHLC are all equal on such a day and the breakdown
+  // is empty, so this flag is what separates "paused" from "a day where nothing
+  // happened" - the second is a real 0, the first is an absence. The two must
+  // never be confused: a user who paused through illness and a user who did
+  // nothing produce the same chart shape unless this column is read.
+  paused Boolean @default(false)
+  closedAt DateTime @default(now())
+
+  @@unique([userId, localDate])
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// Rate limit for the paid vision model. DB-backed for the same reason
+// AssistantRateLimitLog is: every service here runs min-instances=0, so an
+// in-memory counter resets on cold start and enforces nothing precisely when
+// load makes it matter.
+model FoodPhotoRequestLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  requestedAt DateTime @default(now())
+  // This table is the cost ledger for a paid vision call, so it records what
+  // happened and not merely that a request arrived. `requestedAt` alone answers
+  // "is this user hammering the endpoint", which is the rate-limit question; the
+  // rest answers the one that decides whether the feature is worth its price.
+  //
+  // outcome: 'ok' (foods matched the catalogue) | 'no_food' (a photo of
+  // something that is not food, or nothing identifiable) | 'rejected' (nothing
+  // was logged from this photo) | 'provider_error' | 'rate_limited'.
+  outcome       String?
+  latencyMs     Int?
+  // Token counts, so per-photo spend can be attributed and a prompt change can
+  // be shown to have made it more expensive rather than merely different.
+  tokensIn      Int?
+  tokensOut     Int?
+  // Where the photo went, so an image nobody ever confirmed can be reclaimed.
+  // Null when the request failed before anything was stored.
+  photoPath     String?
+  model         String?
+  // How many proposed items the catalogue did not contain. The honest early
+  // signal that the model is naming things we have never heard of: a high rate
+  // here means the catalogue is the bottleneck, not the vision model.
+  unmatchedCount Int     @default(0)
+  // The user later confirmed nothing from this photo. Set on the row when the
+  // photo is swept, so abandonment is measurable instead of inferred from a
+  // missing FoodLog.
+  abandonedAt   DateTime?
+
+  @@index([userId, requestedAt])
+  // Created by 20260929000000_food_photo_recognition and declared here only
+  // now. The migration built this index on purpose - to answer "which photos did
+  // we fail to recognise, oldest first" without scanning the log - and then the
+  // schema never mentioned it, so `migrate diff` reported the database as having
+  // an index the schema did not know about. That is the mirror image of the
+  // SavedMealLine case and the more dangerous direction: it invites somebody to
+  // "fix" drift by dropping a live index off a table nobody has re-read since.
+  @@index([outcome, requestedAt])
+  @@schema("health")
+}
+
+// ---------------------------------------------------------------------------
+// Health profile (gamified onboarding v2, 2026-10-01).
+//
+// The "get to know you" answers: five asked at signup (allergies, weight,
+// height, drinking, smoking — each with "prefer not to say" as a first-class
+// answer), the rest filled in over time from the Profile tab for a coin each.
+//
+// One row per person rather than spreading these across HealthGoal and
+// PersonalisationProfile. HealthGoal only exists after Health+ intake, and
+// PersonalisationProfile is the training-programming record; neither is the
+// home for "who cooks your food" or "where are you from". Weight and height
+// are deliberately NOT columns here — weight is a BiometricEntry time series
+// and height lives on PersonalisationProfile.heightCm (the fallback ledger
+// targetService already reads), so there is still exactly one place each
+// number lives. The two *Declined booleans record only that the person chose
+// not to say, so the mandatory step can tell "declined" from "never asked".
+//
+// Every value is from a fixed set in services/healthProfile.js except
+// allergies (the user's own words, capped) and hometown (capped free text).
+// Each field has a named reader there (FIELD_CONSUMERS) — nothing here is
+// collected without one.
+//
+// greens / otherSubstances are the most sensitive columns in this service.
+// They reach the coach (the user's explicit choice) and the user's own DPDP
+// export, and nothing else: not analytics, not admin, not insurer-grade, not
+// FHIR. Enforced by tests, not just by this comment.
+model HealthProfile {
+  userId           Int       @id
+  // 'none' | 'has' | 'prefer_not'. 'has' requires at least one allergy.
+  allergyStatus    String?
+  allergies        String[]  @default([])
+  weightDeclined   Boolean   @default(false)
+  heightDeclined   Boolean   @default(false)
+  // never | occasionally | weekly | daily | prefer_not
+  drinking         String?
+  smoking          String?
+  greens           String?
+  otherSubstances  String?
+  broughtHere      String[]  @default([])
+  mealsPerDay      Int?
+  followsDiet      Boolean?
+  dietType         String?
+  whoCooks         String?
+  occupation       String?
+  workingHours     String?
+  healthSpend      String?
+  wearsSpectacles  Boolean?
+  spectaclesType   String?
+  hometown         String?
+  // 'none' | 'has' | 'prefer_not'. The reminders themselves are rows in
+  // MedicationReminder; this records the answer so "I take nothing" is
+  // distinguishable from "never asked".
+  medicationsStatus String?
+  // Question keys whose one-time coin has been credited. The coin ledger's
+  // idempotency key already makes a second credit impossible; this copy is so
+  // the app can show "already earned" without a cross-service call.
+  coinKeys         String[]  @default([])
+  // When the five signup questions were last fully answered (any answer,
+  // including "prefer not to say").
+  basicsAnsweredAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// Consent to hold the sensitive health-profile answers (allergies, drinking,
+// smoking, substances, medications). Shaped exactly like BiometricConsent and
+// AssistantConsent: server-stamped policy version, revoke sets revokedAt.
+// Non-sensitive answers (hometown, who cooks, occupation…) and every
+// "prefer not to say" need no consent — declining to disclose is not health
+// data.
+model HealthProfileConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  policyVersion String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// A medicine the user wants reminding about. Used ONLY to schedule the
+// user's own reminders (on-device notifications) and to let the coach
+// acknowledge that reminders exist. It never changes a plan, a target or a
+// score — see healthProfile.js MEDICATION_NOTE for the one fixed line shown
+// alongside it. Free-text name, capped; times are 'HH:MM' local.
+model MedicationReminder {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  times     String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@schema("health")
+}
+
+model HealthReport {
+  id          Int          @id @default(autoincrement())
+  userId      Int
+  storagePath String
+  fileName    String
+  status      ReportStatus @default(PENDING)
+  // The date the blood was drawn, 'YYYY-MM-DD', or null when nobody has said.
+  // Distinct from createdAt (when the file arrived) because a report is a
+  // reading of a past moment, and BiometricEntry is unique per
+  // (userId, metric, localDate) - so dating entries by upload time silently
+  // overwrites earlier reports verified the same day. See the migration.
+  reportDate  String?
+  // A date read off the report's own text by OCR, 'YYYY-MM-DD', kept separate
+  // from reportDate on purpose. reportDate means a person said it; this means a
+  // parser read it off a page and is only confident about a labelled,
+  // unambiguous format. Merging the two would make a guess indistinguishable
+  // from a statement in every surface downstream, including the wording the app
+  // uses to tell the user which one they are looking at.
+  //
+  // Never written when reportDate is set. The user's word is the source of truth
+  // and OCR only fills a gap the user left.
+  detectedReportDate String?
+  processedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  extractions ReportExtraction[]
+
+  @@index([userId])
+  @@schema("health")
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVIEW_REQUIRED
+
+  @@schema("health")
+}
+
+model ReportExtraction {
+  id               Int      @id @default(autoincrement())
+  reportId         Int
+  report           HealthReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  metric           BiometricMetric
+  rawValue         String   // The exact text found in the PDF (e.g. "5.7%")
+  normalizedValue  Decimal? @db.Decimal(8, 2)
+  unit             String?
+  confidence      Float    @default(0) // 0.0 to 1.0
+  isVerified       Boolean   @default(false) // Verified by user
+  createdAt        DateTime    @default(now())
+
+  @@index([reportId])
+  @@schema("health")
+}
+
+// ---------------------------------------------------------------------------
+// Coach journey (2026-10). The daily habits, the journey's own start-of-record,
+// the coach consent row, and the content tables the journey reads.
+
+enum WellnessMoodSlot {
+  morning
+  night
+
+  @@schema("health")
+}
+
+// One row per drink rather than a running daily total. A total can only be
+// overwritten; a row can be timestamped, undone, and summed on read the same
+// way the food log is. Summing is cheap and the row is the record.
+model WaterLog {
+  clientRequestId String? @unique
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  localDate String
+  ml        Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// A supplement the user takes, in their own words. Never suggested by us and
+// never a medicine — this is the habit half of the plan, the same posture as
+// MedicationReminder but without the clinical framing.
+model SupplementSchedule {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  times     String[] @default([])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@schema("health")
+}
+
+// One tick of a schedule on one day. scheduleId is nullable and deliberately
+// has no relation: a tick outlives the schedule it was taken against — deleting
+// the schedule must not delete the history of having taken it.
+model SupplementLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  scheduleId Int?
+  name       String
+  localDate  String
+  takenAt    DateTime @default(now())
+
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// One optional wellbeing check-in in each morning/night slot per account/day.
+// The database unique key is the authoritative cap across devices and retries.
+model WellnessMoodCheckIn {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  localDate String
+  slot      WellnessMoodSlot
+  mood      String
+  factors   String[]         @default([])
+  support   String?
+  note      String           @default("")
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, localDate, slot])
+  @@index([userId, localDate])
+  @@schema("health")
+}
+
+// The journey's own start-of-record, one row per user: which level someone
+// began at, what has unlocked and when, and the pause/quit state the score
+// engine reads. Deliberately separate from auth's User so the journey can be
+// erased and re-started without touching the account.
+model JourneyProgress {
+  userId           Int       @id
+  // ExperienceLevel value at start.
+  startLevel       String
+  startedAt        DateTime  @default(now())
+  // [{ "layer": 1, "at": "ISO", "via": "start|showed_up|steady_weeks|early|existing" }].
+  unlocked         Json
+  foodEarlyAt      DateTime?
+  // YYYY-MM-DD, set once, never reset.
+  easyStartUntil   String?
+  quitReason       String?
+  // A non-workout wellbeing plan snapshots the onboarding preferences used
+  // to choose its first tracking layers and conservative daily targets.
+  wellnessOnly     Boolean   @default(false)
+  wellnessFocuses  String[]  @default([])
+  wellnessDayPattern String?
+  wellnessSleepPattern String?
+  // The workout track set aside while the user is on a wellbeing plan:
+  // { unlocked, startLevel, workoutSlots, stepsPerDay, at }. Restored when
+  // they switch back (journeyService.switchJourneyTrack / startJourney), so a
+  // persona round trip loses nothing. Null when there is nothing to restore.
+  workoutSnapshot  Json?
+  lastShowedUpDate String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// Consent to let the coach read the plan and — with the supplements scope —
+// the supplement schedule. Shaped like the other consent rows: server-stamped
+// policy versions per scope, revoke sets revokedAt. Absence of the row is "not
+// asked yet", not "declined".
+model CoachConsent {
+  userId         Int       @id
+  // "basic" | "supplements".
+  scopes         String[]
+  // { "basic": "2026-10", "supplements": "2026-10" }.
+  policyVersions Json
+  grantedAt      DateTime
+  revokedAt      DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@schema("health")
+}
+
+// The instruction sheet behind one exercise, per language, review-gated. Kept
+// out of Exercise so a corrected cue is a new reviewable row rather than an
+// edit to the training record, and so the library can ship before the copy is
+// signed off.
+model ExerciseContent {
+  id           Int       @id @default(autoincrement())
+  exerciseId   Int
+  // en | hinglish | hi
+  lang         String
+  steps        String[]
+  feelCues     String[]
+  mistakes     String[]
+  reviewStatus String    @default("pending")
+  reviewedBy   Int?
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([exerciseId, lang])
+  @@schema("health")
+}
+
+// A coach article. `kind` is `first_visit` | `faq`. Same review gate as
+// ExerciseContent, same reason.
+model CoachArticle {
+  id           Int       @id @default(autoincrement())
+  slug         String
+  kind         String
+  lang         String
+  title        String
+  body         String
+  reviewStatus String    @default("pending")
+  reviewedBy   Int?
+  version      Int       @default(1)
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([slug, lang])
+  @@schema("health")
+}
+
+// First-run progress and reward eligibility survive reinstalls and journey resets.
+model RoutineJourneyState {
+  userId Int @id
+  accountCreatedAt DateTime
+  waterLoggedAt DateTime?
+  workoutCompletedAt DateTime?
+  createdAt DateTime @default(now())
+  @@schema("health")
+}
+
+model RoutineWaterDay {
+  userId Int
+  localDate String
+  targetMl Int
+  rewardedLogs Int @default(0)
+  lastRewardAt DateTime?
+  @@id([userId, localDate])
+  @@schema("health")
+}
+
+// Durable outbox. Never deleted by undoing activity; retries reuse the coin key.
+model RoutineRewardClaim {
+  key String @id
+  userId Int
+  amount Int
+  description String
+  createdAt DateTime @default(now())
+  paidAt DateTime?
+  @@index([userId, paidAt])
+  @@schema("health")
+}
+
+// Per paid call, including failed parses and enrichment. No image or prompt content.
+model FoodPhotoUsage {
+  id Int @id @default(autoincrement())
+  userId Int
+  requestedAt DateTime @default(now())
+  stage String
+  outcome String
+  latencyMs Int
+  model String?
+  tokensIn Int?
+  tokensOut Int?
+  thinkingTokens Int?
+  totalTokens Int?
+  cachedTokens Int?
+  @@index([userId, requestedAt])
+  @@schema("health")
+}
+
+model FoodPhotoRecognitionCache {
+  key String @id
+  userId Int
+  proposal Json
+  expiresAt DateTime
+  @@index([userId])
+  @@index([expiresAt])
+  @@schema("health")
+}
+
+model FoodPhotoContribution {
+  sourcePhotoPath String?
+  id Int @id @default(autoincrement())
+  userId Int
+  path String @unique
+  consentVersion String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  label Json?
+  reviewer String?
+  reviewedAt DateTime?
+  @@unique([userId, sourcePhotoPath])
+  @@index([userId])
+  @@index([expiresAt])
+  @@schema("health")
+}
+
+// Account-scoped permission for this and future confirmed meal photos.
+model FoodPhotoSharingPreference {
+  userId Int @id
+  enabled Boolean
+  consentVersion String
+  decidedAt DateTime @default(now())
   @@schema("health")
 }

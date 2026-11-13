@@ -1,0 +1,462 @@
+// Gateway trust-boundary tests: isPublicRoute gating, authMiddleware JWT
+// verification + header injection/stripping, and the /api/events analytics
+// allowlist + enrichment pipeline. The gateway is the only component allowed
+// to set x-user-*/x-internal-key headers, so this is where a spoofed
+// identity would otherwise slip through. Run with:
+//   node --experimental-test-module-mocks --test test/gateway.test.js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
+
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = 'test-jwt-secret';
+process.env.INTERNAL_API_KEY = 'test-internal-key';
+
+const ingestCalls = [];
+const UAParserResult = {
+  os: { name: 'Android', version: '14' },
+  browser: { name: 'Chrome', version: '120.0' },
+  device: { type: 'mobile' },
+};
+
+let isPublicRoute, authMiddleware, eventsHandler;
+
+test('setup: mock proxy/rate-limit/analytics/ua-parser, import gateway once', async (t) => {
+  t.mock.module('express-http-proxy', { exports: { default: () => () => {} } });
+  t.mock.module('express-rate-limit', { exports: { default: () => () => {} } });
+  t.mock.module('../utils/analytics.js', { exports: { ingest: (payload) => ingestCalls.push(payload) } });
+  t.mock.module('ua-parser-js', {
+    exports: {
+      default: class MockUAParser { getResult() { return UAParserResult; } },
+      UAParser: class MockUAParser { getResult() { return UAParserResult; } },
+    },
+  });
+  ({ isPublicRoute, authMiddleware, eventsHandler } = await import('../index.js'));
+  assert.equal(typeof isPublicRoute, 'function');
+  assert.equal(typeof authMiddleware, 'function');
+  assert.equal(typeof eventsHandler, 'function');
+});
+
+// ---- isPublicRoute ---------------------------------------------------------
+
+test('isPublicRoute: true for the public read/list routes', () => {
+  assert.equal(isPublicRoute('GET', '/api/gyms'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms?lat=28.0&lng=77.0'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/slots'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/reviews'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/subscription-plans'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/classes'), true);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/classes/99/occurrences'), true);
+  assert.equal(isPublicRoute('GET', '/api/auth/otp-config'), true);
+  assert.equal(isPublicRoute('GET', '/api/auth/app-config'), true);
+  assert.equal(isPublicRoute('GET', '/api/auth/jobs?active=true'), true);
+  assert.equal(isPublicRoute('GET', '/api/auth/platform-reviews'), true);
+  assert.equal(isPublicRoute('POST', '/api/auth/send-otp'), true);
+  assert.equal(isPublicRoute('POST', '/api/auth/verify-otp'), true);
+  assert.equal(isPublicRoute('POST', '/api/auth/verify-firebase-token'), true);
+  assert.equal(isPublicRoute('POST', '/api/auth/google'), true);
+  assert.equal(isPublicRoute('POST', '/api/wallet/webhooks/razorpay'), true);
+  assert.equal(isPublicRoute('POST', '/api/events'), true);
+  assert.equal(isPublicRoute('GET', '/api/bookings/public/attendance-stats'), true);
+  assert.equal(isPublicRoute('GET', '/health'), true);
+});
+
+test('isPublicRoute: false once the method stops matching the pattern', () => {
+  assert.equal(isPublicRoute('POST', '/api/gyms'), false);
+  assert.equal(isPublicRoute('DELETE', '/api/gyms/123'), false);
+  assert.equal(isPublicRoute('POST', '/api/gyms/123/slots'), false);
+  assert.equal(isPublicRoute('GET', '/api/wallet/webhooks/razorpay'), false);
+  assert.equal(isPublicRoute('POST', '/api/wallet/orders'), false);
+  assert.equal(isPublicRoute('GET', '/api/wallet/balance'), false);
+  assert.equal(isPublicRoute('GET', '/api/bookings/mine'), false);
+  assert.equal(isPublicRoute('GET', '/api/buddy/discovery'), false);
+  assert.equal(isPublicRoute('POST', '/api/buddy/swipes'), false);
+  assert.equal(isPublicRoute('POST', '/api/auth/pitch-access/check'), true); // POST-only auth route
+});
+
+test('isPublicRoute: an unanchored /slots prefix covers deeper subpaths, but method still gates', () => {
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/slots/666'), true); // unanchored by design
+  assert.equal(isPublicRoute('POST', '/api/gyms/123/slots/666'), false);
+  assert.equal(isPublicRoute('POST', '/api/events2'), false);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123?admin=true'), true);   // public GET still public
+  assert.equal(isPublicRoute('GET', '/api/health'), false);               // only /health exactly is public
+});
+
+// ---- authMiddleware --------------------------------------------------------
+
+function makeRes() {
+  const res = { statusCode: 200, body: null };
+  res.status = (code) => { res.statusCode = code; return res; };
+  res.json = (body) => { res.body = body; return res; };
+  return res;
+}
+
+test('authMiddleware: strips client-supplied identity/internal headers unconditionally', () => {
+  const req = {
+    method: 'GET', path: '/api/gyms',
+    headers: {
+      'x-user-id': '999', 'x-user-role': 'gobhi', 'x-user-type': 'premium', 'x-internal-key': 'stolen',
+    },
+  };
+  const res = makeRes();
+  let called = false;
+  authMiddleware(req, res, () => { called = true; });
+  assert.equal(called, true);
+  assert.equal(req.headers['x-user-id'], undefined);
+  assert.equal(req.headers['x-user-role'], undefined);
+  assert.equal(req.headers['x-user-type'], undefined);
+  assert.equal(req.headers['x-internal-key'], undefined);
+});
+
+test('authMiddleware: public route passes through with no token', () => {
+  const req = { method: 'GET', path: '/api/gyms', headers: {} };
+  const res = makeRes();
+  let called = false;
+  authMiddleware(req, res, () => { called = true; });
+  assert.equal(called, true);
+  assert.equal(res.statusCode, 200);
+});
+
+test('authMiddleware: protected route without a token -> 401 Unauthorized', () => {
+  const req = { method: 'GET', path: '/api/wallet/balance', headers: {} };
+  const res = makeRes();
+  authMiddleware(req, res, () => { throw new Error('next must not be called'); });
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.body, { error: 'Unauthorized' });
+});
+
+test('authMiddleware: valid JWT injects identity headers and forwards', () => {
+  const token = jwt.sign({ id: 42, role: 'customer', type: 'premium' }, process.env.JWT_SECRET);
+  const req = { method: 'POST', path: '/api/bookings', headers: { authorization: `Bearer ${token}` } };
+  const res = makeRes();
+  let called = false;
+  authMiddleware(req, res, () => { called = true; });
+  assert.equal(called, true);
+  assert.equal(req.headers['x-user-id'], '42');
+  assert.equal(req.headers['x-user-role'], 'customer');
+  assert.equal(req.headers['x-user-type'], 'premium');
+});
+
+test('authMiddleware: token without role/type fills empty strings', () => {
+  const token = jwt.sign({ id: 7 }, process.env.JWT_SECRET);
+  const req = { method: 'GET', path: '/api/buddy/discovery', headers: { authorization: `Bearer ${token}` } };
+  const res = makeRes();
+  authMiddleware(req, res, () => {});
+  assert.equal(req.headers['x-user-id'], '7');
+  assert.equal(req.headers['x-user-role'], '');
+  assert.equal(req.headers['x-user-type'], '');
+});
+
+test('authMiddleware: bad signature -> 401 Invalid token', () => {
+  const token = jwt.sign({ id: 1 }, 'wrong-secret');
+  const req = { method: 'GET', path: '/api/wallet/balance', headers: { authorization: `Bearer ${token}` } };
+  const res = makeRes();
+  authMiddleware(req, res, () => { throw new Error('next must not be called'); });
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.body, { error: 'Invalid token' });
+});
+
+test('authMiddleware: expired token -> 401 Token expired (drives client refresh)', (t) => {
+  const PINNED_NOW = 1_700_000_000_000;
+  t.mock.timers.enable({ apis: ['Date'], now: PINNED_NOW });
+  const token = jwt.sign({ id: 1 }, process.env.JWT_SECRET, { expiresIn: '-30s' });
+  const req = { method: 'GET', path: '/api/wallet/balance', headers: { authorization: `Bearer ${token}` } };
+  const res = makeRes();
+  authMiddleware(req, res, () => { throw new Error('next must not be called'); });
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.body, { error: 'Token expired' });
+});
+
+test('authMiddleware: malformed/garbage token -> 401 Invalid token', () => {
+  const req = { method: 'GET', path: '/api/wallet/balance', headers: { authorization: 'Bearer not-a-jwt' } };
+  const res = makeRes();
+  authMiddleware(req, res, () => { throw new Error('next must not be called'); });
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.body, { error: 'Invalid token' });
+});
+
+// ---- /api/events handler ----------------------------------------------------
+
+function eventsReq(body, headers = {}) {
+  return { body, headers, ip: '10.20.30.40' };
+}
+
+test('client replay IDs require and preserve an immutable occurrence time', (t) => {
+  const now=Date.parse('2026-10-26T08:00:00Z');
+  t.mock.timers.enable({apis:['Date'],now});
+  ingestCalls.length=0;
+  const body={event:'otp_requested',distinct_id:'synthetic',event_id:'00000000-0000-4000-8000-000000000001',occurred_at:new Date(now-60000).toISOString()};
+  eventsHandler(eventsReq(body),makeRes());
+  t.mock.timers.tick(120000);
+  eventsHandler(eventsReq(body),makeRes());
+  assert.equal(ingestCalls.length,2);
+  assert.equal(ingestCalls[0].eventId,ingestCalls[1].eventId);
+  assert.equal(ingestCalls[0].timestamp,body.occurred_at);
+  assert.equal(ingestCalls[1].timestamp,body.occurred_at);
+  for(const occurred_at of [undefined,'invalid',new Date(now+600000).toISOString(),new Date(now-8*86400000).toISOString()]) {
+    eventsHandler(eventsReq({...body,occurred_at}),makeRes());
+  }
+  assert.equal(ingestCalls.length,2);
+});
+
+test('dropped client events are counted per reason and logged once, still answering 202', (t) => {
+  const now = Date.parse('2026-11-06T08:00:00Z');
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const warn = t.mock.method(console, 'warn', () => {});
+  ingestCalls.length = 0;
+  const ok = { event: 'otp_requested', distinct_id: 'u1', event_id: '00000000-0000-4000-8000-000000000001', occurred_at: new Date(now - 1000).toISOString() };
+  const batch = { events: [
+    ok,
+    { ...ok, event_id: '00000000-0000-4000-8000-000000000002', occurred_at: undefined },        // the 2026-11-03 outage shape
+    { ...ok, event_id: '00000000-0000-4000-8000-000000000003', occurred_at: 'not-a-date' },
+    { ...ok, event_id: '00000000-0000-4000-8000-000000000004', occurred_at: new Date(now - 8 * 86400000).toISOString() },
+    { ...ok, event_id: 12345 },
+    { event: 'definitely_not_registered_event', distinct_id: 'u1' },
+    null,
+  ] };
+  const res = makeRes();
+  eventsHandler(eventsReq(batch), res);
+
+  assert.equal(res.statusCode, 202);
+  assert.equal(ingestCalls.length, 1, 'only the valid event is ingested');
+  assert.equal(warn.mock.callCount(), 1, 'one log line per request, not one per drop');
+  const line = JSON.parse(warn.mock.calls[0].arguments[0]);
+  assert.equal(line.severity, 'WARNING');
+  assert.equal(line.message, 'client_events_dropped');
+  assert.equal(line.received, 7);
+  assert.deepEqual(line.drops, {
+    occurred_at_missing_or_invalid: 2,
+    occurred_at_out_of_window: 1,
+    event_id_not_string: 1,
+    not_allowlisted: 1,
+    malformed: 1,
+  });
+  assert.deepEqual(line.unregistered_events, ['definitely_not_registered_event']);
+});
+
+test('a fully valid batch logs nothing and never echoes event payloads', (t) => {
+  const now = Date.parse('2026-11-06T08:00:00Z');
+  t.mock.timers.enable({ apis: ['Date'], now });
+  const warn = t.mock.method(console, 'warn', () => {});
+  ingestCalls.length = 0;
+  eventsHandler(eventsReq({ event: 'otp_requested', distinct_id: 'u1', event_id: '00000000-0000-4000-8000-000000000009', occurred_at: new Date(now).toISOString(), properties: { phone: '9999999999' } }), makeRes());
+  assert.equal(ingestCalls.length, 1);
+  assert.equal(warn.mock.callCount(), 0);
+
+  // A drop must log reasons and counts only, never distinct_id or properties.
+  eventsHandler(eventsReq({ event: 'otp_requested', distinct_id: 'secret-user', event_id: 'x', properties: { phone: '9999999999' } }), makeRes());
+  const text = String(warn.mock.calls[0].arguments[0]);
+  assert.ok(!text.includes('secret-user') && !text.includes('9999999999'));
+});
+
+test('eventsHandler: single allowed event is ingested with enrichment', () => {
+  ingestCalls.length = 0;
+  const res = makeRes();
+  eventsHandler(eventsReq({ event: 'otp_requested', distinct_id: 'anon-1', properties: { screen: 'login' } },
+    { 'user-agent': 'Mozilla/5.0' }), res);
+  assert.equal(res.statusCode, 202);
+  assert.equal(ingestCalls.length, 1);
+  const call = ingestCalls[0];
+  assert.equal(call.event, 'otp_requested');
+  assert.equal(call.distinctId, 'anon-1');
+  assert.equal(call.source, 'client');
+  assert.equal(call.properties.screen, 'login');
+  assert.equal(call.properties.user_agent, 'Mozilla/5.0');
+  assert.equal(call.properties.ip, '10.20.30.40');
+  assert.equal(call.properties.os_name, 'Android');
+  assert.equal(call.properties.device_type, 'mobile');
+});
+
+test('eventsHandler: batch of N valid events -> N ingests', () => {
+  ingestCalls.length = 0;
+  const res = makeRes();
+  eventsHandler(eventsReq({ events: [
+    { event: 'screen_viewed', distinct_id: 'd1' },
+    { event: 'search_performed', distinct_id: 'd2', properties: { query: 'crossfit' } },
+  ] }), res);
+  assert.equal(res.statusCode, 202);
+  assert.equal(ingestCalls.length, 2);
+  assert.equal(ingestCalls[0].event, 'screen_viewed');
+  assert.equal(ingestCalls[1].properties.query, 'crossfit');
+});
+
+test('eventsHandler: unknown event name is silently dropped (still 202)', () => {
+  ingestCalls.length = 0;
+  const res = makeRes();
+  eventsHandler(eventsReq({ events: [
+    { event: 'totally_made_up_event', distinct_id: 'd1' },
+    { event: 'otp_requested', distinct_id: 'd2' },
+  ] }), res);
+  assert.equal(res.statusCode, 202);
+  assert.equal(ingestCalls.length, 1);
+  assert.equal(ingestCalls[0].distinctId, 'd2');
+});
+
+test('eventsHandler: skips malformed entries instead of failing the batch', () => {
+  ingestCalls.length = 0;
+  const res = makeRes();
+  eventsHandler(eventsReq({ events: [
+    null,
+    { event: 42 },
+    {},
+    { event: 'otp_requested', distinct_id: 123 },                       // distinct_id not a string
+    { event: 'otp_requested', distinct_id: 'x'.repeat(201) },           // >200 chars
+    { event: 'otp_requested', properties: [] },                         // properties must be object
+    { event: 'search_performed', distinct_id: 'good' },                // the one that should pass
+  ] }), res);
+  assert.equal(res.statusCode, 202);
+  assert.equal(ingestCalls.length, 1);
+  assert.equal(ingestCalls[0].distinctId, 'good');
+});
+
+test('eventsHandler: client-supplied rich fields are never overwritten by backstop enrichment', () => {
+  ingestCalls.length = 0;
+  const res = makeRes();
+  eventsHandler(eventsReq({
+    event: 'screen_viewed', distinct_id: 'd1',
+    properties: { user_agent: 'custom-agent', os_name: 'iOS', device_type: 'tablet' },
+  }, { 'user-agent': 'Mozilla/5.0' }), res);
+  const call = ingestCalls[0];
+  assert.equal(call.properties.user_agent, 'custom-agent');
+  assert.equal(call.properties.os_name, 'iOS');
+  assert.equal(call.properties.device_type, 'tablet');
+});
+
+test('eventsHandler: never throws even on a garbage body', () => {
+  ingestCalls.length = 0;
+  const res = makeRes();
+  eventsHandler(eventsReq('just a string', {}), res);
+  assert.equal(res.statusCode, 202);
+  assert.deepEqual(res.body, { ok: true });
+  eventsHandler(eventsReq({ events: 'not-an-array' }, {}), res);
+  assert.equal(res.statusCode, 202);
+});
+
+const queueProperties = () => ({
+  measurement_version: 1, occurrence_kind: 'grid',
+  queue_age_bucket: '10s_to_1m', queue_age_basis: 'wall_estimate',
+  failure_reason: 'none', upload_attempts_bucket: '1', resolution: 'receipt_observed',
+});
+
+test('queue diagnostics are default-off, require identity and preserve exactly coarse properties', () => {
+  const previous = process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+  try {
+    const e = { event: 'explore_pickup_queue_resolved', distinct_id: 'A', properties: queueProperties() };
+    delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    ingestCalls.length = 0;
+    eventsHandler(eventsReq(e), makeRes());
+    assert.equal(ingestCalls.length, 0);
+    process.env.EXPLORE_QUEUE_DIAGNOSTICS = 'true';
+    const req = eventsReq(e, { 'user-agent': 'sensitive-device', authorization: 'Bearer not-verified-here' });
+    eventsHandler(req, makeRes());
+    assert.deepEqual(ingestCalls, [{ event: e.event, distinctId: 'A', properties: queueProperties(), source: 'client' }]);
+    for (const distinct_id of [undefined, '', ' ', 2, 'x'.repeat(201)]) {
+      eventsHandler(eventsReq({ ...e, distinct_id }), makeRes());
+    }
+    assert.equal(ingestCalls.length, 1);
+  } finally {
+    if (previous === undefined) delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    else process.env.EXPLORE_QUEUE_DIAGNOSTICS = previous;
+  }
+});
+
+test('queue diagnostic malformed properties are dropped; ordinary events retain enrichment', () => {
+  const previous = process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+  process.env.EXPLORE_QUEUE_DIAGNOSTICS = 'true';
+  try {
+    ingestCalls.length = 0;
+    const e = { event: 'explore_pickup_queue_resolved', distinct_id: 'A', properties: queueProperties() };
+    const invalid = [
+      null, [], {}, { ...queueProperties(), ip: '1.2.3.4' },
+      { ...queueProperties(), claim_id: 'secret' },
+      { ...queueProperties(), measurement_version: '1' },
+      { ...queueProperties(), queue_age_basis: 'unknown' },
+      { ...queueProperties(), failure_reason: 'timeout' },
+    ];
+    eventsHandler(eventsReq({ events: [
+      ...invalid.map((properties) => ({ ...e, properties })),
+      { event: 'screen_viewed', distinct_id: 'B', properties: {} },
+    ] }, { 'user-agent': 'normal-UA' }), makeRes());
+    assert.equal(ingestCalls.length, 1);
+    assert.equal(ingestCalls[0].event, 'screen_viewed');
+    assert.equal(ingestCalls[0].properties.ip, '10.20.30.40');
+    assert.equal(ingestCalls[0].properties.user_agent, 'normal-UA');
+  } finally {
+    if (previous === undefined) delete process.env.EXPLORE_QUEUE_DIAGNOSTICS;
+    else process.env.EXPLORE_QUEUE_DIAGNOSTICS = previous;
+  }
+});
+
+test('Explore endpoints remain private and emit typed auth errors before proxying', () => {
+  for (const [method,path] of [['GET','catalogue'],['GET','collection'],['GET','nearby'],['POST','pickups']]) {
+    const full='/api/auth/explore/'+path;
+    assert.equal(isPublicRoute(method,full),false);
+    for (const token of [null,'garbage',jwt.sign({id:42,role:'customer'},process.env.JWT_SECRET,{expiresIn:-1})]) {
+      const req={method,path:full,headers:{'x-user-id':'42','x-user-role':'customer',...(token?{authorization:'Bearer '+token}:{})}};
+      const res=makeRes();authMiddleware(req,res,()=>assert.fail('unauthenticated request reached proxy'));
+      assert.equal(res.statusCode,401);assert.equal(res.body.error.code,'AUTH_REQUIRED');assert.equal(res.body.error.messageKey,'explore.error.auth_required');
+      assert.equal(res.body.error.retryable,false);assert.equal(typeof res.body.error.requestId,'string');assert.equal(req.headers['x-user-id'],undefined);
+    }
+  }
+});
+
+// ---- /content/loader-facts -------------------------------------------------
+
+test('isPublicRoute: loader facts are public GET-only', () => {
+  assert.equal(isPublicRoute('GET', '/content/loader-facts'), true);
+  assert.equal(isPublicRoute('POST', '/content/loader-facts'), false);
+});
+
+test('loader facts payload slices batches and wraps the cursor', async () => {
+  const { buildLoaderFactsPayload, LOADER_FACTS_TOTAL } = await import('../utils/loaderFacts.js');
+  assert.ok(LOADER_FACTS_TOTAL > 100);
+
+  const first = buildLoaderFactsPayload({ offset: 0, limit: 10, audience: 'customer' });
+  assert.equal(first.facts.length, 10);
+  assert.equal(first.offset, 0);
+  assert.equal(first.nextOffset, 10);
+  assert.equal(first.limit, 10);
+  assert.equal(first.total, LOADER_FACTS_TOTAL);
+  assert.ok(first.facts.every((f) => typeof f.id === 'string' && typeof f.text === 'string'));
+
+  const second = buildLoaderFactsPayload({ offset: first.nextOffset, limit: 10, audience: 'customer' });
+  assert.equal(second.offset, 10);
+  const ids = new Set(first.facts.map((f) => f.id));
+  assert.ok(second.facts.every((f) => !ids.has(f.id)), 'consecutive batches must not overlap');
+
+  const wrapped = buildLoaderFactsPayload({ offset: LOADER_FACTS_TOTAL, limit: 10, audience: 'customer' });
+  assert.equal(wrapped.offset, 0);
+});
+
+test('loader facts honor audience filters and clamp limit', async () => {
+  const { buildLoaderFactsPayload, LOADER_FACTS_TOTAL } = await import('../utils/loaderFacts.js');
+  const partner = buildLoaderFactsPayload({ offset: 0, limit: 50, audience: 'partner' });
+  assert.equal(partner.limit, 20, 'limit is clamped to MAX_LIMIT');
+  assert.ok(partner.total < LOADER_FACTS_TOTAL, 'brand-only facts are hidden from partners');
+  assert.ok(partner.facts.every((f) => !/phool gobhi/i.test(f.text)));
+});
+
+test('loader facts handler sets cache headers and answers If-None-Match with 304', async () => {
+  const { loaderFactsHandler } = await import('../utils/loaderFacts.js');
+  const headers = {};
+  const res = {
+    statusCode: 200,
+    body: null,
+    ended: false,
+    set(k, v) { headers[k.toLowerCase()] = v; return this; },
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+    end() { this.ended = true; return this; },
+  };
+  loaderFactsHandler({ query: {}, headers: {} }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.facts.length, 10);
+  assert.match(headers['cache-control'], /max-age=300/);
+  assert.ok(headers.etag);
+
+  const res304 = { ...res, body: null, ended: false, set() { return this; }, status(code) { this.statusCode = code; return this; }, end() { this.ended = true; return this; } };
+  loaderFactsHandler({ query: {}, headers: { 'if-none-match': headers.etag } }, res304);
+  assert.equal(res304.statusCode, 304);
+  assert.equal(res304.ended, true);
+});

@@ -1,0 +1,1637 @@
+[
+  {
+    "exercise": "Paused Bench Press",
+    "equipment": "barbell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "dVM-rN5cd4E",
+        "title": "Pause Bench Press",
+        "channel": "Men's Health",
+        "duration": "1:52",
+        "description": "",
+        "similarity": 0.971
+      },
+      {
+        "id": "K4BIkKGKy9k",
+        "title": "Paused Bench Press: Gym Shorts (How To)",
+        "channel": "Barbell Logic",
+        "duration": "0:49",
+        "description": "",
+        "similarity": 0.766
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Landmine Row",
+    "equipment": "barbell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "9hSQVBHLOX0",
+        "title": "How to do a Landmine Row",
+        "channel": "Atomic Athlete",
+        "duration": "1:04",
+        "description": "",
+        "similarity": 1.0
+      },
+      {
+        "id": "kgqJ_VCfeJI",
+        "title": "The Experts Guide to the Landmine Row Exercise | IFBB Pro Jonny Catanzano",
+        "channel": "Onnit",
+        "duration": "14:40",
+        "description": "",
+        "similarity": 0.75
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Paused Squat",
+    "equipment": "barbell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "nknf16JJTZo",
+        "title": "The Paused Squat: Gym Shorts (How To)",
+        "channel": "Barbell Logic",
+        "duration": "0:49",
+        "description": "",
+        "similarity": 0.686
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Frog Pump",
+    "equipment": "bodyweight",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "MQ62r2V7Lw8",
+        "title": "Frog Pump",
+        "channel": "Men's Health",
+        "duration": "0:57",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Goblet Squat",
+    "equipment": "kettlebell",
+    "setup": [
+      "Stand holding a light kettlebell by the horns close to your chest. This will be your starting position.",
+      "Squat down between your legs until your hamstrings are on your calves. Keep your chest and head up and your back straight."
+    ],
+    "candidates": [
+      {
+        "id": "JO7D6GJ98wY",
+        "title": "How To Do A Goblet Squat Correctly",
+        "channel": "Jack Hanrahan Fitness ",
+        "duration": "11:14",
+        "description": "",
+        "similarity": 1.0
+      },
+      {
+        "id": "3gpXflqRiEc",
+        "title": "How to Goblet Squat",
+        "channel": "Men's Health",
+        "duration": "0:48",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Single-Arm Dumbbell Press",
+    "equipment": "dumbbell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "d6Ba29xFBnw",
+        "title": "How to do a Single Arm Dumbbell Bench Press | Tiger Fitness",
+        "channel": "Tiger Fitness",
+        "duration": "0:30",
+        "description": "",
+        "similarity": 0.889
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Strict Press",
+    "equipment": "kettlebell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "Ay9W-movDuE",
+        "title": "Kettlebell Exercise: Strict Press",
+        "channel": "Onnit",
+        "duration": "0:30",
+        "description": "",
+        "similarity": 1.0
+      },
+      {
+        "id": "sAtZ4yAsQnI",
+        "title": "Kettlebell Clean And Press",
+        "channel": "Men's Health",
+        "duration": "0:50",
+        "description": "",
+        "similarity": 0.711
+      },
+      {
+        "id": "nJ3iAT3UP3k",
+        "title": "Pavel Tsatsouline on the Kettlebell Press",
+        "channel": "StrongFirst",
+        "duration": "3:35",
+        "description": "",
+        "similarity": 0.667
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Halo",
+    "equipment": "kettlebell",
+    "setup": [
+      "Stand tall with your feet hip-width apart. Hold a kettlebell upside down by the horns, with the bell above your hands and close to your chest. Brace your abdominals and squeeze your glutes so your ribcage stays down. This is your starting position.",
+      "Keeping your elbows close to your head, move the kettlebell up past one ear and around behind your head."
+    ],
+    "candidates": [
+      {
+        "id": "YGZWa5be1hk",
+        "title": "How To: KETTLEBELL HALO",
+        "channel": "Zack Henderson",
+        "duration": "3:29",
+        "description": "",
+        "similarity": 1.0
+      },
+      {
+        "id": "Zy6bgAxPeks",
+        "title": "Kettlebell Halo",
+        "channel": "Men's Health",
+        "duration": "1:23",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Cross-Body Hammer Curl",
+    "equipment": "dumbbell",
+    "setup": [
+      "Stand up straight with a dumbbell in each hand. Your hands should be down at your side with your palms facing in.",
+      "While keeping your palms facing in and without twisting your arm, curl the dumbbell of the right arm up towards your left shoulder as you exhale. Touch the top of the dumbbell to your shoulder and hold the contraction for a second."
+    ],
+    "candidates": [
+      {
+        "id": "9nY13VqNEkg",
+        "title": "Cross Body Hammer Curls",
+        "channel": "mountaindog1",
+        "duration": "0:44",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Skater Hop",
+    "equipment": "bodyweight",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "Jx2KXGbQkYM",
+        "title": "How To Do Skaters",
+        "channel": "Get Healthy U - with Chris Freytag",
+        "duration": "0:36",
+        "description": "",
+        "similarity": 0.706
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Snatch",
+    "equipment": "kettlebell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "AR6E01ABoHk",
+        "title": "Proper Path of the Kettlebell Snatch | StrongFirst",
+        "channel": "StrongFirst",
+        "duration": "1:38",
+        "description": "",
+        "similarity": 0.81
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Turkish Get-up",
+    "equipment": "kettlebell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "0bWRPC49-KI",
+        "title": "Turkish Get-Up Basics",
+        "channel": "StrongFirst",
+        "duration": "2:48",
+        "description": "",
+        "similarity": 0.8
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "90/90 Hamstring",
+    "equipment": "bodyweight",
+    "setup": [
+      "Lie on your back, with one leg extended straight out.",
+      "With the other leg, bend the hip and knee to 90 degrees. You may brace your leg with your hands if necessary. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "VYvMMw8z3rE",
+        "title": "How to do a 90/90 Hip Stretch properly - CORRECT FORM IS ESSENTIAL",
+        "channel": "Jack Hanrahan Fitness ",
+        "duration": "5:59",
+        "description": "",
+        "similarity": 0.625
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Alternating Kettlebell Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean two kettlebells to your shoulders. Clean the kettlebells to your shoulders by extending through the legs and hips as you pull the kettlebells towards your shoulders. Rotate your wrists as you do so.",
+      "Press one directly overhead by extending through the elbow, turning it so the palm faces forward while holding the other kettlebell stationary ."
+    ],
+    "candidates": [
+      {
+        "id": "4ULa6AJcjr8",
+        "title": "The Kettlebell Floor Press",
+        "channel": "Zack Henderson",
+        "duration": "1:36",
+        "description": "",
+        "similarity": 0.76
+      },
+      {
+        "id": "Ay9W-movDuE",
+        "title": "Kettlebell Exercise: Strict Press",
+        "channel": "Onnit",
+        "duration": "0:30",
+        "description": "",
+        "similarity": 0.627
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Anti-Gravity Press",
+    "equipment": "barbell",
+    "setup": [
+      "Place a bar on the ground behind the head of an incline bench.",
+      "Lay on the bench face down. With a pronated grip, pick the barbell up from the floor. Flex the elbows, performing a reverse curl to bring the bar near your chest. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "HXbetYIM-AY",
+        "title": "How to perform Anti-Gravity Press - Shoulders Exercise",
+        "channel": "Buff Dudes",
+        "duration": "1:14",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Around The Worlds",
+    "equipment": "dumbbell",
+    "setup": [
+      "Lay down on a flat bench holding a dumbbell in each hand with the palms of the hands facing towards the ceiling. Tip: Your arms should be parallel to the floor and next to your thighs. To avoid injury, make sure that you keep your elbows slightly bent. This will be your starting position.",
+      "Now move the dumbbells by creating a semi-circle as you displace them from the initial position to over the head. All of the movement should happen with the arms parallel to the floor at all times. Breathe in as you perform this portion of the movement."
+    ],
+    "candidates": [
+      {
+        "id": "w_Pplr0hI1s",
+        "title": "How to Perform Around the Worlds - Chest Exercise Tutorial",
+        "channel": "Buff Dudes",
+        "duration": "1:32",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Atlas Stone Trainer",
+    "equipment": "other",
+    "setup": [
+      "This trainer is effective for developing Atlas Stone strength for those who don't have access to stones, and are typically made from bar ends or heavy pipe.",
+      "Begin by loading the desired weight onto the bar. Straddle the weight, wrapping your arms around the implement, bending at the hips."
+    ],
+    "candidates": [
+      {
+        "id": "go0WMsBSN6w",
+        "title": "How To: Lift an Atlas Stone",
+        "channel": "Rogue Fitness",
+        "duration": "4:48",
+        "description": "",
+        "similarity": 0.629
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Atlas Stones",
+    "equipment": "other",
+    "setup": [
+      "Begin with the atlas stone between your feet. Bend at the hips to wrap your arms vertically around the Atlas Stone, attempting to get your fingers underneath the stone. Many stones will have a small flat portion on the bottom, which will make the stone easier to hold.",
+      "Pulling the stone into your torso, drive through the back half of your feet to pull the stone from the ground."
+    ],
+    "candidates": [
+      {
+        "id": "go0WMsBSN6w",
+        "title": "How To: Lift an Atlas Stone",
+        "channel": "Rogue Fitness",
+        "duration": "4:48",
+        "description": "",
+        "similarity": 0.786
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Band Good Morning",
+    "equipment": "other",
+    "setup": [
+      "Using a 41 inch band, stand on one end, spreading your feet a small amount. Bend at the hips to loop the end of the band behind your neck. This will be your starting position.",
+      "Keeping your legs straight, extend through the hips to come to a near vertical position."
+    ],
+    "candidates": [
+      {
+        "id": "fJA39ZOVaEQ",
+        "title": "How To Do Banded Good Mornings",
+        "channel": "Rogue Fitness",
+        "duration": "0:33",
+        "description": "",
+        "similarity": 0.919
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Band Good Morning (Pull Through)",
+    "equipment": "other",
+    "setup": [
+      "Loop the band around a post. Standing a little ways away, loop the opposite end around the neck. Your hands can help hold the band in position.",
+      "Begin by bending at the hips, getting your butt back as far as possible. Keep your back flat and bend forward to about 90 degrees. Your knees should be only slightly bent."
+    ],
+    "candidates": [
+      {
+        "id": "fJA39ZOVaEQ",
+        "title": "How To Do Banded Good Mornings",
+        "channel": "Rogue Fitness",
+        "duration": "0:33",
+        "description": "",
+        "similarity": 0.68
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Barbell Ab Rollout",
+    "equipment": "barbell",
+    "setup": [
+      "For this exercise you will need to get into a pushup position, but instead of having your hands of the floor, you will be grabbing on to an Olympic barbell (loaded with 5-10 lbs on each side) instead. This will be your starting position.",
+      "While keeping a slight arch on your back, lift your hips and roll the barbell towards your feet as you exhale. Tip: As you perform the movement, your glutes should be coming up, you should be keeping the abs tight and should maintain your back posture at all times. Also your arms should be staying perpendicular to the floor throughout the movement. If you don't, you will work out your shoulders and back more than the abs."
+    ],
+    "candidates": [
+      {
+        "id": "O-d6HC9gLcw",
+        "title": "How to : Barbell Ab Rollout - Abs Roller Exercise",
+        "channel": "Buff Dudes",
+        "duration": "1:11",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Barbell Incline Shoulder Raise",
+    "equipment": "barbell",
+    "setup": [
+      "Lie back on an Incline Bench. Using a medium width grip (a grip that is slightly wider than shoulder width), lift the bar from the rack and hold it straight over you with your arms straight. This will be your starting position.",
+      "While keeping the arms straight, lift the bar by protracting your shoulder blades, raising the shoulders from the bench as you breathe out."
+    ],
+    "candidates": [
+      {
+        "id": "zdALvgA0VCk",
+        "title": "Barbell Incline Shoulder Raise Benefits : Standard Workouts",
+        "channel": "eHowFitness",
+        "duration": "1:10",
+        "description": "",
+        "similarity": 0.69
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Bent Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean a kettlebell to your shoulder. Clean the kettlebell to your shoulders by extending through the legs and hips as you raise the kettlebell towards your shoulder. The wrist should rotate as you do so. This will be your starting position.",
+      "Begin my leaning to the side opposite the kettlebell, continuing until you are able to touch the ground with your free hand, keeping your eyes on the kettlebell. As you do so, press the weight vertically be extending through the elbow, keeping your arm perpendicular to the ground."
+    ],
+    "candidates": [
+      {
+        "id": "cmVXzpLROGw",
+        "title": "Bent Kettlebell Press Tutorial",
+        "channel": "Kettlebell Kings",
+        "duration": "1:49",
+        "description": "",
+        "similarity": 0.645
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Box Squat with Bands",
+    "equipment": "barbell",
+    "setup": [
+      "Begin in a power rack with a box at the appropriate height behind you. Set up the bands on the sleeves, secured to either band pegs, the rack, or dumbbells so that there is appropriate tension. If dumbbells are used, secure them so that they don't move. Also, ensure that the dumbbells you are using are heavy enough for the bands that you are using. Additional plates can be used to hold the dumbbells down. If more tension is needed, you can either widen the base on the floor or choke the bands. Typically, you would aim for a box height that brings you to a parallel squat, but you can train higher or lower if desired.",
+      "Begin by stepping under the bar and placing it across the back of the shoulders. Squeeze your shoulder blades together and rotate your elbows forward, attempting to bend the bar across your shoulders. Remove the bar from the rack, creating a tight arch in your lower back, and step back into position. Place your feet wider for more emphasis on the back, glutes, adductors, and hamstrings, or closer together for more quad development. Keep your head facing forward."
+    ],
+    "candidates": [
+      {
+        "id": "oP8C3HBAx9E",
+        "title": "How To Box Squat For Beginners",
+        "channel": "Peak Strength",
+        "duration": "3:02",
+        "description": "",
+        "similarity": 0.684
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Close-Grip Dumbbell Press",
+    "equipment": "dumbbell",
+    "setup": [
+      "Place a dumbbell standing up on a flat bench.",
+      "Ensuring that the dumbbell stays securely placed at the top of the bench, lie perpendicular to the bench with only your shoulders lying on the surface. Hips should be below the bench and your legs bent with your feet firmly on the floor."
+    ],
+    "candidates": [
+      {
+        "id": "5Y3VZsLb1Ys",
+        "title": "How To Do Dumbbell Bench Press Correctly",
+        "channel": "Jack Hanrahan Fitness ",
+        "duration": "10:03",
+        "description": "",
+        "similarity": 0.711
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Crucifix",
+    "equipment": "other",
+    "setup": [
+      "In the crucifix, you statically hold weights out to the side for time. While the event can be practiced using dumbbells, it is best to practice with one of the various implements used, such as axes and hammers, as it feels different.",
+      "Begin standing, and raise your arms out to the side holding the implements. Your arms should be parallel to the ground. In competition, judges or sensors are used to let you know when you break parallel. Hold for as long as you can. Typically, the weights should be heavy enough that you fail in 30-60 seconds."
+    ],
+    "candidates": [
+      {
+        "id": "kvNkr0wrfEg",
+        "title": "How to Perform Crucifix Curls",
+        "channel": "Buff Dudes",
+        "duration": "2:15",
+        "description": "",
+        "similarity": 0.762
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Deadlift with Chains",
+    "equipment": "barbell",
+    "setup": [
+      "You can attach the chains to the sleeves of the bar, or just drape the middle over the bar so there is a greater weight increase as you lift.",
+      "Approach the bar so that it is centered over your feet. You feet should be about hip width apart. Bend at the hip to grip the bar at shoulder width, allowing your shoulder blades to protract. Typically, you would use an overhand grip or an over/under grip on heavier sets. With your feet, and your grip set, take a big breath and then lower your hips and bend the knees until your shins contact the bar."
+    ],
+    "candidates": [
+      {
+        "id": "y3hsdW2QS4w",
+        "title": "Chain Deadlifts.MPG",
+        "channel": "mountaindog1",
+        "duration": "0:40",
+        "description": "",
+        "similarity": 0.824
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Deficit Deadlift",
+    "equipment": "barbell",
+    "setup": [
+      "Begin by having a platform or weight plates that you can stand on, usually 1-3 inches in height. Approach the bar so that it is centered over your feet. You feet should be about hip width apart. Bend at the hip to grip the bar at shoulder width, allowing your shoulder blades to protract. Typically, you would use an overhand grip or an over/under grip on heavier sets.",
+      "With your feet, and your grip set, take a big breath and then lower your hips and bend the knees until your shins contact the bar. Look forward with your head, keep your chest up and your back arched, and begin driving through the heels to move the weight upward. After the bar passes the knees, aggressively pull the bar back, pulling your shoulder blades together as you drive your hips forward into the bar."
+    ],
+    "candidates": [
+      {
+        "id": "R43pt8Tzrgg",
+        "title": "How To Deficit Deadlift - Stronger Off the Floor to INCREASE YOUR DEADLIFT",
+        "channel": "Barbell Logic",
+        "duration": "4:15",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Double Kettlebell Jerk",
+    "equipment": "kettlebell",
+    "setup": [
+      "Hold a kettlebell by the handle in each hand.",
+      "Clean the kettlebells to your shoulders by extending through the legs and hips as you pull the kettlebells towards your shoulders. Rotate your wrists as you do so, so that the palms face forward. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "N6Rvg3EH8mM",
+        "title": "How To Kettlebell Jerk",
+        "channel": "Zack Henderson",
+        "duration": "7:08",
+        "description": "",
+        "similarity": 0.811
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Double Kettlebell Push Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean two kettlebells to your shoulders.",
+      "Squat down a few inches and reverse the motion rapidly. Use the momentum from the legs to drive the kettlebells overhead."
+    ],
+    "candidates": [
+      {
+        "id": "HcqWMKxkvyA",
+        "title": "Double Kettlebell Push Press Workout",
+        "channel": "Zack Henderson",
+        "duration": "1:53",
+        "description": "",
+        "similarity": 0.875
+      },
+      {
+        "id": "W9NlTHkK1iU",
+        "title": "Kettlebell Push Press (Single & Double Kettlebell)",
+        "channel": "Zack Henderson",
+        "duration": "4:46",
+        "description": "",
+        "similarity": 0.757
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Double Kettlebell Snatch",
+    "equipment": "kettlebell",
+    "setup": [
+      "Place two kettlebells behind your feet. Bend your knees and sit back to pick up the kettlebells.",
+      "Swing the kettlebells between your legs forcefully and reverse the direction."
+    ],
+    "candidates": [
+      {
+        "id": "AR6E01ABoHk",
+        "title": "Proper Path of the Kettlebell Snatch | StrongFirst",
+        "channel": "StrongFirst",
+        "duration": "1:38",
+        "description": "",
+        "similarity": 0.694
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Double Leg Butt Kick",
+    "equipment": "bodyweight",
+    "setup": [
+      "Begin standing with your knees slightly bent.",
+      "Quickly squat a short distance, flexing the hips and knees, and immediately extend to jump for maximum vertical height."
+    ],
+    "candidates": [
+      {
+        "id": "oMW59TKZvaI",
+        "title": "How to Butt-Kick with Proper Form",
+        "channel": "Get Healthy U - with Chris Freytag",
+        "duration": "0:59",
+        "description": "",
+        "similarity": 0.621
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Drag Curl",
+    "equipment": "barbell",
+    "setup": [
+      "Grab a barbell with a supinated grip (palms facing forward) and get your elbows close to your torso and back. This will be your starting position.",
+      "As you exhale, curl the bar up while keeping the elbows to the back as you \"Drag\" the bar up by keeping it in contact with your torso. Tip: As you can see, you will not be keeping the elbows pinned to your sides, but instead you will be bringing them back. Also, do not lift your shoulders."
+    ],
+    "candidates": [
+      {
+        "id": "K1baXRg-OG8",
+        "title": "How to Perform Drag Curl Biceps Exercise Tutorial",
+        "channel": "Buff Dudes",
+        "duration": "1:45",
+        "description": "",
+        "similarity": 0.75
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Dumbbell Squat To A Bench",
+    "equipment": "dumbbell",
+    "setup": [
+      "Stand up straight with a flat bench behind you while holding a dumbbell on each hand (palms facing the side of your legs).",
+      "Position your legs using a shoulder width medium stance with the toes slightly pointed out. Keep your head up at all times as looking down will get you off balance and also maintain a straight back. This will be your starting position. Note: For the purposes of this discussion we will use the medium stance described above which targets overall development; however you can choose any of the three stances discussed in the foot stances section."
+    ],
+    "candidates": [
+      {
+        "id": "SRolvrsmBzU",
+        "title": "How To Squat Better With Dumbbells",
+        "channel": "Criticalbench",
+        "duration": "3:51",
+        "description": "",
+        "similarity": 0.81
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Extended Range One-Arm Kettlebell Floor Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Lie on the floor and position a kettlebell for one arm to press. The kettlebell should be held by the handle. The leg on the same side that you are pressing should be bent, with the knee crossing over the midline of the body.",
+      "Press the kettlebell by extending the elbow and adducting the arm, pressing it above your body. Return to the starting position."
+    ],
+    "candidates": [
+      {
+        "id": "4ULa6AJcjr8",
+        "title": "The Kettlebell Floor Press",
+        "channel": "Zack Henderson",
+        "duration": "1:36",
+        "description": "",
+        "similarity": 0.638
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Floor Glute-Ham Raise",
+    "equipment": "other",
+    "setup": [
+      "You can use a partner for this exercise or brace your feet under something stable.",
+      "Begin on your knees with your upper legs and torso upright. If using a partner, they will firmly hold your feet to keep you in position. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "Co7xAWe3hwo",
+        "title": "PERFECT YOUR GLUTE-HAM RAISE",
+        "channel": "Onnit",
+        "duration": "7:23",
+        "description": "",
+        "similarity": 0.732
+      },
+      {
+        "id": "c2pWqsHR7FU",
+        "title": "Best Hamstring Exercise? How To Perform Glute Ham Raises",
+        "channel": "Barbell Logic",
+        "duration": "6:13",
+        "description": "",
+        "similarity": 0.627
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Frankenstein Squat",
+    "equipment": "barbell",
+    "setup": [
+      "This drill teaches you the proper positioning of both the bar and your body during the clean and front squat.",
+      "Place the barbell on the front of the shoulders, releasing your grip and extending your arms out in front of you. The shoulders should be pushed forward to create a shelf, and the bar should be in contact with the throat. Ensure that you only move your shoulder blades forward; don't round the thoracic spine."
+    ],
+    "candidates": [
+      {
+        "id": "lqiax7HvENM",
+        "title": "FRANKENSTEIN Squats | Long Leg Squat Variations",
+        "channel": "elitefts",
+        "duration": "6:06",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Front Squats With Two Kettlebells",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean two kettlebells to your shoulders. Clean the kettlebells to your shoulders by extending through the legs and hips as you pull the kettlebells towards your shoulders. Rotate your wrists as you do so.",
+      "Looking straight ahead at all times, squat as low as you can and pause at the bottom. As you squat down, push your knees out. You should squat between your legs, keeping an upright torso, with your head and chest up."
+    ],
+    "candidates": [
+      {
+        "id": "3nA2ERmAyP0",
+        "title": "How to do a Double Kettlebell Front Squat",
+        "channel": "Atomic Athlete",
+        "duration": "0:49",
+        "description": "",
+        "similarity": 0.786
+      },
+      {
+        "id": "Q0T-oSe3LfY",
+        "title": "Double Kettlebell Front Squat",
+        "channel": "Men's Health",
+        "duration": "1:01",
+        "description": "",
+        "similarity": 0.786
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Good Morning off Pins",
+    "equipment": "barbell",
+    "setup": [
+      "Begin with a bar on a rack at about the same height as your stomach. Bend over underneath the bar and rack the bar across the rear of your shoulders as you would a power squat, not on top of your shoulders. At the proper height, you should be near parallel to the floor when bent over. Keep your back tight, shoulder blades pinched together, and your knees slightly bent. Keep your back arched and your cervical spine in proper alignment.",
+      "Begin the motion by extending through the hips with your glutes and hamstrings, and you are standing with the weight. Slowly lower the weight back to the pins returning to the starting position."
+    ],
+    "candidates": [
+      {
+        "id": "vKPGe8zb2S4",
+        "title": "How To Perform Good Mornings - Exercise Tutorial",
+        "channel": "Buff Dudes",
+        "duration": "2:56",
+        "description": "",
+        "similarity": 0.765
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Hammer Grip Incline DB Bench Press",
+    "equipment": "dumbbell",
+    "setup": [
+      "Lie back on an incline bench with a dumbbell on each hand on top of your thighs. The palms of your hand will be facing each other.",
+      "By using your thighs to help you get the dumbbells up, clean the dumbbells one arm at a time so that you can hold them at shoulder width."
+    ],
+    "candidates": [
+      {
+        "id": "ySeSg4lMgmE",
+        "title": "How to do a Hammer-Grip Dumbbell Bench Press | Tiger Fitness",
+        "channel": "Tiger Fitness",
+        "duration": "0:34",
+        "description": "",
+        "similarity": 0.788
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Hanging Bar Good Morning",
+    "equipment": "barbell",
+    "setup": [
+      "Begin with a bar on a rack at about the same height as your stomach. Suspend the bar using chains or suspension straps.",
+      "Bend over underneath the bar and rack the bar across the rear of your shoulders as you would a power squat, not on top of your traps. At the proper height, you should be near parallel to the floor when bent over. Keep your back tight, shoulder blades pinched together, and your knees slightly bent. Keep your back arched and your cervical spine in proper alignment."
+    ],
+    "candidates": [
+      {
+        "id": "vKPGe8zb2S4",
+        "title": "How To Perform Good Mornings - Exercise Tutorial",
+        "channel": "Buff Dudes",
+        "duration": "2:56",
+        "description": "",
+        "similarity": 0.649
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Incline Push-Up Depth Jump",
+    "equipment": "other",
+    "setup": [
+      "For this drill you will need a box about 12 inches high, and two thick mats or aerobics steps.",
+      "Place the steps just outside of your shoulders, and place your feet on top of the box so that you are in an incline pushup position, your hands just inside the steps. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "Me9bHFAxnCs",
+        "title": "How to do an Incline Pushup | Tiger Fitness",
+        "channel": "Tiger Fitness",
+        "duration": "0:37",
+        "description": "",
+        "similarity": 0.718
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Incline Push-Up Reverse Grip",
+    "equipment": "bodyweight",
+    "setup": [
+      "Stand facing a Smith machine bar or sturdy elevated platform at an appropriate height.",
+      "Place your hands on the bar palms up, with your hands about shoulder width apart."
+    ],
+    "candidates": [
+      {
+        "id": "Me9bHFAxnCs",
+        "title": "How to do an Incline Pushup | Tiger Fitness",
+        "channel": "Tiger Fitness",
+        "duration": "0:37",
+        "description": "",
+        "similarity": 0.683
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Incline Push-Up Wide",
+    "equipment": "bodyweight",
+    "setup": [
+      "Stand facing a Smith machine bar or sturdy elevated platform at an appropriate height.",
+      "Place your hands on the bar, with your hands wider than shoulder width."
+    ],
+    "candidates": [
+      {
+        "id": "Me9bHFAxnCs",
+        "title": "How to do an Incline Pushup | Tiger Fitness",
+        "channel": "Tiger Fitness",
+        "duration": "0:37",
+        "description": "",
+        "similarity": 0.848
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "JM Press",
+    "equipment": "barbell",
+    "setup": [
+      "Start the exercise the same way you would a close grip bench press. You will lie on a flat bench while holding a barbell at arms length (fully extended) with the elbows in. However, instead of having the arms perpendicular to the torso, make sure the bar is set in a direct line above the upper chest. This will be your starting position.",
+      "Now beginning from a fully extended position lower the bar down as if performing a lying triceps extension. Inhale as you perform this movement. When you reach the half way point, let the bar roll back about one inch by moving the upper arms towards your legs until they are perpendicular to the torso. Tip: Keep the bend at the elbows constant as you bring the upper arms forward."
+    ],
+    "candidates": [
+      {
+        "id": "hOCW9cE-GJg",
+        "title": "The Official JM Press Tutorial",
+        "channel": "elitefts",
+        "duration": "8:26",
+        "description": "",
+        "similarity": 0.64
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Halo with Overhead Extension",
+    "equipment": "kettlebell",
+    "setup": [
+      "Stand tall with your feet hip-width apart. Hold a kettlebell upside down by the horns, with the bell above your hands and close to your chest. Brace your abdominals and squeeze your glutes so your ribcage stays down. This is your starting position.",
+      "Keeping your elbows close to your head, move the kettlebell up past one ear and around until it sits behind your head. Pause here."
+    ],
+    "candidates": [
+      {
+        "id": "YGZWa5be1hk",
+        "title": "How To: KETTLEBELL HALO",
+        "channel": "Zack Henderson",
+        "duration": "3:29",
+        "description": "",
+        "similarity": 0.612
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Overhead Triceps Extension",
+    "equipment": "kettlebell",
+    "setup": [
+      "Stand with your feet hip-width apart, holding a kettlebell by the horns with both hands. Press it overhead until your arms are extended, with the bell hanging behind your hands.",
+      "Brace your abdominals and keep your upper arms vertical and close to your head. This is your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "qS5q6FgddTI",
+        "title": "Kettlebell Kings Presents: Kettlebell Overhead Tricep Extension - Kettlebells 4 Aesthetics",
+        "channel": "Kettlebell Kings",
+        "duration": "0:58",
+        "description": "",
+        "similarity": 0.735
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Kettlebell Pirate Ships",
+    "equipment": "kettlebell",
+    "setup": [
+      "With a wide stance, hold a kettlebell with both hands. Allow it to hang at waist level with your arms extended. This will be your starting position.",
+      "Initiate the movement by turning to one side, swinging the kettlebell to head height. Briefly pause at the top of the motion."
+    ],
+    "candidates": [
+      {
+        "id": "bDCeXbMJVNs",
+        "title": "How To Kettlebell Swing (in 3 minutes)",
+        "channel": "Zack Henderson",
+        "duration": "2:59",
+        "description": "",
+        "similarity": 0.654
+      },
+      {
+        "id": "YSxHifyI6s8",
+        "title": "Kettlebell Swing",
+        "channel": "Men's Health",
+        "duration": "1:58",
+        "description": "The Kettlebell Swing\u00a0...",
+        "similarity": 0.615
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Landmine 180's",
+    "equipment": "barbell",
+    "setup": [
+      "Position a bar into a landmine or securely anchor it in a corner. Load the bar to an appropriate weight.",
+      "Raise the bar from the floor, taking it to shoulder height with both hands with your arms extended in front of you. Adopt a wide stance. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "YC7poHGaVFE",
+        "title": "How to Perform Landmine 180 Abs Exercise",
+        "channel": "Buff Dudes",
+        "duration": "1:16",
+        "description": "",
+        "similarity": 0.8
+      },
+      {
+        "id": "EBt65VGkj4Q",
+        "title": "Landmine Workout",
+        "channel": "Men's Health",
+        "duration": "3:22",
+        "description": "",
+        "similarity": 0.6
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Leg-Over Floor Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Lie on the floor with one kettlebell in place on your chest, holding it by the handle. Extend leg on working side over leg on non-working side.Your free arm can be extended out to your side for support.",
+      "Press the kettlebll into a locked out position."
+    ],
+    "candidates": [
+      {
+        "id": "4ULa6AJcjr8",
+        "title": "The Kettlebell Floor Press",
+        "channel": "Zack Henderson",
+        "duration": "1:36",
+        "description": "",
+        "similarity": 0.714
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Natural Glute Ham Raise",
+    "equipment": "bodyweight",
+    "setup": [
+      "Using the leg pad of a lat pulldown machine or a preacher bench, position yourself so that your ankles are under the pads, knees on the seat, and you are facing away from the machine. You should be upright and maintaining good posture.",
+      "This will be your starting position. Lower yourself under control until your knees are almost completely straight."
+    ],
+    "candidates": [
+      {
+        "id": "Co7xAWe3hwo",
+        "title": "PERFECT YOUR GLUTE-HAM RAISE",
+        "channel": "Onnit",
+        "duration": "7:23",
+        "description": "",
+        "similarity": 0.698
+      },
+      {
+        "id": "c2pWqsHR7FU",
+        "title": "Best Hamstring Exercise? How To Perform Glute Ham Raises",
+        "channel": "Barbell Logic",
+        "duration": "6:13",
+        "description": "",
+        "similarity": 0.642
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Clean and Jerk",
+    "equipment": "kettlebell",
+    "setup": [
+      "Hold a kettlebell by the handle.",
+      "Clean the kettlebell to your shoulder by extending through the legs and hips as you pull the kettlebell towards your shoulder. Rotate your wrist as you do so, so that the palm faces forward."
+    ],
+    "candidates": [
+      {
+        "id": "__YwepqHzAU",
+        "title": "Expert Guide to the One-Arm Kettlebell Clean | Shane Heins",
+        "channel": "Onnit",
+        "duration": "12:21",
+        "description": "",
+        "similarity": 0.906
+      },
+      {
+        "id": "LAjqej2yLFE",
+        "title": "Single-Arm Clean & Press Exercise : Kettlebell Workouts & Exercises",
+        "channel": "eHowFitness",
+        "duration": "1:17",
+        "description": "",
+        "similarity": 0.722
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Floor Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Lie on the floor holding a kettlebell with one hand, with your upper arm supported by the floor. The palm should be facing in.",
+      "Press the kettlebell straight up toward the ceiling, rotating your wrist."
+    ],
+    "candidates": [
+      {
+        "id": "4ULa6AJcjr8",
+        "title": "The Kettlebell Floor Press",
+        "channel": "Zack Henderson",
+        "duration": "1:36",
+        "description": "",
+        "similarity": 0.815
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Jerk",
+    "equipment": "kettlebell",
+    "setup": [
+      "Hold a kettlebell by the handle. Clean the kettlebell to your shoulder by extending through the legs and hips as you pull the kettlebell towards your shoulder. Rotate your wrist as you do so, so that the palm faces forward. This will be your starting position.",
+      "Dip your body by bending the knees, keeping your torso upright."
+    ],
+    "candidates": [
+      {
+        "id": "__YwepqHzAU",
+        "title": "Expert Guide to the One-Arm Kettlebell Clean | Shane Heins",
+        "channel": "Onnit",
+        "duration": "12:21",
+        "description": "",
+        "similarity": 0.793
+      },
+      {
+        "id": "LAjqej2yLFE",
+        "title": "Single-Arm Clean & Press Exercise : Kettlebell Workouts & Exercises",
+        "channel": "eHowFitness",
+        "duration": "1:17",
+        "description": "",
+        "similarity": 0.667
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Para Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean a kettlebell to your shoulder. Clean the kettlebell to your shoulder by extending through the legs and hips as you pull the kettlebell towards your shoulder. Rotate your wrist as you do so, so that the palm faces forward. This will be your starting position.",
+      "Hold the kettlebell with the elbow out to the side, and press it up and out until it is locked out overhead."
+    ],
+    "candidates": [
+      {
+        "id": "LAjqej2yLFE",
+        "title": "Single-Arm Clean & Press Exercise : Kettlebell Workouts & Exercises",
+        "channel": "eHowFitness",
+        "duration": "1:17",
+        "description": "",
+        "similarity": 0.722
+      },
+      {
+        "id": "4ULa6AJcjr8",
+        "title": "The Kettlebell Floor Press",
+        "channel": "Zack Henderson",
+        "duration": "1:36",
+        "description": "",
+        "similarity": 0.604
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Push Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Hold a kettlebell by the handle. Clean the kettlebell to your shoulder by extending through the legs and hips as you pull the kettlebell towards your shoulder. Rotate your wrist as you do so, so that the palm faces forward. This will be your starting position.",
+      "Dip your body by bending the knees, keeping your torso upright."
+    ],
+    "candidates": [
+      {
+        "id": "LAjqej2yLFE",
+        "title": "Single-Arm Clean & Press Exercise : Kettlebell Workouts & Exercises",
+        "channel": "eHowFitness",
+        "duration": "1:17",
+        "description": "",
+        "similarity": 0.722
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Split Snatch",
+    "equipment": "kettlebell",
+    "setup": [
+      "Hold a kettlebell in one hand by the handle.",
+      "Squat towards the floor, and then reverse the motion, extending the hips, knees, and finally the ankles, to raise the kettlebell overhead."
+    ],
+    "candidates": [
+      {
+        "id": "lnhUi8nbFug",
+        "title": "Kettlebell Split Snatch | StrongFirst",
+        "channel": "StrongFirst",
+        "duration": "3:07",
+        "description": "",
+        "similarity": 0.821
+      },
+      {
+        "id": "AR6E01ABoHk",
+        "title": "Proper Path of the Kettlebell Snatch | StrongFirst",
+        "channel": "StrongFirst",
+        "duration": "1:38",
+        "description": "",
+        "similarity": 0.655
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Kettlebell Swings",
+    "equipment": "kettlebell",
+    "setup": [],
+    "candidates": [
+      {
+        "id": "5i_xp1vtkc4",
+        "title": "How To: Single-Arm Kettlebell Swing",
+        "channel": "Zack Henderson",
+        "duration": "3:51",
+        "description": "",
+        "similarity": 1.0
+      },
+      {
+        "id": "bDCeXbMJVNs",
+        "title": "How To Kettlebell Swing (in 3 minutes)",
+        "channel": "Zack Henderson",
+        "duration": "2:59",
+        "description": "",
+        "similarity": 0.727
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One-Arm Open Palm Kettlebell Clean",
+    "equipment": "kettlebell",
+    "setup": [
+      "Place one kettlebell between your feet.",
+      "Grab the handle with one hand and raise the kettlebell rapidly, let it flip so that the ball of the kettlebell lands in the palm of your hand."
+    ],
+    "candidates": [
+      {
+        "id": "__YwepqHzAU",
+        "title": "Expert Guide to the One-Arm Kettlebell Clean | Shane Heins",
+        "channel": "Onnit",
+        "duration": "12:21",
+        "description": "",
+        "similarity": 0.754
+      },
+      {
+        "id": "LAjqej2yLFE",
+        "title": "Single-Arm Clean & Press Exercise : Kettlebell Workouts & Exercises",
+        "channel": "eHowFitness",
+        "duration": "1:17",
+        "description": "",
+        "similarity": 0.753
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "One Leg Barbell Squat",
+    "equipment": "barbell",
+    "setup": [
+      "Start by standing about 2 to 3 feet in front of a flat bench with your back facing the bench. Have a barbell in front of you on the floor. Tip: Your feet should be shoulder width apart from each other.",
+      "Bend the knees and use a pronated grip with your hands being wider than shoulder width apart from each other to lift the barbell up until you can rest it on your chest."
+    ],
+    "candidates": [
+      {
+        "id": "ppFIQY00RQg",
+        "title": "How To Single Leg Squat | Exercise Tutorial",
+        "channel": "Peak Strength",
+        "duration": "1:45",
+        "description": "",
+        "similarity": 0.789
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Open Palm Kettlebell Clean",
+    "equipment": "kettlebell",
+    "setup": [
+      "Place one kettlebell between your feet. Clean the kettlebell by extending through the legs and hips as you raise the kettlebell towards your shoulders.",
+      "Release the kettlebell as it comes up, and let it flip so that the ball of the kettlebell lands in the palms of your hands."
+    ],
+    "candidates": [
+      {
+        "id": "sAtZ4yAsQnI",
+        "title": "Kettlebell Clean And Press",
+        "channel": "Men's Health",
+        "duration": "0:50",
+        "description": "",
+        "similarity": 0.792
+      },
+      {
+        "id": "0pp3hIPTJqo",
+        "title": "3 Tips For Kettlebell Clean Technique | \u00a0@EricLeija\u00a0 \u00a0@FrancheskaFit\u00a0  #workout",
+        "channel": "Onnit",
+        "duration": "1:01",
+        "description": "",
+        "similarity": 0.679
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Otis-Up",
+    "equipment": "other",
+    "setup": [
+      "Secure your feet and lay back on the floor. Your knees should be bent. Hold a weight with both hands to your chest. This will be your starting position.",
+      "Initiate the movement by flexing the hips and spine to raise your torso up from the ground."
+    ],
+    "candidates": [
+      {
+        "id": "BhtnaHGJa8w",
+        "title": "How to perform Otis Up - Abs Exercise Tutorial",
+        "channel": "Buff Dudes",
+        "duration": "1:29",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Prone Manual Hamstring",
+    "equipment": "other",
+    "setup": [
+      "You will need a partner for this exercise. Lay face down with your legs straight. Your assistant will place their hand on your heel.",
+      "To begin, flex the knee to curl your leg up. Your partner should provide resistance, starting light and increasing the pressure as the movement is completed. Communicate with your partner to monitor appropriate resistance levels."
+    ],
+    "candidates": [
+      {
+        "id": "rYLpvcDWVt4",
+        "title": "How To Perform Manual Hamstring Curls - Exercise Tutorial",
+        "channel": "Buff Dudes",
+        "duration": "2:31",
+        "description": "",
+        "similarity": 0.744
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Reverse Band Box Squat",
+    "equipment": "barbell",
+    "setup": [
+      "Begin in a power rack with a box at the appropriate height behind you. Set up the bands either on band pegs or attached to the top of the rack, ensuring they will be directly above the bar during the squat. Attach the other end to the bar.",
+      "Begin by stepping under the bar and placing it across the back of the shoulders. Squeeze your shoulder blades together and rotate your elbows forward, attempting to bend the bar across your shoulders. Remove the bar from the rack, creating a tight arch in your lower back, and step back into position. Place your feet wider for more emphasis on the back, glutes, adductors, and hamstrings, or closer together for more quad development. Keep your head facing forward."
+    ],
+    "candidates": [
+      {
+        "id": "oP8C3HBAx9E",
+        "title": "How To Box Squat For Beginners",
+        "channel": "Peak Strength",
+        "duration": "3:02",
+        "description": "",
+        "similarity": 0.622
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Reverse Hyperextension",
+    "equipment": "machine",
+    "setup": [
+      "Place your feet between the pads after loading an appropriate weight. Lay on the top pad, allowing your hips to hang off the back, while grasping the handles to hold your position.",
+      "To begin the movement, flex the hips, pulling the legs forward."
+    ],
+    "candidates": [
+      {
+        "id": "3d9_W--eUcI",
+        "title": "Reverse Hypers",
+        "channel": "Men's Health",
+        "duration": "2:38",
+        "description": "",
+        "similarity": 0.778
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Seated Band Hamstring Curl",
+    "equipment": "other",
+    "setup": [
+      "Secure a band close to the ground and place a bench a couple feet away from it.",
+      "Seat yourself on the bench and secure the band behind your ankles, beginning with your legs straight. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "M_dUNslNjBU",
+        "title": "Seated Band Leg Curl",
+        "channel": "Men's Health",
+        "duration": "0:58",
+        "description": "",
+        "similarity": 0.783
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Single-Arm Linear Jammer",
+    "equipment": "barbell",
+    "setup": [
+      "Position a bar into a landmine or securely anchor it in a corner. Load the bar to an appropriate weight.",
+      "Raise the bar from the floor, taking it to your shoulders with one or both hands. Adopt a wide stance. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "XkvwvOje1DM",
+        "title": "How to Perform Single Arm Linear Jammer Exercise",
+        "channel": "Buff Dudes",
+        "duration": "1:25",
+        "description": "",
+        "similarity": 1.0
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Single Leg Butt Kick",
+    "equipment": "bodyweight",
+    "setup": [
+      "Begin by standing on one leg, with the bent knee raised. This will be your start position.",
+      "Using a countermovement jump, take off upward by extending the hip, knee, and ankle of the grounded leg."
+    ],
+    "candidates": [
+      {
+        "id": "oMW59TKZvaI",
+        "title": "How to Butt-Kick with Proper Form",
+        "channel": "Get Healthy U - with Chris Freytag",
+        "duration": "0:59",
+        "description": "",
+        "similarity": 0.643
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Smith Machine Leg Press",
+    "equipment": "machine",
+    "setup": [
+      "Position a Smith machine bar a couple feet off of the ground. Ensure that it is resting on the safeties. After loading the bar to an appropriate weight, lie underneath the bar. Place the middle of your feet on the bar, tucking your knees to your chest. This will be your starting position.",
+      "Begin the movement by driving through your feet to move the bar upward, extending the hips and knees. Do not lock out your knees."
+    ],
+    "candidates": [
+      {
+        "id": "fKJoIWiBwkA",
+        "title": "How To Get \"BIG\" Legs with the Smith Machine",
+        "channel": "mountaindog1",
+        "duration": "10:16",
+        "description": "",
+        "similarity": 0.694
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Squat with Bands",
+    "equipment": "barbell",
+    "setup": [
+      "Set up the bands on the sleeves, secured to either band pegs, the rack, or dumbbells so that there is appropriate tension.",
+      "Begin by stepping under the bar and placing it across the back of the shoulders. Squeeze your shoulder blades together and rotate your elbows forward, attempting to bend the bar across your shoulders. Remove the bar from the rack, creating a tight arch in your lower back, and step back into position. Place your feet wide for more emphasis on the back, glutes, adductors, and hamstrings. Keep your head facing forward."
+    ],
+    "candidates": [
+      {
+        "id": "duP-UZsfOaQ",
+        "title": "How To Do Resistance Band Squat",
+        "channel": "Get Healthy U - with Chris Freytag",
+        "duration": "0:49",
+        "description": "",
+        "similarity": 0.688
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Squat with Chains",
+    "equipment": "barbell",
+    "setup": [
+      "To set up the chains, begin by looping the leader chain over the sleeves of the bar. The heavy chain should be attached using a snap hook. Adjust the length of the lead chain so that a few links are still on the floor at the top of the movement.",
+      "Begin by stepping under the bar and placing it across the back of the shoulders. Squeeze your shoulder blades together and rotate your elbows forward, attempting to bend the bar across your shoulders. Remove the bar from the rack, creating a tight arch in your lower back, and step back into position. Place your feet wide for more emphasis on the back, glutes, adductors, and hamstrings. Keep your head facing forward."
+    ],
+    "candidates": [
+      {
+        "id": "OW3dRfyvoWg",
+        "title": "Chain Squats.MPG",
+        "channel": "mountaindog1",
+        "duration": "0:37",
+        "description": "",
+        "similarity": 0.815
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Standing Concentration Curl",
+    "equipment": "dumbbell",
+    "setup": [
+      "Taking a dumbbell in your working hand, lean forward. Allow your working arm to hang perpendicular to the ground with the elbow pointing out. This will be your starting position.",
+      "Flex the elbow to curl the weight, keeping the upper arm stationary. At the top of the repetition, flex the biceps and pause."
+    ],
+    "candidates": [
+      {
+        "id": "VMbDQ8PZazY",
+        "title": "CONCENTRATION CURL",
+        "channel": "Atomic Athlete",
+        "duration": "0:27",
+        "description": "",
+        "similarity": 0.8
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Straight-Arm Dumbbell Pullover",
+    "equipment": "dumbbell",
+    "setup": [
+      "Place a dumbbell standing up on a flat bench.",
+      "Ensuring that the dumbbell stays securely placed at the top of the bench, lie perpendicular to the bench (torso across it as in forming a cross) with only your shoulders lying on the surface. Hips should be below the bench and legs bent with feet firmly on the floor. The head will be off the bench as well."
+    ],
+    "candidates": [
+      {
+        "id": "5lbvUCXfDU0",
+        "title": "Dumbbell pullovers You are doing them wrong",
+        "channel": "mountaindog1",
+        "duration": "1:24",
+        "description": "",
+        "similarity": 0.658
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Suspended Split Squat",
+    "equipment": "other",
+    "setup": [
+      "Suspend your straps so the handles are 18-30 inches from the floor.",
+      "Facing away from the setup, place your rear foot into the handle behind you. Keep your head looking forward and your chest up, with your knee slightly bent. This will be your starting position."
+    ],
+    "candidates": [
+      {
+        "id": "hXpGSa5HYqY",
+        "title": "How to do a SPLIT SQUAT",
+        "channel": "Atomic Athlete",
+        "duration": "0:25",
+        "description": "",
+        "similarity": 0.688
+      },
+      {
+        "id": "m8mQ_92_Ylg",
+        "title": "Fix your form: split squats",
+        "channel": "Jack Hanrahan Fitness ",
+        "duration": "6:06",
+        "description": "",
+        "similarity": 0.634
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Two-Arm Kettlebell Clean",
+    "equipment": "kettlebell",
+    "setup": [
+      "Place two kettlebells between your feet. To get in the starting position, push your butt back and look straight ahead.",
+      "Clean the kettlebells to your shoulders by extending through the legs and hips as you raise the kettlebells towards your shoulders. Rotate your wrists as you do so."
+    ],
+    "candidates": [
+      {
+        "id": "bDCeXbMJVNs",
+        "title": "How To Kettlebell Swing (in 3 minutes)",
+        "channel": "Zack Henderson",
+        "duration": "2:59",
+        "description": "",
+        "similarity": 0.604
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Two-Arm Kettlebell Jerk",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean two kettlebells to your shoulders. Clean the kettlebells to your shoulders by extending through the legs and hips as you swing the kettlebells towards your shoulders. Rotate your wrists as you do so, so that the palms face forward. Squat down a few inches and reverse the motion rapidly driving both kettlebells overhead. Immediately after the initial push, squat down again and get under the kettlebells. Once the kettlebells are locked out, stand upright to complete the exercise."
+    ],
+    "candidates": [
+      {
+        "id": "IR32hqinsRo",
+        "title": "Kettlebell Jerk - How to do Kettlebell Jerk || Kettlebell Kings",
+        "channel": "Kettlebell Kings",
+        "duration": "2:07",
+        "description": "",
+        "similarity": 0.789
+      },
+      {
+        "id": "N6Rvg3EH8mM",
+        "title": "How To Kettlebell Jerk",
+        "channel": "Zack Henderson",
+        "duration": "7:08",
+        "description": "",
+        "similarity": 0.789
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Two-Arm Kettlebell Military Press",
+    "equipment": "kettlebell",
+    "setup": [
+      "Clean two kettlebells to your shoulders. Clean the kettlebells to your shoulders by extending through the legs and hips as you swing the kettlebells towards your shoulders. Rotate your wrists as you do so, so that the palms face forward.",
+      "Press the kettlebells up and out. As the kettlebells pass your head, lean into the weights so that the kettlebells are racked behind your head. Make sure to contract your lats, butt, and stomach for added stability."
+    ],
+    "candidates": [
+      {
+        "id": "zTz8EO6sJlg",
+        "title": "Set the Lat to Boost Your Kettlebell Military Press | StrongFirst",
+        "channel": "StrongFirst",
+        "duration": "3:22",
+        "description": "",
+        "similarity": 0.753
+      },
+      {
+        "id": "nJ3iAT3UP3k",
+        "title": "Pavel Tsatsouline on the Kettlebell Press",
+        "channel": "StrongFirst",
+        "duration": "3:35",
+        "description": "",
+        "similarity": 0.6
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  },
+  {
+    "exercise": "Two-Arm Kettlebell Row",
+    "equipment": "kettlebell",
+    "setup": [
+      "Place two kettlebells in front of your feet. Bend your knees slightly and then push your butt out as much as possible as you bend over to get in the starting position.",
+      "Grab both kettlebells and pull them to your stomach, retracting your shoulder blades and flexing the elbows. Keep your back straight. Lower and repeat."
+    ],
+    "candidates": [
+      {
+        "id": "ZeF3U4aR32U",
+        "title": "1-Arm Kettlebell Rows for BACK STRENGTH (top 10 variations)",
+        "channel": "Zack Henderson",
+        "duration": "11:03",
+        "description": "",
+        "similarity": 0.609
+      }
+    ],
+    "status": "requires_explicit_variant_decision"
+  }
+]

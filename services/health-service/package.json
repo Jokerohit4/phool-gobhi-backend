@@ -6,18 +6,31 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "test": "node --experimental-test-module-mocks --test"
+    "test": "node --experimental-test-module-mocks --test",
+    "seed:foods": "node prisma/seed/run.js",
+    "seed:foods:status": "node prisma/seed/status.js --status",
+    "seed:foods:signoff": "node prisma/seed/signoff.js",
+    "db:deploy": "prisma migrate deploy",
+    "check:drift": "node scripts/check-schema-drift.mjs"
+  },
+  "prisma": {
+    "seed": "node prisma/seed/run.js"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.21.0",
     "@prisma/client": "^6.8.2",
     "axios": "^1.7.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "firebase-admin": "^12.7.0",
     "google-auth-library": "^10.9.0",
-    "pg": "^8.16.0"
+    "ioredis": "^5.11.1",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.16.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
+    "cloudinary": "^1.41.3",
     "nodemon": "^3.1.10",
     "prisma": "^6.8.2"
   }

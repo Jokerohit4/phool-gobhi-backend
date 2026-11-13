@@ -149,6 +149,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://pguser:pgpass@postgres:5432/challengedb
       - CHALLENGE_SERVICE_PORT=5008
+      - HEALTH_SERVICE_URL=http://health-service:5009
       - AUTH_SERVICE_URL=http://auth-service:5001
       - BOOKING_SERVICE_URL=http://booking-service:5005
       - BUDDY_SERVICE_URL=http://buddy-service:5007

@@ -10,6 +10,7 @@
 // The wallet-service already does this the right way (GET /internal/:id +
 // x-internal-key) — this file follows that precedent.
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { createTtlCache } from '../utils/ttlCache.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 // .trim() guards against a stray trailing newline in the Secret Manager
@@ -38,8 +39,28 @@ export async function getUserInternal(userId) {
 
 // Batched display-field lookup for a discovery/matches page — one round
 // trip for N candidates instead of N internal calls.
-export async function getUsersBatchInternal(ids) {
-  if (!ids.length) return [];
+// Display fields (name / photo) are cached per user id for 60s with single-flight;
+// a failed batch is never cached and still rejects (callers already .catch it).
+// A renamed user shows the old name for at most 60s on this instance.
+const displayCache = createTtlCache(60_000);
+
+export function getUsersBatchInternal(ids) {
+  if (!ids.length) return Promise.resolve([]);
+  const uniq = [...new Set(ids)];
+  const toLoad = [];
+  let batch = null;
+  // Loaders run synchronously inside get() for the ids that miss, so by the
+  // time the microtask below fires toLoad holds exactly the missing ids and
+  // they share ONE auth-service call.
+  const ensureBatch = () => (batch ??= Promise.resolve().then(() => fetchUsersBatch(toLoad)));
+  return Promise.all(uniq.map((id) => displayCache.get(id, async () => {
+    toLoad.push(id);
+    const rows = await ensureBatch();
+    return rows.find((u) => u.id === id) ?? null;
+  }))).then((rows) => rows.filter(Boolean));
+}
+
+async function fetchUsersBatch(ids) {
   const res = await fetch(`${AUTH_SERVICE_URL}/internal/users/batch`, {
     method: 'POST',
     headers: {

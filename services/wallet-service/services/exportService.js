@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // DPDPA access right (s.11) for wallet and subscriptions, called by
 // auth-service's platform-wide export.

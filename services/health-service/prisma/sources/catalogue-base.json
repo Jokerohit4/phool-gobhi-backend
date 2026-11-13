@@ -1,0 +1,3945 @@
+[
+  {
+    "name": "Barbell Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Shoulders",
+      "Triceps"
+    ],
+    "aliases": [
+      "bench press",
+      "bb bench",
+      "flat bench press"
+    ]
+  },
+  {
+    "name": "Incline Dumbbell Press",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Fly",
+    "muscleGroup": "chest",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Crossover",
+    "muscleGroup": "chest",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Standing Cable Chest Press",
+    "muscleGroup": "chest",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Shoulders",
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": [
+      "pushup",
+      "push ups",
+      "press up"
+    ]
+  },
+  {
+    "name": "Barbell Row",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Lat Pulldown",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": [
+      "lat pull down",
+      "lat pull"
+    ]
+  },
+  {
+    "name": "Pull-up",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": [
+      "pullup",
+      "pull ups"
+    ]
+  },
+  {
+    "name": "Seated Cable Row",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Straight-Arm Pulldown",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Cable Row",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Squat",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": [
+      "back squat",
+      "bb squat"
+    ]
+  },
+  {
+    "name": "Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Back",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Leg Press",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Glutes"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Walking Lunge",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Pull-Through",
+    "muscleGroup": "legs",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes",
+      "Hamstrings"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Kickback",
+    "muscleGroup": "legs",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Overhead Press",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": [
+      "ohp",
+      "military press",
+      "shoulder press"
+    ]
+  },
+  {
+    "name": "Lateral Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Face Pull",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Back"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Lateral Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Upright Row",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Back"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Curl",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Triceps Pushdown",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": [
+      "tricep push down",
+      "triceps pressdown"
+    ]
+  },
+  {
+    "name": "Hammer Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Curl",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Overhead Triceps Extension",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Plank",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Hanging Leg Raise",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Crunch",
+    "muscleGroup": "core",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Woodchopper",
+    "muscleGroup": "core",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [
+      "Back"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Running",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Legs",
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cycling",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Legs",
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Yoga Flow",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Bodyweight Squat",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [],
+    "aliases": [
+      "air squat",
+      "free squat"
+    ]
+  },
+  {
+    "name": "Incline Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Glute Bridge",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dead Bug",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Pike Push-up",
+    "muscleGroup": "shoulders",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Chair Dip",
+    "muscleGroup": "arms",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Towel Row",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Superman",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Split Squat",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Calf Raise",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Calves"
+    ],
+    "secondaryMuscles": [],
+    "aliases": [
+      "calf raises"
+    ]
+  },
+  {
+    "name": "Wall Sit",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Quadriceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Side Plank",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Hollow Hold",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "March in Place",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Legs",
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Step-Back Lunge",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Shadow Boxing",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular",
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Incline Barbell Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Decline Barbell Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Close-Grip Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Paused Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Floor Press",
+    "muscleGroup": "chest",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": [
+      "db bench",
+      "dumbbell chest press"
+    ]
+  },
+  {
+    "name": "Dumbbell Fly",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Incline Dumbbell Fly",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Floor Press",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Decline Dumbbell Press",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Pullover",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Squeeze Press",
+    "muscleGroup": "chest",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Shoulders"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Machine Chest Press",
+    "muscleGroup": "chest",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Incline Machine Chest Press",
+    "muscleGroup": "chest",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Pec Deck Fly",
+    "muscleGroup": "chest",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Smith Machine Bench Press",
+    "muscleGroup": "chest",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Smith Machine Incline Press",
+    "muscleGroup": "chest",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Decline Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Diamond Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Wide Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Knee Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Wall Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Chest Dip",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Archer Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Scapular Push-up",
+    "muscleGroup": "chest",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Chest"
+    ],
+    "secondaryMuscles": [
+      "Triceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Pendlay Row",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "T-Bar Row",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Underhand Barbell Row",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Rack Pull",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Meadows Row",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Landmine Row",
+    "muscleGroup": "back",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Dumbbell Row",
+    "muscleGroup": "back",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": [
+      "db row",
+      "dumbbell row",
+      "one arm row"
+    ]
+  },
+  {
+    "name": "Chest-Supported Dumbbell Row",
+    "muscleGroup": "back",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Incline Dumbbell Row",
+    "muscleGroup": "back",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Shrug",
+    "muscleGroup": "back",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Reverse Fly",
+    "muscleGroup": "back",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Renegade Row",
+    "muscleGroup": "back",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Close-Grip Lat Pulldown",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Wide-Grip Lat Pulldown",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Underhand Lat Pulldown",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Lat Pulldown",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Wide-Grip Cable Row",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Pullover",
+    "muscleGroup": "back",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Assisted Pull-up",
+    "muscleGroup": "back",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Machine High Row",
+    "muscleGroup": "back",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Machine Low Row",
+    "muscleGroup": "back",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Chest-Supported Machine Row",
+    "muscleGroup": "back",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Reverse Pec Deck",
+    "muscleGroup": "back",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Back Extension",
+    "muscleGroup": "back",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Biceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Chin-up",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": [
+      "chinup",
+      "chin ups"
+    ]
+  },
+  {
+    "name": "Neutral-Grip Pull-up",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Inverted Row",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Scapular Pull-up",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Prone Y Raise",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Bird Dog",
+    "muscleGroup": "back",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Back"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Front Squat",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Romanian Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": [
+      "rdl",
+      "barbell rdl"
+    ]
+  },
+  {
+    "name": "Sumo Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Stiff-Leg Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Hip Thrust",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Glute Bridge",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Good Morning",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Zercher Squat",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Box Squat",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Paused Squat",
+    "muscleGroup": "legs",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Quadriceps",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Goblet Squat",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Squat",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Romanian Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": [
+      "db rdl",
+      "dumbbell rdl"
+    ]
+  },
+  {
+    "name": "Bulgarian Split Squat",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": [
+      "rear foot elevated split squat"
+    ]
+  },
+  {
+    "name": "Dumbbell Reverse Lunge",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Step-up",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Sumo Squat",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Lateral Lunge",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Leg Romanian Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Hip Thrust",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Hack Squat",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Smith Machine Squat",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Leg Extension",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Seated Leg Curl",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Lying Leg Curl",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": [
+      "hamstring curl",
+      "hamstring curls"
+    ]
+  },
+  {
+    "name": "Hip Abduction Machine",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Hip Adduction Machine",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Adductors"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Machine Hip Thrust",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Belt Squat",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Leg Press",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Reverse Lunge",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Forward Lunge",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Lateral Lunge",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Step-up",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Leg Glute Bridge",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Frog Pump",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cossack Squat",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Assisted Pistol Squat",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Sissy Squat",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Nordic Hamstring Curl",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Leg Squat to Bench",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Hip Airplane",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings",
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Standing Calf Raise",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Calves"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Seated Calf Raise",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Calves"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Leg Press Calf Raise",
+    "muscleGroup": "legs",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Calf Raise",
+    "muscleGroup": "legs",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Calves"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Single-Leg Calf Raise",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Calves"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Tibialis Raise",
+    "muscleGroup": "legs",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Calves"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Goblet Squat",
+    "muscleGroup": "legs",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Reverse Lunge",
+    "muscleGroup": "legs",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Quadriceps",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Romanian Deadlift",
+    "muscleGroup": "legs",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Hamstrings",
+      "Glutes"
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Seated Dumbbell Shoulder Press",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Arnold Press",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Front Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Bent-Over Lateral Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Upright Row",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Dumbbell Press",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Leaning Lateral Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Seated Barbell Press",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Push Press",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Landmine Press",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Front Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Upright Row",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Shrug",
+    "muscleGroup": "shoulders",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Front Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Reverse Fly",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable External Rotation",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Cable Shoulder Press",
+    "muscleGroup": "shoulders",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Machine Shoulder Press",
+    "muscleGroup": "shoulders",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Machine Lateral Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Smith Machine Shoulder Press",
+    "muscleGroup": "shoulders",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Wall Slide",
+    "muscleGroup": "shoulders",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Back"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Wall Angel",
+    "muscleGroup": "shoulders",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Back"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Prone T Raise",
+    "muscleGroup": "shoulders",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Back"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Strict Press",
+    "muscleGroup": "shoulders",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Halo",
+    "muscleGroup": "shoulders",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Shoulders"
+    ],
+    "secondaryMuscles": [
+      "Core"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Incline Dumbbell Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Concentration Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Alternating Dumbbell Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cross-Body Hammer Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Zottman Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Preacher Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Reverse Dumbbell Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Wrist Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Forearms"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Reverse Wrist Curl",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Forearms"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "EZ-Bar Curl",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Reverse Barbell Curl",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Preacher Curl",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Wrist Curl",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Forearms"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Triceps Extension",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Skull Crusher",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Triceps Kickback",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Overhead Triceps Extension",
+    "muscleGroup": "arms",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "EZ-Bar Skull Crusher",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Barbell Triceps Extension",
+    "muscleGroup": "arms",
+    "equipment": "barbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Rope Triceps Pushdown",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Reverse-Grip Triceps Pushdown",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Triceps Pushdown",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Triceps Kickback",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Rope Hammer Curl",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Single-Arm Cable Curl",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Bayesian Cable Curl",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "High Cable Curl",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Cable Reverse Curl",
+    "muscleGroup": "arms",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps"
+    ],
+    "secondaryMuscles": [
+      "Forearms"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Machine Preacher Curl",
+    "muscleGroup": "arms",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Biceps",
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Machine Triceps Extension",
+    "muscleGroup": "arms",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Assisted Dip",
+    "muscleGroup": "arms",
+    "equipment": "machine",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Triceps"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Crunch",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Reverse Crunch",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Bicycle Crunch",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Sit-up",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Russian Twist",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Lying Leg Raise",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Flutter Kick",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Heel Touch",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "V-up",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Seated Knee Tuck",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Hanging Knee Raise",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Captain Chair Knee Raise",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Bear Plank",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Forearm Side Plank",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "High Plank",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Plank Shoulder Tap",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Mountain Climber",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Boat Hold",
+    "muscleGroup": "core",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Pallof Press",
+    "muscleGroup": "core",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cable Rotation",
+    "muscleGroup": "core",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kneeling Cable Crunch",
+    "muscleGroup": "core",
+    "equipment": "cable",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Ab Wheel Rollout",
+    "muscleGroup": "core",
+    "equipment": "other",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Stability Ball Crunch",
+    "muscleGroup": "core",
+    "equipment": "other",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Stability Ball Rollout",
+    "muscleGroup": "core",
+    "equipment": "other",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Medicine Ball Russian Twist",
+    "muscleGroup": "core",
+    "equipment": "other",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Side Bend",
+    "muscleGroup": "core",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Dead Bug",
+    "muscleGroup": "core",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Core"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Jumping Jack",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": [
+      "star jump",
+      "jumping jacks"
+    ]
+  },
+  {
+    "name": "High Knees",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Butt Kick",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Fast Feet",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Standing Knee Drive",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Step Jack",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Low-Impact Skater",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Skater Hop",
+    "muscleGroup": "cardio",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Treadmill Walk",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": [
+      "walking treadmill"
+    ]
+  },
+  {
+    "name": "Treadmill Run",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Incline Treadmill Walk",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Stationary Bike",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": [
+      "exercise bike",
+      "indoor cycling",
+      "spin bike"
+    ]
+  },
+  {
+    "name": "Recumbent Bike",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Elliptical",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Rowing Machine",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": [
+      "rowing",
+      "erg row",
+      "rower"
+    ]
+  },
+  {
+    "name": "Ski Erg",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Stair Climber",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Air Bike",
+    "muscleGroup": "cardio",
+    "equipment": "machine",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Brisk Walking",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": [
+      "walk",
+      "walking",
+      "power walking"
+    ]
+  },
+  {
+    "name": "Jogging",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Hiking",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Swimming",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Outdoor Cycling",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration_distance",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Jump Rope",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": [
+      "skipping",
+      "skip rope",
+      "rope skipping"
+    ]
+  },
+  {
+    "name": "Battle Rope",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Step Aerobics",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Aerobic Dance",
+    "muscleGroup": "cardio",
+    "equipment": "other",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Cardiovascular"
+    ],
+    "secondaryMuscles": [
+      "Legs"
+    ],
+    "aliases": []
+  },
+  {
+    "name": "Burpee",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Squat Thrust",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Inchworm",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Bear Crawl",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Crab Walk",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Squat to Reach",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Sprawl",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Swing",
+    "muscleGroup": "fullBody",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Clean",
+    "muscleGroup": "fullBody",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Snatch",
+    "muscleGroup": "fullBody",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Clean and Press",
+    "muscleGroup": "fullBody",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Turkish Get-up",
+    "muscleGroup": "fullBody",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Kettlebell Thruster",
+    "muscleGroup": "fullBody",
+    "equipment": "kettlebell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Thruster",
+    "muscleGroup": "fullBody",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Clean and Press",
+    "muscleGroup": "fullBody",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Snatch",
+    "muscleGroup": "fullBody",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Dumbbell Devil Press",
+    "muscleGroup": "fullBody",
+    "equipment": "dumbbell",
+    "loggingType": "sets_reps_weight",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Farmer Carry",
+    "muscleGroup": "fullBody",
+    "equipment": "dumbbell",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Suitcase Carry",
+    "muscleGroup": "fullBody",
+    "equipment": "dumbbell",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cat-Cow",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Child Pose",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Downward Dog",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Cobra Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Worlds Greatest Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": [
+      "world's greatest stretch"
+    ]
+  },
+  {
+    "name": "Hip Flexor Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Standing Hamstring Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Seated Hamstring Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Figure Four Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Butterfly Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Chest Doorway Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Thoracic Rotation",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Ankle Mobility Rock",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Deep Squat Hold",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "90-90 Hip Switch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Neck Side Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Wrist Flexor Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Shoulder Cross-Body Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Standing Quad Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  },
+  {
+    "name": "Calf Stretch",
+    "muscleGroup": "fullBody",
+    "equipment": "bodyweight",
+    "loggingType": "duration",
+    "primaryMuscles": [
+      "Full Body"
+    ],
+    "secondaryMuscles": [],
+    "aliases": []
+  }
+]

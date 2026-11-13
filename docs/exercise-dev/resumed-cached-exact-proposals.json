@@ -1,0 +1,182 @@
+[
+  {
+    "exercise": "Towel Row",
+    "choices": [
+      {
+        "id": "lPZufNTFFHQ",
+        "title": "How to perform a Towel Row",
+        "channel": "pulsed up"
+      }
+    ]
+  },
+  {
+    "exercise": "Cable Reverse Curl",
+    "choices": [
+      {
+        "id": "HwB-DevuJjU",
+        "title": "Reverse Cable Curl",
+        "channel": "ChadMollickDotCom"
+      }
+    ]
+  },
+  {
+    "exercise": "Jumping Jack",
+    "choices": [
+      {
+        "id": "c4DAnQ6DtF8",
+        "title": "Jumping Jacks",
+        "channel": "FitnessBlender"
+      }
+    ]
+  },
+  {
+    "exercise": "Ankle Circles",
+    "choices": [
+      {
+        "id": "mzTQGYGI0Ng",
+        "title": "Ankle Circles - Ask Doctor Jo",
+        "channel": "AskDoctorJo"
+      }
+    ]
+  },
+  {
+    "exercise": "Barbell Ab Rollout",
+    "choices": [
+      {
+        "id": "O-d6HC9gLcw",
+        "title": "How to : Barbell Ab Rollout - Abs Roller Exercise",
+        "channel": "Buff Dudes"
+      }
+    ]
+  },
+  {
+    "exercise": "Chair Squat",
+    "choices": [
+      {
+        "id": "GIz1C3yfE1s",
+        "title": "Squats with a Chair - Ask Doctor Jo",
+        "channel": "AskDoctorJo"
+      },
+      {
+        "id": "rvpC9QkTc3Y",
+        "title": "Chair Squat Exercise",
+        "channel": "Margaret Martin, Physical Therapist"
+      }
+    ]
+  },
+  {
+    "exercise": "Crucifix",
+    "choices": [
+      {
+        "id": "Lp-Xd81gCNE",
+        "title": "How To Do Crucifix | Exercise Demo",
+        "channel": "OriGym"
+      }
+    ]
+  },
+  {
+    "exercise": "External Rotation",
+    "choices": [
+      {
+        "id": "Y71-aZzwBfE",
+        "title": "How To Do External Rotation | Exercise Demo",
+        "channel": "OriGym"
+      }
+    ]
+  },
+  {
+    "exercise": "Full Range-Of-Motion Lat Pulldown",
+    "choices": [
+      {
+        "id": "cczFstlkvzQ",
+        "title": "Full Range-Of-Motion-Lat Pulldown",
+        "channel": "Kurdish Bodybuilding"
+      }
+    ]
+  },
+  {
+    "exercise": "Incline Hammer Curls",
+    "choices": [
+      {
+        "id": "FdzmJiIHIPw",
+        "title": "Incline Hammer Curls",
+        "channel": "mountaindog1"
+      }
+    ]
+  },
+  {
+    "exercise": "One Leg Barbell Squat",
+    "choices": [
+      {
+        "id": "JlTojfaAXBo",
+        "title": "How to Do Barbell Single Leg Squats",
+        "channel": "LIVESTRONG"
+      }
+    ]
+  },
+  {
+    "exercise": "Reverse Cable Curl",
+    "choices": [
+      {
+        "id": "HwB-DevuJjU",
+        "title": "Reverse Cable Curl",
+        "channel": "ChadMollickDotCom"
+      }
+    ]
+  },
+  {
+    "exercise": "Seated Front Deltoid",
+    "choices": [
+      {
+        "id": "CRBgpqR1jWg",
+        "title": "How To Do Seated Front Deltoid | Exercise Demo",
+        "channel": "OriGym"
+      }
+    ]
+  },
+  {
+    "exercise": "Snatch",
+    "choices": [
+      {
+        "id": "V9dJTdolGw8",
+        "title": "Learn How To Do A Snatch",
+        "channel": "PureGym"
+      }
+    ]
+  },
+  {
+    "exercise": "Split Squat Stretch",
+    "choices": [
+      {
+        "id": "hXpGSa5HYqY",
+        "title": "How to do a SPLIT SQUAT",
+        "channel": "Atomic Athlete"
+      },
+      {
+        "id": "UJWLxHAYxx4",
+        "title": "Split Squat - Legs Exercise - Bodybuilding.com",
+        "channel": "Bodybuilding.com"
+      }
+    ]
+  },
+  {
+    "exercise": "Standing Biceps Stretch",
+    "choices": [
+      {
+        "id": "G1I--Obo0eQ",
+        "title": "How To Do Standing Bicep Stretch | Stretching Demo",
+        "channel": "OriGym"
+      }
+    ]
+  },
+  {
+    "exercise": "Suspended Row",
+    "choices": [
+      {
+        "id": "X9ptLAm8fuE",
+        "title": "How to Perform a Suspended Row | Nuffield Health",
+        "channel": "Nuffield Health"
+      }
+    ]
+  }
+]

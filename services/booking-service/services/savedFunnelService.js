@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 // steps shape: [{ event: string, filters?: Record<string,string> }, ...], in
 // the order they're required to occur. Validated here (not just trusted from

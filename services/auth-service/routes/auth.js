@@ -1,6 +1,8 @@
+import exploreRoutes from '../exploration/routes.js';
 import { Router } from 'express';
+import { registerPushToken, unregisterPushToken } from '../controllers/pushTokenController.js';
 const router = Router();
-import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -33,17 +35,17 @@ router.post('/login', login);
 router.post('/refresh-token', refreshToken);
 router.post('/logout', logout);
 router.delete('/delete', verifyToken, deleteUser);
+// The path both mobile apps actually call. The customer app (since 2026-08-15)
+// and the partner app both send DELETE /api/auth/account, and this route never
+// existed — every in-app "Delete account" got a 404, and the customer app
+// then logged the user out as though it had worked. Installed builds can't be
+// patched, so the backend answers the path they already use; /delete stays
+// for anything that calls it. Same handler, same auth.
+router.delete('/account', verifyToken, deleteUser);
 // DPDPA access right (s.11) — the read counterpart of /delete above. Fans out
 // to every service holding this user's data and returns one document. Add
 // ?format=download to get it as a saved file.
 router.get('/export', verifyToken, exportMyData);
-router.post('/forgot-password', async (req, res) => {
-  // Only email/password accounts (gobhi/staff, via /admin/staff — customer
-  // and partner accounts are phone+OTP only) would ever need this. No email
-  // delivery integration exists yet, so this returns an honest "not
-  // implemented" rather than silently claiming an email was sent.
-  res.status(501).json({ error: 'Password reset isn\'t available yet — contact an admin to reset a staff account.' });
-});
 router.post('/send-otp', sendOtp);
 router.post('/verify-otp', verifyOtp);
 router.post('/verify-firebase-token', verifyFirebaseToken);
@@ -60,6 +62,12 @@ router.get('/app-config', getAppConfig);
 // Admin portal's raw config view/edit (Settings page)
 router.get('/app-config/admin', requireGobhi, getAppConfigAdmin);
 router.put('/app-config/admin', requireGobhi, updateAppConfigAdmin);
+// The flag registry itself — what the Settings page renders toggles from, so a
+// flag added server-side is reachable from the portal without also editing it
+// into a hand-maintained list there. Gobhi-only like every other admin route.
+router.get('/app-config/registry', requireGobhi, getFeatureFlagRegistry);
+// Who switched which flag, when, from what. `?flag=<name>` narrows to one flag.
+router.get('/app-config/history', requireGobhi, listAppConfigHistory);
 // Public — website launch gate, see getLaunchStatus.
 router.get('/launch-status', getLaunchStatus);
 // Admin portal's raw view/edit of the launch gate (Settings page).
@@ -78,6 +86,10 @@ router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 // Scheduled trigger (see .github/workflows) — nudges gym-linked signups
 // with no activity N days after registering.
 router.post('/internal/attendance-saas/reengagement-sweep', requireInternal, runAttendanceSaasReengagementSweep);
+// Internal: per-gym "users joined this month" counts, the numerator of the
+// attendance-SaaS monthly flat-per-user bill (wallet-service computes the
+// amount and debits the partner wallet).
+router.post('/internal/attendance-saas/joined-counts', requireInternal, countGymJoinedUsersByMonthInternal);
 // Gobhi-only: admin's attendance-SaaS member roster for one gym.
 router.get('/admin/attendance-saas/members/:gymId', requireGobhi, listAttendanceSaasMembers);
 // Partner-facing equivalent (own gym, ownership-checked, no phone) — closes
@@ -94,14 +106,13 @@ router.patch('/gym/:gymId/trainers/:trainerId', verifyToken, updateTrainerStatus
 router.get('/bank-account', verifyToken, getBankAccount);
 router.put('/bank-account', verifyToken, updateBankAccount);
 router.get('/admin/bank-account/:userId', requireGobhi, getBankAccountAdmin);
-router.post('/fcm-token', verifyToken, updateFcmToken);
-// Per-gym attendance leaderboards (booking-service) are opt-in.
+router.post('/fcm-token', verifyToken, registerPushToken);
+router.delete('/fcm-token', verifyToken, unregisterPushToken);
+// Per-gym attendance leaderboards (booking-service) are on by default; this
+// is the profile-side opt-out (no toggle on the board itself).
 router.put('/leaderboard-opt-in', verifyToken, updateLeaderboardOptIn);
-// Map collectibles (veggie pickups) -- standalone currency, no coins/gyms
-// involved. Spawn points are deterministic client-side; these just record
-// which ids this customer has found.
-router.get('/collectibles/mine', requireCustomer, listMyCollectibles);
-router.post('/collectibles/:collectibleId/collect', requireCustomer, collectCollectible);
+// Explore uses typed customer-auth errors and keeps rollback history available.
+router.use('/explore', exploreRoutes);
 
 // Pitch-deck access allowlist (moved off a hardcoded file in the website repo)
 router.post('/pitch-access/check', checkContact);

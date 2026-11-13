@@ -1,4 +1,4 @@
-const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
+export const IST_OFFSET_MS = (5 * 60 + 30) * 60000;
 const MIN_LEAD_MS = 60 * 60000;
 
 // Gym hours ("14:00") are wall-clock IST regardless of the server's own
@@ -16,8 +16,8 @@ function slotInstantUTC(date, startTime) {
 // calendar date — `booking.date` is always an IST-local date string, so
 // comparing it against a raw `new Date().toISOString()` date is wrong
 // between IST 00:00-05:29, when the UTC date is still yesterday's.
-export function todayDateStringIST() {
-  return new Date(Date.now() + IST_OFFSET_MS).toISOString().split('T')[0];
+export function todayDateStringIST(nowMs = Date.now()) {
+  return new Date(nowMs + IST_OFFSET_MS).toISOString().split('T')[0];
 }
 
 // A slot is bookable only if it starts at least MIN_LEAD_MS from now.
@@ -63,6 +63,24 @@ export function isBeforeSessionWindow(date, startTime) {
 
 export function isSessionEnded(date, endTime) {
   return Date.now() > slotInstantUTC(date, endTime);
+}
+
+// True once `graceMs` has passed since the slot ended. `nowMs` is injectable
+// so the auto-complete sweep's cut-off can be tested without moving the clock.
+export function sessionEndedBefore(date, endTime, graceMs, nowMs = Date.now()) {
+  return nowMs > slotInstantUTC(date, endTime) + graceMs;
+}
+
+// Milliseconds from `nowMs` until the slot starts (negative once it has).
+export function msUntilSlot(date, startTime, nowMs = Date.now()) {
+  return slotInstantUTC(date, startTime) - nowMs;
+}
+
+// "18:00" -> "6:00 PM", "09:30" -> "9:30 AM" - how a reminder says the time.
+export function formatSlotTime(time) {
+  const [h, m] = time.split(':').map(Number);
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 // Computes a replacement startTime/endTime (same duration as the original

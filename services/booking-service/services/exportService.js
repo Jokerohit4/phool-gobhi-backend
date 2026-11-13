@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
 
 // DPDPA access right (s.11) for bookings, called by auth-service's
 // platform-wide export.
@@ -11,10 +10,11 @@ const prisma = new PrismaClient();
 // they describe keeps the right to see them. An access right that skipped
 // exactly the data we refuse to delete would be the wrong way round.
 export async function buildExportService(userId) {
-  const [bookings, warnings, memberAttendance] = await Promise.all([
+  const [bookings, warnings, memberAttendance, independentCheckIns] = await Promise.all([
     prisma.booking.findMany({ where: { customerId: userId }, orderBy: { createdAt: 'asc' } }),
     prisma.attendanceWarning.findMany({ where: { customerId: userId }, orderBy: { createdAt: 'asc' } }),
     prisma.memberAttendance.findMany({ where: { customerId: userId }, orderBy: { checkedInAt: 'asc' } }),
+    prisma.independentCheckIn.findMany({ where: { customerId: userId }, orderBy: { checkedInAt: 'asc' } }),
   ]);
 
   return {
@@ -49,6 +49,14 @@ export async function buildExportService(userId) {
     })),
     // Attendance-SaaS check-ins that never had a booking behind them.
     memberCheckins: memberAttendance.map((m) => ({ at: m.checkedInAt, gymId: m.gymId, date: m.date })),
+    // Non-partner gym check-ins. unclaimedGymId is a gym-service UnclaimedGym
+    // id, not a Gym id — named in full here so the export is self-describing
+    // rather than ambiguous to whoever reads it.
+    independentCheckins: independentCheckIns.map((c) => ({
+      at: c.checkedInAt,
+      unclaimedGymId: c.unclaimedGymId,
+      date: c.date,
+    })),
     // Commission and partner-share figures are deliberately omitted: they are
     // the gym's commercial terms, not the customer's personal data. The
     // amount the customer actually paid is included above.

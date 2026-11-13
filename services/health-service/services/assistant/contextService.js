@@ -1,0 +1,434 @@
+import { calendarDayNumberIST, calendarPartsIST } from '../../utils/sessionDay.js';
+import prisma from '../../db/prisma.js';
+import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
+import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
+import { tierOf, orderMemories } from './memoryService.js';
+import { summariseHomeSetup } from '../homeSetup.js';
+import { summariseForCoach } from '../healthProfile.js';
+import { HEALTH_PROFILE_POLICY_VERSION } from '../healthProfileConsentService.js';
+import { quoteUserText, QUOTE_NOTE } from './guardrails.js';
+import { isWellnessProfile } from '../../utils/persona.js';
+
+
+// Hard ceiling on the user-context block. Without one, a user with two years
+// of history quietly makes every one of their messages the most expensive
+// message on the platform.
+//
+// Sized so the worst case fits without truncation ever firing: every memory key
+// at its cap (25 rows x 80 chars = ~2,500) plus attendance and five recent
+// workouts. Truncation below is a backstop now, not something the design leans
+// on to stay inside budget — which matters because the thing it would cut is a
+// user's own remembered facts.
+// +200 over the memory-only worst case for the "How they train" line below,
+// which is bounded (fixed phrases, no free text) at well under that; +250 for
+// the "Home setup" line (onboarding audit P2), bounded the same way — every
+// equipment chip plus the longest space phrase is ~230 characters.
+// +1,500 for the health profile (gamified onboarding v2, 2026-10-01): the
+// allergy safety line at its cap (12 x 40 chars + phrasing, ~560) and the
+// lifestyle line at its worst (every phrase plus a 60-char hometown, ~900).
+// +10,000 for up to 20 consented, user-stated concerns (500 characters each),
+// quoted as data so they cannot become prompt instructions.
+// +150 for the quoted-text note and the «» around each memory value (B16).
+const MAX_CONTEXT_CHARS = 15500;
+const ATTENDANCE_WINDOW_HOURS = 24 * 30;
+const RECENT_SESSION_LIMIT = 10;
+
+function pluralise(n, one, many) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+// Attendance timestamps are UTC, but a training pattern only means anything in
+// the user's own wall clock. A 7am IST session is 01:30 UTC — read as UTC it
+// lands in "late night" AND on the previous weekday, so both halves of the
+// pattern would be wrong. Everything below is computed from IST parts.
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Below this many distinct days, a day-of-week or time-of-day "pattern" is
+// noise, and stating it as fact makes the coach confidently wrong about the
+// one thing it is supposed to know better than the user.
+const MIN_DAYS_FOR_PATTERN = 6;
+
+function istParts(value) {
+  return calendarPartsIST(value);
+}
+
+function timeBucket(hour) {
+  if (hour < 5) return 'late at night';
+  if (hour < 11) return 'in the mornings';
+  if (hour < 16) return 'around midday';
+  if (hour < 21) return 'in the evenings';
+  return 'late at night';
+}
+
+/// Shape, not rows. The model needs to know how consistent this person has
+/// been AND when they actually train — habit coaching is pattern work, and
+/// "11 days in 30" cannot tell you they always miss Thursdays.
+///
+/// Still an aggregate: no dates, no gym, nothing linkable. A day-of-week and
+/// time-of-day shape is arguably *less* identifying than thirty raw
+/// timestamps, while being the part that makes the advice specific.
+/// Exported for the tests: the alternative is standing up a Prisma mock and a
+/// cross-service HTTP stub to assert one sentence.
+export function summariseAttendance(events) {
+  if (!events.length) return 'No gym check-ins recorded in the last 30 days.';
+
+  // One entry per calendar day — two sessions in a day is one day of training,
+  // and counting it twice would skew every ratio below.
+  const byDay = new Map();
+  for (const e of events) {
+    const p = istParts(e.attendedAt);
+    if (!byDay.has(p.ymd)) byDay.set(p.ymd, p);
+  }
+  const days = [...byDay.keys()].sort();
+  const n = days.length;
+  const weeks = ATTENDANCE_WINDOW_HOURS / 24 / 7;
+  const perWeek = Math.round((n / weeks) * 10) / 10;
+
+  const sentences = [
+    `Trained on ${pluralise(n, 'day', 'days')} in the last 30 (about ${perWeek} a week).`,
+  ];
+
+  if (n >= MIN_DAYS_FOR_PATTERN) {
+    const dowCounts = new Array(7).fill(0);
+    const buckets = new Map();
+    for (const p of byDay.values()) {
+      dowCounts[p.dow] += 1;
+      const b = timeBucket(p.hour);
+      buckets.set(b, (buckets.get(b) || 0) + 1);
+    }
+
+    // Days they actually repeat on, most-frequent first, then re-ordered
+    // Mon-first so it reads like a week rather than a ranking.
+    const regular = dowCounts
+      .map((count, dow) => ({ count, dow }))
+      .filter((d) => d.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .sort((a, b) => ((a.dow + 6) % 7) - ((b.dow + 6) % 7))
+      .map((d) => DAY_NAMES[d.dow]);
+
+    const [topBucket, topCount] = [...buckets.entries()].sort((a, b) => b[1] - a[1])[0];
+    // Only claim a time-of-day habit when it actually dominates; someone split
+    // evenly between mornings and evenings has no such habit to report.
+    const bucketPhrase = topCount / n >= 0.6 ? `, mostly ${topBucket}` : '';
+
+    if (regular.length) {
+      sentences.push(`Usually ${regular.join(', ')}${bucketPhrase}.`);
+    } else if (bucketPhrase) {
+      sentences.push(`Trains${bucketPhrase.slice(2)}.`);
+    }
+
+    // The most actionable single number for habit work: how long they go
+    // before falling off. Gaps are between training days inside the window.
+    let longestGap = 0;
+    for (let i = 1; i < days.length; i++) {
+      const gap = Math.round(
+        (Date.parse(days[i]) - Date.parse(days[i - 1])) / 86400000
+      );
+      if (gap > longestGap) longestGap = gap;
+    }
+    if (longestGap >= 3) {
+      sentences.push(`Longest break ${pluralise(longestGap, 'day', 'days')}.`);
+    }
+  }
+
+  const lastVisit = new Date(
+    Math.max(...events.map((e) => new Date(e.attendedAt).getTime()))
+  );
+  // IST calendar days, not elapsed 24h blocks — the same wall-clock rule as
+  // the pattern above. Elapsed hours told the coach a 7am-yesterday session
+  // was "today" for anyone asking between midnight and 7am IST (found
+  // 2026-10-01 at 00:12 IST, when the recency test failed on the clock).
+  const istDay = (ms) => calendarDayNumberIST(ms);
+  const daysAgo = Math.max(0, istDay(Date.now()) - istDay(lastVisit.getTime()));
+  const when =
+    daysAgo === 0 ? 'today' : daysAgo === 1 ? 'yesterday' : `${daysAgo} days ago`;
+  sentences.push(`Last session ${when}.`);
+
+  return sentences.join(' ');
+}
+
+const LOCATION_PHRASES = {
+  home: 'at home',
+  gym: 'at a gym',
+  fitness_centre: 'at a fitness centre',
+  sports: 'playing sports',
+  other: 'somewhere other than a gym or home',
+};
+const FREQUENCY_PHRASES = {
+  one_two: '1-2 times a week',
+  three_four: '3-4 times a week',
+  five_plus: '5-6 times a week',
+};
+const FREE_TIME_PHRASES = {
+  morning: 'mornings',
+  afternoon: 'afternoons',
+  evening: 'evenings',
+  late_night: 'late nights',
+  flexible: 'it varies',
+};
+export const GOAL_PHRASES = {
+  weight_loss: 'weight loss',
+  muscle_gain: 'muscle gain',
+  general_fitness: 'general fitness',
+  flexibility_yoga: 'flexibility and yoga',
+  sports_training: 'sports training',
+  rehabilitation: 'getting back into fitness after a break',
+};
+
+/// What onboarding told us about how this person trains, as one line.
+///
+/// Before this, the coach knew nothing onboarding asked: a user who said "I
+/// train at home" and then asked what to do today could be sent to a squat
+/// rack they don't have. It's a stable fact, so it sits right after the safety
+/// block — near the top, inside the part of the prompt that is byte-identical
+/// between turns and therefore stays in the provider's prefix cache.
+///
+/// Enum answers only, mapped to fixed phrases. trainingLocationOther is free
+/// text typed at signup and deliberately NOT passed through: it was collected
+/// for a human to read, not to be sent to a model provider.
+/// Exported for the tests.
+export function summariseTrainingProfile(profile) {
+  if (!profile) return null;
+  const bits = [];
+  if (isWellnessProfile(profile)) {
+    bits.push('Chose daily wellbeing tracking and does not want workout or gym plans unless they ask for them.');
+    return `How they want to use the app (from onboarding): ${bits.join(' ')}`;
+  }
+  const where = LOCATION_PHRASES[profile.trainingLocationPref];
+  if (profile.currentlyWorksOut === false) {
+    bits.push(where ? `Not training yet; would rather train ${where}.` : 'Not training yet.');
+  } else if (profile.currentlyWorksOut === true) {
+    if (where) bits.push(`Trains ${where}.`);
+    if (profile.trainingLocationPref === 'home') {
+      // The one that changes the answer most: no gym, so no machines, and
+      // any plan must work with what is at home unless they say otherwise.
+      bits.push('Suggest workouts that need no gym equipment unless they mention having some.');
+    }
+  }
+  // Plain labels, not an allowlist: the sports catalog (auth-service) grows with venues.
+  const sports = (Array.isArray(profile.sportsPlayed) ? profile.sportsPlayed : [])
+    .filter((k) => typeof k === 'string' && k !== 'other')
+    .map((k) => k.replace(/_/g, ' '));
+  if (sports.length) bits.push(`Plays ${sports.join(', ')}.`);
+  const freq = FREQUENCY_PHRASES[profile.weeklyFrequencyIntent];
+  if (freq) bits.push(`Usually trains ${freq}.`);
+  const free = FREE_TIME_PHRASES[profile.freeTimeWindow];
+  if (free) bits.push(`Usually free: ${free}.`);
+  const goals = (profile.fitnessGoals || []).map((g) => GOAL_PHRASES[g]).filter(Boolean);
+  if (goals.length) {
+    bits.push(`Goals: ${goals.join(', ')}.`);
+    // A rule, not just a fact: workouts are tailored to these goals by default.
+    bits.push('Unless they ask otherwise, tailor workout suggestions to these goals.');
+  }
+  if (!bits.length) return null;
+  return `How they train (from onboarding): ${bits.join(' ')}`;
+}
+
+const WELLNESS_FOCUS_PHRASES = {
+  sleep: 'sleep',
+  energy: 'daytime energy',
+  balanced_eating: 'balanced meals',
+  hydration: 'hydration',
+  mood_stress: 'mood and stress check-ins',
+  digestion: 'digestion and gut comfort',
+  daily_movement: 'everyday movement',
+};
+const WELLNESS_DAY_PHRASES = {
+  mostly_seated: 'mostly seated',
+  mixed: 'a mix of sitting and moving',
+  mostly_on_feet: 'on their feet most of the day',
+  variable_schedule: 'a variable daily schedule',
+};
+const WELLNESS_SLEEP_PHRASES = {
+  under_five: 'under 5 hours',
+  five_to_six: '5–6 hours',
+  six_to_seven: '6–7 hours',
+  seven_to_nine: '7–9 hours',
+  over_nine: 'over 9 hours',
+  varies: 'varies',
+};
+
+/// Fixed, non-diagnostic summary of optional wellness onboarding answers.
+export function summariseWellnessProfile(profile) {
+  if (!isWellnessProfile(profile)) return null;
+  const bits = [];
+  const focuses = (profile.wellnessFocuses || [])
+    .map((focus) => WELLNESS_FOCUS_PHRASES[focus])
+    .filter(Boolean);
+  if (focuses.length) bits.push(`Focus areas: ${focuses.join(', ')}.`);
+  const day = WELLNESS_DAY_PHRASES[profile.wellnessDayPattern];
+  if (day) bits.push(`Typical day: ${day}.`);
+  const sleep = WELLNESS_SLEEP_PHRASES[profile.wellnessSleepPattern];
+  if (sleep) bits.push(`Self-reported usual sleep: ${sleep}.`);
+  if (!bits.length) return null;
+  return `Daily wellbeing context from onboarding (self-reported preferences, not diagnoses): ${bits.join(' ')}`;
+}
+
+/// Reduced by a deterministic formatter rather than a second model call.
+/// Summarising with the model would double the cost and latency of every
+/// message, and make the context non-reproducible for anyone debugging an
+/// answer later.
+function summariseSessions(sessions) {
+  if (!sessions.length) return 'No logged workouts yet.';
+  const lines = sessions.slice(0, 5).map((s) => {
+    const date = s.startedAt.toISOString().slice(0, 10);
+    const names = (s.exercises || [])
+      .map((e) => e.exercise?.name)
+      .filter(Boolean)
+      .slice(0, 4);
+    const setCount = (s.exercises || []).reduce(
+      (n, e) => n + (e.sets?.length || 0),
+      0
+    );
+    return `- ${date}: ${names.join(', ') || 'workout'} (${pluralise(setCount, 'set', 'sets')})`;
+  });
+  return `Recent workouts:\n${lines.join('\n')}`;
+}
+
+/// Everything the model is told about this user, assembled fresh each turn.
+///
+/// Injuries come from PersonalisationProfile.injuryZones — the field that
+/// already exists and already has a consent gate — rather than being collected
+/// a second time in chat. One place to revoke, one place to erase.
+export async function buildUserContextService(userId) {
+  const [events, sessions, personalisation, memories, weeklyGoal, authProfile] = await Promise.all([
+    fetchAttendanceSince(ATTENDANCE_WINDOW_HOURS, { userId }),
+    prisma.workoutSession.findMany({
+      where: { userId, endedAt: { not: null } },
+      orderBy: { startedAt: 'desc' },
+      take: RECENT_SESSION_LIMIT,
+      include: { exercises: { include: { exercise: true, sets: true } } },
+    }),
+    prisma.personalisationProfile.findUnique({ where: { userId } }),
+    // No orderBy: orderMemories below imposes the stable (tier, key, id) order
+    // the prompt needs, and ordering by updatedAt here would only reshuffle the
+    // block every time a fact was restated — breaking the cached prefix.
+    prisma.assistantMemory.findMany({ where: { userId } }),
+    prisma.weeklyGoal.findUnique({ where: { userId } }).catch(() => null),
+    // Best-effort (returns null on failure): an unreachable auth-service costs
+    // the coach one line of context, never the answer.
+    fetchUserProfileInternal(userId),
+  ]);
+  // The health profile and the medication COUNT (never the names). Read
+  // defensively: these tables are newer than every other read here, and a
+  // missing row or a failed read costs the coach a line, never the answer.
+  const optional = (q) => (q ? q.catch(() => null) : Promise.resolve(null));
+  const [healthProfile, medicationCount, healthProfileConsent] = await Promise.all([
+    optional(prisma.healthProfile?.findUnique({ where: { userId } })),
+    optional(prisma.medicationReminder?.count({ where: { userId, active: true } })),
+    optional(prisma.healthProfileConsent?.findUnique({ where: { userId } })),
+  ]);
+  const profileLines = summariseForCoach(healthProfile, { medicationCount: medicationCount || 0 });
+  const mayShareHealthConcerns =
+    healthProfileConsent &&
+    !healthProfileConsent.revokedAt &&
+    healthProfileConsent.policyVersion === HEALTH_PROFILE_POLICY_VERSION;
+  const personalIssues = mayShareHealthConcerns
+    ? (await optional(
+        prisma.healthCondition?.findMany({
+          where: { userId, source: 'user_stated' },
+          orderBy: { createdAt: 'asc' },
+          select: { label: true },
+        }),
+      )) || []
+    : [];
+
+  // Every memory, every turn — no retrieval step.
+  //
+  // KEY_POLICY caps a user at 25 rows of 80 characters, so the whole store is
+  // ~2,500 characters at its absolute worst and simply fits. Selecting from it
+  // would be machinery for a problem the caps already solve, and on this
+  // provider it actively costs more than it saves: a memory block that varies
+  // with the message breaks the cached prompt prefix, moving everything after
+  // it from half-price-and-rate-limit-exempt to full price. It would also add
+  // a way to silently miss an allergy, which is worth no saving at all.
+  //
+  // Order is stable (tier, key, id) so the block is byte-identical between
+  // turns and that prefix keeps caching.
+  const ordered = orderMemories(memories);
+  const byTier = (t) => ordered.filter((m) => tierOf(m.key) === t);
+  // Memory values are the user's own words (extracted from chat), so they go
+  // in as quoted data with a hard cap — never as text the model could read as
+  // an instruction (B16). The key is ours, from KEY_POLICY.
+  const renderMemories = (rows) =>
+    rows.map((m) => `- ${m.key}: ${quoteUserText(m.value, 120)}`).join('\n');
+
+  const safety = byTier(1);
+  const parts = [];
+  if (safety.length) {
+    parts.push(`Important — they have told the assistant:\n${renderMemories(safety)}`);
+  }
+  // Allergies the user declared on their health profile sit with the safety
+  // memories, at the very front: a missed allergy is the one mistake here
+  // that can hurt someone.
+  if (profileLines.safety) parts.push(profileLines.safety);
+  if (personalIssues.length) {
+    parts.push(
+      `Long-term health concerns the user chose to share (unverified, not diagnoses): ${personalIssues
+        .map((issue) => quoteUserText(issue.label, 500))
+        .join('; ')}. Use this only as personal context; do not infer a diagnosis or recommend treatment.`,
+    );
+  }
+  const training = summariseTrainingProfile(authProfile);
+  if (training) parts.push(training);
+  const wellness = summariseWellnessProfile(authProfile);
+  if (wellness) parts.push(wellness);
+  // Right after "how they train": both are stable facts, so both stay in the
+  // byte-identical (cached) front of the prompt. Fixed phrases only.
+  const homeSetup = summariseHomeSetup(personalisation);
+  if (homeSetup) parts.push(homeSetup);
+  // Stable facts too, so they stay in the cached front of the prompt. This
+  // includes the substance answers — the user's explicit choice, so the coach
+  // can give advice that fits their actual life. "Prefer not to say" renders
+  // nothing (see summariseForCoach).
+  if (profileLines.lifestyle) parts.push(profileLines.lifestyle);
+  parts.push(summariseAttendance(events), summariseSessions(sessions));
+
+  if (weeklyGoal?.sessionsPerWeek) {
+    parts.push(`Weekly goal: ${pluralise(weeklyGoal.sessionsPerWeek, 'session', 'sessions')}.`);
+  }
+  if (personalisation?.experienceLevel) {
+    parts.push(`Experience: ${personalisation.experienceLevel}.`);
+  }
+  if (personalisation?.injuryZones?.length) {
+    parts.push(`Areas they have flagged as sensitive: ${personalisation.injuryZones.join(', ')}.`);
+  }
+  // Tiers 2 and 3 at the end. Nothing is expected to be cut now that the
+  // budget fits the worst case, but if a future change makes truncation bite,
+  // it should bite preferences rather than the safety block above.
+  const rest = [...byTier(2), ...byTier(3)];
+  if (rest.length) {
+    parts.push(`Things they have told the assistant:\n${renderMemories(rest)}`);
+  }
+
+  // Stated once, before any quoted user text, and fixed wording, so the
+  // cached prefix stays byte-identical.
+  if (memories.length || personalIssues.length) parts.unshift(QUOTE_NOTE);
+
+  let text = parts.join('\n');
+  if (text.length > MAX_CONTEXT_CHARS) {
+    // Truncate rather than drop a whole section: losing the tail of a memory
+    // list is better than silently losing attendance, which is the part that
+    // makes answers specific to this person.
+    text = `${text.slice(0, MAX_CONTEXT_CHARS)}…`;
+  }
+
+  return {
+    text,
+    // Counts and ids only — never the content. An audit trail that copies the
+    // sensitive rows it audits has doubled the exposure it exists to control,
+    // which is the same reasoning HealthDataAuditLog is built on.
+    audit: {
+      attendanceEvents: events.length,
+      workoutSessions: sessions.length,
+      injuryZones: personalisation?.injuryZones?.length ?? 0,
+      memories: memories.length,
+      onboardingProfile: training ? 1 : 0,
+      homeSetup: homeSetup ? 1 : 0,
+      healthProfile: (profileLines.safety ? 1 : 0) + (profileLines.lifestyle ? 1 : 0),
+      personalIssues: personalIssues.length,
+      contextChars: text.length,
+    },
+  };
+}

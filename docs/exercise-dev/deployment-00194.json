@@ -1,0 +1,13 @@
+{
+  "target": "health-service-dev",
+  "previousRevision": "health-service-dev-00192-nid",
+  "stage": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-dev-t6_rt0gg",
+  "sourceSha256": "966343be2ce016008cfab537d5bc0f4d38403cfe31c9f4277d104d2450b52369",
+  "environmentSha256": "d88d12c5f2bb63127498e4548447e9a1a12dba522b33f80dd67d968c2827a6f0",
+  "serviceAccount": "1077801427223-compute@developer.gserviceaccount.com",
+  "taggedRevision": "health-service-dev-00194-fij",
+  "taggedUrl": "https://exercises-check---health-service-dev-pwixdiy6va-el.a.run.app",
+  "bindingsPreserved": true,
+  "promotedToDev": true,
+  "verifiedAt": "2026-11-06T11:38:06.659719+00:00"
+}

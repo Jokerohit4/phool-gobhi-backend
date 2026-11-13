@@ -1,0 +1,41 @@
+{
+  "Band Hip Adductions": {
+    "youtubeVideoId": "Vce3tIYpzhc",
+    "reason": "Physical therapist teaches anchored standing band hip adduction with the band on the leg nearest the anchor and the leg moving inward. Canonical source photos and target muscles confirm adduction; the incompatible outward-movement source text is corrected separately. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Band Assisted Pull-Up": {
+    "youtubeVideoId": "4yE-XGDWJPg",
+    "reason": "Instructor teaches securing a looped resistance band to the pull-up bar and performing assisted pull-ups. Filmed support is under the foot; written source uses the bent knee in the loop. This band-support variation is recorded explicitly; no counterweight-machine substitution. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Ankle Circles": {
+    "youtubeVideoId": "jedIfZqZpVM",
+    "reason": "Fitness instructor teaches standing ankle circles with the foot unloaded, matching the standing canonical ankle-mobility activity. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Calf Press": {
+    "youtubeVideoId": "WvFjkJzOA_o",
+    "reason": "Coach teaches the seated horizontal calf-extension machine with forefeet on the platform and controlled ankle movement, matching the canonical Calf Press machine setup. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Cable Preacher Curl": {
+    "youtubeVideoId": "NplhX5NBgi0",
+    "reason": "Coach teaches the low-cable preacher curl with the upper arm supported on an incline pad. Footage demonstrates one arm; publisher instructions explicitly discuss a wider bench for the bilateral version. This unilateral/bilateral support variation is recorded rather than claiming both arms appear simultaneously. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Cable Wrist Curl": {
+    "youtubeVideoId": "o8Bc88IbyNY",
+    "reason": "Instructor teaches a seated low-pulley palms-up wrist curl with the forearms supported and wrist flexion isolated. Filmed forearm support is a padded bench attachment rather than the source's thighs; this support-surface variation is recorded explicitly. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Cable Chest Press": {
+    "youtubeVideoId": "UJL1YgWL6Rg",
+    "reason": "Coach teaches a seated dual-cable chest press on an incline bench. The canonical source explicitly permits incline/decline execution and uses the same bench-supported cable press, so this is an allowed setup rather than the rejected standing press. Four primary storyboard frames inspected; English captions and playable embed verified.",
+    "contactSheet": "resume-bands-cables-contact.jpg"
+  },
+  "Bench Jump": {
+    "youtubeVideoId": "hxldG9FX4j4",
+    "reason": "Existing reviewed coach tutorial teaches a two-foot box jump, controlled landing and dismount. The canonical Bench Jump source explicitly permits a box or bench and specifies the same jump/landing pattern. Actual publisher metadata and English-caption evidence are retained. No claim of new video hosting or a different loaded exercise."
+  }
+}

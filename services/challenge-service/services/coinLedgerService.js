@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../db/prisma.js';
+import { track } from '../utils/analytics.js';
 
 // Mirrors wallet-service's credit/debit ledger pattern exactly (same
 // idempotencyKey @unique + atomic check-and-decrement + upsert-on-credit /
@@ -22,12 +22,55 @@ async function alreadyApplied(userId, idempotencyKey) {
   return serializeBalance(await prisma.coinBalance.findUnique({ where: { userId } }));
 }
 
+// The actual atomic decrement, factored out so a caller that already holds
+// its own transaction (e.g. coinCatalogService's customer-redemption path,
+// where an inventory-cap check and the coin debit must commit or fail
+// together as one unit) can run it inside THAT transaction instead of
+// opening a second, nested one — Prisma's interactive transactions don't
+// nest, and a debit that committed separately from the cap check it was
+// supposed to be conditioned on would defeat the point of checking at all.
+//
+// No idempotency pre-check in here: the caller's own transaction is the
+// unit of retry and idempotency. A duplicate call still can't double-debit
+// (the same atomic updateMany guard applies), it just surfaces as
+// "Insufficient coins" or a unique-constraint error on the ledger insert
+// instead of a clean early return — which is fine, because a caller with
+// its own transaction also has its own idempotency check upstream (see
+// redeemCatalogItemByUserService).
+//
+// Deliberately NOT tracked here: this runs inside the caller's transaction,
+// which may still roll back, so an event emitted from in here could describe
+// a debit that never committed. debitCoinsService tracks the same movement
+// once its own transaction commits, and the redemption path is covered by
+// coins_redeemed.
+export async function debitCoinsInTx(tx, userId, amount, description, idempotencyKey = null) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('amount must be a positive finite number');
+  }
+  // Atomic check-and-decrement under the row lock — the balance can't go
+  // negative even under concurrent debits, because the WHERE clause and the
+  // decrement happen in one statement.
+  const { count } = await tx.coinBalance.updateMany({
+    where: { userId, balance: { gte: amount } },
+    data: { balance: { decrement: amount } },
+  });
+  if (count === 0) throw new Error('Insufficient coins');
+  const updated = await tx.coinBalance.findUnique({ where: { userId } });
+  await tx.coinLedgerEntry.create({
+    data: { userId, type: 'debit', amount, description, idempotencyKey },
+  });
+  return updated;
+}
+
 export async function creditCoinsService(userId, amount, description, idempotencyKey = null) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('amount must be a positive finite number');
   }
   const already = await alreadyApplied(userId, idempotencyKey);
-  if (already) return already;
+  if (already) {
+    track('coins_credited', userId, { amount, balance_after: already.balance, replayed: true });
+    return already;
+  }
   try {
     const updated = await prisma.$transaction(async (tx) => {
       await tx.coinBalance.upsert({ where: { userId }, update: {}, create: { userId, balance: 0 } });
@@ -40,40 +83,36 @@ export async function creditCoinsService(userId, amount, description, idempotenc
       });
       return updated;
     });
-    return serializeBalance(updated);
+    const serialized = serializeBalance(updated);
+    track('coins_credited', userId, { amount, balance_after: serialized.balance, replayed: false });
+    return serialized;
   } catch (err) {
-    if (idempotencyKey && err.code === 'P2002') return alreadyApplied(userId, idempotencyKey);
+    if (idempotencyKey && err.code === 'P2002') {
+      const raced = await alreadyApplied(userId, idempotencyKey);
+      if (raced) track('coins_credited', userId, { amount, balance_after: raced.balance, replayed: true });
+      return raced;
+    }
     throw err;
   }
 }
 
 export async function debitCoinsService(userId, amount, description, idempotencyKey = null) {
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error('amount must be a positive finite number');
-  }
   const already = await alreadyApplied(userId, idempotencyKey);
-  if (already) return already;
+  if (already) {
+    track('coins_debited', userId, { amount, balance_after: already.balance, replayed: true });
+    return already;
+  }
   try {
-    const updated = await prisma.$transaction(async (tx) => {
-      const balance = await tx.coinBalance.findUnique({ where: { userId } });
-      if (!balance) throw new Error('Coin balance not found');
-      // Atomic check-and-decrement under the row lock — same race guard as
-      // wallet-service's debitWalletService, needed for the same reason
-      // (two concurrent redemptions must not both pass a stale balance read).
-      const { count } = await tx.coinBalance.updateMany({
-        where: { userId, balance: { gte: amount } },
-        data: { balance: { decrement: amount } },
-      });
-      if (count === 0) throw new Error('Insufficient coins');
-      const updated = await tx.coinBalance.findUnique({ where: { userId } });
-      await tx.coinLedgerEntry.create({
-        data: { userId, type: 'debit', amount, description, idempotencyKey },
-      });
-      return updated;
-    });
-    return serializeBalance(updated);
+    const updated = await prisma.$transaction((tx) => debitCoinsInTx(tx, userId, amount, description, idempotencyKey));
+    const serialized = serializeBalance(updated);
+    track('coins_debited', userId, { amount, balance_after: serialized.balance, replayed: false });
+    return serialized;
   } catch (err) {
-    if (idempotencyKey && err.code === 'P2002') return alreadyApplied(userId, idempotencyKey);
+    if (idempotencyKey && err.code === 'P2002') {
+      const raced = await alreadyApplied(userId, idempotencyKey);
+      if (raced) track('coins_debited', userId, { amount, balance_after: raced.balance, replayed: true });
+      return raced;
+    }
     throw err;
   }
 }
@@ -89,4 +128,57 @@ export async function getCoinLedgerService(userId, limit = 50) {
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
+}
+
+// --- Reward moments ("while you were away") -------------------------------
+//
+// A credit is a celebration the person should get to see: the wheel after a
+// log. The app shows it as soon as the log's reply lands, but a slow request,
+// a closed app or a lost reply can lose that moment. These two functions let
+// the app list what was credited but never shown, and mark it shown.
+//
+// Only activity rewards count. Refunds, redemptions and the like are credits
+// too but are not celebrations, so the list is an allow-list of the key
+// prefixes the activity credits use.
+export const REWARD_MOMENT_KEY_PREFIXES = [
+  'workout-credit:',
+  'workout-photo-',
+  'routine:',
+  'health-profile:',
+  'health-weekly-consistency:',
+];
+
+// Older than this and it is no longer news.
+const UNREVEALED_WINDOW_DAYS = 3;
+
+export async function getUnrevealedRewardsService(userId, { now = new Date(), limit = 20 } = {}) {
+  const since = new Date(now.getTime() - UNREVEALED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const entries = await prisma.coinLedgerEntry.findMany({
+    where: {
+      userId,
+      type: 'credit',
+      revealedAt: null,
+      createdAt: { gte: since },
+      OR: REWARD_MOMENT_KEY_PREFIXES.map((prefix) => ({ idempotencyKey: { startsWith: prefix } })),
+    },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+    select: { id: true, amount: true, description: true, createdAt: true },
+  });
+  return { coins: entries.reduce((sum, e) => sum + e.amount, 0), entries };
+}
+
+// With ids: marks exactly those. Without: marks every credit made up to now,
+// which is what the app sends once its reveal queue has drained.
+export async function markRewardsRevealedService(userId, { ids, now = new Date() } = {}) {
+  const where = {
+    userId,
+    type: 'credit',
+    revealedAt: null,
+    ...(Array.isArray(ids)
+      ? { id: { in: ids.filter((id) => Number.isInteger(id)) } }
+      : { createdAt: { lte: now } }),
+  };
+  const { count } = await prisma.coinLedgerEntry.updateMany({ where, data: { revealedAt: now } });
+  return { revealed: count };
 }

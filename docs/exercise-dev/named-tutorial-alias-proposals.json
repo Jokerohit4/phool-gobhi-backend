@@ -1,0 +1,20 @@
+[
+  {
+    "exercise": "Leg Extension",
+    "equipment": "machine",
+    "fromExercise": "Leg Extensions",
+    "id": "yR_LqZYSIgM"
+  },
+  {
+    "exercise": "Jumping Jack",
+    "equipment": "bodyweight",
+    "fromExercise": "Star Jump",
+    "id": "h6wu4_LOhyU"
+  },
+  {
+    "exercise": "Upright Cable Row",
+    "equipment": "cable",
+    "fromExercise": "Cable Upright Row",
+    "id": "FfyheD6NZvU"
+  }
+]

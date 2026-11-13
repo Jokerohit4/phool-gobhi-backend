@@ -18,6 +18,8 @@ import {
   redeemGiftDayInternal,
   processLapsedSubscriptionsInternal,
   reconcilePendingRazorpayOrdersInternal,
+  creditReferral,
+  reconcileReferralsInternal,
   getGiftBonusPayoutsAnalytics,
   getMySubscriptions,
   ackGiftReveal,
@@ -33,6 +35,10 @@ import {
   getPendingBankSettlements,
   settleBankSettlements,
   getMyBankSettlements,
+  getAttendanceSaasBill,
+  getAttendanceSaasBills,
+  applyAttendanceSaasBill,
+  getMyAttendanceSaasBill,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -75,6 +81,11 @@ router.get('/internal/subscriptions/active', requireInternal, getActiveSubscript
 router.post('/internal/subscriptions/:id/redeem-gift-day', requireInternal, redeemGiftDayInternal); // booking-service, after a gift-day-covered booking
 router.post('/internal/subscriptions/process-lapsed', requireInternal, processLapsedSubscriptionsInternal); // periodic sweep trigger
 router.post('/internal/orders/reconcile-pending', requireInternal, reconcilePendingRazorpayOrdersInternal); // Razorpay top-up reconciliation trigger
+// Referral payouts — the single writer of referral-credit-* keys (the generic
+// /:userId/credit route rejects them). Cap + `bonus` type enforced in
+// referralService.js; reconcile repairs half-paid pairs hourly.
+router.post('/internal/referrals/credit', requireInternal, creditReferral); // booking-service (first_booking) / health-service (home_days) trigger
+router.post('/internal/referrals/reconcile', requireInternal, reconcileReferralsInternal);
 router.post('/internal/subscriptions/has-purchased-batch', requireInternal, getCustomerIdsWithPurchasedSubscription); // auth-service's attendance-SaaS re-engagement sweep
 
 // Attendance-SaaS bank settlements — a separate ledger from Wallet above;
@@ -85,5 +96,12 @@ router.post('/internal/bank-settlements/record', requireInternal, recordPendingB
 router.get('/bank-settlements/mine', requireRole('partner'), getMyBankSettlements); // Partner's own pending total + history (optional ?gymId=)
 router.get('/bank-settlements/admin/pending', requireRole('gobhi'), getPendingBankSettlements); // Admin: every partner's pending total
 router.post('/bank-settlements/admin/:partnerId/settle', requireRole('gobhi'), settleBankSettlements); // Admin: mark a partner's pending rows settled (optional body {gymId})
+
+// Attendance-SaaS monthly flat-per-user bill (see walletService.js) —
+// computed on access, no cron, negative partner balance allowed.
+router.get('/attendance-saas/bill/:gymId', requireRole('gobhi'), getAttendanceSaasBill); // Admin: read-only computed bill for (gym, month)
+router.post('/attendance-saas/bills', requireRole('gobhi'), getAttendanceSaasBills); // Admin: batch compute for many gyms (body {gymIds, month})
+router.post('/attendance-saas/bill/:gymId/apply', requireRole('gobhi'), applyAttendanceSaasBill); // Admin: charge the (gym, month) bill
+router.get('/attendance-saas/bill/:gymId/mine', requireRole('partner'), getMyAttendanceSaasBill); // Partner: their gym's open bill (ownership-checked)
 
 export default router;

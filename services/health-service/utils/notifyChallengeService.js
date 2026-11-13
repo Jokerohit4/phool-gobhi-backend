@@ -19,11 +19,11 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // ledger, so a retry after a transient failure is safe. The receiving route
 // is gated behind the streaksCoins feature flag, so this is a harmless
 // no-op (403, swallowed -> not credited) until an admin turns that phase on.
-export async function notifyWorkoutFinished({ userId, sessionId, description, idempotencyKey }) {
+export async function notifyWorkoutFinished({ userId, sessionId, description, idempotencyKey, routinePolicy }) {
   try {
     const res = await axios.post(
       `${CHALLENGE_SERVICE_URL}/internal/workout-credit`,
-      { userId, sessionId, description, idempotencyKey },
+      { userId, sessionId, description, idempotencyKey, routinePolicy },
       {
         headers: {
           'x-internal-key': INTERNAL_API_KEY,
@@ -35,5 +35,74 @@ export async function notifyWorkoutFinished({ userId, sessionId, description, id
   } catch (err) {
     console.error('[challenge-service] notifyWorkoutFinished failed for', idempotencyKey, err.message);
     return { verified: false, credited: false };
+  }
+}
+
+// One coin per health-profile question, once ever (gamified onboarding v2).
+//
+// The idempotency key is the whole guarantee: challenge-service's coin ledger
+// refuses a second credit with the same key, so re-answering, editing, a retry
+// after a timeout or two devices saving at once can never pay twice. It is
+// keyed on the QUESTION, not the answer, for exactly that reason.
+//
+// Same posture as notifyWorkoutFinished: best-effort, never throws. The route
+// is behind streaksCoins, so with coins switched off this is a 403 that
+// resolves to false — and because the caller only records the key as paid on
+// true, a question answered while coins were off still pays once they're on.
+export async function creditProfileQuestionCoin({ userId, questionKey }) {
+  try {
+    await axios.post(
+      `${CHALLENGE_SERVICE_URL}/internal/coins/${userId}/credit`,
+      {
+        amount: 1,
+        description: `Health profile: ${questionKey}`,
+        idempotencyKey: `health-profile:${userId}:${questionKey}`,
+      },
+      {
+        headers: {
+          'x-internal-key': INTERNAL_API_KEY,
+          ...(await googleIdTokenHeader(CHALLENGE_SERVICE_URL)),
+        },
+      },
+    );
+    return true;
+  } catch (err) {
+    if (err.response?.status !== 403) {
+      console.error('[challenge-service] profile coin failed for', userId, questionKey, err.message);
+    }
+    return false;
+  }
+}
+
+// The weekly consistency bonus - coins, not rupees. The Health Score card has
+// always promised "50 coins"; the old reward code credited the rupee wallet
+// instead (on a route that did not exist, so it never paid either way).
+//
+// Keyed on the user and the IST week, so evaluating on every nightly close can
+// pay at most once per week however many nights the average stays above the
+// bar. Same never-throws posture as the credits above; a false return leaves
+// the key unspent, so the next night's evaluation tries again.
+export async function creditWeeklyConsistencyCoins({ userId, weekStart, amount, average }) {
+  try {
+    await axios.post(
+      `${CHALLENGE_SERVICE_URL}/internal/coins/${userId}/credit`,
+      {
+        amount,
+        description: `Weekly consistency bonus: ${average.toFixed(1)}% average`,
+        idempotencyKey: `health-weekly-consistency:${userId}:${weekStart}`,
+      },
+      {
+        headers: {
+          'x-internal-key': INTERNAL_API_KEY,
+          ...(await googleIdTokenHeader(CHALLENGE_SERVICE_URL)),
+        },
+      },
+    );
+    return true;
+  } catch (err) {
+    if (err.response?.status !== 403) {
+      console.error('[challenge-service] weekly consistency coins failed for', userId, weekStart, err.message);
+    }
+    return false;
   }
 }

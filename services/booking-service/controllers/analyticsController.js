@@ -36,6 +36,14 @@ export const getOnboardingFunnel = async (req, res) => {
   }
 };
 
+export const getCustomerOnboardingFunnel = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getCustomerOnboardingFunnel(req.query.days) });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getApprovalSla = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getApprovalSla(req.query.days) });

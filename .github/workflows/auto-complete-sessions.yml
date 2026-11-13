@@ -1,0 +1,108 @@
+name: Auto-complete ended sessions
+
+# Fires booking-service's autoCompleteEndedSessions (POST /internal/auto-complete):
+# every booking whose attendance was verified (status 'started' - a QR scan or
+# a geofenced self check-in) and whose slot ended more than an hour ago is
+# completed exactly as if the partner had tapped "complete": partner payout,
+# first-session referral bonus, booking_completed event (completed_by: auto),
+# customer push.
+#
+# Why it exists: completion used to depend entirely on the partner tapping
+# "complete", and completeBooking only accepts today's sessions - so a partner
+# who forgot left the session unpaid for good after midnight, and the
+# customer's referral bonus never fired.
+#
+# What it deliberately does NOT do: a booking still 'confirmed' after its slot
+# (nobody checked the customer in) is left alone. That is a no-show, and paying
+# the partner for it would be paying for a visit nobody proved happened. No-show
+# policy is a separate decision.
+#
+# Idempotent: each row is claimed with a status-conditioned updateMany and the
+# payout carries an idempotency key, so a double-fired or manually re-run sweep
+# completes and pays every session once.
+#
+# Scheduled from GitHub Actions rather than an in-process timer for the same
+# reason as every other sweep here: Cloud Run throttles CPU to near-zero
+# between requests. Hourly, not more often - the 2026-08-21 Neon compute
+# incident was a 5-minute cron; 24 runs/day of one indexed query is not that.
+#
+# ---------------------------------------------------------------------------
+# READ THIS BEFORE ASSUMING IT RUNS
+#
+# `schedule` triggers fire ONLY from the default branch (`main`), which lags
+# `dev`. Until this file and the endpoint reach `main`, the only way to run the
+# sweep is the workflow_dispatch button.
+#
+# prod is deliberately absent from the matrix until the sweep has been watched
+# on dev. This one moves money: add `prod` once a few dev runs have reported
+#   { "data": { "scanned": N, "due": M, "completed": M, "failures": [] } }
+# with numbers that match what the partner apps show.
+
+on:
+  schedule:
+    # Quarter past every hour, clear of the :00/:30 slots other sweeps use.
+    - cron: '15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sweep:
+    strategy:
+      matrix:
+        env: [dev]   # prod deliberately absent until watched on dev - see above
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      # The general deploy provider: this step exists to authenticate the gcloud
+      # CLI (secret read + service describe), not to call the endpoint.
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # INTERNAL_API_KEY lives inside the consolidated
+      # booking-service-secrets-<env> JSON payload.
+      - id: secret
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            SECRETS_JSON:${{ vars.GCP_PROJECT_ID }}/booking-service-secrets-${{ matrix.env }}
+
+      - id: internalkey
+        env:
+          SECRETS_JSON: ${{ steps.secret.outputs.SECRETS_JSON }}
+        run: |
+          KEY=$(echo "$SECRETS_JSON" | jq -r '.INTERNAL_API_KEY')
+          echo "::add-mask::$KEY"
+          echo "internal-api-key=$KEY" >> "$GITHUB_OUTPUT"
+
+      # Called directly on the service, never through the gateway: the route
+      # is /internal/auto-complete and is not in the gateway's PUBLIC_ROUTES.
+      - id: svcurl
+        run: |
+          URL=$(gcloud run services describe "booking-service-${{ matrix.env }}" \
+            --project="${{ vars.GCP_PROJECT_ID }}" --region="${{ vars.GCP_REGION }}" \
+            --format="value(status.url)")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      # Both layers are required: x-internal-key satisfies requireInternal, the
+      # Google-signed ID token satisfies Cloud Run's IAM invoker check.
+      - id: sweepauth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ matrix.env == 'prod' && vars.GCP_WIF_PROVIDER_HEALTH_PROD || vars.GCP_WIF_PROVIDER_HEALTH_DEV }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'id_token'
+          id_token_audience: ${{ steps.svcurl.outputs.url }}
+
+      - run: |
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.sweepauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            -H "Content-Type: application/json" \
+            "${{ steps.svcurl.outputs.url }}/internal/auto-complete"

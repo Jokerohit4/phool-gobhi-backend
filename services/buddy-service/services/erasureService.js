@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import cloudinary from '../config/cloudinary.js';
-const prisma = new PrismaClient();
+import { profileChanged } from '../utils/buddyCaches.js';
 
 // DPDPA erasure for this service, called by auth-service when a user
 // deletes their account. Buddy holds the most personal data on the
@@ -17,7 +17,7 @@ const prisma = new PrismaClient();
 export async function eraseUserService(userId) {
   const profile = await prisma.buddyProfile.findUnique({
     where: { userId },
-    include: { photos: true },
+    include: { photos: true, records: true },
   });
 
   // Cloudinary first: if a row is deleted but its image isn't, the image
@@ -34,6 +34,14 @@ export async function eraseUserService(userId) {
       photoFailures.push(photo.publicId);
     }
   }
+
+  for (const record of profile?.records ?? []) {
+    if (!record.mediaPublicId) continue;
+    try { await cloudinary.uploader.destroy(record.mediaPublicId, { resource_type: record.mediaType }); }
+    catch (err) { photoFailures.push(record.mediaPublicId); }
+  }
+  // Keep rows available for retry if any asset could not be removed.
+  if (photoFailures.length) throw { status: 502, error: 'Media erasure incomplete; retry required', cloudinaryFailures: photoFailures };
 
   const matches = await prisma.match.findMany({
     where: { OR: [{ userLowId: userId }, { userHighId: userId }] },
@@ -57,12 +65,30 @@ export async function eraseUserService(userId) {
     prisma.blockedUser.deleteMany({
       where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
     }),
+    // Reports are asymmetric, and deliberately so.
+    //
+    // As REPORTER: delete outright. The report is the user's own assertion
+    // about someone else; there is no safety claim that outranks a person's
+    // right to withdraw it, and a report nobody may retract is a blacklist
+    // with extra steps.
+    prisma.report.deleteMany({ where: { reporterId: userId } }),
+    // As REPORTED: keep the row, drop the pointer. A safety record has to
+    // outlive the account it describes — otherwise erasing an account is a way
+    // to erase accountability, and the moderation history for that person
+    // silently vanishes from the queue. But the identifier must go, because
+    // keeping it retains the personal data we were asked to erase. Net result:
+    // the report stays reviewable, and it no longer points at anyone.
+    prisma.report.updateMany({
+      where: { reportedUserId: userId },
+      data: { reportedUserId: null },
+    }),
     prisma.buddyFilter.deleteMany({ where: { userId } }),
     // Photos cascade from BuddyProfile, but deleted explicitly so the row
     // count returned below is honest about what went.
     ...(profile ? [prisma.buddyPhoto.deleteMany({ where: { buddyProfileId: profile.id } })] : []),
     prisma.buddyProfile.deleteMany({ where: { userId } }),
   ]);
+  profileChanged(userId);
 
   return {
     erased: true,

@@ -16,18 +16,112 @@ model User {
   email     String?    @unique
   password  String?
   role      Role
+  // Equipment ids the coach recommends for this user (customer app). Plain
+  // scalar list: Prisma lists cannot be optional; the column is nullable
+  // INTEGER[] and reads back as [].
+  recommendedEquipment Int[]    @default([])
   type      UserType
   gobhiType GobhiType?
   isActive  Boolean    @default(true)
   gender        Gender?
   dateOfBirth   DateTime?     @db.Date
+  // One real gender change is allowed, ever (old gender set and the new one
+  // differs). genderChangedAt records when that first change happened, and
+  // genderChangedTo what it became — buddy-service copies both into its own
+  // cache to keep a man who changed to "female" out of women-only decks
+  // (see BuddyProfile.womenOnlyBlocked). Set inside updateProfile's updates
+  // object so the profile-completion-bonus rollback reverts them too.
+  genderChangedAt DateTime?
+  genderChangedTo Gender?
   fitnessGoals  FitnessGoal[]
-  // Collected at onboarding alongside gender/dateOfBirth/fitnessGoals — feeds
-  // the customer app's client-side gym recommendation scorer (experienceLevel
-  // is the highest-weighted, required field there) and gates the trainer
-  // WhatsApp-handoff CTA to new/restarting users only.
+  // Sports the user plays (constants/sports.js). Independent of persona and
+  // never cleared by a switch.
+  sportsPlayed  String[]      @default([])
+  // LIVE AGAIN as of the coach-journey cutover (2026-10-16). It was deprecated
+  // on 2026-09-30: the onboarding step that collected it and the client-side
+  // gym scorer that read it were both removed. The coach journey re-introduces
+  // it as the answer that picks the starting plan layer (new_to_gym → layer 1,
+  // restarting_after_break → layer 2, experienced → all five layers), written
+  // by the journey flow and read by GET /me so Home can branch on the first
+  // call. health-service's PersonalisationProfile.experienceLevel is a
+  // different concept (the AI coach's training preference) and is unaffected.
   experienceLevel       ExperienceLevel?
+  // How long they have been training, asked as a follow-up to experienceLevel
+  // for everyone but new_to_gym. experienceLevel says what kind of history they
+  // have; this says how much of it, so "regularly for 2 months" and "regularly
+  // for 10 years" stop looking identical. Null = never asked (existing users).
+  trainingTenure        TrainingTenure?
+  // --- Coach journey: gym-link state (2026-10-16) ------------------------
+  // homeUnclaimedGymId is the user's own Places-sourced non-partner gym
+  // (gym-service UnclaimedGym.id) — the Home screen's "your gym" target when
+  // there is no partner GymLink to branch on. pendingGymPromptGymId is a
+  // partner Gym.id the one-time "your gym just joined, link?" prompt points
+  // at. Both are bare Ints with no Prisma relation, the same unenforced
+  // cross-service convention as linkedGymId/trainerGymId above (Gym and
+  // UnclaimedGym live in gym-service's own database).
+  homeUnclaimedGymId       Int?
+  pendingGymPromptGymId    Int?
+  // One-time notice the app shows then clears (e.g. "removed_by_gym"), set by
+  // the link/unlink flows (B2) and cleared by POST /api/auth/me/notice/clear.
+  gymLinkNotice            String?
+  // First-visit badge consent, collected once and never reset — the timestamp
+  // records when consent was given so the badge flow cannot re-ask. Defaults
+  // false so existing rows need no backfill.
+  firstVisitBadgeConsent    Boolean   @default(false)
+  firstVisitBadgeConsentAt  DateTime?
   weeklyFrequencyIntent FrequencyIntent?
+  // --- Onboarding branch (2026-09-18) -------------------------------------
+  // Who this user is, decided once at onboarding and revisable later. These
+  // live here rather than in health-service because the app must branch its
+  // Home tab on them at boot, from the same /me call that already carries
+  // linkedGymId — anything read only from health-service is unreachable
+  // whenever the healthMetrics flag is off, which would be the wrong
+  // dependency for tab routing.
+  //
+  // "Do you work out?" — null means never asked (pre-existing accounts, or
+  // onboarding completed before this shipped), which is NOT the same as false.
+  currentlyWorksOut Boolean?
+  workoutIntent WorkoutIntent?
+  // Optional onboarding context for people who choose daily wellbeing
+  // tracking instead of workouts. These answers help shape habit guidance;
+  // none is a medical diagnosis or exercise target.
+  wellnessFocuses String[] @default([])
+  wellnessDayPattern String?
+  wellnessSleepPattern String?
+  wellnessSetupCompleted Boolean @default(false)
+  // Answers both phrasings of the same question ("where do you work out" for
+  // an existing exerciser, "where would you prefer" for someone starting) —
+  // one column, because the downstream behaviour is identical either way.
+  trainingLocationPref TrainingLocationPref?
+  // Free text behind the "Other" option. Deliberately unconstrained and never
+  // parsed — it exists to be read by a human deciding what the next enum
+  // value should be.
+  trainingLocationOther String?
+  // The derived, mutable field the app's Home tab branches on. Derivation
+  // lives in authService (deriveAppMode) rather than being trusted from the
+  // client, so the rule stays in one place when it changes. Once `persona`
+  // is set, appMode follows it (appModeForPersona) and is kept only for
+  // older app builds.
+  appMode AppMode?
+  // Who the user is in the app. Null until the user first switches or a gym
+  // link changes; null means "derive from the onboarding answers" (see
+  // services/personaService.js resolvePersona). Once set, only an explicit
+  // switch or a gym link/leave/removal changes it — editing an answer never
+  // does, which is what stops old answers trapping someone in a persona.
+  persona Persona?
+  // Coarse "when are you usually free" bucket. Consumed for nudge send-time
+  // and off-peak targeting — NOT collected for its own sake. If that consumer
+  // ever goes away, delete the field rather than leaving it to rot the way
+  // fitnessGoals did.
+  freeTimeWindow FreeTimeWindow?
+  // When the user's own-gym membership ends (future date when written).
+  gymSubscriptionEndDate DateTime?
+  // Account archive (retain-everything deletion mode, see accountArchiveService).
+  // archivedAt is set when the user closes their account; archivedData holds the
+  // identifying fields that were moved out of the live columns so the phone and
+  // email can belong to a brand-new account. Null for every live user.
+  archivedAt      DateTime?
+  archivedData    Json?
   profileImageUrl String    @default("")
   fcmToken        String    @default("")
   savedAddresses  SavedAddress[]
@@ -66,34 +160,109 @@ model User {
   // on a later sweep run — this is "processed," not strictly "was nudged."
   reengagementNudgedAt DateTime?
   // Per-gym attendance leaderboards (booking-service, MemberAttendance-backed)
-  // are opt-in — a check-in is otherwise private. False by default; toggled
-  // from the customer app's settings screen. Global, not per-gym: someone who
-  // opts in is visible on every gym's board their check-ins would rank on.
-  leaderboardOptIn Boolean @default(false)
-  // Map collectibles (veggie pickups) are a standalone currency, deliberately
-  // NOT coins and NOT tied to gyms/bookings/badges in any way -- just walk
-  // near a spawn point on the Explore map and it's yours. Spawn points are
-  // deterministic client-side (fixed grid, no catalog table needed); this
-  // relation is only "which ones has this user found."
-  collectibleFinds CollectibleFind[]
+  // are on by default — a check-in is public on the boards it would rank on.
+  // True by default; opt-out by the user, from the customer app's profile
+  // screen only. Global, not per-gym: someone who stays on is visible on every
+  // gym's board their check-ins would rank on.
+  leaderboardOptIn Boolean @default(true)
+  exploreLocations ExploreLocationReceipt[]
+  exploreRewards ExploreRewardReceipt[]
+  exploreClaims ExploreClaim[]
+  exploreProgress ExploreProgress?
+  exploreReceiptEvents ExploreReceiptEvent[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
+  // Covers the attendance-SaaS monthly-bill query (users joined a gym in a
+  // given month): where linkedGymId = X AND createdAt in [monthStart, monthEnd).
+  @@index([linkedGymId, createdAt])
   @@schema("auth")
 }
 
-// One row per veggie collectible a user has picked up on the Explore map.
-// collectibleId is a client-generated deterministic id (grid cell reference,
-// e.g. "veg_12_7") -- there's no server-side spawn catalog, so this table is
-// purely "has this user found this id," nothing more.
-model CollectibleFind {
-  id            Int      @id @default(autoincrement())
-  userId        Int
-  user          User     @relation(fields: [userId], references: [id])
-  collectibleId String
-  foundAt       DateTime @default(now())
+// Published configurations and manifests are immutable (also enforced by SQL triggers).
+model ExploreCatalogue {
+  version Int @id
+  hash String @unique
+  payload Json
+  @@schema("auth")
+}
 
-  @@unique([userId, collectibleId])
+model ExploreEpochManifest {
+  epochManifestId String @id
+  epoch String
+  worldGeneration Int
+  payload Json
+  receipts ExploreLocationReceipt[]
+  @@unique([epoch, worldGeneration])
+  @@schema("auth")
+}
+
+model ExploreProgress {
+  userId Int @id
+  user User @relation(fields: [userId], references: [id])
+  revision Int @default(0)
+  @@schema("auth")
+}
+
+// Canonical proof-free wire receipt; indexed identity/revision columns support snapshots.
+model ExploreLocationReceipt {
+  receiptId String @id
+  userId Int
+  user User @relation(fields: [userId], references: [id])
+  occurrenceId String
+  epochManifestId String
+  manifest ExploreEpochManifest @relation(fields: [epochManifestId], references: [epochManifestId])
+  revision Int
+  acknowledgedAt DateTime @db.Timestamptz(3)
+  payload Json
+  @@unique([userId, occurrenceId])
+  @@unique([userId, revision])
+  @@index([userId, acknowledgedAt, receiptId])
+  @@schema("auth")
+}
+
+model ExploreRewardReceipt {
+  receiptId String @id
+  userId Int
+  user User @relation(fields: [userId], references: [id])
+  rewardKey String
+  revision Int
+  acknowledgedAt DateTime @db.Timestamptz(3)
+  payload Json
+  @@unique([userId, rewardKey])
+  @@unique([userId, revision])
+  @@index([userId, acknowledgedAt, receiptId])
+  @@schema("auth")
+}
+
+// Durable account-scoped receipt telemetry, committed with its terminal outcome.
+model ExploreReceiptEvent {
+  eventId String @id @db.Uuid
+  userId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  receiptId String? @unique
+  claimId String?
+  event String
+  properties Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz(3)
+  attempts Int @default(0)
+  deliveredAt DateTime? @db.Timestamptz(3)
+  @@unique([userId, claimId])
+  @@index([deliveredAt, nextAttemptAt])
+  @@index([userId])
+  @@schema("auth")
+}
+
+// Never store the command or position: only a digest and terminal outcome.
+model ExploreClaim {
+  userId Int
+  user User @relation(fields: [userId], references: [id])
+  claimId String
+  fingerprint String
+  receiptId String?
+  reason String?
+  @@id([userId, claimId])
   @@schema("auth")
 }
 
@@ -101,8 +270,8 @@ model CollectibleFind {
 // familyId. A row's usedAt/replacedByJti gets set the moment it's rotated;
 // presenting an already-used token again after the grace window (see
 // refreshTokenService.js) revokes the whole family — that's the theft-replay
-// signal rotation exists to catch. expiresAt is fixed per family (not
-// extended on rotation) so total session length stays the 7 days it is today.
+// signal rotation exists to catch. expiresAt belongs to each token: a new
+// successor gets 30 days from rotation, keeping an active session signed in.
 model RefreshToken {
   id            String    @id @default(uuid())
   jti           String    @unique
@@ -343,6 +512,39 @@ model ProfileCompletionBonusSetting {
   @@schema("auth")
 }
 
+// Append-only audit trail of admin feature-flag changes. The current flag values
+// live as a JSON blob inside AppVersionSetting.config, which answers "what is it
+// now" but never "what did it used to be" — and for a kill-switch that decides
+// whether a feature collects personal data, "who switched this on, when, and from
+// what" is the question that actually has to be answerable after something goes
+// wrong.
+//
+// Written from updateAppConfigAdmin (authController.js) on every save that
+// changes at least one flag. A save that changes nothing writes no row, so the
+// table stays small and readable.
+//
+// `changedFlags` is denormalised on purpose: it means a query can ask "what has
+// happened to workoutTracking?" without a JSON diff over before/after, which no
+// index can help with. `before` is nullable because the very first write after
+// this table exists may follow a config blob created before it.
+model AppConfigHistory {
+  id           Int      @id @default(autoincrement())
+  changedFlags String[]
+  before       Json?
+  after        Json
+  note         String?
+  changedBy    Int?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([changedBy, createdAt])
+  // GIN over the text array so "what happened to THIS flag?" stays an index
+  // lookup rather than degrading into a sequential scan once the table has
+  // more than a few hundred rows.
+  @@index([changedFlags(ops: ArrayOps)], type: Gin)
+  @@schema("auth")
+}
+
 enum GobhiType {
   trainer
   cleaner
@@ -392,8 +594,18 @@ enum FitnessGoal {
 
 enum ExperienceLevel {
   new_to_gym
+  just_started
   restarting_after_break
   experienced
+
+  @@schema("auth")
+}
+
+enum TrainingTenure {
+  under_3_months
+  three_to_12_months
+  one_to_3_years
+  over_3_years
 
   @@schema("auth")
 }
@@ -403,5 +615,211 @@ enum FrequencyIntent {
   three_four
   five_plus
 
+  @@schema("auth")
+}
+
+// Where the user trains, or would prefer to. `gym` and `fitness_centre` are
+// kept distinct because the whiteboard flow asks for them separately and the
+// distinction is meaningful to users even though today they route the same —
+// collapsing them now would be a lossy migration to undo later.
+enum TrainingLocationPref {
+  home
+  gym
+  fitness_centre
+  sports
+  other
+
+  @@schema("auth")
+}
+
+// Which experience the app leads with.
+//   gym_seeker — booking/PAYG is the proposition; Home leads with discovery.
+//   home_track — the user trains or wants to train; the app is a
+//                workout/progress/habit tool.
+//   wellness — the user does not want workouts; Home leads with wellbeing
+//              tracking and should not sell gyms.
+enum AppMode {
+  gym_seeker
+  home_track
+  wellness
+
+  @@schema("auth")
+}
+
+enum WorkoutIntent {
+  workout
+  wellness_only
+
+  @@schema("auth")
+}
+
+// See User.persona and services/personaService.js.
+enum Persona {
+  linked_gym
+  own_gym
+  wellness
+  home_training
+  sports
+  explorer
+
+  @@schema("auth")
+}
+
+enum FreeTimeWindow {
+  morning
+  afternoon
+  evening
+  late_night
+  flexible
+
+  @@schema("auth")
+}
+// Every time a user switches which experience the app leads with.
+//
+// Append-only, and the reason it exists is measurement rather than
+// correctness: the onboarding branch is a guess about how people split, and
+// this is how you find out whether the guess was right. If users switch once
+// and stay, the split was good; if they oscillate, the question was wrong.
+//
+// Also the audit trail for a field that changes what a user sees — without
+// it, "why does my app look different" has no answer.
+model AppModeHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  // Null on the first row for a user: they came from onboarding, not from
+  // switching away from something.
+  fromMode  AppMode?
+  toMode    AppMode
+  // Set on rows written by a persona change (personaService). Null on
+  // appMode-only rows from before personas were stored.
+  fromPersona Persona?
+  toPersona   Persona?
+  // 'onboarding' | 'floating_prompt' | 'settings' | 'gym_link' | 'gym_leave'
+  // | 'gym_removed' (PERSONA_SWITCH_SOURCES)
+  source    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@schema("auth")
+}
+
+// How a GymLink was created: the user picked the gym themselves (self), or they
+// arrived through the gym's QR/link (gym_qr). Drives whether the link counts as
+// a self-declared membership or a verified check-in origin.
+enum GymLinkSource {
+  self
+  gym_qr
+
+  @@schema("auth")
+}
+
+// A customer↔gym membership link — the source of truth the linked-member Home
+// and the attendance-SaaS bill read. Distinct from User.linkedGymId, which is a
+// denormalised pointer to the single active link and stays for the reads that
+// must not join. gymId is a bare Int (gym-service's database), so this is an
+// unenforced cross-service reference like the rest of the file. A link is
+// "active" while removedAt is null; removed rows are kept so a self-re-link can
+// be blocked and history survives a gym removing a member.
+// A gym owner's time-boxed "approve every join" window (1h / 8h / 24h). While
+// autoApproveUntil is in the future, a presence-verified entrance scan joins
+// the member as approved; otherwise it leaves a pending request for the owner.
+// One row per gym; closing a window deletes the row.
+model GymJoinWindow {
+  gymId             Int      @id
+  autoApproveUntil  DateTime
+  openedByPartnerId Int?
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@schema("auth")
+}
+
+// What a gym owner records about one of its own members, per (gym, member).
+// The phone is whatever the OWNER typed from their own records — the customer's
+// own phone is never exposed to partners. Dates are IST calendar dates
+// ('YYYY-MM-DD'), like the date columns elsewhere; money is in paise.
+model GymMemberRecord {
+  gymId                 Int
+  userId                Int
+  phone                 String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  lockerNumber          String?
+  joinedOn              String?
+  followUpOn            String?
+  amountDuePaise        Int?
+  notes                 String?
+  updatedByPartnerId    Int?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
+
+  @@id([gymId, userId])
+  @@index([userId])
+  @@schema("auth")
+}
+
+// A gym member's payment ledger. Members renew, so each payment is its own row;
+// "valid until" and lifetime paid are derived from it, never overwritten.
+model GymMemberPayment {
+  id                 Int      @id @default(autoincrement())
+  gymId              Int
+  userId             Int
+  amountPaise        Int
+  paidOn             String
+  paymentMode        String?
+  planName           String?
+  validUntil         String?
+  note               String?
+  createdByPartnerId Int?
+  createdAt          DateTime @default(now())
+
+  @@index([gymId, userId])
+  @@index([userId])
+  @@schema("auth")
+}
+
+model GymLink {
+  id                     Int           @id @default(autoincrement())
+  userId                 Int
+  gymId                  Int
+  source                 GymLinkSource
+  linkedAt               DateTime      @default(now())
+  // Set by booking-service's member check-in ping the first time this linked
+  // member is verifiably checked in at the gym — the "verified member" signal.
+  firstVerifiedCheckinAt DateTime?
+  removedAt              DateTime?
+  removedByPartnerId     Int?
+  // True when the gym (not the user) removed the link: the user may not
+  // self-re-link to this gym without coming back through the gym's QR.
+  selfRelinkBlocked      Boolean       @default(false)
+  // Gym-side confirmation of a `self` link. A self link is live immediately but
+  // sits in the partner's pending queue (approvedAt null, no verified check-in)
+  // until the gym approves it. Rejecting is removeMemberFromGym, not a field.
+  // gym_qr links never need it: the gym initiated them.
+  approvedAt             DateTime?
+  approvedByPartnerId    Int?
+
+  // At most one active link per user is enforced by a partial unique index
+  // (GymLink_userId_active_key, WHERE "removedAt" IS NULL) created in the
+  // 20261028170000_persona migration. Prisma cannot express partial indexes,
+  // so it lives only in SQL.
+  @@index([gymId, linkedAt])
+  @@index([userId])
+  @@schema("auth")
+}
+
+// One row per app install a user has signed in on, keyed by a stable
+// client-generated installId. Used to detect referral/self-link abuse across
+// accounts that share a device and to reach "all devices for this user".
+// lastSeenAt refreshes on every POST /api/auth/devices.
+model UserDevice {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  installId   String
+  platform    String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@unique([userId, installId])
+  @@index([installId])
   @@schema("auth")
 }

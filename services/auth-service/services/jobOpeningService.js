@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 const VALID_EMPLOYMENT_TYPES = ['full_time', 'part_time', 'internship', 'contract'];
 

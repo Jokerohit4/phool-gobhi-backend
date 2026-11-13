@@ -1,16 +1,19 @@
 import './bootstrap-secrets.js';
+import { loggingDayMiddleware } from './utils/loggingDayContext.js';
+import { analyticsMiddleware } from './utils/analyticsTransport.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { connectDB } from './db.js';
 connectDB();
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db/prisma.js';
 import healthRoutes from './routes/health.js';
 
 const app = express();
-const prisma = new PrismaClient();
+app.use(analyticsMiddleware());
 
 app.use(express.json());
+app.use(loggingDayMiddleware);
 
 // Health must be registered before the router — same ordering rule
 // gym-service/buddy-service/challenge-service already enforce (a param

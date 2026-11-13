@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 
-const prisma = new PrismaClient();
 
 const VALID_PROVIDERS = ['fast2sms', 'firebase', 'skip'];
 

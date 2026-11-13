@@ -1,0 +1,1702 @@
+{
+  "Alternating Dumbbell Curl": {
+    "equipment": "dumbbell",
+    "reason": "Same alternating standing dumbbell curl.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Alternate_Bicep_Curl/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Alternate_Bicep_Curl/1.jpg"
+    ],
+    "instructions": [
+      "Stand (torso upright) with a dumbbell in each hand held at arms length. The elbows should be close to the torso and the palms of your hand should be facing your thighs.",
+      "While holding the upper arm stationary, curl the right weight as you rotate the palm of the hands until they are facing forward. At this point continue contracting the biceps as you breathe out until your biceps is fully contracted and the dumbbells are at shoulder level. Hold the contracted position for a second as you squeeze the biceps. Tip: Only the forearms should move.",
+      "Slowly begin to bring the dumbbell back to the starting position as your breathe in. Tip: Remember to twist the palms back to the starting position (facing your thighs) as you come down.",
+      "Repeat the movement with the left hand. This equals one repetition.",
+      "Continue alternating in this manner for the recommended amount of repetitions."
+    ],
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Dumbbell_Alternate_Bicep_Curl",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Alternate_Bicep_Curl.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "equipment": "dumbbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Alternate_Bicep_Curl.json"
+  },
+  "Barbell Floor Press": {
+    "equipment": "barbell",
+    "reason": "Barbell press performed from the floor.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Floor_Press/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Floor_Press/1.jpg"
+    ],
+    "instructions": [
+      "Adjust the j-hooks so they are at the appropriate height to rack the bar. Begin lying on the floor with your head near the end of a power rack. Keeping your shoulder blades pulled together; pull the bar off of the hooks.",
+      "Lower the bar towards the bottom of your chest or upper stomach, squeezing the bar and attempting to pull it apart as you do so. Ensure that you tuck your elbows throughout the movement. Lower the bar until your upper arm contacts the ground and pause, preventing any slamming or bouncing of the weight.",
+      "Press the bar back up as fast as you can, keeping the bar, your wrists, and elbows in line as you do so."
+    ],
+    "secondaryMuscles": [
+      "chest",
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Floor_Press",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Floor_Press.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "intermediate",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "powerlifting",
+      "equipment": "barbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Floor_Press.json"
+  },
+  "Chair Dip": {
+    "equipment": "bodyweight",
+    "reason": "Bodyweight dip with the hands supported behind the torso on a stable raised seat.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bench_Dips/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bench_Dips/1.jpg"
+    ],
+    "instructions": [
+      "For this exercise you will need to place a bench behind your back. With the bench perpendicular to your body, and while looking away from it, hold on to the bench on its edge with the hands fully extended, separated at shoulder width. The legs will be extended forward, bent at the waist and perpendicular to your torso. This will be your starting position.",
+      "Slowly lower your body as you inhale by bending at the elbows until you lower yourself far enough to where there is an angle slightly smaller than 90 degrees between the upper arm and the forearm. Tip: Keep the elbows as close as possible throughout the movement. Forearms should always be pointing down.",
+      "Using your triceps to bring your torso up again, lift yourself back to the starting position.",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "secondaryMuscles": [
+      "chest",
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Bench_Dips",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bench_Dips.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "body only"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bench_Dips.json"
+  },
+  "Chest-Supported Dumbbell Row": {
+    "equipment": "dumbbell",
+    "reason": "Chest supported on an incline bench; two dumbbells and a neutral grip.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Incline_Row/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Incline_Row/1.jpg"
+    ],
+    "instructions": [
+      "Using a neutral grip, lean into an incline bench.",
+      "Take a dumbbell in each hand with a neutral grip, beginning with the arms straight. This will be your starting position.",
+      "Retract the shoulder blades and flex the elbows to row the dumbbells to your side.",
+      "Pause at the top of the motion, and then return to the starting position."
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "forearms",
+      "lats",
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Dumbbell_Incline_Row",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Incline_Row.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "dumbbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_Incline_Row.json"
+  },
+  "Close-Grip Lat Pulldown": {
+    "equipment": "cable",
+    "reason": "Close-grip cable pulldown in front of the torso.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Close-Grip_Front_Lat_Pulldown/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Close-Grip_Front_Lat_Pulldown/1.jpg"
+    ],
+    "instructions": [
+      "Sit down on a pull-down machine with a wide bar attached to the top pulley. Make sure that you adjust the knee pad of the machine to fit your height. These pads will prevent your body from being raised by the resistance attached to the bar.",
+      "Grab the bar with the palms facing forward using the prescribed grip. Note on grips: For a wide grip, your hands need to be spaced out at a distance wider than your shoulder width. For a medium grip, your hands need to be spaced out at a distance equal to your shoulder width and for a close grip at a distance smaller than your shoulder width.",
+      "As you have both arms extended in front of you - while holding the bar at the chosen grip width - bring your torso back around 30 degrees or so while creating a curvature on your lower back and sticking your chest out. This is your starting position.",
+      "As you breathe out, bring the bar down until it touches your upper chest by drawing the shoulders and the upper arms down and back. Tip: Concentrate on squeezing the back muscles once you reach the full contracted position. The upper torso should remain stationary (only the arms should move). The forearms should do no other work except for holding the bar; therefore do not try to pull the bar down using the forearms.",
+      "After a second in the contracted position, while squeezing your shoulder blades together, slowly raise the bar back to the starting position when your arms are fully extended and the lats are fully stretched. Inhale during this portion of the movement.",
+      "6. Repeat this motion for the prescribed amount of repetitions."
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "middle back",
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Close-Grip_Front_Lat_Pulldown",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Close-Grip_Front_Lat_Pulldown.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "cable"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Close-Grip_Front_Lat_Pulldown.json"
+  },
+  "Dumbbell Wrist Curl": {
+    "equipment": "dumbbell",
+    "reason": "Palms-up dumbbell wrist flexion with forearm support.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench/1.jpg"
+    ],
+    "instructions": [
+      "Start out by placing two dumbbells on one side of a flat bench.",
+      "Kneel down on both of your knees so that your body is facing the flat bench.",
+      "Use your arms to grab both of the dumbbells with a supinated grip (palms up) and bring them up so that your forearms are resting against the flat bench. Your wrists should be hanging over the edge.",
+      "Start out by curling your wrist upwards and exhaling.",
+      "Slowly lower your wrists back down to the starting position while inhaling. Make sure to inhale during this part of the exercise.",
+      "Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "equipment": "dumbbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench.json"
+  },
+  "Hip Flexor Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Half-kneeling hip-flexor stretch.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Kneeling_Hip_Flexor/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Kneeling_Hip_Flexor/1.jpg"
+    ],
+    "instructions": [
+      "Kneel on a mat and bring your right knee up so the bottom of your foot is on the floor and extend your left leg out behind you so the top of your foot is on the floor.",
+      "Shift your weight forward until you feel a stretch in your hip. Hold for 15 seconds, then repeat for your other side."
+    ],
+    "secondaryMuscles": [
+      "quadriceps"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Kneeling_Hip_Flexor",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Kneeling_Hip_Flexor.json",
+        "license": "Unlicense"
+      },
+      {
+        "provider": "wger",
+        "sourceId": 1867,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1867/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Davidgj32"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "static",
+      "mechanic": "isolation",
+      "category": "stretching",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Kneeling_Hip_Flexor.json"
+  },
+  "Landmine Row": {
+    "equipment": "barbell",
+    "reason": "Two-hand row of the loaded end of an anchored barbell.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bent_Over_Two-Arm_Long_Bar_Row/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bent_Over_Two-Arm_Long_Bar_Row/1.jpg"
+    ],
+    "instructions": [
+      "Put weight on one of the ends of an Olympic barbell. Make sure that you either place the other end of the barbell in the corner of two walls; or put a heavy object on the ground so the barbell cannot slide backward.",
+      "Bend forward until your torso is as close to parallel with the floor as you can and keep your knees slightly bent.",
+      "Now grab the bar with both arms just behind the plates on the side where the weight was placed and put your other hand on your knee. This will be your starting position.",
+      "Pull the bar straight up with your elbows in (to maximize back stimulation) until the plates touch your lower chest. Squeeze the back muscles as you lift the weight up and hold for a second at the top of the movement. Breathe out as you lift the weight. Tip: Use a stirrup or double handle cable attachment by hooking it under the end of the bar.",
+      "Slowly lower the bar to the starting position getting a nice stretch on the lats. Tip: Do not let the plates touch the floor. To ensure the best range of motion, I recommend using small plates (25-lb ones) as opposed to larger plates (like 35-45lb ones).",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "secondaryMuscles": [
+      "biceps",
+      "lats"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Bent_Over_Two-Arm_Long_Bar_Row",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bent_Over_Two-Arm_Long_Bar_Row.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "intermediate",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "barbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Bent_Over_Two-Arm_Long_Bar_Row.json"
+  },
+  "Pec Deck Fly": {
+    "equipment": "machine",
+    "reason": "Seated machine chest fly.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butterfly/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butterfly/1.jpg"
+    ],
+    "instructions": [
+      "Sit on the machine with your back flat on the pad.",
+      "Take hold of the handles. Tip: Your upper arms should be positioned parallel to the floor; adjust the machine accordingly. This will be your starting position.",
+      "Push the handles together slowly as you squeeze your chest in the middle. Breathe out during this part of the motion and hold the contraction for a second.",
+      "Return back to the starting position slowly as you inhale until your chest muscles are fully stretched.",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Butterfly",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butterfly.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "equipment": "machine"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Butterfly.json"
+  },
+  "Reverse Pec Deck": {
+    "equipment": "machine",
+    "reason": "Reverse seated machine fly for the rear deltoids.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Reverse_Machine_Flyes/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Reverse_Machine_Flyes/1.jpg"
+    ],
+    "instructions": [
+      "Adjust the handles so that they are fully to the rear. Make an appropriate weight selection and adjust the seat height so the handles are at shoulder level. Grasp the handles with your hands facing inwards. This will be your starting position.",
+      "In a semicircular motion, pull your hands out to your side and back, contracting your rear delts.",
+      "Keep your arms slightly bent throughout the movement, with all of the motion occurring at the shoulder joint.",
+      "Pause at the rear of the movement, and slowly return the weight to the starting position."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Reverse_Machine_Flyes",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Reverse_Machine_Flyes.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "equipment": "machine"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Reverse_Machine_Flyes.json"
+  },
+  "Seated Hamstring Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Seated bodyweight hamstring stretch on the floor.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Floor_Hamstring_Stretch/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Floor_Hamstring_Stretch/1.jpg"
+    ],
+    "instructions": [
+      "Sit on a mat with your right leg extended in front of you and your left leg bent with your foot against your right inner thigh.",
+      "Lean forward from your hips and reach for your ankle until you feel a stretch in your hamstring. Hold for 15 seconds, then repeat for your other side."
+    ],
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Seated_Floor_Hamstring_Stretch",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Floor_Hamstring_Stretch.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "static",
+      "mechanic": null,
+      "category": "stretching",
+      "equipment": null
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Seated_Floor_Hamstring_Stretch.json"
+  },
+  "Calf Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Wall-supported calf stretch with the rear heel down.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Calf_Stretch_Hands_Against_Wall/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Calf_Stretch_Hands_Against_Wall/1.jpg"
+    ],
+    "instructions": [
+      "Stand facing a wall from several feet away. Stagger your stance, placing one foot forward.",
+      "Lean forward and rest your hands on the wall, keeping your heel, hip and head in a straight line.",
+      "Attempt to keep your heel on the ground. Hold for 10-20 seconds and then switch sides."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Calf_Stretch_Hands_Against_Wall",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Calf_Stretch_Hands_Against_Wall.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "static",
+      "mechanic": "isolation",
+      "category": "stretching",
+      "equipment": null
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Calf_Stretch_Hands_Against_Wall.json"
+  },
+  "Cable Pullover": {
+    "equipment": "cable",
+    "reason": "Standing straight-arm cable shoulder extension; no elbow-curl substitution.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Straight-Arm_Pulldown/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Straight-Arm_Pulldown/1.jpg"
+    ],
+    "instructions": [
+      "You will start by grabbing the wide bar from the top pulley of a pulldown machine and using a wider than shoulder-width pronated (palms down) grip. Step backwards two feet or so.",
+      "Bend your torso forward at the waist by around 30-degrees with your arms fully extended in front of you and a slight bend at the elbows. If your arms are not fully extended then you need to step a bit more backwards until they are. Once your arms are fully extended and your torso is slightly bent at the waist, tighten the lats and then you are ready to begin.",
+      "While keeping the arms straight, pull the bar down by contracting the lats until your hands are next to the side of the thighs. Breathe out as you perform this step.",
+      "While keeping the arms straight, go back to the starting position while breathing in.",
+      "Repeat for the recommended amount of repetitions."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Straight-Arm_Pulldown",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Straight-Arm_Pulldown.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "isolation",
+      "category": "strength",
+      "equipment": "cable"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Straight-Arm_Pulldown.json"
+  },
+  "Paused Bench Press": {
+    "equipment": "barbell",
+    "reason": "Still position reference only; the source does not teach the pause. Keep pause-specific instruction and motion capture in the backlog.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Bench_Press_-_Medium_Grip/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Bench_Press_-_Medium_Grip/1.jpg"
+    ],
+    "instructions": [],
+    "secondaryMuscles": [
+      "shoulders",
+      "triceps"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Barbell_Bench_Press_-_Medium_Grip",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Bench_Press_-_Medium_Grip.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "barbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)"
+  },
+  "Paused Squat": {
+    "equipment": "barbell",
+    "reason": "Still position reference only; the source does not teach the pause. Keep pause-specific instruction and motion capture in the backlog.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Squat/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Squat/1.jpg"
+    ],
+    "instructions": [],
+    "secondaryMuscles": [
+      "calves",
+      "glutes",
+      "hamstrings",
+      "lower back"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Barbell_Squat",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Barbell_Squat.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "barbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)"
+  },
+  "Side Plank": {
+    "equipment": "bodyweight",
+    "reason": "Use the visually reviewed raised-hip forearm-plank still, not the lowered-hip starting frame.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Side_Bridge/1.jpg"
+    ],
+    "instructions": [
+      "Works your obliques and helps stabilize your spine. Lie on your side and support your body between your forearm and knee to your feet."
+    ],
+    "secondaryMuscles": [
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Side_Bridge",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Side_Bridge.json",
+        "license": "Unlicense"
+      },
+      {
+        "provider": "wger",
+        "sourceId": 580,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/580/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "http://www.bodybuilding.com/"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "static",
+      "mechanic": null,
+      "category": "strength",
+      "equipment": "body only"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "wger · http://www.bodybuilding.com/ · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/580/"
+  },
+  "Forearm Side Plank": {
+    "equipment": "bodyweight",
+    "reason": "Use the visually reviewed raised-hip forearm-plank still, not the lowered-hip starting frame.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Side_Bridge/1.jpg"
+    ],
+    "instructions": [
+      "Works your obliques and helps stabilize your spine. Lie on your side and support your body between your forearm and knee to your feet."
+    ],
+    "secondaryMuscles": [
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Side_Bridge",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Side_Bridge.json",
+        "license": "Unlicense"
+      },
+      {
+        "provider": "wger",
+        "sourceId": 580,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/580/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "http://www.bodybuilding.com/"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "static",
+      "mechanic": null,
+      "category": "strength",
+      "equipment": "body only"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "wger · http://www.bodybuilding.com/ · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/580/"
+  },
+  "90-90 Hip Switch": {
+    "equipment": "bodyweight",
+    "reason": "Seated 90/90 hip transitions.",
+    "images": [],
+    "instructions": [
+      "Sit on the floor with one leg bent at 90 degrees in front of you and the other leg bent at 90 degrees out to the side, so that the rear shin is parallel to the front shin. Keep your torso upright and, if possible, your hands off the floor.",
+      "Rotate both knees over to the other side so that the legs swap positions and you arrive in the same 90/90 position facing the opposite way. Move slowly and under control, keeping the feet in contact with the floor, and alternate sides for the desired number of repetitions.",
+      "Mobility drill for internal and external rotation of the hips."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 2613,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/2613/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": ""
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · wger contributors · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/2613/"
+  },
+  "Ankle Mobility Rock": {
+    "equipment": "bodyweight",
+    "reason": "Use the heel-down dorsiflexion description. Exclude the third-party branded screenshot pending direct source permission.",
+    "images": [],
+    "instructions": [
+      "Move your knee forward, keeping your heel on the ground. Hold the position for a couple of seconds and return to the starting position."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1804,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1804/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Davidgj32"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · Davidgj32 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1804/"
+  },
+  "Bird Dog": {
+    "equipment": "bodyweight",
+    "reason": "Use the quadruped contralateral-extension description. Exclude the unverified synthetic-looking illustration from production imagery.",
+    "images": [],
+    "instructions": [
+      "Begin on all fours with hands under shoulders and knees under hips, keeping your spine neutral.",
+      "Extend your right arm forward and left leg backward simultaneously, keeping hips square.",
+      "Pause briefly at full extension while engaging your core and glutes.",
+      "Return to the starting position and repeat on the opposite side"
+    ],
+    "secondaryMuscles": [
+      "Shoulders",
+      "Glutes"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1572,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1572/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Settebello"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Abs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · Settebello · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1572/"
+  },
+  "Bicycle Crunch": {
+    "equipment": "bodyweight",
+    "reason": "Alternating elbow-to-opposite-knee floor bicycle crunch.",
+    "images": [],
+    "instructions": [
+      "Bicycle crunches are a core exercise performed on the floor. Lie on your back with your hands behind your head and legs extended. Lift your shoulders off the ground, bring one knee toward your chest, and twist your torso so your opposite elbow meets the knee. Alternate sides in a pedaling motion, ensuring controlled movements and engaging your core throughout the exercise."
+    ],
+    "secondaryMuscles": [
+      "Obliquus externus abdominis"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1412,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1412/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "hpmbala@gmail.com"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Abs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · hpmbala@gmail.com · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1412/"
+  },
+  "Cable Woodchopper": {
+    "equipment": "cable",
+    "reason": "Standing high-to-low diagonal cable wood chop, both hands on a single handle, matching the canonical cable exercise.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Standing_Cable_Wood_Chop/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Standing_Cable_Wood_Chop/1.jpg"
+    ],
+    "instructions": [
+      "Connect a standard handle to a tower, and move the cable to the highest pulley position.",
+      "With your side to the cable, grab the handle with one hand and step away from the tower. You should be approximately arm's length away from the pulley, with the tension of the weight on the cable. Your outstretched arm should be aligned with the cable.",
+      "With your feet positioned shoulder width apart, reach upward with your other hand and grab the handle with both hands. Your arms should still be fully extended.",
+      "In one motion, pull the handle down and across your body to your front knee while rotating your torso.",
+      "Keep your back and arms straight and core tight while you pivot your back foot and bend your knees to get a full range of motion.",
+      "Maintain your stance and straight arms. Return to the neutral position in a slow and controlled manner.",
+      "Repeat to failure.",
+      "Then, reposition and repeat the same series of movements on the opposite side."
+    ],
+    "secondaryMuscles": [
+      "shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Standing_Cable_Wood_Chop",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Standing_Cable_Wood_Chop.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "pull",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "cable"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Standing_Cable_Wood_Chop.json"
+  },
+  "Cat-Cow": {
+    "equipment": "bodyweight",
+    "reason": "Both spinal flexion and extension on all fours; a cat-only stretch was rejected.",
+    "images": [],
+    "instructions": [
+      "First get into the four-footed stance. The hands are underneath the shoulders. The fingers are fanned out wide and ensure a stable stance. It is best to rest your front body weight on your thumbs and index fingers. Now place your legs hip-width apart on the yoga mat. Your thighs should be vertically below your hips. Make sure that your weight is evenly distributed between your hands and knees. Your head is an extension of your spine and you are looking down at your mat. Your back is in a neutral position. Breathe in deeply and start with the cat. With the next exhalation, round your back vertebra by vertebra. Try to pull yourself as far as possible towards the ceiling. Pull your head towards your chest and tilt your pelvis. Now inhale deeply and move into the opposite position, cow pose. Bend your back down, pull your shoulders back slightly and lift your head as far as is comfortable for you. Your gaze is directed upwards. Breathe out consciously and switch back to the cat. With the next exhalation, switch back to cow. Repeat the exercise a few times and make sure that you are in the flow."
+    ],
+    "secondaryMuscles": [
+      "Obliquus externus abdominis",
+      "Abs"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1244,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1244/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "damnlost"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Back",
+      "equipment": "Gym mat"
+    },
+    "instructionAttribution": "wger · damnlost · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1244/"
+  },
+  "Child Pose": {
+    "equipment": "bodyweight",
+    "reason": "Exact child pose: hands/knees setup followed by hips onto heels and arms forward. Public-domain source photos for the existing canonical bodyweight movement.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Childs_Pose/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Childs_Pose/1.jpg"
+    ],
+    "instructions": [
+      "Get on your hands and knees, walk your hands in front of you.",
+      "Lower your buttocks down to sit on your heels. Let your arms drag along the floor as you sit back to stretch your entire spine.",
+      "Once you settle onto your heels, bring your hands next to your feet and relax. \"breathe\" into your back. Rest your forehead on the floor. Avoid this position if you have knee problems."
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "middle back"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Childs_Pose",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Childs_Pose.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "static",
+      "mechanic": null,
+      "category": "stretching",
+      "equipment": null
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Childs_Pose.json"
+  },
+  "Cobra Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Prone supported spinal extension with hips down.",
+    "images": [],
+    "instructions": [
+      "The Cobra Stretch is a back extension exercise that helps improve spinal flexibility and relieve lower back tension. To perform, lie face down on the floor with your hands placed under your shoulders. Press your palms into the floor and lift your chest while keeping your hips on the ground. Keep your elbows slightly bent and your shoulders relaxed. Hold the stretch for a few seconds, then slowly lower yourself back down. This exercise is beneficial for improving posture and reducing lower back stiffness."
+    ],
+    "secondaryMuscles": [
+      "Chest"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1450,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1450/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "hpmbala@gmail.com"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Back",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · hpmbala@gmail.com · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1450/"
+  },
+  "Dumbbell Thruster": {
+    "equipment": "dumbbell",
+    "reason": "Front-racked dumbbell squat flowing into an overhead press.",
+    "images": [],
+    "instructions": [
+      "Start with the dumbbells resting on your shoulders and squat down. Push\ninto standing and raise the dumbbells into an overhead position. Bring\nthe dumbbells back to your shoulders and repeat."
+    ],
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1684,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1684/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "meldun"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "Dumbbell"
+    },
+    "instructionAttribution": "wger · meldun · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1684/"
+  },
+  "Dumbbell Hip Thrust": {
+    "equipment": "dumbbell",
+    "reason": "Retain source metadata only: branded high-resolution media needs its original rights source, and the text does not establish bench support.",
+    "images": [],
+    "instructions": [],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1642,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1642/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "AlucardEvil40"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "Dumbbell"
+    }
+  },
+  "Figure Four Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Supine ankle-over-knee glute stretch.",
+    "images": [
+      "https://wger.de/media/exercise-images/1869/c49187bd-9f90-4a7a-b25e-1d50e857a104.png"
+    ],
+    "instructions": [
+      "Lie on your back with both knees bent and your feet flat on the floor. Cross one ankle over the opposite knee so that your legs form a figure four.",
+      "Reach through the gap and hold the back of the thigh of the lower leg, or its shin, and gently pull it towards your chest until you feel a stretch in the glute and outer hip of the crossed leg. Keep your head and lower back on the floor and let the crossed knee open outwards. Hold the stretch and breathe calmly, then switch sides."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1869,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1869/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Davidgj32"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "imageAttribution": "wger · Davidgj32 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionAttribution": "wger · Davidgj32 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1869/"
+  },
+  "High Knees": {
+    "equipment": "bodyweight",
+    "reason": "Use the running-in-place description; the visually reviewed repeated-pose illustration is not a reliable alternating-movement sequence.",
+    "images": [],
+    "instructions": [
+      "Run in place, putting knees as high up as is comfortable and switching legs at a quick pace."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 983,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/983/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": ""
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Cardio",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · wger contributors · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/983/"
+  },
+  "High Plank": {
+    "equipment": "bodyweight",
+    "reason": "Straight-arm high plank rather than the forearm plank.",
+    "images": [],
+    "instructions": [
+      "Maintain the starting position for the entire duration of the exercise."
+    ],
+    "secondaryMuscles": [
+      "Shoulders",
+      "Obliquus externus abdominis",
+      "Triceps"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1001,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1001/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": ""
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Chest",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · wger contributors · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1001/"
+  },
+  "Hollow Hold": {
+    "equipment": "bodyweight",
+    "reason": "Supine hollow-body hold, keeping the lower back down.",
+    "images": [],
+    "instructions": [
+      "Get on a mat and lie on your back. Contract your abs, stretch your arms and legs and raise them (your head and shoulders are also be raised). Make sure your lower back remains in contact with the mat."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 297,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/297/",
+        "license": "CC0",
+        "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+        "author": "Behrooz"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Abs",
+      "equipment": "Gym mat"
+    },
+    "instructionAttribution": "wger · Behrooz · CC0 · http://creativecommons.org/publicdomain/zero/1.0/",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/297/"
+  },
+  "Jumping Jack": {
+    "equipment": "bodyweight",
+    "reason": "Feet-apart, arms-overhead jumping jack; generated source images are excluded.",
+    "images": [],
+    "instructions": [
+      "A jumping jack or star jump, also called side-straddle hop in the US military, is a physical jumping exercise performed by jumping to a position with the legs spread wide and the hands going overhead, sometimes in a clap, and then returning to a position with the feet together and the arms at the sides"
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 320,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/320/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "student1234"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs"
+    },
+    "instructionAttribution": "wger · student1234 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/320/"
+  },
+  "Meadows Row": {
+    "equipment": "barbell",
+    "reason": "Unilateral overhand landmine row, preserving the named setup.",
+    "images": [],
+    "instructions": [
+      "The Meadows row is a unilateral row performed with a landmine setup, overhand grip, and staggered stance. Lean your torso forward and grip the barbell. Rest the other forearm on the forward leg. Start this movement by driving the elbow behind you while retracting the shoulder-blade. Keep the working shoulder down. Pull toward your back hip until the elbow is level with your torso."
+    ],
+    "secondaryMuscles": [
+      "Biceps",
+      "Abs"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1304,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1304/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "carlos3c"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Back",
+      "equipment": "Barbell"
+    },
+    "instructionAttribution": "wger · carlos3c · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1304/"
+  },
+  "Pike Push-up": {
+    "equipment": "bodyweight",
+    "reason": "Pike-position bodyweight push-up; no exercise-ball substitution.",
+    "images": [],
+    "instructions": [
+      "Push Up performed from a pike position (optional to have feet elevated)."
+    ],
+    "secondaryMuscles": [
+      "Triceps"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 454,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/454/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Nash"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Arms",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · Nash · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/454/"
+  },
+  "Reverse Lunge": {
+    "equipment": "bodyweight",
+    "reason": "Use the explicit step-back guide; the image sequence does not reliably establish reverse rather than forward stepping.",
+    "images": [],
+    "instructions": [
+      "Step backward with one leg so it can bend comfortably to a 90 degree angle.",
+      "Slowly bend both knees to form 90 degree angles.",
+      "Return to the starting position.",
+      "Repeat, alternating legs."
+    ],
+    "secondaryMuscles": [
+      "Hamstrings"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 999,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/999/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": ""
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · wger contributors · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/999/"
+  },
+  "Seated Knee Tuck": {
+    "equipment": "bodyweight",
+    "reason": "Floor-seated knee tuck with the hands behind the torso.",
+    "images": [
+      "https://wger.de/media/exercise-images/1105/36776818-799a-40bf-9eca-aebb3aa5008f.png"
+    ],
+    "instructions": [
+      "Sit on floor or mat. Place arms slightly behind you. Raise legs. Now extend your legs and pull them back."
+    ],
+    "secondaryMuscles": [
+      "Obliquus externus abdominis"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1105,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1105/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "utkb"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Abs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "imageAttribution": "wger · utkb · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionAttribution": "wger · utkb · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1105/"
+  },
+  "Step Jack": {
+    "equipment": "bodyweight",
+    "reason": "Stepping jack without a jump; keep separate from a standard jumping jack.",
+    "images": [],
+    "instructions": [
+      "​Stand upright with your feet together and arms at your sides.",
+      "​Step your right foot out to the side while simultaneously swinging both arms up above your head.",
+      "Bring your right foot back to the center and lower your arms.",
+      "​Immediately repeat the movement, stepping out with your left foot.",
+      "​Continue alternating sides at a steady, rhythmic pace."
+    ],
+    "secondaryMuscles": [
+      "Shoulders",
+      "Glutes",
+      "Obliquus externus abdominis",
+      "Abs"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1962,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1962/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Anon#2"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Cardio",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · Anon#2 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1962/"
+  },
+  "Suitcase Carry": {
+    "equipment": "dumbbell",
+    "reason": "One-sided dumbbell carry rather than a two-sided farmer carry.",
+    "images": [],
+    "instructions": [
+      "Walk forward and backward with holding dumbbell on one side without leaning to counter the weight."
+    ],
+    "secondaryMuscles": [
+      "Abs",
+      "Trapezius"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1776,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1776/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "aboksz"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Abs",
+      "equipment": "Dumbbell"
+    },
+    "instructionAttribution": "wger · aboksz · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1776/"
+  },
+  "Tibialis Raise": {
+    "equipment": "bodyweight",
+    "reason": "Standing toe lift with heels grounded.",
+    "images": [],
+    "instructions": [
+      "Stand up straight",
+      "Lift the balls of your feet, resting on your heels."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1200,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1200/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "cynomops"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Calves",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · cynomops · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1200/"
+  },
+  "Barbell Bench Press": {
+    "equipment": "barbell",
+    "reason": "Barbell flat bench press; include its separately licensed H.264 MP4 demonstration.",
+    "images": [
+      "https://wger.de/media/exercise-images/192/Bench-press-1.png",
+      "https://wger.de/media/exercise-images/192/Bench-press-2.png"
+    ],
+    "instructions": [
+      "Lay down on a bench, the bar should be directly above your eyes, the knees are somewhat angled and the feet are firmly on the floor. Concentrate, breath deeply and grab the bar more than shoulder wide. Bring it slowly down till it briefly touches your chest at the height of your nipples. Push the bar up.",
+      "If you train with a high weight it is advisable to have a *spotter* that can help you up if you can't lift the weight on your own.",
+      "With the width of the grip you can also control which part of the chest is trained more:",
+      "* wide grip: outer chest muscles\n* narrow grip: inner chest muscles and triceps"
+    ],
+    "secondaryMuscles": [
+      "Shoulders",
+      "Triceps"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 73,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/73/",
+        "license": "CC-BY-SA 3",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+        "author": "sistab2"
+      }
+    ],
+    "demoVideos": [
+      {
+        "id": -50023,
+        "videoUrl": "https://wger.de/media/exercise-video/73/cfb72002-898f-443a-a124-a0bce8a2e6ad.MP4",
+        "kind": "demo",
+        "languageCode": "und",
+        "youtubeVideoId": "",
+        "title": "Barbell Bench Press — demonstration",
+        "channelName": "wger",
+        "durationSeconds": 22,
+        "attribution": "wger · Goulart · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/73/"
+      }
+    ],
+    "classification": {
+      "category": "Chest",
+      "equipment": "Barbell, Bench"
+    },
+    "imageAttribution": "wger · Everkinetic · CC-BY-SA 3 · https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "instructionAttribution": "wger · sistab2 · CC-BY-SA 3 · https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/73/"
+  },
+  "EZ-Bar Skull Crusher": {
+    "equipment": "barbell",
+    "reason": "Lying EZ-bar triceps extension; include its separately licensed H.264 MP4 demonstration.",
+    "images": [
+      "https://wger.de/media/exercise-images/84/Lying-close-grip-triceps-press-to-chin-1.png",
+      "https://wger.de/media/exercise-images/84/Lying-close-grip-triceps-press-to-chin-2.png"
+    ],
+    "instructions": [
+      "Hold the SZ-bar and lay down on a flat bench in such a way that around 1/4 of your head is over the edge. Stretch your arms with the bar and bend them so that the bar is lowered. Just before it touches your forehead, push it up.",
+      "Pay attention to your elbows and arms: only the triceps are doing the work, the rest of the arms should not move."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 246,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/246/",
+        "license": "CC-BY-SA 3",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+        "author": "wger.de"
+      }
+    ],
+    "demoVideos": [
+      {
+        "id": -50061,
+        "videoUrl": "https://wger.de/media/exercise-video/246/75eb8c88-922e-45c5-8be3-ac073f62b63f.MP4",
+        "kind": "demo",
+        "languageCode": "und",
+        "youtubeVideoId": "",
+        "title": "EZ-Bar Skull Crusher — demonstration",
+        "channelName": "wger",
+        "durationSeconds": 16,
+        "attribution": "wger · Goulart · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/246/"
+      }
+    ],
+    "classification": {
+      "category": "Arms",
+      "equipment": "Bench, SZ-Bar"
+    },
+    "imageAttribution": "wger · Everkinetic · CC-BY-SA 3 · https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "instructionAttribution": "wger · wger.de · CC-BY-SA 3 · https://creativecommons.org/licenses/by-sa/3.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/246/"
+  },
+  "Dips - Triceps Version": {
+    "equipment": "bodyweight",
+    "reason": "Triceps-focused parallel-bar dip; include the source demonstration without claiming an instructional tutorial.",
+    "images": [
+      "https://wger.de/media/exercise-images/194/34600351-8b0b-4cb0-8daa-583537be15b0.png"
+    ],
+    "instructions": [
+      "A dip is an upper-body strength exercise. Narrow, shoulder-width dips primarily train the triceps, with major synergists being the anterior deltoid, the pectoralis muscles (sternal, clavicular, and minor), and the rhomboid muscles of the back (in that order).[1] Wide arm training places additional emphasis on the pectoral muscles, similar in respect to the way a wide grip bench press would focus more on the pectorals and less on the triceps."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 194,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/194/",
+        "license": "CC0",
+        "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+        "author": "BFad07"
+      }
+    ],
+    "demoVideos": [
+      {
+        "id": -50064,
+        "videoUrl": "https://wger.de/media/exercise-video/194/d039ec90-474d-47a9-a3ad-bf0b00828c82.MP4",
+        "kind": "demo",
+        "languageCode": "und",
+        "youtubeVideoId": "",
+        "title": "Dips - Triceps Version — demonstration",
+        "channelName": "wger",
+        "durationSeconds": 13,
+        "attribution": "wger · Goulart · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/194/"
+      }
+    ],
+    "classification": {
+      "category": "Chest",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "imageAttribution": "wger · cshep442 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionAttribution": "wger · BFad07 · CC0 · http://creativecommons.org/publicdomain/zero/1.0/",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/194/"
+  },
+  "Captain Chair Knee Raise": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Starting position",
+      "Step into the captain's chair (vertical knee raise station). Rest your forearms on the pads and hold the handles. Keep your upper body upright, look straight ahead and press your back against the pad, without rounding or arching it. Your legs are almost straight with a slight bend in the knees, your feet are off the floor and your legs are together.",
+      "Movement",
+      "Pull your bent legs up, bringing your knees towards your chest. Only go as high as you can while keeping good form, with your legs together the whole time. Then lower your legs again while inhaling, without putting your feet back on the floor."
+    ],
+    "secondaryMuscles": [
+      "Serratus anterior"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 2674,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/2674/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "fen"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Abs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · fen · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/2674/"
+  },
+  "Chest Doorway Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Place the forearm vertically on a door frame or stationary object at head height",
+      "Step forward past the arm, keeping it still against the object to stretch the chest"
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1713,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1713/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Croak6728"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Chest",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · Croak6728 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1713/"
+  },
+  "Kettlebell Deadlift": {
+    "equipment": "kettlebell",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Hinge at the hips and slightly bend at the knees to put your hands on the kettlebell handles. Your back should be straight as you perform the movement.",
+      "Grab the kettlebell handles, with your hands pushing in opposite directions as if to pull the handle apart.",
+      "While contacting your abs and glutes, stand straight up.",
+      "Hinge at the hips again to bring the kettlebell back down, similarly to step 1.",
+      "Repeat from step 3.",
+      "Tips:",
+      "* Be sure you're performing the movements correctly, as doing otherwise can lead to injury. For example, do not squat instead of hinging at the hips, do not round your back while reaching for the kettlebell, and do not lean back while standing up."
+    ],
+    "secondaryMuscles": [
+      "Quads",
+      "Trapezius"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 1003,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/1003/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": ""
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Back",
+      "equipment": "Kettlebell"
+    },
+    "instructionAttribution": "wger · wger contributors · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/1003/"
+  },
+  "Scapular Push-up": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Start in a straight-arm plank with your hands under your shoulders. Keep your elbows locked and move only your shoulder blades: let your chest sink slightly, then push the floor away to spread the shoulder blades. Move in a comfortable, controlled range."
+    ],
+    "secondaryMuscles": [
+      "Shoulders"
+    ],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 2681,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/2681/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "nalhilal"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Back",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · nalhilal · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/2681/"
+  },
+  "Shoulder Cross-Body Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Extend your right arm straight across your chest toward the left. Hook your left arm around your right elbow and pull your right arm a little closer to your body. Keep your shoulder down as you do this. Repeat on the other side."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 2685,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/2685/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "tobias08"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Shoulders",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · tobias08 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/2685/"
+  },
+  "Squat Thrust": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "The burpee, or squat thrust, is a full body exercise used in strength training and as an aerobic exercise. The basic movement is performed in four steps and known as a four-count burpee: Begin in a standing position. Move into a squat position with your hands on the ground. (count 1) Kick your feet back into a plank position, while keeping your arms extended. (count 2) Immediately return your feet into squat position. (count 3) Stand up from the squat position (count 4)"
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 616,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/616/",
+        "license": "CC0",
+        "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/",
+        "author": "BFad07"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Legs",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · BFad07 · CC0 · http://creativecommons.org/publicdomain/zero/1.0/",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/616/"
+  },
+  "Wall Slide": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Stand with heels, shoulders, back of head, and hips touching the wall. Start with biceps straight out and elbows at a 90 degree angle. Straighten the arms while remaining againstthe wall without arching the back off of the wall, mimicking a shoulder press movement."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 716,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/716/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "Whythebigpaws"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Back",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · Whythebigpaws · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/716/"
+  },
+  "Wrist Flexor Stretch": {
+    "equipment": "bodyweight",
+    "reason": "Reviewed licensed English movement instructions match the named setup and equipment. Images were not reviewed and are deliberately excluded.",
+    "images": [],
+    "instructions": [
+      "Extend your right arm straight out in front of you, with your palm facing up (fingers pointing toward the floor). Using your left hand, gently pull the fingers of your right hand toward you until you feel a stretch in your forearm and biceps."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "wger",
+        "sourceId": 2686,
+        "sourceUrl": "https://wger.de/api/v2/exerciseinfo/2686/",
+        "license": "CC-BY-SA 4",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+        "author": "tobias08"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "category": "Arms",
+      "equipment": "none (bodyweight exercise)"
+    },
+    "instructionAttribution": "wger · tobias08 · CC-BY-SA 4 · https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+    "instructionSourceUrl": "https://wger.de/api/v2/exerciseinfo/2686/"
+  },
+  "Bulgarian Split Squat": {
+    "equipment": "dumbbell",
+    "reason": "Dumbbell split squat with rear foot elevated, matching the Bulgarian variant and preserving existing catalogue equipment.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Split_Squat_with_Dumbbells/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Split_Squat_with_Dumbbells/1.jpg"
+    ],
+    "instructions": [
+      "Position yourself into a staggered stance with the rear foot elevated and front foot forward.",
+      "Hold a dumbbell in each hand, letting them hang at the sides. This will be your starting position.",
+      "Begin by descending, flexing your knee and hip to lower your body down. Maintain good posture througout the movement. Keep the front knee in line with the foot as you perform the exercise.",
+      "At the bottom of the movement, drive through the heel to extend the knee and hip to return to the starting position."
+    ],
+    "secondaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Split_Squat_with_Dumbbells",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Split_Squat_with_Dumbbells.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "beginner",
+      "force": "push",
+      "mechanic": "compound",
+      "category": "strength",
+      "equipment": "dumbbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Split_Squat_with_Dumbbells.json"
+  },
+  "Single-Arm Overhead Triceps Extension": {
+    "equipment": "dumbbell",
+    "reason": "Single dumbbell held above the head with one arm, elbow flexion/extension; source supports seated and standing setups.",
+    "images": [
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_One-Arm_Triceps_Extension/0.jpg",
+      "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_One-Arm_Triceps_Extension/1.jpg"
+    ],
+    "instructions": [
+      "Grab a dumbbell and either sit on a military press bench or a utility bench that has a back support on it as you place the dumbbells upright on top of your thighs or stand up straight.",
+      "Clean the dumbbell up to bring it to shoulder height and then extend the arm over your head so that the whole arm is perpendicular to the floor and next to your head. The dumbbell should be on top of you. The other hand can be kept fully extended to the side, by the waist, supporting the upper arm that has the dumbbell or grabbing a fixed surface.",
+      "Rotate the wrist so that the palm of your hand is facing forward and the pinkie is facing the ceiling. This will be your starting position.",
+      "Slowly lower the dumbbell behind your head as you hold the upper arm stationary. Inhale as you perform this movement and pause when your triceps are fully stretched.",
+      "Return to the starting position by flexing your triceps as you breathe out. Tip: It is imperative that only the forearm moves. The upper arm should remain at all times stationary next to your head.",
+      "Repeat for the recommended amount of repetitions and switch arms."
+    ],
+    "secondaryMuscles": [],
+    "providers": [
+      {
+        "provider": "free-exercise-db",
+        "sourceId": "Dumbbell_One-Arm_Triceps_Extension",
+        "sourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_One-Arm_Triceps_Extension.json",
+        "license": "Unlicense"
+      }
+    ],
+    "demoVideos": [],
+    "classification": {
+      "difficulty": "intermediate",
+      "force": "push",
+      "mechanic": "isolation",
+      "category": "strength",
+      "equipment": "dumbbell"
+    },
+    "imageAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionAttribution": "free-exercise-db (Public Domain / Unlicense)",
+    "instructionSourceUrl": "https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/exercises/Dumbbell_One-Arm_Triceps_Extension.json"
+  }
+}

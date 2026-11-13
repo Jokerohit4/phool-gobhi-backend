@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 let profile = null;
+let cycleProfile = null;
 let sessionExercises = [];
 let templates = [];
 
@@ -22,7 +23,16 @@ test('setup: mock prisma once, import the services once', async (t) => {
     exports: {
       PrismaClient: class {
         constructor() {
-          this.sessionExercise = { findMany: async () => sessionExercises };
+          // Last-trained aggregate (one row per muscle group, MAX(startedAt)),
+          // derived from the fixture rows the way the SQL would.
+          this.$queryRaw = async () => {
+            const max = new Map();
+            for (const se of sessionExercises) {
+              const g = se.exercise.muscleGroup;
+              if (!max.has(g) || se.session.startedAt > max.get(g)) max.set(g, se.session.startedAt);
+            }
+            return [...max].map(([muscleGroup, lastTrainedAt]) => ({ muscleGroup, lastTrainedAt }));
+          };
           this.workoutTemplate = { findMany: async () => templates };
           this.workoutSession = { findMany: async () => [] };
           this.workoutSet = { findMany: async () => [] };
@@ -32,8 +42,15 @@ test('setup: mock prisma once, import the services once', async (t) => {
               profile = profile ? { ...profile, ...update } : { injuryZones: [], ...create };
               return profile;
             },
+            updateMany: async ({ data }) => {
+              profile = profile ? { ...profile, ...data } : null;
+              return { count: profile ? 1 : 0 };
+            },
             deleteMany: async () => { profile = null; },
           };
+          // Read by progressService's lazy expiry of a cycle-owned recovery
+          // mode (releaseExpiredRecoveryMode). Null unless a test opts in.
+          this.cycleTrackingProfile = { findUnique: async () => cycleProfile };
         }
       },
       Prisma: {},
@@ -76,6 +93,7 @@ test('recovery mode stretches the window, so a recently-trained group stays reco
     { exercise: { muscleGroup: 'chest' }, session: { startedAt: daysAgo(2) } },
   ];
   templates = [];
+  cycleProfile = null;
 
   profile = { programmingMode: 'neutral', injuryZones: [] };
   const neutral = await getMuscleReadinessService(1);
@@ -85,6 +103,50 @@ test('recovery mode stretches the window, so a recently-trained group stays reco
   const recovery = await getMuscleReadinessService(1);
   assert.equal(recovery.readiness.find((r) => r.muscleGroup === 'chest').status, 'recovering');
   assert.equal(recovery.suppressPrPush, true, 'recovery mode must tell the client not to push PRs');
+});
+
+test('a cycle recovery mode whose window has closed lapses to neutral in readiness', async () => {
+  // The expiry is read-side: no cron needed. A low_impact the cycle sync set
+  // during the last period must not keep stretching windows weeks later.
+  sessionExercises = [];
+  templates = [];
+  profile = { programmingMode: 'low_impact_recovery', injuryZones: [] };
+  cycleProfile = {
+    userId: 1,
+    managesProgrammingMode: true,
+    lastPeriodStartDate: new Date(daysAgo(20)),
+  };
+
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.programmingMode, 'neutral', 'an owned, expired override is released');
+  assert.equal(result.suppressPrPush, false);
+  assert.equal(profile.programmingMode, 'neutral', 'the stored mode is cleared, not just the copy');
+});
+
+test('a cycle recovery mode inside its window keeps low-impact in readiness', async () => {
+  sessionExercises = [
+    { exercise: { muscleGroup: 'chest' }, session: { startedAt: daysAgo(2) } },
+  ];
+  templates = [];
+  profile = { programmingMode: 'low_impact_recovery', injuryZones: [] };
+  cycleProfile = { userId: 1, managesProgrammingMode: true, lastPeriodStartDate: new Date(daysAgo(0)) };
+
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.programmingMode, 'low_impact_recovery');
+  assert.equal(result.suppressPrPush, true);
+});
+
+test('a user-chosen low-impact is not expired by the cycle window', async () => {
+  // managesProgrammingMode distinguishes our programmatic override from the
+  // user's own choice (typically injury). Hers is never auto-expired.
+  sessionExercises = [];
+  templates = [];
+  profile = { programmingMode: 'low_impact_recovery', injuryZones: ['knee'] };
+  cycleProfile = { userId: 1, managesProgrammingMode: false, lastPeriodStartDate: new Date(daysAgo(20)) };
+
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.programmingMode, 'low_impact_recovery');
+  assert.equal(result.suppressPrPush, true);
 });
 
 test('female_default re-ranks toward the lower-body routine', async () => {
@@ -168,4 +230,50 @@ test('Step A and Step B save independently without wiping each other', async () 
 
   assert.equal(profile.heightCm, 175, 'Step B must not wipe Step A');
   assert.deepEqual(profile.injuryZones, ['shoulder']);
+});
+
+// Home setup (onboarding audit P2): the suggestion engine must actually use
+// it, not just store it.
+test('a routine needing kit the user lacks is passed over for one that fits', async () => {
+  sessionExercises = [];
+  templates = [
+    { id: 7, name: 'Dumbbell Upper', exercises: [
+      { exercise: { muscleGroup: 'chest', equipment: 'dumbbell' } },
+    ] },
+    { id: 8, name: 'Bodyweight Upper', exercises: [
+      { exercise: { muscleGroup: 'chest', equipment: 'bodyweight' } },
+    ] },
+  ];
+  profile = { programmingMode: 'neutral', injuryZones: [], homeSetupAt: new Date(), homeEquipment: ['none'] };
+  const result = await getMuscleReadinessService(1);
+  assert.equal(result.suggestedTemplate.id, 8, 'no dumbbells at home, so not the dumbbell routine');
+
+  // Unknown setup: the original tie-break (first wins) is untouched.
+  profile = { programmingMode: 'neutral', injuryZones: [] };
+  assert.equal((await getMuscleReadinessService(1)).suggestedTemplate.id, 7);
+});
+
+test('if nothing fits, the routine is still suggested rather than hidden', async () => {
+  sessionExercises = [];
+  templates = [
+    { id: 9, name: 'Dumbbell Upper', exercises: [
+      { exercise: { muscleGroup: 'chest', equipment: 'dumbbell' } },
+    ] },
+  ];
+  profile = { programmingMode: 'neutral', injuryZones: [], homeSetupAt: new Date(), homeEquipment: ['none'] };
+  assert.equal((await getMuscleReadinessService(1)).suggestedTemplate.id, 9);
+});
+
+test('saving any home-setup answer (or skipping) stamps homeSetupAt', async () => {
+  profile = null;
+  const saved = await upsertProfileService(1, { homeEquipment: [] });
+  assert.ok(saved.homeSetupAt instanceof Date, '"I have nothing" is an answer');
+
+  profile = null;
+  const skipped = await upsertProfileService(1, { homeSetupAnswered: true });
+  assert.ok(skipped.homeSetupAt instanceof Date, 'a skip is remembered, so it is not asked again');
+
+  profile = null;
+  const other = await upsertProfileService(1, { heightCm: 170 });
+  assert.equal(other.homeSetupAt, undefined, 'unrelated saves never mark it answered');
 });

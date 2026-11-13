@@ -1,0 +1,78 @@
+-- Reconciles the database with schema.prisma, in both directions.
+--
+-- Why this file exists at all: `prisma migrate diff --from-url <db>
+-- --to-schema-datamodel prisma/schema.prisma` had been reporting four
+-- differences for as long as the drift checker had existed. All four were
+-- pre-existing and none had ever been applied, which is exactly how a drift
+-- report stops being read. Three of them were the schema lying about the
+-- database and were fixed in the schema instead - they are listed at the
+-- bottom because a migration with no statement for them looks like an
+-- oversight rather than a decision.
+--
+-- Two remain that genuinely need SQL, and they are opposite mistakes: an index
+-- the schema promises and the database never got, and a column default the
+-- schema does not promise and the database has had since day one.
+--
+-- Safe to run against a database that already has these shapes: both
+-- statements are guarded, and both are no-ops when the object is already right.
+-- Running the migrations from empty to here produces the same result as
+-- running this file against the drifted production schema.
+
+-- ---- 1. SavedMealLine_savedMealId_idx: promised, never created ---------------
+--
+-- schema.prisma has declared @@index([savedMealId]) on SavedMealLine since the
+-- model was written, and 20260927000000_add_health_ledger never created it, so
+-- `migrate diff` reported the database as missing an index forever.
+--
+-- Unlike the NutritionTarget case - where the declared index was redundant and
+-- the declaration was deleted instead - nothing else here serves this column.
+-- There is no FK constraint and no other index on the table, so the reads are
+-- unindexed full scans of SavedMealLine.
+--
+-- The read path is `include: { lines: { orderBy: { order: 'asc' } } }` on the
+-- parent SavedMeal (nutritionService.logSavedMeal). Prisma turns that into a
+-- separate statement with `WHERE savedMealId IN (...)`, not into a join, so this
+-- index is on the actual hot query rather than on a theoretical one. The cost
+-- side is one extra index entry per saved-meal line, which is small and bounded
+-- by the number of meals a person has saved.
+CREATE INDEX IF NOT EXISTS "SavedMealLine_savedMealId_idx"
+  ON "health"."SavedMealLine"("savedMealId");
+
+-- ---- 2. CyclePhaseEntry.updatedAt: a default nobody declared -----------------
+--
+-- The reverse error. 20261007000000_add_cycle_phase_entry_updated_at added this
+-- column as NOT NULL DEFAULT CURRENT_TIMESTAMP, which was the right call at the
+-- time - a NOT NULL column cannot be added to a table that already has rows
+-- without a default to backfill them.
+--
+-- What that migration did not do is drop the default afterwards, and the
+-- datamodel never declared one: `updatedAt DateTime @updatedAt` means the
+-- Prisma client writes the value on every INSERT and UPDATE. So the default is
+-- dead code that also actively hides a bug: an insert written by raw SQL, a
+-- future service without codegen, or a buggy write path that forgets the field
+-- would still get a plausible timestamp and look correct, when the truth is
+-- that nobody touched the row. Every other table in this service has been
+-- plain `NOT NULL` on updatedAt since the ledger migration, including
+-- FoodRequest in 20261010000000.
+--
+-- Dropping a default does not touch existing rows and does not fail: the
+-- column stays NOT NULL, and any write that omits the column now gets an error
+-- instead of a lie. That is the intended outcome.
+ALTER TABLE "health"."CyclePhaseEntry"
+  ALTER COLUMN "updatedAt" DROP DEFAULT;
+
+-- ---- Fixed in the schema, deliberately with no SQL here ----------------------
+--
+-- FoodPhotoRequestLog (outcome, requestedAt): 20260929000000_food_photo_
+-- recognition created this index on purpose and the schema never declared it.
+-- Adding CREATE INDEX here would have been a no-op against any migrated
+-- database, and against a fresh one the original migration already creates it.
+-- The declaration was added to schema.prisma instead, which is what was
+-- actually missing.
+--
+-- NutritionTarget @@index([userId]): declared in the schema, never created,
+-- and never needed. NutritionTarget_userId_effectiveFrom_key is a unique btree
+-- with userId as its LEADING column, so it already serves every userId lookup
+-- on the table. Creating the index would have added a second tree with the
+-- same leading column - paid for on every insert and delete, used by nothing.
+-- The declaration was deleted instead.

@@ -1,0 +1,10 @@
+{
+  "environment": "dev",
+  "runtimeAccount": "gateway-sa@phool-gobhi.iam.gserviceaccount.com",
+  "publishedCopies": 2,
+  "rawCopies": 2,
+  "uniqueEventIds": 1,
+  "warehouseReadChecked": false,
+  "eventId": "pipeline-probe:4d24c573-3efd-4077-9871-8bd13a2c1913",
+  "passed": true
+}

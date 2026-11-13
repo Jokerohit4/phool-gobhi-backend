@@ -1,0 +1,7 @@
+{
+  "sourceUrl": "https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/dist/exercises.json",
+  "revision": "a859101d633a01c4a1a920d6a8ce41dabba0705f",
+  "records": 876,
+  "upstreamSha256": "5bb747e3fc658f095a60dcbf6d53c96627acdcc6ffb6fffde86f7e26995d40bf",
+  "structuredComparison": "All records and fields equal the pinned upstream JSON."
+}

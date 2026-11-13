@@ -1,0 +1,10 @@
+{
+  "environment": "prod",
+  "runtimeAccount": "backend-svc-sa@phool-gobhi.iam.gserviceaccount.com",
+  "publishedCopies": 2,
+  "rawCopies": 2,
+  "uniqueEventIds": 1,
+  "warehouseReadChecked": true,
+  "eventId": "pipeline-probe:496a8880-8fcd-4f5f-87cf-ddc13010ffc7",
+  "passed": true
+}

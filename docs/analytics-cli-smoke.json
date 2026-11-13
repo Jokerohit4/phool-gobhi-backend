@@ -1,0 +1,30 @@
+[
+  {
+    "environment": "dev",
+    "script": "analytics-digest.cjs",
+    "passed": true,
+    "postgresUrlProvided": false,
+    "outputBytes": 1106
+  },
+  {
+    "environment": "dev",
+    "script": "investor-metrics.cjs",
+    "passed": true,
+    "postgresUrlProvided": false,
+    "outputBytes": 12658
+  },
+  {
+    "environment": "prod",
+    "script": "analytics-digest.cjs",
+    "passed": true,
+    "postgresUrlProvided": false,
+    "outputBytes": 875
+  },
+  {
+    "environment": "prod",
+    "script": "investor-metrics.cjs",
+    "passed": true,
+    "postgresUrlProvided": false,
+    "outputBytes": 7588
+  }
+]

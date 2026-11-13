@@ -1,0 +1,582 @@
+{
+  "selected": [
+    {
+      "exercise": "Wall Sit",
+      "id": "JaZNYM3zAP0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Hollow Hold",
+      "id": "TNHSgs_orU0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Incline Barbell Bench Press",
+      "id": "SrqOu55lrYU",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Decline Barbell Bench Press",
+      "id": "LfyQBUKR8SE",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Smith Machine Bench Press",
+      "id": "z_r6hDOYtO0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Decline Push-up",
+      "id": "SKPab2YC8BE",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Diamond Push-up",
+      "id": "J0DnG1_S92I",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Chest-Supported Dumbbell Row",
+      "id": "ro2vfHfD0DQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Reverse Fly",
+      "id": "d1QEddtoOq0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Wide-Grip Lat Pulldown",
+      "id": "lueEJGjTuPQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Wide-Grip Cable Row",
+      "id": "e9oe5qbN0jo",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Front Squat",
+      "id": "tlfahNdNPPI",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Barbell Glute Bridge",
+      "id": "0od5lwWMGV8",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Zercher Squat",
+      "id": "vpy4ADmlo1E",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Squat",
+      "id": "v_c67Omje48",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Bulgarian Split Squat",
+      "id": "SkNsa3eBwLA",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Hack Squat",
+      "id": "0tn5K9NlCfo",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Lying Leg Curl",
+      "id": "vl5nUdE9mWM",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Reverse Lunge",
+      "id": "-Nr6dqEvz3Q",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Forward Lunge",
+      "id": "g8-Ge9S0aUw",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Single-Leg Glute Bridge",
+      "id": "_K_di6h2-Wg",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Sissy Squat",
+      "id": "VUiFlZ2FsKA",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Single-Leg Calf Raise",
+      "id": "ElcvJ0kjt6c",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Kettlebell Deadlift",
+      "id": "hinonqqzatk",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Front Raise",
+      "id": "CH9JzDStL3U",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Upright Row",
+      "id": "IhZLB48kluc",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Push Press",
+      "id": "Hqxjk5Z35SM",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Barbell Front Raise",
+      "id": "Ofo2DQdT7DA",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Incline Dumbbell Curl",
+      "id": "HhHHBj3qTJ4",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Alternating Dumbbell Curl",
+      "id": "sAq_ocpRh_I",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Zottman Curl",
+      "id": "ZrpRBgswtHs",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Wrist Curl",
+      "id": "7ac_qmBjkFI",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Reverse Wrist Curl",
+      "id": "krZ6pWGZ8xo",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Reverse Barbell Curl",
+      "id": "didEQUuieRQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Skull Crusher",
+      "id": "ir5PsbniVSc",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Rope Hammer Curl",
+      "id": "1Quc_tOv97I",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Seated Knee Tuck",
+      "id": "54q250IUEAc",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Boat Hold",
+      "id": "xmfJyheHY6w",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Rowing Machine",
+      "id": "6_eLpWiNijE",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Jump Rope",
+      "id": "u3zgHI8QnqE",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Burpee",
+      "id": "qLBImHhCXSw",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Bear Crawl",
+      "id": "U3Y58Kyw7Xw",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Kettlebell Swing",
+      "id": "sSESeQAir2M",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Snatch",
+      "id": "0yd9443Y-fg",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Downward Dog",
+      "id": "Xt5WMcSv9Js",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Butterfly Stretch",
+      "id": "-z2LUk9OSO0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Standing Quad Stretch",
+      "id": "kzAsm4WQqvQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Ab Crunch Machine",
+      "id": "LQ1VKHflOXQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Barbell Hack Squat",
+      "id": "64PFHtq5XO8",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Barbell Incline Bench Press - Medium Grip",
+      "id": "SrqOu55lrYU",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Bent Over Barbell Row",
+      "id": "FWJR5Ve8bnQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Cable Hammer Curls - Rope Attachment",
+      "id": "vsarApmqJmo",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Clean and Press",
+      "id": "KCe8l86-alA",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Close-Grip EZ Bar Curl",
+      "id": "o74HeVd6BIw",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Crunches",
+      "id": "0t4t3IpiEao",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Decline Dumbbell Flyes",
+      "id": "IMALXhhHRKM",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Dumbbell Shoulder Press",
+      "id": "0JfYxMRsUCQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Exercise Ball Crunch",
+      "id": "Imui46JTe7s",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Front Squat (Clean Grip)",
+      "id": "tW2H0Ib_hQw",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Hanging Pike",
+      "id": "wVRlRmGsZ2w",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Hurdle Hops",
+      "id": "SuddHMMcK5I",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Internal Rotation with Band",
+      "id": "MfjCK5_Ss5g",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Janda Sit-Up",
+      "id": "UsFGTXPmPaI",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Mountain Climbers",
+      "id": "cnyTQDSE884",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "One-Arm Dumbbell Row",
+      "id": "dFzUjzfih7k",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Preacher Curl",
+      "id": "fIWP-FRFNU0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Smith Machine Upright Row",
+      "id": "vcXkzN6QXbk",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Stairmaster",
+      "id": "SZU9Rm0sNOo",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Standing Barbell Calf Raise",
+      "id": "3UWi44yN-wM",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Svend Press",
+      "id": "cIoUZOnypS8",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Tate Press",
+      "id": "IgSjoXbpy1M",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Tire Flip",
+      "id": "o14pB2rG2EQ",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Upright Barbell Row",
+      "id": "nIJGvsdNtFE",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Wide Stance Barbell Squat",
+      "id": "JXdGBp_YYz0",
+      "reason": "Reviewed exact movement/equipment title against canonical setup; instructional reference from an established source channel. Primary metadata verified by builder."
+    },
+    {
+      "exercise": "Sumo Deadlift",
+      "id": "XsrD5y8EIKU",
+      "reason": "Jeff Nippard barbell sumo-deadlift technique guide replaces the rejected kettlebell candidate."
+    },
+    {
+      "exercise": "Dumbbell Fly",
+      "id": "QENKPHhQVi4",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Meadows Row",
+      "id": "WyzVl-G3zWU",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Chin-up",
+      "id": "brhRXlOhsAM",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Dumbbell Sumo Squat",
+      "id": "MwNY25e4QEA",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Dumbbell Lateral Lunge",
+      "id": "R8jArZG2J6Q",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Leaning Lateral Raise",
+      "id": "qWif_7SOYpQ",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Concentration Curl",
+      "id": "0AUGkch3tzc",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Bayesian Cable Curl",
+      "id": "4O24gFksZ04",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Reverse Crunch",
+      "id": "s02jKx6VEoQ",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Bicycle Crunch",
+      "id": "Iwyvozckjak",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Sit-up",
+      "id": "onaQ0v_J5uU",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Russian Twist",
+      "id": "wkD8rjkodUI",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Dumbbell Side Bend",
+      "id": "dL9ZzqtQI5c",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Fast Feet",
+      "id": "eT5M1goPDhY",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Inchworm",
+      "id": "XFnK5X8hKB0",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Dumbbell Clean and Press",
+      "id": "8G-jnVP_f2s",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Barbell Side Bend",
+      "id": "TbmXHlsMDck",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Barbell Walking Lunge",
+      "id": "hm3zBA8_Iak",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Bench Sprint",
+      "id": "fC4GiRdITqE",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Cable Reverse Crunch",
+      "id": "b8oUb_6POhQ",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Crossover Reverse Lunge",
+      "id": "_X_NgMn1gY8",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Dumbbell Flyes",
+      "id": "QENKPHhQVi4",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Finger Curls",
+      "id": "gnDRXH2J5Yc",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Incline Push-Up Close-Grip",
+      "id": "XARFPzMnEJU",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Jefferson Squats",
+      "id": "4Xuk0qp15D8",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Kettlebell Windmill",
+      "id": "q8K_Wg8OuV4",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Pelvic Tilt Into Bridge",
+      "id": "oje869YCAL4",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Push Up to Side Plank",
+      "id": "o2Qek4N2ea8",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Rack Pulls",
+      "id": "aAjN8zS7Idg",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Seated Cable Shoulder Press",
+      "id": "bREeDArAsOw",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Side Jackknife",
+      "id": "T9z08AMpxS8",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Side to Side Box Shuffle",
+      "id": "ugoS_fU6DZk",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Smith Machine Behind the Back Shrug",
+      "id": "QIiilFBaaWM",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Smith Machine Bent Over Row",
+      "id": "ZFNLCpj8e-o",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Smith Machine Close-Grip Bench Press",
+      "id": "KpmPnqIJcZU",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Snatch Balance",
+      "id": "cMVxFAyQgRk",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Standing Pelvic Tilt",
+      "id": "1VQ5ITSDpaI",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    },
+    {
+      "exercise": "Star Jump",
+      "id": "h6wu4_LOhyU",
+      "reason": "Reviewed exact movement title and canonical equipment/setup; published instructional reference from the named source channel."
+    }
+  ],
+  "excluded": {
+    "Back Extension": "Video uses a Roman-chair bench; catalogue supplement describes a seated back-extension machine.",
+    "Sumo Deadlift": "Candidate thumbnail demonstrates a kettlebell, not the canonical barbell. Use the separately selected barbell technique guide.",
+    "Arnold Press": "Candidate demonstrates standing; current source guide describes seated pressing.",
+    "Dumbbell Triceps Extension": "Candidate is seated and bilateral; current source guide describes standing unilateral extension.",
+    "Russian Twist": "Candidate uses a kettlebell; catalogue movement is unweighted.",
+    "Flutter Kicks": "Canonical source is prone on a bench; candidate is supine on the floor.",
+    "Front Dumbbell Raise": "Canonical source specifies alternating arms; candidate does not establish that variant.",
+    "Reverse Flyes": "Canonical source is prone against an incline bench; candidate teaches unsupported fly.",
+    "Tricep Dumbbell Kickback": "Canonical source uses two dumbbells while standing; candidate is a supported single-arm variation.",
+    "Narrow Stance Squats": "Canonical source uses a barbell; source thumbnail demonstrates unloaded bodyweight squats."
+  },
+  "scope": "Source reference selection; does not imply physical-device playback or a coach-content approval."
+}

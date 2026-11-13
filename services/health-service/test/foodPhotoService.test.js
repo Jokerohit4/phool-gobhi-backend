@@ -1,0 +1,828 @@
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+
+// The service is tested with a mock prisma and a stubbed storage + recogniser,
+// because what is being verified here is the part neither of those can decide:
+// that a model proposal is matched to the RIGHT catalogue row, that a log is
+// only written after the user confirms, that one photo the user did not own
+// cannot be attached, and that the correction counter is measuring the thing
+// its schema comment claims it measures.
+
+const STORAGE = {
+  saved: [],
+  signed: 'https://signed.example/photo',
+  deleted: [],
+};
+
+let recognizer = {
+  calls: [],
+  async recognizeFood(args) {
+    this.calls.push(args);
+    return {
+      isFood: true,
+      items: [{ name: 'dal', grams: 200, confidence: 0.8, nonVeg: false }],
+      note: null,
+      model: 'gemini-2.0-flash-001',
+      tokensIn: 900,
+      tokensOut: 40,
+    };
+  },
+};
+
+let svc;
+
+beforeEach(async () => {
+  STORAGE.saved = [];
+  STORAGE.deleted = [];
+  recognizer = {
+    calls: [],
+    async recognizeFood(args) {
+      this.calls.push(args);
+      return {
+        isFood: true,
+        items: [{ name: 'dal', grams: 200, confidence: 0.8, nonVeg: false }],
+        note: null,
+        model: 'gemini-2.0-flash-001',
+        tokensIn: 900,
+        tokensOut: 40,
+      };
+    },
+  };
+
+  svc = await import('../services/ledger/foodPhotoService.js');
+});
+
+// Collaborators are injected rather than monkey-patched. ESM namespaces are
+// frozen, so assigning to a module's exports throws - which is the same reason
+// the service takes `deps` the way it already takes `prisma`.
+function deps(overrides = {}) {
+  return {
+    storage: {
+      isAllowedMimeType: (m) => m.startsWith('image/'),
+      savePhoto: async ({ userId }) => {
+        const path = `food/${userId}/abc-123.jpg`;
+        STORAGE.saved.push(path);
+        return path;
+      },
+      signedPhotoUrl: async (p) => (p ? STORAGE.signed : null),
+      deletePhotos: async (paths) => {
+        STORAGE.deleted.push(...paths);
+        return { deleted: paths.length, failed: [] };
+      },
+      ...overrides.storage,
+    },
+    recognize: (payload, opts) => recognizer.recognizeFood(payload, opts),
+    isRecognizerConfigured: () => overrides.configured !== false,
+  };
+}
+
+const DAL = {
+  id: 11,
+  name: 'Dal, cooked',
+  aliases: ['dal', 'daal'],
+  kcal: 116,
+  proteinG: 9,
+  carbsG: 16,
+  fatG: 2.2,
+  fibreG: 4,
+  ironMg: 2.5,
+  magnesiumMg: 28,
+  calciumMg: 24,
+  zincMg: 1.1,
+  servings: null,
+  nonVeg: false,
+  createdByUserId: null,
+  verified: false,
+};
+
+const RICE = {
+  ...DAL,
+  id: 12,
+  name: 'Rice, cooked (white)',
+  aliases: ['chawal', 'bhaat', 'white rice'],
+  kcal: 130,
+};
+
+const FRIED_RICE = {
+  ...DAL,
+  id: 13,
+  name: 'Vegetable fried rice',
+  aliases: [],
+  kcal: 180,
+};
+
+function mockPrisma(overrides = {}) {
+  const catalogue = [...(overrides.catalogue ?? [DAL, RICE, FRIED_RICE])];
+  const created = [];
+  return {
+    async $transaction(work) { return work(this); },
+    async $executeRaw() { return 1; },
+    created,
+    catalogue,
+    foodItem: {
+      findMany: async () => catalogue,
+      findFirst: async ({ where }) => catalogue.find((f) =>
+        f.name.toLowerCase() === where.name.equals.toLowerCase() && f.createdByUserId == null) ?? null,
+      create: async ({ data }) => {
+        const row = { id: 100 + catalogue.length, ...data };
+        catalogue.push(row);
+        return row;
+      },
+      findUnique: async ({ where }) => catalogue.find((f) => f.id === where.id) ?? null,
+    },
+    foodPhotoUsage: {create:async ({data}) => data},
+    foodPhotoRequestLog: {
+      count: async () => overrides.requestCount ?? 0,
+      create: async (args) => ({ id: 1, ...args.data }),
+      // `in`, not `??`: this mock needs to be able to say "no such claim" by
+      // returning null, and `null ?? { id: 1 }` substitutes the fallback - so the
+      // ownership test below silently exercised the allowed path instead of the
+      // refused one. A mock that cannot express a denial cannot test a denial.
+      findFirst: async () => ('claim' in overrides ? overrides.claim : { id: 1 }),
+      findMany: async () => [],
+      updateMany: async () => ({ count: 0 }),
+    },
+    foodLog: {
+      create: async (args) => {
+        const row = { id: created.length + 1, ...args.data };
+        created.push(row);
+        return row;
+      },
+      findMany: async () => [],
+      findFirst: async () => null,
+      findUnique: async () => null,
+      count: async () => 0,
+    },
+    ...overrides.rest,
+  };
+}
+
+const PHOTO_ARGS = { buffer: Buffer.from('JPEGBYTES'), mimeType: 'image/jpeg' };
+
+test('a proposal becomes a catalogue candidate, and no FoodLog is written', async () => {
+  const prisma = mockPrisma();
+  const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+
+  assert.equal(out.isFood, true);
+  assert.equal(out.items.length, 1);
+  // The model's name is kept for display and for the correction metric, but the
+  // logged food is OUR row, and every nutrient comes from our data.
+  assert.equal(out.items[0].proposedName, 'dal');
+  assert.equal(out.items[0].foodItemId, DAL.id);
+  assert.equal(out.items[0].name, 'Dal, cooked');
+  assert.equal(out.items[0].grams, 200);
+  assert.equal(prisma.created.length, 0, 'recognise must not write a food log');
+  assert.equal(prisma.foodPhotoRequestLogCount, undefined);
+});
+
+test('the cheapest correct match wins, not the first row returned', async () => {
+  // "rice" against a catalogue that has both a plain rice and a fried rice. A
+  // substring match that does not prefer the shorter name logs a plate of biryani
+  // for someone who photographed plain rice.
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'rice', grams: 150, confidence: 0.9, nonVeg: false }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.items[0].foodItemId, RICE.id, 'plain rice beats vegetable fried rice');
+});
+
+test('an exact catalogue name beats a longer one that merely contains it', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'Dal, cooked', grams: 200, confidence: 0.9, nonVeg: false }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.items[0].foodItemId, DAL.id);
+});
+
+const PHOTO_NUTRITION = {
+  kcal: 180, proteinG: 6, carbsG: 25, fatG: 6, fibreG: 3,
+  ironMg: 2, magnesiumMg: 30, calciumMg: 40, zincMg: null,
+  aliases: ['buckwheat pancake'], basis: 'cooked',
+  servings: [{ label: 'piece', grams: 90 }, { label: 'plate', grams: 180 }],
+};
+
+test('a missing food is created with full options and returned as an ordinary candidate', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, model: 'vision-test', items: [{
+      name: 'kuttu ki chilla', grams: 180, confidence: 0.9, nonVeg: false,
+      nutrition: PHOTO_NUTRITION,
+    }],
+  });
+  const prisma = mockPrisma({ catalogue: [] });
+  const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.items.length, 1);
+  assert.deepEqual(out.unmatched, []);
+  const food = prisma.catalogue[0];
+  assert.equal(out.items[0].foodItemId, food.id);
+  assert.deepEqual(out.items[0].servings, PHOTO_NUTRITION.servings);
+  assert.deepEqual(out.items[0].per100g, { kcal: 180, proteinG: 6, carbsG: 25, fatG: 6,
+    fibreG: 3, ironMg: 2, magnesiumMg: 30, calciumMg: 40, zincMg: null });
+  assert.equal(out.items[0].nutritionVerified, false);
+  for (const [key, value] of Object.entries(PHOTO_NUTRITION)) assert.deepEqual(food[key], value);
+  assert.equal(food.source, 'estimate');
+  assert.equal(food.verified, false);
+  assert.equal(food.createdByUserId, null);
+  assert.equal(food.veg, true);
+  assert.match(food.searchText, /buckwheat pancake/);
+  assert.equal(prisma.created.length, 0);
+
+  const confirmed = await svc.confirmPhotoLog(prisma, {
+    userId: 7, photoPath: out.photoPath, localDate: '2026-10-28', slot: 'lunch',
+    lines: [{ foodItemId: food.id, grams: 180, proposedName: food.name, confidence: 0.9 }],
+  });
+  assert.equal(confirmed.logged, 1);
+  assert.equal(prisma.created[0].foodItemId, food.id);
+  assert.equal(prisma.created[0].source, 'photo_confirmed');
+  assert.equal(prisma.created[0].nutrients.kcal, 324);
+
+  const again = await svc.recognizePhoto(prisma, { userId: 8, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(again.items[0].foodItemId, food.id);
+  assert.equal(prisma.catalogue.length, 1, 'later photos reuse the new shared food');
+});
+
+test('separate enrichment accepts a reworded name and never caches a gap', async () => {
+  const old = process.env.FOOD_PHOTO_NUTRITION_MODE;
+  process.env.FOOD_PHOTO_NUTRITION_MODE = 'separate';
+  const payloads = [];
+  let enrichmentAnswer = { name: 'Kuttu chilla (buckwheat)', grams: 100, nutrition: PHOTO_NUTRITION };
+  recognizer.recognizeFood = async (payload) => {
+    payloads.push(payload);
+    if (payload.enrichmentName) return { isFood: true, model: 'vision-test', items: enrichmentAnswer ? [enrichmentAnswer] : [] };
+    return { isFood: true, model: 'vision-test', items: [{ name: 'kuttu ki chilla', grams: 180, confidence: 0.9 }] };
+  };
+  try {
+    const prisma = mockPrisma({ catalogue: [] });
+    const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+    // The model reworded the name; the single answer is still the answer.
+    assert.equal(out.items.length, 1);
+    assert.equal(prisma.catalogue[0].name, 'kuttu ki chilla');
+    assert.equal(payloads.filter((p) => p.enrichmentName).length, 1);
+
+    enrichmentAnswer = null;
+    await assert.rejects(
+      svc.recognizePhoto(mockPrisma({ catalogue: [] }), { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+      (e) => e.status === 502 && e.code === 'PROVIDER_FAILED',
+    );
+  } finally {
+    if (old == null) delete process.env.FOOD_PHOTO_NUTRITION_MODE; else process.env.FOOD_PHOTO_NUTRITION_MODE = old;
+  }
+});
+
+test('existing catalogue nutrition is never overwritten by model estimates', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, items: [{ name: 'dal', grams: 100, confidence: 0.9, nutrition: PHOTO_NUTRITION }],
+  });
+  const prisma = mockPrisma();
+  const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.items[0].foodItemId, DAL.id);
+  assert.equal(out.items[0].per100g.kcal, DAL.kcal);
+  assert.equal(prisma.catalogue.length, 3);
+});
+
+test('missing nutrition is retryable rather than asking the user to resolve a catalogue gap', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, items: [{ name: 'new dish', grams: 100 }],
+  });
+  const prisma = mockPrisma({ catalogue: [] });
+  await assert.rejects(
+    svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    { status: 502, code: 'PROVIDER_FAILED' },
+  );
+  assert.equal(prisma.catalogue.length, 0);
+});
+
+test('a photo with no food is a 200-shaped answer, not a failure', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: false,
+    items: [],
+    note: null,
+    model: 'm',
+    tokensIn: 10,
+    tokensOut: 2,
+  });
+
+  const prisma = mockPrisma();
+  const out = await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+
+  assert.equal(out.isFood, false);
+  assert.deepEqual(out.items, []);
+  assert.equal(out.photoPath, 'food/7/abc-123.jpg', 'the photo is kept so the user can retry');
+});
+
+test('the request ledger records cost and outcome, and no names', async () => {
+  let recorded = null;
+  const prisma = mockPrisma();
+  prisma.foodPhotoRequestLog.create = async (args) => {
+    recorded = args.data;
+    return { id: 1, ...args.data };
+  };
+
+  await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+
+  assert.equal(recorded.outcome, 'ok');
+  assert.equal(recorded.tokensIn, 900);
+  assert.equal(recorded.tokensOut, 40);
+  assert.equal(recorded.photoPath, 'food/7/abc-123.jpg');
+  assert.equal(recorded.model, 'gemini-2.0-flash-001');
+  // The userId is there - it is this user's own cost record - but nothing about
+  // what was on the plate.
+  assert.equal(recorded.userId, 7);
+  assert.equal(JSON.stringify(recorded).includes('dal'), false);
+});
+
+test('a provider failure is a 502 and never leaks the provider message', async () => {
+  recognizer.recognizeFood = async () => {
+    const { ProviderError } = await import('../utils/providerError.js');
+    throw new ProviderError('provider returned 400: inlineData=<photograph bytes>', {
+      status: 400,
+      code: 'PROVIDER_REJECTED',
+    });
+  };
+
+  let recorded = null;
+  const prisma = mockPrisma();
+  prisma.foodPhotoRequestLog.create = async (args) => {
+    recorded = args.data;
+    return { id: 1, ...args.data };
+  };
+
+  await assert.rejects(
+    () => svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    (err) => {
+      assert.equal(err.status, 502);
+      assert.equal(err.code, 'PROVIDER_FAILED');
+      assert.equal(err.message.includes('photograph'), false);
+      return true;
+    },
+  );
+  // The attempt was still billed, so the row has to exist or the failed call is
+  // invisible in the cost ledger - which is exactly how a feature starts costing
+  // more than it looks.
+  assert.equal(recorded?.outcome, 'provider_error');
+  // And the photo is still tracked, so the sweeper can reclaim it.
+  assert.equal(recorded?.photoPath, 'food/7/abc-123.jpg');
+});
+
+// One provider call per request: the retry loop for this feature is the person
+// holding the phone. A failure comes back fast as a 502, and the next attempt
+// carries an attempt number that providers/index.js rotates to a different key
+// and model — a hidden second call inside this service would delay the error
+// screen that rotation depends on and turn one billable attempt into several.
+
+test('a provider that stays down costs exactly one call and one ledger row', async () => {
+  const { ProviderError } = await import('../utils/providerError.js');
+  let attempts = 0;
+  recognizer.recognizeFood = async () => {
+    attempts++;
+    throw new ProviderError('Food photo provider returned 503', {
+      status: 503,
+      retryable: true,
+      code: 'PROVIDER_REJECTED',
+    });
+  };
+
+  let rows = [];
+  const prisma = mockPrisma();
+  prisma.foodPhotoRequestLog.create = async (args) => {
+    rows.push(args.data);
+    return { id: 1, ...args.data };
+  };
+
+  await assert.rejects(
+    () => svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    (err) => err.status === 502 && err.code === 'PROVIDER_FAILED',
+  );
+  assert.equal(attempts, 1, 'one attempt per request - the rotation is the client ladder');
+  // One photo, one row in the cost ledger: the failed call is billed, so it has
+  // to be visible in what spend is reconciled against.
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, 'provider_error');
+});
+
+test('the attempt number reaches the recogniser, defaulting to the first candidate', async () => {
+  const seen = [];
+  recognizer.recognizeFood = async (_payload, opts) => {
+    seen.push(opts?.attempt);
+    return {
+      isFood: true,
+      items: [{ name: 'dal', grams: 200, confidence: 0.8, nonVeg: false }],
+      note: null,
+      model: 'm',
+      tokensIn: 1,
+      tokensOut: 1,
+    };
+  };
+
+  // No attempt given: an app version that predates the rotation must land on
+  // candidate 1, the vendor it always had.
+  await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, attempt: 4, deps: deps() });
+
+  assert.deepEqual(seen, [1, 4]);
+});
+
+test('an unconfigured provider is 503, which the app can explain', async () => {
+  await assert.rejects(
+    () =>
+      svc.recognizePhoto(mockPrisma(), {
+        userId: 7,
+        ...PHOTO_ARGS,
+        deps: deps({ configured: false }),
+      }),
+    (err) => err.status === 503 && err.code === 'PROVIDER_NOT_CONFIGURED',
+  );
+});
+
+test('the rate limit is counted before the model is called, not after', async () => {
+  const prisma = mockPrisma({ requestCount: 20 });
+  recognizer.calls = [];
+
+  await assert.rejects(
+    () => svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    (err) => err.status === 429 && err.code === 'RATE_LIMITED',
+  );
+  // No photo stored and no money spent: the limit exists to bound spend, and a
+  // limit checked after the call bounds nothing.
+  assert.equal(STORAGE.saved.length, 0);
+  assert.equal(recognizer.calls.length, 0);
+});
+
+test('a non-image is refused before anything is stored', async () => {
+  await assert.rejects(
+    () =>
+      svc.recognizePhoto(mockPrisma(), {
+        userId: 7,
+        buffer: Buffer.from('%PDF-1.4'),
+        mimeType: 'application/pdf',
+        deps: deps(),
+      }),
+    (err) => err.status === 400 && err.code === 'UNSUPPORTED_IMAGE',
+  );
+  assert.equal(STORAGE.saved.length, 0);
+});
+
+test('confirm writes photo_confirmed logs carrying the proposal and the photo', async () => {
+  // The model comes off the claim row, which is this service's own record of
+  // what it called - see the ownership note on confirmPhotoLog.
+  const prisma = mockPrisma({ claim: { id: 1, model: 'gemini-2.0-flash-001' } });
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [
+      { foodItemId: DAL.id, grams: 200, proposedName: 'dal', confidence: 0.8, corrected: false },
+      { foodItemId: RICE.id, grams: 150, proposedName: 'rice', confidence: 0.9, corrected: false },
+    ],
+    // A client claiming a different model must not be able to choose what the
+    // per-model accuracy numbers get attributed to.
+    model: 'some-other-model-the-caller-made-up',
+  });
+
+  assert.equal(out.logged, 2);
+  assert.equal(out.corrections, 0);
+  assert.equal(out.correctionRate, 0);
+  assert.equal(prisma.created.length, 2);
+  assert.equal(prisma.created[0].source, 'photo_confirmed');
+  assert.equal(prisma.created[0].photoPath, 'food/7/abc-123.jpg');
+  assert.equal(prisma.created[0].photoModel, 'gemini-2.0-flash-001');
+  // The proposal is retained so the correction rate is debuggable rather than
+  // just a number that went up.
+  assert.equal(prisma.created[0].photoProposedName, 'dal');
+  assert.equal(prisma.created[0].photoConfidence, 0.8);
+  assert.equal(prisma.created[0].photoCorrections, 0);
+});
+
+test('the correction counter is what the schema comment says it is', async () => {
+  const prisma = mockPrisma({ claim: { id: 1 } });
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [
+      { foodItemId: DAL.id, grams: 200, proposedName: 'dal', corrected: true },
+      { foodItemId: RICE.id, grams: 150, proposedName: 'rice', corrected: false },
+      { foodItemId: FRIED_RICE.id, grams: 100, proposedName: 'rice', corrected: true },
+    ],
+  });
+
+  // The launch metric: the share of lines the user had to fix. "More than half"
+  // is the threshold named in the schema.
+  assert.equal(out.corrections, 2);
+  assert.equal(out.correctionRate, 0.6667);
+  assert.equal(prisma.created.filter((r) => r.photoCorrections === 1).length, 2);
+});
+
+test("one user's photo cannot be attached to another user's log", async () => {
+  // The request ledger is the ownership proof. Without it, any caller who could
+  // name a uuid could attach someone else's meal to their own diary.
+  const prisma = mockPrisma({ claim: null });
+  await assert.rejects(
+    () =>
+      svc.confirmPhotoLog(prisma, {
+        userId: 7,
+        photoPath: 'food/9/someone-elses.jpg',
+        localDate: '2026-09-29',
+        slot: 'dinner',
+        lines: [{ foodItemId: DAL.id, grams: 200 }],
+      }),
+    (err) => err.status === 403 && err.code === 'PHOTO_NOT_CLAIMED',
+  );
+  assert.equal(prisma.created.length, 0);
+});
+
+test('one bad line does not lose the lines the user did not touch', async () => {
+  const prisma = mockPrisma({ catalogue: [DAL] });
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [
+      { foodItemId: DAL.id, grams: 200, proposedName: 'dal' },
+      { foodItemId: 9999, grams: 100, proposedName: 'ghost' },
+    ],
+  });
+
+  assert.equal(out.logged, 1);
+  assert.equal(out.rejected.length, 1);
+  assert.equal(prisma.created.length, 1);
+});
+
+test('confirm with nothing selected is a 400, and logs nothing', async () => {
+  const prisma = mockPrisma({ claim: { id: 1 } });
+  await assert.rejects(
+    () =>
+      svc.confirmPhotoLog(prisma, {
+        userId: 7,
+        photoPath: 'food/7/abc-123.jpg',
+        localDate: '2026-09-29',
+        slot: 'dinner',
+        lines: [],
+      }),
+    (err) => err.status === 400 && err.code === 'NO_LINES',
+  );
+});
+
+test('a photo link is minted only for the owner', async () => {
+  const prisma = mockPrisma();
+  prisma.foodLog.findFirst = async ({ where }) =>
+    where.userId === 7 ? { photoPath: 'food/7/abc-123.jpg' } : null;
+
+  const out = await svc.getPhotoLink(prisma, { userId: 7, logId: 5, deps: deps() });
+  assert.equal(out.url, STORAGE.signed);
+
+  await assert.rejects(
+    () => svc.getPhotoLink(prisma, { userId: 8, logId: 5, deps: deps() }),
+    (err) => err.status === 404,
+  );
+});
+
+test('a log with no photo is a 404, not a null link', async () => {
+  const prisma = mockPrisma();
+  prisma.foodLog.findFirst = async () => ({ photoPath: null });
+  await assert.rejects(
+    () => svc.getPhotoLink(prisma, { userId: 7, logId: 5, deps: deps() }),
+    (err) => err.status === 404 && err.code === 'NO_PHOTO',
+  );
+});
+
+test('the object is only released when the LAST line from that photo goes', async () => {
+  const prisma = mockPrisma();
+  prisma.foodLog.count = async () => 1;
+  let out = await svc.releasePhotoIfUnreferenced(prisma, { photoPath: 'food/7/abc.jpg', deps: deps() });
+  assert.equal(out.deleted, 0, 'a sibling line still shows this photo');
+  assert.equal(STORAGE.deleted.length, 0);
+
+  prisma.foodLog.count = async () => 0;
+  out = await svc.releasePhotoIfUnreferenced(prisma, { photoPath: 'food/7/abc.jpg', deps: deps() });
+  assert.equal(out.deleted, 1);
+  assert.deepEqual(STORAGE.deleted, ['food/7/abc.jpg']);
+});
+
+// --- catalogue grounding ----------------------------------------------------
+
+test('the recogniser is only shown curated rows, never custom user foods', async () => {
+  const wheres = [];
+  const prisma = mockPrisma();
+  prisma.foodItem.findMany = async (args) => {
+    wheres.push(args.where || {});
+    return prisma.catalogue;
+  };
+
+  await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  // The FIRST findMany is the catalogue fetch folded into the prompt; that lane
+  // is curated-only. (The later per-name search is allowed to reach the user's
+  // own customs, exactly like the food picker does.)
+  assert.ok(wheres.length >= 1);
+  assert.equal(wheres[0].createdByUserId, null);
+});
+
+test('the curated catalogue is folded into the prompt so the model names exact rows', async () => {
+  const prisma = mockPrisma();
+  await svc.recognizePhoto(prisma, { userId: 7, ...PHOTO_ARGS, deps: deps() });
+
+  const sent = recognizer.calls[0];
+  assert.ok(sent.catalogueText.length > 0, 'a catalogue must actually be sent');
+  // Both the canonical name and an alias reach the model; the instruction says
+  // whatever it names must be spelled the way it sees it here.
+  assert.ok(sent.catalogueText.includes('Dal, cooked'));
+  assert.ok(sent.catalogueText.includes('daal'));
+});
+
+test('an exact grounded row is trusted, even when free text could never reach it', async () => {
+  // The dialect->canonical case the catalogue field exists for: the model saw
+  // "kuttu ki chilla" and names OUR row "Buckwheat flour chilla". No prefix
+  // matcher will ever connect those two strings, so free text would dump the
+  // item in `unmatched`. The grounded answer is the only path that works.
+  const BUCKWHEAT = { ...DAL, id: 50, name: 'Buckwheat flour chilla', aliases: [] };
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'kuttu ki chilla', catalogue: 'Buckwheat flour chilla', grams: 90, confidence: 0.81, nonVeg: true }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(
+    mockPrisma({ catalogue: [BUCKWHEAT] }),
+    { userId: 7, ...PHOTO_ARGS, deps: deps() },
+  );
+  assert.equal(out.unmatched.length, 0);
+  assert.equal(out.items[0].foodItemId, BUCKWHEAT.id);
+  // The model's own name still comes through for the correction metric.
+  assert.equal(out.items[0].proposedName, 'kuttu ki chilla');
+});
+
+test('a low-confidence grounded row is not trusted and falls through to matching', async () => {
+  // MIN_TRUSTED_CATALOGUE_CONFIDENCE: a model that hedged on an anchor ("maybe
+  // this is dal") must not be taken at that word - the hedge leaks into the
+  // match. It falls to free text, where the normal match still works.
+  recognizer.recognizeFood = async () => ({
+    isFood: true,
+    items: [{ name: 'dal', catalogue: 'Dal, cooked', grams: 200, confidence: 0.2, nonVeg: false }],
+    note: null,
+    model: 'm',
+    tokensIn: 1,
+    tokensOut: 1,
+  });
+
+  const out = await svc.recognizePhoto(mockPrisma(), { userId: 7, ...PHOTO_ARGS, deps: deps() });
+  assert.equal(out.unmatched.length, 0);
+  assert.equal(out.items[0].foodItemId, DAL.id);
+});
+
+test('an invented grounded name cannot bypass nutrition validation', async () => {
+  recognizer.recognizeFood = async () => ({
+    isFood: true, items: [{ name: 'Paneer & greens', catalogue: 'Made-up row', grams: 100 }],
+  });
+  await assert.rejects(
+    svc.recognizePhoto(mockPrisma({ catalogue: [] }), { userId: 7, ...PHOTO_ARGS, deps: deps() }),
+    { code: 'PROVIDER_FAILED' },
+  );
+});
+
+// --- matched-but-unknown confirm lines ---------------------------------------
+
+test('a confirmed unknown line is logged as pending, not dropped, and raises a request', async () => {
+  let createdRequest = null;
+  const prisma = mockPrisma({
+    claim: { id: 1, model: 'gemini-2.0-flash-001' },
+    rest: {
+      foodRequest: {
+        findFirst: async () => null,
+        count: async () => 0,
+        create: async (a) => ((createdRequest = a.data), { id: 9, ...a.data }),
+      },
+    },
+  });
+
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [
+      { unknown: true, name: 'Amla pickle, homemade', grams: 100, proposedName: 'Amla pickle', confidence: 0.71, corrected: false },
+    ],
+  });
+
+  assert.equal(out.logged, 1);
+  assert.equal(out.pending, 1);
+
+  const row = prisma.created[0];
+  assert.equal(row.source, 'photo_unmatched');
+  assert.deepEqual(row.nutrients, { unknown: true });
+  assert.equal(row.name, 'Amla pickle, homemade');
+  assert.equal(row.foodItemId, null);
+  assert.equal(row.photoPath, 'food/7/abc-123.jpg');
+  assert.equal(row.photoProposedName, 'Amla pickle');
+  // The dish reaches the missing-food queue under the photo lane.
+  assert.equal(createdRequest.source, 'photo');
+  assert.equal(createdRequest.name, 'Amla pickle, homemade');
+});
+
+test('an unknown line with no name falls back to the proposed name', async () => {
+  const prisma = mockPrisma({
+    claim: { id: 1 },
+    rest: { foodRequest: { findFirst: async () => null, count: async () => 0, create: async (a) => ({ id: 9, ...a.data }) } },
+  });
+
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'lunch',
+    lines: [{ unknown: true, proposedName: 'Kadai paneer saag', grams: 120, corrected: false }],
+  });
+
+  assert.equal(out.pending, 1);
+  assert.equal(prisma.created[0].name, 'Kadai paneer saag');
+});
+
+test('a request-queue refusal does not lose the pending log', async () => {
+  // The cap bounds the shared queue, not the diary. logging what you ate must
+  // not depend on the queue accepting a new row.
+  const prisma = mockPrisma({
+    claim: { id: 1 },
+    rest: { foodRequest: { findFirst: async () => null, count: async () => 999, create: async () => { throw new Error('must not create'); } } },
+  });
+
+  const out = await svc.confirmPhotoLog(prisma, {
+    userId: 7,
+    photoPath: 'food/7/abc-123.jpg',
+    localDate: '2026-09-29',
+    slot: 'dinner',
+    lines: [{ unknown: true, name: 'Keema kaleji', grams: 90, corrected: false }],
+  });
+
+  assert.equal(out.logged, 1);
+  assert.equal(out.pending, 1);
+  assert.equal(prisma.created[0].source, 'photo_unmatched');
+});
+
+// ---- on-device upload (no vision) ------------------------------------------
+
+test('the no-vision upload stores and claims the photo without the model', async () => {
+  const prisma = mockPrisma();
+  const claims = [];
+  prisma.foodPhotoRequestLog.create = async (args) => {
+    claims.push(args.data);
+    return { id: 1, ...args.data };
+  };
+
+  // `configured: false` is the load-bearing bit: the whole point of the route
+  // is that an on-device match never reaches the paid vision provider, so an
+  // unconfigured provider must not block it.
+  const out = await svc.uploadPhotoOnly(prisma, {
+    userId: 7,
+    ...PHOTO_ARGS,
+    deps: deps({ configured: false }),
+  });
+
+  assert.equal(out.photoPath, 'food/7/abc-123.jpg');
+  assert.equal(out.photoUrl, 'https://signed.example/photo');
+  assert.equal(STORAGE.saved.length, 1, 'the photo is stored once');
+  assert.equal(recognizer.calls.length, 0, 'the vision model is never called');
+  assert.equal(claims.length, 1, 'a claim row is recorded so confirm can attach');
+  assert.equal(claims[0].outcome, 'on_device_upload');
+  assert.equal(claims[0].photoPath, 'food/7/abc-123.jpg');
+});
+
+test('the no-vision upload validates like recognize and shares its rate cap', async () => {
+  await assert.rejects(
+    () => svc.uploadPhotoOnly(mockPrisma(), { userId: 7, buffer: Buffer.alloc(0), mimeType: 'image/jpeg', deps: deps() }),
+    (err) => err.status === 400 && err.code === 'NO_PHOTO',
+  );
+
+  await assert.rejects(
+    () => svc.uploadPhotoOnly(mockPrisma(), { userId: 7, ...PHOTO_ARGS, mimeType: 'text/plain', deps: deps() }),
+    (err) => err.status === 400 && err.code === 'UNSUPPORTED_IMAGE',
+  );
+
+  // An on-device short-circuit must not be a cheaper way to fill the bucket: it
+  // stores an object the sweeper has to reclaim, so the hourly cap applies.
+  await assert.rejects(
+    () =>
+      svc.uploadPhotoOnly(mockPrisma({ requestCount: 20 }), {
+        userId: 7,
+        ...PHOTO_ARGS,
+        deps: deps(),
+      }),
+    (err) => err.status === 429 && err.code === 'RATE_LIMITED',
+  );
+});

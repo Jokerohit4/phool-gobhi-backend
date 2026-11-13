@@ -1,9 +1,10 @@
 
 import { buildFullExportService } from '../services/exportService.js';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
+import { resolvePersona } from '../services/personaService.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import {
   loadOtpProvider,
@@ -18,12 +19,30 @@ import {
   loadProfileCompletionBonusAdmin,
   updateProfileCompletionBonusAmount,
 } from '../services/profileCompletionBonusService.js';
+import {
+  FLAG_SCHEMA_VERSION,
+  defaultFeatures,
+  flagNames,
+  flagRegistry,
+  // Pure, dependency-free helpers that moved here from this file so the admin
+  // route, the contract tests and scripts/seedFeatureFlags.js cannot disagree
+  // about what a valid flag payload is. Re-exported below: callers that
+  // already import validateFeaturePayload from here keep working.
+  validateFeaturePayload,
+  diffChangedFlags,
+} from '../config/featureFlagRegistry.js';
+import { socialFromConfig } from '../services/socialConfigService.js';
+import {
+  appConfigBundleCache, APP_CONFIG_KEY, launchGateCache, LAUNCH_GATE_KEY,
+  evictAppConfigBundle, evictLaunchGate,
+} from '../utils/settingsCaches.js';
+import { bucketFor } from '../services/experimentService.js';
+import { gymLinkStatus as linkStatusOf } from '../utils/gymLinkStatus.js';
+import { rosterExtras } from '../services/gymMemberService.js';
 
-const prisma = new PrismaClient();
 
 const signup = async (req, res) => {
   try {
-    console.log('Signup request body:', req.body);
     // This route is public (no auth) — gobhi/staff accounts must only ever be
     // created via the authenticated POST /admin/staff path (createStaffService),
     // which calls signupService directly and bypasses this check. Without this,
@@ -92,11 +111,9 @@ const exportMyData = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
-    console.log('req.user', req.user);
     const result = await deleteUserService(req.user.id);
     res.json(result);
   } catch (err) {
-    console.log('err', err);
     res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
   }
 };
@@ -106,7 +123,7 @@ const refreshToken = async (req, res) => {
     const result = await refreshTokenService(req.body?.token);
     res.json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || 'Unknown error' });
+    res.status(err.status || 500).json({ error: err.error || 'Unknown error', errorCode: err.errorCode });
   }
 };
 
@@ -176,6 +193,7 @@ const getOtpConfigAdmin = async (req, res) => {
 const updateOtpConfigAdmin = async (req, res) => {
   try {
     const updated = await updateOtpProvider(req.body?.provider, req.user.id);
+    evictAppConfigBundle();
     res.json({ data: { provider: updated.provider }, updatedAt: updated.updatedAt });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -198,6 +216,7 @@ const getProfileCompletionBonusAdmin = async (req, res) => {
 const updateProfileCompletionBonusAdmin = async (req, res) => {
   try {
     const updated = await updateProfileCompletionBonusAmount(req.body?.amount, req.user.id);
+    evictAppConfigBundle();
     res.json({ data: { amount: updated.amount }, updatedAt: updated.updatedAt });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -251,62 +270,44 @@ async function loadAppVersionConfig() {
   return row?.config || DEFAULT_APP_VERSION_CONFIG;
 }
 
-// Kill-switch defaults for customer-app features. Buddy is currently live, so
-// the default is enabled (true) — the flag only does something once an admin
-// deliberately turns it off from the admin portal's /settings page. Same
-// inert-by-default convention as DEFAULT_APP_VERSION_CONFIG. otp.provider and
-// profileCompletionBonus.amount are overridden with the live setting-row
-// values in getAppConfig below (their defaults here just keep the shape safe
-// before/without those rows).
+// Kill-switch defaults for customer-app features, derived from the registry —
+// see config/featureFlagRegistry.js for the full rationale on every flag. This
+// used to be a hand-maintained literal duplicating the customer app's
+// AppConfigModel and the admin portal's own copy, and the three drifted (see the
+// registry header). Adding a flag there is now the only step needed to make it
+// reachable from the portal and covered by the contract test.
+//
+// These are only DEFAULTS: a stored app-config blob (written by the admin
+// portal's /settings page) overrides them key by key, so the portal is the live
+// switch and this is what an environment with no blob starts as.
+//
+// The inert-by-default convention is deliberate and load-bearing. Flipped ON then
+// back OFF on 2026-09-10: the owner asked for all flags on; turning the DEFAULTS
+// on turned out to be the wrong mechanism, because prod's blob says nothing about
+// these keys and main was 73 commits behind. Promoting main with true defaults
+// would have switched the entire programme on for real users at deploy —
+// including the cron that sends push notifications — rather than landing it dark.
+// So features land OFF in a new environment and are enabled per environment from
+// the portal, the one place that decision is visible and reversible without a
+// deploy.
+//
+// `referral` fails OPEN (it is live, so a missing/unknown flag must resolve to
+// on rather than hide a shipped feature). `buddy` now fails CLOSED: it was
+// flipped to defaultEnabled:false in W3, because the safety backstop (reports,
+// hold, suspend) is the reason it can be shown at all, so an unknown flag must
+// hide it rather than reveal an unverified feature. Everything else fails
+// CLOSED: it collects or moves state, so a backend hiccup must hide it rather
+// than risk the app calling a route that isn't ready. The one open exception is
+// marked in the registry and is deliberate.
+//
+// otp.provider and profileCompletionBonus.amount are NOT registry entries — they
+// are served from their own singleton setting rows and overridden on top of this
+// in getAppConfig. Their entries below only keep the response shape safe before
+// (or without) those rows existing.
 const DEFAULT_FEATURES = {
-  buddy: { enabled: true },
+  ...defaultFeatures(),
   otp: { provider: 'firebase' },
   profileCompletionBonus: { amount: 20 },
-  // Gamification suite — each phase ships behind its own kill-switch,
-  // default OFF until an admin deliberately turns it on from /settings.
-  // See C:\Users\rohit\.claude\plans\delightful-rolling-bubble.md.
-  //
-  // These are only DEFAULTS: a stored app-config blob (written by the admin
-  // portal's /settings page) overrides them key by key, so the portal is the
-  // live switch and this is what an environment with no blob starts as.
-  //
-  // Flipped ON then back OFF on 2026-09-10, deliberately. The owner asked
-  // for all flags on; turning the DEFAULTS on turned out to be the wrong
-  // mechanism for it, because prod's blob says nothing about these keys and
-  // main was 73 commits behind. Promoting main with true defaults would have
-  // switched the entire programme on for real users at deploy - including
-  // the cron that sends push notifications - rather than landing it dark.
-  //
-  // So: features land OFF in a new environment and are enabled per
-  // environment from the portal, which is the one place that decision is
-  // visible and reversible without a deploy. Dev is unaffected by this
-  // revert for the four below plus healthMetrics: its blob already has them
-  // explicitly true.
-  badges: { enabled: false },
-  streaksCoins: { enabled: false },
-  challenges: { enabled: false },
-  buddyPairedStreaks: { enabled: false },
-  // Exercise records, routines, workout sessions, watch/HealthKit sync —
-  // see C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-metrics-implementation-plan-2026-08-27.html
-  healthMetrics: { enabled: false },
-  // Held separately from healthMetrics because these two needed legal
-  // sign-off the rest of the health layer doesn't (see
-  // docs/phool-gobhi-counsel-brief-20260908.html). Both flipped ON
-  // 2026-09-10 on the owner's instruction - that review is the owner's call
-  // and it has been made. The reasoning below stays so the reason they were
-  // ever separate isn't lost, and because either can still be pulled
-  // independently from /settings, which now carries both toggles (until
-  // 2026-09-10 these were the only two flags the portal could not reach, so
-  // their "off" was a code default rather than a decision).
-  //
-  //   healthPersonalisation — the only consent-bearing write in health-service
-  //     (a non-neutral programming mode records a privacyVersion). The consent
-  //     wording needs review before a real user agrees to it.
-  //   recapSharing — the only feature producing an artifact meant to leave the
-  //     platform. It carries no PII by construction, but that claim is worth
-  //     checking before the card is shareable.
-  healthPersonalisation: { enabled: false },
-  recapSharing: { enabled: false },
 };
 
 // Maintenance-window config for the customer website's wallet and gym
@@ -366,8 +367,30 @@ const getAppConfig = async (req, res) => {
   let entry = { minVersion: '1.0.0', latestVersion: '1.0.0', updateUrl: '', message: '' };
   let features = DEFAULT_FEATURES;
   let maintenance = resolveMaintenance(null);
+  // Social master switch. Seeded off so a failure in socialConfigService can
+  // only ever fail closed — a social surface must never appear as enabled
+  // because the settings read threw.
+  let social = { enabled: false };
   try {
-    const config = await loadAppVersionConfig();
+    // These independent reads previously took three database round trips on
+    // every app launch. Social failure still resolves to the fail-closed default.
+    // The DB-derived pieces are cached 15s in-process (single-flight, failures
+    // not cached, evicted by every admin write — see utils/settingsCaches.js).
+    // Social is derived from the SAME config row, so appVersionSetting is read
+    // once, not twice. Nothing caller-specific is cached: the app/platform/
+    // version comparison below runs per request.
+    const { config, otpProvider, bonusAmount, social: socialConfig } = await appConfigBundleCache.get(
+      APP_CONFIG_KEY,
+      async () => {
+        const [cfg, otp, bonus] = await Promise.all([
+          loadAppVersionConfig(),
+          loadOtpProvider(),
+          loadProfileCompletionBonusAmount(),
+        ]);
+        return { config: cfg, otpProvider: otp, bonusAmount: bonus, social: socialFromConfig(cfg) };
+      },
+    );
+    social = socialConfig;
     entry = config?.[app]?.[platform] || entry;
     maintenance = resolveMaintenance(config);
     // Shallow-merge so a config blob that predates the features key (or only
@@ -375,10 +398,19 @@ const getAppConfig = async (req, res) => {
     // OTP provider and profile-completion bonus amount are served from their
     // own singleton setting rows (single source of truth for the admin
     // panel's /settings edits), overriding whatever an old blob carried.
-    const [otpProvider, bonusAmount] = await Promise.all([
-      loadOtpProvider(),
-      loadProfileCompletionBonusAmount(),
-    ]);
+    //
+    // The merge is key-by-key and additive, so a flag absent from the stored
+    // blob still resolves to its registry default and therefore still appears
+    // in the response. That matters more than it looks: before FLAG_SCHEMA_VERSION
+    // existed, a service deployed from an older revision had a smaller
+    // DEFAULT_FEATURES literal, so its response simply omitted flags the client
+    // knew about — and the client's `?? false` made "deliberately off" and
+    // "this server predates that flag" indistinguishable. flagsKnown below
+    // makes the difference observable in one log line.
+    // Non-fatal: a social-config read failure leaves the seeded {enabled:false}
+    // rather than aborting the whole app-config response, matching the
+    // fail-open philosophy of this endpoint (a bad social read must not stop
+    // the force-update check from reaching the app).
     features = {
       ...DEFAULT_FEATURES,
       ...(config?.features || {}),
@@ -394,6 +426,12 @@ const getAppConfig = async (req, res) => {
     console.error('getAppConfig error:', err);
   }
   res.json({
+    schemaVersion: FLAG_SCHEMA_VERSION,
+    // What THIS service build knows about. A client can diff this against its
+    // own flag list to tell "off" apart from "my server is older than this
+    // flag" — which is the failure that silently turned prod's workout logging
+    // into visible-but-403 buttons.
+    flagsKnown: flagNames(),
     forceUpdate,
     updateAvailable,
     minVersion: entry.minVersion,
@@ -402,7 +440,34 @@ const getAppConfig = async (req, res) => {
     message: entry.message,
     features,
     maintenance,
+    // Top-level (not inside `features`): it is a master switch over the whole
+    // social surface, not one more flag, and B14 backs it with its own settings
+    // row rather than the flag registry.
+    social,
   });
+};
+
+// gobhi-only — the flag registry itself, so the admin portal renders toggles
+// from this list instead of redeclaring it. That redeclaration was the root of
+// every flag drift (see config/featureFlagRegistry.js): a flag added server-side
+// with no portal entry was unreachable, and a flag declared in the portal with
+// no server entry was dead. Deriving the UI from here makes an unreachable flag
+// impossible to create again.
+const getFeatureFlagRegistry = async (req, res) => {
+  try {
+    const config = await loadAppVersionConfig();
+    const stored = config?.features || {};
+    res.json({
+      data: flagRegistry().map((flag) => ({
+        ...flag,
+        // The live value, so the portal does not have to merge two responses.
+        enabled: stored[flag.name]?.enabled ?? flag.defaultEnabled,
+      })),
+      schemaVersion: FLAG_SCHEMA_VERSION,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
 };
 
 // gobhi-only — admin portal's raw view/edit of the full config blob.
@@ -415,18 +480,87 @@ const getAppConfigAdmin = async (req, res) => {
   }
 };
 
+
 const updateAppConfigAdmin = async (req, res) => {
   try {
     const config = req.body?.config;
     if (!config || typeof config !== 'object') {
       return res.status(400).json({ error: 'config is required' });
     }
+    if (config.features !== undefined) {
+      if (config.features === null || typeof config.features !== 'object' || Array.isArray(config.features)) {
+        return res.status(400).json({ error: 'config.features must be an object of flagName -> { enabled }' });
+      }
+      const { unknown, malformed } = validateFeaturePayload(config.features);
+      if (unknown.length) {
+        return res.status(400).json({
+          error: `unknown feature flag(s): ${unknown.join(', ')} - not in the registry, so nothing reads them`,
+          unknown,
+          knownFlags: flagNames(),
+        });
+      }
+      if (malformed.length) {
+        return res.status(400).json({
+          error: `these flags must be { "enabled": true|false }: ${malformed.join(', ')}`,
+          malformed,
+        });
+      }
+    }
+    const previous = await loadAppVersionConfig();
+
     const updated = await prisma.appVersionSetting.upsert({
       where: { id: 1 },
       create: { id: 1, config, updatedBy: req.user.id },
       update: { config, updatedBy: req.user.id },
     });
-    res.json({ data: updated.config });
+    evictAppConfigBundle();
+    // Audit only the flags that actually moved. A history row is written for
+    // each, in one insert, so "which flag changed at 14:03" is one indexed
+    // lookup rather than a scan over every save ever made.
+    //
+    // Best-effort by design: an audit write that fails must not fail the save
+    // that already succeeded. A toggle switched on with no history row is bad,
+    // but a toggle that cannot be switched on because the audit insert hit a
+    // constraint is worse — the flag is the live control and the history is
+    // bookkeeping.
+    const changedFlags = diffChangedFlags(previous?.features, config.features);
+    if (changedFlags.length) {
+      try {
+        await prisma.appConfigHistory.create({
+          data: {
+            changedFlags,
+            before: previous?.features ?? undefined,
+            after: config.features ?? {},
+            note: req.body?.note || null,
+            changedBy: req.user.id,
+          },
+        });
+      } catch (auditErr) {
+        console.error(
+          `app-config saved but history write failed (flags: ${changedFlags.join(', ')}):`,
+          auditErr.message,
+        );
+      }
+    }
+    res.json({ data: updated.config, changedFlags });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// gobhi-only — who switched which flag, when, from what. The read twin of the
+// write in updateAppConfigAdmin; `flag` narrows to one flag (the incident
+// question), otherwise it is the general log.
+const listAppConfigHistory = async (req, res) => {
+  try {
+    const flag = req.query?.flag;
+    const where = flag ? { changedFlags: { has: flag } } : {};
+    const rows = await prisma.appConfigHistory.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Number(req.query?.limit) || 100, 500),
+    });
+    res.json({ data: rows });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -451,7 +585,7 @@ async function loadLaunchGate() {
 // seconds early is worse here than a transient false "not live yet".
 const getLaunchStatus = async (req, res) => {
   try {
-    const gate = await loadLaunchGate();
+    const gate = await launchGateCache.get(LAUNCH_GATE_KEY, loadLaunchGate);
     if (!gate.enabled) return res.json({ launchAt: null, isLive: true });
     if (!gate.launchAt) return res.json({ launchAt: null, isLive: false });
     const launchAt = gate.launchAt.toISOString();
@@ -490,6 +624,7 @@ const updateLaunchGateAdmin = async (req, res) => {
       create: { id: 1, enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
       update: { enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
     });
+    evictLaunchGate();
     res.json({ data: { enabled: updated.enabled, launchAt: updated.launchAt } });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -523,10 +658,42 @@ const updateStaffStatus = async (req, res) => {
   }
 };
 
+export const ME_SELECT = Object.fromEntries([
+  'id', 'phone', 'name', 'email', 'role', 'type', 'gender', 'dateOfBirth', 'fitnessGoals', 'sportsPlayed',
+  'referralCode', 'linkedGymId', 'trainerGymId', 'leaderboardOptIn', 'experienceLevel', 'trainingTenure', 'homeUnclaimedGymId',
+  'pendingGymPromptGymId', 'gymLinkNotice', 'firstVisitBadgeConsent', 'currentlyWorksOut', 'workoutIntent',
+  'wellnessFocuses', 'wellnessDayPattern', 'wellnessSleepPattern', 'wellnessSetupCompleted',
+  'trainingLocationPref', 'trainingLocationOther', 'appMode', 'persona', 'freeTimeWindow', 'weeklyFrequencyIntent', 'recommendedEquipment', 'gymSubscriptionEndDate',
+  // The app reads the avatar from /me; without it every client saw "no photo".
+  'profileImageUrl',
+].map((field) => [field, true]));
+
 const getMe = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    // Narrow select: exactly the columns the response below reads, plus the
+    // inputs resolvePersona() reads (persona, linkedGymId, homeUnclaimedGymId,
+    // the wellness answers, trainingLocationPref, currentlyWorksOut, appMode,
+    // workoutIntent). The User row is wide; /me is the app-boot call. Adding a
+    // field to the response means adding it to ME_SELECT (test pins this).
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: ME_SELECT });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    // How the active gym membership was made (QR vs self-declared), so the app
+    // can render the linked-member home from /me alone. Null when the pointer
+    // exists but there is no live GymLink row yet (pre-backfill accounts).
+    // gymLinkStatus is whether the gym has confirmed it ('pending' for a
+    // self-declared link nobody at the gym has answered yet), so the app can say
+    // "waiting for your gym" and keep saying it across restarts.
+    let gymLinkSource = null;
+    let gymLinkStatus = null;
+    if (user.linkedGymId) {
+      const active = await prisma.gymLink.findFirst({
+        where: { userId: user.id, removedAt: null },
+        orderBy: { linkedAt: 'desc' },
+        select: { source: true, approvedAt: true, firstVerifiedCheckinAt: true },
+      });
+      gymLinkSource = active?.source ?? null;
+      gymLinkStatus = linkStatusOf(active);
+    }
     res.json({
       id: user.id,
       phone: user.phone,
@@ -537,10 +704,47 @@ const getMe = async (req, res) => {
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
+      sportsPlayed: user.sportsPlayed ?? [],
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
+      gymLinkSource,
+      gymLinkStatus,
       trainerGymId: user.trainerGymId,
       leaderboardOptIn: user.leaderboardOptIn,
+      // Coach-journey (B2) linked-member fields: which Home to route to, the
+      // unclaimed-gym prompt/notice state, and the first-visit badge consent.
+      experienceLevel: user.experienceLevel ?? null,
+      trainingTenure: user.trainingTenure ?? null,
+      homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
+      pendingGymPromptGymId: user.pendingGymPromptGymId ?? null,
+      gymLinkNotice: user.gymLinkNotice ?? null,
+      firstVisitBadgeConsent: user.firstVisitBadgeConsent ?? false,
+      // Onboarding branch — appMode in particular is read at app boot to pick
+      // which Home to render, alongside linkedGymId directly above. Shipping
+      // it on /me (not only on the profile endpoint) is what lets the app
+      // branch on the first call rather than after a second round trip.
+      currentlyWorksOut: user.currentlyWorksOut ?? null,
+      workoutIntent: user.workoutIntent || null,
+      wellnessFocuses: user.wellnessFocuses || [],
+      wellnessDayPattern: user.wellnessDayPattern || null,
+      wellnessSleepPattern: user.wellnessSleepPattern || null,
+      wellnessSetupCompleted: user.wellnessSetupCompleted === true,
+      trainingLocationPref: user.trainingLocationPref,
+      trainingLocationOther: user.trainingLocationOther,
+      appMode: user.appMode,
+      // Who the user is in the app — the one value Home, Progress and the
+      // challenge list should all branch on (services/personaService.js).
+      persona: resolvePersona(user),
+      freeTimeWindow: user.freeTimeWindow,
+      weeklyFrequencyIntent: user.weeklyFrequencyIntent ?? null,
+      gymSubscriptionEndDate: user.gymSubscriptionEndDate || null,
+      // Server-assigned experiment buckets (A1 hook, B14 owns the assignment).
+      // Derived on every call rather than stored, so there is no per-user row
+      // to migrate and a user cannot be re-bucketed by a stale cache. Today it
+      // is the constant control arm; see services/experimentService.js.
+      experiments: bucketFor(user.id),
+      recommendedEquipment: user.recommendedEquipment ?? null,
+      profileImageUrl: user.profileImageUrl || '',
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -560,24 +764,59 @@ const getUserInternal = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    const membership = user.linkedGymId ? await prisma.gymLink.findFirst({
+      where: { userId: user.id, gymId: user.linkedGymId, removedAt: null },
+      orderBy: { linkedAt: 'desc' },
+      select: { source: true, approvedAt: true },
+    }) : null;
     res.json({
       id: user.id,
+      gymLinkStatus: linkStatusOf(membership),
       name: user.name,
       phone: user.phone,
       dateOfBirth: user.dateOfBirth,
       gender: user.gender,
+      // Copied into buddy-service's BuddyProfile cache on profile sync: a
+      // gender changed to "female" (and not since cleared by an admin) blocks
+      // the user from women-only discovery (BuddyProfile.womenOnlyBlocked).
+      genderChangedAt: user.genderChangedAt ?? null,
+      genderChangedTo: user.genderChangedTo ?? null,
       fitnessGoals: user.fitnessGoals,
+      sportsPlayed: user.sportsPlayed ?? [],
       // Onboarding answers health-service reads to seed a weekly training
       // goal (FR-04) instead of measuring everyone against one hardcoded
       // number. Preferences, not sensitive data — the same class as
       // fitnessGoals directly above.
       experienceLevel: user.experienceLevel,
       weeklyFrequencyIntent: user.weeklyFrequencyIntent,
+      // The rest of the onboarding branch, for health-service: the AI coach
+      // is told how this person trains (a home trainee asked "what should I
+      // do today" must not be sent to a gym), and comeback nudges are timed
+      // to freeTimeWindow. Same class as the preferences above — how someone
+      // likes to train, not anything about their health.
+      currentlyWorksOut: user.currentlyWorksOut ?? null,
+      workoutIntent: user.workoutIntent || null,
+      wellnessFocuses: user.wellnessFocuses || [],
+      wellnessDayPattern: user.wellnessDayPattern || null,
+      wellnessSleepPattern: user.wellnessSleepPattern || null,
+      wellnessSetupCompleted: user.wellnessSetupCompleted === true,
+      trainingLocationPref: user.trainingLocationPref || null,
+      appMode: user.appMode || null,
+      // challenge-service (audience), health-service (plan track, coach,
+      // nudges) read this instead of re-deriving it from the answers.
+      persona: resolvePersona(user),
+      freeTimeWindow: user.freeTimeWindow || null,
       profileImageUrl: user.profileImageUrl,
       fcmToken: user.fcmToken,
       referredByUserId: user.referredByUserId,
       linkedGymId: user.linkedGymId,
+      homeUnclaimedGymId: user.homeUnclaimedGymId ?? null,
       trainerGymId: user.trainerGymId,
+      // Coach-journey B2: booking-service gates the partner "first visit"
+      // badge on firstVisitBadgeConsent and needs createdAt for the prompt
+      // cadence; health-service reads createdAt for journey timing.
+      firstVisitBadgeConsent: user.firstVisitBadgeConsent ?? false,
+      createdAt: user.createdAt ?? null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -613,7 +852,7 @@ const getUsersBatchInternal = async (req, res) => {
     if (!ids.length) return res.json({ data: [] });
     const users = await prisma.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true },
+      select: { id: true, name: true, phone: true, profileImageUrl: true, leaderboardOptIn: true, firstVisitBadgeConsent: true, linkedGymId: true },
     });
     res.json({ data: users });
   } catch (err) {
@@ -632,6 +871,71 @@ const runAttendanceSaasReengagementSweep = async (req, res) => {
   }
 };
 
+// Internal (requireInternal): count of users who joined each gym in a given
+// calendar month (YYYY-MM, IST) — the "users joined" numerator behind the
+// attendance-SaaS monthly flat-per-user bill (wallet-service computes
+// amount = joinedCount x flatFee and debits the partner wallet).
+const countGymJoinedUsersByMonthInternal = async (req, res) => {
+  try {
+    const gymIds = Array.isArray(req.body?.gymIds) ? req.body.gymIds.map(Number).filter(Number.isFinite) : [];
+    if (!gymIds.length) return res.status(400).json({ error: 'gymIds required' });
+    const counts = await countGymJoinedUsersByMonthService(gymIds, req.body?.month);
+    res.json({ data: { month: req.body?.month, counts } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Roster shared by the gobhi attendance-SaaS view and the partner-facing member
+// list (coach-journey B2). Reads active GymLinks rather than scanning
+// User.linkedGymId, so it can apply the self-link visibility rule: a
+// self-declared member is not shown until the gym approves them or a verified
+// check-in confirms they really go there, and even then only by first name (they never opted into
+// being named next to check-ins they did not make). QR members show in full.
+async function gymRoster(gymId, { includePhone, includeRecord = false }) {
+  const links = await prisma.gymLink.findMany({
+    where: { gymId, removedAt: null },
+    orderBy: { linkedAt: 'asc' },
+    select: { userId: true, source: true, firstVerifiedCheckinAt: true, approvedAt: true, linkedAt: true },
+  });
+  // A self link shows once the gym approved it or a verified check-in confirmed it.
+  const visible = links.filter((l) => l.source !== 'self' || l.approvedAt != null);
+  const ids = [...new Set(visible.map((l) => l.userId))];
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, createdAt: true, ...(includePhone ? { phone: true } : {}), ...(includeRecord ? { profileImageUrl: true } : {}) },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  // Partner view only: what the owner recorded (expiry, follow-up, balance, locker)
+  // so the roster can flag renewals at a glance. Additive fields; nothing removed.
+  const extras = includeRecord ? await rosterExtras(prisma, gymId, ids) : new Map();
+  return visible
+    .map((l) => {
+      const u = byId.get(l.userId);
+      if (!u) return null;
+      return {
+        id: u.id,
+        name: l.source === 'self' ? firstNameOnly(u.name) : u.name,
+        ...(includePhone ? { phone: u.phone } : {}),
+        createdAt: u.createdAt,
+        linkSource: l.source,
+        // memberSince: when they became this gym's member (approval for a self
+        // link, the link itself for a gym-QR one). The partner's "not seen in a
+        // week" list uses it so someone who joined two days ago is not flagged.
+        ...(includeRecord ? { photoUrl: u.profileImageUrl || null, memberSince: l.approvedAt ?? l.linkedAt ?? null, ...(extras.get(l.userId) ?? {}) } : {}),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function firstNameOnly(name) {
+  if (typeof name !== 'string') return null;
+  const trimmed = name.trim();
+  return trimmed ? trimmed.split(/\s+/)[0] : null;
+}
+
 // Gobhi-only roster of a single gym's linked members (attendance-SaaS
 // wedge) — admin's /attendance-saas dashboard previously only had
 // gym-level aggregates (see wallet-service's getSubscriptionSummaryByGymService);
@@ -639,11 +943,7 @@ const runAttendanceSaasReengagementSweep = async (req, res) => {
 const listAttendanceSaasMembers = async (req, res) => {
   try {
     const gymId = parseInt(req.params.gymId);
-    const members = await prisma.user.findMany({
-      where: { linkedGymId: gymId },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, phone: true, createdAt: true },
-    });
+    const members = await gymRoster(gymId, { includePhone: true });
     res.json({ data: members });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -652,7 +952,7 @@ const listAttendanceSaasMembers = async (req, res) => {
 
 // Partner-facing member roster (attendance-SaaS gap-analysis finding: every
 // competitor treats "see your own members" as day-one baseline, and this
-// existed in code but was gobhi-only). Same query as
+// existed in code but was gobhi-only). Same roster as
 // listAttendanceSaasMembers above, minus phone — partners must never see a
 // customer's phone number (same rule bookingController's getGymBookings
 // already enforces for the booking-history roster).
@@ -661,11 +961,7 @@ export const listGymMembersForPartner = async (req, res) => {
     if (req.user.role !== 'partner') return res.status(403).json({ error: 'Forbidden' });
     const gymId = parseInt(req.params.gymId);
     await assertPartnerOwnsGym(gymId, req.user.id);
-    const members = await prisma.user.findMany({
-      where: { linkedGymId: gymId },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, name: true, createdAt: true },
-    });
+    const members = await gymRoster(gymId, { includePhone: false, includeRecord: true });
     res.json({ data: members });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
@@ -786,8 +1082,10 @@ const updateFcmToken = async (req, res) => {
   }
 };
 
-// Per-gym attendance leaderboards (booking-service) are opt-in — a check-in
-// is otherwise private. This is the only way leaderboardOptIn ever changes.
+// Per-gym attendance leaderboards (booking-service) are on by default — a
+// check-in is public on the boards it would rank on. This opt-out is the only
+// way leaderboardOptIn ever changes, and it is reachable from the customer
+// app's profile screen only (no toggle on the board itself).
 const updateLeaderboardOptIn = async (req, res) => {
   try {
     const { optIn } = req.body;
@@ -799,40 +1097,6 @@ const updateLeaderboardOptIn = async (req, res) => {
   }
 };
 
-// Map collectibles (veggie pickups) -- a standalone currency, deliberately
-// NOT coins and NOT tied to gyms/bookings/badges. Spawn points are
-// deterministic client-side (fixed grid, see the customer app's
-// VeggieCollectibleGrid); there's no server-side catalog, so this is purely
-// which ids a user has found.
-const listMyCollectibles = async (req, res) => {
-  try {
-    const finds = await prisma.collectibleFind.findMany({
-      where: { userId: req.user.id },
-      select: { collectibleId: true },
-    });
-    res.json({ data: finds.map((f) => f.collectibleId) });
-  } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
-  }
-};
-
-const collectCollectible = async (req, res) => {
-  try {
-    const { collectibleId } = req.params;
-    if (!collectibleId) return res.status(400).json({ error: 'collectibleId required' });
-    // Idempotent: walking near an already-found spawn point again (or a
-    // retried request) is a no-op, not an error.
-    await prisma.collectibleFind.upsert({
-      where: { userId_collectibleId: { userId: req.user.id, collectibleId } },
-      create: { userId: req.user.id, collectibleId },
-      update: {},
-    });
-    res.json({ ok: true, collectibleId });
-  } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
-  }
-};
-
-export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listMyCollectibles, collectCollectible, listStaff, createStaff, updateStaffStatus };
+export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, validateFeaturePayload, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, countGymJoinedUsersByMonthInternal };
 
 

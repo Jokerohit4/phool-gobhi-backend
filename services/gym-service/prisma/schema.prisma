@@ -71,15 +71,16 @@ model Gym {
   // every gym until an admin overrides it.
   commissionPct Decimal    @default(20) @db.Decimal(5, 2)
   // Attendance-SaaS wedge: when this gym first went live (isApproved flipped
-  // true), set once in approveGym and never moved after — drives wallet-
-  // service's 1-month honeymoon window on GymSubscription purchases. Null
-  // until first approval. Backfilled to createdAt for gyms already approved
-  // before this feature existed (see migration) so no already-live gym gets
-  // a free honeymoon it never had.
+  // true), set once in approveGym and never moved after. Null until first
+  // approval. Backfilled to createdAt for gyms already approved before this
+  // feature existed (see migration). Historical/display use only — a
+  // free-commission honeymoon window keyed off this date existed from
+  // 2026-08-19 to 2026-09-11 and was removed; every subscription purchase
+  // now carries a platform commission from day one.
   partnershipStartDate DateTime?
-  // Post-honeymoon commission on GymSubscription purchases specifically —
-  // separate lever from commissionPct, which keeps governing one-off
-  // marketplace bookings unchanged. Null = platform default (see
+  // Commission on GymSubscription purchases specifically — separate lever
+  // from commissionPct, which keeps governing one-off marketplace bookings
+  // unchanged. Null = platform default (see
   // DEFAULT_SUBSCRIPTION_SAAS_COMMISSION_PERCENT in wallet-service).
   subscriptionCommissionPct Decimal? @db.Decimal(5, 2)
   // Partner's own opt-out of the attendance-SaaS program — applied
@@ -101,14 +102,16 @@ model Gym {
   marketplaceEnabled Boolean @default(true)
   // Admin-only (gobhi, see PUT /:id/subscription-pricing-mode) — which
   // formula wallet-service applies to a GymSubscription purchase's
-  // post-honeymoon commission: a percentage of the plan price
+  // commission: a percentage of the plan price
   // (subscriptionCommissionPct above), or a flat fee per registration
-  // regardless of plan price (subscriptionFlatFeePerUser below). Some gyms
-  // are a better fit for "we take a cut of what you charge," others for
-  // "we charge you a flat Rs-per-signup fee" — this lets gobhi pick per gym.
-  subscriptionPricingMode SubscriptionPricingMode @default(percentage)
+  // regardless of plan price (subscriptionFlatFeePerUser below). Platform
+  // default is flatPerUser (Rs 1/customer, see wallet-service's
+  // DEFAULT_SUBSCRIPTION_FLAT_FEE_PER_USER) — some gyms are a better fit for
+  // "we take a cut of what you charge" instead, which is why gobhi can still
+  // pick per gym.
+  subscriptionPricingMode SubscriptionPricingMode @default(flatPerUser)
   // Only meaningful when subscriptionPricingMode = flatPerUser. Null uses
-  // wallet-service's platform-default flat fee.
+  // wallet-service's platform-default flat fee (currently Rs 1).
   subscriptionFlatFeePerUser Decimal? @db.Decimal(10, 2)
   weeklyPlanPrice     Decimal? @db.Decimal(19, 2)
   monthlyPlanPrice    Decimal? @db.Decimal(19, 2)
@@ -122,6 +125,7 @@ model Gym {
   slotBlocks   SlotBlock[]
   slotPrices   GymSlotPrice[]
   editRequests GymEditRequest[]
+  leads        GymLead[]
   operatingHours GymOperatingHours[]
   classes        GymClass[]
 
@@ -144,6 +148,8 @@ model GymImage {
   gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
+  // Every gym read includes its images (listGyms, detail, internal fetch).
+  @@index([gymId])
   @@schema("gym")
 }
 
@@ -299,6 +305,43 @@ enum EditRequestStatus {
   @@schema("gym")
 }
 
+// Sales pipeline for the attendance-SaaS side of the operation: a prospective
+// member the partner is following up on. Purely partner-owned bookkeeping —
+// "converting" a lead is a status the partner records, not a backend action
+// (membership books live in booking-service), so a converted lead is
+// best-effort signal and the phone turning up in the Members roster later is
+// the real proof of a sale.
+model GymLead {
+  id        Int        @id @default(autoincrement())
+  gymId     Int
+  partnerId Int
+  name      String?
+  phone     String?
+  notes     String?
+  // Where the inquiry came from — freeform partner input, defaulted to
+  // 'walk_in' by the service when omitted. Plain String keeps the app and the
+  // migration flexible; becomes an enum only if it grows fixed options.
+  source    String     @default("walk_in")
+  status    LeadStatus @default(new)
+  gym       Gym        @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([gymId, status])
+  @@index([partnerId])
+  @@schema("gym")
+}
+
+enum LeadStatus {
+  new
+  contacted
+  scheduled_visit
+  converted
+  lost
+
+  @@schema("gym")
+}
+
 // A partner mutation on an already-approved (live) gym. Instead of writing
 // straight to Gym/GymImage/SlotBlock/GymSlotPrice, the proposed change sits
 // here until a gobhi approves it — customers keep seeing the old approved
@@ -321,5 +364,51 @@ model GymEditRequest {
 
   @@index([gymId, status])
   @@index([status])
+  @@schema("gym")
+}
+
+// A gym a customer told us they train at, which is NOT a Phool Gobhi partner.
+//
+// Deliberately a separate model rather than a nullable Gym.partnerId: that
+// column is load-bearing across commission, payout and every partner
+// "my gyms" query, and making it optional would force an audit of each of
+// those reads for a case none of them should ever see. An unclaimed gym has
+// no partner, no slots, no prices, no bookings and no QR — it exists so a
+// customer's attendance can be recorded against a real place, and so sales
+// can see which gyms our users already go to.
+//
+// Sourced from Google Places, keyed on googlePlaceId and upserted, so repeat
+// searches for the same place converge on one row — which is what makes
+// "how many distinct users attend here" a meaningful number rather than a
+// count of how often people searched.
+model UnclaimedGym {
+  id            Int         @id @default(autoincrement())
+  googlePlaceId String      @unique
+  name          String
+  address       String
+  city          String      @default("")
+  lat           Float
+  lng           Float
+  // The first customer who named this place. A bare Int, unenforced, same
+  // cross-service convention as every other userId in this codebase.
+  addedByUserId Int
+  claimStatus   ClaimStatus @default(unclaimed)
+  // Set once a partner onboards this place for real, so historical attendance
+  // logged against the UnclaimedGym id stays attributable afterwards. Bare
+  // Int by the same convention — it points at Gym.id in this same schema, but
+  // is written by a sales/ops action rather than a relation we cascade on.
+  claimedGymId  Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([claimStatus])
+  @@schema("gym")
+}
+
+enum ClaimStatus {
+  unclaimed
+  claim_pending
+  claimed
+
   @@schema("gym")
 }

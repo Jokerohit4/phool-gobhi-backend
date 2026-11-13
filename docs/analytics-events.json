@@ -1,85 +1,1344 @@
 {
-  "$comment": "Single source of truth for every analytics event name shipped anywhere in the platform (backend track()/ingest() calls, both Flutter apps' AnalyticsEvents constants, website). Checked by scripts/check-analytics-events.cjs, which fails a deploy if code uses an event string not listed here (docs/analytics-events.json) — this is what would have caught the 2026-07-22 silent subscription-funnel rename before it shipped. 'source' is 'server' (emitted in-process via track(), never touches the gateway's /api/events route) or 'client' (sent by an app/website via ingest(), and therefore the set the gateway's /api/events allowlist is built from). Retired events are kept here, flagged retired, so historical rows remain queryable and the checker doesn't complain about old code that no longer exists.",
-
-  "signup_completed":            { "source": "server", "service": "auth-service" },
-  "login_completed":             { "source": "server", "service": "auth-service" },
-  "attendance_saas_reengagement_sent": { "source": "server", "service": "auth-service", "since": "2026-08-20", "notes": "attendance-SaaS wedge — nudge sent to a gym-linked signup with no booking/subscription activity" },
-  "partner_bank_settlement_recorded":  { "source": "server", "service": "wallet-service", "since": "2026-08-20", "notes": "admin marked a partner's pending attendance-SaaS bank settlement as paid (manual bank transfer, outside the app)" },
-  "staff_account_created":       { "source": "server", "service": "auth-service" },
-  "staff_account_revoked":       { "source": "server", "service": "auth-service" },
-  "staff_account_reactivated":   { "source": "server", "service": "auth-service" },
-  "trainer_account_created":      { "source": "server", "service": "auth-service", "since": "2026-08-21", "notes": "partner created a gym-employed trainer account" },
-  "trainer_account_deactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
-  "trainer_account_reactivated":  { "source": "server", "service": "auth-service", "since": "2026-08-21" },
-  "trainer_checked_in":           { "source": "server", "service": "booking-service", "since": "2026-08-21" },
-  "training_session_logged":      { "source": "server", "service": "booking-service", "since": "2026-08-21", "notes": "trainer self-logged which attended customer booking they trained" },
-
-  "gym_created":                 { "source": "server", "service": "gym-service" },
-  "gym_approved":                { "source": "server", "service": "gym-service" },
-  "gym_rejected":                { "source": "server", "service": "gym-service" },
-
-  "booking_confirmed":           { "source": "server", "service": "booking-service" },
-  "booking_failed":              { "source": "server", "service": "booking-service" },
-  "booking_cancelled":           { "source": "server", "service": "booking-service" },
-  "booking_completed":           { "source": "server", "service": "booking-service" },
-  "booking_created":             { "source": "server", "service": "booking-service" },
-  "referral_credited":           { "source": "server", "service": "booking-service", "since": "2026-08-03", "notes": "fires when a referred customer's first completed booking triggers the ₹50/₹50 wallet credit" },
-  "checkin_requested":           { "source": "server", "service": "booking-service" },
-  "attendance_verified":         { "source": "server", "service": "booking-service", "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'" },
-  "attendance_slot_mismatch_confirmed": { "source": "server", "service": "booking-service", "since": "2026-07-29", "notes": "fires instead of attendance_verified when a partner scans a booking's QR before its session window opens and confirms shifting the slot time" },
-  "badge_earned":                { "source": "server", "service": "booking-service", "since": "2026-08-18", "notes": "gamification wave 1 — fires on selfCheckIn when this is the customer's first-ever attended booking at gymId" },
-
-  "wallet_topup_order_created":  { "source": "server", "service": "wallet-service" },
-  "wallet_topup_succeeded":      { "source": "server", "service": "wallet-service" },
-  "wallet_topup_failed":         { "source": "server", "service": "wallet-service" },
-  "partner_payout_recorded":     { "source": "server", "service": "wallet-service" },
-  "wallet_topup_config_updated": { "source": "server", "service": "wallet-service", "since": "2026-08-06", "notes": "admin edits WalletTopupConfig (presets/allowCustomAmount/min/max) via phool-gobhi-admin's Settings page" },
-  "subscription_purchased_wallet": { "source": "server", "service": "wallet-service", "since": "2026-07-22", "notes": "replaces the retired two-step subscription_order_created/subscription_purchased flow as of commit b8c7251" },
-  "subscription_order_created":  { "source": "server", "service": "wallet-service", "retired": true, "retiredSince": "2026-07-22", "notes": "superseded by subscription_purchased_wallet; historical rows only" },
-  "subscription_purchased":      { "source": "server", "service": "wallet-service", "retired": true, "retiredSince": "2026-07-22", "notes": "superseded by subscription_purchased_wallet; historical rows only" },
-
-  "buddy_profile_created":       { "source": "server", "service": "buddy-service" },
-  "buddy_swiped":                { "source": "server", "service": "buddy-service" },
-  "buddy_matched":               { "source": "server", "service": "buddy-service" },
-  "buddy_unmatched":             { "source": "server", "service": "buddy-service" },
-  "buddy_message_sent":          { "source": "server", "service": "buddy-service" },
-  "buddy_blocked":               { "source": "server", "service": "buddy-service" },
-
-  "otp_requested":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "otp_submitted":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "identify":                       { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "screen_viewed":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"] },
-  "search_performed":               { "source": "client", "apps": ["phool_gobhi"] },
-  "gym_viewed":                     { "source": "client", "apps": ["phool_gobhi"] },
-  "slot_selected":                  { "source": "client", "apps": ["phool_gobhi"] },
-  "book_tapped":                    { "source": "client", "apps": ["phool_gobhi"] },
-  "checkin_tapped":                 { "source": "client", "apps": ["phool_gobhi"] },
-  "topup_tapped":                   { "source": "client", "apps": ["phool_gobhi"] },
-  "referral_shared":                { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-03", "notes": "Share your code tapped on the Refer & Earn screen" },
-  "map_explored_opened":            { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-18", "notes": "gamification wave 1 — fog-of-war explore map opened" },
-  "badge_shelf_viewed":             { "source": "client", "apps": ["phool_gobhi"], "since": "2026-08-18", "notes": "gamification wave 1 — badge shelf opened" },
-  "session_started":                { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23", "notes": "as of 2026-08-15, the website's copy also carries properties.channel ('direct'|'organic_search'|'social'|'referral'|'campaign:<utm_source>'), referrer_host, utm_source/medium/campaign/term/content, and landing_path — captured once at the very first paint of the session, before any client-side navigation — backing the admin's traffic-source breakdown" },
-  "session_ended":                  { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner", "website"], "since": "2026-07-23" },
-  "update_required_shown":          { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"], "notes": "force-update splash screen shown (min version gate)" },
-  "update_now_tapped":               { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
-  "soft_update_shown":               { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"], "notes": "dismissible nudge shown (latest version gate)" },
-  "soft_update_dismissed":           { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
-  "soft_update_tapped":              { "source": "client", "apps": ["phool_gobhi", "phool_gobhi_partner"] },
-  "onboarding_started":              { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_step_completed":       { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_gym_photo_added":      { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_doc_added":            { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "onboarding_submitted":            { "source": "client", "apps": ["phool_gobhi_partner"] },
-  "gym_image_uploaded":              { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to GymScreenCubit.addImage on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "gym_doc_uploaded":                { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to GymScreenCubit.addDoc on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "gym_profile_updated":             { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to GymScreenCubit.updateGym on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "dashboard_viewed":                { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to HomeScreenTwo.initState on 2026-08-17 — previously reserved but unwired since 2026-07-23" },
-  "booking_checked_in":              { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "wired to CameraCubit's QR-scan verify-attendance success on 2026-08-17 (properties.method = 'qr_scan'|'qr_scan_slot_shift') — previously reserved but unwired since 2026-07-23" },
-  "gym_switched":                    { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "SelectedGymCubit.selectGym, only fires on an actual change of selection — backs multi-gym engagement visibility, which had zero analytics coverage before this" },
-  "gym_class_created":               { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "new recurring-class supply feature (ClassesCubit.addClass); properties.pending reflects whether it needs gobhi approval like other gym edits" },
-  "schedule_slot_blocked":           { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "ScheduleCubit.toggleBlock; properties.action is 'blocked'|'unblocked'" },
-  "schedule_hours_updated":          { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "ScheduleCubit.saveHours (operating-hours editor)" },
-  "logout_tapped":                   { "source": "client", "apps": ["phool_gobhi_partner"], "since": "2026-08-17", "notes": "fires before AuthCubit.onTapSignOut/reset() so the event still carries the outgoing user's distinct_id" },
-  "cta_clicked":                     { "source": "client", "apps": ["website"], "since": "2026-07-23", "notes": "generic CTA click event, properties.cta identifies which one (e.g. 'whatsapp', 'signup')" },
-  "location_resolved":               { "source": "client", "apps": ["website"], "since": "2026-08-15", "notes": "fires once per session after the site's silent geolocation grab settles. properties.permission is 'granted'|'denied'|'unsupported'|'timeout'|'error'; when granted, properties.nearest_gym_distance_km is the TRUE nearest-gym distance computed server-side (no 40km discovery cutoff) — backs the admin Location Reach view" }
+  "$comment": "Single source of truth for every analytics event name shipped anywhere in the platform (backend track()/ingest() calls, both Flutter apps' AnalyticsEvents constants, website). Checked by scripts/check-analytics-events.cjs, which fails a deploy if code uses an event string not listed here (docs/analytics-events.json) \u2014 this is what would have caught the 2026-07-22 silent subscription-funnel rename before it shipped. 'source' is 'server' (emitted in-process via track(), never touches the gateway's /api/events route) or 'client' (sent by an app/website via ingest(), and therefore the set the gateway's /api/events allowlist is built from). Retired events are kept here, flagged retired, so historical rows remain queryable and the checker doesn't complain about old code that no longer exists.",
+  "signup_completed": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "login_completed": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "attendance_saas_reengagement_sent": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-20",
+    "notes": "attendance-SaaS wedge \u2014 nudge sent to a gym-linked signup with no booking/subscription activity"
+  },
+  "attendance_saas_bill_charged": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-09-17",
+    "notes": "admin applied a gym's monthly attendance-SaaS bill \u2014 users joined that month x flat per-user fee debited from the partner wallet (negative balance allowed)"
+  },
+  "partner_bank_settlement_recorded": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-08-20",
+    "notes": "admin marked a partner's pending attendance-SaaS bank settlement as paid (manual bank transfer, outside the app)"
+  },
+  "staff_account_created": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "staff_account_revoked": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "staff_account_reactivated": {
+    "source": "server",
+    "service": "auth-service"
+  },
+  "trainer_account_created": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-21",
+    "notes": "partner created a gym-employed trainer account"
+  },
+  "trainer_account_deactivated": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-21"
+  },
+  "trainer_account_reactivated": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-08-21"
+  },
+  "trainer_checked_in": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-21"
+  },
+  "training_session_logged": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-21",
+    "notes": "trainer self-logged which attended customer booking they trained"
+  },
+  "gym_created": {
+    "source": "server",
+    "service": "gym-service"
+  },
+  "food_photo_on_device": {
+    "source": "client",
+    "service": "health-service",
+    "since": "2026-10-06",
+    "notes": "the on-device matcher was engaged for a photo (customer app). props matched (bool), score, runner_up, catalogue_size, model \u2014 NEVER the matched food's name, because a plate is a description of somebody's diet and the no-PII rule on health_food_photo_recognized applies to this event for the same reason. This is the calibration signal for the mobileclip drop-in: matched=false with a high score means the short-circuit bar is tuned too low (near-misses are topping the index with wrong rows), matched=true with a low runner_up means the win is decisive, and a rising catalogue_size should flatten the correlation between scores and ground truth. Server-side recognizes still fire health_food_photo_recognized; this event exists so an on-device short-circuit is visible in the same funnel without faking a model recognition"
+  },
+  "gym_approved": {
+    "source": "server",
+    "service": "gym-service"
+  },
+  "gym_rejected": {
+    "source": "server",
+    "service": "gym-service"
+  },
+  "booking_confirmed": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_failed": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_cancelled": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_completed": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "booking_created": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "referral_credited": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-03",
+    "notes": "fires when a referred customer's first completed booking triggers the \u20b950/\u20b950 wallet credit"
+  },
+  "checkin_requested": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "independent_checkin": {
+    "source": "server",
+    "service": "booking-service"
+  },
+  "attendance_verified": {
+    "source": "server",
+    "service": "booking-service",
+    "notes": "fires with properties.method = 'qr_scan' or 'qr_geofence_self'"
+  },
+  "attendance_slot_mismatch_confirmed": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-07-29",
+    "notes": "fires instead of attendance_verified when a partner scans a booking's QR before its session window opens and confirms shifting the slot time"
+  },
+  "badge_earned": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-08-18",
+    "notes": "gamification wave 1 \u2014 fires on selfCheckIn when this is the customer's first-ever attended booking at gymId"
+  },
+  "wallet_topup_order_created": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "wallet_topup_succeeded": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "wallet_topup_failed": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "partner_payout_recorded": {
+    "source": "server",
+    "service": "wallet-service"
+  },
+  "wallet_topup_config_updated": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-08-06",
+    "notes": "admin edits WalletTopupConfig (presets/allowCustomAmount/min/max) via phool-gobhi-admin's Settings page"
+  },
+  "subscription_purchased_wallet": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-07-22",
+    "notes": "replaces the retired two-step subscription_order_created/subscription_purchased flow as of commit b8c7251"
+  },
+  "subscription_order_created": {
+    "source": "server",
+    "service": "wallet-service",
+    "retired": true,
+    "retiredSince": "2026-07-22",
+    "notes": "superseded by subscription_purchased_wallet; historical rows only"
+  },
+  "subscription_purchased": {
+    "source": "server",
+    "service": "wallet-service",
+    "retired": true,
+    "retiredSince": "2026-07-22",
+    "notes": "superseded by subscription_purchased_wallet; historical rows only"
+  },
+  "buddy_profile_created": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_swiped": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_matched": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_unmatched": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_message_sent": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_blocked": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_reported": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_match_expired": {
+    "source": "server",
+    "service": "buddy-service"
+  },
+  "buddy_auto_held": {
+    "source": "server",
+    "service": "buddy-service",
+    "since": "2026-10-09",
+    "notes": "a user was put on automatic moderation hold after 2+ qualifying reporters reported them within 30 days (W7). props reporter_count, reason — the hold hides the user from decks and blocks browsing/swiping on both sides, but leaves already-open chats working because a hold is not a verdict"
+  },
+  "buddy_women_only_toggled": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "women-only mode was switched in the buddy filters (W8). props enabled (bool) — only a profile whose synced gender is female can turn it on, and while it is on the gender filter is forced to [female]"
+  },
+  "buddy_safety_sheet_seen": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "the buddy safety sheet was shown (W8) — the report/hold/suspend explanation presented before women-only mode is offered"
+  },
+  "otp_requested": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "otp_submitted": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "identify": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "screen_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ]
+  },
+  "search_performed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "gym_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "slot_selected": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "book_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "checkin_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "home_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-12",
+    "notes": "the three homes emitted only the automatic screen_viewed, so an opened-and-abandoned home looked identical to one that drove a booking. `home_viewed` names the persona once per home mount; `home_section_tapped` names the section the person reached for (the shared action rows; the health cards and rails keep their own richer events). Registered in the backend's docs/analytics-events.json alongside `home_section_tapped`."
+  },
+  "home_section_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-12",
+    "notes": "names the section the person reached for (the shared action rows; the health cards and rails keep their own richer events). Registered in the backend's docs/analytics-events.json alongside `home_viewed`."
+  },
+  "persona_switched": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-28",
+    "notes": "a user's persona changed (linked_gym / own_gym / wellness / home_training / sports / explorer). Props from_persona, to_persona, source: settings | floating_prompt | onboarding for a user switch, gym_link | gym_leave | gym_removed when a gym link changed it. AppModeHistory holds the same rows."
+  },
+  "persona_switch_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-28",
+    "notes": "the user confirmed a switch in the persona switcher (from_persona, to_persona, entry). Paired with server persona_switched for success, persona_switch_failed for a refusal."
+  },
+  "persona_switch_failed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-28",
+    "notes": "the server refused a persona switch; prop code is the error code (SWITCH_COOLDOWN, GYM_REQUIRED, GYM_NOT_FOUND, FLAG_DISABLED, SELF_LINK_BLOCKED, SELF_LINK_LIMIT, or network)."
+  },
+  "topup_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ]
+  },
+  "referral_shared": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-08-03",
+    "notes": "Share your code tapped on the Refer & Earn screen"
+  },
+  "explore_visible": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: actual visible session; entry_source and world_state. Separate from historical map mount counts. No location/proof."
+  },
+  "explore_session_ended": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: visible session ends; coarse duration_bucket, client outcome and fix_state. Caught/pending never implies saved."
+  },
+  "explore_find_nearby": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: usable-fix session denominator; has_nearby and distinct_count within inclusive 150m. Does not establish accessibility. No occurrence IDs."
+  },
+  "explore_target_presented": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: target_state and nullable occurrence_kind. Only gym/reviewed can be directed targets; blocked states are not impressions."
+  },
+  "explore_encounter_started": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: encounter actually opened; occurrence_kind and cosmetic rarity only."
+  },
+  "explore_encounter_result": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: caught/missed_retry/abandoned, attempts, occurrence_kind and rarity. Client interaction, not authoritative pickup outcome."
+  },
+  "explore_pickup_pending": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: durable account outbox insertion; occurrence_kind and connectivity. No candidate ID, proof or saved claim."
+  },
+  "explore_pickup_queue_issue": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-24",
+    "notes": "E9 queue diagnostic: client-side queue issue observation. Seven fields: measurement_version, occurrence_kind, queue_age_bucket, queue_age_basis, failure_reason, upload_attempts_bucket, phase (enqueue/pending). No IDs, proof, coordinates, free-text. Diagnostic only."
+  },
+  "explore_pickup_queue_resolved": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-24",
+    "notes": "E9 queue diagnostic: client-side queue resolution observation. Seven fields: measurement_version, occurrence_kind, queue_age_bucket, queue_age_basis, failure_reason, upload_attempts_bucket, resolution (receipt_observed/server_rejection_observed/client_terminal). No IDs, proof, coordinates, free-text. Diagnostic only."
+  },
+  "explore_collection_viewed": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: real journal access; entry_source and world_state. Does not mean eating or exercising."
+  },
+  "explore_gym_opened": {
+    "source": "client",
+    "apps": ["phool_gobhi"],
+    "since": "2026-10-23",
+    "notes": "E9: explicit Explore-to-gym-detail handoff; entry_source and world_state. No attendance credit."
+  },
+  "explore_pickup_saved": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-23",
+    "notes": "Reserved E9 authoritative receipt event, deduplicated at transaction boundary. No client ingestion; no proof/location. Call-site implementation remains with E2/E9."
+  },
+  "explore_pickup_rejected": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-23",
+    "notes": "Reserved E9 terminal command rejection with typed reason and occurrence kind. No client ingestion or proof. Call-site implementation remains with E2/E9."
+  },
+  "explore_daily_set_completed": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-10-23",
+    "notes": "Reserved B1 authoritative acknowledged daily-set completion, never inferred from client activity. No B1 issuance in Increment A."
+  },
+  "map_explored_opened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-08-18",
+    "notes": "gamification wave 1 \u2014 fog-of-war explore map opened"
+  },
+  "badge_shelf_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-08-18",
+    "notes": "gamification wave 1 \u2014 badge shelf opened"
+  },
+  "health_card_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "health ledger \u2014 a Home/Progress health card rendered with content (props.surface = today_score | health_score | your_plan | ledger_journal)"
+  },
+  "health_card_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "health ledger \u2014 a Home/Progress health card was tapped (props.surface as above)"
+  },
+  "health_food_log_opened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-08",
+    "notes": "health ledger \u2014 the food picker was opened against a usable nutrition scope (props.day = today | past). Top of the food-log funnel: the successful bottom is the server's health_food_logged, so the pair gives a per-day open-to-log conversion, and the split on day tells picker friction in the moment apart from friction only when backfilling a past date"
+  },
+  "health_food_log_abandoned": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-08",
+    "notes": "health ledger \u2014 the picker was opened and closed with the day's log count unraised (props.day as above). Fired from dispose only when the scope was usable, so a screen that only ever showed the consent prompt is neither an open nor an abandonment. Judged by the day's log count gain rather than a per-button flag, so a food logged from the photo screen or a saved-meals repeat still counts as logged and does not read as an abandonment"
+  },
+  "health_food_log_failed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-08",
+    "notes": "health ledger \u2014 an add from the picker was refused or did not land (props.day as above, props.source = search | custom | repeat_day). Names the entry path so a spike reads as one broken path rather than a broken picker. The server's own sentence is what the user sees; this only counts that it happened"
+  },
+  "session_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ],
+    "since": "2026-07-23",
+    "notes": "as of 2026-08-15, the website's copy also carries properties.channel ('direct'|'organic_search'|'social'|'referral'|'campaign:<utm_source>'), referrer_host, utm_source/medium/campaign/term/content, and landing_path \u2014 captured once at the very first paint of the session, before any client-side navigation \u2014 backing the admin's traffic-source breakdown"
+  },
+  "session_ended": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner",
+      "website"
+    ],
+    "since": "2026-07-23"
+  },
+  "update_required_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "notes": "force-update splash screen shown (min version gate)"
+  },
+  "update_now_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ]
+  },
+  "soft_update_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "notes": "dismissible nudge shown (latest version gate)"
+  },
+  "soft_update_dismissed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ]
+  },
+  "soft_update_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_step_completed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "notes": "partner app: wizard page done. Customer app (since 2026-10-01): step done — props step (details|training|health_basics|why_here|medical_docs|permissions), surface (signup|resume|profile_edit), plus the step's enum answers only (currently_works_out, training_location, weekly_frequency, free_time_window); never DOB, gender or free text; the health-profile steps (since 2026-10-01) carry only step, surface and skipped (bool), never any health answer"
+  },
+  "onboarding_step_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-01",
+    "notes": "customer onboarding step shown — props step, surface. Viewed minus completed per step is the drop-off"
+  },
+  "onboarding_permission_result": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-01",
+    "notes": "customer onboarding permission step resolved — props permission (location|notifications), granted (bool)"
+  },
+  "onboarding_completed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-01",
+    "notes": "customer onboarding finished (signup wizard done, or the training branch saved from the resume prompt / Profile) — props surface, currently_works_out, training_location"
+  },
+  "onboarding_gym_photo_added": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_doc_added": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "onboarding_submitted": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ]
+  },
+  "gym_image_uploaded": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to GymScreenCubit.addImage on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "gym_doc_uploaded": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to GymScreenCubit.addDoc on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "gym_profile_updated": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to GymScreenCubit.updateGym on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "dashboard_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to HomeScreenTwo.initState on 2026-08-17 \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "booking_checked_in": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "wired to CameraCubit's QR-scan verify-attendance success on 2026-08-17 (properties.method = 'qr_scan'|'qr_scan_slot_shift') \u2014 previously reserved but unwired since 2026-07-23"
+  },
+  "gym_switched": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "SelectedGymCubit.selectGym, only fires on an actual change of selection \u2014 backs multi-gym engagement visibility, which had zero analytics coverage before this"
+  },
+  "gym_class_created": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "new recurring-class supply feature (ClassesCubit.addClass); properties.pending reflects whether it needs gobhi approval like other gym edits"
+  },
+  "schedule_slot_blocked": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "ScheduleCubit.toggleBlock; properties.action is 'blocked'|'unblocked'"
+  },
+  "schedule_hours_updated": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "ScheduleCubit.saveHours (operating-hours editor)"
+  },
+  "logout_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-08-17",
+    "notes": "fires before AuthCubit.onTapSignOut/reset() so the event still carries the outgoing user's distinct_id"
+  },
+  "cta_clicked": {
+    "source": "client",
+    "apps": [
+      "website"
+    ],
+    "since": "2026-07-23",
+    "notes": "generic CTA click event, properties.cta identifies which one (e.g. 'whatsapp', 'signup')"
+  },
+  "location_resolved": {
+    "source": "client",
+    "apps": [
+      "website"
+    ],
+    "since": "2026-08-15",
+    "notes": "fires once per session after the site's silent geolocation grab settles. properties.permission is 'granted'|'denied'|'unsupported'|'timeout'|'error'; when granted, properties.nearest_gym_distance_km is the TRUE nearest-gym distance computed server-side (no 40km discovery cutoff) \u2014 backs the admin Location Reach view"
+  },
+  "offline_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "the app-wide no-internet screen was shown (OfflineGate) \u2014 how often a transport failure interrupts someone mid-task"
+  },
+  "app_error": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "a handled client-side error surfaced to the user"
+  },
+  "sprout_encountered": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "map collectible came into range on the Explore map"
+  },
+  "sprout_caught": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-18",
+    "notes": "map collectible picked up"
+  },
+  "delete_account_confirmed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-09-18",
+    "notes": "partner confirmed account deletion. Constant is declared but not yet wired to a call site \u2014 registered so the name is reserved and the checker stays green"
+  },
+  "run_start_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "run tracker Start screen opened \u2014 props gps_ready, has_weight (run-tracker-spec.html \u00a713)"
+  },
+  "run_permission_result": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "location/notification/precise-location permission prompt resolved \u2014 props kind, result"
+  },
+  "run_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "recording began \u2014 props type (run/walk/cycle), gps_ready_at_start, countdown_on"
+  },
+  "run_paused": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props auto (bool), elapsed_s"
+  },
+  "run_resumed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props auto (bool), elapsed_s"
+  },
+  "run_recovered": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "app relaunched into the \"resume your run?\" sheet after an OS kill/crash \u2014 props choice (resume/finish/discard), gap_s"
+  },
+  "run_finished": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "hold-to-finish completed \u2014 props type, distance_m, moving_s, had_gap"
+  },
+  "run_saved": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props distance_m"
+  },
+  "run_discarded": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props distance_m, reason (too_short/user)"
+  },
+  "run_upload_failed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "pending-queue upload attempt failed \u2014 props attempt, http_status"
+  },
+  "run_history_viewed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-09-24",
+    "notes": "props count"
+  },
+  "health_report_uploaded": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-02",
+    "notes": "a medical report was uploaded to the vault. props fileName (filename only, never contents), status=PENDING at upload time — later processing status changes are NOT re-emitted, this event marks the upload moment only"
+  },
+  "health_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-04",
+    "notes": "base Health+ consent granted — the parent of the per-scope grants (health_medical_consent_granted, health_nutrition_consent_granted) and the legal basis for holding anything in the vault. props version = the policy version asserted, platform = ios|android. This row was written to Prisma without ever being emitted, so the funnel showed zero health opt-ins while consents existed"
+  },
+  "health_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-04",
+    "notes": "base Health+ consent withdrawn, which cascades to every ledger scope. The counterpart to health_consent_granted and the event to watch for churn: a revoke here means the whole health surface is off for that user"
+  },
+  "health_nutrition_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "nutrition scope granted. props version = the privacy-policy version the client asserted it was showing, so a build that consents on behalf of copy it never displayed is visible here rather than in a support ticket"
+  },
+  "health_nutrition_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "nutrition scope withdrawn. props purged (true = the collected food logs were also deleted). A revoke is a churn signal; purged=true is the one to look at hardest"
+  },
+  "health_medical_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "medical-records scope granted, independently of nutrition. No props: the words of the consent are not an analytics property"
+  },
+  "health_medical_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "medical-records scope withdrawn. props purged. Kept separate from the nutrition revoke because the two scopes are granted and withdrawn independently, and folding them together would make a partial withdrawal invisible"
+  },
+  "health_photo_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-08",
+    "notes": "photo scope granted - permission to send a photograph of a meal to an outside vision provider. props version = the privacy-policy version the client asserted it was showing. The number to watch: it is the count of people who agreed to a transmission nutrition consent never described, and a gap between it and health_nutrition_consent_granted is how many food-logging users said no"
+  },
+  "health_photo_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-08",
+    "notes": "photo scope withdrawn. props purged (true = the already-sent photographs were deleted too, leaving the typed food rows behind). Separate from nutrition because someone can stop the photo path while continuing to keep a written diary"
+  },
+  "health_intake_saved": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "target intake accepted. props skipped, hasGoal, weightWritten \u2014 shape only, never the values. A body weight is not an analytics property. Does NOT fire on a refusal; see health_targets_pace_rejected"
+  },
+  "health_targets_pace_rejected": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "the requested loss pace was refused as unsafe, so nothing was saved. props code, limited_by ('max_weekly_loss_0.75kg'|'max_weekly_loss_pct_body_weight' \u2014 which bound actually fired), weeks_needed, max_weekly_loss_kg. The highest-signal event in this feature: it separates 'users ask for goals we decline' from 'users abandon the wizard', and limited_by shows whether our own cap is the constraint"
+  },
+  "health_target_recomputed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "targets recalculated from current weight. props written, skipped"
+  },
+  "health_prescription_saved": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-08",
+    "notes": "the user committed the adjustable plan (calories/steps/sleep/sessions) from the app's Your plan screen. props adjusted, had_workout. Shape only and deliberately so: a calorie target and a sleep window are health data, and this dictionary is read by everyone who can query the analytics database. `adjusted` is whether the server had to move any of the four back into its legal range - a rate that climbs says our bounds and people's expectations have drifted apart, which is the one thing about this feature worth watching. Preview drags emit nothing: they are a question, not a commitment, and counting them would make a slider someone explored look like a plan someone chose."
+  },
+  "health_food_added": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-06",
+    "notes": "a gobhi reviewer added a food to the curated catalogue (the ONLY sanctioned FoodItem write in the service, by design). props source, verified, resolved_requests \u2014 source is the provenance the reviewer chose (estimate unless a real one was in hand), verified is whether they clicked the sourced-numbers box, resolved_requests is how many pending requests the add closed, which is the demand backlog turning into supply. The food's own NAME is deliberately not carried, matching health_food_requested's reasoning in reverse: a request name is what customers could not find (demand), a held catalogue row is not a data point about any one user. See foodRequestService.js's header for why this is the one sanctioned path"
+  },
+  "health_food_embeddings_refreshed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-06",
+    "notes": "a gobhi reviewer regenerated the on-device food matcher's embeddings (POST /admin/food-embeddings/refresh). props computed, model \u2014 how many curated rows were embedded and by which Gemini model, so a bad build (few rows, or the deployment accidentally keyed on a deprecated model) is visible in the admin refresh log rather than surfacing as silent customer-side match misses"
+  },
+  "health_food_logged": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "food(s) added to a day. Three shapes on one event so foods-logged is a single funnel with an origin split, not three events that have to be summed correctly by hand. Search path: props slot, source='search' (one food). Saved-meal repeat path: props slot, source='saved_meal', logged_count, skipped_count \u2014 a repeat writes many foods in one request, so counting it as a single food would understate the feature, and skipped_count > 0 means foods left the catalogue after the meal was saved and the user was shown a partial-write warning. Photo path: props slot, source='photo_confirmed', logged_count \u2014 one photo can produce several foods, for the same reason as the repeat path"
+  },
+  "health_food_requested": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-10",
+    "notes": "a user could not find a food in the picker and submitted it. props name. Fires only on CREATION, not on a repeat ask for a dish already requested \u2014 requestCount on the row is the demand signal, and counting both would make one persistent user look like growing demand. The volume and the shape of these names are the catalogue growth backlog: this is the only place that records what people actually searched for and did not find, as opposed to a guess about what they eat. Note the name IS carried \u2014 unlike a food photo's proposed names, a food name is not a description of somebody's diet, and the whole value of the event is knowing which dish"
+  },
+  "health_custom_food_created": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-11",
+    "notes": "a user created (or re-saved) a food of their own from the picker's empty state, so it is searchable and loggable by them from then on. No props: the food's name is the user's own data, unlike health_food_requested where the name is the whole point (demand for the shared catalogue)"
+  },
+  "health_food_photo_recognized": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a food photo was recognised. props is_food, matched_count, unmatched_count \u2014 never the proposed food names, because a plate is a description of somebody's diet and this dictionary is queryable by anyone with analytics access. unmatched_count is the interesting one: a high rate means our catalogue is the bottleneck rather than the vision model, which is a different fix. Fires for a photo with no food in it too (is_food=false), so recognition attempts and recognitions are distinguishable"
+  },
+  "health_food_photo_confirmed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "the user confirmed foods from a photo. props slot, logged_count, corrections, rejected_count. The launch metric lives here: corrections / logged_count is the share of lines the user had to fix, and the schema comment on FoodLog.photoCorrections names half of that as the point where the feature stops earning its per-photo cost. Emitted as a funnel event rather than left to a dashboard because a cost decision needs a number that cannot quietly stop being collected"
+  },
+  "health_saved_meal_created": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a day's slot snapshotted as a reusable meal. props slot, line_count. A distinct decision from logging a food, and the one that predicts repeat use \u2014 a create with no later repeat is the drop-off"
+  },
+  "health_plan_regenerated": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "suggested plan rebuilt. props created, dropped"
+  },
+  "health_day_closed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a day was finalised. props frozen (false = the day was already closed, so the call was a no-op), earned, target, hit (the one-plan daily score: points earned against the day's target, and whether the target was reached)"
+  },
+  "health_medical_doc_uploaded": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-09-29",
+    "notes": "a medical document was stored. props kind only \u2014 never the filename, storage path, or contents; a path is a capability and the document is the user's private data"
+  },
+  "health_doctor_appointment_recorded": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-10",
+    "notes": "an appointment was added to the plan. props NONE, deliberately: a doctor, a speciality, a date and a note are all health data, and the analytics util's no-PII rule applies with nothing to trade against. Fires on create only \u2014 editing an appointment is a correction, not a new booking, and re-emitting it would inflate the count of appointments a user has. Renamed from doctor_appointment_recorded at registration: this was the only health-service event without the health_ prefix, and it was renamed rather than registered as-is because it had never shipped, so no historical rows change meaning. A bare doctor_appointment prefix would also have read as the AI prescription kind of the same name, which is a different thing entirely and is explicitly rejected as a plan item kind"
+  },
+  "plan_built": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "the one plan was rebuilt for a user. props reason (start|unlock|consent|setup|edit|supplements|migrate), on_layers (count of layers the plan now spans), created, updated, deactivated. Emitted by rebuildPlan (UA1) \u2014 every plan write path funnels through it, so this is the count of plan churn per user, and the funnel for 'did the migrate (UB5) actually rebuild anyone'. A no-op rebuild (reason=edit that changed nothing) still emits with created=0 updated=0 deactivated=0"
+  },
+  "layer_turned_on": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "a journey layer was switched on for a user. props layer (the layerKey), reason (setup|coach|migrate). Fires on the transition only, never on an already-on layer \u2014 on_layers on plan_built is the stock level, this is the flow"
+  },
+  "layer_unlocked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "a locked journey layer became available to switch on. props layer, how (showed_up|steady_weeks|early|existing_data|start_level). Unlock is not activation: this counts the gate opening, layer_turned_on counts the user walking through it, and the gap between them is the story of whether the next layer is a good idea"
+  },
+  "plan_item_completed": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "the user tapped a plan item done on the Today card. props row_kind (PlanItemKind), layer (layerKey). MANUAL ticks only \u2014 auto-satisfied completions (how='auto') were deleted in the one-plan migration (UB5) and the generator no longer writes them, so this is the honest count of things the user chose to do. Server-side, because the tick goes through the plan API, not a client-only log"
+  },
+  "plan_edited": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-15",
+    "notes": "the user changed their plan outside a tick. props what (settings|slots|item_added|item_removed). settings and slots fire alongside plan_built with reason=edit; item_added/item_removed are the user asserting ownership over the list (the 'own' layer). Not a failure signal on its own \u2014 a plan nobody edits is a plan nobody reads"
+  },
+  "today_row_tapped": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-15",
+    "notes": "a row on the Today card was tapped. props row_kind, action (open_detail|tick|expand). Client-side because the point is the tap on the card face, before any server call; plan_item_completed is the server's truth that a tick landed. The gap between this and plan_item_completed is the retry/expiry story"
+  },
+  "today_target_hit": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-15",
+    "notes": "the Today card showed its daily-target-reached celebration. props earned, target. Client-side: it fires when the UI decides the target is met (optimistically, before health_day_closed freezes the day server-side). The client/server pair brackets the day-close race the way booking_tapped/booking_created does"
+  },
+  "attendance_recorded": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "a check-in was folded into the unified AttendanceEventLog that drives weekly streaks. props checkin_source (booking | member_checkin | self_checkin), gym_id, booking_id, member_attendance_id, already_recorded, coins_awarded. Named checkin_source rather than source because a prop called source shadows the envelope's own source field in the console sink's log line. The most important row in the gamification layer: qualifyingCheckinsPerWeek is tuned against distinct_ids per week here, and already_recorded=true rows are retries of booking-service's fire-and-forget call rather than new visits, so counting them as visits would overstate the funnel"
+  },
+  "challenge_enrolled": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, already_enrolled, target_count, reward_coins. Top of the challenge funnel. already_enrolled=true is the app re-opening a challenge the user already joined, including an abandoned one (enrollService returns any existing row as-is), so it must never be counted as a new join"
+  },
+  "challenge_left": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, prior_status, abandoned, progress_count. abandoned=false means the enrollment was already completed or left, a deliberate non-action. Abandon rate read together with progress_count is the honest signal for whether a challenge was too hard rather than boring"
+  },
+  "challenge_checkpoint_visited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "a checkpoint scan attempt on an outside_gym_city quest. props challenge_id, replayed, accepted, reason (enrollment_not_active | already_visited | null), progress_after, target_count, completed. Both non-accept paths are recorded on purpose: they are the anti-replay defence working, and a high already_visited share means users are re-scanning banked spots instead of finding new ones"
+  },
+  "challenge_completed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, progress_count, target_count, reward_coins, via (checkpoint | off_peak). via separates a completion the user drove from one the off-peak rule granted on their behalf, which is a much weaker engagement signal"
+  },
+  "challenge_off_peak_advanced": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_count, completed_count. Emitted only when at least one off-peak challenge actually advanced, since the common case is a no-op and logging those would bury the signal. Moving visits into quiet hours is the entire point of the mechanic, so challenge_count per check-in is the number to watch"
+  },
+  "streak_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props current_streak, longest_streak. Streak length is an engagement metric, deliberately carrying no attendance timestamps or body measurements, consistent with the health-service entries"
+  },
+  "streak_week_resulted": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "one row per user per closed week. props week_start, qualified, current_streak, checkin_count. This is the retention series: consecutive qualified weeks is the product's core promise, and checkin_count is what separates a user who missed the week from one who came once"
+  },
+  "streak_week_closed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "one anonymous row per close-week cron run (distinct_id null by design, the run is the subject and not any user). props week_start, weeks_closed, qualified, broken. A missing or short row means the cron did not fire, which would otherwise be indistinguishable from a genuinely quiet week in the per-user rows"
+  },
+  "coins_credited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "any CoinLedgerEntry credit. props amount, balance_after, replayed. Emitted per ledger movement with the description deliberately NOT logged: descriptions are free text assembled from catalog titles and species names, and the business reason is already carried by the event that triggered the credit (attendance_recorded, streak_week_resulted, sprout_caught, coins_refunded). replayed=true is an idempotent re-run, not new currency"
+  },
+  "coins_debited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props amount, balance_after, replayed. See coins_credited for why the description is excluded"
+  },
+  "coins_catalog_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props item_count. The marketplace impression; the gap between this and coins_redeemed is the catalog drop-off"
+  },
+  "coins_redeemed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props path (wallet | customer), redemption_id, category, coin_cost, discount_amount, replayed. path separates wallet-service's redemption inside a subscription purchase from the customer's own marketplace redemption, which have entirely different economics: one discounts a purchase already being made, the other spends coins for something on its own"
+  },
+  "coins_redemption_rejected": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props path, reason (gym_trial_cap_reached | gym_trial_already_claimed | insufficient_coins). Recorded from the catch rather than the throw site, because a serializable-transaction retry can roll a rejection back and then succeed. The most actionable event in the coin layer: an insufficient_coins spike means the earn rate is too tight for the catalog's prices, and gym_trial_cap_reached means the month's supply is gone"
+  },
+  "coins_refunded": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props redemption_id, coin_cost, already_refunded. Coins clawed back because the downstream subscription purchase failed after the debit. A rising count means that purchase flow is breaking, and it is the signal that coins are not being burned for nothing"
+  },
+  "workout_credited": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "health-service asked whether a finished workout session earns coins. props verified, credited, amount, economy_disabled. verified=false means no AttendanceEventLog row for that user today, so the workout and check-in surfaces have drifted apart. This is the most useful diagnostic in the file because it fires for every workout logged without a check-in"
+  },
+  "workout_credit_held": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-11-14",
+    "notes": "props gym_id, day. A workout finished while the person was still checked in at a gym, so its coins were set aside until they check out by scanning the gym poster. A high count against workout_credit_released means people leave without scanning"
+  },
+  "workout_credit_released": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-11-14",
+    "notes": "props amount, day. Held workout coins paid out because the person checked out by scanning the gym poster"
+  },
+  "paired_streak_opted_in": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props match_id, already. This build auto-enrolls both members rather than having an invite/accept sub-flow, so a single event is emitted for whoever tapped"
+  },
+  "paired_streak_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props pair_count, active_count, longest_streak"
+  },
+  "paired_streak_week_closed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "one anonymous row per cron run, alongside streak_week_closed. props week_start, pairs, survived, broken. A pair survives only if both members independently qualified, so this measures whether the mechanic holds up or just punishes the weaker half of every pair"
+  },
+  "sprouts_nearby_viewed": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, spawn_count, seeded_count. seeded_count > 0 means this read had to mint spawns to reach the live minimum, so ordinary reads are also what keep the map populated"
+  },
+  "sprout_caught": {
+    "source": "server",
+    "service": "challenge-service",
+    "since": "2026-10-04",
+    "notes": "props challenge_id, spawn_id, caught, reason (already_gone | too_far | lost_race | null), species_key, rarity, coins_awarded, distance_bucket. Every non-catch is recorded with its cause: too_far means the spawn was visible but out of reach (a spawn-radius or client-GPS problem), already_gone and lost_race are other users winning it. distance_bucket is rounded to 100m and capped at 50 so it can never become a location log"
+  },
+  "workout_session_reopened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-11-07",
+    "notes": "an unfinished or check-in-drafted workout session was re-opened by id. No props. workout_started counts only brand-new sessions, so started + session_reopened together are every workout the user entered; a finish with neither was previously invisible"
+  },
+  "consent_prompt_shown": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-11-07",
+    "notes": "a consent surface was put in front of the user. props consent_kind (health | ledger). health fires when the status loads and consent is not yet granted; ledger fires when the combined consent screen opens. The denominator for the *_consent_granted events: grants / prompts shown is the real consent rate"
+  },
+  "workout_started": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "a new workout session was created and the live screen opened \u2014 props has_template (bool). Resuming an in-progress or check-in-drafted session does NOT fire this, so it counts genuinely-new workouts"
+  },
+  "workout_set_completed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "a set's tick landed on the server \u2014 props set_number. Fired only on completing, never on the undo, so it is the count of sets actually logged. No weight/reps: a plate is a diet detail, a weight is a training one, and neither is needed to see whether the workout screen is being used"
+  },
+  "workout_exercise_added": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "an exercise was added to the live session \u2014 props exercise_id. Mid-workout additions are how the empty-start workout is actually built"
+  },
+  "workout_paused": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "props elapsed_s (gym-floor seconds so far)"
+  },
+  "workout_resumed": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "props elapsed_s (gym-floor seconds so far). Paired with workout_paused to measure how often a session is interrupted and whether it survives"
+  },
+  "workout_finished": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi"
+    ],
+    "since": "2026-10-09",
+    "notes": "the session was saved on the server \u2014 props type, rpe, sets_completed, duration_s. The other half of the funnel: workout_started without workout_finished is the abandonment signal"
+  },
+  "coach_onboarding_step_viewed": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "coach_onboarding_completed": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "coach_referral_offer_shown": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "assistant_guardrail_triggered": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-12",
+    "notes": "the AI coach guardrail replaced an answer with the fixed doctor reply (B16). props stage (input = question never sent to the model; output = model reply replaced), reason (substance_advice | diagnosis_or_treatment | dose | cure_claim), lang (en | hinglish | hi)"
+  },
+  "coach_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-12",
+    "notes": "a coach consent scope was granted (A2/B coach journey). props scope (basic | supplements | ...) only, never anything about the journey it unlocks"
+  },
+  "coach_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-10-12",
+    "notes": "a coach consent scope was withdrawn. props scope"
+  },
+  "journey_layer_unlocked": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "food_early_started": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "roadmap_opened": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "plan_day_opened": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "workout_set_ticked": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "exercise_content_viewed": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "water_logged": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "supplement_logged": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "gym_self_linked": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "gym_link_removed_seen": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "first_visit_badge_toggled": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "referral_offer_shown": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "score_intro_seen": {
+    "source": "client",
+    "service": "auth-service",
+    "experiment_variant": ""
+  },
+  "week_summary_viewed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_week_changed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_prompt_shown": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_prompt_tapped": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  },
+  "week_summary_prompt_dismissed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-10-30"
+  }
 }

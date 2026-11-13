@@ -1,0 +1,106 @@
+{
+  "environment": "prod",
+  "asOf": "2026-10-25T21:49:04.788710Z",
+  "results": [
+    {
+      "index": 0,
+      "report": "investor_inventory",
+      "passed": true,
+      "postgresRows": 34,
+      "warehouseRows": 34,
+      "sourceResultSha256": "89b493ba9d1705183cbfcbbeff8223d3cc0c0d731d467eef06767e2ad5f93d18",
+      "warehouseResultSha256": "89b493ba9d1705183cbfcbbeff8223d3cc0c0d731d467eef06767e2ad5f93d18",
+      "processedBytes": 890592
+    },
+    {
+      "index": 1,
+      "report": "investor_dau",
+      "passed": true,
+      "postgresRows": 30,
+      "warehouseRows": 30,
+      "sourceResultSha256": "355be356e54cc529be75c52719a83b826e453f3c5b0ded45ddf14ce5f5e8dd51",
+      "warehouseResultSha256": "355be356e54cc529be75c52719a83b826e453f3c5b0ded45ddf14ce5f5e8dd51",
+      "processedBytes": 748224
+    },
+    {
+      "index": 2,
+      "report": "investor_retention",
+      "passed": true,
+      "postgresRows": 61,
+      "warehouseRows": 61,
+      "sourceResultSha256": "fa765311ab77b43e859588e127ff9566e636432bed8de786aab956a6a34eed40",
+      "warehouseResultSha256": "fa765311ab77b43e859588e127ff9566e636432bed8de786aab956a6a34eed40",
+      "processedBytes": 0
+    },
+    {
+      "index": 3,
+      "report": "investor_funnel",
+      "passed": true,
+      "postgresRows": 1,
+      "warehouseRows": 1,
+      "sourceResultSha256": "22038787489e63fd45ada19e6a70fba4fbae4fdde73af53d8f89c4162facc275",
+      "warehouseResultSha256": "22038787489e63fd45ada19e6a70fba4fbae4fdde73af53d8f89c4162facc275",
+      "processedBytes": 0
+    },
+    {
+      "index": 4,
+      "report": "investor_gyms",
+      "passed": true,
+      "postgresRows": 11,
+      "warehouseRows": 11,
+      "sourceResultSha256": "7669b176cb5028c29347d80c9c4d8bb608834f37276e241429d1e2428db40efc",
+      "warehouseResultSha256": "7669b176cb5028c29347d80c9c4d8bb608834f37276e241429d1e2428db40efc",
+      "processedBytes": 0
+    },
+    {
+      "index": 5,
+      "report": "digest_0",
+      "passed": true,
+      "postgresRows": 1,
+      "warehouseRows": 1,
+      "sourceResultSha256": "764632887236dbd64972d320c29ce4131407c731bbed412fe074527766aaf51f",
+      "warehouseResultSha256": "764632887236dbd64972d320c29ce4131407c731bbed412fe074527766aaf51f",
+      "processedBytes": 0
+    },
+    {
+      "index": 6,
+      "report": "digest_1",
+      "passed": true,
+      "postgresRows": 2,
+      "warehouseRows": 2,
+      "sourceResultSha256": "af778db1cd447830aee29cd38a8de2196e7808d0f93fc2ad3b7576f55b7acde8",
+      "warehouseResultSha256": "af778db1cd447830aee29cd38a8de2196e7808d0f93fc2ad3b7576f55b7acde8",
+      "processedBytes": 0
+    },
+    {
+      "index": 7,
+      "report": "digest_2",
+      "passed": true,
+      "postgresRows": 3,
+      "warehouseRows": 3,
+      "sourceResultSha256": "57921119b5753a54a243fb31d1ceaaccb167326302e86ea2bedc8e02b886d4cc",
+      "warehouseResultSha256": "57921119b5753a54a243fb31d1ceaaccb167326302e86ea2bedc8e02b886d4cc",
+      "processedBytes": 0
+    },
+    {
+      "index": 8,
+      "report": "digest_3",
+      "passed": true,
+      "postgresRows": 1,
+      "warehouseRows": 1,
+      "sourceResultSha256": "37d37c6d0297c6ebc5f0822cce350167cb7911f2d6e161eadcdec7996d5a2ded",
+      "warehouseResultSha256": "37d37c6d0297c6ebc5f0822cce350167cb7911f2d6e161eadcdec7996d5a2ded",
+      "processedBytes": 0
+    },
+    {
+      "index": 9,
+      "report": "digest_4",
+      "passed": true,
+      "postgresRows": 5,
+      "warehouseRows": 5,
+      "sourceResultSha256": "edd0de1b80d6ff74d41eb61772705b246ab52931e5afe8e72db346531ba6910d",
+      "warehouseResultSha256": "edd0de1b80d6ff74d41eb61772705b246ab52931e5afe8e72db346531ba6910d",
+      "processedBytes": 0
+    }
+  ]
+}

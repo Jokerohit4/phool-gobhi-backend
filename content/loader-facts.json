@@ -1,0 +1,3100 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-12",
+  "total": 230,
+  "facts": [
+    {
+      "id": "phool-gobhi-is-92-water",
+      "text": "Raw phool gobhi is 92% water and packs over half your daily vitamin C in one cup.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "marketing"
+      ]
+    },
+    {
+      "id": "pairing-turmeric-with-a-pinch",
+      "text": "Pairing turmeric with a pinch of black pepper boosts absorption by 2,000%.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "over-70-of-your-immune",
+      "text": "A large share of the body’s immune cells reside along the gastrointestinal tract.",
+      "tags": [
+        "habits",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "walking-just-10-minutes-after",
+      "text": "Walking just 10 minutes after a meal helps keep your blood sugar steady.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "during-deep-sleep-your-brain",
+      "text": "During deep sleep, your brain literally washes away daily metabolic waste.",
+      "tags": [
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-heart-beats-roughly-100",
+      "text": "Your heart beats roughly 100,000 times a day to keep you moving.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "drinking-two-glasses-of-water",
+      "text": "Drinking two glasses of water can temporarily boost metabolism by 30%.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-hearty-laugh-boosts-blood",
+      "text": "A hearty laugh boosts blood flow by 20% and relaxes blood vessels.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "ounce-for-ounce-human-bone",
+      "text": "Ounce for ounce, human bone is stronger than solid steel.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-body-builds-a-brand",
+      "text": "Your body builds a brand-new outer layer of skin every 28 days.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "one-small-amla-holds-up",
+      "text": "One small amla holds up to 20 times more vitamin C than an orange.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "slow-deep-breathing-signals-your",
+      "text": "Slow, deep breathing signals your nervous system to lower stress in seconds.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "nerve-signals-travel-between-your",
+      "text": "Signals in the fastest myelinated nerve fibers travel at speeds up to ~250 mph.",
+      "tags": [
+        "mind",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-taste-buds-completely-replace",
+      "text": "Your taste buds completely replace themselves every 10 to 14 days.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "laid-end-to-end-your",
+      "text": "Laid end to end, your blood vessels would wrap around the Earth twice.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-brain-generates-enough-electricity",
+      "text": "Your brain generates enough electricity when awake to power a small lightbulb.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "chewing-food-slowly-gives-your",
+      "text": "Chewing food slowly gives your brain 20 minutes to register fullness.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-stomach-gets-a-brand",
+      "text": "Your stomach gets a brand-new mucus lining every three to four days.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "morning-sunlight-within-30-minutes",
+      "text": "Morning sunlight within 30 minutes of waking sets your internal sleep clock.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sitting-for-8-hours-slows",
+      "text": "Sitting for 8 hours slows blood flow; standing for 2 minutes resets it.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-liver-can-regenerate-itself",
+      "text": "Your liver can regenerate back to full size even after a large portion is removed.",
+      "tags": [
+        "sleep",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "crying-releases-stress-hormones-and",
+      "text": "Early research suggests emotional tears may carry a different protein mix than reflex tears.",
+      "tags": [
+        "mind",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "you-blink-about-15-to",
+      "text": "You blink about 15 to 20 times a minute to keep your eyes lubricated.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-20-minute-power-nap",
+      "text": "A 20-minute power nap sharpens memory without causing sleep grogginess.",
+      "tags": [
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-nose-can-remember-and",
+      "text": "Your nose can remember and distinguish over 1 trillion different scents.",
+      "tags": [
+        "sleep",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "cold-water-splashes-trigger-a",
+      "text": "Cold water splashes trigger a reflex that instantly slows your heart rate.",
+      "tags": [
+        "habits",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "muscles-burn-three-times-more",
+      "text": "Muscles burn three times more calories at rest than body fat does.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "smiling-even-gently-releases-endorphins",
+      "text": "Genuine smiling engages eye and cheek muscles that naturally reflect positive mood.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "you-are-roughly-1-centimeter",
+      "text": "Spinal discs rehydrate overnight, making you slightly taller in the morning than at night.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "phool-gobhi-belongs-to-the",
+      "text": "Phool gobhi belongs to the cruciferous family, known for natural cell defense.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "marketing"
+      ]
+    },
+    {
+      "id": "jeera-water-stimulates-digestive-enzymes",
+      "text": "Jeera water stimulates digestive enzymes and reduces post-meal bloating.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "cardamom-acts-as-a-natural",
+      "text": "Cardamom acts as a natural breath freshener and soothes stomach acidity.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "soaking-almonds-overnight-improves-nutrient",
+      "text": "Soaking almonds softens their tough skin and slightly reduces phytic acid.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "ghee-contains-butyric-acid-a",
+      "text": "Ghee contains butyric acid, a short-chain fatty acid that nourishes gut cells.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "gingerol-in-fresh-ginger-helps",
+      "text": "Gingerol in fresh ginger helps calm nausea and reduces muscle soreness.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "cinnamon-helps-improve-insulin-sensitivity",
+      "text": "Cinnamon helps improve insulin sensitivity and balance blood sugar spikes.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "curry-leaves-are-packed-with",
+      "text": "Curry leaves are packed with iron and folic acid for healthy blood flow.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "fennel-seeds-saunf-relax-smooth",
+      "text": "Fennel seeds (saunf) relax smooth intestinal muscles after heavy meals.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "moringa-leaves-contain-seven-times",
+      "text": "Moringa leaves contain seven times more vitamin C than oranges.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "ragi-is-one-of-the",
+      "text": "Ragi is one of the richest plant-based sources of natural calcium.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "garlic-releases-allicin-a-heart",
+      "text": "Garlic releases allicin-a heart-protective compound-when crushed and rested.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sprouting-moong-dal-multiplies-its",
+      "text": "Sprouting moong dal multiplies its vitamin C and enzyme content dramatically.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "ajwain-seeds-contain-thymol-which",
+      "text": "Ajwain seeds contain thymol, which offers instant relief from indigestion.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "pomegranates-are-loaded-with-antioxidants",
+      "text": "Pomegranates are loaded with antioxidants that protect artery walls.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "coconut-water-mirrors-human-blood",
+      "text": "Coconut water mirrors human blood plasma in its electrolyte balance.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-kidneys-filter-about-150",
+      "text": "Your kidneys filter about 150 liters of blood every single day.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "humming-increases-nitric-oxide-in",
+      "text": "Humming increases nitric oxide in your nasal passages by 15-fold.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-lungs-contain-roughly-300",
+      "text": "Your lungs contain roughly 300 million tiny air sacs called alveoli.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "human-dna-is-99-9",
+      "text": "Human DNA is 99.9% identical across every single person on Earth.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-single-drop-of-blood",
+      "text": "A single drop of blood contains around 5 million red blood cells.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-cornea-is-the-only",
+      "text": "Your cornea is the only part of your body with no blood supply.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sweat-itself-is-odorless-skin",
+      "text": "Sweat itself is odorless; skin bacteria create scent when breaking it down.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-brain-uses-about-20",
+      "text": "Your brain uses about 20% of your body's total oxygen and energy.",
+      "tags": [
+        "mind",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sneezes-travel-out-of-your",
+      "text": "Sneezes travel out of your nose at speeds up to 100 miles per hour.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "fingernails-grow-nearly-four-times",
+      "text": "Fingernails grow nearly four times faster than toenails.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-heart-creates-enough-pressure",
+      "text": "Your heart creates enough pressure to squirt blood 30 feet.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "yawning-pulls-in-cool-air",
+      "text": "Yawning triggers a deep stretch of the jaw, face, and upper airway muscles.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "humans-shed-around-600-000",
+      "text": "Humans shed around 600,000 particles of skin every single hour.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-skeleton-completely-replaces-itself",
+      "text": "Your skeleton completely replaces itself roughly every 10 years.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "stomach-acid-is-strong-enough",
+      "text": "Stomach acid is strong enough to dissolve stainless steel.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "reading-for-just-6-minutes",
+      "text": "Reading for just 6 minutes can reduce stress levels by up to 68%.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "hugging-for-20-seconds-releases",
+      "text": "Hugging for 20 seconds releases oxytocin, the body's bonding hormone.",
+      "tags": [
+        "mind",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "listening-to-music-triggers-dopamine",
+      "text": "Listening to music triggers dopamine release similar to eating favorite foods.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "spending-20-minutes-in-nature",
+      "text": "Spending 20 minutes in nature drops cortisol levels significantly.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "writing-down-worries-before-bed",
+      "text": "Writing down worries before bed helps you fall asleep faster.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "gratitude-journaling-rewires-neural-pathways",
+      "text": "Gratitude journaling rewires neural pathways toward positive focus.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "deep-belly-breathing-stimulates-the",
+      "text": "Deep belly breathing stimulates the vagus nerve to calm anxiety.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "being-dehydrated-by-just-2",
+      "text": "Being dehydrated by just 2% impairs focus, memory, and mood.",
+      "tags": [
+        "mind",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "blue-light-at-night-tricks",
+      "text": "Blue light at night tricks your brain into halting melatonin production.",
+      "tags": [
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-cool-bedroom-around-18",
+      "text": "A cool bedroom around 18°C to 20°C promotes deeper, restorative sleep.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "daydreaming-activates-the-brain-s",
+      "text": "Daydreaming activates the brain's creative problem-solving network.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "learning-a-new-skill-builds",
+      "text": "Learning a new skill builds fresh myelin insulation around brain neurons.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "eye-strain-drops-dramatically-when",
+      "text": "Eye strain drops dramatically when following the 20-20-20 screen rule.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "walking-barefoot-on-grass-helps",
+      "text": "Walking barefoot on grass helps ground your nervous system and lower stress.",
+      "tags": [
+        "habits",
+        "movement",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "social-connection-is-linked-to",
+      "text": "Social connection is linked to a 50% higher likelihood of longevity.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-gut-produces-roughly-90",
+      "text": "Most of the body’s serotonin is produced in the gut, where it helps regulate digestion.",
+      "tags": [
+        "mind",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "bananas-contain-tryptophan-which-your",
+      "text": "Bananas contain tryptophan, which your body converts into mood-lifting serotonin.",
+      "tags": [
+        "movement",
+        "mind",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "dark-chocolate-with-70-cocoa",
+      "text": "Dark chocolate with 70%+ cocoa boosts blood flow to the brain.",
+      "tags": [
+        "mind",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "walnuts-resemble-the-human-brain",
+      "text": "Walnuts resemble the human brain and are rich in brain-boosting omega-3s.",
+      "tags": [
+        "mind",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "spinach-nitrates-help-muscles-use",
+      "text": "Spinach nitrates help muscles use oxygen more efficiently during exercise.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "tomatoes-release-more-heart-healthy",
+      "text": "Tomatoes release more heart-healthy lycopene when cooked than when raw.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "green-tea-pairs-caffeine-with",
+      "text": "Green tea pairs caffeine with L-theanine for calm, jitter-free focus.",
+      "tags": [
+        "mind",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "flaxseeds-are-one-of-the",
+      "text": "Flaxseeds are one of the richest plant sources of omega-3 fatty acids.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sweet-potatoes-provide-over-400",
+      "text": "Sweet potatoes provide over 400% of your daily vitamin A requirement.",
+      "tags": [
+        "sleep",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "pumpkin-seeds-are-loaded-with",
+      "text": "Pumpkin seeds are loaded with magnesium, essential for deep relaxation.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "lentils-dal-deliver-slow-burning",
+      "text": "Lentils (dal) deliver slow-burning complex carbs and plant protein together.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "curd-dahi-introduces-live-probiotics",
+      "text": "Curd (dahi) introduces live probiotics that strengthen your gut barrier.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "turmeric-s-active-compound-curcumin",
+      "text": "Turmeric's active compound curcumin fights inflammation at the molecular level.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "beetroot-juice-boosts-stamina-by",
+      "text": "Beetroot juice boosts stamina by widening blood vessels for better oxygen flow.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "phool-gobhi-is-rich-in",
+      "text": "Phool gobhi is rich in choline, a vital nutrient for memory and brain health.",
+      "tags": [
+        "mind",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-thigh-bone-femur-can",
+      "text": "Your thigh bone (femur) can support up to 30 times your body weight.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "the-strongest-muscle-in-the",
+      "text": "The strongest muscle in the human body by weight is the jaw muscle.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-ears-and-nose-never",
+      "text": "Your ears and nose never stop growing throughout your entire life.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-cough-releases-air-at",
+      "text": "A cough releases air at roughly 60 miles per hour.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "babies-are-born-with-around",
+      "text": "Babies are born with around 300 bones, which fuse into 206 by adulthood.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-left-lung-is-slightly",
+      "text": "Your left lung is slightly smaller than your right lung to make room for your heart.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "the-small-intestine-is-roughly",
+      "text": "The small intestine is roughly 20 feet long-about the height of a giraffe.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-body-produces-about-1",
+      "text": "Your body produces about 1 to 1.5 liters of saliva every single day.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "every-tongue-print-is-completely",
+      "text": "Every tongue print is completely unique, just like a fingerprint.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "red-blood-cells-make-a",
+      "text": "Red blood cells make a complete circuit through your body in 60 seconds.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "regular-strength-training-increases-bone",
+      "text": "Regular strength training increases bone density at any age.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "climbing-stairs-burns-more-calories",
+      "text": "Climbing stairs burns more calories per minute than jogging.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "stretching-improves-blood-circulation-and",
+      "text": "Stretching improves blood circulation and delivers fresh nutrients to joints.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "squats-engage-the-largest-muscle",
+      "text": "Squats engage the largest muscle groups in your body at once.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "consistent-daily-movement-matters-more",
+      "text": "Consistent daily movement matters more than occasional intense workouts.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-muscles-grow-and-repair",
+      "text": "Your muscles grow and repair while you rest, not while you lift.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "balance-exercises-sharpen-communication-between",
+      "text": "Balance exercises sharpen communication between your brain and inner ear.",
+      "tags": [
+        "movement",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "swimming-works-nearly-every-major",
+      "text": "Swimming works nearly every major muscle group with zero joint impact.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "brisk-walking-for-30-minutes",
+      "text": "Brisk walking for 30 minutes a day lowers heart disease risk by 35%.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "good-posture-increases-lung-capacity",
+      "text": "Good posture increases lung capacity by up to 30%.",
+      "tags": [
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "vitamin-d-from-sunlight-helps",
+      "text": "Vitamin D from sunlight helps your body absorb calcium effectively.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "zinc-plays-a-key-role",
+      "text": "Zinc plays a key role in wound healing and immune cell function.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "iron-carries-oxygen-from-your",
+      "text": "Iron carries oxygen from your lungs to every muscle in your body.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "potassium-helps-balance-sodium-levels",
+      "text": "Potassium helps balance sodium levels and keeps blood pressure healthy.",
+      "tags": [
+        "movement",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "magnesium-is-involved-in-over",
+      "text": "Magnesium is involved in over 300 biochemical reactions in the body.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "vitamin-b12-keeps-your-nerve",
+      "text": "Vitamin B12 keeps your nerve cells healthy and powers red blood cell production.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "fiber-feeds-beneficial-gut-bacteria",
+      "text": "Fiber feeds beneficial gut bacteria and keeps digestion moving smoothly.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "healthy-fats-are-essential-for",
+      "text": "Healthy fats are essential for absorbing vitamins A, D, E, and K.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "protein-provides-the-amino-acid",
+      "text": "Protein provides the amino acid building blocks for every cell in your body.",
+      "tags": [
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "antioxidants-protect-your-cells-from",
+      "text": "Antioxidants protect your cells from everyday oxidative stress.",
+      "tags": [
+        "mind",
+        "nutrition",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "eating-colorful-fruits-and-vegetables",
+      "text": "Eating colorful fruits and vegetables ensures a wide spectrum of phytonutrients.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-body-s-circadian-rhythm",
+      "text": "Your body's circadian rhythm regulates hormone release on a 24-hour cycle.",
+      "tags": [
+        "sleep",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "consistent-wake-up-times-strengthen",
+      "text": "Consistent wake-up times strengthen your natural sleep-wake rhythm.",
+      "tags": [
+        "sleep",
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "late-night-heavy-meals-force",
+      "text": "Late-night heavy meals force your digestive system to work overtime during sleep.",
+      "tags": [
+        "habits",
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "caffeine-has-a-half-life",
+      "text": "Caffeine has a half-life of about 5 hours in the human body.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "warm-showers-before-bed-lower",
+      "text": "Warm showers before bed lower your core body temperature afterward, aiding sleep.",
+      "tags": [
+        "sleep",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "rem-sleep-is-when-your",
+      "text": "REM sleep is when your brain processes emotions and consolidates memories.",
+      "tags": [
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "even-one-night-of-poor",
+      "text": "Even one night of poor sleep can temporarily reduce insulin sensitivity.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "gargling-with-warm-salt-water",
+      "text": "Gargling with warm salt water draws excess fluid out of swollen throat tissues.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "steam-inhalation-helps-loosen-mucus",
+      "text": "Steam inhalation helps loosen mucus and soothe irritated nasal passages.",
+      "tags": [
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "honey-coats-the-throat-and",
+      "text": "Honey coats the throat and calms nighttime coughs naturally.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "peppermint-aroma-can-help-relieve",
+      "text": "Peppermint aroma can help relieve mild tension headaches.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "cold-compresses-constrict-blood-vessels",
+      "text": "Cold compresses constrict blood vessels to reduce acute swelling.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "habit-loops-take-an-average",
+      "text": "Habit loops take an average of 66 days to become automatic, not 21.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "tiny-habits-stick-best-when",
+      "text": "Tiny habits stick best when they take less than two minutes to start.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "stacking-a-new-habit-onto",
+      "text": "Stacking a new habit onto an existing routine doubles follow-through.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-environment-shapes-your-habits",
+      "text": "Your environment shapes your habits far more than willpower alone.",
+      "tags": [
+        "habits",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "putting-a-water-bottle-on",
+      "text": "Putting a water bottle on your desk increases daily intake effortlessly.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "never-missing-twice-keeps-a",
+      "text": "Never missing twice keeps a single slip from turning into a broken habit.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "identity-based-habits-stick-think",
+      "text": "Identity-based habits stick: think 'I am a walker,' not 'I must walk.'",
+      "tags": [
+        "habits",
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "visual-cues-trigger-up-to",
+      "text": "Visual cues trigger up to 80% of our daily automatic behaviors.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "making-good-habits-obvious-and",
+      "text": "Making good habits obvious and bad habits invisible rewires routines.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "friction-is-your-friend-hiding",
+      "text": "Friction is your friend: hiding junk food cuts mindless snacking by half.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "laying-out-workout-clothes-at",
+      "text": "Laying out workout clothes at night removes morning decision fatigue.",
+      "tags": [
+        "habits",
+        "sleep",
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "tracking-a-habit-on-a",
+      "text": "Tracking a habit on a calendar creates a visual chain you won't want to break.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "brain-neurons-that-fire-together",
+      "text": "Brain neurons that fire together wire together through repetition.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "dopamine-spikes-in-anticipation-of",
+      "text": "Dopamine spikes in anticipation of a reward, not just when receiving it.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "celebrating-immediately-after-a-tiny",
+      "text": "Celebrating immediately after a tiny habit wires pleasure into your brain.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "consistency-beats-intensity-10-minutes",
+      "text": "Consistency beats intensity-10 minutes daily outperforms 1 hour once a week.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "willpower-is-like-a-muscle",
+      "text": "Willpower is like a muscle that tires throughout the day; routines save it.",
+      "tags": [
+        "habits",
+        "movement",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "implementation-intentions-at-7-am",
+      "text": "Implementation intentions ('At 7 AM, I will...') triple success rates.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "starting-with-just-five-pushups",
+      "text": "Starting with just five pushups removes the mental resistance to exercising.",
+      "tags": [
+        "sleep",
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-basal-ganglia-stores-automated",
+      "text": "Your basal ganglia stores automated habits so your conscious brain can rest.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "pairing-a-chore-with-a",
+      "text": "Pairing a chore with a favorite podcast makes hard habits enjoyable.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "changing-your-environment-is-the",
+      "text": "Changing your environment is the fastest way to break an old habit loop.",
+      "tags": [
+        "habits",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "about-40-of-your-daily",
+      "text": "About 40% of your daily actions are subconscious habits, not active choices.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "reducing-friction-by-20-seconds",
+      "text": "Reducing friction by 20 seconds makes good habits dramatically easier.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "increasing-friction-by-20-seconds",
+      "text": "Increasing friction by 20 seconds helps break unwanted screen habits.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "focusing-on-one-keystone-habit",
+      "text": "Focusing on one keystone habit creates a ripple effect across other routines.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sleep-is-a-keystone-habit",
+      "text": "Sleep is a keystone habit that improves diet, mood, and focus automatically.",
+      "tags": [
+        "habits",
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "morning-routines-set-the-momentum",
+      "text": "Morning routines set the momentum for healthier choices all day long.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "boredom-and-stress-are-the",
+      "text": "Boredom and stress are the two most common triggers for bad habits.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "replacing-a-bad-habit-works",
+      "text": "Replacing a bad habit works far better than trying to erase it completely.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-brain-craves-the-reward",
+      "text": "Your brain craves the reward behind a habit, not the habit itself.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "keeping-healthy-snacks-at-eye",
+      "text": "Keeping healthy snacks at eye level increases nutritious eating.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "using-smaller-plates-naturally-reduces",
+      "text": "Using smaller plates naturally reduces portion sizes without feeling deprived.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "social-norms-shape-behavior-we",
+      "text": "Social norms shape behavior-we unconsciously adopt the habits of our circle.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "sharing-a-goal-with-an",
+      "text": "Sharing a goal with an accountability partner boosts completion to 65%.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "regular-check-ins-with-a",
+      "text": "Regular check-ins with a partner raise habit success rates up to 95%.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "pre-committing-to-a-morning",
+      "text": "Pre-committing to a morning walk with a friend eliminates snooze excuses.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "decision-fatigue-leads-to-impulsive",
+      "text": "Decision fatigue leads to impulsive habits; automate repetitive choices.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "evening-wind-down-rituals-train",
+      "text": "Evening wind-down rituals train your brain to release melatonin on schedule.",
+      "tags": [
+        "habits",
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "charging-your-phone-outside-the",
+      "text": "Charging your phone outside the bedroom stops late-night scrolling instantly.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-two-minute-tidy-before",
+      "text": "A two-minute tidy before bed creates a calm, stress-free morning.",
+      "tags": [
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "writing-tomorrow-s-top-three",
+      "text": "Writing tomorrow's top three tasks tonight clears mental clutter for sleep.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "progress-isn-t-linear-plateaus",
+      "text": "Progress isn't linear-plateaus are when habits quietly solidify.",
+      "tags": [
+        "habits",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "falling-in-love-with-the",
+      "text": "Falling in love with the daily process beats obsessing over distant goals.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "micro-wins-release-dopamine-that",
+      "text": "Micro-wins release dopamine that fuels motivation for the next step.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "specific-triggers-beat-vague-goals",
+      "text": "Specific triggers beat vague goals: 'After lunch, I walk' beats 'Walk more.'",
+      "tags": [
+        "habits",
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "habit-bundling-pairs-something-you",
+      "text": "Habit bundling pairs something you need to do with something you want to do.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-brain-resists-sudden-drastic",
+      "text": "Your brain resists sudden drastic changes; gradual shifts bypass resistance.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "five-deep-breaths-before-meals",
+      "text": "Five deep breaths before meals shifts your body into digestion mode.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "drinking-a-glass-of-water",
+      "text": "Drinking a glass of water right after waking jumpstarts daily hydration.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "stretching-while-waiting-for-tea",
+      "text": "Stretching while waiting for tea to brew turns dead time into self-care.",
+      "tags": [
+        "movement",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-1-improvement-every-day",
+      "text": "A 1% improvement every day compounds into 37x growth over one year.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "you-don-t-rise-to",
+      "text": "You don't rise to the level of your goals; you fall to the level of your systems.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "cue-craving-response-and-reward",
+      "text": "Cue, craving, response, and reward form the four-step engine of every habit.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "removing-notifications-eliminates-dozens-of",
+      "text": "Removing notifications eliminates dozens of daily distraction triggers.",
+      "tags": [
+        "habits",
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "batching-similar-tasks-protects-deep",
+      "text": "Batching similar tasks protects deep focus and reduces mental switching.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "keeping-fruit-on-the-kitchen",
+      "text": "Keeping fruit on the kitchen counter makes healthy snacking the default.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "meal-prepping-on-weekends-removes",
+      "text": "Meal prepping on weekends removes weekday unhealthy takeout temptations.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "gratitude-habits-train-your-brain",
+      "text": "Gratitude habits train your brain's filter to notice positive moments first.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "saying-i-don-t-instead",
+      "text": "Saying 'I don't' instead of 'I can't' strengthens self-control and resolve.",
+      "tags": [
+        "movement",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "rest-days-are-an-essential",
+      "text": "Rest days are an essential part of any sustainable fitness habit.",
+      "tags": [
+        "habits",
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "tracking-mood-alongside-habits-reveals",
+      "text": "Tracking mood alongside habits reveals which routines truly energize you.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "every-action-you-take-is",
+      "text": "Every action you take is a vote for the type of person you want to become.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "high-stress-days-call-for",
+      "text": "High-stress days call for 'minimum viable habits'-even 2 minutes counts.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "designing-dedicated-spaces-a-desk",
+      "text": "Designing dedicated spaces-a desk for work, a bed for sleep-sharpens focus.",
+      "tags": [
+        "sleep",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "reading-just-10-pages-a",
+      "text": "Reading just 10 pages a day adds up to roughly 15 books a year.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "brushing-teeth-with-your-non",
+      "text": "Brushing teeth with your non-dominant hand builds fresh neural pathways.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "chewing-slowly-builds-a-lifelong",
+      "text": "Chewing slowly builds a lifelong habit of mindful, satisfied eating.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "setting-a-daily-bedtime-alarm",
+      "text": "Setting a daily bedtime alarm is even more important than a wake-up alarm.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "stepping-outside-for-5-minutes",
+      "text": "Stepping outside for 5 minutes after work creates a clear mental boundary.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "automating-healthy-defaults-frees-mental",
+      "text": "Automating healthy defaults frees mental energy for creative thinking.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "forgiving-yourself-quickly-after-a",
+      "text": "Forgiving yourself quickly after a slip prevents emotional stress eating.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "temptation-bundling-turns-workouts-into",
+      "text": "Temptation bundling turns workouts into your exclusive time for favorite shows.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "clear-cues-beat-motivation-motivation",
+      "text": "Clear cues beat motivation-motivation fades, triggers stay reliable.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "closing-kitchen-lights-after-dinner",
+      "text": "Closing kitchen lights after dinner creates a natural cue to stop snacking.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "keeping-a-journal-by-your",
+      "text": "Keeping a journal by your bed makes nightly reflection effortless.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "walking-meetings-turn-sedentary-work",
+      "text": "Walking meetings turn sedentary work calls into active daily movement.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "starting-any-task-for-just",
+      "text": "Starting any task for just five minutes often triggers natural momentum.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "digital-sunsets-screens-off-30",
+      "text": "Digital sunsets-screens off 30 minutes before bed-protect deep sleep.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "celebration-is-the-fertilizer-that",
+      "text": "Celebration is the fertilizer that helps newly planted habits take root.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "grouping-healthy-habits-into-a",
+      "text": "Grouping healthy habits into a morning sequence reduces mental effort.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-brain-loves-predictability-steady",
+      "text": "Your brain loves predictability; steady rhythms lower baseline anxiety.",
+      "tags": [
+        "mind",
+        "nutrition"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "replacing-sugary-drinks-with-infused",
+      "text": "Replacing sugary drinks with infused water resets taste buds in two weeks.",
+      "tags": [
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "practicing-posture-checks-every-time",
+      "text": "Practicing posture checks every time you walk through a doorway builds alignment.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "focusing-on-streak-recovery-rather",
+      "text": "Focusing on streak recovery rather than perfection keeps habits alive.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "external-reminders-like-sticky-notes",
+      "text": "External reminders like sticky notes work best when refreshed regularly.",
+      "tags": [
+        "sleep"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "mindful-pauses-between-stimulus-and",
+      "text": "Mindful pauses between stimulus and response give you control over reactions.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "connecting-daily-habits-to-personal",
+      "text": "Connecting daily habits to personal values turns chores into purpose.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "simplifying-steps-makes-a-routine",
+      "text": "Simplifying steps makes a routine resilient even on your busiest days.",
+      "tags": [
+        "habits"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "tracking-energy-levels-helps-you",
+      "text": "Tracking energy levels helps you schedule hard habits at peak hours.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "a-clutter-free-counter-makes",
+      "text": "A clutter-free counter makes cooking fresh meals far more inviting.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "micro-meditations-of-60-seconds",
+      "text": "Micro-meditations of 60 seconds train calm focus anywhere, anytime.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "stopping-a-workout-while-you",
+      "text": "Stopping a workout while you still feel energized makes you eager for tomorrow.",
+      "tags": [
+        "movement"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "rituals-turn-ordinary-daily-actions",
+      "text": "Rituals turn ordinary daily actions into grounding moments of mindfulness.",
+      "tags": [
+        "habits",
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "your-future-self-is-built",
+      "text": "Your future self is built quietly by the tiny choices you repeat today.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "consistency-turns-awkward-new-behaviors",
+      "text": "Consistency turns awkward new behaviors into effortless second nature.",
+      "tags": [
+        "mind"
+      ],
+      "audiences": [
+        "customer",
+        "partner",
+        "admin",
+        "marketing"
+      ]
+    },
+    {
+      "id": "small-seeds-watered-daily-grow",
+      "text": "Small seeds watered daily grow strong-just like habits in Phool Gobhi.",
+      "tags": [
+        "habits",
+        "body"
+      ],
+      "audiences": [
+        "customer",
+        "marketing"
+      ]
+    }
+  ]
+}

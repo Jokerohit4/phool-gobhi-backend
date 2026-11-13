@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma.js';
 import { exportUserAcrossServices } from '../utils/exportAcrossServices.js';
-const prisma = new PrismaClient();
 
 // Platform-wide DPDPA access right (s.11): one document covering everything
 // Phool Gobhi holds about a person, assembled from every service that stores
@@ -13,11 +12,15 @@ const prisma = new PrismaClient();
 // returned WITH the gaps named, which serves the person better than an error
 // page that tells them nothing about anything.
 export async function buildFullExportService(userId) {
-  const [user, addresses, finds, platformReview] = await Promise.all([
+  const [user, addresses, locations, rewards, platformReview, gymLinks, devices, receiptEvents] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.savedAddress.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
-    prisma.collectibleFind.findMany({ where: { userId }, orderBy: { foundAt: 'asc' } }),
+    prisma.exploreLocationReceipt.findMany({ where: { userId }, orderBy: { acknowledgedAt: 'asc' } }),
+    prisma.exploreRewardReceipt.findMany({ where: { userId }, orderBy: { acknowledgedAt: 'asc' } }),
     prisma.platformReview.findUnique({ where: { customerId: userId } }),
+    prisma.gymLink.findMany({ where: { userId }, orderBy: { linkedAt: 'asc' } }),
+    prisma.userDevice.findMany({ where: { userId }, orderBy: { firstSeenAt: 'asc' } }),
+    prisma.exploreReceiptEvent.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
   ]);
 
   if (!user) {
@@ -43,20 +46,57 @@ export async function buildFullExportService(userId) {
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
+      sportsPlayed: user.sportsPlayed,
       experienceLevel: user.experienceLevel,
+      trainingTenure: user.trainingTenure,
       weeklyFrequencyIntent: user.weeklyFrequencyIntent,
+      wellnessFocuses: user.wellnessFocuses,
+      wellnessDayPattern: user.wellnessDayPattern,
+      wellnessSleepPattern: user.wellnessSleepPattern,
+      wellnessSetupCompleted: user.wellnessSetupCompleted,
       profileImageUrl: user.profileImageUrl,
       referralCode: user.referralCode,
       // Whether someone referred them is part of their own record; who that
       // person is would be a handle to a third party's account.
       wasReferred: user.referredByUserId !== null,
       leaderboardOptIn: user.leaderboardOptIn,
+      // Onboarding branch answers — preference data about this person, so it
+      // belongs in their DPDPA access-right export like every other answer
+      // they gave us. Added here at the same time as the columns, rather than
+      // left to be noticed later.
+      currentlyWorksOut: user.currentlyWorksOut,
+      workoutIntent: user.workoutIntent,
+      trainingLocationPref: user.trainingLocationPref,
+      trainingLocationOther: user.trainingLocationOther,
+      appMode: user.appMode,
+      freeTimeWindow: user.freeTimeWindow,
+      // Coach-journey membership + prompt state (B2), same class as the
+      // onboarding answers above: this person's own record.
+      linkedGymId: user.linkedGymId,
+      homeUnclaimedGymId: user.homeUnclaimedGymId,
+      pendingGymPromptGymId: user.pendingGymPromptGymId,
+      gymLinkNotice: user.gymLinkNotice,
+      firstVisitBadgeConsent: user.firstVisitBadgeConsent,
+      firstVisitBadgeConsentAt: user.firstVisitBadgeConsentAt,
       joinedAt: user.createdAt,
     },
+    gymLinks: gymLinks.map((l) => ({
+      gymId: l.gymId,
+      source: l.source,
+      linkedAt: l.linkedAt,
+      firstVerifiedCheckinAt: l.firstVerifiedCheckinAt,
+      removedAt: l.removedAt,
+      removedByPartnerId: l.removedByPartnerId,
+      selfRelinkBlocked: l.selfRelinkBlocked,
+    })),
+    devices: devices.map((d) => ({
+      installId: d.installId, platform: d.platform, firstSeenAt: d.firstSeenAt, lastSeenAt: d.lastSeenAt,
+    })),
     savedAddresses: addresses.map((a) => ({
       label: a.label, address: a.formattedAddress, lat: a.lat, lng: a.lng, savedAt: a.createdAt,
     })),
-    collectiblesFound: finds.map((f) => ({ collectibleId: f.collectibleId, foundAt: f.foundAt })),
+    exploration: { locationReceipts: locations.map(r => r.payload), rewardReceipts: rewards.map(r => r.payload),
+      receiptTelemetry: receiptEvents.map(({eventId,event,properties,createdAt,deliveredAt,attempts,nextAttemptAt})=>({eventId,event,properties,createdAt,deliveredAt,attempts,nextAttemptAt})) },
     platformReview: platformReview
       ? { rating: platformReview.rating, comment: platformReview.comment, at: platformReview.createdAt }
       : null,
@@ -66,7 +106,7 @@ export async function buildFullExportService(userId) {
     notIncluded: {
       credentials: 'your password hash and login/refresh tokens are security material, not personal data we would ever hand back',
       otpCodes: 'one-time codes are short-lived and are not retained',
-      internalTelemetry: 'aggregate analytics events are not keyed to your account in a form we return here',
+      internalTelemetry: 'Explore receipt delivery records are included in exploration.receiptTelemetry; other analytics retain the existing separate sink conventions',
     },
     // If anything failed, the document says so at the top level rather than
     // quietly presenting itself as complete.

@@ -1,0 +1,351 @@
+import { randomUUID } from 'node:crypto';
+import prisma from '../db/prisma.js';
+import * as placesService from './placesService.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+
+
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+
+// How close two coordinates must be, in metres, before we treat a Places
+// result as "this is the partner gym we already have". Gyms sit in buildings,
+// Places pins and our own partner-entered coordinates disagree by a few tens
+// of metres routinely, and the failure modes are asymmetric:
+//   too tight  -> we create an unclaimed row shadowing a real partner gym, and
+//                 that customer silently loses booking/PAYG for a gym we sell.
+//   too loose  -> we attach them to the wrong gym in a dense market.
+// 150m is deliberately conservative; the name check below is what stops the
+// loose case from mattering in a mall with four gyms in it.
+const MATCH_RADIUS_M = 150;
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Loose name comparison: lowercase, strip punctuation and the filler words
+// every gym name contains, so "Gold's Gym (Sector 39)" and "Golds Gym Sector
+// 39" compare equal without a fuzzy-match dependency.
+const FILLER = new Set(['gym', 'fitness', 'centre', 'center', 'studio', 'the', 'and']);
+function nameTokens(name) {
+  return new Set(
+    String(name || '')
+      .toLowerCase()
+      // Apostrophes are ELIDED, not turned into separators: splitting on them
+      // makes "Gold's" two tokens ("gold", "s") while "Golds" stays one, so
+      // the same gym written two ways would fail to match itself.
+      .replace(/['’]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t && !FILLER.has(t))
+  );
+}
+
+function namesLookAlike(a, b) {
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (ta.size === 0 || tb.size === 0) return false;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  // Every distinguishing token of the smaller name must appear in the larger.
+  return shared === Math.min(ta.size, tb.size);
+}
+
+/// Does this Places result correspond to a gym we already have as a partner?
+///
+/// Runs server-side on purpose: the client must not need to know our partner
+/// list to decide, and the matching rule must be changeable without an app
+/// release. Returns the matching Gym id, or null.
+///
+/// Both conditions must hold — near AND named alike. Distance alone puts a
+/// mall's four gyms in one bucket; name alone matches a chain's other branch
+/// across the city, which would attribute attendance to a gym the customer
+/// has never entered.
+export async function matchPartnerGymService({ name, lat, lng }) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+
+  // Bounding box first so this is an indexed-ish scan rather than a full
+  // table haversine. ~0.002 degrees latitude is comfortably wider than
+  // MATCH_RADIUS_M at Indian latitudes.
+  const delta = 0.002;
+  const candidates = await prisma.gym.findMany({
+    where: {
+      lat: { gte: lat - delta, lte: lat + delta },
+      lng: { gte: lng - delta, lte: lng + delta },
+    },
+    select: { id: true, name: true, lat: true, lng: true },
+  });
+
+  for (const g of candidates) {
+    if (distanceMeters(lat, lng, g.lat, g.lng) > MATCH_RADIUS_M) continue;
+    if (!namesLookAlike(name, g.name)) continue;
+    return g.id;
+  }
+  return null;
+}
+
+/// Resolve a Places id into either "this is partner gym N" or an UnclaimedGym
+/// row. Details are fetched server-side so no Maps key ever ships to a client.
+export async function resolvePlaceService(placeId, userId, sessionToken) {
+  if (!placeId) throw { status: 400, error: 'placeId is required' };
+
+  const details = await placesService.placeDetails(placeId, sessionToken);
+  if (details.lat === null || details.lng === null) {
+    throw { status: 422, error: "That place has no location we can use for check-in." };
+  }
+
+  const matchedGymId = await matchPartnerGymService(details);
+  if (matchedGymId) {
+    return { matchedGymId, unclaimedGym: null };
+  }
+
+  const unclaimedGym = await prisma.unclaimedGym.upsert({
+    where: { googlePlaceId: placeId },
+    // Refresh the descriptive fields (a place can be renamed or re-pinned)
+    // but never reassign addedByUserId — it records who told us first, which
+    // is the interesting fact for sales, not who asked most recently.
+    update: {
+      name: details.name,
+      address: details.address,
+      city: details.city,
+      lat: details.lat,
+      lng: details.lng,
+    },
+    create: {
+      googlePlaceId: placeId,
+      name: details.name,
+      address: details.address,
+      city: details.city,
+      lat: details.lat,
+      lng: details.lng,
+      addedByUserId: userId,
+    },
+  });
+
+  return { matchedGymId: null, unclaimedGym };
+}
+
+// Manually added gyms carry a synthetic googlePlaceId so the existing unique
+// column (and every consumer keyed on it) keeps working with no migration.
+// The prefix is the marker: anything starting with it was pinned by a
+// customer standing somewhere, not verified against Google's index — so a
+// check-in there proves "the phone was where the user said their gym is",
+// which is weaker evidence than a Places-backed gym. Anything that grades
+// attendance (e.g. an insurer-grade score) must treat these as self-reported.
+export const MANUAL_PLACE_PREFIX = 'manual:';
+export const MANUAL_GYM_LIMIT = 3;
+const MANUAL_GYM_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Rough India bounding box. A manual pin outside it is a spoofed or broken
+// location, not a gym we can geofence.
+const INDIA_BOUNDS = { minLat: 6, maxLat: 37.5, minLng: 68, maxLng: 97.5 };
+
+export function isManualPlaceId(placeId) {
+  return typeof placeId === 'string' && placeId.startsWith(MANUAL_PLACE_PREFIX);
+}
+
+/// "Can't find your gym? Add it" — the user names the gym and we pin it where
+/// their phone is right now (they are expected to be at it). Partner matching
+/// still runs first: a user who types "Iron House" while standing in our
+/// partner Iron House should be sent to booking, not filed as independent.
+export async function addManualGymService({ name, lat, lng }, userId) {
+  const cleanName = typeof name === 'string' ? name.trim().replace(/\s+/g, ' ') : '';
+  if (cleanName.length < 2 || cleanName.length > 80) {
+    throw { status: 400, error: 'Gym name must be 2–80 characters' };
+  }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw { status: 400, error: 'Your current location is needed to add a gym' };
+  }
+  if (
+    lat < INDIA_BOUNDS.minLat || lat > INDIA_BOUNDS.maxLat ||
+    lng < INDIA_BOUNDS.minLng || lng > INDIA_BOUNDS.maxLng
+  ) {
+    throw { status: 422, error: 'That location is outside India' };
+  }
+
+  const matchedGymId = await matchPartnerGymService({ name: cleanName, lat, lng });
+  if (matchedGymId) return { matchedGymId, unclaimedGym: null };
+
+  // Reuse this user's own earlier manual pin of the same name close by, so
+  // re-adding (e.g. after reinstalling) doesn't litter the table with
+  // duplicates of one gym.
+  const delta = 0.002;
+  const mine = await prisma.unclaimedGym.findMany({
+    where: {
+      addedByUserId: userId,
+      googlePlaceId: { startsWith: MANUAL_PLACE_PREFIX },
+      lat: { gte: lat - delta, lte: lat + delta },
+      lng: { gte: lng - delta, lte: lng + delta },
+    },
+  });
+  const existing = mine.find(
+    (g) => distanceMeters(lat, lng, g.lat, g.lng) <= MATCH_RADIUS_M && namesLookAlike(cleanName, g.name)
+  );
+  if (existing) return { matchedGymId: null, unclaimedGym: existing };
+
+  // A handful of new manual gyms per user per month is plenty for someone
+  // naming the gym they actually go to. More is the pattern of minting
+  // check-in targets (several "gyms" at home), so it stops here.
+  const recentManual = await prisma.unclaimedGym.count({
+    where: {
+      addedByUserId: userId,
+      googlePlaceId: { startsWith: MANUAL_PLACE_PREFIX },
+      createdAt: { gte: new Date(Date.now() - MANUAL_GYM_WINDOW_MS) },
+    },
+  });
+  if (recentManual >= MANUAL_GYM_LIMIT) {
+    throw { status: 429, error: "You've added several gyms recently. Pick one from the list, or try again later.", code: 'MANUAL_GYM_LIMIT' };
+  }
+
+  const unclaimedGym = await prisma.unclaimedGym.create({
+    data: {
+      googlePlaceId: `${MANUAL_PLACE_PREFIX}${randomUUID()}`,
+      name: cleanName,
+      address: '',
+      city: '',
+      lat,
+      lng,
+      addedByUserId: userId,
+    },
+  });
+  return { matchedGymId: null, unclaimedGym };
+}
+
+export async function getUnclaimedGymService(id) {
+  const gym = await prisma.unclaimedGym.findUnique({ where: { id } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  return gym;
+}
+
+/// The customer-facing read of a saved non-partner gym, so the app can judge
+/// "am I near it" before the person taps check-in. Only what the app needs: no
+/// Places id, no who-added-it.
+///
+/// A gym pinned by hand carries the coordinates of whoever pinned it, so it is
+/// readable only by them (anyone else gets the same 404 as a missing row — the
+/// id space must not be probeable). A Google Places gym is a public place.
+export async function getMyUnclaimedGymService(id, userId) {
+  const gym = await prisma.unclaimedGym.findUnique({ where: { id } });
+  if (
+    !gym ||
+    (gym.googlePlaceId.startsWith(MANUAL_PLACE_PREFIX) &&
+      gym.addedByUserId !== Number(userId))
+  ) {
+    throw { status: 404, error: 'Gym not found' };
+  }
+  const { name, address, city, lat, lng, claimStatus, claimedGymId } = gym;
+  return { id: gym.id, name, address, city, lat, lng, claimStatus, claimedGymId };
+}
+
+export async function listUnclaimedGymsService({ claimStatus } = {}) {
+  return prisma.unclaimedGym.findMany({
+    where: claimStatus ? { claimStatus } : undefined,
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+/// Announce that a place our own customers checked into independently is now a
+/// real partner gym. Two best-effort hops:
+///   1. booking-service tells us which customers ever checked in there;
+///   2. auth-service turns that into a "this gym joined, book it properly"
+///      prompt for them (and for anyone who called it home).
+///
+/// Every failure is logged and swallowed on purpose. By the time this runs the
+/// admin's claim-status change has already committed, and a notification that
+/// neither downstream service guarantees must never fail or delay that action.
+/// customerIds stays [] if hop 1 fails: hop 2 is still worth sending, because
+/// auth also matches customers by homeUnclaimedGymId rather than by the list.
+export async function notifyUnclaimedGymClaimed(unclaimedGymId, claimedGymId) {
+  const internalHeaders = (extra = {}) => ({
+    'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(),
+    ...extra,
+  });
+
+  let customerIds = [];
+  try {
+    const resp = await fetch(
+      `${BOOKING_SERVICE_URL}/internal/unclaimed-gyms/${unclaimedGymId}/customers`,
+      {
+        headers: {
+          ...internalHeaders(),
+          ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)),
+        },
+      }
+    );
+    if (resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      // The contract types this as {customerIds}, but booking-service ships
+      // every other internal read wrapped in {data}; accept both so a change
+      // in envelope convention can't silently drop the list.
+      const raw = body?.data?.customerIds ?? body?.customerIds;
+      if (Array.isArray(raw)) {
+        customerIds = raw.map(Number).filter(Number.isFinite);
+      }
+    } else {
+      console.error(
+        `unclaimedGymClaimed: booking customers fetch failed (${resp.status}) for unclaimed gym ${unclaimedGymId}`
+      );
+    }
+  } catch (err) {
+    console.error(
+      `unclaimedGymClaimed: booking customers fetch errored for unclaimed gym ${unclaimedGymId}:`,
+      err.message
+    );
+  }
+
+  try {
+    const resp = await fetch(`${AUTH_SERVICE_URL}/internal/unclaimed-gym-claimed`, {
+      method: 'POST',
+      headers: {
+        ...internalHeaders({ 'content-type': 'application/json' }),
+        ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),
+      },
+      body: JSON.stringify({ unclaimedGymId, claimedGymId, customerIds }),
+    });
+    if (!resp.ok) {
+      console.error(
+        `unclaimedGymClaimed: auth notify failed (${resp.status}) for unclaimed gym ${unclaimedGymId}`
+      );
+    }
+  } catch (err) {
+    console.error(
+      `unclaimedGymClaimed: auth notify errored for unclaimed gym ${unclaimedGymId}:`,
+      err.message
+    );
+  }
+}
+
+export async function updateClaimStatusService(id, { claimStatus, claimedGymId }) {
+  const existing = await getUnclaimedGymService(id);
+  const updated = await prisma.unclaimedGym.update({
+    where: { id },
+    data: {
+      ...(claimStatus ? { claimStatus } : {}),
+      ...(claimedGymId !== undefined ? { claimedGymId } : {}),
+    },
+  });
+
+  // Only the transition that turns an independent place into a real partner
+  // gym is worth announcing; re-saving an already-claimed row is a no-op for
+  // the downstream services and would re-prompt customers a second time.
+  const justClaimed =
+    updated.claimStatus === 'claimed' &&
+    updated.claimedGymId != null &&
+    !(existing.claimStatus === 'claimed' && existing.claimedGymId === updated.claimedGymId);
+
+  if (justClaimed) {
+    // Deliberately not awaited: the admin action is already committed, and the
+    // response should not wait on (nor fail because of) two downstream calls.
+    notifyUnclaimedGymClaimed(updated.id, updated.claimedGymId).catch((err) => {
+      console.error('updateClaimStatusService: claim hook failed:', err.message);
+    });
+  }
+
+  return updated;
+}

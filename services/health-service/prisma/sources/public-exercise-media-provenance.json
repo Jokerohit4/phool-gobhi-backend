@@ -1,0 +1,363 @@
+{
+  "Cat-Cow": {
+    "provider": "dvids",
+    "sourceUrl": "https://www.dvidshub.net/video/753723/cat-camel",
+    "sourceTitle": "Cat Camel",
+    "author": "CPT Matthew Holfinger",
+    "rights": "public_domain",
+    "licenseUrl": "https://www.dvidshub.net/about/copyright",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed side-view footage shows both spinal flexion and extension on hands and knees, matching Cat-Cow. Clip excludes the front-view transition.",
+    "clipStartSeconds": 14,
+    "clipDurationSeconds": 10,
+    "crop": [
+      192,
+      0,
+      768,
+      576
+    ],
+    "sourceId": "753723",
+    "publicPlaybackUrl": "https://d34w7g4gy10iej.cloudfront.net/video/2005/DOD_107825984/DOD_107825984-1024x576-1769k.mp4",
+    "sourcePageSha256": "5f422294d108a465ddf5128031258b22381874009f95d3190f0b0c14cd4279b7",
+    "sourceVideoSha256": "7b4df52b472f702fea63d6748c10eac83fb7992bf9aa9f2af779e3a2ebb506fc",
+    "sourceDurationSeconds": 24.98,
+    "sourceDimensions": [
+      1024,
+      576
+    ],
+    "framesSampledSeconds": [
+      1.25,
+      5.0,
+      8.74,
+      12.49,
+      16.24,
+      19.98
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\753723.mp4"
+  },
+  "High Knees": {
+    "provider": "dvids",
+    "sourceUrl": "https://www.dvidshub.net/video/558574/high-knees",
+    "sourceTitle": "High Knees",
+    "author": "CPT Matthew Holfinger",
+    "rights": "public_domain",
+    "licenseUrl": "https://www.dvidshub.net/about/copyright",
+    "reviewStatus": "excluded",
+    "reviewReason": "Footage demonstrates a travelling drill; the existing catalogue guide describes in-place high knees. Do not substitute it.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "558574",
+    "publicPlaybackUrl": "https://d34w7g4gy10iej.cloudfront.net/video/1710/DOD_104966749/DOD_104966749-1024x576-1769k.mp4",
+    "sourcePageSha256": "a343b08cab97259fc402b05b71a802088657794b3f6f77c090b8e7ac4e3788d6",
+    "sourceVideoSha256": "b4daab12d7946738e4bd4819248b9b942d2de9fe839f5c775affa8e8c5e86cd5",
+    "sourceDurationSeconds": 17.19,
+    "sourceDimensions": [
+      1024,
+      576
+    ],
+    "framesSampledSeconds": [
+      0.86,
+      3.44,
+      6.02,
+      8.6,
+      11.17,
+      13.75
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\558574.mp4"
+  },
+  "Bodyweight Squat": {
+    "provider": "dvids",
+    "sourceUrl": "https://www.dvidshub.net/video/517502/body-weight-squat",
+    "sourceTitle": "Body Weight Squat",
+    "author": "MAJ Joshua Pena / Cpl Amber Jennings",
+    "rights": "public_domain",
+    "licenseUrl": "https://www.dvidshub.net/about/copyright",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed unweighted squats through standing, descent and ascent with feet planted and arms forward, matching the catalogue movement.",
+    "clipStartSeconds": 18,
+    "clipDurationSeconds": 10,
+    "crop": [
+      224,
+      0,
+      576,
+      576
+    ],
+    "sourceId": "517502",
+    "publicPlaybackUrl": "https://d34w7g4gy10iej.cloudfront.net/video/1704/DOD_104245094/DOD_104245094-1024x576-1769k.mp4",
+    "sourcePageSha256": "df9ed4bf157adcbfd8de07a87e1547775342451daaa1a465e628f51520fe1079",
+    "sourceVideoSha256": "05b5870da6ebc66abcfd5715a2864e21299d176dc2c87524d3f5904c37450f66",
+    "sourceDurationSeconds": 32.68,
+    "sourceDimensions": [
+      1024,
+      576
+    ],
+    "framesSampledSeconds": [
+      1.63,
+      6.54,
+      11.44,
+      16.34,
+      21.24,
+      26.14
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\517502.mp4"
+  },
+  "Side Plank": {
+    "provider": "dvids",
+    "sourceUrl": "https://www.dvidshub.net/video/640254/side-plank",
+    "sourceTitle": "Side Plank",
+    "author": "CPT Matthew Holfinger",
+    "rights": "public_domain",
+    "licenseUrl": "https://www.dvidshub.net/about/copyright",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed lower side-view panel shows straight-leg side plank raised from the floor on one forearm, matching the unweighted catalogue hold.",
+    "clipStartSeconds": 0.3,
+    "clipDurationSeconds": 10,
+    "crop": [
+      256,
+      288,
+      544,
+      288
+    ],
+    "sourceId": "640254",
+    "publicPlaybackUrl": "https://d34w7g4gy10iej.cloudfront.net/video/1811/DOD_106215246/DOD_106215246-1024x576-1769k.mp4",
+    "sourcePageSha256": "8b2a551b7cb9729159d83911b97ddd1b70e0d0ac6cc604c440b26d402be4825d",
+    "sourceVideoSha256": "cc8a0911df3a3fadf6f275f8b6554e8b1039c207f832e032777eb9071d2c3039",
+    "sourceDurationSeconds": 11.41,
+    "sourceDimensions": [
+      1024,
+      576
+    ],
+    "framesSampledSeconds": [
+      0.57,
+      2.28,
+      3.99,
+      5.71,
+      7.42,
+      9.13
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\640254.mp4"
+  },
+  "Plank": {
+    "provider": "dvids",
+    "sourceUrl": "https://www.dvidshub.net/video/640237/plank",
+    "sourceTitle": "Plank",
+    "author": "CPT Matthew Holfinger",
+    "rights": "public_domain",
+    "licenseUrl": "https://www.dvidshub.net/about/copyright",
+    "reviewStatus": "approved_reference",
+    "reviewReason": "Reviewed lower side-view panel shows floor-to-forearm plank setup and straight-body hold supported by toes and forearms; no weights or leg lifts.",
+    "clipStartSeconds": 0.3,
+    "clipDurationSeconds": 10,
+    "crop": [
+      256,
+      288,
+      544,
+      288
+    ],
+    "sourceId": "640237",
+    "publicPlaybackUrl": "https://d34w7g4gy10iej.cloudfront.net/video/1811/DOD_106215226/DOD_106215226-1024x576-1769k.mp4",
+    "sourcePageSha256": "879dec358311092ea333642867dcc40fcb02f07042c65db8b5a47c334a3ef68b",
+    "sourceVideoSha256": "ccfc4e0e7bf94a98de7cbba53539fea2f5f6211b1d127e919920c70b674fd4c8",
+    "sourceDurationSeconds": 12.12,
+    "sourceDimensions": [
+      1024,
+      576
+    ],
+    "framesSampledSeconds": [
+      0.61,
+      2.42,
+      4.24,
+      6.06,
+      7.88,
+      9.7
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\640237.mp4"
+  },
+  "Shoulder Cross-Body Stretch": {
+    "provider": "dvids",
+    "sourceUrl": "https://www.dvidshub.net/video/699168/cross-body-stretch",
+    "sourceTitle": "Cross Body Stretch",
+    "author": "CPT Matthew Holfinger",
+    "rights": "public_domain",
+    "licenseUrl": "https://www.dvidshub.net/about/copyright",
+    "reviewStatus": "excluded",
+    "reviewReason": "Actual footage is a seated spinal twist with one knee across the body, not a shoulder cross-body stretch. Title alone is insufficient.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "699168",
+    "publicPlaybackUrl": "https://d34w7g4gy10iej.cloudfront.net/video/1907/DOD_107054988/DOD_107054988.mp4",
+    "sourcePageSha256": "e624301f91968faef02776330db2e0cc379758618f808b2e5663f5eb337f08e8",
+    "sourceVideoSha256": "cf19cc1b9e8070e9920d2815f1796054ad68c085107653cfbc101e1184b7429f",
+    "sourceDurationSeconds": 4.86,
+    "sourceDimensions": [
+      640,
+      480
+    ],
+    "framesSampledSeconds": [
+      0.24,
+      0.97,
+      1.7,
+      2.43,
+      3.16,
+      3.89
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\699168.mp4"
+  },
+  "Face Pull": {
+    "provider": "wger",
+    "sourceUrl": "https://wger.de/api/v2/video/78/",
+    "sourceTitle": "Facepull",
+    "author": "Goulart",
+    "rights": "cc_by_sa_4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "reviewStatus": "pending",
+    "reviewReason": "Pending actual motion review; source license is verified separately.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "wger-78",
+    "publicPlaybackUrl": "https://wger.de/media/exercise-video/222/245a824b-cd39-45f2-b251-2c0b7efead0d.MOV",
+    "sourcePageSha256": "5d75544d44b6f732b50f5f640fd83f0baefc386e73639779372143c33e6cb1b6",
+    "sourceVideoSha256": "7a336d6b99e52f1f74850945958a72a9082b735e02cafb3e29bb6183c11f5422",
+    "sourceDurationSeconds": 8.7,
+    "sourceDimensions": [
+      1920,
+      1080
+    ],
+    "framesSampledSeconds": [
+      0.43,
+      1.74,
+      3.04,
+      4.35,
+      5.65,
+      6.96
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\wger-78.mp4"
+  },
+  "Barbell Hip Thrust": {
+    "provider": "wger",
+    "sourceUrl": "https://wger.de/api/v2/video/72/",
+    "sourceTitle": "Hip Thrust",
+    "author": "Goulart",
+    "rights": "cc_by_sa_4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "reviewStatus": "pending",
+    "reviewReason": "Pending actual motion review; source license is verified separately.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "wger-72",
+    "publicPlaybackUrl": "https://wger.de/media/exercise-video/294/45bacf4b-1bb6-4d47-8bd1-9f00eddd4019.MOV",
+    "sourcePageSha256": "629e1c94e5bc03586af8aa4e52c350efd791937bed46876be98bc59a648ca480",
+    "sourceVideoSha256": "2d9af3456d9bf47f6f52ee31c8da2af883b58acdd02b161e32d23d90ab87a26b",
+    "sourceDurationSeconds": 30.19,
+    "sourceDimensions": [
+      1920,
+      1080
+    ],
+    "framesSampledSeconds": [
+      1.51,
+      6.04,
+      10.57,
+      15.1,
+      19.62,
+      24.15
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\wger-72.mp4"
+  },
+  "Barbell Walking Lunge": {
+    "provider": "wger",
+    "sourceUrl": "https://wger.de/api/v2/video/34/",
+    "sourceTitle": "Barbell Lunges Walking",
+    "author": "Goulart",
+    "rights": "cc_by_sa_4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "reviewStatus": "pending",
+    "reviewReason": "Pending actual motion review; source license is verified separately.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "wger-34",
+    "publicPlaybackUrl": "https://wger.de/media/exercise-video/802/85d1d7f8-c3c5-47e8-9b26-56896919e6e7.MOV",
+    "sourcePageSha256": "daa9957be640889d917829ca28d266023295d933b9b65f886115a0d5f1ebb9a2",
+    "sourceVideoSha256": "cc6cbe62cba5d51921ffea9601d56c32a8f3ecc0ec06d8dade67554fe82cf87b",
+    "sourceDurationSeconds": 12.72,
+    "sourceDimensions": [
+      1920,
+      1080
+    ],
+    "framesSampledSeconds": [
+      0.64,
+      2.54,
+      4.45,
+      6.36,
+      8.27,
+      10.18
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\wger-34.mp4"
+  },
+  "Alternating Dumbbell Curl": {
+    "provider": "wger",
+    "sourceUrl": "https://wger.de/api/v2/video/48/",
+    "sourceTitle": "Biceps Curls With Dumbbell",
+    "author": "Goulart",
+    "rights": "cc_by_sa_4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "reviewStatus": "pending",
+    "reviewReason": "Pending actual motion review; source license is verified separately.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "wger-48",
+    "publicPlaybackUrl": "https://wger.de/media/exercise-video/92/8bfb917c-3d0d-49b9-8073-5d7e01c1b894.MOV",
+    "sourcePageSha256": "6895b8435bf92381c272ee534123bf0a0558bbb470376192adbc11f4dc154c31",
+    "sourceVideoSha256": "4e5e4bbbf24385e8bbed16b7fb2905243041646f56031c3c3515073d6b9ace75",
+    "sourceDurationSeconds": 10.94,
+    "sourceDimensions": [
+      1920,
+      1080
+    ],
+    "framesSampledSeconds": [
+      0.55,
+      2.19,
+      3.83,
+      5.47,
+      7.11,
+      8.75
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\wger-48.mp4"
+  },
+  "One-Arm Dumbbell Preacher Curl": {
+    "provider": "wger",
+    "sourceUrl": "https://wger.de/api/v2/video/52/",
+    "sourceTitle": "Single-arm Preacher Curl",
+    "author": "Goulart",
+    "rights": "cc_by_sa_4",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "reviewStatus": "pending",
+    "reviewReason": "Pending actual motion review; source license is verified separately.",
+    "clipStartSeconds": null,
+    "clipDurationSeconds": null,
+    "crop": null,
+    "sourceId": "wger-52",
+    "publicPlaybackUrl": "https://wger.de/media/exercise-video/584/109e8d5d-62a4-40ad-8813-2ccef5bc751f.MOV",
+    "sourcePageSha256": "cdd670cf48e85e4c88c7e751b138a8eabefe016d2b2aa47ffd47a56227744c52",
+    "sourceVideoSha256": "b7f875efa49f4adc26331f9da7fce4b6db10bc8d346712256cdc5714ae89d3c4",
+    "sourceDurationSeconds": 13.02,
+    "sourceDimensions": [
+      1920,
+      1080
+    ],
+    "framesSampledSeconds": [
+      0.65,
+      2.6,
+      4.56,
+      6.51,
+      8.46,
+      10.42
+    ],
+    "localSource": "C:\\Users\\rohit\\AppData\\Local\\Temp\\exercise-public-media\\wger-52.mp4"
+  }
+}

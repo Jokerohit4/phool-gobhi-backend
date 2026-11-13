@@ -1,0 +1,309 @@
+import { Router } from 'express';
+import { requireAuth, requireInternal } from '../middleware/requireAuth.js';
+import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
+import { requireAdult } from '../middleware/requireAdult.js';
+import { requireNutritionConsent, requireMedicalRecordsConsent, requirePhotoConsent } from '../middleware/requireLedgerConsent.js';
+import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
+import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
+import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
+import * as ledgerCtrl from '../controllers/ledgerController.js';
+import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
+import * as coachConsentCtrl from '../controllers/coachConsentController.js';
+import * as appointmentCtrl from '../controllers/appointmentController.js';
+import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js';
+import { uploadFoodPhotoMiddleware } from '../middleware/foodPhotoUpload.js';
+
+const router = Router();
+
+// ---- Gating ---------------------------------------------------------------
+//
+// Three layers, each answering a different question:
+//
+//   healthLedger flag   - does this feature exist? Admin-controlled, default
+//                         off. A 403 FEATURE_DISABLED, which the app treats as
+//                         "not in this build".
+//   healthMetrics flag  - is the surrounding health surface on at all? The
+//                         ledger stores weight, food and prescriptions, so it
+//                         must not be reachable while the rest of Health+ is
+//                         switched off.
+//   consent scope       - has THIS person agreed to nutrition / medical
+//                         records? A 403 CONSENT_REQUIRED, which the app turns
+//                         into an opt-in prompt. Not a flag: consent is
+//                         per-person and revocable at any time.
+//
+// Consent has to be inside the gate on the routes that read the data, and
+// deliberately NOT on the routes that read or grant consent itself - otherwise
+// there is no way to opt in.
+const ledgerGated = [requireAuth, requireFeatureFlag('healthMetrics'), requireFeatureFlag('healthLedger')];
+
+const nutrition = [...ledgerGated, requireNutritionConsent];
+const medical = [...ledgerGated, requireMedicalRecordsConsent];
+
+// Consent status and granting are reachable with the flag on but without the
+// scope already granted.
+const consentGated = [...ledgerGated];
+
+// The coach journey's gates, mirroring the two shapes above.
+//
+//   coachGated  - auth + the coachJourney flag. NOT built on ledgerGated:
+//                 healthMetrics and healthLedger describe the food ledger and
+//                 the derived-score surface, not the coach's plan, and the
+//                 journey must work for a user who has neither flag on. This
+//                 is the gate the coach-consent routes sit behind: reading
+//                 and granting consent must be reachable without the scope,
+//                 or there is no way to opt in.
+//   coachBasic   - auth + the flag + the coach `basic` scope. The gate the
+//                 either-gated routes below accept INSTEAD of nutrition, for
+//                 a user who granted the coach consent but never the diary's.
+const coachGated = [requireAuth, requireCoachJourney];
+const coachBasic = [...coachGated, requireCoachConsent('basic')];
+
+const planGated = [requireAuth, requireCoachJourney, requireCoachConsent('basic')];
+const planSoftGated = [requireAuth, requireCoachJourney];
+
+// ---- Consent --------------------------------------------------------------
+
+router.get('/ledger/consent', ...consentGated, ledgerConsentCtrl.getConsent);
+// Current policy wording version on its own, so the app can render the prompt
+// before it has any consent state to show. Public within the ledger gate —
+// there is nothing user-specific in it.
+router.get('/ledger/consent/policy', ...consentGated, ledgerConsentCtrl.getPolicy);
+router.post('/ledger/consent/nutrition', ...consentGated, requireAdult, ledgerConsentCtrl.grantNutrition);
+router.delete('/ledger/consent/nutrition', ...consentGated, ledgerConsentCtrl.revokeNutrition);
+router.post('/ledger/consent/medical-records', ...consentGated, requireAdult, ledgerConsentCtrl.grantMedicalRecords);
+router.delete('/ledger/consent/medical-records', ...consentGated, ledgerConsentCtrl.revokeMedicalRecords);
+// Photographs, asked for where the photograph is taken rather than folded into
+// nutrition: sending a plate to an outside AI company is a different decision
+// from keeping a written food diary, and one that nutrition consent never
+// described.
+router.post('/ledger/consent/photo', ...consentGated, requireAdult, ledgerConsentCtrl.grantPhoto);
+router.delete('/ledger/consent/photo', ...consentGated, ledgerConsentCtrl.revokePhoto);
+
+// ---- Coach consent ---------------------------------------------------------
+//
+// Gobhi the Coach's consent, separate from the ledger scopes above: `basic`
+// is what lets the journey, plan and score run at all; `supplements` is the
+// narrow extra that lets the supplement habit collect. Granting is
+// adults-only like every other consent grant in this service (requireAdult);
+// revoking is NEVER gated — not by the flag, not by a scope — for the same
+// reason DELETE /runs/consent and DELETE /biometrics/consent are not:
+// withdrawing must keep working after an admin switches the feature off, or
+// the switch strands the very record it created.
+router.get('/coach-consent', ...coachGated, coachConsentCtrl.getConsent);
+router.post('/coach-consent', ...coachGated, requireAdult, coachConsentCtrl.grantConsent);
+router.delete('/coach-consent/:scope', requireAuth, coachConsentCtrl.revokeConsent);
+
+// ---- Intake ----------------------------------------------------------------
+
+// Gated on `nutrition` like the target routes, because intake exists to produce
+// a nutrition target. This is a deliberate consequence of that: answering "what
+// are you working towards, how old are you" is itself health data, and the
+// nutrition consent is what the user agreed to when they turned the food log on.
+router.get('/ledger/setup', ...nutrition, ledgerCtrl.getSetup);
+// A weight in the body is written to the BiometricEntry series (source
+// 'manual'), so it also needs body-numbers consent - nutrition consent describes
+// the food log, not body measurements. A save without a weight is unaffected.
+router.put('/ledger/setup', ...nutrition, requireBiometricConsentForIntakeWeight, ledgerCtrl.saveSetup);
+
+// ---- Targets --------------------------------------------------------------
+
+router.post('/ledger/foods/score-preview', ...nutrition, ledgerCtrl.previewFoodScores);
+router.get('/ledger/targets', ...nutrition, ledgerCtrl.getTargets);
+// GET, and not a second POST, because this reads. It was previously served by
+// calling the recompute endpoint, which turned a screen load into a write.
+router.get(
+  '/ledger/targets/activity-detail',
+  ...nutrition,
+  ledgerCtrl.getTargetActivityDetail
+);
+
+// ---- Food -----------------------------------------------------------------
+
+// includeUnverified defaults to true here. See the comment on searchFoods: the
+// catalogue ships unverified pending nutritionist sign-off, and the alternative
+// is a food log with nothing in it.
+router.get('/ledger/foods', ...nutrition, ledgerCtrl.searchFoods);
+router.post('/ledger/foods/lookup', ...nutrition, ledgerCtrl.lookupFoodByText);
+// The picker's opening list, before a query is typed. Registered before the
+// parameterized food routes for the same reason the rest of this block is: a
+// literal segment that could be read as an :id must come first, or "recent"
+// would be parsed as an id by a later route.
+router.get('/ledger/foods/recent', ...nutrition, ledgerCtrl.recentFoods);
+// The user's own food, created from the picker when the catalogue has nothing.
+// Unlike a food request (below), this is usable immediately: it is searchable
+// and loggable by its owner, and by nobody else.
+router.post('/ledger/foods', ...nutrition, ledgerCtrl.createCustomFood);
+router.post('/ledger/foods/:id/customize', ...nutrition, ledgerCtrl.customizeFood);
+// The empty state's escape hatch. Same gate as search itself, for the same
+// reason: it lives inside the picker, so a user who cannot reach the picker
+// cannot reach this.
+router.post('/ledger/food-requests', ...nutrition, ledgerCtrl.requestFood);
+router.get('/ledger/food-requests', ...nutrition, ledgerCtrl.listFoodRequests);
+// The embedded catalogue for the on-device matcher. Nutrition-gated like the
+// rest of the ledger: the vectors are derived from catalogue text and carry no
+// user data, but they exist to serve this app's food features, so they share
+// the ledger's consent gate rather than inventing their own surface.
+router.get('/ledger/food-embeddings', ...nutrition, ledgerCtrl.getFoodEmbeddings);
+router.post('/ledger/food-logs', ...nutrition, ledgerCtrl.logFood);
+// A whole day copied onto another. A literal sibling of the POST above, before
+// the parameterized routes, so "repeat" is never read as an id.
+router.post('/ledger/food-logs/repeat', ...nutrition, ledgerCtrl.repeatFoodLogs);
+router.delete('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.deleteFoodLog);
+// A correction to one row - size, label or meal. Separate from POST above for
+// the same reason PUT and POST are separate: POST makes a row and this one
+// moves an existing one, and a client that cannot tell them apart can double
+// the log it meant to fix. Registered with the rest of the food-log routes so
+// ledgerRoutingGates' "collection before parameterized sibling" rule keeps
+// holding.
+router.patch('/ledger/food-logs/:id', ...nutrition, ledgerCtrl.updateFoodLog);
+router.get('/ledger/food-totals/:localDate', ...nutrition, ledgerCtrl.getDayTotals);
+
+router.get('/ledger/saved-meals', ...nutrition, ledgerCtrl.listSavedMeals);
+router.post('/ledger/saved-meals', ...nutrition, ledgerCtrl.saveMeal);
+router.post('/ledger/saved-meals/:id/log', ...nutrition, ledgerCtrl.logSavedMeal);
+router.patch('/ledger/saved-meals/:id', ...nutrition, ledgerCtrl.updateSavedMeal);
+router.delete('/ledger/saved-meals/:id', ...nutrition, ledgerCtrl.deleteSavedMeal);
+
+// ---- Photo food logging ---------------------------------------------------
+//
+// A fourth gate, on top of the three above, and the only route group in this
+// file that needs one.
+//
+// `foodPhotoLogging` is not a sub-feature of the ledger the way `healthMetrics`
+// and `healthLedger` are. Those two say "does this exist"; this one says
+// "may this user's image leave our infrastructure". It is a separate flag with
+// its own default because the ledger being on says nothing about consent to
+// third-party image processing, and a user who is happy to log dal by hand has
+// not agreed to a photo of their plate going to a model.
+//
+// Nutrition consent still applies on top of it. Both gates, in that order, so a
+// request is refused on the flag before the bytes are buffered - the multer
+// middleware sits after the gates for the same reason it does on the medical
+// route.
+// Recognition, upload and confirm: every route on which the image leaves this
+// service, or is recorded as having left it. Flag first (does this feature
+// exist), then the photo scope (has this person agreed to send it), then
+// nutrition underneath both — a photo of a meal is still a food log entry, so
+// turning the diary off stops the photo path too even if photo consent stands.
+const photo = [
+  ...nutrition,
+  requireFeatureFlag('foodPhotoLogging'),
+  requirePhotoConsent,
+];
+
+router.post(
+  '/ledger/food-photos/recognize',
+  ...photo,
+  uploadFoodPhotoMiddleware,
+  ledgerCtrl.recognizeFoodPhoto,
+);
+// The on-device matcher's storage half (foodEmbeddingService.js): store and
+// claim a photo that never reaches the vision model. Same gates as recognize -
+// the photo still leaves the phone, so the flag and consent that make recognize
+// legal apply to it exactly, and the multer still buffers the bytes after them.
+router.post(
+  '/ledger/food-photos/upload',
+  ...photo,
+  uploadFoodPhotoMiddleware,
+  ledgerCtrl.uploadFoodPhoto,
+);
+// Not flag-gated on `foodPhotoLogging`. A photo that was confirmed while the
+// flag was on has to stay readable after an admin switches it off - and a read
+// mints a signed link for an image this service already holds, so it introduces
+// no new capability to gate.
+router.get('/ledger/food-logs/:id/photo', ...nutrition, ledgerCtrl.getFoodPhotoLink);
+router.post('/ledger/food-photos/confirm', ...photo, ledgerCtrl.confirmFoodPhoto);
+// Opt-in research copy of a photo already sent for recognition. Same gates as
+// recognise: it is a copy of the same image, under the same consent.
+router.post('/ledger/food-photos/contribute', ...photo, ledgerCtrl.contributeFoodPhoto);
+// Account preference read remains reachable when collection is disabled.
+router.get('/ledger/food-photos/sharing', requireAuth, ledgerCtrl.getFoodPhotoSharing);
+router.post('/ledger/food-photos/sharing', ...photo, requireAdult, ledgerCtrl.setFoodPhotoSharing);
+
+// Withdrawal is authenticated only, never flag- or consent-gated: a user must
+// be able to take their copies back after switching either off.
+router.delete('/ledger/food-photos/contributions', requireAuth, ledgerCtrl.withdrawFoodPhotoContributions);
+
+
+// ---- Appointments ---------------------------------------------------------
+//
+// Gated on `medical` (medical_records consent) — appointments are medical
+// records, not food logs. The score engine reads PlanItem kind
+// doctor_appointment; these routes are for the appointment calendar.
+router.get('/ledger/appointments', ...medical, appointmentCtrl.listAppointments);
+router.post('/ledger/appointments', ...medical, appointmentCtrl.createAppointment);
+// Next BEFORE /:id. Express matches in registration order, so
+// '/appointments/next' has to be declared before a route that would treat
+// 'next' as an id - otherwise the next-appointment lookup 404s forever against
+// an appointment that does not exist.
+router.get('/ledger/appointments/next', ...medical, appointmentCtrl.getNextAppointment);
+router.get('/ledger/appointments/:id', ...medical, appointmentCtrl.getAppointment);
+router.patch('/ledger/appointments/:id', ...medical, appointmentCtrl.updateAppointment);
+router.delete('/ledger/appointments/:id', ...medical, appointmentCtrl.deleteAppointment);
+
+// ---- Score ----------------------------------------------------------------
+//
+// The READS and WRITES are planGated (coachJourney + basic scope):
+// a coach user's score is derived from the plan the coach built, so the
+// `basic` scope is the consent that covers reading and writing it.
+router.get('/ledger/score', ...planGated, ledgerCtrl.getScoreSeries);
+router.get('/ledger/score/calm', ...planGated, ledgerCtrl.getCalmSeries);
+router.get('/ledger/score/safety', ...planGated, ledgerCtrl.getSafetyFlag);
+router.put('/ledger/score/calm-mode', ...planGated, ledgerCtrl.setCalmMode);
+router.get('/ledger/score/pause', ...planGated, ledgerCtrl.getPause);
+router.put('/ledger/score/pause', ...planGated, ledgerCtrl.setPause);
+router.delete('/ledger/score/pause', ...planGated, ledgerCtrl.clearPause);
+// Attainment - whether the goal is being met, as distinct from what the day was
+// worth. A separate route rather than a field on the score series because it
+// answers a different question from different evidence: the score reads
+// snapshots, this reads the weight series. A client that could conflate them by
+// accident is a client we would rather not ship.
+router.get('/ledger/attainment', ...planGated, ledgerCtrl.getAttainment);
+// The score's target: the number the user is aiming at and the window they gave
+// themselves. Separate from /ledger/attainment on purpose - attainment reads the
+// weight series and answers "is the goal being met", this reads the score chain
+// and answers "am I getting to the number I set". Different evidence, different
+// question, and a client that could conflate them by accident is a client we
+// would rather not ship.
+router.get('/ledger/score/target', ...planGated, ledgerCtrl.getScoreTarget);
+router.get('/ledger/score/blended', ...planGated, ledgerCtrl.getBlendedScore);
+router.put('/ledger/score/target', ...planGated, ledgerCtrl.setScoreTarget);
+router.delete('/ledger/score/target', ...planGated, ledgerCtrl.clearScoreTarget);
+router.post('/ledger/score/:localDate/close', ...planGated, ledgerCtrl.closeScoreDay);
+
+// Rewards
+router.post('/ledger/rewards/evaluate', ...nutrition, ledgerCtrl.evaluateMyReward);
+router.post('/internal/rewards/evaluate', requireInternal, ledgerCtrl.evaluateRewards);
+
+// AI Plans
+router.post('/ledger/ai/prescribe', ...nutrition, ledgerCtrl.prescribeAiPlan);
+router.get('/ledger/biometrics/trajectory', ...nutrition, ledgerCtrl.getBiomarkerTrajectory);
+router.get('/ledger/biometrics/correlation', ...nutrition, ledgerCtrl.getMarkerCorrelation);
+router.post('/ledger/biometrics/batch-consistency', ...nutrition, ledgerCtrl.getBatchConsistency);
+router.post('/internal/ledger/biometrics/batch-consistency', requireInternal, ledgerCtrl.getBatchConsistency);
+
+// ---- Medical documents ----------------------------------------------------
+//
+// The only place in this service that stores a medical record. The multer
+// middleware runs after the consent gate, so a request without consent is
+// rejected before the bytes are read into memory - the order matters, because
+// buffering an upload is the expensive part and a user who has not consented
+// should not make the server hold their file at all.
+router.get('/ledger/medical-documents', ...medical, ledgerCtrl.listMedicalDocuments);
+router.post('/ledger/medical-documents/plan-note', ...medical, ledgerCtrl.createDoctorPlanNote);
+router.post(
+  '/ledger/medical-documents',
+  ...medical,
+  uploadMedicalDocumentMiddleware,
+  ledgerCtrl.uploadMedicalDocument,
+);
+router.get('/ledger/medical-documents/:id/link', ...medical, ledgerCtrl.getMedicalDocumentLink);
+router.delete('/ledger/medical-documents/:id', ...medical, ledgerCtrl.deleteMedicalDocument);
+
+// ---- Nightly sweep (internal) --------------------------------------------
+router.post('/internal/ledger/close-days', requireInternal, ledgerCtrl.runDayCloseSweepInternal);
+// Daily photo sweep: unconfirmed photos past 24 h, expired research copies and
+// cache entries. Fired by .github/workflows/sweep-food-photos.yml.
+router.post('/internal/ledger/food-photos/sweep', requireInternal, ledgerCtrl.sweepFoodPhotos);
+
+export default router;

@@ -1,6 +1,11 @@
 import * as personalisationService from '../services/personalisationService.js';
 import { recordAudit } from '../services/auditService.js';
 import { serializeDecimals } from '../utils/serializeDecimals.js';
+import {
+  HOME_EQUIPMENT, TRAINING_SPACES, validateHomeEquipment, validateTrainingSpace,
+  suggestHomeEquipment,
+} from '../services/homeSetup.js';
+import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 
 const EXPERIENCE_LEVELS = ['none', 'lt_1_year', 'one_to_three_years', 'over_three_years'];
 const ENERGY_PATTERNS = ['morning', 'afternoon', 'evening'];
@@ -17,9 +22,15 @@ const WEIGHT_MAX_KG = 400;
 export const getProfile = async (req, res) => {
   try {
     const profile = await personalisationService.getProfileService(req.userId);
+    // Best-effort hint for the home-setup sheet; never fails the profile read.
+    const authUser = await fetchUserProfileInternal(req.userId);
     res.json({
       data: {
         ...serializeDecimals(profile),
+        suggestedHomeEquipment: suggestHomeEquipment(
+          authUser?.fitnessGoals,
+          profile?.homeEquipment,
+        ),
         // The client renders the chip sets from this rather than hardcoding
         // its own copy, so adding a zone/level later needs no app release.
         options: {
@@ -27,6 +38,8 @@ export const getProfile = async (req, res) => {
           energyPatterns: ENERGY_PATTERNS,
           injuryZones: INJURY_ZONES,
           programmingModes: PROGRAMMING_MODES,
+          homeEquipment: HOME_EQUIPMENT,
+          trainingSpaces: TRAINING_SPACES,
         },
       },
     });
@@ -37,8 +50,10 @@ export const getProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay } =
-      req.body || {};
+    const {
+      heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay,
+      homeEquipment, trainingSpace, homeSetupAnswered,
+    } = req.body || {};
 
     if (heightCm !== undefined && heightCm !== null) {
       const h = Number(heightCm);
@@ -72,8 +87,21 @@ export const updateProfile = async (req, res) => {
       }
     }
 
+    const equipmentError = validateHomeEquipment(homeEquipment);
+    if (equipmentError) return res.status(400).json({ error: equipmentError });
+    const spaceError = validateTrainingSpace(trainingSpace);
+    if (spaceError) return res.status(400).json({ error: spaceError });
+
     const profile = await personalisationService.upsertProfileService(req.userId, {
       heightCm, setupWeightKg, experienceLevel, injuryZones, energyPattern, preferredRestDay,
+      // An explicit null clears (the same "I'd rather not say" rule as every
+      // other field here); arrays are stored de-duplicated.
+      // String[] can't hold null in Postgres/Prisma, so "clear" is [].
+      homeEquipment: homeEquipment === null
+        ? []
+        : Array.isArray(homeEquipment) ? [...new Set(homeEquipment)] : homeEquipment,
+      trainingSpace,
+      homeSetupAnswered: homeSetupAnswered === true,
     });
     res.json({ data: serializeDecimals(profile) });
   } catch (err) {

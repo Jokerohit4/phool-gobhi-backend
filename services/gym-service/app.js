@@ -1,14 +1,15 @@
 import './bootstrap-secrets.js';
+import { analyticsMiddleware } from './utils/analyticsTransport.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { connectDB } from './db.js';
 connectDB();
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db/prisma.js';
 import gymRoutes from './routes/gym.js';
 
 const app = express();
-const prisma = new PrismaClient();
+app.use(analyticsMiddleware());
 
 // Middleware
 app.use(express.json());

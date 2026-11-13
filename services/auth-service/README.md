@@ -1,63 +1,54 @@
-# Phool Gobhi Backend - Polyglot Architecture
+# Auth Service
 
-This backend is built using a polyglot architecture, where different services use different technologies and databases based on their specific needs.
+Port: 5001
 
-## Services
-
-### Auth Service (Port: 5001)
 - Built with Node.js and Express
 - Uses PostgreSQL (via Prisma) for user authentication data
-- Handles user authentication, JWT token generation, and session management
-- Dependencies: express, jsonwebtoken, bcrypt, prisma
-
-### User Service (Port: 5002)
-- Built with Node.js and Express
-- Uses MongoDB for user profile and related data
-- Handles user profile management, preferences, and user-related operations
-- Dependencies: express, mongoose
+- Handles user authentication, JWT token generation, OTP-based login, and session management
+- Dependencies: express, jsonwebtoken, prisma
 
 ## Setup
 
-1. Install dependencies for each service:
+1. Install dependencies:
 ```bash
 cd services/auth-service && npm install
-cd services/user-service && npm install
 ```
 
 2. Set up environment variables:
-Create `.env` files in each service directory with the following variables:
-
-Auth Service (.env):
+Create `.env` file with:
 ```
 AUTH_SERVICE_PORT=5001
 DATABASE_URL="postgresql://user:password@localhost:5432/auth_db"
 JWT_SECRET="your-jwt-secret"
 ```
 
-User Service (.env):
-```
-USER_SERVICE_PORT=5002
-MONGODB_URI="mongodb://localhost:27017/user_db"
-```
-
-3. Start the services:
+3. Start the service:
 ```bash
-# Start Auth Service
-cd services/auth-service && npm run dev
-
-# Start User Service
-cd services/user-service && npm run dev
+npm run dev
 ```
 
 ## API Endpoints
 
-### Auth Service (http://localhost:5001)
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/logout
-- GET /health
+- `POST /api/auth/signup` - User registration
+- `POST /api/auth/login` - User login (OTP-based)
+- `POST /api/auth/refresh-token` - Refresh JWT token
+- `POST /api/auth/logout` - Logout and revoke tokens
+- `POST /api/auth/send-otp` - Request OTP for login
+- `POST /api/auth/verify-otp` - Verify OTP and login
+- `GET /api/auth/app-config` - Public app configuration
+- `GET /api/auth/otp-config` - OTP provider configuration
+- `GET /health` - Health check
 
-### User Service (http://localhost:5002)
-- GET /api/users/profile
-- PUT /api/users/profile
-- GET /health 
+## Session lifetime
+
+Access tokens last 15 minutes. Refresh tokens last 30 days, and each successful
+rotation issues a successor valid for another 30 days. Regular use keeps a session
+signed in without a fixed cutoff from the original login; after 30 days without
+a successful refresh, login is required again.
+
+Existing unexpired seven-day tokens adopt the rolling expiry on their next
+successful refresh. Expired and revoked tokens remain invalid. Concurrent refresh
+retries within the grace window receive the same successor and its stored expiry;
+they do not extend it again. Explicit logout and late token reuse still revoke the
+entire rotation family. No database migration or mobile update is required for
+this lifetime change; it takes effect when auth-service is deployed.

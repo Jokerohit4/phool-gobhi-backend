@@ -1,3 +1,5 @@
+> Analytics migration: runtime analytics configuration now targets BigQuery/Pub/Sub; see [runbook](../docs/analytics-bigquery-runbook.md). PostgreSQL provider notes below are historical. Application transaction stores remain on Neon.
+
 # `deploy/services.json`
 
 Declarative source of truth for what each Cloud Run service deploys with. Replaces the
@@ -29,7 +31,13 @@ mistaken for transcription errors):
 - **Prod analytics rollout (2026-07-23):** all six services now carry `ANALYTICS_PROVIDER=postgres`
   in prod, same as dev — but pointed at a **separate, dedicated** Neon DB (secret base name
   `analytics-database-url`, not `db-url`), not the shared dev/booking DB dev still uses. Deliberate:
-  prod analytics traffic never touches the real transactional booking DB.
+  prod analytics traffic never touches the real transactional booking DB. **All prod services are
+  now on Postgres** (2026-09-24 verified: gateway + all 8 services, `ANALYTICS_PROVIDER=postgres`,
+  events flowing into the dedicated Neon analytics DB — 6,570 events / 1,073 users cumulative). The
+  key lives as `ANALYTICS_DATABASE_URL` inside each service's `*-secrets-prod` consolidated JSON
+  (`DATABASE_URL` is NOT a substitute). `challenge-service` and `health-service` were missing it
+  until 2026-09-24 — added to both secret payloads and services redeployed so their `:latest` secret
+  refs mount the key.
 - **wallet-service**: prod was missing `GYM_SERVICE_URL` until 2026-08-06 — harmless while
   wallet-service had no code path calling gym-service, but `purchaseSubscriptionWithWallet`
   (shipped 2026-08-03) needs it to look up gym plan pricing, and its `fetchGymForSubscription`

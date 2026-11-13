@@ -72,6 +72,34 @@ model Booking {
   // the public aggregate stat). attendanceMethod records how it was proven;
   // null means this predates the feature or was never verified.
   attendedAt               DateTime?
+
+  // When the "your session starts soon" push went out. Claimed with a
+  // conditioned updateMany before sending, so an overlapping or retried sweep
+  // run can never remind the same booking twice. Null = not reminded.
+  reminderSentAt           DateTime?
+
+  // What this booking's cancellation owes the customer (null = nothing, e.g.
+  // subscription-covered) and when it was credited. A cancelled row with a
+  // due amount and no refundedAt is retried by the hourly settlement sweep.
+  refundDueAmount          Decimal?      @db.Decimal(19, 2)
+  refundedAt               DateTime?
+
+  // The partner payout counterpart of refundDueAmount/refundedAt above. A
+  // completion flips the booking to `completed` BEFORE the partner wallet
+  // credit; if that credit failed it was only logged, and since the hourly
+  // sweep scans only `started` rows nothing would ever retry it — the partner
+  // silently lost the session's share. payoutAmount records what completion
+  // owes the partner (null = nothing owed, e.g. an "upfront" subscription whose
+  // partnerShare is null, or a SaaS bank-settlement visit) and payoutCreditedAt
+  // when the credit succeeded, so the sweep can retry every completed-but-
+  // unpaid booking under the same idempotency key.
+  payoutAmount             Decimal?      @db.Decimal(19, 2)
+  payoutCreditedAt         DateTime?
+
+  // Set when the gym, not the customer, cancelled. The customer always gets
+  // a full refund then, and is shown gymCancelReason.
+  cancelledByGymAt         DateTime?
+  gymCancelReason          String?
   attendanceMethod         AttendanceMethod?
   attendanceVerifiedBy     Int?
   attendanceOverrideReason String?
@@ -119,6 +147,11 @@ model Booking {
   // page/relation granularity under load, causing spurious serialization
   // conflicts for unrelated concurrent bookings.
   @@index([classId, date])
+  // Customer-scoped reads: booking list (customerId, newest first), attendance
+  // history / streaks (customerId, attendedAt) and the subscription visit count.
+  @@index([customerId, createdAt])
+  @@index([customerId, attendedAt])
+  @@index([subscriptionId])
   @@schema("booking")
 }
 
@@ -281,14 +314,85 @@ model AttendanceWarning {
 // 'member_checkin') so linked members earn the same streaks/coins as
 // booking customers, per the 2026-08-27 decision.
 model MemberAttendance {
-  id          Int      @id @default(autoincrement())
-  customerId  Int
-  gymId       Int
-  date        String
-  checkedInAt DateTime @default(now())
+  id           Int       @id @default(autoincrement())
+  customerId   Int
+  gymId        Int
+  date         String
+  checkedInAt  DateTime  @default(now())
+  // When a linked member taps "check out" on the work-out home the same day.
+  // Null means they're still checked in (or never checked out yet). One
+  // check-in per customer+gym+day is still guaranteed by the unique below —
+  // a same-day re-entry after checking out re-nulls this column rather than
+  // creating a second row (see bookingService.memberCheckIn).
+  checkedOutAt DateTime?
 
   @@unique([customerId, gymId, date])
   @@index([gymId, date])
   @@index([customerId])
+  @@schema("booking")
+}
+
+// A check-in at a gym we have no partnership with — the customer told us they
+// train there (see gym-service's UnclaimedGym), and proved presence with GPS.
+//
+// Structurally close to MemberAttendance above, and deliberately NOT a
+// Booking: there is no slot, no price, no capacity and no partner to pay, so
+// every column Booking carries would be null or meaningless here. The one
+// thing this shares with a booking is that it produces an AttendanceEventLog
+// row, which is what makes it count toward streaks and progress.
+//
+// Deliberately stores NO coordinates. The GPS fix is checked against the
+// gym's geofence at write time and then discarded: keeping it would build a
+// location history of a person in a service that is deliberately excluded
+// from the DPDPA erasure fan-out (see auth-service's eraseAcrossServices —
+// booking-service is skipped precisely because it holds no PII, and that
+// exclusion is only safe while it stays true). The proof is the act of
+// passing the check, not the reading that passed it.
+//
+// The unique constraint is the dedupe: one check-in per person per gym per
+// day. It lives here rather than relying on challenge-service's
+// idempotencyKey because that service's ingest route is behind the
+// streaksCoins flag, so while that flag is off it would accept nothing and
+// dedupe would silently not exist.
+model IndependentCheckIn {
+  id              Int      @id @default(autoincrement())
+  customerId      Int
+  // gym-service's UnclaimedGym.id — NOT a Gym.id. Bare Int, unenforced,
+  // same cross-service convention as every other id here.
+  unclaimedGymId  Int
+  // IST calendar date ("YYYY-MM-DD"), matching MemberAttendance's convention.
+  date            String
+  checkedInAt     DateTime @default(now())
+
+  @@unique([customerId, unclaimedGymId, date])
+  @@index([customerId, checkedInAt])
+  @@schema("booking")
+}
+
+// Every time someone comes into or goes out of a gym, for members and for guests
+// with a booking alike. MemberAttendance keeps one row per day (a re-entry just
+// clears checkedOutAt), so it cannot say when anyone went out or came back; this
+// can. It feeds the partner's live occupancy and heat map, and decides whether a
+// finished workout's coins are paid (only a check-out by scan releases them).
+model GymPresenceEvent {
+  id         Int      @id @default(autoincrement())
+  gymId      Int
+  customerId Int
+  // "in" or "out".
+  kind       String
+  // Who the person was at the gym: "member" (attendance-SaaS link) or "booking".
+  source     String
+  // How it happened: "checkin" (an arrival), "scan" (checked out with the poster
+  // QR, present at the gym), "tap" (the in-app button, no proof of presence) or
+  // "auto" (closed by the server after the day ended). Only "scan" releases coins.
+  method     String
+  bookingId  Int?
+  // The IST calendar day, so "today" never depends on the server's own zone.
+  date       String
+  at         DateTime @default(now())
+
+  @@index([gymId, at])
+  @@index([gymId, date])
+  @@index([customerId, gymId, date, at])
   @@schema("booking")
 }

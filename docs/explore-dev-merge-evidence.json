@@ -1,0 +1,99 @@
+{
+  "recordedAt": "2026-10-24T15:06:55.595715+00:00",
+  "app": {
+    "testedMergeCommit": "6a91fac2d9077b919abd06381f5d5353110bdf49",
+    "testedTree": "186954c42783b81b9d1ce07432de3f77f9b49915",
+    "localDevCommit": "0bd4ed0c083fc66f0158f36b3f438ed6d59fed3e",
+    "featureInput": "b7fc47d752937e765674cdb2e84bdf603ccf6da7",
+    "incorporatedDevCommits": [
+      "356e1b1",
+      "0bd4ed0"
+    ],
+    "fullSuitePassed": 5209,
+    "wholeAppAnalysis": "no issues",
+    "localMergeChecksPassed": true,
+    "latestRemoteVerified": false,
+    "artifacts": [
+      {
+        "path": ".dart_tool/dev-merge-full-suite.log",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/explore-dev-merge-review",
+        "sha256": "8c2f532de9b40d3189fd6189536fef9794eabd0a10d1207e4020978b5eb99324",
+        "bytes": 1949102
+      },
+      {
+        "path": ".dart_tool/dev-merge-analysis.log",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/explore-dev-merge-review",
+        "sha256": "fe718021b2b894c0b60965c49a5152331252994453ce0ccee2ff2358dedfa40f",
+        "bytes": 200
+      }
+    ]
+  },
+  "backend": {
+    "sourceCommit": "a70e9015f64b46f545599025c8d9f1b6fc5a6eba",
+    "localDevCommit": "5214fa8dd8242093e542bd89a169dcf9321753b2",
+    "input": "ec862f172b1ffaea542b332693e2c1c0c391afcd",
+    "boundaryTestsPassed": 32,
+    "finalAuditTestsPassed": 5,
+    "ciCollectorSources": 79,
+    "runtimeOrMigrationChangesInReview": false,
+    "hostedRunTriggered": false,
+    "latestRemoteVerified": false,
+    "actualDevInventoryExecuted": false,
+    "genuineUpgradeExecuted": false,
+    "readyForDevMerge": false,
+    "artifacts": [
+      {
+        "path": "tools/explore-e10/.runtime/dev-merge/boundary-tests.log",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review",
+        "sha256": "eeab5d4b8a1157af127222d1b7f383e16ed6a81c23703ec334f22dbde42cf0e0",
+        "bytes": 6360
+      },
+      {
+        "path": "tools/explore-e10/.runtime/dev-merge/audit-unit-final.log",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review",
+        "sha256": "81135cccb9d805baf030820fa9b6d8cb7f69f1747d9047e61bf311890bb39db3",
+        "bytes": 1110
+      },
+      {
+        "path": "tools/explore-e10/.runtime/dev-merge/feature-push-attempt.log",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review",
+        "sha256": "70171704b5ef50079840d04c57dfccda69b1e3c9e10e5be4edbf794da6622da0",
+        "bytes": 1004
+      },
+      {
+        "path": "tools/explore-e10/.runtime/dev-merge/dev-baseline-attempt.json",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review",
+        "sha256": "7cef0c9b148b195760a41dd9e46521232884c146802a377cc86c90e4cbd535f4",
+        "bytes": 10109
+      },
+      {
+        "path": "tools/explore-e10/ci-evidence/ci-source.json",
+        "validationRoot": "C:/Users/rohit/Phool-Gobhi/wt/backend-dev-merge-review",
+        "sha256": "eb9480dae9bd388f64e73c9d8c0d05d502b22612b185f117a79eaf72c9ce2a02",
+        "bytes": 19645
+      }
+    ]
+  },
+  "externalBlockers": [
+    {
+      "operation": "GitHub run lookup",
+      "result": "network socket access denied; credential validity cannot be determined by this failed lookup"
+    },
+    {
+      "operation": "Normal feature branch push",
+      "sourceCommit": "a70e9015f64b46f545599025c8d9f1b6fc5a6eba",
+      "branch": "feature/explore-e10-backend",
+      "exitCode": 128,
+      "result": "could not connect to github.com:443; no remote change"
+    },
+    {
+      "operation": "Dev Secret Manager access",
+      "result": "dev_secret_access_unavailable; stopped before PostgreSQL connection"
+    }
+  ],
+  "combinedDevMergeReady": false,
+  "devMerged": false,
+  "deploymentPerformed": false,
+  "flagsActivated": false,
+  "continuation": "Authorized GitHub connectivity plus dev Secret Manager/DB access; verify remote refs, exact-source hosted results, read-only dev inventory and appropriate isolated existing-lineage upgrade rehearsal."
+}

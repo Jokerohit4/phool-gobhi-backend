@@ -36,6 +36,8 @@ export async function notifyMatch(userId, otherUserName) {
         title: "It's a match!",
         body: `You and ${otherUserName} both liked each other. Say hi!`,
       },
+      // Lets the app route a tap to the matches list instead of just opening.
+      data: { type: 'buddy_match' },
       android: {
         priority: 'high',
         notification: { channelId: 'buddy_match_channel' },

@@ -1,0 +1,23 @@
+-- FR-08 grows a third nudge: "you are behind the score target you set."
+--
+-- The score target (scoreTargetPoints / scoreTargetFrom / scoreTargetUntil on
+-- HealthGoal) already tells a user, on their own card, whether they are on
+-- track. This adds the one nudge that can carry that fact out to a person who
+-- is not looking at the card - which is the whole point of a nudge.
+--
+-- Why a new enum value rather than reusing `comeback`: a comeback says "you
+-- have been gone"; this says "you are here and behind". They describe
+-- different states, have different timing rules (the target one waits longer
+-- between repeats, see nudgeService), and - the deciding reason - a user must
+-- be able to switch them off independently. Folding the target nudge into
+-- `comeback` would mean turning off re-engagement to silence a pace reminder
+-- they never wanted, or the reverse.
+--
+-- IF NOT EXISTS matches the precedent in the run-tracker migration and keeps
+-- this re-runnable against a database that was partially applied.
+--
+-- NOTE: ALTER TYPE ... ADD VALUE cannot run inside the same transaction as a
+-- statement that uses the new value. This file adds the value and nothing
+-- else, so there is nothing here to use it; if it is ever extended, split any
+-- statement reading `target` into a later migration.
+ALTER TYPE "health"."NudgeType" ADD VALUE IF NOT EXISTS 'target';

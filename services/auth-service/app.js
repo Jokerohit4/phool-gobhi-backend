@@ -1,15 +1,27 @@
 import './bootstrap-secrets.js';
+import { analyticsMiddleware } from './utils/analyticsTransport.js';
 import dotenv from 'dotenv';
 dotenv.config();
 import { connectDB } from './db.js';
 connectDB();
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from './db/prisma.js';
 import authRoutes from './routes/auth.js';
+import { errorResponse } from './exploration/contracts.js';
 import userProfileRoutes from './routes/userProfile.js';
+import deviceRoutes from './routes/devices.js';
+import gymLinkRoutes from './routes/gymLinks.js';
+import gymMemberRoutes from './routes/gymMembers.js';
+import { startPickupDelivery, deliverPickupBatch, isExploreRequest } from './exploration/telemetry.js';
+import { deliverReceiptEvent } from './utils/analytics.js';
 
 const app = express();
-const prisma = new PrismaClient();
+app.use(analyticsMiddleware({
+  // Explore requests only — see isExploreRequest for why not every request.
+  beforeDrain: (req) => isExploreRequest(req)
+    ? deliverPickupBatch({db:prisma,send:deliverReceiptEvent,limit:1})
+    : undefined,
+}));
 
 // Middleware
 app.use(express.json());
@@ -17,6 +29,18 @@ app.use(express.json());
 // Routes
 app.use('/', authRoutes);
 app.use('/users', userProfileRoutes);
+// Coach-journey routers (mounted 2026-10-16 as empty stubs so the paths below
+// are reserved under /api/auth before the Group B owners fill them in):
+//   devices  - POST /devices, GET /internal/devices/:installId/users,
+//              GET /internal/users/:id/devices
+//   gymLinks - POST/DELETE /gym-links/self, POST /me/notice/clear,
+//              POST /internal/gym-links/checked-in
+// Both are mounted at '/' beside authRoutes for the same reason authRoutes is:
+// the gateway already strips the /api/auth prefix, and these paths are flat
+// under it.
+app.use('/', deviceRoutes);
+app.use('/', gymLinkRoutes);
+app.use('/', gymMemberRoutes);
 
 app.get('/health', async (req, res) => {
   try {
@@ -33,6 +57,9 @@ app.get('/health', async (req, res) => {
 // upload failures return the same JSON shape as every other error path
 // instead of falling through to Express's default HTML response.
 app.use((err, req, res, next) => {
+  if (req.path === '/explore' || req.path.startsWith('/explore/')) {
+    return errorResponse(res, err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large' ? 'INVALID_REQUEST' : 'INTERNAL_ERROR');
+  }
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'File is too large' });
   }
@@ -43,5 +70,6 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || process.env.AUTH_SERVICE_PORT || 5001;
 app.listen(PORT, () => {
+  startPickupDelivery({db:prisma,send:deliverReceiptEvent});
   console.log(`🚀 Auth Service running on port ${PORT}`);
 });
