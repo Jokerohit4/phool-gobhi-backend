@@ -102,6 +102,12 @@ export async function grantCycleConsentService(userId, { privacyVersion } = {}) 
 /// data — deletion is its own explicit act (deleteAllCycleDataService), because
 /// silently destroying months of someone's records when they toggle a switch
 /// off is not a decision this function should make for them.
+///
+/// What it DOES do is hand back the one thing the feature set on the user's
+/// behalf: a low_impact_recovery that this service applied. With consent off the
+/// sync no longer runs, so nothing else would ever release it, and the user
+/// would keep being programmed from a period she has stopped sharing. A mode she
+/// chose herself is never touched (see releaseOwnedRecoveryMode).
 export async function revokeCycleConsentService(userId) {
   const consent = await prisma.healthConsent.findUnique({ where: { userId } });
   if (consent) {
@@ -110,11 +116,29 @@ export async function revokeCycleConsentService(userId) {
       data: { scopes: (consent.scopes || []).filter((s) => s !== CYCLE_SCOPE) },
     });
   }
+  await releaseOwnedRecoveryMode(prisma, userId);
   await prisma.cycleTrackingProfile.updateMany({
     where: { userId },
-    data: { consentAt: null },
+    data: { consentAt: null, managesProgrammingMode: false },
   });
   return { granted: false };
+}
+
+/// Puts PersonalisationProfile.programmingMode back to neutral, but ONLY when the
+/// cycle feature is what set it: the profile says it owns the mode and the mode
+/// is the one it applies (low_impact_recovery). `female_default` and any mode
+/// the user picked are left exactly as they are. `db` is the prisma client or a
+/// transaction client, so a caller deleting the profile can do this in the same
+/// transaction: the profile is the only record of ownership, and once it is gone
+/// nothing could ever release the mode.
+async function releaseOwnedRecoveryMode(db, userId) {
+  const profile = await db.cycleTrackingProfile.findUnique({ where: { userId } });
+  if (!profile || profile.managesProgrammingMode !== true) return false;
+  const { count } = await db.personalisationProfile.updateMany({
+    where: { userId, programmingMode: 'low_impact_recovery' },
+    data: { programmingMode: 'neutral' },
+  });
+  return count > 0;
 }
 
 export async function getProfileService(userId) {
@@ -238,7 +262,12 @@ export async function updateProfileService(userId, input) {
   if (averageCycleLengthDays != null) data.averageCycleLengthDays = Number(averageCycleLengthDays);
   if (averagePeriodLengthDays != null) data.averagePeriodLengthDays = Number(averagePeriodLengthDays);
   if (lastPeriodStartDate !== undefined) {
-    data.lastPeriodStartDate = lastPeriodStartDate ? new Date(lastPeriodStartDate) : null;
+    // Normally derived from the logged periods (resyncLastPeriodStart); this is
+    // the one way to state it without logging a period, so it gets the same
+    // checks a logged start does rather than being stored as given.
+    data.lastPeriodStartDate = lastPeriodStartDate
+      ? dayFromIso(parsePeriodDay(lastPeriodStartDate, 'lastPeriodStartDate', { notFuture: true }))
+      : null;
   }
 
   await prisma.cycleTrackingProfile.upsert({
@@ -259,11 +288,15 @@ export async function logPhaseService(userId, { startDate, endDate, phase }) {
     throw { status: 400, error: `phase must be one of: ${VALID_PHASES.join(', ')}` };
   }
 
+  const startIso = parsePeriodDay(startDate, 'startDate', { notFuture: true });
+  const endIso = endDate ? parsePeriodDay(endDate, 'endDate') : null;
+  await assertPeriodSpan(userId, { phase, startIso, endIso });
+
   const entry = await prisma.cyclePhaseEntry.create({
     data: {
       userId,
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
+      startDate: dayFromIso(startIso),
+      endDate: endIso ? dayFromIso(endIso) : null,
       phase,
       // Always user_logged here — predictions are written by the derivation
       // below, never by a request. Keeping the two apart is what stops a
@@ -279,6 +312,66 @@ export async function logPhaseService(userId, { startDate, endDate, phase }) {
 }
 
 const VALID_PHASES = ['menstrual', 'follicular', 'ovulation', 'luteal'];
+
+/// A calendar day from a request, as YYYY-MM-DD, or a 400. Accepts a plain date
+/// or an ISO timestamp (its UTC date, which is what a @db.Date column stores
+/// anyway); anything else is a typo, not something to hand to the database and
+/// answer with a 500. `notFuture` refuses a day that has not happened yet: these
+/// are records of what happened, not plans.
+function parsePeriodDay(value, field, { notFuture = false } = {}) {
+  const text = typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : '';
+  const iso = validDayIso(/^\d{4}-\d{2}-\d{2}T/.test(text) ? text.slice(0, 10) : text);
+  if (!iso) throw { status: 400, error: `${field} must be a valid date (YYYY-MM-DD)` };
+  if (notFuture && iso > todayIso()) {
+    throw { status: 400, error: `${field} cannot be in the future`, code: 'DATE_IN_FUTURE' };
+  }
+  return iso;
+}
+
+/// The checks that need the other entries. Menstrual periods only, because that
+/// is the phase the recovery window, the prediction and the calendar are built on:
+///   - the end is not before the start;
+///   - a period is at most MAX_PERIOD_DAYS long (the same ceiling the average is
+///     held to; the client treats a longer open span as a forgotten log);
+///   - it does not overlap or duplicate another logged period. An open period
+///     counts as its start day only, so forgetting to close one never blocks the
+///     next; closing it later is checked against the others the same way.
+/// `selfId` excludes the entry being edited from its own comparison.
+async function assertPeriodSpan(userId, { phase, startIso, endIso, selfId = null }) {
+  if (endIso && endIso < startIso) {
+    throw { status: 400, error: 'endDate cannot be before startDate', code: 'PERIOD_END_BEFORE_START' };
+  }
+  if (phase !== 'menstrual') return;
+
+  if (endIso && daysBetween(startIso, endIso) + 1 > MAX_PERIOD_DAYS) {
+    throw {
+      status: 400,
+      error: `A period cannot be longer than ${MAX_PERIOD_DAYS} days.`,
+      code: 'PERIOD_TOO_LONG',
+    };
+  }
+
+  const others = (await prisma.cyclePhaseEntry.findMany({
+    where: { userId, phase: 'menstrual', source: 'user_logged' },
+  })).filter((e) => e.phase === 'menstrual' && e.source === 'user_logged' && e.id !== selfId);
+  const end = endIso ?? startIso;
+  const clash = others.find((e) => {
+    const s = isoDay(e.startDate);
+    const t = e.endDate ? isoDay(e.endDate) : s;
+    return startIso <= t && s <= end;
+  });
+  if (clash) {
+    throw {
+      status: 409,
+      error: 'That overlaps a period you already logged. Edit that one instead.',
+      code: 'PERIOD_OVERLAP',
+    };
+  }
+}
+
+function daysBetween(fromIso, toIso) {
+  return Math.round((dayFromIso(toIso) - dayFromIso(fromIso)) / MS_PER_DAY);
+}
 
 /// lastPeriodStartDate is derived, not independent: it is the start of the most
 /// recent user-logged period. Recomputing it after every write means a
@@ -315,14 +408,20 @@ export async function updatePhaseService(userId, id, input = {}) {
     throw { status: 400, error: 'startDate cannot be empty' };
   }
 
-  const nextStart = startDate !== undefined ? new Date(startDate) : entry.startDate;
-  const nextEnd = endDate !== undefined ? (endDate ? new Date(endDate) : null) : entry.endDate;
-  if (Number.isNaN(nextStart.getTime()) || (nextEnd && Number.isNaN(nextEnd.getTime()))) {
-    throw { status: 400, error: 'Invalid date' };
+  const startIso = startDate !== undefined
+    ? parsePeriodDay(startDate, 'startDate', { notFuture: true })
+    : isoDay(entry.startDate);
+  const endIso = endDate !== undefined
+    ? (endDate ? parsePeriodDay(endDate, 'endDate') : null)
+    : (entry.endDate ? isoDay(entry.endDate) : null);
+  const nextPhase = phase !== undefined ? phase : entry.phase;
+  // Only when something that affects the span changed, so an entry saved before
+  // these checks existed is not locked out of an unrelated edit.
+  if (startDate !== undefined || endDate !== undefined || phase !== undefined) {
+    await assertPeriodSpan(userId, { phase: nextPhase, startIso, endIso, selfId: entry.id });
   }
-  if (nextEnd && nextEnd < nextStart) {
-    throw { status: 400, error: 'endDate cannot be before startDate' };
-  }
+  const nextStart = dayFromIso(startIso);
+  const nextEnd = endIso ? dayFromIso(endIso) : null;
 
   const data = {};
   if (startDate !== undefined) data.startDate = nextStart;
@@ -450,12 +549,18 @@ export async function releaseExpiredRecoveryMode(userId, currentMode) {
 }
 
 /// Explicit deletion of the cycle record, separate from revoking consent.
+///
+/// The training mode is released in the same transaction as the profile delete.
+/// The profile is the only record that the cycle feature set the mode, so
+/// deleting it first (or separately) would strand a mid-period user in
+/// low_impact_recovery with nothing left that could ever clear it.
 export async function deleteAllCycleDataService(userId) {
-  await prisma.$transaction([
-    prisma.cyclePhaseEntry.deleteMany({ where: { userId } }),
-    prisma.cycleDayLog.deleteMany({ where: { userId } }),
-    prisma.cycleTrackingProfile.deleteMany({ where: { userId } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    await releaseOwnedRecoveryMode(tx, userId);
+    await tx.cyclePhaseEntry.deleteMany({ where: { userId } });
+    await tx.cycleDayLog.deleteMany({ where: { userId } });
+    await tx.cycleTrackingProfile.deleteMany({ where: { userId } });
+  });
   return { deleted: true };
 }
 

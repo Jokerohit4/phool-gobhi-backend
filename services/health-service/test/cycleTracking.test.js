@@ -140,8 +140,17 @@ test('setup: stub Prisma, import once', async (t) => {
               personalisation = personalisation ? { ...personalisation, ...update } : { ...create };
               return personalisation;
             },
+            updateMany: async ({ where, data }) => {
+              const hit = personalisation
+                && (where.programmingMode == null || personalisation.programmingMode === where.programmingMode);
+              if (hit) personalisation = { ...personalisation, ...data };
+              return { count: hit ? 1 : 0 };
+            },
           };
-          this.$transaction = async (ops) => Promise.all(ops);
+          // Both forms Prisma has: a list of operations, or a callback handed a
+          // transaction client (here, the same fakes).
+          this.$transaction = async (ops) =>
+            typeof ops === 'function' ? ops(this) : Promise.all(ops);
         }
       },
       Prisma: {},
@@ -489,4 +498,232 @@ test("one person's day log is never read or removed through another's id", async
 
   await svc.deleteDayLogService(1, d);
   assert.equal(dayLogs.length, 0);
+});
+
+// --- Recovery mode is released with the data that justified it --------------
+
+test('delete-all mid-period hands back the mode the feature set', async () => {
+  // The profile is the only record that cycle sync owns the mode. Deleting it
+  // alone would leave her on low_impact_recovery with nothing able to clear it.
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+  assert.equal(personalisation.programmingMode, 'low_impact_recovery');
+  assert.equal(cycleProfile.managesProgrammingMode, true);
+
+  await svc.deleteAllCycleDataService(1);
+
+  assert.equal(cycleProfile, null);
+  assert.equal(personalisation.programmingMode, 'neutral');
+});
+
+test('delete-all leaves a mode the user chose alone', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  personalisation = { userId: 1, programmingMode: 'low_impact_recovery', injuryZones: ['knee'] };
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+
+  await svc.deleteAllCycleDataService(1);
+
+  assert.equal(personalisation.programmingMode, 'low_impact_recovery', 'her injury setting stays');
+});
+
+test('delete-all never touches female_default', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  personalisation = { userId: 1, programmingMode: 'female_default', injuryZones: [] };
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+
+  await svc.deleteAllCycleDataService(1);
+
+  assert.equal(personalisation.programmingMode, 'female_default');
+});
+
+test('delete-all with no profile and no personalisation is fine', async () => {
+  resetFakes();
+  await assert.doesNotReject(() => svc.deleteAllCycleDataService(1));
+});
+
+test('revoking consent mid-period releases the mode now, not at the window end', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+  assert.equal(personalisation.programmingMode, 'low_impact_recovery');
+
+  await svc.revokeCycleConsentService(1);
+
+  assert.equal(personalisation.programmingMode, 'neutral');
+  assert.equal(cycleProfile.managesProgrammingMode, false, 'nothing is owned any more');
+  assert.equal(phases.length, 1, 'the data is still not deleted by revoking');
+});
+
+test('revoking consent leaves a user-chosen mode alone', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  personalisation = { userId: 1, programmingMode: 'low_impact_recovery', injuryZones: ['knee'] };
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+
+  await svc.revokeCycleConsentService(1);
+
+  assert.equal(personalisation.programmingMode, 'low_impact_recovery');
+});
+
+test('granting again mid-period re-applies the mode', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+  await svc.revokeCycleConsentService(1);
+
+  await svc.grantCycleConsentService(1);
+  await svc.getProfileService(1);
+
+  assert.equal(personalisation.programmingMode, 'low_impact_recovery');
+  assert.equal(cycleProfile.managesProgrammingMode, true);
+});
+
+// --- Period entries are validated on the way in ------------------------------
+
+const rejects400 = (fn, status = 400) => assert.rejects(fn, (e) => e.status === status);
+
+test('logging a period refuses bad dates instead of a 500', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await rejects400(() => svc.logPhaseService(1, { startDate: 'not-a-date', phase: 'menstrual' }));
+  await rejects400(() => svc.logPhaseService(1, { startDate: '2026-02-31', phase: 'menstrual' }));
+  await rejects400(() => svc.logPhaseService(1, { startDate: 12345, phase: 'menstrual' }));
+  await rejects400(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-3), endDate: 'nope', phase: 'menstrual',
+  }));
+  assert.equal(phases.length, 0);
+});
+
+test('logging a period refuses an end before the start', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await rejects400(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-2), endDate: daysFromToday(-5), phase: 'menstrual',
+  }));
+  assert.equal(phases.length, 0);
+});
+
+test('logging a period refuses a start in the future', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await rejects400(() => svc.logPhaseService(1, { startDate: daysFromToday(3), phase: 'menstrual' }));
+  assert.equal(phases.length, 0);
+});
+
+test('a period longer than the ceiling is refused, and exactly the ceiling is fine', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await rejects400(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-30), endDate: daysFromToday(-10), phase: 'menstrual',
+  }));
+  await assert.doesNotReject(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-30), endDate: daysFromToday(-17), phase: 'menstrual',
+  }));
+});
+
+test('overlapping and duplicate periods are refused with 409', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, {
+    startDate: daysFromToday(-10), endDate: daysFromToday(-6), phase: 'menstrual',
+  });
+
+  // Same start, a start inside it, and a range that swallows it.
+  await rejects400(() => svc.logPhaseService(1, { startDate: daysFromToday(-10), phase: 'menstrual' }), 409);
+  await rejects400(() => svc.logPhaseService(1, { startDate: daysFromToday(-8), phase: 'menstrual' }), 409);
+  await rejects400(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-12), endDate: daysFromToday(-4), phase: 'menstrual',
+  }), 409);
+  // Touching on a shared day counts as overlap; the day after does not.
+  await rejects400(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-6), endDate: daysFromToday(-4), phase: 'menstrual',
+  }), 409);
+  await assert.doesNotReject(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-5), endDate: daysFromToday(-3), phase: 'menstrual',
+  }));
+  assert.equal(phases.length, 2);
+});
+
+test('an open period does not block the next one, but closing it over the next is refused', async () => {
+  // Forgetting to end a period must not lock her out of logging the next.
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  const first = await svc.logPhaseService(1, { startDate: daysFromToday(-20), phase: 'menstrual' });
+  await svc.logPhaseService(1, { startDate: daysFromToday(-12), phase: 'menstrual' });
+
+  await rejects400(() => svc.updatePhaseService(1, first.id, { endDate: daysFromToday(-12) }), 409);
+  await assert.doesNotReject(() => svc.updatePhaseService(1, first.id, { endDate: daysFromToday(-16) }));
+});
+
+test('other phases are not subject to the period span and overlap rules', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, {
+    startDate: daysFromToday(-30), endDate: daysFromToday(-20), phase: 'luteal',
+  });
+  await assert.doesNotReject(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-28), endDate: daysFromToday(-18), phase: 'luteal',
+  }));
+});
+
+test('editing a period is held to the same rules', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, {
+    startDate: daysFromToday(-14), endDate: daysFromToday(-10), phase: 'menstrual',
+  });
+  const b = await svc.logPhaseService(1, {
+    startDate: daysFromToday(-6), endDate: daysFromToday(-2), phase: 'menstrual',
+  });
+
+  await rejects400(() => svc.updatePhaseService(1, b.id, { startDate: 'garbage' }));
+  await rejects400(() => svc.updatePhaseService(1, b.id, { startDate: daysFromToday(2) }));
+  await rejects400(() => svc.updatePhaseService(1, b.id, { startDate: daysFromToday(-11) }), 409);
+  await rejects400(() => svc.updatePhaseService(1, b.id, { endDate: daysFromToday(-30) }));
+  // Its own old range is not a clash with itself.
+  await assert.doesNotReject(() => svc.updatePhaseService(1, b.id, { endDate: daysFromToday(-3) }));
+});
+
+test('an entry saved before the checks existed can still have an unrelated edit', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  phases.push({
+    id: 50, userId: 1, startDate: new Date(daysFromToday(-60)), endDate: new Date(daysFromToday(-30)),
+    phase: 'menstrual', source: 'user_logged',
+  });
+  // Nothing that affects the span changes, so nothing is re-validated.
+  await assert.doesNotReject(() => svc.updatePhaseService(1, 50, {}));
+});
+
+test('lastPeriodStartDate through the profile call is validated too', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await rejects400(() => svc.updateProfileService(1, { lastPeriodStartDate: 'soon' }));
+  await rejects400(() => svc.updateProfileService(1, { lastPeriodStartDate: daysFromToday(5) }));
+
+  const ok = await svc.updateProfileService(1, { lastPeriodStartDate: daysFromToday(-9) });
+  assert.equal(ok.lastPeriodStartDate, daysFromToday(-9));
+  const cleared = await svc.updateProfileService(1, { lastPeriodStartDate: null });
+  assert.equal(cleared.lastPeriodStartDate, null);
+});
+
+test('each refusal carries a code the app can turn into its own wording', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, {
+    startDate: daysFromToday(-10), endDate: daysFromToday(-6), phase: 'menstrual',
+  });
+  const code = async (fn) => fn().then(() => null, (e) => e.code);
+
+  assert.equal(await code(() => svc.logPhaseService(1, { startDate: daysFromToday(-8), phase: 'menstrual' })), 'PERIOD_OVERLAP');
+  assert.equal(await code(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-60), endDate: daysFromToday(-40), phase: 'menstrual',
+  })), 'PERIOD_TOO_LONG');
+  assert.equal(await code(() => svc.logPhaseService(1, {
+    startDate: daysFromToday(-30), endDate: daysFromToday(-33), phase: 'menstrual',
+  })), 'PERIOD_END_BEFORE_START');
+  assert.equal(await code(() => svc.logPhaseService(1, { startDate: daysFromToday(4), phase: 'menstrual' })), 'DATE_IN_FUTURE');
 });
