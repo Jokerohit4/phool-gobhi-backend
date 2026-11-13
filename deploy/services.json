@@ -444,7 +444,9 @@
             "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
             "ANALYTICS_BIGQUERY_DATASET": "analytics_prod",
             "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
-            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456",
+            "MEDICAL_BUCKET_NAME": "phool-gobhi-medical",
+            "FOOD_TEXT_AI_LOOKUP": "true"
           },
           "secrets": {
             "SECRETS_JSON": "health-service-secrets"
