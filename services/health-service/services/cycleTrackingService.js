@@ -466,7 +466,6 @@ export async function deleteAllCycleDataService(userId) {
 // service refuses anything outside these lists. The lists are wellness
 // vocabulary, not clinical codes.
 export const FLOW_LEVELS = ['spotting', 'light', 'medium', 'heavy'];
-export const MOODS = ['happy', 'calm', 'low', 'irritable', 'anxious', 'energetic'];
 export const SYMPTOMS = [
   'cramps', 'headache', 'bloating', 'fatigue', 'backache',
   'nausea', 'breast_tenderness', 'acne', 'cravings', 'poor_sleep',
@@ -479,7 +478,7 @@ function validDayIso(value) {
 }
 
 function shapeDayLog(row) {
-  return { date: isoDay(row.date), flow: row.flow ?? null, mood: row.mood ?? null, symptoms: row.symptoms ?? [] };
+  return { date: isoDay(row.date), flow: row.flow ?? null, symptoms: row.symptoms ?? [] };
 }
 
 export async function listDayLogsService(userId, { from, to } = {}) {
@@ -502,20 +501,23 @@ export async function listDayLogsService(userId, { from, to } = {}) {
   return rows.map(shapeDayLog);
 }
 
-/// Set one day's log. Only keys present change; a day left with no flow, no mood
-/// and no symptoms is removed rather than kept as an empty row. Future days are
+/// Set one day's log. Only keys present change; a day left with no flow and no
+/// symptoms is removed rather than kept as an empty row. Future days are
 /// refused: this is a record of what happened.
 export async function upsertDayLogService(userId, dateIso, input = {}) {
   const day = validDayIso(dateIso);
   if (!day) throw { status: 400, error: 'date must be YYYY-MM-DD' };
   if (day > todayIso()) throw { status: 400, error: 'A future day cannot be logged.' };
 
-  const { flow, mood, symptoms } = input;
+  const { flow, symptoms } = input;
+  // Refused rather than ignored: a client that still sends a mood must hear
+  // that it was not stored, not lose it silently. Mood has one home - the
+  // wellness check-in - and a null (what older builds send unprompted) is fine.
+  if (input.mood != null) {
+    throw { status: 400, error: 'Mood is saved by the wellness check-in, not the cycle log.' };
+  }
   if (flow != null && !FLOW_LEVELS.includes(flow)) {
     throw { status: 400, error: `flow must be one of: ${FLOW_LEVELS.join(', ')}` };
-  }
-  if (mood != null && !MOODS.includes(mood)) {
-    throw { status: 400, error: `mood must be one of: ${MOODS.join(', ')}` };
   }
   if (symptoms !== undefined) {
     if (!Array.isArray(symptoms) || symptoms.some((x) => !SYMPTOMS.includes(x))) {
@@ -527,13 +529,12 @@ export async function upsertDayLogService(userId, dateIso, input = {}) {
   const existing = await prisma.cycleDayLog.findFirst({ where: { userId, date } });
   const next = {
     flow: flow !== undefined ? flow : existing?.flow ?? null,
-    mood: mood !== undefined ? mood : existing?.mood ?? null,
     symptoms: symptoms !== undefined ? [...new Set(symptoms)] : existing?.symptoms ?? [],
   };
 
-  if (!next.flow && !next.mood && next.symptoms.length === 0) {
+  if (!next.flow && next.symptoms.length === 0) {
     if (existing) await prisma.cycleDayLog.delete({ where: { id: existing.id } });
-    return { date: day, flow: null, mood: null, symptoms: [] };
+    return { date: day, flow: null, symptoms: [] };
   }
 
   const row = existing

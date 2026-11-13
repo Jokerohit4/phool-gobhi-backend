@@ -650,7 +650,6 @@ export async function buildFullExportService(userId) {
           dayLogs: cycleDayLogs.map((d) => ({
             date: d.date,
             flow: d.flow,
-            mood: d.mood,
             symptoms: d.symptoms,
           })),
           phases: cyclePhases.map((e) => ({

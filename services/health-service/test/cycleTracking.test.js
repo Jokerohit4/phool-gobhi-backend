@@ -425,24 +425,24 @@ test('deleting all cycle data also removes the per-day symptom log', async () =>
   assert.equal(dayLogs.length, 0);
 });
 
-test('a day log stores flow, mood and symptoms and reads back newest first', async () => {
+test('a day log stores flow and symptoms and reads back newest first', async () => {
   resetFakes();
   const d1 = daysFromToday(-2);
   const d2 = daysFromToday(-1);
-  await svc.upsertDayLogService(1, d1, { flow: 'heavy', mood: 'low', symptoms: ['cramps', 'fatigue'] });
+  await svc.upsertDayLogService(1, d1, { flow: 'heavy', symptoms: ['cramps', 'fatigue'] });
   await svc.upsertDayLogService(1, d2, { flow: 'light' });
 
   const list = await svc.listDayLogsService(1);
   assert.deepEqual(list.map((r) => r.date), [d2, d1]);
-  assert.deepEqual(list[1], { date: d1, flow: 'heavy', mood: 'low', symptoms: ['cramps', 'fatigue'] });
+  assert.deepEqual(list[1], { date: d1, flow: 'heavy', symptoms: ['cramps', 'fatigue'] });
 });
 
 test('updating one field of a day leaves the others alone', async () => {
   resetFakes();
   const d = daysFromToday(-1);
-  await svc.upsertDayLogService(1, d, { flow: 'medium', mood: 'calm', symptoms: ['bloating'] });
-  const out = await svc.upsertDayLogService(1, d, { mood: 'happy' });
-  assert.deepEqual(out, { date: d, flow: 'medium', mood: 'happy', symptoms: ['bloating'] });
+  await svc.upsertDayLogService(1, d, { flow: 'medium', symptoms: ['bloating'] });
+  const out = await svc.upsertDayLogService(1, d, { symptoms: ['bloating', 'fatigue'] });
+  assert.deepEqual(out, { date: d, flow: 'medium', symptoms: ['bloating', 'fatigue'] });
   assert.equal(dayLogs.length, 1, 'same day is one row, not two');
 });
 
@@ -459,7 +459,7 @@ test('only the fixed vocabularies are accepted - no free text can be stored', as
   const d = daysFromToday(-1);
   for (const bad of [
     { flow: 'torrential' },
-    { mood: 'whatever I typed' },
+    { mood: 'happy' },
     { symptoms: ['a free text diagnosis'] },
     { symptoms: 'cramps' },
   ]) {

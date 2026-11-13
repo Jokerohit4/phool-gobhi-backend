@@ -1143,7 +1143,11 @@ model CyclePhaseEntry {
   @@schema("health")
 }
 
-// Per-day symptom log (flow, mood, symptoms). One row per user per day.
+// Per-day symptom log (flow, symptoms). One row per user per day.
+//
+// Mood is deliberately NOT here: it lives in WellnessMoodCheckIn, once. A
+// second mood column in the most sensitive table would be a second copy that
+// the mood history never sees, tied to cycle consent instead of its own.
 // Same containment as the tables above: behind the cycleTracking flag AND the
 // cycle_tracking consent scope, and in erasure + export from the first commit.
 // Values are validated against fixed allowlists in cycleTrackingService; free
@@ -1153,7 +1157,6 @@ model CycleDayLog {
   userId    Int
   date      DateTime @db.Date
   flow      String?
-  mood      String?
   symptoms  String[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
