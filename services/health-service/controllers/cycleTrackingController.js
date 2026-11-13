@@ -46,6 +46,36 @@ export const listPhases = async (req, res) => {
   } catch (err) { fail(res, err); }
 };
 
+export const updatePhase = async (req, res) => {
+  try {
+    res.json({ data: await cycleService.updatePhaseService(req.userId, req.params.id, req.body || {}) });
+  } catch (err) { fail(res, err); }
+};
+
+export const deletePhase = async (req, res) => {
+  try {
+    res.json({ data: await cycleService.deletePhaseService(req.userId, req.params.id) });
+  } catch (err) { fail(res, err); }
+};
+
+export const listDayLogs = async (req, res) => {
+  try {
+    res.json({ data: await cycleService.listDayLogsService(req.userId, { from: req.query.from, to: req.query.to }) });
+  } catch (err) { fail(res, err); }
+};
+
+export const upsertDayLog = async (req, res) => {
+  try {
+    res.json({ data: await cycleService.upsertDayLogService(req.userId, req.params.date, req.body || {}) });
+  } catch (err) { fail(res, err); }
+};
+
+export const deleteDayLog = async (req, res) => {
+  try {
+    res.json({ data: await cycleService.deleteDayLogService(req.userId, req.params.date) });
+  } catch (err) { fail(res, err); }
+};
+
 // Separate from revoking consent on purpose: switching a feature off and
 // destroying months of someone's records are different intentions, and
 // conflating them would delete data the user only meant to stop adding to.

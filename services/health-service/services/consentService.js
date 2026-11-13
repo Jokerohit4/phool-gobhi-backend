@@ -124,6 +124,7 @@ export async function deleteAllDataService(userId) {
     // someone's menstrual history — so they go with the account without
     // exception. Wired in with the migration that created them, not later.
     prisma.cyclePhaseEntry.deleteMany({ where: { userId } }),
+    prisma.cycleDayLog.deleteMany({ where: { userId } }),
     prisma.cycleTrackingProfile.deleteMany({ where: { userId } }),
     // --- Health Ledger ----------------------------------------------------
     //

@@ -1143,6 +1143,25 @@ model CyclePhaseEntry {
   @@schema("health")
 }
 
+// Per-day symptom log (flow, mood, symptoms). One row per user per day.
+// Same containment as the tables above: behind the cycleTracking flag AND the
+// cycle_tracking consent scope, and in erasure + export from the first commit.
+// Values are validated against fixed allowlists in cycleTrackingService; free
+// text is deliberately not accepted, so nothing a person types can land here.
+model CycleDayLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  date      DateTime @db.Date
+  flow      String?
+  mood      String?
+  symptoms  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@schema("health")
+}
+
 // --- Health Ledger (2026-09-27) ---------------------------------------------
 //
 // See C:\Users\rohit\Phool-Gobhi\docs\phool-gobhi-health-ledger-plan-20260927.html.

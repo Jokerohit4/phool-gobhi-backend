@@ -344,7 +344,7 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent, moodCheckIns] =
+  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, cycleDayLogs, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent, moodCheckIns] =
     await Promise.all([
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.ledgerConsent.findUnique({ where: { userId } }),
@@ -379,6 +379,7 @@ export async function buildFullExportService(userId) {
       prisma.assistantMemory.findMany({ where: { userId }, orderBy: { updatedAt: 'asc' } }),
       prisma.cycleTrackingProfile.findUnique({ where: { userId } }),
       prisma.cyclePhaseEntry.findMany({ where: { userId }, orderBy: { startDate: 'asc' } }),
+      prisma.cycleDayLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
 
       // ---- Health ledger -------------------------------------------------
       // Everything here is per-user health data, so all of it belongs in a
@@ -646,6 +647,12 @@ export async function buildFullExportService(userId) {
           lastPeriodStartDate: cycleProfile.lastPeriodStartDate,
           // `source` rides along so a prediction is never mistaken in the
           // export for something she reported.
+          dayLogs: cycleDayLogs.map((d) => ({
+            date: d.date,
+            flow: d.flow,
+            mood: d.mood,
+            symptoms: d.symptoms,
+          })),
           phases: cyclePhases.map((e) => ({
             startDate: e.startDate,
             endDate: e.endDate,

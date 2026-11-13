@@ -215,6 +215,14 @@ router.delete('/cycle/consent', ...cycleGated, cycleCtrl.revokeConsent);
 router.put('/cycle', ...cycleGated, requireCycleConsent, cycleCtrl.updateProfile);
 router.get('/cycle/phases', ...cycleGated, requireCycleConsent, cycleCtrl.listPhases);
 router.post('/cycle/phases', ...cycleGated, requireCycleConsent, cycleCtrl.logPhase);
+router.put('/cycle/phases/:id', ...cycleGated, requireCycleConsent, cycleCtrl.updatePhase);
+// Flag-gated but not consent-gated: removing one logged entry must never
+// require agreeing to log more (same rule as DELETE /biometrics/...).
+router.delete('/cycle/phases/:id', ...cycleGated, cycleCtrl.deletePhase);
+router.get('/cycle/days', ...cycleGated, requireCycleConsent, cycleCtrl.listDayLogs);
+router.put('/cycle/days/:date', ...cycleGated, requireCycleConsent, cycleCtrl.upsertDayLog);
+// Like deleting a phase: removing a logged value never requires consent to log more.
+router.delete('/cycle/days/:date', ...cycleGated, cycleCtrl.deleteDayLog);
 // NOT flag-gated, same reasoning as DELETE /me: a user must always be able to
 // delete their own data, even if the feature that collected it is switched off.
 router.delete('/cycle', requireAuth, cycleCtrl.deleteAllData);

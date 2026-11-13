@@ -173,18 +173,47 @@ function deriveCurrentPhase(profile, phases) {
   return covering ? covering.phase : null;
 }
 
-/// The next period's start, only once there is enough reality to anchor it:
-/// at least two user-logged periods AND an average cycle length. Multiple
-/// confirmed periods stop the model echoing a single logged date back as a
-/// prediction, so a one-off log never produces one.
+/// How many logged gaps feed the derived average. Recent cycles say more about
+/// the next one than a year-old one does, and capping keeps one very old outlier
+/// from dragging the estimate.
+const MAX_GAPS_FOR_AVERAGE = 6;
+
+/// Mean length of her recent cycles, from the gaps between user-logged period
+/// starts. Null when there are not two periods yet, or when the result falls
+/// outside the same typo-guard bounds a typed value must meet (a gap of 200 days
+/// is a missed log, not a cycle).
+function derivedCycleLength(starts) {
+  const days = starts.map(isoDay);
+  const gaps = [];
+  for (let i = 0; i < days.length - 1 && gaps.length < MAX_GAPS_FOR_AVERAGE; i++) {
+    gaps.push(Math.round((dayFromIso(days[i]) - dayFromIso(days[i + 1])) / MS_PER_DAY));
+  }
+  if (!gaps.length) return null;
+  const mean = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+  return mean >= MIN_CYCLE_DAYS && mean <= MAX_CYCLE_DAYS ? mean : null;
+}
+
+/// The next period's start, only once there is enough reality to anchor it: at
+/// least two user-logged periods. Multiple confirmed periods stop the model
+/// echoing a single logged date back as a prediction, so a one-off log never
+/// produces one.
+///
+/// The cycle length is the one she set when she set one; otherwise it is learned
+/// from her own logged gaps, so logging two periods is enough on its own and she
+/// is not asked to type a number she may not know.
 async function predictNextPeriodStart(userId, profile) {
-  if (!profile?.lastPeriodStartDate || !profile.averageCycleLengthDays) return null;
-  const loggedCycles = await prisma.cyclePhaseEntry.count({
+  if (!profile?.lastPeriodStartDate) return null;
+  const logged = (await prisma.cyclePhaseEntry.findMany({
     where: { userId, phase: 'menstrual', source: 'user_logged' },
-  });
-  if (loggedCycles < 2) return null;
+    orderBy: { startDate: 'desc' },
+  })).filter((e) => e.phase === 'menstrual' && e.source === 'user_logged');
+  if (logged.length < 2) return null;
+
+  const cycleDays = profile.averageCycleLengthDays
+    ?? derivedCycleLength(logged.map((e) => e.startDate).sort((a, b) => b - a));
+  if (!cycleDays) return null;
   return {
-    nextPeriodStart: addDaysIso(isoDay(profile.lastPeriodStartDate), profile.averageCycleLengthDays),
+    nextPeriodStart: addDaysIso(isoDay(profile.lastPeriodStartDate), cycleDays),
     isEstimate: true,
   };
 }
@@ -226,9 +255,8 @@ export async function updateProfileService(userId, input) {
 
 export async function logPhaseService(userId, { startDate, endDate, phase }) {
   if (!startDate) throw { status: 400, error: 'startDate is required' };
-  const validPhases = ['menstrual', 'follicular', 'ovulation', 'luteal'];
-  if (!validPhases.includes(phase)) {
-    throw { status: 400, error: `phase must be one of: ${validPhases.join(', ')}` };
+  if (!VALID_PHASES.includes(phase)) {
+    throw { status: 400, error: `phase must be one of: ${VALID_PHASES.join(', ')}` };
   }
 
   const entry = await prisma.cyclePhaseEntry.create({
@@ -244,16 +272,82 @@ export async function logPhaseService(userId, { startDate, endDate, phase }) {
     },
   });
 
-  if (phase === 'menstrual') {
-    await prisma.cycleTrackingProfile.upsert({
-      where: { userId },
-      update: { lastPeriodStartDate: new Date(startDate) },
-      create: { userId, lastPeriodStartDate: new Date(startDate) },
-    });
-  }
+  if (phase === 'menstrual') await resyncLastPeriodStart(userId);
 
   await syncProgrammingModeService(userId);
   return entry;
+}
+
+const VALID_PHASES = ['menstrual', 'follicular', 'ovulation', 'luteal'];
+
+/// lastPeriodStartDate is derived, not independent: it is the start of the most
+/// recent user-logged period. Recomputing it after every write means a
+/// backdated log cannot drag it backwards and a deleted period cannot leave it
+/// pointing at a day that no longer exists. When there is no period left it is
+/// cleared, which also switches the recovery window and the prediction off.
+async function resyncLastPeriodStart(userId) {
+  const latest = await prisma.cyclePhaseEntry.findFirst({
+    where: { userId, phase: 'menstrual', source: 'user_logged' },
+    orderBy: { startDate: 'desc' },
+  });
+  await prisma.cycleTrackingProfile.upsert({
+    where: { userId },
+    update: { lastPeriodStartDate: latest ? latest.startDate : null },
+    create: { userId, lastPeriodStartDate: latest ? latest.startDate : null },
+  });
+}
+
+/// Edit one logged entry: close a period (set its end), fix a mistyped date, or
+/// change its phase. `endDate: null` re-opens it. Only keys present in `input`
+/// change, so closing a period cannot disturb its start.
+export async function updatePhaseService(userId, id, input = {}) {
+  const entryId = Number(id);
+  const entry = Number.isInteger(entryId)
+    ? await prisma.cyclePhaseEntry.findFirst({ where: { id: entryId, userId } })
+    : null;
+  if (!entry) throw { status: 404, error: 'That entry was not found.' };
+
+  const { startDate, endDate, phase } = input;
+  if (phase !== undefined && !VALID_PHASES.includes(phase)) {
+    throw { status: 400, error: `phase must be one of: ${VALID_PHASES.join(', ')}` };
+  }
+  if (startDate !== undefined && !startDate) {
+    throw { status: 400, error: 'startDate cannot be empty' };
+  }
+
+  const nextStart = startDate !== undefined ? new Date(startDate) : entry.startDate;
+  const nextEnd = endDate !== undefined ? (endDate ? new Date(endDate) : null) : entry.endDate;
+  if (Number.isNaN(nextStart.getTime()) || (nextEnd && Number.isNaN(nextEnd.getTime()))) {
+    throw { status: 400, error: 'Invalid date' };
+  }
+  if (nextEnd && nextEnd < nextStart) {
+    throw { status: 400, error: 'endDate cannot be before startDate' };
+  }
+
+  const data = {};
+  if (startDate !== undefined) data.startDate = nextStart;
+  if (endDate !== undefined) data.endDate = nextEnd;
+  if (phase !== undefined) data.phase = phase;
+
+  const updated = await prisma.cyclePhaseEntry.update({ where: { id: entry.id }, data });
+  await resyncLastPeriodStart(userId);
+  await syncProgrammingModeService(userId);
+  return updated;
+}
+
+/// Remove one entry. Scoped to the caller (`userId` in the lookup) so an id from
+/// another account is a 404, never a delete.
+export async function deletePhaseService(userId, id) {
+  const entryId = Number(id);
+  const entry = Number.isInteger(entryId)
+    ? await prisma.cyclePhaseEntry.findFirst({ where: { id: entryId, userId } })
+    : null;
+  if (!entry) throw { status: 404, error: 'That entry was not found.' };
+
+  await prisma.cyclePhaseEntry.delete({ where: { id: entry.id } });
+  await resyncLastPeriodStart(userId);
+  await syncProgrammingModeService(userId);
+  return { deleted: true };
 }
 
 export async function listPhasesService(userId, { limit = 60 } = {}) {
@@ -359,7 +453,98 @@ export async function releaseExpiredRecoveryMode(userId, currentMode) {
 export async function deleteAllCycleDataService(userId) {
   await prisma.$transaction([
     prisma.cyclePhaseEntry.deleteMany({ where: { userId } }),
+    prisma.cycleDayLog.deleteMany({ where: { userId } }),
     prisma.cycleTrackingProfile.deleteMany({ where: { userId } }),
   ]);
+  return { deleted: true };
+}
+
+// --- Per-day symptom log ----------------------------------------------------
+//
+// Fixed vocabularies only. A free-text field on this table would let someone
+// type a diagnosis or a name into the most sensitive table we hold, so the
+// service refuses anything outside these lists. The lists are wellness
+// vocabulary, not clinical codes.
+export const FLOW_LEVELS = ['spotting', 'light', 'medium', 'heavy'];
+export const MOODS = ['happy', 'calm', 'low', 'irritable', 'anxious', 'energetic'];
+export const SYMPTOMS = [
+  'cramps', 'headache', 'bloating', 'fatigue', 'backache',
+  'nausea', 'breast_tenderness', 'acne', 'cravings', 'poor_sleep',
+];
+
+function validDayIso(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = dayFromIso(value);
+  return Number.isNaN(d.getTime()) || isoDay(d) !== value ? null : value;
+}
+
+function shapeDayLog(row) {
+  return { date: isoDay(row.date), flow: row.flow ?? null, mood: row.mood ?? null, symptoms: row.symptoms ?? [] };
+}
+
+export async function listDayLogsService(userId, { from, to } = {}) {
+  const range = {};
+  if (from) {
+    const f = validDayIso(from);
+    if (!f) throw { status: 400, error: 'from must be YYYY-MM-DD' };
+    range.gte = dayFromIso(f);
+  }
+  if (to) {
+    const t = validDayIso(to);
+    if (!t) throw { status: 400, error: 'to must be YYYY-MM-DD' };
+    range.lte = dayFromIso(t);
+  }
+  const rows = await prisma.cycleDayLog.findMany({
+    where: { userId, ...(from || to ? { date: range } : {}) },
+    orderBy: { date: 'desc' },
+    take: 400,
+  });
+  return rows.map(shapeDayLog);
+}
+
+/// Set one day's log. Only keys present change; a day left with no flow, no mood
+/// and no symptoms is removed rather than kept as an empty row. Future days are
+/// refused: this is a record of what happened.
+export async function upsertDayLogService(userId, dateIso, input = {}) {
+  const day = validDayIso(dateIso);
+  if (!day) throw { status: 400, error: 'date must be YYYY-MM-DD' };
+  if (day > todayIso()) throw { status: 400, error: 'A future day cannot be logged.' };
+
+  const { flow, mood, symptoms } = input;
+  if (flow != null && !FLOW_LEVELS.includes(flow)) {
+    throw { status: 400, error: `flow must be one of: ${FLOW_LEVELS.join(', ')}` };
+  }
+  if (mood != null && !MOODS.includes(mood)) {
+    throw { status: 400, error: `mood must be one of: ${MOODS.join(', ')}` };
+  }
+  if (symptoms !== undefined) {
+    if (!Array.isArray(symptoms) || symptoms.some((x) => !SYMPTOMS.includes(x))) {
+      throw { status: 400, error: `symptoms must be a list drawn from: ${SYMPTOMS.join(', ')}` };
+    }
+  }
+
+  const date = dayFromIso(day);
+  const existing = await prisma.cycleDayLog.findFirst({ where: { userId, date } });
+  const next = {
+    flow: flow !== undefined ? flow : existing?.flow ?? null,
+    mood: mood !== undefined ? mood : existing?.mood ?? null,
+    symptoms: symptoms !== undefined ? [...new Set(symptoms)] : existing?.symptoms ?? [],
+  };
+
+  if (!next.flow && !next.mood && next.symptoms.length === 0) {
+    if (existing) await prisma.cycleDayLog.delete({ where: { id: existing.id } });
+    return { date: day, flow: null, mood: null, symptoms: [] };
+  }
+
+  const row = existing
+    ? await prisma.cycleDayLog.update({ where: { id: existing.id }, data: next })
+    : await prisma.cycleDayLog.create({ data: { userId, date, ...next } });
+  return shapeDayLog(row);
+}
+
+export async function deleteDayLogService(userId, dateIso) {
+  const day = validDayIso(dateIso);
+  if (!day) throw { status: 400, error: 'date must be YYYY-MM-DD' };
+  await prisma.cycleDayLog.deleteMany({ where: { userId, date: dayFromIso(day) } });
   return { deleted: true };
 }

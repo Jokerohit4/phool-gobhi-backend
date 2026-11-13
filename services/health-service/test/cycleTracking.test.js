@@ -13,6 +13,8 @@ let healthConsent = null;
 let cycleProfile = null;
 let personalisation = null;
 let phases = [];
+let dayLogs = [];
+let nextDayLogId = 1;
 let nextPhaseId = 1;
 
 let svc;
@@ -22,6 +24,8 @@ function resetFakes() {
   cycleProfile = null;
   personalisation = null;
   phases = [];
+  dayLogs = [];
+  nextDayLogId = 1;
   nextPhaseId = 1;
 }
 
@@ -73,8 +77,23 @@ test('setup: stub Prisma, import once', async (t) => {
               phases.push(row);
               return row;
             },
-            findFirst: async () =>
-              [...phases].sort((a, b) => b.startDate - a.startDate)[0] ?? null,
+            findFirst: async ({ where } = {}) =>
+              [...phases]
+                .filter((e) =>
+                  (where?.id == null || e.id === where.id) &&
+                  (where?.userId == null || (e.userId ?? 1) === where.userId) &&
+                  (!where?.phase || e.phase === where.phase) &&
+                  (!where?.source || e.source === where.source))
+                .sort((a, b) => b.startDate - a.startDate)[0] ?? null,
+            update: async ({ where, data }) => {
+              const i = phases.findIndex((e) => e.id === where.id);
+              phases[i] = { ...phases[i], ...data };
+              return phases[i];
+            },
+            delete: async ({ where }) => {
+              phases = phases.filter((e) => e.id !== where.id);
+              return { id: where.id };
+            },
             findMany: async () => phases,
             count: async ({ where } = {}) => phases.filter(
               (e) => (!where?.phase || e.phase === where.phase) && (!where?.source || e.source === where.source)
@@ -82,6 +101,37 @@ test('setup: stub Prisma, import once', async (t) => {
             deleteMany: async () => {
               phases = [];
               return { count: 1 };
+            },
+          };
+          this.cycleDayLog = {
+            findFirst: async ({ where }) =>
+              dayLogs.find((d) => d.userId === where.userId && +d.date === +where.date) ?? null,
+            findMany: async ({ where }) =>
+              dayLogs
+                .filter((d) => d.userId === where.userId)
+                .filter((d) => !where.date?.gte || d.date >= where.date.gte)
+                .filter((d) => !where.date?.lte || d.date <= where.date.lte)
+                .sort((a, b) => b.date - a.date),
+            create: async ({ data }) => {
+              const row = { id: nextDayLogId++, ...data };
+              dayLogs.push(row);
+              return row;
+            },
+            update: async ({ where, data }) => {
+              const i = dayLogs.findIndex((d) => d.id === where.id);
+              dayLogs[i] = { ...dayLogs[i], ...data };
+              return dayLogs[i];
+            },
+            delete: async ({ where }) => {
+              dayLogs = dayLogs.filter((d) => d.id !== where.id);
+              return { id: where.id };
+            },
+            deleteMany: async ({ where }) => {
+              const before = dayLogs.length;
+              dayLogs = dayLogs.filter(
+                (d) => !(d.userId === where.userId && (!where.date || +d.date === +where.date))
+              );
+              return { count: before - dayLogs.length };
             },
           };
           this.personalisationProfile = {
@@ -187,12 +237,14 @@ test('cycle data reaches training ONLY through ProgrammingMode', async () => {
   await svc.grantCycleConsentService(1);
 
   // A period starting today: the window is open, so the auto-apply happens.
-  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+  const entry = await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
   assert.equal(personalisation.programmingMode, 'low_impact_recovery');
 
   // Once the window has closed it must expire back to neutral — and never
-  // have become female_default at any point.
-  await svc.logPhaseService(1, { startDate: daysFromToday(-20), phase: 'menstrual' });
+  // have become female_default at any point. (Correcting the start date to
+  // three weeks ago is how the window closes here; logging an older period no
+  // longer moves the last-period date backwards.)
+  await svc.updatePhaseService(1, entry.id, { startDate: daysFromToday(-20) });
   assert.equal(personalisation.programmingMode, 'neutral');
   assert.notEqual(personalisation.programmingMode, 'female_default');
 });
@@ -267,4 +319,174 @@ test('a single logged period is never echoed back as a prediction', async () => 
 
   const profile = await svc.getProfileService(1);
   assert.equal(profile.prediction, null);
+});
+
+test('closing a period sets its end and leaves its start alone', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  const entry = await svc.logPhaseService(1, { startDate: daysFromToday(-3), phase: 'menstrual' });
+
+  const closed = await svc.updatePhaseService(1, entry.id, { endDate: daysFromToday(0) });
+  assert.equal(closed.endDate.toISOString().slice(0, 10), daysFromToday(0));
+  assert.equal(closed.startDate.toISOString().slice(0, 10), daysFromToday(-3));
+});
+
+test('an end before the start is refused, and null re-opens a period', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  const entry = await svc.logPhaseService(1, {
+    startDate: daysFromToday(-3), endDate: daysFromToday(-1), phase: 'menstrual',
+  });
+
+  await assert.rejects(
+    () => svc.updatePhaseService(1, entry.id, { endDate: daysFromToday(-5) }),
+    (err) => err.status === 400
+  );
+  const reopened = await svc.updatePhaseService(1, entry.id, { endDate: null });
+  assert.equal(reopened.endDate, null);
+});
+
+test('editing or deleting an entry that is not yours is a 404', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  phases.push({
+    id: 99, userId: 2, startDate: new Date(daysFromToday(-3)), endDate: null,
+    phase: 'menstrual', source: 'user_logged',
+  });
+
+  await assert.rejects(() => svc.updatePhaseService(1, 99, { endDate: daysFromToday(0) }), (e) => e.status === 404);
+  await assert.rejects(() => svc.deletePhaseService(1, 99), (e) => e.status === 404);
+  assert.equal(phases.length, 1, 'the other account entry survives');
+});
+
+test('deleting the latest period moves the last-period date back, deleting the only one clears it', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  const older = await svc.logPhaseService(1, { startDate: daysFromToday(-30), phase: 'menstrual' });
+  const newer = await svc.logPhaseService(1, { startDate: daysFromToday(-2), phase: 'menstrual' });
+  assert.equal(cycleProfile.lastPeriodStartDate.toISOString().slice(0, 10), daysFromToday(-2));
+
+  await svc.deletePhaseService(1, newer.id);
+  assert.equal(cycleProfile.lastPeriodStartDate.toISOString().slice(0, 10), daysFromToday(-30));
+
+  await svc.deletePhaseService(1, older.id);
+  assert.equal(cycleProfile.lastPeriodStartDate, null);
+});
+
+test('logging a backdated period does not drag the last-period date backwards', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, { startDate: daysFromToday(-2), phase: 'menstrual' });
+  await svc.logPhaseService(1, { startDate: daysFromToday(-60), phase: 'menstrual' });
+  assert.equal(cycleProfile.lastPeriodStartDate.toISOString().slice(0, 10), daysFromToday(-2));
+});
+
+test('with no typed cycle length, two logged periods are enough: it is learned from the gap', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, { startDate: daysFromToday(-60), phase: 'menstrual' });
+  await svc.logPhaseService(1, { startDate: daysFromToday(-32), phase: 'menstrual' });
+  await svc.logPhaseService(1, { startDate: daysFromToday(-2), phase: 'menstrual' });
+
+  const profile = await svc.getProfileService(1);
+  assert.equal(profile.averageCycleLengthDays, null, 'the typed setting is untouched');
+  // gaps are 28 and 30 -> mean 29
+  assert.equal(profile.prediction.nextPeriodStart, addDays(daysFromToday(-2), 29));
+});
+
+test('a typed cycle length wins over the learned one', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.updateProfileService(1, { averageCycleLengthDays: 35 });
+  await svc.logPhaseService(1, { startDate: daysFromToday(-30), phase: 'menstrual' });
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+
+  const profile = await svc.getProfileService(1);
+  assert.equal(profile.prediction.nextPeriodStart, addDays(daysFromToday(0), 35));
+});
+
+test('an implausible gap (a missed log) gives no prediction rather than a wild one', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.logPhaseService(1, { startDate: daysFromToday(-200), phase: 'menstrual' });
+  await svc.logPhaseService(1, { startDate: daysFromToday(0), phase: 'menstrual' });
+
+  assert.equal((await svc.getProfileService(1)).prediction, null);
+});
+
+test('deleting all cycle data also removes the per-day symptom log', async () => {
+  resetFakes();
+  await svc.grantCycleConsentService(1);
+  await svc.upsertDayLogService(1, daysFromToday(-1), { flow: 'light', symptoms: ['cramps'] });
+  assert.equal(dayLogs.length, 1);
+
+  await svc.deleteAllCycleDataService(1);
+
+  assert.equal(dayLogs.length, 0);
+});
+
+test('a day log stores flow, mood and symptoms and reads back newest first', async () => {
+  resetFakes();
+  const d1 = daysFromToday(-2);
+  const d2 = daysFromToday(-1);
+  await svc.upsertDayLogService(1, d1, { flow: 'heavy', mood: 'low', symptoms: ['cramps', 'fatigue'] });
+  await svc.upsertDayLogService(1, d2, { flow: 'light' });
+
+  const list = await svc.listDayLogsService(1);
+  assert.deepEqual(list.map((r) => r.date), [d2, d1]);
+  assert.deepEqual(list[1], { date: d1, flow: 'heavy', mood: 'low', symptoms: ['cramps', 'fatigue'] });
+});
+
+test('updating one field of a day leaves the others alone', async () => {
+  resetFakes();
+  const d = daysFromToday(-1);
+  await svc.upsertDayLogService(1, d, { flow: 'medium', mood: 'calm', symptoms: ['bloating'] });
+  const out = await svc.upsertDayLogService(1, d, { mood: 'happy' });
+  assert.deepEqual(out, { date: d, flow: 'medium', mood: 'happy', symptoms: ['bloating'] });
+  assert.equal(dayLogs.length, 1, 'same day is one row, not two');
+});
+
+test('clearing everything on a day removes the row instead of keeping an empty one', async () => {
+  resetFakes();
+  const d = daysFromToday(-1);
+  await svc.upsertDayLogService(1, d, { flow: 'light', symptoms: ['acne'] });
+  await svc.upsertDayLogService(1, d, { flow: null, symptoms: [] });
+  assert.equal(dayLogs.length, 0);
+});
+
+test('only the fixed vocabularies are accepted - no free text can be stored', async () => {
+  resetFakes();
+  const d = daysFromToday(-1);
+  for (const bad of [
+    { flow: 'torrential' },
+    { mood: 'whatever I typed' },
+    { symptoms: ['a free text diagnosis'] },
+    { symptoms: 'cramps' },
+  ]) {
+    await assert.rejects(() => svc.upsertDayLogService(1, d, bad), (err) => err.status === 400);
+  }
+  assert.equal(dayLogs.length, 0);
+});
+
+test('a malformed or future day is refused', async () => {
+  resetFakes();
+  await assert.rejects(() => svc.upsertDayLogService(1, 'yesterday', { flow: 'light' }), (e) => e.status === 400);
+  await assert.rejects(() => svc.upsertDayLogService(1, '2026-02-30', { flow: 'light' }), (e) => e.status === 400);
+  await assert.rejects(
+    () => svc.upsertDayLogService(1, daysFromToday(3), { flow: 'light' }),
+    (e) => e.status === 400
+  );
+});
+
+test("one person's day log is never read or removed through another's id", async () => {
+  resetFakes();
+  const d = daysFromToday(-1);
+  await svc.upsertDayLogService(1, d, { flow: 'light' });
+
+  assert.deepEqual(await svc.listDayLogsService(2), []);
+  await svc.deleteDayLogService(2, d);
+  assert.equal(dayLogs.length, 1, "user 2's delete must not touch user 1's row");
+
+  await svc.deleteDayLogService(1, d);
+  assert.equal(dayLogs.length, 0);
 });

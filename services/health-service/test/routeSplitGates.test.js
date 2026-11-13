@@ -338,6 +338,9 @@ test('and the rest of the delete surface is accounted for rather than unlisted',
       // router file draws: deleting a logged value must never require agreeing
       // to log more. These were the two I initially left out of this list.
       "router.delete('/biometrics/:metric/:localDate', ...metricsGated, biometricCtrl.deleteEntry);",
+      // Same rule for one logged cycle entry: flag-gated, never consent-gated.
+      "router.delete('/cycle/phases/:id', ...cycleGated, cycleCtrl.deletePhase);",
+      "router.delete('/cycle/days/:date', ...cycleGated, cycleCtrl.deleteDayLog);",
       "router.delete('/templates/:id', ...workoutGated, templateCtrl.deleteTemplate);",
       "router.delete('/plans/active', ...workoutGated, planCtrl.abandonPlan);",
     ].sort(),
