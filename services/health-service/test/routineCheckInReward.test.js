@@ -51,8 +51,8 @@ const checkIn = (p, kind, localDate = '2026-10-26', now = day1) =>
 
 test('policy: sleep and mood coins only for eligible accounts in their first two weeks', () => {
   const young = routineRewardPolicy(createdAt, day1);
-  assert.equal(young.sleepLog, 1);
-  assert.equal(young.moodLog, 1);
+  assert.equal(young.sleepLog, 5);
+  assert.equal(young.moodLog, 5);
   const old = routineRewardPolicy(createdAt, new Date('2026-11-10T06:00:00Z'));
   assert.equal(old.sleepLog, 0);
   assert.equal(old.moodLog, 0);
@@ -61,18 +61,18 @@ test('policy: sleep and mood coins only for eligible accounts in their first two
   assert.equal(beforeLaunch.moodLog, 0);
 });
 
-test('a saved sleep/body number pays one coin, once per day', async () => {
+test('a saved sleep/body number pays five coins, once per day', async () => {
   reset();
   const p = fake();
-  assert.deepEqual(await checkIn(p, 'sleep'), { coinsAwarded: 1, pending: false });
+  assert.deepEqual(await checkIn(p, 'sleep'), { coinsAwarded: 5, pending: false });
   assert.deepEqual(await checkIn(p, 'sleep'), { coinsAwarded: 0, pending: false });
   assert.equal(ledger.size, 1);
 });
 
-test('a mood check-in pays one coin a day, whichever slot, and morning + night never double up', async () => {
+test('a mood check-in pays five coins a day, whichever slot, and morning + night never double up', async () => {
   reset();
   const p = fake();
-  assert.equal((await checkIn(p, 'mood')).coinsAwarded, 1);
+  assert.equal((await checkIn(p, 'mood')).coinsAwarded, 5);
   assert.equal((await checkIn(p, 'mood')).coinsAwarded, 0);
   assert.equal(ledger.size, 1);
 });
@@ -80,8 +80,8 @@ test('a mood check-in pays one coin a day, whichever slot, and morning + night n
 test('sleep and mood are separate coins on the same day', async () => {
   reset();
   const p = fake();
-  assert.equal((await checkIn(p, 'sleep')).coinsAwarded, 1);
-  assert.equal((await checkIn(p, 'mood')).coinsAwarded, 1);
+  assert.equal((await checkIn(p, 'sleep')).coinsAwarded, 5);
+  assert.equal((await checkIn(p, 'mood')).coinsAwarded, 5);
   assert.equal(ledger.size, 2);
 });
 
@@ -90,7 +90,7 @@ test('the next day pays again', async () => {
   const p = fake();
   await checkIn(p, 'sleep');
   const next = await checkIn(p, 'sleep', '2026-10-27', new Date('2026-10-27T06:00:00Z'));
-  assert.equal(next.coinsAwarded, 1);
+  assert.equal(next.coinsAwarded, 5);
   assert.equal(ledger.size, 2);
 });
 
@@ -116,7 +116,7 @@ test('a slow coin service leaves the claim pending and the retry pays it once', 
   failCredit = true;
   assert.deepEqual(await checkIn(p, 'sleep'), { coinsAwarded: 0, pending: true });
   failCredit = false;
-  assert.deepEqual(await payRoutineClaims(p, 7), { coinsAwarded: 1, pending: false });
+  assert.deepEqual(await payRoutineClaims(p, 7), { coinsAwarded: 5, pending: false });
   assert.deepEqual(await payRoutineClaims(p, 7), { coinsAwarded: 0, pending: false });
   assert.equal(ledger.size, 1);
 });

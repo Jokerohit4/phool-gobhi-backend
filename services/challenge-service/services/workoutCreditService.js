@@ -86,7 +86,7 @@ export async function verifyAndCreditWorkout({ userId, sessionId, description, i
     // Bound both amounts here as defense in depth; this is never a public API.
     const starter = routinePolicy.starterAmount;
     const verifiedTotal = routinePolicy.verifiedAmount;
-    if (![starter, verifiedTotal].every(n => Number.isInteger(n) && n >= 0 && n <= 4) || verifiedTotal < starter) {
+    if (![starter, verifiedTotal].every(n => Number.isInteger(n) && n >= 0 && n <= 10) || verifiedTotal < starter) {
       throw Object.assign(new Error('Invalid routine reward policy'), { status: 400 });
     }
     let amount = 0;

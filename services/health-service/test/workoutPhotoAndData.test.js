@@ -207,16 +207,16 @@ test('photo upload: failed credit keeps the photo, persists no reward, retry can
   assert.deepEqual(retry.reward, { coins: 2, credited: true });
 });
 
-test('photo reward roll (default CSPRNG) always lands in 1..5 and hits every value', async () => {
+test('photo reward roll (default CSPRNG) always lands in 5..10 and hits every value', async () => {
   const seen = new Set();
   for (let i = 0; i < 400; i++) {
     reset();
     const s = seed({ endedAt: new Date() });
     const { reward } = await svc.uploadSessionPhotoService(s.id, 1, photo);
-    assert.ok(Number.isInteger(reward.coins) && reward.coins >= 1 && reward.coins <= 5);
+    assert.ok(Number.isInteger(reward.coins) && reward.coins >= 5 && reward.coins <= 10);
     seen.add(reward.coins);
   }
-  assert.deepEqual([...seen].sort(), [1, 2, 3, 4, 5]);
+  assert.deepEqual([...seen].sort((a, b) => a - b), [5, 6, 7, 8, 9, 10]);
 });
 
 test('photo is mapped to its own session: two users, several sessions', async () => {
