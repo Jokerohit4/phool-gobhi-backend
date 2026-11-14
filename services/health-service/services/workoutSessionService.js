@@ -519,14 +519,14 @@ export async function finishSessionService(sessionId, userId, { type, rpe, activ
 }
 
 // POST /sessions/:id/photo. Stores the photo on the (finished) session and pays
-// a one-time random 1-5 coin reward, rolled server-side with a CSPRNG.
+// a one-time random 5-10 coin reward, rolled server-side with a CSPRNG.
 //
 // The reward is paid at most once per session: photoRewardCoins is persisted
 // only AFTER challenge-service accepts the credit, and the credit key
 // (`workout-photo-<sessionId>`) is stable, so a failed credit leaves the field
 // null and a retry can pay - while a replaced photo on an already-rewarded
 // session never rolls or pays again.
-export async function uploadSessionPhotoService(sessionId, userId, { buffer, mimeType }, { rng = () => randomInt(1, 6), credit = creditWorkoutPhotoCoins } = {}) {
+export async function uploadSessionPhotoService(sessionId, userId, { buffer, mimeType }, { rng = () => randomInt(5, 11), credit = creditWorkoutPhotoCoins } = {}) {
   const session = await assertOwnsSession(sessionId, userId);
   if (!session.endedAt) {
     const err = new Error('Finish the workout before adding a photo');

@@ -66,30 +66,30 @@ test('calendar unlocks are 7/10/15 days, based on customer dates at 4 AM', () =>
   assert.equal(elapsedJourneyDays('2026-10-26T18:29:00Z', new Date('2026-11-02T22:30:00Z')), 8);
 });
 test('small rewards taper at day 8 and day 15; old and future accounts cannot get starter coins', () => {
-  assert.equal(routineRewardPolicy(createdAt, now).waterLog, 1);
+  assert.equal(routineRewardPolicy(createdAt, now).waterLog, 5);
   const week2 = routineRewardPolicy(createdAt, new Date('2026-11-02T06:00:00Z'));
-  assert.deepEqual([week2.waterLog, week2.waterTarget, week2.workout, week2.locationWorkout], [0, 1, 1, 3]);
+  assert.deepEqual([week2.waterLog, week2.waterTarget, week2.workout, week2.locationWorkout], [0, 5, 5, 10]);
   const steady = routineRewardPolicy(createdAt, new Date('2026-11-09T06:00:00Z'));
-  assert.deepEqual([steady.waterLog, steady.waterTarget, steady.workout, steady.locationWorkout], [0, 0, 0, 3]);
+  assert.deepEqual([steady.waterLog, steady.waterTarget, steady.workout, steady.locationWorkout], [0, 0, 0, 5]);
   assert.equal(routineRewardPolicy('2020-01-01', now).eligible, false);
   assert.equal(routineRewardPolicy('2030-01-01', now).eligible, false);
 });
 test('first log pays one coin; simultaneous taps and sub-hour logs cannot pay again', async () => {
   ledger.clear(); const p = fake();
   const results = await Promise.all([log(p), log(p), log(p)]);
-  assert.equal(results.reduce((s, r) => s + r.coinsAwarded, 0), 1);
+  assert.equal(results.reduce((s, r) => s + r.coinsAwarded, 0), 5);
   assert.equal((await log(p, new Date(now.getTime() + 59 * 60000))).coinsAwarded, 0);
-  assert.equal((await log(p, new Date(now.getTime() + 60 * 60000))).coinsAwarded, 1);
+  assert.equal((await log(p, new Date(now.getTime() + 60 * 60000))).coinsAwarded, 5);
   assert.equal(p.state.waterLoggedAt instanceof Date, true);
 });
 test('only three water logs/day; immutable target and paid claims survive undo/re-log', async () => {
   ledger.clear(); const p = fake();
   for (let hour = 0; hour < 5; hour++) await log(p, new Date(now.getTime() + hour * 3600000));
-  assert.equal([...ledger.values()].reduce((a, b) => a + b, 0), 3);
+  assert.equal([...ledger.values()].reduce((a, b) => a + b, 0), 15);
   p.setTotal(500);
   await log(p, new Date(now.getTime() + 6 * 3600000), { targetMl: 250 });
   assert.equal(p.claims.size, 3, 'lowering the current target cannot replace the day snapshot');
-  p.setTotal(2500); assert.equal((await log(p)).coinsAwarded, 1);
+  p.setTotal(2500); assert.equal((await log(p)).coinsAwarded, 5);
   p.setTotal(0); await log(p); p.setTotal(2500); await log(p);
   assert.equal(p.claims.size, 4);
 });
@@ -97,7 +97,7 @@ test('credit outages leave durable claims; explicit retry pays once without anot
   ledger.clear(); const p = fake(); failCredit = true;
   assert.deepEqual(await log(p), { coinsAwarded: 0, pending: true });
   failCredit = false;
-  assert.deepEqual(await payRoutineClaims(p, 7), { coinsAwarded: 1, pending: false });
+  assert.deepEqual(await payRoutineClaims(p, 7), { coinsAwarded: 5, pending: false });
   assert.deepEqual(await payRoutineClaims(p, 7), { coinsAwarded: 0, pending: false });
   assert.equal((await log(p, new Date(now.getTime() + 2 * 3600000), { replayed: true })).coinsAwarded, 0);
   assert.equal(p.claims.size, 1, 'replaying an old successful request cannot qualify as a new drink');
@@ -120,7 +120,7 @@ test('empty/rest/instant sessions cannot earn starter workout coins', async () =
 
 test('midnight cannot reset the one-hour spacing', async () => {
   ledger.clear(); const p = fake();
-  assert.equal((await log(p, new Date('2026-10-26T18:29:00Z'))).coinsAwarded, 1);
+  assert.equal((await log(p, new Date('2026-10-26T18:29:00Z'))).coinsAwarded, 5);
   assert.equal((await log(p, new Date('2026-10-26T18:31:00Z'), { localDate: '2026-10-26' })).coinsAwarded, 0);
-  assert.equal((await log(p, new Date('2026-10-26T19:29:00Z'), { localDate: '2026-10-26' })).coinsAwarded, 1);
+  assert.equal((await log(p, new Date('2026-10-26T19:29:00Z'), { localDate: '2026-10-26' })).coinsAwarded, 5);
 });

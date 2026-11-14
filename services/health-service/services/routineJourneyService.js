@@ -157,14 +157,14 @@ export async function recordRoutineWater(prisma, { userId, localDate, targetMl, 
         });
         if (policy.waterLog > 0 && day.rewardedLogs < policy.waterLogDailyCap &&
             logged <= day.targetMl && (!lastRewardAt || now - lastRewardAt >= 3600000)) {
-          await addClaim(`routine:water:${userId}:${localDate}:log:${day.rewardedLogs + 1}`, 1, 'Water logged');
+          await addClaim(`routine:water:${userId}:${localDate}:log:${day.rewardedLogs + 1}`, policy.waterLog, 'Water logged');
           await tx.routineWaterDay.update({
             where: { userId_localDate: { userId, localDate } },
             data: { rewardedLogs: { increment: 1 }, lastRewardAt: now },
           });
         }
         if (policy.waterTarget > 0 && day.targetMl > 0 && logged >= day.targetMl) {
-          await addClaim(`routine:water:${userId}:${localDate}:target`, 1, 'Daily water target completed');
+          await addClaim(`routine:water:${userId}:${localDate}:target`, policy.waterTarget, 'Daily water target completed');
         }
       }, { isolationLevel: 'Serializable' });
       break;

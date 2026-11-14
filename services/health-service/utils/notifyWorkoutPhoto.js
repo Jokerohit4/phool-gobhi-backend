@@ -4,7 +4,7 @@ import { googleIdTokenHeader } from './googleIdToken.js';
 const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
-// Random 1-5 coin reward for the post-workout photo. The amount is rolled by
+// Random 5-10 coin reward for the post-workout photo. The amount is rolled by
 // the caller (server-side) and the key is tied to the session, so a retry can
 // never pay twice. Never throws: false leaves the key unspent so a later
 // upload can pay.

@@ -38,7 +38,7 @@ export async function notifyWorkoutFinished({ userId, sessionId, description, id
   }
 }
 
-// One coin per health-profile question, once ever (gamified onboarding v2).
+// Five coins per health-profile question, once ever (gamified onboarding v2).
 //
 // The idempotency key is the whole guarantee: challenge-service's coin ledger
 // refuses a second credit with the same key, so re-answering, editing, a retry
@@ -54,7 +54,7 @@ export async function creditProfileQuestionCoin({ userId, questionKey }) {
     await axios.post(
       `${CHALLENGE_SERVICE_URL}/internal/coins/${userId}/credit`,
       {
-        amount: 1,
+        amount: 5,
         description: `Health profile: ${questionKey}`,
         idempotencyKey: `health-profile:${userId}:${questionKey}`,
       },

@@ -112,7 +112,7 @@ test('every question is coin-eligible and completion counts all of them', () => 
 test('the coin is keyed on the question, never the answer — re-answering cannot pay twice', () => {
   const src = read('utils', 'notifyChallengeService.js');
   assert.match(src, /idempotencyKey: `health-profile:\$\{userId\}:\$\{questionKey\}`/);
-  assert.match(src, /amount: 1,/);
+  assert.match(src, /amount: 5,/);
 });
 
 // --- nothing collected without a reader ---------------------------------------
