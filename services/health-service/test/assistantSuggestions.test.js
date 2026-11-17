@@ -1,66 +1,65 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import express from 'express';
 
 let service;
-let payload;
-let configured = true;
-let content = '{"suggestions":["Can we talk about my mood?","Help me unwind"]}';
-const calls = [];
+let controller;
+let dependencyCalls = 0;
+const unexpectedCall = () => {
+  dependencyCalls++;
+  throw new Error('Disabled suggestions must not access the database or provider');
+};
 
-test('setup suggestions with a read-only database and provider', async (t) => {
-  t.mock.module('@prisma/client', { exports: {
-    PrismaClient: class {
-      assistantConversation = { findUnique: async ({where}) => ({ id: where.id, userId: 7, summary: 'Feeling overwhelmed' }) };
-      assistantMessage = { findMany: async () => [
-        { role: 'assistant', content: 'Want to talk about what happened?' },
-        { role: 'user', content: 'I feel low today' },
-      ] };
-    },
-  } });
+test('setup disabled suggestions with unavailable database and provider', async (t) => {
+  t.mock.module('../db/prisma.js', { defaultExport: new Proxy({}, { get: unexpectedCall }) });
   t.mock.module('../services/assistant/providers/index.js', { exports: {
-    isProviderConfigured: () => configured,
-    getProvider: () => ({ generate: async (value) => { payload = value; calls.push(value); return {content}; } }),
+    isProviderConfigured: unexpectedCall,
+    getProvider: unexpectedCall,
   } });
+  // Isolate the other controller actions; suggestions use the real service.
+  t.mock.module('../services/assistant/assistantService.js', { exports: {} });
+  t.mock.module('../services/assistant/memoryService.js', { exports: {} });
   service = await import('../services/assistant/suggestionService.js');
+  controller = await import('../controllers/assistantController.js');
 });
 
-test('mood conversation, summary and draft reach generation in chronological order', async () => {
-  const result = await service.getSuggestionsService(7, {conversationId: 2, draft: 'I wish'});
-  assert.deepEqual(result.suggestions, ['Can we talk about my mood?', 'Help me unwind']);
-  const data = JSON.parse(payload.messages[0].content);
-  assert.equal(data.draft, 'I wish');
-  assert.equal(data.summary, 'Feeling overwhelmed');
-  assert.equal(data.history[0].role, 'user');
-  assert.match(payload.systemPrompt, /Support only training, app help, health, fitness, mental health, and mood/);
-  assert.match(payload.systemPrompt, /wholly unrelated draft or conversation/);
-  assert.match(payload.systemPrompt, /return {"suggestions":\[\]}/);
-});
-
-test('another user cannot generate from a private conversation', async () => {
-  const before = calls.length;
-  await assert.rejects(service.getSuggestionsService(8, {conversationId: 2}), {status: 404});
-  assert.equal(calls.length, before);
-});
-
-test('malformed requests fail before calling the provider', async () => {
-  const before = calls.length;
-  for (const input of [{draft: 42}, {draft: 'a'.repeat(2001)}, {conversationId: '2'}, {conversationId: -1}]) {
-    await assert.rejects(service.getSuggestionsService(7, input), {status: 400});
+test('starters, conversation follow-ups and draft completions are all empty', async () => {
+  for (const input of [undefined, {}, { draft: 'Help me' }, { conversationId: 2 },
+    { conversationId: 2, draft: 'I feel' }, { draft: 'a'.repeat(2000) }]) {
+    assert.deepEqual(await service.getSuggestionsService(7, input), { suggestions: [] });
   }
-  assert.equal(calls.length, before);
+  // No conversation content is read, even for another user's conversation id.
+  assert.deepEqual(await service.getSuggestionsService(8, { conversationId: 2 }), { suggestions: [] });
+  assert.equal(dependencyCalls, 0);
 });
 
-test('unconfigured provider and invalid output have no static fallback', async () => {
-  configured = false;
-  await assert.rejects(service.getSuggestionsService(7), {status: 503});
-  configured = true;
-  content = 'not json';
-  assert.deepEqual(await service.getSuggestionsService(7), {suggestions: []});
+test('malformed requests still fail validation without using external dependencies', async () => {
+  for (const input of [{ draft: 42 }, { draft: 'a'.repeat(2001) },
+    { conversationId: '2' }, { conversationId: -1 }]) {
+    await assert.rejects(service.getSuggestionsService(7, input), { status: 400 });
+  }
+  assert.equal(dependencyCalls, 0);
 });
 
-test('output validation removes duplicates, invalid entries and unsafe prompts', () => {
-  assert.deepEqual(service.parseSuggestions(JSON.stringify({suggestions: [
-    ' Help me unwind ', 'help me unwind', 5, '', 'x'.repeat(201), 'What medicine should I take?', 'Tell me more',
-  ]})), ['Help me unwind', 'Tell me more']);
-  assert.deepEqual(service.parseSuggestions('```json\n{"suggestions":["Listen to me"]}\n```'), ['Listen to me']);
+test('released app receives HTTP 200, its existing empty-list envelope and no-store', async (t) => {
+  const app = express();
+  app.use(express.json());
+  // Production keeps its existing authentication, feature and consent gates.
+  app.post('/api/health/assistant/suggestions', (req, res) => {
+    req.userId = 7;
+    return controller.getSuggestions(req, res);
+  });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve())));
+  const url = `http://127.0.0.1:${server.address().port}/api/health/assistant/suggestions`;
+  for (const body of [{}, { conversationId: 2, draft: 'Help me with my workout' }]) {
+    const response = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await response.json(), { data: { suggestions: [] } });
+  }
+  assert.equal(dependencyCalls, 0);
 });
