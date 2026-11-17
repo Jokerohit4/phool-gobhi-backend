@@ -2,6 +2,8 @@ import pg from 'pg';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { queryBigQuery } from '../utils/bigQueryAnalytics.js';
+import { analyticsEnvironment } from '../utils/analyticsTransport.js';
+import { buildTrafficQuery, trafficReport } from './trafficReport.js';
 
 const { Pool } = pg;
 
@@ -34,6 +36,21 @@ async function query(sql, params = []) {
 function daysParam(days) {
   const n = Number(days);
   return Number.isFinite(n) && n > 0 && n <= 365 ? n : 30;
+}
+
+export async function getTraffic(input) {
+  const bigQuery = process.env.ANALYTICS_READ_PROVIDER === 'bigquery';
+  const report = buildTrafficQuery(input, {
+    bigQuery,
+    asOf: new Date(Math.floor(Date.now() / 60000) * 60000),
+    project: process.env.ANALYTICS_BIGQUERY_PROJECT || 'phool-gobhi',
+    dataset: process.env.ANALYTICS_BIGQUERY_DATASET || `analytics_${analyticsEnvironment()}`,
+  });
+  if (!bigQuery && !getPool()) throw new Error('Analytics storage is unavailable');
+  const result = bigQuery
+    ? await queryBigQuery(report.sql, [], { native: true, queryParameters: report.queryParameters })
+    : await getPool().query(report.sql, report.values);
+  return trafficReport(result.rows, report);
 }
 
 // ---- Supply / partner onboarding funnel + approval SLA --------------------
