@@ -140,6 +140,45 @@ test('missing session IDs retain activity but produce no fabricated time; empty 
   assert.deepEqual(empty.screens, []);
 });
 
+test('login links deduplicate anonymous activity across active-user and engagement metrics', () => {
+  const report = fixtureReport([
+    { ts: '2026-11-16T10:00:00.000Z', event: 'screen_viewed', user: 'anon_a', props: { screen_name: 'Home' } },
+    event('10:00', 'screen_viewed', { user: 'anon_a', props: { screen_name: 'Home' } }),
+    event('10:01', 'plan_tapped', { user: 'anon_a' }),
+    event('10:02', 'identify', { user: '42', props: { anon_distinct_id: 'anon_a' } }),
+    event('10:03', 'screen_viewed', { user: '42', props: { screen_name: 'Home' } }),
+    event('10:04', 'plan_tapped', { user: '42' }),
+    event('10:05', 'identify', { user: '42', props: { anon_distinct_id: 'anon_a' } }),
+  ], { product: 'customer', days: 7 });
+  assert.deepEqual(report.activeUsers, { dau: 1, wau: 1, mau: 1 });
+  assert.equal(report.summary.users, 1);
+  assert.equal(report.summary.n, 5, 'repeated identity events neither add activity nor multiply joined rows');
+  assert.equal(report.summary.averageSecondsPerUser, 240);
+  assert.equal(report.screens[0].users, 1);
+  assert.equal(report.actions[0].users, 1);
+  assert.equal(report.actions[0].n, 2);
+  assert.equal(report.breakdown[0].users, 1);
+  assert.deepEqual(report.daily.map(row => row.users), [1, 1]);
+  assert.equal(report.frequency[0].label, '2');
+  assert.equal(report.frequency[0].users, 1);
+  assert.equal(report.heatmap.reduce((sum, row) => sum + row.users, 0), 2);
+});
+
+test('identity links stay product scoped and scan beyond the chart window', () => {
+  const report = fixtureReport([
+    { ts: '2026-11-14T10:00:00.000Z', event: 'identify', user: '42', props: { anon_distinct_id: 'anon_a' } },
+    event('10:00', 'plan_tapped', { user: 'anon_a' }),
+    event('10:01', 'plan_tapped', { user: '42' }),
+    event('10:02', 'plan_tapped', { user: 'anon_unlinked' }),
+    event('10:03', 'plan_tapped', { user: 'anon_a', props: { app: 'phool_gobhi_partner' } }),
+    event('10:04', 'plan_tapped', { user: '42', props: { app: 'phool_gobhi_partner' } }),
+  ], { days: 1 });
+  assert.equal(report.activeUsers.dau, 4, 'customer aliases merge, partner aliases do not inherit the customer link');
+  assert.equal(report.summary.n, 5);
+  assert.equal(report.breakdown.find(row => row.app === 'customer').users, 2);
+  assert.equal(report.breakdown.find(row => row.app === 'partner').users, 2);
+});
+
 test('warehouse queries are bounded and all user selections are bound parameters', () => {
   const report = buildTrafficQuery({ product: 'partner', platform: 'ios', days: 7 }, { bigQuery: true, asOf: AS_OF });
   assert.match(report.sql, /analytics_dev\.events_between/);

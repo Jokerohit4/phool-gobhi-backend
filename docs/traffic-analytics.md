@@ -14,7 +14,7 @@ The report reads client events only, with recognised product tags (`phool_gobhi`
 
 An active identity has at least one qualifying event. DAU/WAU/MAU are distinct identities over rolling 24-hour, 7-day and 30-day windows ending at `asOf`, regardless of `days`. `asOf` is rounded down to the current minute so the warehouse's existing one-minute cache can be reused. Each query scans `max(30, days)` days. Calendar charts, return frequency and weekday/hour patterns use Asia/Kolkata. Partial boundary dates are labelled in the UI.
 
-Identities are product scoped (`product:distinct_id`). A person using two products may count twice under All. There is no cross-product identity graph or anonymous-to-login stitching in this report; the latter can also increase counts. Platform breakdowns can overlap for the same identity. Mobile Both means Android + iOS. Missing platform tags remain visible in All, rather than being assigned to an OS.
+Identities are product scoped. Within each product, `identify` events link `anon_distinct_id` to the identified account. The most recent link within the scanned history (`max(30, days)` days) canonicalizes anonymous activity before all identity-based metrics are computed. Identify events themselves never count as activity. Anonymous activity without a known link remains a separate identity. A person using two products may count twice under All; there is no cross-product identity graph. Platform breakdowns can overlap for the same identity. Mobile Both means Android + iOS. Missing platform tags remain visible in All, rather than being assigned to an OS. These first-party activity counts intentionally use a different event definition and identity system from Firebase active-user metrics.
 
 ## Engagement estimate
 
