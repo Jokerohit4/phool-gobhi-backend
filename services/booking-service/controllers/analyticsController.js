@@ -132,6 +132,14 @@ export const getRevenueTrend = async (req, res) => {
   }
 };
 
+export const getTraffic = async (req, res) => {
+  try {
+    res.json({ data: await analyticsQuery.getTraffic(req.query) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const getWebsiteTraffic = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getWebsiteTraffic(req.query.days, req.query.country, req.query.city) });
