@@ -223,3 +223,29 @@ model WalletTopupConfig {
 
   @@schema("wallet")
 }
+
+// Guided coaching is independent of gym marketplace subscriptions and never
+// gates the customer's logging or lab snapshot features.
+model CoachingSubscription {
+  id                              Int      @id @default(autoincrement())
+  userId                          Int      @unique
+  userName                        String?
+  phone                           String?
+  planType                        String   @default("FREE")
+  planStatus                      String   @default("INACTIVE")
+  trialEndsAt                     DateTime?
+  riskBucket                      String   @default("UNSET")
+  hasExistingGym                  Boolean  @default(false)
+  hasNutritionist                 Boolean  @default(false)
+  worksOut                        Boolean?
+  freeDelightSessionsRemaining    Int      @default(0)
+  addonTrainerSessionsRemaining   Int      @default(0)
+  labCreditsRemaining             Int      @default(0)
+  labBookingStatus                String   @default("NOT_BOOKED")
+  gymPassStatus                   String   @default("NOT_ISSUED")
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  @@index([planType, planStatus])
+  @@schema("wallet")
+}

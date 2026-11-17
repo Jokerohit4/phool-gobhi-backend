@@ -14,6 +14,11 @@ five minutes per service, production p95 latency above five seconds for ten
 minutes, and CPU/memory p95 above 85% for ten minutes. Dashboard percentiles
 show the worst revision per service, rather than a merged traffic percentile.
 At low traffic, individual cold starts can dominate those percentiles.
+Latency, CPU and memory conditions treat missing data as non-breaching
+(`EVALUATION_MISSING_DATA_INACTIVE`), so idle periods and scale-to-zero do not
+keep prior breaches in violation. Gateway uptime checks continue to detect
+unavailability. Pub/Sub backlog and dead-letter alerts retain their existing
+missing-data behavior, since queued messages require follow-up.
 
 For an incident, identify the affected service and revision in Cloud Logging.
 Check Cloud Run readiness, traffic, the failed API path and database connectivity.
@@ -63,6 +68,22 @@ window. The analytics project has six hours of history; its historical clone
 was connected to successfully and the owned drill branch was deleted.
 
 ## Scheduler
+
+Local production warmups are installed with
+`powershell -NoProfile -File deploy/scripts/install_local_health_warmup.ps1`.
+Windows task `PhoolGobhi Production Health Warmup` runs every five minutes and
+at sign-in as the current Windows user, using the existing
+`officialrohitashwa@gmail.com` gcloud login. Seven private production backends
+receive authenticated `GET /health`; gateway already has cloud uptime checks.
+The task requires the user to be signed in and the machine awake and online.
+It runs hidden on battery too, but does not change power/sleep settings.
+The installed script, public endpoint configuration and bounded rotating logs
+live in `%LOCALAPPDATA%\PhoolGobhi\HealthWarmup`. Tokens are held in memory
+and never written to logs or configuration. Refresh the gcloud login if auth
+fails. No Cloud Scheduler resources or minimum instances are used for warmups.
+These checks can reduce cold starts but cannot guarantee instance retention;
+database-backed health routes can prevent Neon autosuspend and add costs.
+Pause with `Disable-ScheduledTask -TaskName 'PhoolGobhi Production Health Warmup'`.
 
 `daily-partner-briefing` previously lacked Cloud Run authentication and failed
 with permission denied. It now uses OIDC as

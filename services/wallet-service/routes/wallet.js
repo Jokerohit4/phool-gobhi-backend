@@ -39,6 +39,12 @@ import {
   getAttendanceSaasBills,
   applyAttendanceSaasBill,
   getMyAttendanceSaasBill,
+  getMyCoaching,
+  updateMyCoachingProfile,
+  createCoachingOrder,
+  verifyCoachingOrder,
+  listCoachingFulfillment,
+  updateCoachingFulfillment,
 } from '../controllers/walletController.js';
 import { requireAuth, requireInternal, requireRole } from '../middleware/requireAuth.js';
 
@@ -46,6 +52,12 @@ const router = Router();
 
 router.post('/', requireInternal, createWallet); // Create wallet (internal)
 router.get('/balance', requireAuth, getMyWallet); // Get wallet for logged-in user
+router.get('/coaching/mine', requireRole('customer'), getMyCoaching);
+router.put('/coaching/mine', requireRole('customer'), updateMyCoachingProfile);
+router.post('/coaching/orders', requireRole('customer'), createCoachingOrder);
+router.post('/coaching/verify', requireRole('customer'), verifyCoachingOrder);
+router.get('/coaching/admin/fulfillment', requireRole('gobhi'), listCoachingFulfillment);
+router.post('/coaching/admin/fulfillment/:userId', requireRole('gobhi'), updateCoachingFulfillment);
 router.get('/transactions', requireAuth, getMyWalletTransactions); // Get transactions for logged-in user
 router.get('/partners/summary', requireRole('gobhi'), listPartnerBalances); // Admin: list partner balances owed
 router.get('/admin/analytics/gift-bonus-payouts', requireRole('gobhi'), getGiftBonusPayoutsAnalytics); // Admin: gift-day/attendance-bonus rollup

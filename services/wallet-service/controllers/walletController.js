@@ -478,6 +478,102 @@ export const createTopUpOrder = async (req, res) => {
   }
 };
 
+const COACHING_PRICES = { MONTHLY_4499: 4499, QUARTERLY_11999: 11999, TRAINER_ADDON_1499: 1499 };
+const coachingView = (row) => ({
+  plan_type: row.planType, plan_status: row.planStatus, trial_ends_at: row.trialEndsAt,
+  risk_bucket: row.riskBucket, has_existing_gym: row.hasExistingGym,
+  free_delight_sessions_remaining: row.freeDelightSessionsRemaining,
+  addon_trainer_sessions_remaining: row.addonTrainerSessionsRemaining,
+  lab_credits_remaining: row.labCreditsRemaining, lab_booking_status: row.labBookingStatus,
+  gym_pass_status: row.gymPassStatus,
+});
+
+export const getMyCoaching = async (req, res) => {
+  try {
+    const row = await prisma.coachingSubscription.upsert({ where: { userId: req.userId }, create: { userId: req.userId }, update: {} });
+    res.json({ data: coachingView(row) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+export const updateMyCoachingProfile = async (req, res) => {
+  try {
+    const { worksOut, hasExistingGym, hasNutritionist, riskBucket, userName, phone } = req.body;
+    if (riskBucket != null && !['UNSET', 'GREEN', 'AMBER', 'RED'].includes(riskBucket)) return res.status(400).json({ error: 'Invalid risk bucket' });
+    const row = await prisma.coachingSubscription.upsert({
+      where: { userId: req.userId },
+      create: { userId: req.userId, worksOut: worksOut ?? null, hasExistingGym: !!hasExistingGym, hasNutritionist: !!hasNutritionist, ...(riskBucket ? { riskBucket } : {}), userName, phone },
+      update: { ...(worksOut != null ? { worksOut: !!worksOut } : {}), ...(hasExistingGym != null ? { hasExistingGym: !!hasExistingGym } : {}), ...(hasNutritionist != null ? { hasNutritionist: !!hasNutritionist } : {}), ...(riskBucket ? { riskBucket } : {}), ...(userName ? { userName } : {}), ...(phone ? { phone } : {}) },
+    });
+    res.json({ data: coachingView(row) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+export const createCoachingOrder = async (req, res) => {
+  try {
+    if (req.userRole !== 'customer') return res.status(403).json({ error: 'Customer account required' });
+    const { product } = req.body;
+    const amount = COACHING_PRICES[product];
+    if (!amount) return res.status(400).json({ error: 'Unknown coaching plan' });
+    if (product === 'TRAINER_ADDON_1499') {
+      const entitlement = await prisma.coachingSubscription.findUnique({ where: { userId: req.userId } });
+      if (!entitlement || entitlement.planType === 'FREE' || !['TRIAL_72H', 'ACTIVE'].includes(entitlement.planStatus)) {
+        return res.status(403).json({ error: 'An active guided plan is required for trainer add-ons' });
+      }
+    }
+    const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_SECRET });
+    const order = await razorpay.orders.create({ amount: amount * 100, currency: 'INR', notes: { userId: String(req.userId), product, purpose: 'guided_coaching' } });
+    await prisma.razorpayOrder.create({ data: { userId: req.userId, orderId: order.id, amount, status: 'PENDING', purpose: 'coaching', planType: product } });
+    res.status(201).json({ data: { orderId: order.id, amount, currency: 'INR', keyId: process.env.RAZORPAY_KEY_ID } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+export const verifyCoachingOrder = async (req, res) => {
+  try {
+    const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
+    const order = await prisma.razorpayOrder.findUnique({ where: { orderId } });
+    if (!order || order.purpose !== 'coaching' || order.userId !== req.userId) return res.status(404).json({ error: 'Coaching order not found' });
+    const digest = crypto.createHmac('sha256', process.env.RAZORPAY_SECRET).update(`${orderId}|${razorpayPaymentId}`).digest('hex');
+    if (!safeEqualHex(digest, razorpaySignature)) return res.status(400).json({ error: 'Invalid payment signature' });
+    if (order.status === 'SUCCESS') return res.json({ data: { success: true } });
+    const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_SECRET });
+    const payment = await razorpay.payments.fetch(razorpayPaymentId);
+    if (payment.order_id !== orderId || payment.status !== 'captured') return res.status(409).json({ error: 'Payment is not captured yet' });
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.razorpayOrder.updateMany({ where: { orderId, status: 'PENDING' }, data: { status: 'SUCCESS', razorpayPaymentId } });
+      if (!claimed.count) throw Object.assign(new Error('Order already processed'), { status: 409 });
+      if (order.planType === 'TRAINER_ADDON_1499') {
+        await tx.coachingSubscription.upsert({ where: { userId: req.userId }, create: { userId: req.userId, addonTrainerSessionsRemaining: 4 }, update: { addonTrainerSessionsRemaining: { increment: 4 } } });
+      } else {
+        await tx.coachingSubscription.upsert({ where: { userId: req.userId }, create: { userId: req.userId, planType: order.planType, planStatus: 'TRIAL_72H', trialEndsAt: new Date(now.getTime() + 72 * 3600000), freeDelightSessionsRemaining: 2, labCreditsRemaining: order.planType === 'QUARTERLY_11999' ? 2 : 0 }, update: { planType: order.planType, planStatus: 'TRIAL_72H', trialEndsAt: new Date(now.getTime() + 72 * 3600000), freeDelightSessionsRemaining: 2, labCreditsRemaining: order.planType === 'QUARTERLY_11999' ? 2 : 0 } });
+      }
+    });
+    res.json({ data: { success: true } });
+  } catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+};
+
+export const listCoachingFulfillment = async (_req, res) => {
+  try {
+    const rows = await prisma.coachingSubscription.findMany({ where: { planType: { not: 'FREE' } }, orderBy: { createdAt: 'desc' } });
+    res.json({ data: rows.map((r) => ({ id: r.userId, name: r.userName || 'Customer', phone: r.phone || '', ...coachingView(r), trial_cleared: !r.trialEndsAt || new Date() >= r.trialEndsAt })) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+export const updateCoachingFulfillment = async (req, res) => {
+  try {
+    const { action } = req.body;
+    const row = await prisma.coachingSubscription.findUnique({ where: { userId: Number(req.params.userId) } });
+    if (!row) return res.status(404).json({ error: 'Customer not found' });
+    const data = action === 'consume_free' && row.freeDelightSessionsRemaining > 0 ? { freeDelightSessionsRemaining: { decrement: 1 } }
+      : action === 'consume_addon' && row.addonTrainerSessionsRemaining > 0 ? { addonTrainerSessionsRemaining: { decrement: 1 } }
+      : action === 'book_lab' && row.trialEndsAt && new Date() >= row.trialEndsAt && row.labCreditsRemaining > 0 ? { labCreditsRemaining: { decrement: 1 }, labBookingStatus: 'BOOKING_REQUESTED' }
+      : null;
+    if (!data) return res.status(409).json({ error: 'Action is not available' });
+    const updated = await prisma.coachingSubscription.update({ where: { userId: row.userId }, data });
+    res.json({ data: coachingView(updated) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
 export const verifyAndCreditWallet = async (req, res) => {
   try {
     // Defense-in-depth alongside the same guard in createTopUpOrder — a

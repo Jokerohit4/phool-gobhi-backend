@@ -44,10 +44,28 @@ export const listGymsAdmin = async (req, res) => {
 // Admin (gobhi) single-gym lookup — unlike getGym above, this doesn't 404
 // on a pending/rejected gym, so staff can open the detail view before approving.
 export const getGymAdmin = async (req, res) => {
+  const startedAt = Date.now();
   try {
     const gym = await gymService.getGymByIdRaw(parseInt(req.params.id));
     res.json({ data: sanitizeApiResponse(gym) });
   } catch (err) {
+    if (!err.status || err.status >= 500) {
+      // Prisma messages can contain SQL, connection details and row values.
+      // Record diagnostic codes and call sites without logging those values.
+      console.error(JSON.stringify({
+        severity: 'ERROR',
+        message: 'Admin gym lookup failed',
+        route: 'GET /admin/:id',
+        gymId: req.params.id,
+        durationMs: Date.now() - startedAt,
+        errorType: err.name || 'Error',
+        errorCode: err.code || null,
+        clientVersion: err.clientVersion || null,
+        callSites: typeof err.stack === 'string'
+          ? err.stack.split('\n').filter(line => /^\s+at /.test(line)).slice(0, 8)
+          : [],
+      }));
+    }
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
 };
