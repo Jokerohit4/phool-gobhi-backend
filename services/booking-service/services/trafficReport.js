@@ -41,17 +41,23 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
         WHEN 'website' THEN 'website' ELSE 'unknown' END AS app,
       LOWER(COALESCE(${prop('platform')}, 'unknown')) AS platform,
       NULLIF(${prop('session_id')}, '') AS session_id,
+      NULLIF(${prop('anon_distinct_id')}, '') AS anon_id,
       CASE WHEN event = 'screen_viewed' THEN COALESCE(NULLIF(${prop('screen_name')}, ''), '(unnamed screen)') END AS screen
     FROM ${table}
     WHERE ts >= ${timestamp(1)} AND ts < ${timestamp(2)} AND source = 'client'
       AND distinct_id IS NOT NULL AND distinct_id NOT IN ('', 'anonymous')
-      AND event NOT IN ('identify', 'loading_wait_ended') AND event NOT LIKE 'explore_queue_%'
+      AND event != 'loading_wait_ended' AND event NOT LIKE 'explore_queue_%'
+  ), identity_links AS (
+    SELECT app, anon_id, distinct_id AS identified_id,
+      ROW_NUMBER() OVER (PARTITION BY app, anon_id ORDER BY ts DESC, distinct_id) AS alias_rank
+    FROM raw WHERE event = 'identify' AND anon_id IS NOT NULL AND anon_id != distinct_id
   ), scoped AS (
-    SELECT *, CONCAT(app, ':', distinct_id) AS actor FROM raw
-    WHERE app IN ('customer', 'partner', 'website')
-      AND (${parameter(7)} = 'all' OR app = ${parameter(7)})
+    SELECT r.*, CONCAT(r.app, ':', COALESCE(l.identified_id, r.distinct_id)) AS actor FROM raw r
+    LEFT JOIN identity_links l ON l.app = r.app AND l.anon_id = r.distinct_id AND l.alias_rank = 1
+    WHERE r.event != 'identify' AND r.app IN ('customer', 'partner', 'website')
+      AND (${parameter(7)} = 'all' OR r.app = ${parameter(7)})
       AND (${parameter(7)} NOT IN ('customer', 'partner') OR
-        (platform IN ('android', 'ios') AND (${parameter(8)} = 'both' OR platform = ${parameter(8)})))
+        (r.platform IN ('android', 'ios') AND (${parameter(8)} = 'both' OR r.platform = ${parameter(8)})))
   ), current_events AS (
     SELECT * FROM scoped WHERE ts >= ${timestamp(3)}
   ), previous AS (
