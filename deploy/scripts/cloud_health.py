@@ -68,13 +68,18 @@ def threshold(name, metric, value, aligner, duration="600s", production=False):
         filter_ += ' AND resource.labels.service_name=monitoring.regex.full_match(".*-prod")'
     if metric == "request_count":
         filter_ += ' AND metric.labels.response_code_class="5xx"'
-    return {"displayName": name, "conditionThreshold": {
+    condition = {"displayName": name, "conditionThreshold": {
         "filter": filter_, "comparison": "COMPARISON_GT", "thresholdValue": value,
         "duration": duration, "trigger": {"count": 1},
         "aggregations": [{"alignmentPeriod": "300s", "perSeriesAligner": aligner,
                           "crossSeriesReducer": "REDUCE_SUM" if metric == "request_count" else "REDUCE_MAX",
                           "groupByFields": ["resource.labels.service_name"]}],
     }}
+    if metric in ("request_latencies", "container/cpu/utilizations", "container/memory/utilizations"):
+        # Cloud Run samples stop when an instance scales to zero. Do not
+        # carry a prior threshold breach forward through an idle period.
+        condition["conditionThreshold"]["evaluationMissingData"] = "EVALUATION_MISSING_DATA_INACTIVE"
+    return condition
 
 
 def configure_monitoring(email):
