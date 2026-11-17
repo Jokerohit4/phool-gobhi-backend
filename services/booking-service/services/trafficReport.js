@@ -111,7 +111,7 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
     FROM current_events WHERE event NOT IN ('screen_viewed', 'session_started') GROUP BY event, app, platform
     UNION ALL
     SELECT 'hour', ${text(weekday)}, '', ${text(hour)}, COUNT(*), COUNT(DISTINCT actor), 0, 0, 0, 0
-    FROM current_events GROUP BY ${weekday}, ${hour}
+    FROM current_events GROUP BY 2, 4
     UNION ALL
     SELECT 'product', '', e.app, e.platform, COUNT(*), COUNT(DISTINCT e.actor),
       SUM(CASE WHEN e.event = 'screen_viewed' THEN 1 ELSE 0 END),
