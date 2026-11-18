@@ -979,6 +979,24 @@ export async function setAccountCohortBulkService(userIds, cohort, actorId) {
   return { updated: count, notFound: ids.filter((n) => !foundSet.has(n)) };
 }
 
+// Ids of every account NOT at the default cohort, grouped by cohort. Analytics
+// (booking-service) filters events by user id with this: the non-default
+// cohorts are the small ones, so the id lists stay short even though
+// UNKNOWN_USERS is nearly everyone. Ids are strings to match the warehouse's
+// distinct_id column.
+export async function listNonDefaultCohortIdsService() {
+  const rows = await prisma.user.findMany({
+    where: { accountCohort: { not: 'UNKNOWN_USERS' } },
+    select: { id: true, accountCohort: true },
+    orderBy: { id: 'asc' },
+  });
+  const out = Object.fromEntries(
+    VALID_ACCOUNT_COHORTS.filter((c) => c !== 'UNKNOWN_USERS').map((c) => [c, []]),
+  );
+  for (const r of rows) out[r.accountCohort].push(String(r.id));
+  return out;
+}
+
 // Staff view of users by cohort, cursor-paginated on id (ascending). Also
 // returns per-cohort totals so the admin can see the whole split at a glance.
 export async function listUsersByCohortService({ cohort, limit, cursor } = {}) {

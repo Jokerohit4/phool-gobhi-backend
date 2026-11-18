@@ -4,6 +4,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { queryBigQuery } from '../utils/bigQueryAnalytics.js';
 import { analyticsEnvironment } from '../utils/analyticsTransport.js';
 import { buildTrafficQuery, trafficReport } from './trafficReport.js';
+import { cohortClause, resolveCohortScope } from '../utils/cohortScope.js';
 
 const { Pool } = pg;
 
@@ -39,12 +40,14 @@ function daysParam(days) {
 }
 
 export async function getTraffic(input) {
+  const scope = await resolveCohortScope(input?.cohort);
   const bigQuery = process.env.ANALYTICS_READ_PROVIDER === 'bigquery';
   const report = buildTrafficQuery(input, {
     bigQuery,
     asOf: new Date(Math.floor(Date.now() / 60000) * 60000),
     project: process.env.ANALYTICS_BIGQUERY_PROJECT || 'phool-gobhi',
     dataset: process.env.ANALYTICS_BIGQUERY_DATASET || `analytics_${analyticsEnvironment()}`,
+    scope,
   });
   if (!bigQuery && !getPool()) throw new Error('Analytics storage is unavailable');
   const result = bigQuery
@@ -104,8 +107,10 @@ export async function getOnboardingFunnel(days) {
 // to the customer app, the mirror of the partner funnel's filter above.
 // 'surface' separates the signup wizard from the resume prompt and the
 // Profile editor, which are the same step in three different moments.
-export async function getCustomerOnboardingFunnel(days) {
+export async function getCustomerOnboardingFunnel(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const { rows: steps } = await query(
     `SELECT properties->>'step' AS step,
             coalesce(properties->>'surface', 'signup') AS surface,
@@ -114,9 +119,9 @@ export async function getCustomerOnboardingFunnel(days) {
        FROM analytics_events
       WHERE event IN ('onboarding_step_viewed', 'onboarding_step_completed')
         AND properties->>'app' = 'phool_gobhi'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY 1, 2 ORDER BY 2, 1`,
-    [n]
+    params
   );
   const { rows: permissions } = await query(
     `SELECT properties->>'permission' AS permission,
@@ -125,9 +130,9 @@ export async function getCustomerOnboardingFunnel(days) {
        FROM analytics_events
       WHERE event = 'onboarding_permission_result'
         AND properties->>'app' = 'phool_gobhi'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY 1 ORDER BY 1`,
-    [n]
+    params
   );
   const { rows: completedBy } = await query(
     `SELECT coalesce(properties->>'training_location', 'unanswered') AS training_location,
@@ -135,9 +140,9 @@ export async function getCustomerOnboardingFunnel(days) {
        FROM analytics_events
       WHERE event = 'onboarding_completed'
         AND properties->>'app' = 'phool_gobhi'
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY 1 ORDER BY 2 DESC`,
-    [n]
+    params
   );
   return { steps, permissions, completedByTrainingLocation: completedBy };
 }
@@ -177,21 +182,25 @@ export async function getApprovalSla(days) {
 
 const CONVERSION_STEPS = ['gym_viewed', 'slot_selected', 'book_tapped', 'booking_confirmed'];
 
-export async function getConversionFunnel(days) {
+export async function getConversionFunnel(days, scope) {
   const n = daysParam(days);
+  const p1 = [CONVERSION_STEPS, n];
+  const c1 = cohortClause(scope, p1);
+  const p2 = [n];
+  const c2 = cohortClause(scope, p2);
   const { rows: steps } = await query(
     `SELECT event, count(DISTINCT distinct_id)::int AS users
        FROM analytics_events
-      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval
+      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval${c1}
       GROUP BY event`,
-    [CONVERSION_STEPS, n]
+    p1
   );
   const { rows: failuresByReason } = await query(
     `SELECT properties->>'reason' AS reason, count(*)::int AS n
        FROM analytics_events
-      WHERE event = 'booking_failed' AND ts > now() - ($1 || ' days')::interval
+      WHERE event = 'booking_failed' AND ts > now() - ($1 || ' days')::interval${c2}
       GROUP BY 1 ORDER BY n DESC`,
-    [n]
+    p2
   );
   return { steps, failuresByReason };
 }
@@ -222,68 +231,76 @@ export async function getGymFunnel(gymId, days) {
 
 // ---- Fulfillment / attendance funnel ---------------------------------------
 
-export async function getFulfillmentFunnel(days) {
+export async function getFulfillmentFunnel(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const { rows: steps } = await query(
     `SELECT event, count(DISTINCT distinct_id)::int AS users
        FROM analytics_events
       WHERE event IN ('booking_confirmed', 'checkin_requested', 'attendance_verified', 'booking_completed')
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY event`,
-    [n]
+    params
   );
   const { rows: byMethod } = await query(
     `SELECT properties->>'method' AS method, count(*)::int AS n
        FROM analytics_events
-      WHERE event = 'attendance_verified' AND ts > now() - ($1 || ' days')::interval
+      WHERE event = 'attendance_verified' AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY 1 ORDER BY n DESC`,
-    [n]
+    params
   );
   return { steps, byMethod };
 }
 
 // ---- Activation -------------------------------------------------------------
 
-export async function getActivation(days) {
+export async function getActivation(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const { rows } = await query(
     `SELECT event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users
        FROM analytics_events
       WHERE event IN ('otp_requested', 'otp_submitted', 'signup_completed', 'login_completed')
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY event`,
-    [n]
+    params
   );
   return { steps: rows };
 }
 
 // ---- Wallet top-up funnel ---------------------------------------------------
 
-export async function getWalletFunnel(days) {
+export async function getWalletFunnel(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const { rows } = await query(
     `SELECT event, count(DISTINCT distinct_id)::int AS users
        FROM analytics_events
       WHERE event IN ('topup_tapped', 'wallet_topup_order_created', 'wallet_topup_succeeded', 'wallet_topup_failed')
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY event`,
-    [n]
+    params
   );
   return { steps: rows };
 }
 
 // ---- Buddy engagement funnel -------------------------------------------------
 
-export async function getBuddyFunnel(days) {
+export async function getBuddyFunnel(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const { rows } = await query(
     `SELECT event, count(DISTINCT distinct_id)::int AS users
        FROM analytics_events
       WHERE event IN ('buddy_profile_created', 'buddy_swiped', 'buddy_matched', 'buddy_message_sent',
                        'buddy_unmatched', 'buddy_blocked')
-        AND ts > now() - ($1 || ' days')::interval
+        AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY event`,
-    [n]
+    params
   );
   return { steps: rows };
 }
@@ -293,16 +310,18 @@ export async function getBuddyFunnel(days) {
 // Bookings/GMV and gym counts by city — the `city` property was denormalized
 // onto booking events (and was already native on gym events) specifically so
 // this kind of slice needs no join back to the gym table.
-export async function getCityBreakdown(days) {
+export async function getCityBreakdown(days, scope) {
   const n = daysParam(days);
+  const bookingParams = [n];
+  const bookingCohort = cohortClause(scope, bookingParams);
   const { rows: bookingRows } = await query(
     `SELECT COALESCE(properties->>'city', 'Unknown') AS city,
             count(*)::int AS bookings,
             COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv
        FROM analytics_events
-      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval
+      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval${bookingCohort}
       GROUP BY 1`,
-    [n]
+    bookingParams
   );
   const { rows: gymRows } = await query(
     `SELECT COALESCE(properties->>'city', 'Unknown') AS city,
@@ -335,25 +354,27 @@ export async function getCityBreakdown(days) {
 // events that fired; the full gym list lives in gym-service's own DB, not
 // this analytics pool) — that join would need a cross-service call, deferred
 // until this view proves useful enough to justify it.
-export async function getBadgeSummary(days) {
+export async function getBadgeSummary(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const [{ rows: totals }, { rows: byGym }] = await Promise.all([
     query(
       `SELECT count(*)::int AS total_badges,
               count(DISTINCT distinct_id)::int AS unique_customers
          FROM analytics_events
-        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval`,
-      [n]
+        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval${c}`,
+      params
     ),
     query(
       `SELECT (properties->>'gym_id')::int AS gym_id,
               COALESCE(properties->>'city', 'Unknown') AS city,
               count(*)::int AS badges
          FROM analytics_events
-        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval
+        WHERE event = 'badge_earned' AND ts > now() - ($1 || ' days')::interval${c}
         GROUP BY 1, 2
         ORDER BY badges ASC`,
-      [n]
+      params
     ),
   ]);
   const t = totals[0] || { total_badges: 0, unique_customers: 0 };
@@ -366,16 +387,18 @@ export async function getBadgeSummary(days) {
 
 // ---- Revenue / GMV trend -------------------------------------------------------
 
-export async function getRevenueTrend(days) {
+export async function getRevenueTrend(days, scope) {
   const n = daysParam(days);
+  const params = [n];
+  const c = cohortClause(scope, params);
   const { rows } = await query(
     `SELECT date_trunc('day', ts) AS day,
             count(*)::int AS bookings,
             COALESCE(sum((properties->>'amount')::numeric), 0)::float AS gmv
        FROM analytics_events
-      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval
+      WHERE event = 'booking_confirmed' AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY 1 ORDER BY 1`,
-    [n]
+    params
   );
   return { days: rows };
 }
@@ -593,18 +616,20 @@ const REACH_BUCKETS = [
   { label: '30km+', min: 30, max: null },
 ];
 
-export async function getLocationReach(days, limit) {
+export async function getLocationReach(days, limit, scope) {
   const n = daysParam(days);
   const cappedLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  const params = [n];
+  const c = cohortClause(scope, params);
 
   const { rows: permission } = await query(
     `SELECT properties->>'permission' AS permission,
             count(*)::int AS n,
             count(DISTINCT distinct_id)::int AS distinct_visitors
        FROM analytics_events
-      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval
+      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval${c}
       GROUP BY 1`,
-    [n]
+    params
   );
 
   const { rows: distanceStats } = await query(
@@ -614,8 +639,8 @@ export async function getLocationReach(days, limit) {
        FROM analytics_events
       WHERE event = 'location_resolved'
         AND properties->>'nearest_gym_distance_km' IS NOT NULL
-        AND ts > now() - ($1 || ' days')::interval`,
-    [n]
+        AND ts > now() - ($1 || ' days')::interval${c}`,
+    params
   );
 
   const bucketSelect = REACH_BUCKETS
@@ -630,8 +655,8 @@ export async function getLocationReach(days, limit) {
        FROM analytics_events
       WHERE event = 'location_resolved'
         AND properties->>'nearest_gym_distance_km' IS NOT NULL
-        AND ts > now() - ($1 || ' days')::interval`,
-    [n]
+        AND ts > now() - ($1 || ' days')::interval${c}`,
+    params
   );
   const bucketCounts = bucketRows[0] || {};
   const buckets = REACH_BUCKETS.map((b, i) => ({ label: b.label, count: bucketCounts[`bucket_${i}`] ?? 0 }));
@@ -641,6 +666,8 @@ export async function getLocationReach(days, limit) {
   // aggregate. FILTER on the array_agg drops null distances (denied/
   // unsupported/timeout/error rows) so a visitor's last GRANTED distance
   // still surfaces even if their most recent event was a later denial.
+  const visitorParams = [n, cappedLimit];
+  const cv = cohortClause(scope, visitorParams);
   const { rows: visitors } = await query(
     `SELECT distinct_id,
             max(ts) AS last_seen,
@@ -648,11 +675,11 @@ export async function getLocationReach(days, limit) {
             (array_agg((properties->>'nearest_gym_distance_km')::float ORDER BY ts DESC)
               FILTER (WHERE properties->>'nearest_gym_distance_km' IS NOT NULL))[1] AS nearest_gym_distance_km
        FROM analytics_events
-      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval
+      WHERE event = 'location_resolved' AND ts > now() - ($1 || ' days')::interval${cv}
       GROUP BY distinct_id
       ORDER BY last_seen DESC
       LIMIT $2`,
-    [n, cappedLimit]
+    visitorParams
   );
 
   return {
@@ -768,7 +795,7 @@ export async function getRecentAnonSessions(days, limit) {
 // did X" rather than "what did user X do." Same shape (grouped by
 // distinct_id, most recent first) but for any event + optional exact-match
 // property filters, not just the anon-id special case.
-export async function searchEventUsers(event, filters, days, limit) {
+export async function searchEventUsers(event, filters, days, limit, scope) {
   const n = daysParam(days || 30);
   const cappedLimit = Math.min(Math.max(Number(limit) || 25, 1), 200);
   const params = [event];
@@ -780,13 +807,14 @@ export async function searchEventUsers(event, filters, days, limit) {
   }
   const daysIdx = params.push(n);
   const limitIdx = params.push(cappedLimit);
+  const cohortSql = cohortClause(scope, params);
   const { rows } = await query(
     `SELECT distinct_id,
             min(ts) AS first_seen,
             max(ts) AS last_seen,
             count(*)::int AS event_count
        FROM analytics_events
-      WHERE event = $1 AND ts > now() - ($${daysIdx} || ' days')::interval${filterClauses}
+      WHERE event = $1 AND ts > now() - ($${daysIdx} || ' days')::interval${filterClauses}${cohortSql}
       GROUP BY distinct_id
       ORDER BY last_seen DESC
       LIMIT $${limitIdx}`,
@@ -808,7 +836,7 @@ export async function searchEventUsers(event, filters, days, limit) {
 // "of everyone who started in the window, how many eventually did each next
 // step") and the generated CTE aliases (step0, step1, ... — ordinal, never
 // derived from user input) are interpolated directly.
-export async function getCustomFunnel(steps, days) {
+export async function getCustomFunnel(steps, days, scope) {
   const n = daysParam(days || 30);
   const params = [];
   const ctes = steps.map((step, i) => {
@@ -821,10 +849,11 @@ export async function getCustomFunnel(steps, days) {
     }
     if (i === 0) {
       const daysIdx = params.push(n);
+      const cohortSql = cohortClause(scope, params, 'e.distinct_id');
       return `step0 AS (
         SELECT distinct_id, min(ts) AS ts0
           FROM analytics_events e
-         WHERE e.event = $${eventIdx} AND e.ts > now() - ($${daysIdx} || ' days')::interval${filterClauses}
+         WHERE e.event = $${eventIdx} AND e.ts > now() - ($${daysIdx} || ' days')::interval${filterClauses}${cohortSql}
          GROUP BY distinct_id
       )`;
     }
@@ -941,19 +970,21 @@ export async function getUserProfile(distinctId) {
 
 // ---- Generic daily trend for any event(s) -----------------------------------
 
-export async function getTrend(metric, days) {
+export async function getTrend(metric, days, scope) {
   const n = daysParam(days);
   const events = String(metric || '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
   if (events.length === 0) return { days: [] };
+  const params = [events, n];
+  const c = cohortClause(scope, params);
   const { rows } = await query(
     `SELECT date_trunc('day', ts) AS day, event, count(*)::int AS n, count(DISTINCT distinct_id)::int AS distinct_users
        FROM analytics_events
-      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval
+      WHERE event = ANY($1) AND ts > now() - ($2 || ' days')::interval${c}
       GROUP BY 1, 2 ORDER BY 1`,
-    [events, n]
+    params
   );
   return { days: rows };
 }
@@ -969,14 +1000,17 @@ export async function getTrend(metric, days) {
 // cohorts so this stays a small table, not an unbounded triangle.
 const RETENTION_MAX_WEEK_OFFSET = 8;
 
-export async function getRetentionCohorts(cohortWeeks) {
+export async function getRetentionCohorts(cohortWeeks, scope) {
   const weeks = Number(cohortWeeks);
   const n = Number.isFinite(weeks) && weeks > 0 && weeks <= 26 ? weeks : 12;
+  const params = [n];
+  // Scoping first_booking is enough: activity is joined to it on distinct_id.
+  const c = cohortClause(scope, params);
   const { rows } = await query(
     `WITH first_booking AS (
        SELECT distinct_id, date_trunc('week', min(ts)) AS cohort_week
          FROM analytics_events
-        WHERE event = 'booking_confirmed'
+        WHERE event = 'booking_confirmed'${c}
         GROUP BY distinct_id
      ),
      activity AS (
@@ -995,7 +1029,7 @@ export async function getRetentionCohorts(cohortWeeks) {
     WHERE fb.cohort_week > now() - ($1 || ' weeks')::interval
     GROUP BY fb.cohort_week, week_offset
    ORDER BY fb.cohort_week, week_offset`,
-    [n]
+    params
   );
 
   const cohortsByWeek = new Map();

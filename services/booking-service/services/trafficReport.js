@@ -16,13 +16,24 @@ export function trafficFilters(input = {}) {
   return { product, platform: ['customer', 'partner'].includes(product) ? platform : 'both', days: n };
 }
 
-export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Date(), project = 'phool-gobhi', dataset = 'analytics_dev' } = {}) {
+export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Date(), project = 'phool-gobhi', dataset = 'analytics_dev', scope = null } = {}) {
   const filters = trafficFilters(input);
   if (!/^[a-z][a-z0-9-]+$/.test(project) || !/^analytics_(dev|prod)$/.test(dataset)) throw new Error('Invalid traffic warehouse');
   const end = new Date(asOf);
   const since = days => new Date(end.getTime() - days * 86400000).toISOString();
   const values = [since(Math.max(30, filters.days)), end.toISOString(), since(filters.days), since(1), since(7), since(30), filters.product, filters.platform];
+  // Account-cohort scope (utils/cohortScope.js). Added as an optional ninth
+  // parameter only when a cohort is selected, so the default report's SQL and
+  // bindings are exactly what they were before cohorts existed. The filter is
+  // applied to the STITCHED identity (anonymous ids resolved to the user they
+  // later identified as), so a tester's pre-login activity follows them.
+  const cohortScoped = !!scope && scope.mode !== 'all';
+  if (cohortScoped) values.push(scope.ids);
   const parameter = i => bigQuery ? `@p${i}` : `$${i}`;
+  const cohortList = () => bigQuery ? `IN UNNEST(${parameter(9)})` : `= ANY(${parameter(9)})`;
+  const cohortCondition = !cohortScoped ? '' : scope.mode === 'include'
+    ? `\n      AND COALESCE(l.identified_id, r.distinct_id) ${cohortList()}`
+    : `\n      AND NOT (COALESCE(l.identified_id, r.distinct_id) ${cohortList()})`;
   const timestamp = i => bigQuery ? `TIMESTAMP(${parameter(i)})` : `CAST(${parameter(i)} AS timestamptz)`;
   const prop = key => bigQuery ? `JSON_VALUE(properties, '$.${key}')` : `properties->>'${key}'`;
   const date = value => bigQuery ? `FORMAT_TIMESTAMP('%Y-%m-%d', ${value}, 'Asia/Kolkata')` : `to_char(${value} AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD')`;
@@ -57,7 +68,7 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
     WHERE r.event != 'identify' AND r.app IN ('customer', 'partner', 'website')
       AND (${parameter(7)} = 'all' OR r.app = ${parameter(7)})
       AND (${parameter(7)} NOT IN ('customer', 'partner') OR
-        (r.platform IN ('android', 'ios') AND (${parameter(8)} = 'both' OR r.platform = ${parameter(8)})))
+        (r.platform IN ('android', 'ios') AND (${parameter(8)} = 'both' OR r.platform = ${parameter(8)})))${cohortCondition}
   ), current_events AS (
     SELECT * FROM scoped WHERE ts >= ${timestamp(3)}
   ), previous AS (
@@ -135,8 +146,11 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
       CASE WHEN seconds = 0 THEN 'No observed time' WHEN seconds < 60 THEN 'Under 1 min'
       WHEN seconds < 300 THEN '1–5 min' WHEN seconds < 900 THEN '5–15 min' ELSE '15+ min' END
   ) SELECT * FROM results`;
-  const queryParameters = values.map((value, i) => ({ name: `p${i + 1}`, parameterType: { type: 'STRING' }, parameterValue: { value: String(value) } }));
-  return { sql, values, queryParameters, filters, asOf: end.toISOString() };
+  const queryParameters = values.map((value, i) => Array.isArray(value)
+    ? { name: `p${i + 1}`, parameterType: { type: 'ARRAY', arrayType: { type: 'STRING' } }, parameterValue: { arrayValues: value.map(item => ({ value: String(item) })) } }
+    : { name: `p${i + 1}`, parameterType: { type: 'STRING' }, parameterValue: { value: String(value) } });
+  const reported = cohortScoped ? { ...filters, cohort: scope.cohorts.join(',') } : filters;
+  return { sql, values, queryParameters, filters: reported, asOf: end.toISOString() };
 }
 
 export function trafficReport(rows, { filters, asOf }) {

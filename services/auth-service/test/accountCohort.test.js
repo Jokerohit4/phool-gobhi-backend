@@ -21,7 +21,8 @@ test('setup: mock prisma, import authService once', async (t) => {
               let r = users;
               if (where.id?.in) r = r.filter((u) => where.id.in.includes(u.id));
               if (where.id?.gt) r = r.filter((u) => u.id > where.id.gt);
-              if (where.accountCohort) r = r.filter((u) => u.accountCohort === where.accountCohort);
+              if (where.accountCohort?.not) r = r.filter((u) => u.accountCohort !== where.accountCohort.not);
+              else if (where.accountCohort) r = r.filter((u) => u.accountCohort === where.accountCohort);
               return take ? r.slice(0, take) : r;
             },
             groupBy: async () => {
@@ -100,4 +101,14 @@ test('lists by cohort with counts and cursor paging', async () => {
   assert.deepEqual(only.users.map((u) => u.id), [3]);
   await assert.rejects(svc.listUsersByCohortService({ cohort: 'VIP' }), { status: 400 });
   await assert.rejects(svc.listUsersByCohortService({ cursor: 'x' }), { status: 400 });
+});
+
+test('non-default cohort ids are grouped by cohort as strings, UNKNOWN_USERS left out', async () => {
+  reset();
+  users.push(
+    { id: 3, name: 'c', role: 'customer', accountCohort: 'TESTING_ACCOUNTS' },
+    { id: 4, name: 'd', role: 'customer', accountCohort: 'FRIENDS_AND_FAMILY' },
+  );
+  const r = await svc.listNonDefaultCohortIdsService();
+  assert.deepEqual(r, { FRIENDS_AND_FAMILY: ['4'], GENERATED_ACCOUNTS: [], TESTING_ACCOUNTS: ['3'] });
 });

@@ -1,6 +1,12 @@
 import * as analyticsQuery from '../services/analyticsQueryService.js';
 import * as savedFunnels from '../services/savedFunnelService.js';
 import { assertPartnerOwnsGym } from '../services/bookingService.js';
+import { resolveCohortScope } from '../utils/cohortScope.js';
+
+// ?cohort=all|FRIENDS_AND_FAMILY,TESTING_ACCOUNTS,... (see utils/cohortScope.js).
+// A bad value is a 400 and an unreachable auth-service a 503; neither may fall
+// back to unfiltered numbers.
+const scopeOf = (req) => resolveCohortScope(req.query.cohort);
 
 // Thin wrappers, same shape as the existing admin attendance endpoints in
 // bookingController.js — every route here is requireRole('gobhi') (see
@@ -38,9 +44,9 @@ export const getOnboardingFunnel = async (req, res) => {
 
 export const getCustomerOnboardingFunnel = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getCustomerOnboardingFunnel(req.query.days) });
+    res.json({ data: await analyticsQuery.getCustomerOnboardingFunnel(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
@@ -54,81 +60,81 @@ export const getApprovalSla = async (req, res) => {
 
 export const getConversionFunnel = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getConversionFunnel(req.query.days) });
+    res.json({ data: await analyticsQuery.getConversionFunnel(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getFulfillmentFunnel = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getFulfillmentFunnel(req.query.days) });
+    res.json({ data: await analyticsQuery.getFulfillmentFunnel(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getActivation = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getActivation(req.query.days) });
+    res.json({ data: await analyticsQuery.getActivation(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getWalletFunnel = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getWalletFunnel(req.query.days) });
+    res.json({ data: await analyticsQuery.getWalletFunnel(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getBuddyFunnel = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getBuddyFunnel(req.query.days) });
+    res.json({ data: await analyticsQuery.getBuddyFunnel(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getTrend = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getTrend(req.query.metric, req.query.days) });
+    res.json({ data: await analyticsQuery.getTrend(req.query.metric, req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getRetentionCohorts = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getRetentionCohorts(req.query.weeks) });
+    res.json({ data: await analyticsQuery.getRetentionCohorts(req.query.weeks, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getCityBreakdown = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getCityBreakdown(req.query.days) });
+    res.json({ data: await analyticsQuery.getCityBreakdown(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getBadgeSummary = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getBadgeSummary(req.query.days) });
+    res.json({ data: await analyticsQuery.getBadgeSummary(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
 export const getRevenueTrend = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getRevenueTrend(req.query.days) });
+    res.json({ data: await analyticsQuery.getRevenueTrend(req.query.days, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
@@ -158,9 +164,9 @@ export const getSupplyHealth = async (req, res) => {
 
 export const getLocationReach = async (req, res) => {
   try {
-    res.json({ data: await analyticsQuery.getLocationReach(req.query.days, req.query.limit) });
+    res.json({ data: await analyticsQuery.getLocationReach(req.query.days, req.query.limit, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
@@ -211,9 +217,9 @@ export const searchEventUsers = async (req, res) => {
         return res.status(400).json({ error: 'filters must be JSON, e.g. {"city":"Gurugram"}' });
       }
     }
-    res.json({ data: await analyticsQuery.searchEventUsers(event, parsedFilters, days, limit) });
+    res.json({ data: await analyticsQuery.searchEventUsers(event, parsedFilters, days, limit, await scopeOf(req)) });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };
 
@@ -238,9 +244,9 @@ export const getCustomFunnelResult = async (req, res) => {
       return res.status(400).json({ error: 'Provide either funnelId or steps' });
     }
     const validSteps = savedFunnels.validateSteps(rawSteps);
-    res.json({ data: await analyticsQuery.getCustomFunnel(validSteps, days) });
+    res.json({ data: await analyticsQuery.getCustomFunnel(validSteps, days, await scopeOf(req)) });
   } catch (err) {
-    res.status(400).json({ error: err.message || 'Server error' });
+    res.status(err.status === 503 ? 503 : 400).json({ error: err.message || 'Server error' });
   }
 };
 

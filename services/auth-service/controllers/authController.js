@@ -2,7 +2,7 @@
 import { buildFullExportService } from '../services/exportService.js';
 import prisma from '../db/prisma.js';
 import semver from 'semver';
-import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, setAccountCohortService, setAccountCohortBulkService, listUsersByCohortService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
+import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, setAccountCohortService, setAccountCohortBulkService, listUsersByCohortService, listNonDefaultCohortIdsService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { resolvePersona } from '../services/personaService.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
@@ -658,6 +658,14 @@ const updateStaffStatus = async (req, res) => {
   }
 };
 
+const getAccountCohortsInternal = async (_req, res) => {
+  try {
+    res.json({ data: await listNonDefaultCohortIdsService() });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
 const listUsersByCohort = async (req, res) => {
   try {
     const { cohort, limit, cursor } = req.query;
@@ -1124,6 +1132,6 @@ const updateLeaderboardOptIn = async (req, res) => {
   }
 };
 
-export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, validateFeaturePayload, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, listUsersByCohort, setAccountCohort, setAccountCohortBulk, countGymJoinedUsersByMonthInternal };
+export { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, validateFeaturePayload, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, listAttendanceSaasMembers, getBankAccount, updateBankAccount, getBankAccountAdmin, updateFcmToken, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, getAccountCohortsInternal, listUsersByCohort, setAccountCohort, setAccountCohortBulk, countGymJoinedUsersByMonthInternal };
 
 

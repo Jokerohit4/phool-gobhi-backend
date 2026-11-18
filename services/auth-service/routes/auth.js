@@ -2,7 +2,7 @@ import exploreRoutes from '../exploration/routes.js';
 import { Router } from 'express';
 import { registerPushToken, unregisterPushToken } from '../controllers/pushTokenController.js';
 const router = Router();
-import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, listUsersByCohort, setAccountCohort, setAccountCohortBulk, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, getAccountCohortsInternal, listUsersByCohort, setAccountCohort, setAccountCohortBulk, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -80,6 +80,8 @@ router.get('/profile-completion-bonus/admin', requireGobhi, getProfileCompletion
 router.put('/profile-completion-bonus/admin', requireGobhi, updateProfileCompletionBonusAdmin);
 router.get('/me', verifyToken, getMe);
 router.patch('/me', verifyToken, updateMe);
+// Registered before '/internal/:id' so 'account-cohorts' is never read as an id.
+router.get('/internal/account-cohorts', requireInternal, getAccountCohortsInternal);
 router.get('/internal/:id', requireInternal, getUserInternal);
 router.get('/internal/by-phone/:phone', requireInternal, getUserByPhoneInternal);
 router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
