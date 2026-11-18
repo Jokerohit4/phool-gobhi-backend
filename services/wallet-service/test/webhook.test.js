@@ -27,6 +27,7 @@ const digestValue = 'abc123456';
 const noOp = async () => {};
 
 test('setup: mock dependencies and import webhook handler', async (t) => {
+  t.mock.module('../services/coachingService.js', { exports: { settleCoachingPayment: async () => false } });
   t.mock.module('crypto', {
     exports: {
       default: {

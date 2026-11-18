@@ -186,6 +186,8 @@ export async function deleteAllDataService(userId) {
     // `medical/{userId}/` prefix as every other medical blob, so the sweep below
     // reclaims it.
     prisma.healthReport.deleteMany({ where: { userId } }),
+    prisma.guidanceRequest.deleteMany({ where: { userId } }),
+    prisma.guidanceProfile.deleteMany({ where: { userId } }),
     // Coach journey (Gobhi the Coach, 2026-10): water and supplement habits
     // are a behavioural record of what someone consumed each day, the
     // JourneyProgress row is their self-declared start level and unlock

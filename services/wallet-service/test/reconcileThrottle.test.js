@@ -34,11 +34,12 @@ function reset() {
   pageCalls = [];
   reconcileImpl = async () => ({ credited: 0, failed: 0, unresolved: 0, total: 0 });
   walletImpl = async () => ({ id: 1, userId: USER, balance: 100 });
-  orderImpl = async () => ({ orderId: 'o1', userId: USER, amount: 200, status: 'PENDING' });
+  orderImpl = async () => ({ orderId: 'o1', userId: USER, amount: 200, status: 'PENDING', purpose: 'topup' });
   claimImpl = async () => true;
 }
 
 test('setup', async (t) => {
+  t.mock.module('../services/coachingService.js', { exports: { settleCoachingPayment: async () => false } });
   t.mock.module('crypto', {
     exports: { default: { createHmac: () => ({ update() {}, digest: () => 'sig' }), timingSafeEqual: () => true } },
   });

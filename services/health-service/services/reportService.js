@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import prisma from '../db/prisma.js';
 import { track } from '../utils/analytics.js';
 import { extractBiomarkersFromPDF } from '../utils/ocrService.js';
@@ -89,6 +90,7 @@ export async function createReportService({ userId, storagePath, fileName, sizeB
         fileName,
         status: 'PENDING',
         reportDate: parsedReportDate,
+        mimeType: mimeType || 'application/pdf',
       },
     });
 
@@ -108,121 +110,42 @@ export async function createReportService({ userId, storagePath, fileName, sizeB
  * Now integrated with Google Document AI via ocrService.js.
  */
 export async function processReportService(reportId) {
+  const token = randomUUID();
+  const write = data => prisma.healthReport.updateMany({ where: { id: reportId, processingToken: token, status: 'PROCESSING' }, data });
   try {
-    const report = await prisma.healthReport.findUnique({
-      where: { id: reportId },
-    });
-
+    const report = await prisma.healthReport.findUnique({ where: { id: reportId } });
     if (!report) throw { status: 404, error: 'Report not found' };
-
-    // Legacy shape: a row whose storagePath is an http(s) URL rather than a
-    // bucket object path.
-    //
-    // The column was renamed from cloudinaryUrl and RENAME preserves data, so if
-    // any row was ever written through the old contract it still holds a full
-    // URL here. Handing that to signedDocumentUrl asks GCS for an object named
-    // "https://res.cloudinary.com/...", which cannot succeed on any retry and
-    // reports as a generic 502 that says nothing about the real cause.
-    //
-    // Checked before anything else, including the status flip below, so this
-    // makes no doomed network call to learn something the value itself already
-    // says. Marked FAILED with a reason rather than left retrying: a row that can
-    // never resolve is a user's report stuck forever with no indication of why.
     if (/^https?:\/\//i.test(report.storagePath || '')) {
-      await prisma.healthReport.update({
-        where: { id: reportId },
-        data: { status: 'FAILED' },
-      });
-      return {
-        status: 'FAILED',
-        message: 'Stored report predates the current storage layout',
-      };
+      await prisma.healthReport.update({ where: { id: reportId }, data: { status: 'FAILED' } });
+      return { status: 'FAILED', message: 'Stored report predates the current storage layout' };
     }
-
-    // Update status to processing
-    await prisma.healthReport.update({
-      where: { id: reportId },
-      data: { status: 'PROCESSING' },
-    });
-
-    // The OCR service fetches the document over HTTP, so it needs a URL rather
-    // than a bucket path. Minted here, for this one call, and discarded — the
-    // bucket has no public access and the path is the only thing stored.
-    //
-    // This is the reason the report PDF can live in the same private bucket as
-    // every other medical record instead of needing a publicly-readable host:
-    // the URL exists for the length of one HTTP fetch inside this function.
-    //
-    // A failure to mint is a processing failure, not a silent skip. The report
-    // stays PROCESSING and is retried/orphaned rather than being marked FAILED
-    // with no reason, because "could not read the bucket" and "the PDF had no
-    // biomarkers in it" are different problems and only one of them is the
-    // user's document being wrong.
+    const claimed = await prisma.healthReport.updateMany({ where: { id: reportId, status: 'PENDING' }, data: { status: 'PROCESSING', processingStartedAt: new Date(), processingToken: token } });
+    if (!claimed.count) return { status: report.status };
     const signedUrl = await signedDocumentUrl(report.storagePath);
-    if (!signedUrl) {
-      throw { status: 502, error: 'Could not read the stored report' };
-    }
-
-    // Use the real OCR service to extract markers from the PDF
-    const { extractions, detectedDate } = await extractBiomarkersFromPDF(signedUrl);
-
-    if (!extractions || extractions.length === 0) {
-      await prisma.healthReport.update({
-        where: { id: reportId },
-        data: { status: 'FAILED' },
-      });
-      return { status: 'FAILED', message: 'No biomarkers extracted' };
-    }
-
-    // The printed collection date, read off the same page as the values.
-    //
-    // Only written when the user gave no date of their own. reportDate is what
-    // the app calls "you said this"; detectedReportDate is what it calls "read
-    // off your report". Overwriting the former with the latter would be an
-    // unannounced downgrade of a user's own statement to a machine's guess, and
-    // the two would be indistinguishable afterwards - which matters because a
-    // wrong date here silently misdates their health history.
-    //
-    // Best-effort by design: a missing date costs a question at upload time, a
-    // date write that fails would cost the whole report. Caught and logged so a
-    // detection problem is visible without turning it into a processing failure.
+    if (!signedUrl) throw new Error('Could not read stored report');
+    const { extractions, detectedDate, profile, markers } = await extractBiomarkersFromPDF(signedUrl, report.mimeType || 'application/pdf');
+    const proposed = await write({ proposedProfile: profile || {}, proposedMarkers: markers || {} });
+    if (!proposed.count) return { status: 'SUPERSEDED' };
+    // A printed date is separate from, and cannot overwrite, the user's date.
     if (detectedDate?.date && !report.reportDate) {
-      await prisma.healthReport.update({
-        where: { id: reportId },
-        data: { detectedReportDate: detectedDate.date },
-      }).catch((err) => {
+      await write({ detectedReportDate: detectedDate.date }).catch((err) => {
         console.error('[report] detected date write failed:', err?.message);
       });
     }
-
-    // Save extractions to the database
-    await prisma.reportExtraction.createMany({
-      data: extractions.map(ex => ({
-        reportId,
-        metric: ex.metric,
-        rawValue: ex.rawValue,
-        normalizedValue: ex.normalizedValue,
-        unit: ex.unit,
-        confidence: ex.confidence,
-        isVerified: false,
-      })),
+    const completed = await prisma.$transaction(async tx => {
+      const owned = await tx.healthReport.updateMany({ where: { id: reportId, processingToken: token, status: 'PROCESSING' }, data: { status: 'COMPLETED', processedAt: new Date() } });
+      if (!owned.count) return false;
+      const verified = await tx.reportExtraction.findMany({ where: { reportId, isVerified: true }, select: { metric: true } });
+      const keep = new Set(verified.map(x => x.metric));
+      await tx.reportExtraction.deleteMany({ where: { reportId, isVerified: false } });
+      const pending = (extractions || []).filter(ex => !keep.has(ex.metric));
+      if (pending.length) await tx.reportExtraction.createMany({ data: pending.map(ex => ({ reportId, metric: ex.metric, rawValue: ex.rawValue, normalizedValue: ex.normalizedValue, unit: ex.unit, confidence: ex.confidence, isVerified: false })) });
+      return true;
     });
-
-    await prisma.healthReport.update({
-      where: { id: reportId },
-      data: { 
-        status: 'COMPLETED',
-        processedAt: new Date(),
-      },
-    });
-
-    return { status: 'COMPLETED', extractionsCount: extractions.length };
+    return { status: completed ? 'COMPLETED' : 'SUPERSEDED', extractionsCount: extractions?.length || 0 };
   } catch (err) {
-    console.error('processReportService error:', err);
-    await prisma.healthReport.update({
-      where: { id: reportId },
-      data: { status: 'FAILED' },
-    }).catch(() => {});
+    console.error('[report] processing failed for report', reportId);
+    await write({ status: 'FAILED' }).catch(() => {});
     throw { status: 500, error: 'Report processing failed' };
   }
 }
@@ -439,7 +362,10 @@ export async function deleteReportService({ reportId, userId }) {
 
   // ReportExtraction is onDelete: Cascade from the schema, so the extractions
   // go with the row and there is nothing to enumerate here.
-  await prisma.healthReport.delete({ where: { id: report.id } });
+  await prisma.$transaction([
+    prisma.guidanceProfile.deleteMany({ where: { userId, sourceReportId: report.id } }),
+    prisma.healthReport.delete({ where: { id: report.id } }),
+  ]);
 
   const { deleteObjects } = await import('./ledger/medicalDocumentStorage.js');
   const { failed } = await deleteObjects([report.storagePath]).catch((err) => {
