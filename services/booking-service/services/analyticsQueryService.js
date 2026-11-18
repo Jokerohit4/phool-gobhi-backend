@@ -5,6 +5,7 @@ import { queryBigQuery } from '../utils/bigQueryAnalytics.js';
 import { analyticsEnvironment } from '../utils/analyticsTransport.js';
 import { buildTrafficQuery, trafficReport } from './trafficReport.js';
 import { cohortClause, resolveCohortScope } from '../utils/cohortScope.js';
+import { isToday, todayWindowDays } from '../utils/analyticsWindow.js';
 
 const { Pool } = pg;
 
@@ -35,6 +36,8 @@ async function query(sql, params = []) {
 }
 
 function daysParam(days) {
+  // 'today' = since midnight IST, as a fractional number of days.
+  if (isToday(days)) return todayWindowDays();
   const n = Number(days);
   return Number.isFinite(n) && n > 0 && n <= 365 ? n : 30;
 }
