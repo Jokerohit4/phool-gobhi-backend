@@ -810,6 +810,8 @@ const getUserInternal = async (req, res) => {
       name: user.name,
       phone: user.phone,
       dateOfBirth: user.dateOfBirth,
+      isActive: user.isActive,
+      archivedAt: user.archivedAt ?? null,
       gender: user.gender,
       // Copied into buddy-service's BuddyProfile cache on profile sync: a
       // gender changed to "female" (and not since cleared by an admin) blocks

@@ -47,14 +47,14 @@ test('erasure fans out to every service that stores personal data', async () => 
   const result = await eraseUserAcrossServices(42);
 
   assert.equal(result.ok, true);
-  assert.equal(postCalls.length, 3, 'buddy, challenge and health must all be called');
+  assert.equal(postCalls.length, 4, 'buddy, challenge, health and coaching PII must all be erased');
   assert.ok(postCalls.every((u) => u.endsWith('/internal/erase/42')));
   assert.ok(postCalls.some((u) => u.includes('buddy')));
   assert.ok(postCalls.some((u) => u.includes('challenge')));
   assert.ok(postCalls.some((u) => u.includes('health')));
 });
 
-test('booking and wallet are deliberately NOT called', async () => {
+test('booking finances are retained while wallet erases coaching PII', async () => {
   postCalls = [];
   postBehaviour = () => ({ ok: true, status: 200, json: async () => ({ data: { erased: true } }) });
 
@@ -65,7 +65,7 @@ test('booking and wallet are deliberately NOT called', async () => {
   // problem than the one this solves. Asserted so a future "helpful" addition
   // has to argue with a failing test first.
   assert.ok(!postCalls.some((u) => u.includes('booking')));
-  assert.ok(!postCalls.some((u) => u.includes('wallet')));
+  assert.ok(postCalls.some((u) => u.includes('wallet')));
 });
 
 test('one failing service marks the whole erasure as not ok, and names it', async () => {
@@ -108,8 +108,8 @@ test('every service is attempted even after an earlier one fails', async () => {
 
   const result = await eraseUserAcrossServices(42);
 
-  assert.equal(postCalls.length, 3, 'a first failure must not abort the rest');
-  assert.equal(result.results.length, 2);
+  assert.equal(postCalls.length, 4, 'a first failure must not abort the rest');
+  assert.equal(result.results.length, 3);
   assert.equal(result.failures.length, 1);
 });
 

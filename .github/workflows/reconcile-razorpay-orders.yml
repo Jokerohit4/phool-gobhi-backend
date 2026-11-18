@@ -90,3 +90,7 @@ jobs:
             -H "Authorization: Bearer ${{ steps.reconcileauth.outputs.id_token }}" \
             -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
             "${{ steps.svcurl.outputs.url }}/internal/orders/reconcile-pending"
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer ${{ steps.reconcileauth.outputs.id_token }}" \
+            -H "x-internal-key: ${{ steps.internalkey.outputs.internal-api-key }}" \
+            "${{ steps.svcurl.outputs.url }}/coaching/internal/reconcile"

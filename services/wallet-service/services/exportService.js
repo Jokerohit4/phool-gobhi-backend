@@ -23,6 +23,12 @@ export async function buildExportService(userId) {
   });
 
   return {
+    coaching: {
+      membership: await prisma.coachingMembership.findUnique({ where: { userId } }),
+      orders: await prisma.coachingOrder.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      trainerGrants: await prisma.coachingAddonGrant.findMany({ where: { userId } }),
+      fulfillment: await prisma.coachingFulfillment.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    },
     wallet: wallet
       ? {
           balance: Number(wallet.balance),

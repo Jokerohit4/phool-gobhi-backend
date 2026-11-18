@@ -1,0 +1,88 @@
+import { Router } from 'express';
+import crypto from 'crypto';
+import axios from 'axios';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import prisma from '../db/prisma.js';
+import { requireRole, requireInternal } from '../middleware/requireAuth.js';
+import { membershipView, createCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
+const router = Router();
+const run = fn => async (req, res) => { try { res.json({ data: await fn(req) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? e.message : 'Could not complete this request right now. Please try again.' }); } };
+router.get('/mine', requireRole('customer'), run(async req => {
+  // Provider failure must not hide an already granted membership. Pending
+  // payments remain visible and can be reconciled on the next read/webhook.
+  let reconciliationPending = false;
+  await reconcileCoaching(req.userId).catch(() => { reconciliationPending = true; });
+  return { ...(await membershipView(req.userId)), reconciliationPending };
+}));
+router.put('/mine', requireRole('customer'), run(async req => {
+  if (typeof req.body.hasExistingGym !== 'boolean') throw Object.assign(new Error('Choose whether you already have a gym'), { status: 400 });
+  await prisma.coachingMembership.upsert({ where: { userId: req.userId }, create: { userId: req.userId, hasExistingGym: req.body.hasExistingGym }, update: { hasExistingGym: req.body.hasExistingGym } });
+  return membershipView(req.userId);
+}));
+router.post('/orders', requireRole('customer'), run(req => createCoachingOrder(req.userId, req.body.product)));
+router.post('/verify', requireRole('customer'), run(async req => {
+  const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
+  if (typeof orderId !== 'string' || typeof razorpayPaymentId !== 'string') throw Object.assign(new Error('Payment identifiers are required'), { status: 400 });
+  const row = await prisma.coachingOrder.findUnique({ where: { orderId } });
+  if (!row || row.userId !== req.userId) throw Object.assign(new Error('Order not found'), { status: 404 });
+  if (!signatureMatches(orderId, razorpayPaymentId, razorpaySignature)) throw Object.assign(new Error('Invalid payment signature'), { status: 400 });
+  await settleCoachingPayment(orderId, razorpayPaymentId);
+  const settled = await prisma.coachingOrder.findUnique({ where: { orderId } });
+  return { ...(await membershipView(req.userId)), payment_status: settled.status };
+}));
+router.post('/refund', requireRole('customer'), run(req => requestCoachingRefund(req.userId)));
+router.post('/labs', requireRole('customer'), run(async req => {
+  const record = await requestLab(req.userId, req.body.address, req.body.idempotencyKey);
+  await notifyCoachingFulfillment(req.userId).catch(() => {});
+  return record;
+}));
+router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId))));
+router.post('/internal/reconcile', requireInternal, run(async () => {
+  const users = await prisma.coachingOrder.findMany({ where: { status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } }, select: { userId: true }, distinct: ['userId'], orderBy: { updatedAt: 'asc' }, take: 100 });
+  let reconciled = 0;
+  for (const { userId } of users) { await reconcileCoaching(userId); reconciled++; }
+  await notifyCoachingFulfillment();
+  return { reconciled };
+}));
+router.get('/admin/fulfillment', requireRole('gobhi'), run(async () => {
+  const users = await prisma.coachingMembership.findMany({ where: { planType: { not: 'FREE' } }, orderBy: { updatedAt: 'desc' }, take: 200 });
+  const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
+  const info = new Map();
+  if (users.length) {
+    const response = await axios.post(`${authUrl}/internal/users/batch`, { ids: users.map(r => r.userId) }, { timeout: 15000, headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...(await googleIdTokenHeader(authUrl)) } });
+    for (const user of response.data?.data || []) info.set(user.id, user);
+  }
+  return Promise.all(users.map(async row => {
+    const context = await guidanceContext(row.userId);
+    return { id: row.userId, name: info.get(row.userId)?.name || context?.confirmedDetails?.name || 'Customer', phone: info.get(row.userId)?.phone || '', risk_bucket: context?.riskBucket || 'UNSET', clinical_status: context?.clinicalStatus || 'PENDING', ...(await membershipView(row.userId)) };
+  }));
+}));
+router.post('/admin/fulfillment/:userId/sessions', requireRole('gobhi'), run(req => consumeSession(Number(req.params.userId), req.body.kind, req.userId, req.body.idempotencyKey)));
+router.patch('/admin/fulfillment/:userId/gym', requireRole('gobhi'), run(async req => {
+  if (!['AWAITING_ASSIGNMENT', 'ASSIGNED', 'ACTIVE', 'CANCELLED'].includes(req.body.status)) throw Object.assign(new Error('Choose a gym pass status'), { status: 400 });
+  return prisma.coachingMembership.update({ where: { userId: Number(req.params.userId) }, data: { gymPassStatus: req.body.status } });
+}));
+router.patch('/admin/requests/:id', requireRole('gobhi'), run(async req => {
+  if (!['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(req.body.status)) throw Object.assign(new Error('Choose a fulfillment status'), { status: 400 });
+  return prisma.$transaction(async tx => {
+    const row = await tx.coachingFulfillment.findUnique({ where: { id: Number(req.params.id) } });
+    if (!row) throw Object.assign(new Error('Request not found'), { status: 404 });
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(${row.userId}::bigint)`;
+    const current = await tx.coachingFulfillment.findUnique({ where: { id: row.id } });
+    if (current.status === 'CANCELLED' || current.status === 'COMPLETED') return current;
+    if (current.kind === 'LAB' && req.body.status === 'CANCELLED') await tx.coachingMembership.updateMany({ where: { userId: row.userId, activeOrderId: current.details?.membershipOrderId ?? null, planStatus: { in: ['TRIAL_72H', 'ACTIVE'] }, labCreditsRemaining: { lt: 2 } }, data: { labCreditsRemaining: { increment: 1 } } });
+    return tx.coachingFulfillment.update({ where: { id: row.id }, data: { status: req.body.status, completedBy: req.userId } });
+  });
+}));
+// Alternate webhook URL for dedicated provider configuration. The shared
+// /webhooks/razorpay endpoint dispatches coaching orders to the same settler.
+router.post('/webhook', run(async req => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const expected = secret && crypto.createHmac('sha256', secret).update(req.rawBody || '').digest('hex');
+  const supplied = String(req.headers['x-razorpay-signature'] || '');
+  if (!expected || !/^[a-f\d]{64}$/i.test(supplied) || !crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(supplied, 'hex'))) throw Object.assign(new Error('Invalid webhook signature'), { status: 400 });
+  const payment = req.body.payload?.payment?.entity;
+  if (['payment.authorized', 'payment.captured'].includes(req.body.event) && payment?.order_id) await settleCoachingPayment(payment.order_id, payment.id);
+  return { received: true };
+}));
+export default router;

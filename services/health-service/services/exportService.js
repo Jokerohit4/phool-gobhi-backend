@@ -452,6 +452,10 @@ export async function buildFullExportService(userId) {
 
   return {
     // ---- Health ledger -------------------------------------------------
+    guidance: {
+      profile: await prisma.guidanceProfile.findUnique({ where: { userId } }),
+      requests: await prisma.guidanceRequest.findMany({ where: { userId } }),
+    },
     ledger: {
       // The goal, its constraints, and the targets derived from them. Decimals
       // are converted to numbers because Prisma hands them back as strings and

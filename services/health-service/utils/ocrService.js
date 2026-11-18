@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { extractGuidanceDetails } from './guidanceExtraction.js';
 import { METRIC_BOUNDS, METRIC_UNITS } from '../services/biometricService.js';
 
 dotenv.config();
@@ -17,7 +18,7 @@ const PROCESSOR_ID = process.env.GOOGLE_DOCUMENT_AI_PROCESSOR_ID;
  * array would invite a caller to treat "a biomarker and its date" as one
  * finding from one place when they are two independent guesses.
  */
-export async function extractBiomarkersFromPDF(pdfUrl) {
+export async function extractBiomarkersFromPDF(pdfUrl, mimeType = 'application/pdf') {
   if (!GOOGLE_PROJECT_ID || !PROCESSOR_ID) {
     console.error('Google Document AI credentials missing');
     throw new Error('OCR_CONFIG_MISSING');
@@ -32,11 +33,12 @@ export async function extractBiomarkersFromPDF(pdfUrl) {
       `https://${LOCATION}-documentai.googleapis.com/v1/projects/${GOOGLE_PROJECT_ID}/locations/${LOCATION}/processors/${PROCESSOR_ID}:process`,
       {
         rawDocument: {
-          mimeType: 'application/pdf',
+          mimeType,
           content: await fetchPdfAsBase64(pdfUrl),
         },
       },
       {
+        timeout: 90000,
         headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
@@ -49,7 +51,8 @@ export async function extractBiomarkersFromPDF(pdfUrl) {
 }
 
 async function fetchPdfAsBase64(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+  if (!response.ok) throw new Error('Could not fetch the private report');
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer).toString('base64');
 }
@@ -63,7 +66,7 @@ async function getGoogleAccessToken() {
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   });
   const token = await auth.getAccessToken();
-  return token.token;
+  return typeof token === 'string' ? token : token.token;
 }
 
 // Lab-report labels -> BiometricMetric. Only enum members may appear here:
@@ -195,7 +198,7 @@ export function parseDocumentAIResponse(data) {
   entities.map(fromEntity).forEach(consider);
   fromText(documentText).filter((ex) => !best.has(ex.metric)).forEach(consider);
 
-  return { extractions: [...best.values()], detectedDate: detectReportDateFromText(documentText) };
+  return { extractions: [...best.values()], detectedDate: detectReportDateFromText(documentText), ...extractGuidanceDetails(documentText) };
 }
 
 /**

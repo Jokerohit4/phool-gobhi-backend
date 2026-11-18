@@ -2162,6 +2162,12 @@ model HealthReport {
   userId      Int
   storagePath String
   fileName    String
+  mimeType    String       @default("application/pdf")
+  proposedProfile Json?
+  proposedMarkers Json?
+  readConsentAt DateTime?
+  processingStartedAt DateTime?
+  processingToken String?
   status      ReportStatus @default(PENDING)
   // The date the blood was drawn, 'YYYY-MM-DD', or null when nobody has said.
   // Distinct from createdAt (when the file arrived) because a report is a
@@ -2466,5 +2472,40 @@ model FoodPhotoSharingPreference {
   enabled Boolean
   consentVersion String
   decidedAt DateTime @default(now())
+  @@schema("health")
+}
+
+
+model GuidanceProfile {
+  userId Int @id
+  sourceReportId Int?
+  confirmedDetails Json @default("{}")
+  confirmedMarkers Json @default("{}")
+  liverFlag Boolean @default(false)
+  riskBucket String @default("UNSET")
+  confirmedAt DateTime?
+  concern String?
+  existingAdvice String?
+  clinicalStatus String @default("PENDING")
+  clinicalNote String?
+  clinicianName String?
+  clinicianRegistration String?
+  reviewedBy Int?
+  reviewedAt DateTime?
+  agreedActions Json @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@schema("health")
+}
+model GuidanceRequest {
+  id Int @id @default(autoincrement())
+  userId Int
+  kind String
+  message String
+  status String @default("REQUESTED")
+  preferredAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt])
   @@schema("health")
 }

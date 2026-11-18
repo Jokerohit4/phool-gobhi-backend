@@ -72,6 +72,7 @@ const PUBLIC_ROUTES = [
   // in gym-service.
   { method: 'GET', pattern: /^\/api\/gyms\/\d+\/classes/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
+  { method: 'POST', pattern: /^\/api\/wallet\/coaching\/webhook$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
   { method: 'GET', pattern: /^\/api\/bookings\/public\/attendance-stats(\?.*)?$/ },
   // Content, not an API resource: served straight from the gateway so all
@@ -159,6 +160,7 @@ const RATE_LIMITED_ROUTES = [
   { method: 'POST', pattern: /^\/api\/auth\/(send-otp|verify-otp|login|signup|contact|refresh-token|google|verify-firebase-token)$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/auth\/jobs\/\d+\/apply$/, limiter: authAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
+  { method: 'POST', pattern: /^\/api\/wallet\/coaching\/(orders|verify|refund)$/, limiter: walletAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },
 ];
 app.use((req, res, next) => {

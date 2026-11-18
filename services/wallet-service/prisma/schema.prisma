@@ -249,3 +249,60 @@ model CoachingSubscription {
   @@index([planType, planStatus])
   @@schema("wallet")
 }
+
+
+model CoachingMembership {
+  userId Int @id
+  planType String @default("FREE")
+  planStatus String @default("INACTIVE")
+  trialEndsAt DateTime?
+  planEndsAt DateTime?
+  purchasedAt DateTime?
+  freeDelightSessionsRemaining Int @default(0)
+  labCreditsRemaining Int @default(0)
+  gymPassStatus String @default("NOT_ISSUED")
+  hasExistingGym Boolean @default(false)
+  activeOrderId Int? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@schema("wallet")
+}
+model CoachingOrder {
+  id Int @id @default(autoincrement())
+  userId Int
+  product String
+  amountPaise Int
+  orderId String @unique
+  paymentId String? @unique
+  status String @default("PENDING")
+  fulfilledAt DateTime?
+  refundId String?
+  refundRequestedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, status])
+  @@schema("wallet")
+}
+model CoachingAddonGrant {
+  id Int @id @default(autoincrement())
+  userId Int
+  orderId Int @unique
+  remaining Int @default(4)
+  expiresAt DateTime
+  @@index([userId, expiresAt])
+  @@schema("wallet")
+}
+model CoachingFulfillment {
+  id Int @id @default(autoincrement())
+  userId Int
+  kind String
+  idempotencyKey String @unique
+  details Json @default("{}")
+  status String @default("REQUESTED")
+  completedBy Int?
+  notificationDeliveredAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt])
+  @@schema("wallet")
+}

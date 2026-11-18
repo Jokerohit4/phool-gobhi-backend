@@ -2,8 +2,11 @@ import { googleIdTokenHeader } from './googleIdToken.js';
 
 const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 
-// Every service that stores personal data keyed to a user id. Booking and
-// wallet are deliberately absent: neither denormalises any PII (they hold
+// Every service that stores personal data keyed to a user id.
+// Booking records are deliberately absent: they contain amounts, dates and gym ids.
+// Wallet now holds coaching collection addresses; its erasure endpoint removes
+// those details and deactivates fulfillment, retaining the financial ledger.
+// Historically neither financial service denormalised PII (they held
 // amounts, dates and gym ids), so once the User row here is gone their
 // `customerId: 42` is already a pseudonymous integer pointing at nothing.
 // Their rows are also part of a financial and partner-settlement record
@@ -13,6 +16,7 @@ const ERASURE_TARGETS = [
   { name: 'buddy-service', url: () => process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007' },
   { name: 'challenge-service', url: () => process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008' },
   { name: 'health-service', url: () => process.env.HEALTH_SERVICE_URL || 'http://health-service:5009' },
+  { name: 'wallet-service', url: () => process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003' },
 ];
 
 /// Erases this user everywhere except auth-service itself.

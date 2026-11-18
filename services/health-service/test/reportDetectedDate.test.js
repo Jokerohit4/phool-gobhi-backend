@@ -138,7 +138,7 @@ describe('detected date storage', () => {
 
     // The write itself names only the detected column. An update listing
     // reportDate would be an overwrite whatever the guard above says.
-    const write = processBody.match(/data:\s*\{\s*detectedReportDate[^}]*\}/);
+    const write = processBody.match(/write\(\{\s*detectedReportDate[^}]*\}/);
     assert.ok(write, 'expected a write of detectedReportDate');
     assert.doesNotMatch(write[0], /reportDate:\s*[^.]/, 'the write must not touch reportDate');
   });
@@ -154,7 +154,7 @@ describe('detected date storage', () => {
     );
     assert.match(
       processBody,
-      /data:\s*\{\s*detectedReportDate[\s\S]*?\}\)\s*\.catch\(/,
+      /write\(\{\s*detectedReportDate[\s\S]*?\}\)\s*\.catch\(/,
       'the detected date write should be best-effort',
     );
   });
@@ -163,9 +163,9 @@ describe('detected date storage', () => {
     const out = parseDocumentAIResponse({
       document: { text: 'Collected: 04 Mar 2026\nLDL 118 mg/dL', entities: [] },
     });
-    assert.deepEqual(Object.keys(out).sort(), ['detectedDate', 'extractions']);
+    assert.deepEqual(Object.keys(out).sort(), ['detectedDate', 'extractions', 'markers', 'profile']);
     assert.equal(out.extractions[0].metric, 'ldl');
-    assert.match(reportServiceSource, /const \{ extractions, detectedDate \} = await extractBiomarkersFromPDF/);
+    assert.match(reportServiceSource, /const \{ extractions, detectedDate, profile, markers \} = await extractBiomarkersFromPDF/);
   });
 
   test('the detector reads the document text, not the trained entities', () => {
