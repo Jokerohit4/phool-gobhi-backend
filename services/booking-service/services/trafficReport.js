@@ -1,23 +1,28 @@
 // One bounded warehouse query for the Traffic report. Only client activity is
 // counted: server jobs and operational truth events are not evidence of app use.
+import { isToday, todayWindowDays } from '../utils/analyticsWindow.js';
+
 const PRODUCTS = ['all', 'customer', 'partner', 'website'];
 const PLATFORMS = ['both', 'android', 'ios'];
 
-export function trafficFilters(input = {}) {
+// `now` is only used for days=today (midnight IST until now), so tests and the
+// builder pass the report's own as-of instant.
+export function trafficFilters(input = {}, now = new Date()) {
   const product = input.product ?? 'all';
   const platform = input.platform ?? 'both';
   if (!PRODUCTS.includes(product) || !PLATFORMS.includes(platform)) {
     throw Object.assign(new Error('Invalid traffic product or platform'), { status: 400 });
   }
-  const n = Number(input.days ?? 30);
-  if (!Number.isInteger(n) || n < 1 || n > 365) {
-    throw Object.assign(new Error('Traffic days must be an integer from 1 to 365'), { status: 400 });
+  const today = isToday(input.days);
+  const n = today ? todayWindowDays(now) : Number(input.days ?? 30);
+  if (!today && (!Number.isInteger(n) || n < 1 || n > 365)) {
+    throw Object.assign(new Error('Traffic days must be "today" or an integer from 1 to 365'), { status: 400 });
   }
   return { product, platform: ['customer', 'partner'].includes(product) ? platform : 'both', days: n };
 }
 
 export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Date(), project = 'phool-gobhi', dataset = 'analytics_dev', scope = null } = {}) {
-  const filters = trafficFilters(input);
+  const filters = trafficFilters(input, asOf);
   if (!/^[a-z][a-z0-9-]+$/.test(project) || !/^analytics_(dev|prod)$/.test(dataset)) throw new Error('Invalid traffic warehouse');
   const end = new Date(asOf);
   const since = days => new Date(end.getTime() - days * 86400000).toISOString();
