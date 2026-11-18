@@ -144,6 +144,8 @@ stable contracts — renaming a shipped event breaks historical funnels.**
 | `staff_account_created` | auth | actorId | `newUserId`, `gobhiType` |
 | `staff_account_revoked` | auth | actorId | `targetUserId` |
 | `staff_account_reactivated` | auth | actorId | `targetUserId` |
+| `user_cohort_changed` | auth | actorId | `targetUserId`, `from`, `to` |
+| `user_cohort_bulk_changed` | auth | actorId | `to`, `updated` |
 | `trainer_account_created` | auth | partnerId | `trainerId`, `gymId` |
 | `trainer_account_deactivated` | auth | partnerId | `trainerId`, `gymId` |
 | `trainer_account_reactivated` | auth | partnerId | `trainerId`, `gymId` |

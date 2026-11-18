@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../db/prisma.js';
 import { generateAccessToken } from '../utils/generateTokens.js';
 import { issueRefreshFamily, rotate as rotateRefreshToken, revokeByToken } from './refreshTokenService.js';
-import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES } from '../constants/userEnums.js';
+import { VALID_ROLES, VALID_TYPES, VALID_GOBHI_TYPES, ROLES, VALID_ACCOUNT_COHORTS } from '../constants/userEnums.js';
 import { ERROR_MESSAGES } from '../constants/errorMessages.js';
 import { track } from '../utils/analytics.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
@@ -938,6 +938,69 @@ export async function googleSignInService({ idToken }) {
     refreshToken,
     user: { id: user.id, phone: user.phone, email: user.email, name: user.name, role: user.role, type: user.type, gobhiType: user.gobhiType },
   };
+}
+
+// --- Account cohort (staff-assigned segmentation: friends & family, testing...) ---
+
+const COHORT_BULK_MAX = 500;
+const COHORT_SELECT = { id: true, name: true, role: true, accountCohort: true };
+
+function assertValidCohort(cohort) {
+  if (!VALID_ACCOUNT_COHORTS.includes(cohort)) {
+    throw { status: 400, error: `accountCohort must be one of: ${VALID_ACCOUNT_COHORTS.join(', ')}` };
+  }
+}
+
+export async function setAccountCohortService(targetId, cohort, actorId) {
+  assertValidCohort(cohort);
+  const id = Number(targetId);
+  if (!Number.isInteger(id) || id <= 0) throw { status: 400, error: 'Invalid user id' };
+  const before = await prisma.user.findUnique({ where: { id }, select: COHORT_SELECT });
+  if (!before) throw { status: 404, error: 'User not found' };
+  if (before.accountCohort === cohort) return before;
+  const updated = await prisma.user.update({ where: { id }, data: { accountCohort: cohort }, select: COHORT_SELECT });
+  track('user_cohort_changed', actorId, { targetUserId: id, from: before.accountCohort, to: cohort });
+  return updated;
+}
+
+// Beta-cohort building: tag many users in one call. Unknown ids are reported
+// back rather than failing the whole batch.
+export async function setAccountCohortBulkService(userIds, cohort, actorId) {
+  assertValidCohort(cohort);
+  if (!Array.isArray(userIds) || userIds.length === 0) throw { status: 400, error: 'userIds must be a non-empty array' };
+  if (userIds.length > COHORT_BULK_MAX) throw { status: 400, error: `At most ${COHORT_BULK_MAX} users per request` };
+  const ids = [...new Set(userIds.map(Number))];
+  if (ids.some((n) => !Number.isInteger(n) || n <= 0)) throw { status: 400, error: 'userIds must be positive integers' };
+  const found = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  const foundIds = found.map((u) => u.id);
+  const { count } = await prisma.user.updateMany({ where: { id: { in: foundIds } }, data: { accountCohort: cohort } });
+  track('user_cohort_bulk_changed', actorId, { to: cohort, updated: count });
+  const foundSet = new Set(foundIds);
+  return { updated: count, notFound: ids.filter((n) => !foundSet.has(n)) };
+}
+
+// Staff view of users by cohort, cursor-paginated on id (ascending). Also
+// returns per-cohort totals so the admin can see the whole split at a glance.
+export async function listUsersByCohortService({ cohort, limit, cursor } = {}) {
+  if (cohort !== undefined && cohort !== '') assertValidCohort(cohort);
+  const take = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  const after = cursor ? Number(cursor) : null;
+  if (cursor && (!Number.isInteger(after) || after <= 0)) throw { status: 400, error: 'Invalid cursor' };
+  const where = cohort ? { accountCohort: cohort } : {};
+  const [rows, grouped] = await Promise.all([
+    prisma.user.findMany({
+      where: after ? { ...where, id: { gt: after } } : where,
+      select: { id: true, name: true, phone: true, email: true, role: true, accountCohort: true, createdAt: true },
+      orderBy: { id: 'asc' },
+      take: take + 1,
+    }),
+    prisma.user.groupBy({ by: ['accountCohort'], _count: { _all: true } }),
+  ]);
+  const hasMore = rows.length > take;
+  const users = hasMore ? rows.slice(0, take) : rows;
+  const counts = Object.fromEntries(VALID_ACCOUNT_COHORTS.map((c) => [c, 0]));
+  for (const g of grouped) counts[g.accountCohort] = g._count._all;
+  return { users, counts, nextCursor: hasMore ? users[users.length - 1].id : null };
 }
 
 // --- Staff (gobhi) management, driven by the admin portal's own Staff page ---

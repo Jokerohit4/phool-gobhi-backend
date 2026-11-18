@@ -109,6 +109,10 @@ model User {
   // switch or a gym link/leave/removal changes it — editing an answer never
   // does, which is what stops old answers trapping someone in a persona.
   persona Persona?
+  // Internal segmentation: who this account actually is, for separating
+  // real users from internal/known ones and for building beta cohorts. Staff-
+  // assigned (never client-writable); every account starts UNKNOWN_USERS.
+  accountCohort AccountCohort @default(UNKNOWN_USERS)
   // Coarse "when are you usually free" bucket. Consumed for nudge send-time
   // and off-peak targeting — NOT collected for its own sake. If that consumer
   // ever goes away, delete the field rather than leaving it to rot the way
@@ -176,6 +180,7 @@ model User {
   // Covers the attendance-SaaS monthly-bill query (users joined a gym in a
   // given month): where linkedGymId = X AND createdAt in [monthStart, monthEnd).
   @@index([linkedGymId, createdAt])
+  @@index([accountCohort])
   @@schema("auth")
 }
 
@@ -560,6 +565,16 @@ enum Role {
   // A gym's own personal trainer — see ROLES.TRAINER in userEnums.js for the
   // full distinction from GobhiType's trainer job-title label.
   trainer
+
+  @@schema("auth")
+}
+
+// See User.accountCohort.
+enum AccountCohort {
+  FRIENDS_AND_FAMILY
+  GENERATED_ACCOUNTS
+  TESTING_ACCOUNTS
+  UNKNOWN_USERS
 
   @@schema("auth")
 }

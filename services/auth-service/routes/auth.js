@@ -2,7 +2,7 @@ import exploreRoutes from '../exploration/routes.js';
 import { Router } from 'express';
 import { registerPushToken, unregisterPushToken } from '../controllers/pushTokenController.js';
 const router = Router();
-import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
+import { signup, login, deleteUser, exportMyData, refreshToken, logout, sendOtp, verifyOtp, verifyFirebaseToken, googleSignIn, getOtpConfig, getOtpConfigAdmin, updateOtpConfigAdmin, listOtpSkipAllowlist, addOtpSkipAllowlist, removeOtpSkipAllowlist, getAppConfig, getAppConfigAdmin, updateAppConfigAdmin, listAppConfigHistory, getFeatureFlagRegistry, getLaunchStatus, getLaunchGateAdmin, updateLaunchGateAdmin, getProfileCompletionBonusAdmin, updateProfileCompletionBonusAdmin, getMe, updateMe, getUserInternal, getUserByPhoneInternal, getUsersBatchInternal, runAttendanceSaasReengagementSweep, countGymJoinedUsersByMonthInternal, listAttendanceSaasMembers, listGymMembersForPartner, getBankAccount, updateBankAccount, getBankAccountAdmin, updateLeaderboardOptIn, listStaff, createStaff, updateStaffStatus, listUsersByCohort, setAccountCohort, setAccountCohortBulk, createTrainer, listTrainers, updateTrainerStatus } from '../controllers/authController.js';
 import { checkContact, listContacts, addContact, removeContact } from '../controllers/pitchAccessController.js';
 import { submitContact, listContact, updateContactRead } from '../controllers/contactController.js';
 import {
@@ -124,6 +124,12 @@ router.delete('/admin/pitch-access/:id', requireGobhi, removeContact);
 router.get('/admin/staff', requireGobhi, listStaff);
 router.post('/admin/staff', requireGobhi, createStaff);
 router.patch('/admin/staff/:id', requireGobhi, updateStaffStatus);
+
+// Account cohort (friends & family / generated / testing / unknown) — staff-only.
+// The bulk route is registered first so 'bulk' is never read as a :id.
+router.get('/admin/users', requireGobhi, listUsersByCohort);
+router.patch('/admin/users/cohort/bulk', requireGobhi, setAccountCohortBulk);
+router.patch('/admin/users/:id/cohort', requireGobhi, setAccountCohort);
 
 // Website /contact form submissions — public write, staff-only read
 router.post('/contact', submitContact);
