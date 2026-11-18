@@ -11,6 +11,16 @@ export const ROLES = {
   TRAINER: 'trainer',
 };
 
+// Internal segmentation of accounts (User.accountCohort). Values match the
+// Prisma enum AccountCohort exactly. Staff-assigned only, never client-writable.
+export const ACCOUNT_COHORTS = {
+  FRIENDS_AND_FAMILY: 'FRIENDS_AND_FAMILY',
+  GENERATED_ACCOUNTS: 'GENERATED_ACCOUNTS',
+  TESTING_ACCOUNTS: 'TESTING_ACCOUNTS',
+  UNKNOWN_USERS: 'UNKNOWN_USERS',
+};
+export const VALID_ACCOUNT_COHORTS = Object.values(ACCOUNT_COHORTS);
+
 export const USER_TYPES = {
   GENERAL: 'general',
   SUB_PREMIUM: 'sub_premium',

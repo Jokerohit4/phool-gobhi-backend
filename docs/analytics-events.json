@@ -38,6 +38,18 @@
     "source": "server",
     "service": "auth-service"
   },
+  "user_cohort_changed": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-11-18",
+    "notes": "staff set a user's accountCohort (props: targetUserId, from, to)"
+  },
+  "user_cohort_bulk_changed": {
+    "source": "server",
+    "service": "auth-service",
+    "since": "2026-11-18",
+    "notes": "staff bulk-set accountCohort (props: to, updated)"
+  },
   "trainer_account_created": {
     "source": "server",
     "service": "auth-service",
