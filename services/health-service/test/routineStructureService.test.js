@@ -6,7 +6,14 @@ let deletions = 0;
 let templateRows = [];
 let templateOwner = 3;
 const previousPhases = [];
+const exercise = {
+  findMany: async ({ where }) => {
+    assert.deepEqual(where.OR, [{ createdByUserId: null }, { createdByUserId: 3 }]);
+    return where.id.in.filter((id) => id === 1 || id === 2).map((id) => ({ id }));
+  },
+};
 const tx = {
+  exercise,
   templateExercise: {
     deleteMany: async () => { deletions++; },
     createMany: async ({ data }) => { updatedExercises = data; },
@@ -19,6 +26,7 @@ test('create, edit and start preserve routine phases, guidance, rest and timed t
     exports: { PrismaClient: class {
       constructor() {
         this.$transaction = async (callback) => callback(tx);
+        this.exercise = exercise;
         this.workoutTemplate = {
           findUnique: async () => ({ id: 7, userId: templateOwner, isSystem: templateOwner === null, exercises: templateRows }),
           create: async ({ data }) => { createdTemplate = data; return data; },
@@ -46,6 +54,9 @@ test('create, edit and start preserve routine phases, guidance, rest and timed t
   assert.equal(updatedExercises[2].instructions, 'One side per set');
   assert.equal(updatedExercises[2].restSeconds, 0);
   await assert.rejects(updateTemplateService(7, 3, { exercises: [] }), { status: 400 });
+  const inaccessible = { name: 'Other', exercises: [{ exerciseId: 9, targetSets: 1, targetReps: 5 }] };
+  await assert.rejects(createTemplateService(3, inaccessible), { status: 404 });
+  await assert.rejects(updateTemplateService(7, 3, inaccessible), { status: 404 });
   assert.equal(deletions, 1, 'invalid edit must not delete the saved routine');
   templateRows = createdTemplate.exercises.create;
   const session = await startSessionService(3, 7);

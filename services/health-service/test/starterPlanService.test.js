@@ -40,6 +40,10 @@ mock.module('../services/plan/rebuildPlan.js', {
   },
 });
 
+mock.module('../services/plan/layerState.js', {
+  exports: { getOnLayerKeys: async () => ['workout', 'water'] },
+});
+
 // The journey reads are imported lazily by resolveUnlockedLayerKeys.
 mock.module('../services/journey/journeyService.js', {
   exports: {
@@ -58,6 +62,7 @@ const {
   resolveUnlockedLayerKeys,
   START_LAYER,
 } = await import('../services/ledger/starterPlanService.js');
+const { saveSettings, saveSlots } = await import('../services/ledger/prescriptionService.js');
 
 // The whole template catalogue the pools name: the gym starters (B7's seeds)
 // and the home track's (seedHomeTrack.js). Ids are arbitrary but stable per
@@ -139,6 +144,34 @@ function fakePrisma(overrides = {}) {
 }
 
 // ---- validation --------------------------------------------------------------
+
+test('a schedule edit preserves starter names and fills metadata for assigned routines', async () => {
+  const starter = { weekday: 0, templateId: null, title: 'Home starter', location: 'home' };
+  const routine = { id: 23, name: 'My routine', level: 'beginner', _count: { exercises: 4 } };
+  const prisma = fakePrisma({
+    state: { prescription: { workoutSlots: [starter] } },
+    prisma: {
+      workoutTemplate: {
+        findMany: async ({ where }) => {
+          assert.deepEqual(where, { id: { in: [23] }, OR: [{ isSystem: true }, { userId: 7 }] });
+          return [routine];
+        },
+      },
+      $transaction: (write) => write(prisma),
+    },
+  });
+  await saveSlots({
+    prisma,
+    userId: 7,
+    slots: [{ weekday: 0, templateId: null }, { weekday: 6, templateId: 23 }],
+  });
+  assert.deepEqual(prisma.state.prescription.workoutSlots, [
+    starter,
+    { weekday: 6, templateId: 23, title: 'My routine', level: 'beginner', moves: 4, location: 'home', manual: true },
+  ]);
+  assert.equal(prisma.state.weeklyGoal.sessionsPerWeek, 2);
+  assert.equal(rebuildCalls.at(-1).options.reason, 'edit');
+});
 
 test('the starter plan refuses answers it cannot plan with', async () => {
   const prisma = fakePrisma();
@@ -343,6 +376,38 @@ test('refreshing slots for a profile change keeps the planned weekdays and rebui
   assert.equal(ok, true);
   assert.deepEqual(written[0].workoutSlots.map((s) => s.weekday), [5, 0, 1]);
   assert.equal(rebuildCalls.at(-1).options.reason, 'personalisation');
+});
+
+test('a profile change preserves both manual assignments and existing personal routines', async () => {
+  const manual = { weekday: 5, templateId: 27, title: 'Picked system routine', manual: true, location: 'gym' };
+  const personal = { weekday: 0, templateId: 28, title: 'Existing personal routine' };
+  const automatic = { weekday: 1, templateId: null, title: 'Old starter' };
+  const prisma = fakePrisma({ state: { prescription: { workoutSlots: [manual, personal, automatic] } } });
+  const findMany = prisma.workoutTemplate.findMany;
+  prisma.workoutTemplate.findMany = async (query) =>
+    query.where.userId === 7 ? [{ id: 28 }] : findMany(query);
+  let slots;
+  prisma.prescription.update = async ({ data }) => { slots = data.workoutSlots; };
+
+  await refreshWorkoutSlotsForProfile(prisma, 7);
+
+  assert.deepEqual(slots.slice(0, 2), [manual, personal]);
+  assert.equal(slots[2].weekday, 1);
+  assert.notEqual(slots[2].title, automatic.title);
+});
+
+test('reducing the session count keeps the manually assigned workout day', async () => {
+  const automatic = { weekday: 0, templateId: null, title: 'Old starter', location: 'gym' };
+  const manual = { weekday: 5, templateId: 27, title: 'Chosen routine', manual: true };
+  const prisma = fakePrisma({ state: {
+    prescription: { workoutSlots: [automatic, manual] },
+    weeklyGoal: { sessionsPerWeek: 2 },
+  } });
+  prisma.$transaction = async (callback) => callback(prisma);
+  await saveSettings({ prisma, userId: 7, draft: { sessionsPerWeek: 1 } });
+  assert.deepEqual(prisma.state.prescription.workoutSlots, [manual]);
+  assert.equal(prisma.state.weeklyGoal.sessionsPerWeek, 1);
+  assert.equal(rebuildCalls.at(-1).options.reason, 'edit');
 });
 
 test('a home week is built from the home track, and experienced users get the harder pool', async () => {

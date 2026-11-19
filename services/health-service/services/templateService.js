@@ -3,6 +3,10 @@ import prisma from '../db/prisma.js';
 import { equipmentFit, rankByFit } from './homeSetup.js';
 import { progressionFields } from './progressionService.js';
 import { createTtlCache } from '../utils/ttlCache.js';
+import { assertWorkoutExercisesVisible } from './workoutExerciseAccess.js';
+import { rebuildPlan } from './plan/rebuildPlan.js';
+import { getOnLayerKeys } from './plan/layerState.js';
+import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
 
 const includeExercises = {
   exercises: { include: { exercise: true }, orderBy: { order: 'asc' } },
@@ -104,6 +108,7 @@ export async function createTemplateService(userId, body) {
       throw err;
     }
   }
+  await assertWorkoutExercisesVisible(prisma, userId, exercises.map((exercise) => exercise.exerciseId));
   return prisma.workoutTemplate.create({
     data: {
       userId,
@@ -151,6 +156,7 @@ export async function updateTemplateService(templateId, userId, body) {
   const description = routineDescription(body || {});
   return prisma.$transaction(async (tx) => {
     if (Array.isArray(exercises)) {
+      await assertWorkoutExercisesVisible(tx, userId, exercises.map((exercise) => exercise.exerciseId));
       const progression = exercises.map(progressionFields);
       await tx.templateExercise.deleteMany({ where: { templateId } });
       await tx.templateExercise.createMany({
@@ -181,10 +187,47 @@ export async function updateTemplateService(templateId, userId, body) {
 
 export async function deleteTemplateService(templateId, userId) {
   await assertOwnsTemplate(templateId, userId);
+  // Resolve Journey before opening the transaction: computing it can run its
+  // own plan rebuild when a layer unlocks.
+  const onLayerKeys = await getOnLayerKeys(prisma, userId);
   // Past sessions keep their own SessionExercise/WorkoutSet rows regardless
   // (they don't cascade off the template) — only WorkoutSession.templateId
   // is nulled by the FK, per Prisma's default behavior for an unspecified
   // onDelete on that relation, so history is never silently deleted by
   // deleting the routine it was started from.
-  await prisma.workoutTemplate.delete({ where: { id: templateId } });
+  const scheduleChanged = await prisma.$transaction(async (tx) => {
+    const [prescription, journey] = await Promise.all([
+      tx.prescription.findUnique({ where: { userId } }),
+      tx.journeyProgress.findUnique({ where: { userId } }),
+    ]);
+    const slots = prescription?.workoutSlots ?? [];
+    const remaining = slots.filter((slot) => slot.templateId !== templateId);
+    const snapshot = journey?.workoutSnapshot;
+    const snapshotChanged = snapshot?.workoutSlots?.some((slot) => slot.templateId === templateId);
+    if (snapshotChanged) {
+      await tx.journeyProgress.update({
+        where: { userId },
+        data: { workoutSnapshot: {
+          ...snapshot,
+          workoutSlots: snapshot.workoutSlots.filter((slot) => slot.templateId !== templateId),
+        } },
+      });
+    }
+    if (remaining.length !== slots.length) {
+      await tx.prescription.update({ where: { userId }, data: { workoutSlots: remaining } });
+      await tx.weeklyGoal.upsert({
+        where: { userId },
+        create: { userId, sessionsPerWeek: remaining.length },
+        update: { sessionsPerWeek: remaining.length },
+      });
+    }
+    await tx.workoutTemplate.delete({ where: { id: templateId } });
+    if (remaining.length !== slots.length) {
+      await rebuildPlan(tx, userId, { reason: 'edit', onLayerKeys });
+    }
+    return snapshotChanged || remaining.length !== slots.length;
+  }, { isolationLevel: 'Serializable' });
+  if (scheduleChanged) {
+    emitJourneyInvalidate(userId);
+  }
 }

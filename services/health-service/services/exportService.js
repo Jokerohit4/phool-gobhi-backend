@@ -1,6 +1,7 @@
 import prisma from '../db/prisma.js';
 import { hasMedicalRecordsConsentService } from './ledger/ledgerConsentService.js';
 import { currentNutritionTarget } from './ledger/currentTarget.js';
+import { countsAsSession, workoutElapsedSeconds } from '../utils/sessionDay.js';
 
 // FR-16. One builder feeds both the JSON and CSV shapes — the BRD's "Robin
 // Hood rule" (Tech §8.3) is that an export and the on-screen numbers for the
@@ -75,7 +76,7 @@ export async function buildRangeSeriesService(userId, { from, to } = {}, { inclu
         startedAt: s.startedAt,
         endedAt: s.endedAt,
         durationMinutes: s.endedAt
-          ? Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 60000)
+          ? Math.round((s.activeSeconds ?? workoutElapsedSeconds(s)) / 60)
           : null,
         type: s.type,
         rpe: s.rpe,
@@ -83,6 +84,7 @@ export async function buildRangeSeriesService(userId, { from, to } = {}, { inclu
         bookingId: s.bookingId,
         exerciseCount: s.exercises.length,
         completedSets,
+        ...(lean ? { qualifies: countsAsSession(s) } : {}),
         volumeKg: Math.round(volumeKg),
       };
     }),

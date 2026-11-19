@@ -1,4 +1,4 @@
-import { isoDayIST } from '../utils/sessionDay.js';
+import { isoDayIST, workoutElapsedSeconds } from '../utils/sessionDay.js';
 const METRICS = ['water_consistency', 'mood_consistency', 'workout_consistency'];
 
 function dayOf(value) {
@@ -25,10 +25,12 @@ export async function challengeActivity(prisma, { userId, since, metric, verifie
     const rows = await prisma.workoutSession.findMany({
       where: { userId, startedAt: { gte: start }, endedAt: { gte: start, lte: now },
         NOT: { type: 'rest' }, ...(verifiedAttendance ? { attendedAt: { not: null } } : {}) },
-      select: { startedAt: true, endedAt: true, type: true,
+      select: { startedAt: true, endedAt: true, type: true, activeSeconds: true, pausedSeconds: true,
         exercises: { select: { sets: { select: { completed: true } } } } },
     });
-    dates = rows.filter(row => isQualifyingSession(row) && new Date(row.endedAt) - new Date(row.startedAt) >= 10 * 60000).map(row => row.endedAt);
+    dates = rows.filter(row => isQualifyingSession(row) &&
+      (row.activeSeconds ?? workoutElapsedSeconds(row)) >= 600,
+    ).map(row => row.endedAt);
   }
   return { count: new Set(dates.map(dayOf)).size };
 }

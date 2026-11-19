@@ -1,4 +1,4 @@
-import { isoDayIST } from '../utils/sessionDay.js';
+import { isoDayIST, workoutElapsedSeconds } from '../utils/sessionDay.js';
 import { recordRoutineWorkout } from './routineJourneyService.js';
 import prisma from '../db/prisma.js';
 import { computeProgression } from './progressionService.js';
@@ -10,6 +10,7 @@ import { pageArgs, finishPage } from '../utils/pagination.js';
 import * as photoStorage from './ledger/foodPhotoStorage.js';
 import { loadSuggestedRest } from './restSuggestionService.js';
 import { latestBiometricRows } from './biometricLatest.js';
+import { assertWorkoutExercisesVisible } from './workoutExerciseAccess.js';
 
 const MAX_SECONDS = 86400;
 
@@ -183,7 +184,9 @@ export async function startSessionService(userId, templateId, attendance, client
     });
     // Scoped to the caller: a ref is client-generated, so treating someone
     // else's as "already done" would hand them another user's session.
-    if (existing && existing.userId === userId) return withPhotoUrl(existing);
+    if (existing && existing.userId === userId && (existing.templateId ?? null) === (templateId ?? null)) {
+      return withPhotoUrl(existing);
+    }
     if (existing) {
       const err = new Error('clientRef already used');
       err.status = 409;
@@ -201,7 +204,10 @@ export async function startSessionService(userId, templateId, attendance, client
         where: { clientRef },
         include: includeFull,
       });
-      if (raced && raced.userId === userId) return withPhotoUrl(raced);
+      if (raced && raced.userId === userId && (raced.templateId ?? null) === (templateId ?? null)) {
+        return withPhotoUrl(raced);
+      }
+      if (raced) throw Object.assign(new Error('clientRef already used'), { status: 409 });
     }
     throw err;
   }
@@ -345,6 +351,33 @@ export async function getSessionDetailService(sessionId, userId) {
   return withPhotoUrl(await attachPreviousPerformance(session));
 }
 
+export async function discardSessionService(sessionId, userId) {
+  await prisma.$transaction(async (tx) => {
+    const session = await tx.workoutSession.findFirst({ where: { id: sessionId, userId } });
+    if (!session) return;
+    const where = { id: sessionId, userId, endedAt: null };
+    if (session.endedAt) {
+      throw Object.assign(new Error('Session already finished'), { status: 409 });
+    }
+    if (session.bookingId != null || session.gymId != null) {
+      const reset = await tx.workoutSession.updateMany({
+        where,
+        data: { templateId: null, clientRef: null, type: null, activeSeconds: null, pausedSeconds: null },
+      });
+      if (!reset.count) {
+        throw Object.assign(new Error('Session already finished'), { status: 409 });
+      }
+      await tx.sessionExercise.deleteMany({ where: { sessionId } });
+    } else {
+      const removed = await tx.workoutSession.deleteMany({ where });
+      if (!removed.count) {
+        throw Object.assign(new Error('Session already finished'), { status: 409 });
+      }
+    }
+  }, { isolationLevel: 'Serializable' });
+  emitJourneyInvalidate(userId);
+}
+
 // The whole active-workout interaction: tap the checkmark, this fires.
 // Not batched client-side — every set saves immediately, so killing the
 // app mid-workout never loses a logged set (per the implementation plan's
@@ -393,6 +426,7 @@ export async function addExerciseToSessionService(sessionId, userId, exerciseId)
     err.status = 409;
     throw err;
   }
+  await assertWorkoutExercisesVisible(prisma, userId, [exerciseId]);
   const count = await prisma.sessionExercise.count({ where: { sessionId } });
   return prisma.sessionExercise.create({
     data: {
@@ -442,8 +476,10 @@ export async function finishSessionService(sessionId, userId, { type, rpe, activ
   if (session.endedAt) {
     return withPhotoUrl(await prisma.workoutSession.findUnique({ where: { id: sessionId }, include: includeFull }));
   }
-  const active = sanitizeSeconds(activeSeconds);
+  const endedAt = new Date();
   const paused = sanitizeSeconds(pausedSeconds);
+  const active = sanitizeSeconds(activeSeconds) ??
+    Math.min(MAX_SECONDS, workoutElapsedSeconds({ startedAt: session.startedAt, endedAt, pausedSeconds: paused }));
   // Body weight at the time of the workout: newest weight biometric, null if
   // none. Best-effort - never blocks finishing.
   let bodyWeightKg;
@@ -457,12 +493,12 @@ export async function finishSessionService(sessionId, userId, { type, rpe, activ
     bodyWeightKg = null;
   }
   const updated = await prisma.workoutSession.update({
-    where: { id: sessionId },
+    where: { id: sessionId, endedAt: null },
     data: {
-      endedAt: new Date(),
+      endedAt,
       ...(type !== undefined ? { type } : {}),
       ...(rpe !== undefined ? { rpe } : {}),
-      ...(active !== undefined ? { activeSeconds: active } : {}),
+      activeSeconds: active,
       ...(paused !== undefined ? { pausedSeconds: paused } : {}),
       bodyWeightKg,
       // A session finished with no bookingId yet (started before any
@@ -471,7 +507,14 @@ export async function finishSessionService(sessionId, userId, { type, rpe, activ
       ...(session.localDate ? {} : { localDate: localDateIST(new Date()) }),
     },
     include: includeFull,
+  }).catch((error) => {
+    if (error.code !== 'P2025') throw error;
+    return null;
   });
+  if (!updated) {
+    await assertOwnsSession(sessionId, userId);
+    return withPhotoUrl(await prisma.workoutSession.findUnique({ where: { id: sessionId }, include: includeFull }));
+  }
   // A finished session can add a showed-up day: drop the cached journey so the
   // next Home read reflects it instead of waiting out the TTL.
   emitJourneyInvalidate(userId);

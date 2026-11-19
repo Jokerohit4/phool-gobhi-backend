@@ -42,7 +42,8 @@ test('slim series equals the full series for the session rows /stats uses', asyn
   rows = [row(1, [{ weightKg: 100, reps: 5, completed: true }, { weightKg: 50, reps: 5, completed: false }])];
   const full = await buildRangeSeriesService(1, { from: day });
   const slim = await buildRangeSeriesService(1, { from: day }, { slim: true });
-  assert.deepEqual(slim.sessions, full.sessions);
+  assert.equal(slim.sessions[0].qualifies, true);
+  assert.deepEqual(slim.sessions.map(({ qualifies, ...session }) => session), full.sessions);
   assert.deepEqual(slim.biometrics, []);
 });
 

@@ -5,7 +5,7 @@ import { rebuildPlan } from '../services/plan/rebuildPlan.js';
 import * as prescriptionService from '../services/ledger/prescriptionService.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import { getMedicalRecordsConsentService } from '../services/ledger/ledgerConsentService.js';
-import { getJourney, unlockFoodEarly } from '../services/journey/journeyService.js';
+import { getJourney, invalidateJourneyCaches, unlockFoodEarly } from '../services/journey/journeyService.js';
 import { track } from '../utils/analytics.js';
 
 
@@ -312,7 +312,13 @@ export const saveSlots = handle(async (req, res) => {
     throw err;
   }
   const journey = await getJourney(req.userId);
-  const { plan, today } = await prescriptionService.saveSlots({ prisma, userId: req.userId, slots, journey });
+  await prescriptionService.saveSlots({ prisma, userId: req.userId, slots, journey });
+  invalidateJourneyCaches(req.userId);
+  const [plan, today] = await Promise.all([
+    todayService.buildPlanDefinition(prisma, req.userId),
+    todayService.buildToday(prisma, req.userId, {}),
+  ]);
+  setPlanToday(req.userId, todayService.todayIST(), today);
   track('plan_edited', req.userId, { what: 'slots' });
   res.json({ plan, today });
 });

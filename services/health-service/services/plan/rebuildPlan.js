@@ -27,9 +27,9 @@ function keyOf(row) {
   return [row.kind, row.layerKey ?? '', row.schedule, row.sourceRef ?? ''].join('|');
 }
 
-export async function rebuildPlan(prisma, userId, { reason } = {}) {
+export async function rebuildPlan(prisma, userId, { reason, onLayerKeys: resolvedLayers } = {}) {
   // 1. Which layers are on (includes 'own', and 'medicine' on consent).
-  const onLayerKeys = await getOnLayerKeys(prisma, userId);
+  const onLayerKeys = resolvedLayers ?? await getOnLayerKeys(prisma, userId);
 
   // 2. Current inputs: the newest NutritionTarget (may be null), the
   // Prescription (slots/steps/sleep), and the active supplement schedules
@@ -118,7 +118,7 @@ export async function rebuildPlan(prisma, userId, { reason } = {}) {
   let updated = 0;
   let deactivated = 0;
   if (toCreate.length || toUpdate.length || toDeactivate.length) {
-    await prisma.$transaction(async (tx) => {
+    const applyDiff = async (tx) => {
       for (const item of toCreate) {
         await tx.planItem.create({
           data: {
@@ -149,7 +149,9 @@ export async function rebuildPlan(prisma, userId, { reason } = {}) {
         await tx.planItem.update({ where: { id: row.id }, data: { active: false } });
         deactivated += 1;
       }
-    });
+    };
+    if (prisma.$transaction) await prisma.$transaction(applyDiff);
+    else await applyDiff(prisma);
   }
 
   // 6. Analytics, after the write and fire-and-forget. plan_built always

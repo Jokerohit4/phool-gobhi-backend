@@ -275,6 +275,7 @@ router.get('/sessions', ...workoutGated, sessionCtrl.listSessions);
 // already calls out for this service).
 router.get('/sessions/today', ...workoutGated, sessionCtrl.getTodaySession);
 router.get('/sessions/:id', ...workoutGated, sessionCtrl.getSessionDetail);
+router.delete('/sessions/:id', ...workoutGated, sessionCtrl.discardSession);
 router.patch('/sessions/:id/sets/:setId', ...workoutGated, sessionCtrl.updateSet);
 router.post('/sessions/:id/photo', ...workoutGated, uploadWorkoutPhotoMiddleware, sessionCtrl.uploadSessionPhoto);
 router.post('/sessions/:id/exercises', ...workoutGated, sessionCtrl.addExerciseToSession);

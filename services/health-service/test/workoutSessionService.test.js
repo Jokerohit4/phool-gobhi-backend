@@ -19,6 +19,7 @@ function resetFakes() {
 }
 
 let getOrCreateDraftForAttendanceService, getTodaySessionService, startSessionService, finishSessionService;
+let discardSessionService, addExerciseToSessionService;
 let notifyCalls = [];
 
 test('setup: mock dependencies once, import workoutSessionService once', async (t) => {
@@ -27,6 +28,21 @@ test('setup: mock dependencies once, import workoutSessionService once', async (
     exports: {
       PrismaClient: class {
         constructor() {
+          this.$transaction = async (work) => work(this);
+          this.exercise = {
+            findMany: async ({ where }) => {
+              const exercises = [{ id: 10, createdByUserId: null }, { id: 11, createdByUserId: 1 }];
+              return exercises.filter((exercise) => where.id.in.includes(exercise.id) &&
+                where.OR.some((clause) => clause.createdByUserId === exercise.createdByUserId));
+            },
+          };
+          this.sessionExercise = {
+            count: async () => 0,
+            create: async ({ data }) => data,
+            deleteMany: async ({ where }) => {
+              workoutSessions.find((session) => session.id === where.sessionId).exercises = [];
+            },
+          };
           this.workoutSession = {
             // Generic partial-match on whatever keys the real query passes —
             // both getOrCreateDraftForAttendanceService's narrower where
@@ -53,6 +69,20 @@ test('setup: mock dependencies once, import workoutSessionService once', async (
               Object.assign(session, data);
               return session;
             },
+            updateMany: async ({ where, data }) => {
+              const session = workoutSessions.find((row) =>
+                Object.entries(where).every(([key, value]) => row[key] === value));
+              if (!session) return { count: 0 };
+              Object.assign(session, data);
+              return { count: 1 };
+            },
+            deleteMany: async ({ where }) => {
+              const index = workoutSessions.findIndex((row) =>
+                Object.entries(where).every(([key, value]) => row[key] === value));
+              if (index === -1) return { count: 0 };
+              workoutSessions.splice(index, 1);
+              return { count: 1 };
+            },
           };
         }
       },
@@ -68,11 +98,50 @@ test('setup: mock dependencies once, import workoutSessionService once', async (
     },
   });
 
-  ({ getOrCreateDraftForAttendanceService, getTodaySessionService, startSessionService, finishSessionService } = await import(
+  ({ getOrCreateDraftForAttendanceService, getTodaySessionService, startSessionService, finishSessionService,
+    discardSessionService, addExerciseToSessionService } = await import(
     '../services/workoutSessionService.js'
   ));
   assert.equal(typeof getOrCreateDraftForAttendanceService, 'function');
   assert.equal(typeof finishSessionService, 'function');
+});
+
+test('discard removes open logs and retains a verified attendance draft', async () => {
+  resetFakes();
+  const open = await startSessionService(1);
+  workoutSessions[0].endedAt = null;
+  await discardSessionService(open.id, 2);
+  assert.equal(workoutSessions.length, 1);
+  await discardSessionService(open.id, 1);
+  assert.equal(workoutSessions.length, 0);
+  await discardSessionService(open.id, 1);
+
+  const draft = await getOrCreateDraftForAttendanceService({
+    userId: 1, bookingId: 100, gymId: 9,
+    attendedAt: new Date().toISOString(), attendanceMethod: 'qr_scan',
+  });
+  const row = workoutSessions[0];
+  Object.assign(row, { endedAt: null, exercises: [{}], templateId: 7, clientRef: 'old-ref' });
+  await discardSessionService(draft.id, 1);
+  assert.equal(row.bookingId, 100);
+  assert.equal(row.gymId, 9);
+  assert.equal(row.attendanceMethod, 'qr_scan');
+  assert.ok(row.attendedAt);
+  assert.equal(row.templateId, null);
+  assert.equal(row.clientRef, null);
+  assert.deepEqual(row.exercises, []);
+
+  row.endedAt = new Date();
+  await assert.rejects(() => discardSessionService(draft.id, 1), { status: 409 });
+});
+
+test('adding an exercise accepts public or owned catalogue entries only', async () => {
+  resetFakes();
+  const mine = await startSessionService(1);
+  const other = await startSessionService(2);
+  assert.equal((await addExerciseToSessionService(mine.id, 1, 11)).exerciseId, 11);
+  assert.equal((await addExerciseToSessionService(other.id, 2, 10)).exerciseId, 10);
+  await assert.rejects(() => addExerciseToSessionService(other.id, 2, 11), { status: 404 });
 });
 
 test('getOrCreateDraftForAttendanceService: no existing draft -> creates one attached to the booking', async () => {
