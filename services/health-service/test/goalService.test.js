@@ -44,7 +44,8 @@ test('setup: mock prisma + auth-service, import goalService once', async (t) => 
               // date window is applied by the caller's own bucketing.
               assert.equal(where.endedAt.not, null);
               assert.deepEqual(where.NOT, { type: 'rest' });
-              assert.ok(where.localDate); assert.ok(!where.OR);
+              assert.ok(where.localDate);
+              assert.deepEqual(where.OR[1], { activeSeconds: { gte: 600 }, exercises: { none: { sets: { some: {} } } } });
               return sessions.map(row => ({ ...row, localDate: row.localDate ?? isoDayIST(row.startedAt) }));
             },
           };

@@ -122,7 +122,7 @@ test('finish ignores invalid durations and leaves bodyWeightKg null with no weig
   reset();
   const s = seed();
   const out = await svc.finishSessionService(s.id, 1, { activeSeconds: -5, pausedSeconds: 999999 });
-  assert.equal(out.activeSeconds, undefined);
+  assert.equal(out.activeSeconds, Math.floor((out.endedAt - s.startedAt) / 1000));
   assert.equal(out.pausedSeconds, undefined);
   assert.equal(out.bodyWeightKg, null);
   assert.ok(out.endedAt);

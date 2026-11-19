@@ -2,7 +2,7 @@ import { buildRangeSeriesService } from './exportService.js';
 import { createTtlCache } from '../utils/ttlCache.js';
 import { onJourneyInvalidate } from '../utils/journeyCacheBus.js';
 import {
-  istDateString, dayString, dayToDate, addDays, startOfIsoWeek, countsAsSession,
+  istDateString, dayString, dayToDate, addDays, startOfIsoWeek,
 } from '../utils/sessionDay.js';
 
 // FR-06 / PRD §08. Everything the Progress screen draws, from one request.
@@ -93,12 +93,10 @@ export async function getStatsService(userId, requestedRange) {
   }));
 
   const rangeStartDay = dayString(rangeStart);
-  // `counted` uses the shared predicate (finished, non-rest, at least one
-  // completed set) so a workout means the same thing here as on the home ring
-  // and the streak; an empty quick-log is a session row but not a workout.
+  // Share workout qualification with Journey, the home ring and the streak.
   // It spans the wider window (>= the heatmap) so the bars and heatmap can
   // outlive a short KPI range; `trained` narrows it to the requested range.
-  const counted = dated.filter((s) => countsAsSession(s));
+  const counted = dated.filter((s) => s.qualifies);
   const trained = counted.filter((s) => s.day >= rangeStartDay);
   const restLogs = dated.filter((s) => s.type === 'rest' && s.day >= rangeStartDay);
 

@@ -46,7 +46,7 @@ test('heavy session read is cached per user; second GET does not repeat it', asy
   assert.equal(p.reads.sessions, 1, 'was one 100-session read per GET');
   assert.deepEqual(a, b);
   assert.equal(a.workoutCompleted, false);
-  assert.deepEqual(Object.keys(p.lastArgs.select).sort(), ['endedAt', 'exercises', 'startedAt', 'type'], 'narrow select');
+  assert.deepEqual(Object.keys(p.lastArgs.select).sort(), ['activeSeconds', 'endedAt', 'exercises', 'pausedSeconds', 'startedAt', 'type'], 'narrow select');
   assert.equal(p.lastArgs.take, 100);
 });
 

@@ -59,17 +59,28 @@ export function startOfIsoWeek(date = new Date()) {
 // by the database, not by fetching rows and filtering in JS.
 export const COUNTED_WORKOUT_WHERE = Object.freeze({
   endedAt: { not: null },
+  type: { not: null },
   NOT: { type: 'rest' },
-  exercises: { some: { sets: { some: { completed: true } } } },
+  OR: [
+    { exercises: { some: { sets: { some: { completed: true } } } } },
+    { activeSeconds: { gte: 600 }, exercises: { none: { sets: { some: {} } } } },
+  ],
 });
 
-// The JS-side twin, for rows that already carry `completedSets` (the export
-// builder's shape). Returns true only for a finished, non-rest session with
-// at least one completed set.
+// Use all sets, including incomplete sets, to distinguish timed logs from
+// strength sessions that were never logged.
 export function countsAsSession(session) {
-  if (!session || session.endedAt == null || session.type === 'rest') return false;
-  if (typeof session.completedSets === 'number') return session.completedSets > 0;
-  return true;
+  if (!session?.type || session.type === 'rest' || !session.endedAt) return false;
+  const sets = session.exercises?.flatMap((exercise) => exercise.sets ?? []) ?? [];
+  if (sets.length) return sets.some((set) => set.completed === true);
+  return (session.activeSeconds ?? workoutElapsedSeconds(session)) >= 600;
+}
+
+export function workoutElapsedSeconds(session) {
+  return session.startedAt && session.endedAt
+    ? Math.max(0, Math.floor((new Date(session.endedAt) - new Date(session.startedAt)) / 1000)
+      - (session.pausedSeconds ?? 0))
+    : 0;
 }
 
 

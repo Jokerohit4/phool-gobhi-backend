@@ -15,7 +15,8 @@ test('setup: mock prisma once, import recapService once', async (t) => {
       PrismaClient: class {
         constructor() {
           this.workoutSession = { findMany: async ({ where }) => {
-            assert.ok(where.localDate); assert.ok(!where.OR);
+            assert.ok(where.localDate);
+            assert.deepEqual(where.OR[1], { activeSeconds: { gte: 600 }, exercises: { none: { sets: { some: {} } } } });
             return sessions.map(row => ({ ...row, localDate: row.localDate ?? isoDayIST(row.startedAt) }));
           } };
         }

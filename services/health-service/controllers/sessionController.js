@@ -69,6 +69,19 @@ export const updateSet = async (req, res) => {
   }
 };
 
+export const discardSession = async (req, res) => {
+  const sessionId = Number(req.params.id);
+  if (!Number.isSafeInteger(sessionId) || sessionId <= 0) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  try {
+    await workoutSessionService.discardSessionService(sessionId, req.userId);
+    return res.status(204).send();
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  }
+};
+
 export const addExerciseToSession = async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id);

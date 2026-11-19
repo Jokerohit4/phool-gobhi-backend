@@ -17,11 +17,14 @@ import assert from 'node:assert/strict';
 let templates = [];
 let sessions = [];
 let homeProfile = null;
+let workoutSchedule, rebuildError;
 
 function reset() {
   templates = [];
   sessions = [];
   homeProfile = null;
+  workoutSchedule = null;
+  rebuildError = null;
 }
 
 function seedUserTemplate(userId, name) {
@@ -34,14 +37,48 @@ function seedSession(templateId, userId, startedAt) {
   sessions.push({ templateId, userId, startedAt });
 }
 
-let listTemplatesService;
+let listTemplatesService, deleteTemplateService;
 
 test('setup: mock prisma once, import templateService once', async (t) => {
+  t.mock.module('../services/plan/layerState.js', {
+    exports: { getOnLayerKeys: async () => ['workout'] },
+  });
+  t.mock.module('../services/plan/rebuildPlan.js', {
+    exports: { rebuildPlan: async (tx) => {
+      assert.equal(tx.$transaction, undefined);
+      assert.deepEqual((await tx.prescription.findUnique()).workoutSlots, [{ weekday: 2, templateId: 8 }]);
+      if (rebuildError) throw rebuildError;
+    } },
+  });
   t.mock.module('@prisma/client', {
     exports: {
       PrismaClient: class {
         constructor() {
+          this.$transaction = async (callback, options) => {
+            assert.equal(options.isolationLevel, 'Serializable');
+            const draft = structuredClone(workoutSchedule);
+            const currentTemplates = [...templates];
+            const tx = {
+              prescription: {
+                findUnique: async () => draft.prescription,
+                update: async ({ data }) => Object.assign(draft.prescription, data),
+              },
+              journeyProgress: {
+                findUnique: async () => draft.journey,
+                update: async ({ data }) => Object.assign(draft.journey, data),
+              },
+              weeklyGoal: { upsert: async ({ update }) => Object.assign(draft.goal, update) },
+              workoutTemplate: { delete: async ({ where }) => {
+                currentTemplates.splice(currentTemplates.findIndex((row) => row.id === where.id), 1);
+              } },
+            };
+            const result = await callback(tx);
+            templates = currentTemplates;
+            workoutSchedule = draft;
+            return result;
+          };
           this.workoutTemplate = {
+            findUnique: async ({ where }) => templates.find((row) => row.id === where.id),
             findMany: async ({ where, orderBy }) => {
               let rows;
               if (where.userId !== undefined) rows = templates.filter((t) => t.userId === where.userId);
@@ -75,7 +112,29 @@ test('setup: mock prisma once, import templateService once', async (t) => {
     },
   });
 
-  ({ listTemplatesService } = await import('../services/templateService.js'));
+  ({ listTemplatesService, deleteTemplateService } = await import('../services/templateService.js'));
+});
+
+test('deleting a scheduled routine removes its plan references in one transaction', async () => {
+  reset();
+  seedUserTemplate(1, 'Scheduled routine');
+  const keep = { weekday: 2, templateId: 8 };
+  const slots = [{ weekday: 0, templateId: 1 }, keep];
+  workoutSchedule = {
+    prescription: { workoutSlots: slots },
+    journey: { workoutSnapshot: { workoutSlots: slots } },
+    goal: { sessionsPerWeek: 2 },
+  };
+  rebuildError = new Error('plan rebuild failed');
+  await assert.rejects(() => deleteTemplateService(1, 1), rebuildError);
+  assert.equal(templates.length, 1);
+  assert.deepEqual(workoutSchedule.prescription.workoutSlots, slots);
+  rebuildError = null;
+  await deleteTemplateService(1, 1);
+  assert.equal(templates.length, 0);
+  assert.deepEqual(workoutSchedule.prescription.workoutSlots, [keep]);
+  assert.deepEqual(workoutSchedule.journey.workoutSnapshot.workoutSlots, [keep]);
+  assert.equal(workoutSchedule.goal.sessionsPerWeek, 1);
 });
 
 test('a user sees their own templates plus every system template', async () => {

@@ -59,7 +59,7 @@ export async function routineSnapshot(prisma, userId) {
           orderBy: { endedAt: 'desc' }, take: 100,
           // Only what isQualifyingSession reads; all sets are kept with their completed flag.
           select: {
-            type: true, endedAt: true, startedAt: true,
+            type: true, endedAt: true, startedAt: true, activeSeconds: true, pausedSeconds: true,
             exercises: { select: { sets: { select: { completed: true } } } },
           },
         });

@@ -102,7 +102,7 @@ test('KPIs follow the stat definitions', async () => {
     // An empty quick-log (finished with zero completed sets): a session row,
     // but NOT a workout — it counts toward neither the KPI, the ring nor the
     // streak, and contributes no minutes/volume.
-    sessionRow({ id: 4, day: isoDay(3), rpe: null, minutes: 40, sets: [] }),
+    sessionRow({ id: 4, day: isoDay(3), rpe: null, minutes: 4, sets: [] }),
   ];
 
   const { kpi } = await getStatsService(1, '7d');
@@ -116,6 +116,17 @@ test('KPIs follow the stat definitions', async () => {
   // averaged in as a zero.
   assert.equal(kpi.avgRpe, 7);
   assert.equal(kpi.consistencyPct, Math.round((2 / 7) * 100));
+});
+
+test('timed workouts count using active time and incomplete sets still disqualify', async () => {
+  sessionRows = [
+    { ...sessionRow({ id: 1, minutes: 20, sets: [] }), activeSeconds: 600 },
+    { ...sessionRow({ id: 2, minutes: 20, sets: [] }), activeSeconds: 599 },
+    { ...sessionRow({ id: 3, minutes: 20, sets: [set(20, 3, false)] }), activeSeconds: 700 },
+  ];
+  const { kpi } = await getStatsService(2, '7d');
+  assert.equal(kpi.sessions, 1);
+  assert.equal(kpi.minutes, 10);
 });
 
 test('avg RPE is null, not zero, when nothing recorded effort', async () => {
