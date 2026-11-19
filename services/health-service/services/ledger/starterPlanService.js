@@ -431,9 +431,30 @@ export async function createStarterPlan(prisma, userId, {
   });
 }
 
-// Rebuild workout slots when a user changes a training preference. Profile
-// changes never alter manually authored plan items; rebuildPlan only diffs
-// suggested rows.
+// Older saved assignments may have no marker. A user's own routine was
+// always manually selected, as was an id-only slot from the old editor.
+export async function keepManualWorkoutSlots(prisma, userId, previous, generated) {
+  const assignedIds = previous.map((slot) => slot.templateId).filter(Boolean);
+  const owned = assignedIds.length && prisma.workoutTemplate?.findMany
+    ? await prisma.workoutTemplate.findMany({
+        where: { id: { in: assignedIds }, userId, isSystem: false },
+        select: { id: true },
+      })
+    : [];
+  const ownedIds = new Set(owned.map((template) => template.id));
+  const manual = previous.filter((slot) =>
+    slot.manual || ownedIds.has(slot.templateId) || (slot.templateId && !slot.title),
+  ).slice(0, generated.length);
+  const byDay = new Map(manual.map((slot) => [slot.weekday, slot]));
+  for (const slot of generated) {
+    if (byDay.size === generated.length) break;
+    if (!byDay.has(slot.weekday)) byDay.set(slot.weekday, slot);
+  }
+  const orderedDays = new Set([...previous.map((slot) => slot.weekday), ...byDay.keys()]);
+  return [...orderedDays].filter((day) => byDay.has(day)).map((day) => byDay.get(day));
+}
+
+// Rebuild suggested workout slots when the user changes a training preference.
 export async function refreshWorkoutSlotsForProfile(prisma, userId) {
   if (!prisma.prescription?.findUnique || !prisma.prescription?.update) return false;
   const [prescription, journey, goal, profile] = await Promise.all([
@@ -444,21 +465,32 @@ export async function refreshWorkoutSlotsForProfile(prisma, userId) {
   ]);
   if (journey?.wellnessOnly) return false;
   if (!prescription?.workoutSlots?.length) return false;
+  const previous = prescription.workoutSlots;
   const homeNames = new Set(Object.values(HOME_TEMPLATE_POOL).flat());
-  const location = prescription.workoutSlots[0]?.location
-    ?? (prescription.workoutSlots.some((slot) => homeNames.has(slot.title)) ? 'home' : 'gym');
+  const location = previous[0]?.location
+    ?? (previous.some((slot) => homeNames.has(slot.title)) ? 'home' : 'gym');
   const experienceLevel = journeyExperienceForProfile(profile, journey?.startLevel ?? DEFAULT_EXPERIENCE_LEVEL);
-  const slots = await buildWorkoutSlots(prisma, {
+  const generated = await buildWorkoutSlots(prisma, {
     experienceLevel,
     location,
-    sessions: prescription.workoutSlots.length,
+    sessions: previous.length,
     goals: goal?.goals ?? [],
     userId,
     quitReason: journey?.quitReason ?? null,
     // Same number of sessions: refresh the routines, keep the days.
-    keepWeekdays: prescription.workoutSlots.map((slot) => slot.weekday),
+    keepWeekdays: previous.map((slot) => slot.weekday),
   });
-  await prisma.prescription.update({ where: { userId }, data: { workoutSlots: slots } });
+  const slots = await keepManualWorkoutSlots(prisma, userId, previous, generated);
+  try {
+    await prisma.prescription.update({
+      where: { userId, updatedAt: prescription.updatedAt },
+      data: { workoutSlots: slots },
+    });
+  } catch (error) {
+    // A newer manual edit or deletion wins over a refresh that read the old schedule.
+    if (error.code === 'P2025') return false;
+    throw error;
+  }
   await rebuildPlan(prisma, userId, { reason: 'personalisation' });
   return true;
 }

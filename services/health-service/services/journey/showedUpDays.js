@@ -1,4 +1,4 @@
-import { isoDayIST } from '../../utils/sessionDay.js';
+import { countsAsSession, isoDayIST } from '../../utils/sessionDay.js';
 import prisma from '../../db/prisma.js';
 import { fetchInternal } from '../../utils/fetchInternal.js';
 import { createTtlCache } from '../../utils/ttlCache.js';
@@ -36,6 +36,8 @@ async function getQualifyingWorkoutDays(userId, from = null) {
       type: true,
       startedAt: true,
       endedAt: true,
+      activeSeconds: true,
+      pausedSeconds: true,
       exercises: {
         select: {
           sets: {
@@ -66,17 +68,7 @@ async function getQualifyingWorkoutDays(userId, from = null) {
  * @returns {boolean}
  */
 export function isQualifyingSession(session) {
-  if (!session.type || session.type === 'rest' || !session.endedAt) return false;
-  // Callers must retain all sets and their completed flag. Filtering to
-  // completed sets would make an unfinished workout look like a no-set log.
-  const sets = session.exercises?.flatMap((ex) => ex.sets ?? []) ?? [];
-  if (sets.some((set) => set.completed === true)) return true;
-  if (sets.length > 0) return false;
-  if (session.startedAt && session.endedAt) {
-    const durationMinutes = (new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 60000;
-    return durationMinutes >= 10;
-  }
-  return false;
+  return countsAsSession(session);
 }
 
 /**

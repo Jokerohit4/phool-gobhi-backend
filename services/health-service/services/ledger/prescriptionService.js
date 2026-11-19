@@ -39,7 +39,7 @@ import {
   NEUTRAL_DEFAULT,
 } from '../goalService.js';
 import { isScopeStale, NUTRITION_SCOPE } from './ledgerConsentService.js';
-import { buildWorkoutSlots } from './starterPlanService.js';
+import { buildWorkoutSlots, keepManualWorkoutSlots } from './starterPlanService.js';
 import { rebuildPlan } from '../plan/rebuildPlan.js';
 import { getOnLayerKeys } from '../plan/layerState.js';
 import { JOURNEY, DEFAULT_STEPS, DEFAULT_SLEEP_MIN, startLayerFor } from '../journey/journeyConfig.js';
@@ -337,90 +337,54 @@ export async function saveSettings({ prisma, userId, draft = {}, journey = null 
     }
   }
 
-  // Check kcal requires Food layer on
-  if (draft.kcal != null) {
-    const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey });
-    if (!onLayerKeys.includes('food')) {
-      const err = new Error('Calorie target can only be set when the Food layer is on');
-      err.status = 409;
-      err.code = 'LAYER_NOT_ON';
-      err.layer = 'food';
-      throw err;
-    }
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey: journey ?? undefined });
+  if (draft.kcal != null && !onLayerKeys.includes('food')) {
+    throw Object.assign(new Error('Calorie target can only be set when the Food layer is on'), {
+      status: 409, code: 'LAYER_NOT_ON', layer: 'food',
+    });
   }
 
-  const ctx = await loadContext(prisma, userId, journey);
-  const resolved = resolve(ctx, draft, 'write', { allowNullKcal: true });
-
-  // Check if sessionsPerWeek changed
-  const sessionsChanged = draft.sessionsPerWeek != null &&
-    draft.sessionsPerWeek !== ctx.weekly?.sessionsPerWeek;
-
-  await prisma.prescription.upsert({
-    where: { userId },
-    create: {
-      userId,
+  return prisma.$transaction(async (tx) => {
+    const ctx = await loadContext(tx, userId, journey);
+    const resolved = resolve(ctx, draft, 'write', { allowNullKcal: true });
+    const sessionsChanged = draft.sessionsPerWeek != null &&
+      resolved.sessionsPerWeek !== ctx.weekly?.sessionsPerWeek;
+    const settings = {
       kcal: resolved.kcal,
       stepsPerDay: resolved.stepsPerDay,
       sleepMinutes: resolved.sleepMinutes,
       rulesVersion: PRESCRIPTION_RULES_VERSION,
-    },
-    update: {
-      kcal: resolved.kcal,
-      stepsPerDay: resolved.stepsPerDay,
-      sleepMinutes: resolved.sleepMinutes,
-      rulesVersion: PRESCRIPTION_RULES_VERSION,
-    },
-  });
-
-  let slots = ctx.saved?.workoutSlots ?? [];
-  if (sessionsChanged) {
-    const experienceLevel = journey?.startLevel ?? 'new_to_gym';
-    const homeRoutineHints = ['no equipment', 'bodyweight', '15 minute', '10 minute', 'no bar', 'mobility', 'desk reset', 'low-impact'];
-    const location = slots.length > 0
-      ? (slots.some((s) => homeRoutineHints.some((hint) => s.title?.toLowerCase().includes(hint))) ? 'home' : 'gym')
-      : 'gym';
-    slots = await buildWorkoutSlots(prisma, {
-      experienceLevel,
-      location,
-      sessions: resolved.sessionsPerWeek,
-      goals: ctx.healthGoal?.goals ?? [],
-      userId,
-      // Changing the count adds or drops days around the ones already planned.
-      keepWeekdays: slots.map((slot) => slot.weekday),
-    });
-
-    await prisma.prescription.update({
-      where: { userId },
-      data: { workoutSlots: slots },
-    });
-
-    await prisma.weeklyGoal.upsert({
-      where: { userId },
-      create: {
+    };
+    if (sessionsChanged) {
+      const slots = ctx.saved?.workoutSlots ?? [];
+      const homeRoutineHints = ['no equipment', 'bodyweight', '15 minute', '10 minute', 'no bar', 'mobility', 'desk reset', 'low-impact'];
+      const location = slots.find((slot) => slot.location)?.location ??
+        (slots.some((slot) => homeRoutineHints.some((hint) => slot.title?.toLowerCase().includes(hint))) ? 'home' : 'gym');
+      const generated = await buildWorkoutSlots(tx, {
+        experienceLevel: journey?.startLevel ?? 'new_to_gym',
+        location,
+        sessions: resolved.sessionsPerWeek,
+        goals: ctx.healthGoal?.goals ?? [],
         userId,
-        sessionsPerWeek: resolved.sessionsPerWeek,
-        setByUser: true,
-      },
-      update: { sessionsPerWeek: resolved.sessionsPerWeek, setByUser: true },
+        keepWeekdays: slots.map((slot) => slot.weekday),
+      });
+      settings.workoutSlots = await keepManualWorkoutSlots(tx, userId, slots, generated);
+      ctx.weekly = await tx.weeklyGoal.upsert({
+        where: { userId },
+        create: { userId, sessionsPerWeek: resolved.sessionsPerWeek, setByUser: true },
+        update: { sessionsPerWeek: resolved.sessionsPerWeek, setByUser: true },
+      });
+    }
+    ctx.saved = await tx.prescription.upsert({
+      where: { userId },
+      create: { userId, ...settings },
+      update: settings,
     });
-    ctx.weekly = { sessionsPerWeek: resolved.sessionsPerWeek, setByUser: true };
-  }
-
-  ctx.saved = {
-    ...ctx.saved,
-    kcal: resolved.kcal,
-    stepsPerDay: resolved.stepsPerDay,
-    sleepMinutes: resolved.sleepMinutes,
-    workoutSlots: slots,
-  };
-
-  // Rebuild plan if sessions changed or any other setting changed
-  if (sessionsChanged || draft.kcal != null || draft.stepsPerDay != null || draft.sleepMinutes != null) {
-    await rebuildPlan(prisma, userId, { reason: 'edit' });
-  }
-
-  return buildPlan(ctx, resolved, journey);
+    if (sessionsChanged || draft.kcal != null || draft.stepsPerDay != null || draft.sleepMinutes != null) {
+      await rebuildPlan(tx, userId, { reason: 'edit', onLayerKeys });
+    }
+    return buildPlan(ctx, resolved, journey);
+  }, { isolationLevel: 'Serializable' });
 }
 
 /**
@@ -445,7 +409,7 @@ export async function saveSlots({ prisma, userId, slots = [], journey = null }) 
   // Validate weekdays unique and in range
   const weekdays = new Set();
   for (const slot of slots) {
-    if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) {
+    if (!slot || !Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) {
       const err = new Error('weekday must be an integer 0-6 (0 = Monday)');
       err.status = 400;
       err.code = 'VALIDATION';
@@ -458,64 +422,60 @@ export async function saveSlots({ prisma, userId, slots = [], journey = null }) 
       throw err;
     }
     weekdays.add(slot.weekday);
-  }
-
-  // Validate templateIds are system or user's own
-  if (slots.length > 0) {
-    const templateIds = slots.map((s) => s.templateId).filter(Boolean);
-    if (templateIds.length > 0) {
-      const templates = await prisma.workoutTemplate.findMany({
-        where: { id: { in: templateIds } },
-        select: { id: true, userId: true, isSystem: true },
-      });
-      const validIds = new Set(
-        templates
-          .filter((t) => t.isSystem || t.userId === userId)
-          .map((t) => t.id)
-      );
-      for (const id of templateIds) {
-        if (!validIds.has(id)) {
-          const err = new Error(`Template ${id} not found or not accessible`);
-          err.status = 400;
-          err.code = 'VALIDATION';
-          throw err;
-        }
-      }
+    if (slot.templateId != null && (!Number.isInteger(slot.templateId) || slot.templateId <= 0)) {
+      throw Object.assign(new Error('templateId must be a positive integer'), { status: 400, code: 'VALIDATION' });
     }
   }
 
-  const ctx = await loadContext(prisma, userId, journey);
+  const templateIds = [...new Set(slots.map((slot) => slot.templateId).filter(Boolean))];
   const sessionsPerWeek = slots.length;
-
-  await prisma.prescription.upsert({
-    where: { userId },
-    create: {
-      userId,
-      kcal: ctx.saved?.kcal ?? null,
-      stepsPerDay: ctx.saved?.stepsPerDay ?? DEFAULT_STEPS,
-      sleepMinutes: ctx.saved?.sleepMinutes ?? DEFAULT_SLEEP_MINUTES,
-      workoutSlots: slots,
-      rulesVersion: PRESCRIPTION_RULES_VERSION,
-    },
-    update: {
-      workoutSlots: slots,
-      rulesVersion: PRESCRIPTION_RULES_VERSION,
-    },
-  });
-
-  await prisma.weeklyGoal.upsert({
-    where: { userId },
-    create: {
-      userId,
-      sessionsPerWeek,
-      setByUser: true,
-    },
-    update: { sessionsPerWeek, setByUser: true },
-  });
-  ctx.weekly = { sessionsPerWeek, setByUser: true };
-  ctx.saved = { ...ctx.saved, workoutSlots: slots };
-
-  await rebuildPlan(prisma, userId, { reason: 'edit' });
+  const onLayerKeys = await getOnLayerKeys(prisma, userId, { journey: journey ?? undefined });
+  const ctx = await prisma.$transaction(async (tx) => {
+    const context = await loadContext(tx, userId, journey);
+    const templates = templateIds.length ? await tx.workoutTemplate.findMany({
+      where: { id: { in: templateIds }, OR: [{ isSystem: true }, { userId }] },
+      select: { id: true, name: true, level: true, _count: { select: { exercises: true } } },
+    }) : [];
+    const byId = new Map(templates.map((template) => [template.id, template]));
+    for (const id of templateIds) {
+      if (!byId.has(id)) {
+        throw Object.assign(new Error(`Template ${id} not found or not accessible`), { status: 400, code: 'VALIDATION' });
+      }
+    }
+    const previousSlots = context.saved?.workoutSlots ?? [];
+    const location = previousSlots.find((slot) => slot.location)?.location;
+    const workoutSlots = slots.map(({ weekday, templateId }) => {
+      const template = byId.get(templateId);
+      const previous = previousSlots.find((slot) => slot.weekday === weekday);
+      if (!template && previous && !previous.templateId) return previous;
+      return {
+        weekday,
+        templateId: template?.id ?? null,
+        ...(previous?.manual === true || previous?.templateId !== template?.id ? { manual: true } : {}),
+        ...(location ? { location } : {}),
+        ...(template ? { title: template.name, level: template.level, moves: template._count.exercises } : {}),
+      };
+    });
+    context.saved = await tx.prescription.upsert({
+      where: { userId },
+      create: {
+        userId,
+        kcal: context.saved?.kcal ?? null,
+        stepsPerDay: context.saved?.stepsPerDay ?? DEFAULT_STEPS,
+        sleepMinutes: context.saved?.sleepMinutes ?? DEFAULT_SLEEP_MINUTES,
+        workoutSlots,
+        rulesVersion: PRESCRIPTION_RULES_VERSION,
+      },
+      update: { workoutSlots, rulesVersion: PRESCRIPTION_RULES_VERSION },
+    });
+    context.weekly = await tx.weeklyGoal.upsert({
+      where: { userId },
+      create: { userId, sessionsPerWeek, setByUser: true },
+      update: { sessionsPerWeek, setByUser: true },
+    });
+    await rebuildPlan(tx, userId, { reason: 'edit', onLayerKeys });
+    return context;
+  }, { isolationLevel: 'Serializable' });
 
   return buildPlan(ctx, { ...resolve(ctx, {}, 'read', { allowNullKcal: true }), sessionsPerWeek }, journey);
 }

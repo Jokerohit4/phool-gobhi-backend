@@ -79,7 +79,7 @@ test('current_week fixture, historical targets, summed parity and counted workou
   assert.equal(body.data.totals.workouts.completed,3);
   assert.equal(body.data.totals.food.weekTargetKcal,7600);
   assert.equal(body.data.days[0].food.kcal,(await getDayTotals(prisma,7,dates[0])).totals.kcal);
-  const where=calls.find(c=>c[0]==='workouts')[1];assert.equal(where.userId,7);assert.ok(where.exercises.some.sets.some.completed);
+  const where=calls.find(c=>c[0]==='workouts')[1];assert.equal(where.userId,7);assert.ok(where.OR[0].exercises.some.sets.some.completed);
   assert.equal(cacheWrites[0][0],'health:week:7:2026-10-26');assert.equal(cacheWrites[0][3],60);
 });
 test('past_week fixture uses snapshots exclusively, legacy unknowns and 600 second cache',async()=>{

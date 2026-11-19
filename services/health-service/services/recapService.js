@@ -1,6 +1,6 @@
 import prisma from '../db/prisma.js';
 import {
-  dayString, dayToDate, addDays, startOfIsoWeek, COUNTED_WORKOUT_WHERE,
+  dayString, dayToDate, addDays, startOfIsoWeek, COUNTED_WORKOUT_WHERE, workoutElapsedSeconds,
 } from '../utils/sessionDay.js';
 
 // The server returns numbers, the client renders the card (BRD Tech §5.4:
@@ -19,8 +19,7 @@ export async function getWeeklyRecapService(userId, weekParam) {
   const end = addDays(start, 7);
   const endStr = dayString(end);
 
-  // A counted workout only (finished, non-rest, >=1 completed set), so a rest
-  // log or an empty quick-log doesn't appear as a session on the recap card.
+  // Use the same credit rule as the weekly goal.
   // Bounded on localDate — the day the user experienced — with a startedAt
   // fallback for rows that predate that column.
   const sessions = await prisma.workoutSession.findMany({
@@ -46,7 +45,7 @@ export async function getWeeklyRecapService(userId, weekParam) {
   const activeDays = [false, false, false, false, false, false, false];
 
   for (const s of sessions) {
-    if (s.endedAt) minutes += Math.round((s.endedAt.getTime() - s.startedAt.getTime()) / 60000);
+    minutes += Math.round((s.activeSeconds ?? workoutElapsedSeconds(s)) / 60);
     if (s.rpe) { rpeSum += s.rpe; rpeCount += 1; }
 
     const day = s.localDate;
