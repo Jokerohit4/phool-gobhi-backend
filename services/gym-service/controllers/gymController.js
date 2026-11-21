@@ -1054,6 +1054,15 @@ export const placesDetails = async (req, res) => {
   }
 };
 
+export const placesCity = async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    res.json({ data: await placesService.cityFromCoordinates(req.body?.lat, req.body?.lng) });
+  } catch (err) {
+    res.status(err.status || 502).json({ error: err.error || 'Could not resolve your city. Please choose where you want support.' });
+  }
+};
+
 
 // ---- DPDPA access right (s.11) -------------------------------------------
 // Internal only: auth-service authenticates the user and fans out to every

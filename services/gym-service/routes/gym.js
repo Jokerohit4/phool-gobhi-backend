@@ -91,6 +91,7 @@ router.get('/:id/subscription-plans', ctrl.getSubscriptionPlans);
 // generic need. Key lives only server-side; see services/placesService.js.
 router.get('/places/autocomplete', requireAuth, ctrl.placesAutocomplete);
 router.get('/places/details', requireAuth, ctrl.placesDetails);
+router.post('/places/city', requireAuth, ctrl.placesCity);
 // Gym-only search for the own-gym picker. Gated with the feature it serves —
 // it's billable (Text/Nearby Search) and has no other caller.
 router.get('/places/gyms', requireAuth, requireFeatureFlag('nonPartnerAttendance'), ctrl.placesGymSearch);

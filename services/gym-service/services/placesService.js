@@ -13,6 +13,24 @@ function requireApiKey() {
   return key;
 }
 
+// Resolve only the city needed for regional offers. Do not return or persist
+// the street address, and do not treat the wider district as the city.
+export async function cityFromCoordinates(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    throw { status: 400, error: 'Valid coordinates are required' };
+  }
+  const params = new URLSearchParams({ latlng: `${lat},${lng}`, result_type: 'locality', language: 'en', key: requireApiKey() });
+  const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`, { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw { status: 502, error: 'Could not resolve your city' };
+  const body = await response.json();
+  if (body.status !== 'OK' && body.status !== 'ZERO_RESULTS') throw { status: 502, error: 'Could not resolve your city' };
+  for (const result of body.results || []) {
+    const city = result.address_components?.find(c => c.types?.includes('locality'))?.long_name;
+    if (typeof city === 'string' && city.trim()) return { city: city.trim() };
+  }
+  throw { status: 422, error: 'Your city could not be identified. Please choose where you want support.' };
+}
+
 export async function autocomplete(input, sessionToken, location) {
   const key = requireApiKey();
   const params = new URLSearchParams({
