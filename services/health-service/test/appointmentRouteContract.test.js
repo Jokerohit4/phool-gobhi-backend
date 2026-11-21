@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { readDartLibrary } from './helpers/dartLibrary.js';
 
 // The app's appointment screen, checked against the routes that are supposed to
 // back it.
@@ -44,7 +45,7 @@ const skipApp = hasAppCheckout ? false : `no app checkout at ${appRepo}`;
 
 /** Every '/api/health/...' literal in the Dart data source. */
 function pathsCalledByApp() {
-  const dart = readFileSync(dartSourcePath, 'utf8');
+  const dart = readDartLibrary(dartSourcePath);
   // Dart interpolates the id ('/ledger/appointments/$id'); Express spells the same
   // idea ':id'. Rewritten rather than truncated, because truncating turns the
   // delete into '/ledger/appointments/', which matches no route and would report a
@@ -178,7 +179,7 @@ test('every appointment route is gated on the medical scope (medical_records con
 test('the appointment screen does not claim to contact the clinic', { skip: skipApp }, () => {
   if (!existsSync(screenSourcePath)) return;
 
-  const screen = readFileSync(screenSourcePath, 'utf8');
+  const screen = readDartLibrary(screenSourcePath);
 
   // The screen is a record of a booking. It has no way to send a reminder and no
   // integration that could, so a promise of one would be a lie the user finds out
@@ -197,7 +198,7 @@ test('the appointment screen is reachable and gates itself on the vault', { skip
   const routesPath = join(appRepo, 'lib', 'presentation', 'routes', 'app_routes.dart');
   if (!existsSync(routesPath)) return;
 
-  const routes = readFileSync(routesPath, 'utf8');
+  const routes = readDartLibrary(routesPath);
 
   assert.match(
     routes,

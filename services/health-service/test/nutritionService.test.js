@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { foodPieceGrams } from '../services/ledger/foodPiecePortions.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -267,6 +268,19 @@ test('a portion can be given in household servings', async () => {
   await logFood(prisma, { userId: 7, localDate: '2026-09-28', slot: 'lunch', foodItemId: 1, servings: 1 });
   assert.equal(Number(created.grams), 150);
   assert.equal(created.nutrients.kcal, 195);
+});
+
+test('a catalogued banana can be logged by count without giving the weight', async () => {
+  const food = { ...RICE, name: 'Banana', basis: 'raw', kcal: 89, servings: null };
+  let created;
+  const prisma = mockPrisma({
+    foodItem: { findUnique: async () => food },
+    foodLog: { create: async (a) => ((created = a.data), { id: 1, ...a.data }) },
+  });
+  await logFood(prisma, { userId: 7, localDate: '2026-09-28', slot: 'lunch', foodItemId: 1, servings: 1.5 });
+  assert.equal(Number(created.grams), 177);
+  assert.equal(created.servings, 1.5);
+  assert.equal(created.nutrients.kcal, 157.53);
 });
 
 test('grams win when both grams and servings are sent', async () => {
@@ -682,13 +696,23 @@ test('progress against a zero or absent target is null, not a divide by zero', (
 
 // --- saved meals -----------------------------------------------------------
 
+test('piece weights use edible catalogue portions and leave weight-only foods alone', () => {
+  assert.equal(foodPieceGrams({ name: 'Banana', basis: 'raw' }), 118);
+  assert.equal(foodPieceGrams({ name: 'Pomegranate', basis: 'raw' }), 282);
+  assert.equal(foodPieceGrams({ name: 'Egg, whole (boiled)', basis: 'cooked' }), 50);
+  assert.equal(foodPieceGrams({ name: 'Banana', basis: 'raw', createdByUserId: 7 }), null);
+  assert.equal(foodPieceGrams({ name: 'Banana chips', basis: 'raw' }), null);
+  assert.equal(foodPieceGrams({ servings: [{ label: '2 slices', grams: 60 }] }), 30);
+  assert.equal(foodPieceGrams({ servings: [{ label: '1 katori', grams: 150 }] }), null);
+});
+
 test('a saved meal copies each line\'s snapshot and name', async () => {
   let created;
   const prisma = mockPrisma({
     foodLog: {
       findMany: async () => [
         { foodItemId: 1, grams: 150, servingLabel: '1 katori', nutrients: { kcal: 195 }, name: 'Rice', nonVeg: false },
-        { foodItemId: 2, grams: 100, servingLabel: null, nutrients: { kcal: 265 }, name: 'Paneer', nonVeg: false },
+        { foodItemId: 2, grams: 100, servings: 2, servingLabel: '2 pieces', nutrients: { kcal: 155 }, name: 'Egg', nonVeg: true },
       ],
     },
     savedMeal: { create: async (a) => ((created = a.data), { id: 1, ...a.data }) },
@@ -697,6 +721,7 @@ test('a saved meal copies each line\'s snapshot and name', async () => {
   assert.equal(created.name, 'Usual lunch');
   assert.equal(created.lines.create.length, 2);
   assert.equal(created.lines.create[0].nutrients.kcal, 195);
+  assert.equal(created.lines.create[1].servings, 2);
   // SavedMealLine has no userId column - the parent SavedMeal carries
   // ownership. The assertion used to check for `userId: 7` here, which
   // enshrined a Prisma write that could only ever fail against a real
@@ -724,14 +749,15 @@ test('repeating a saved meal copies the snapshot, not the live food', async () =
         id: 5,
         name: 'Usual lunch',
         slot: 'lunch',
-        lines: [{ foodItemId: 1, grams: 150, servingLabel: '1 katori', nutrients: { kcal: 195 }, name: 'Rice', nonVeg: false }],
+        lines: [{ foodItemId: 1, grams: 150, servings: 3, servingLabel: '3 pieces', nutrients: { kcal: 232.5 }, name: 'Egg', nonVeg: true }],
       }),
     },
     foodLog: { createMany: async (a) => ((createdMany = a.data), { count: a.data.length }) },
   });
   const out = await logSavedMeal(prisma, { userId: 7, savedMealId: 5, localDate: '2026-09-29' });
   assert.equal(out.logged, 1);
-  assert.equal(createdMany[0].nutrients.kcal, 195);
+  assert.equal(createdMany[0].nutrients.kcal, 232.5);
+  assert.equal(createdMany[0].servings, 3);
   assert.equal(createdMany[0].source, 'saved_meal');
   assert.deepEqual(out.skipped, []);
 });
@@ -937,7 +963,7 @@ test('recent foods dedupe by food and keep the newest portion', async () => {
       findMany: async (args) => {
         query = args;
         return [
-          { foodItemId: 1, grams: 180, servingLabel: '1 bowl', localDate: '2026-09-30' },
+          { foodItemId: 1, grams: 180, servings: 1.5, servingLabel: '1.5 portions', localDate: '2026-09-30' },
           { foodItemId: 2, grams: 100, servingLabel: null, localDate: '2026-09-30' },
           // An older log of food 1 must not appear a second time.
           { foodItemId: 1, grams: 120, servingLabel: null, localDate: '2026-09-29' },
@@ -952,7 +978,8 @@ test('recent foods dedupe by food and keep the newest portion', async () => {
   const out = await recentFoods(prisma, 7, { limit: 8 });
   assert.deepEqual(out.map((r) => r.food.id), [1, 2]);
   assert.equal(out[0].grams, 180, 'the last portion logged, not the first');
-  assert.equal(out[0].servingLabel, '1 bowl');
+  assert.equal(out[0].servings, 1.5);
+  assert.equal(out[0].servingLabel, '1.5 portions');
   // Scoped to the user and to catalogue-backed logs; a hand-typed custom row has
   // no FoodItem to show in the list.
   assert.equal(query.where.userId, 7);

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { readDartLibrary } from './helpers/dartLibrary.js';
 
 // The app's score controls (calm mode, pause, attainment, score target) checked
 // against the routes that back them.
@@ -52,7 +53,7 @@ const SCORE_TAILS = [
 
 /** Every verb+path pair the Dart data source issues for the score surface. */
 function scoreCallsByApp() {
-  const dart = readFileSync(dartSourcePath, 'utf8');
+  const dart = readDartLibrary(dartSourcePath);
   // Dart interpolates ('/ledger/score/$localDate/preview'); Express spells the
   // same idea ':localDate'. Rewritten rather than truncated for the reason the
   // appointment test gives: truncation invents mismatches that do not exist.

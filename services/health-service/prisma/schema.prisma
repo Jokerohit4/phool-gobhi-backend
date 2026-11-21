@@ -1825,6 +1825,7 @@ model SavedMealLine {
   name         String
   nonVeg       Boolean  @default(false)
   grams        Decimal   @db.Decimal(8, 2)
+  servings     Decimal?  @db.Decimal(5, 2)
   servingLabel String?
   nutrients    Json
   // Preserves the order lines were logged in, so a repeated meal reads the way

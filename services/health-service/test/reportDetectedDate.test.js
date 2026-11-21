@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { reportDate } from '../services/reportService.js';
 import { parseDocumentAIResponse } from '../utils/ocrService.js';
+import { readDartLibrary } from './helpers/dartLibrary.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRepo = resolve(here, '..', '..', '..', '..', 'phool-gobhi-customer-app');
@@ -182,9 +183,8 @@ describe('detected date storage', () => {
 
 describe('the app is told which source a date came from', () => {
   test('the model exposes both dates', { skip: !appRepoPresent && 'customer-app checkout not beside the backend repo' }, () => {
-    const model = readFileSync(
+    const model = readDartLibrary(
       join(appRepo, 'lib', 'data', 'models', 'health_report_model.dart'),
-      'utf8',
     );
     assert.match(model, /final String\? detectedReportDate;/);
     assert.match(model, /json\['detectedReportDate'\]/);
@@ -194,9 +194,8 @@ describe('the app is told which source a date came from', () => {
     // The screen is the place a user compares this against their own paperwork.
     // A machine reading presented in the same voice as something the user said
     // would be a small lie that only matters on the day it is wrong.
-    const screen = readFileSync(
+    const screen = readDartLibrary(
       join(appRepo, 'lib', 'presentation', 'pages', 'health', 'health_vault_verification_screen.dart'),
-      'utf8',
     );
     assert.match(screen, /isReportDateDetected/);
     const messages = JSON.parse(readFileSync(join(appRepo, 'lib', 'l10n', 'app_en.arb'), 'utf8'));

@@ -4,6 +4,7 @@ import { getSharingPreference, setSharingPreference, withdrawSharing, tryShareCo
 import { sweepContributions, contribute } from '../services/ledger/photoContribution.js';
 import { customizeFood as createFoodVariant, compositionForFood } from '../services/ledger/foodComposition.js';
 import * as nutritionService from '../services/ledger/nutritionService.js';
+import { foodPieceGrams } from '../services/ledger/foodPiecePortions.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
@@ -164,6 +165,7 @@ function serializeFood(f) {
     aliases: f.aliases,
     basis: f.basis,
     servings: f.servings,
+    pieceGrams: foodPieceGrams(f),
     nonVeg: f.nonVeg,
     ...compositionForFood(f),
     isPersonal: f.createdByUserId != null,
@@ -221,9 +223,10 @@ export const recentFoods = handle(async (req) => {
   const rows = await nutritionService.recentFoods(prisma, req.userId, {
     limit: num(req.query.limit) || 8,
   });
-  return rows.map(({ food, grams, servingLabel }) => ({
+  return rows.map(({ food, grams, servings, servingLabel }) => ({
     ...serializeFood(food),
     lastGrams: grams == null ? null : Number(grams),
+    lastServings: servings == null ? null : Number(servings),
     lastServingLabel: servingLabel || null,
   }));
 });

@@ -10,6 +10,7 @@ import {
   MAX_UPLOAD_BYTES,
 } from '../services/ledger/medicalDocumentStorage.js';
 import { parseReportDate } from '../services/reportService.js';
+import { readDartLibrary } from './helpers/dartLibrary.js';
 
 // The lab-report upload path, which is a different thing from the medical
 // document path that already existed and shares its storage.
@@ -217,7 +218,7 @@ const hasAppCheckout = existsSync(dartSourcePath);
 const skipApp = hasAppCheckout ? false : `no app checkout at ${appRepo}`;
 
 test('every report path the app calls exists as a route', { skip: skipApp }, () => {
-  const dart = readFileSync(dartSourcePath, 'utf8');
+  const dart = readDartLibrary(dartSourcePath);
 
   // Dart interpolates route tails ('/api/health/reports/$id'), and Express
   // spells the same idea as ':id'. Rewritten rather than truncated to the

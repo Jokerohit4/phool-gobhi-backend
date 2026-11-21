@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { readDartLibrary } from './helpers/dartLibrary.js';
 
 // The logged-food surface the app reads and writes, checked against the routes
 // and the payload that back it.
@@ -46,7 +47,7 @@ const FOOD_LOG_PREFIXES = ['/ledger/food-logs', '/ledger/food-totals'];
 
 /** Every verb+path pair the Dart data source issues for logged food. */
 function foodCallsByApp() {
-  const dart = readFileSync(dartDataPath, 'utf8');
+  const dart = readDartLibrary(dartDataPath);
   // Dart interpolates ('/ledger/food-logs/$id'); Express spells the same idea
   // ':id'. Rewritten rather than truncated, for the reason scoreRouteContract
   // gives: truncation invents mismatches that do not exist.
@@ -139,7 +140,7 @@ test('correcting an entry is a PATCH on both sides, not a POST or a PUT', { skip
   // and this router answers router.patch('/ledger/food-logs/:id', ...). If one
   // side moves, Express 404s it identically to a missing path and the only
   // symptom is a snackbar after the user has typed a new size.
-  const dart = readFileSync(dartDataPath, 'utf8');
+  const dart = readDartLibrary(dartDataPath);
   const appCorrects = /_client\.patch\(\s*'\/api\/health\/ledger\/food-logs\//.test(dart);
   const routerCorrects = /router\.patch\(\s*['"]\/ledger\/food-logs\/:id['"]/.test(routesSource);
 
@@ -214,7 +215,7 @@ test("the day's rows ride on the totals response, on both sides", { skip: skipAp
       'the counts still look correct.',
   );
 
-  const modelSource = readFileSync(dartModelPath, 'utf8');
+  const modelSource = readDartLibrary(dartModelPath);
   const modelBlock = modelSource.slice(
     modelSource.indexOf('factory DayTotalsModel.fromJson'),
     modelSource.indexOf('final List<FoodLogModel> logs;'),

@@ -1,5 +1,6 @@
 import { foodQueryTerms, matchesFoodAlias } from './foodNames.js';
 import { compositionForFood, assertSpecificName, isGenericFoodName } from './foodComposition.js';
+import { foodPieceGrams } from './foodPiecePortions.js';
 // Nutrition: search the food table, log what was eaten, aggregate a day,
 // and repeat a meal from a saved one.
 //
@@ -60,10 +61,12 @@ function num(v) {
 // serving maths.
 function toGrams(grams, servings, food) {
   if (grams != null && Number(grams) > 0) return Number(grams);
-  if (servings != null && servings > 0 && food?.servings) {
+  if (servings != null && servings > 0 && food) {
     const list = Array.isArray(food.servings) ? food.servings : [];
-    const match = list.find((s) => Number(s.grams) > 0);
+    const match = list.find((s) => Number(s?.grams) > 0);
     if (match) return Number(servings) * Number(match.grams);
+    const pieceGrams = foodPieceGrams(food);
+    if (pieceGrams != null) return Number(servings) * pieceGrams;
   }
   return 0;
 }
@@ -205,7 +208,7 @@ export async function recentFoods(prisma, userId, { limit = 8 } = {}) {
     // common (the whole point of a recent list is repetition) and deduping below
     // would otherwise return fewer than `capped` rows for an active logger.
     take: capped * 5,
-    select: { foodItemId: true, grams: true, servingLabel: true, localDate: true },
+    select: { foodItemId: true, grams: true, servings: true, servingLabel: true, localDate: true },
   });
 
   const seen = new Set();
@@ -229,7 +232,7 @@ export async function recentFoods(prisma, userId, { limit = 8 } = {}) {
       if (!food) return null;
       // The last portion rides along so the picker can prefill the amount the
       // user chose last time rather than a flat 100 g every tap.
-      return { food, grams: row.grams, servingLabel: row.servingLabel, localDate: row.localDate };
+      return { food, grams: row.grams, servings: row.servings ?? null, servingLabel: row.servingLabel, localDate: row.localDate };
     })
     .filter(Boolean);
 }
@@ -759,6 +762,7 @@ export async function saveMeal(prisma, { userId, name, slot, localDate }) {
           order: i,
           foodItemId: log.foodItemId,
           grams: log.grams,
+          servings: log.servings,
           servingLabel: log.servingLabel,
           // The same snapshot rule as FoodLog: a saved meal keeps the numbers
           // as they were when it was saved, so editing a food later does not
@@ -824,6 +828,7 @@ export async function logSavedMeal(prisma, { userId, savedMealId, localDate, slo
       localDate,
       slot: targetSlot,
       grams: line.grams,
+      servings: line.servings,
       servingLabel: line.servingLabel,
       nutrients: line.nutrients,
       source: 'saved_meal',

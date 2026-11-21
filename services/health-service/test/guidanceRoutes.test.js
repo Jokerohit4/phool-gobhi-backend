@@ -39,6 +39,11 @@ test('report reads are owner-bound and never expose storage capability', async (
   assert.equal((await call('/guidance/reports/1', undefined, { user: 8 })).status, 404);
   const own = await call('/guidance/reports/1');assert.equal(own.status, 200);assert.equal(Object.hasOwn(own.body.data, 'storagePath'), false);
 });
+test('the all-report library and saved-file links are staff-only', async () => {
+  assert.equal((await call('/guidance/admin/reports')).status, 403);
+  assert.equal((await call('/guidance/admin/reports/snapshot/1/link')).status, 403);
+  assert.equal((await call('/guidance/admin/reports/document/1/link')).status, 403);
+});
 test('unconfirmed identity and invalid values never write health data', async () => {
   assert.equal((await call('/guidance/reports/1/confirm', { ...confirmation, belongsToMe: false })).status, 400);
   assert.equal((await call('/guidance/reports/1/confirm', { ...confirmation, markers: { hba1c: 'bad' } })).status, 400);
@@ -70,6 +75,17 @@ test('paid request gates do not gate report reads; form support requires clearan
   assert.equal((await call('/guidance/requests', { kind: 'DOCTOR_CALL' })).status, 200);
   assert.equal((await call('/guidance/requests', { kind: 'DOCTOR_CALL' })).status, 200);
   assert.equal(requests.length, 1);
+});
+test('remote guidance cannot request floor sessions even if an old balance remains', async () => {
+  entitlement = { isGuided: true, plan_type: 'QUARTERLY_11999', benefits: { trainerFloorSessions: false }, free_delight_sessions_remaining: 2, addon_trainer_sessions_remaining: 4 };
+  assert.equal((await call('/guidance/requests', { kind: 'FORM_SESSION' })).status, 400);
+  assert.equal((await call('/guidance/requests', { kind: 'COACH_CALL' })).status, 200);
+});
+test('clinical and coaching requests follow purchased inclusions rather than a tier name', async () => {
+  entitlement = { isGuided: true, plan_type: 'MONTHLY_4499', offer: { dietitianReview: true, doctorClearanceForRed: false, weeklyCoaching: false } };
+  assert.equal((await call('/guidance/requests', { kind: 'DIETITIAN_REVIEW' })).status, 200);
+  assert.equal((await call('/guidance/requests', { kind: 'DOCTOR_CALL' })).status, 400);
+  assert.equal((await call('/guidance/requests', { kind: 'COACH_CALL' })).status, 400);
 });
 test('only staff can open another customer’s confirmed source for clinical review', async () => {
   assert.equal((await call('/guidance/admin/7/report-link')).status, 403);

@@ -9,6 +9,7 @@ import { createReportService, processReportService, parseReportDate } from '../s
 import { validateMarkers, riskBucket } from '../utils/guidanceExtraction.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { invalidateBlendedScore } from '../services/ledger/blendedScoreCache.js';
+import { listAdminReports, adminReportLink } from '../services/adminReportsService.js';
 
 const router = Router();
 const run = fn => async (req, res) => { try { res.json({ data: await fn(req, res) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? (e.error || e.message) : 'Could not complete this request right now. Please try again.' }); } };
@@ -96,8 +97,12 @@ router.post('/guidance/requests', requireRole('customer'), run(async req => {
   if (!['COACH_CALL', 'DOCTOR_CALL', 'DIETITIAN_REVIEW', 'QUESTION', 'FORM_SESSION'].includes(kind)) bad('Choose a valid request');
   const entitlement = await coachingEntitlement(req.userId);
   if (!entitlement.isGuided) throw Object.assign(new Error('An active guided plan is required'), { status: 403 });
-  if (['DOCTOR_CALL', 'DIETITIAN_REVIEW'].includes(kind) && entitlement.plan_type !== 'QUARTERLY_11999') bad('Clinical review is included in the 90-Day Plan');
+  const included = entitlement.offer || {};
+  if (kind === 'DOCTOR_CALL' && !(included.doctorClearanceForRed ?? (entitlement.plan_type === 'QUARTERLY_11999'))) bad('Doctor clearance is not included in this purchased plan');
+  if (kind === 'DIETITIAN_REVIEW' && !(included.dietitianReview ?? (entitlement.plan_type === 'QUARTERLY_11999'))) bad('Dietitian review is not included in this purchased plan');
+  if (kind === 'COACH_CALL' && included.weeklyCoaching === false) bad('Coaching calls are not included in this purchased plan');
   if (kind === 'FORM_SESSION') {
+    if (entitlement.benefits?.trainerFloorSessions === false) bad('Trainer floor sessions are not included in this regional plan');
     const profile = await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } });
     if (profile?.clinicalStatus === 'NOT_CLEARED' || (profile?.riskBucket === 'RED' && profile.clinicalStatus !== 'CLEARED')) bad('Clinical clearance is required before guided form sessions');
     if (entitlement.free_delight_sessions_remaining + entitlement.addon_trainer_sessions_remaining < 1) bad('No trainer sessions remain');
@@ -111,6 +116,14 @@ router.post('/guidance/requests', requireRole('customer'), run(async req => {
 }));
 router.get('/guidance/internal/:userId', requireInternal, run(async req => prisma.guidanceProfile.findUnique({ where: { userId: Number(req.params.userId) } })));
 router.get('/guidance/admin', requireRole('gobhi'), run(async () => ({ profiles: await prisma.guidanceProfile.findMany({ orderBy: { updatedAt: 'desc' }, take: 200 }), requests: await prisma.guidanceRequest.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }) })));
+router.get('/guidance/admin/reports', requireRole('gobhi'), run(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return listAdminReports(req.query);
+}));
+router.get('/guidance/admin/reports/:source/:id/link', requireRole('gobhi'), run(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return adminReportLink(req.params.source, req.params.id);
+}));
 router.get('/guidance/admin/:userId/report-link', requireRole('gobhi'), run(async req => {
   const profile = await prisma.guidanceProfile.findUnique({ where: { userId: Number(req.params.userId) } });
   if (!profile?.sourceReportId || !profile.confirmedAt) throw Object.assign(new Error('No confirmed source report'), { status: 404 });
