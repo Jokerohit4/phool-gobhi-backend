@@ -61,7 +61,7 @@ Collection/onboarding records are durable even if notification delivery fails. C
 
 ## Rollout
 
-1. Deploy wallet and health migrations from `prisma/migrations/20261117010000_health_guidance`. They add tables/columns and preserve pilot data; they do not run automatically from the client. Run `npm run db:deploy` in each service during the normal deployment pipeline.
+1. Deploy wallet and health migrations (`wallet-service/prisma/migrations/20261117010100_wallet_coaching_tables` and `health-service/prisma/migrations/20261117010000_health_guidance`; the names must differ because services share one migration history table in dev). They add tables/columns and preserve pilot data; they do not run automatically from the client. Run `npm run db:deploy` in each service during the normal deployment pipeline.
 2. Deploy wallet/health before the client. `deploy/services.json` adds the health-service URL to wallet; health already has wallet/auth URLs. Allow the existing service account to invoke these services.
 3. Keep the existing private `MEDICAL_BUCKET_NAME`, ADC storage access, `GOOGLE_PROJECT_ID` and `GOOGLE_DOCUMENT_AI_PROCESSOR_ID` configured for health. The processor needs PDF/image OCR. No synthetic extraction fallback is used when OCR is unavailable.
 4. Keep wallet's existing `RAZORPAY_KEY_ID`, `RAZORPAY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` configured. Register captured and authorized payment events on the signed webhook. Web checkout loads the provider's official checkout script; native checkout uses the installed Flutter package.

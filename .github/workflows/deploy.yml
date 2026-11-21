@@ -206,6 +206,10 @@ jobs:
           else
             echo "deploy/scripts/check-undeclared-imports.cjs not present on this branch — skipping."
           fi
+
+      # Services share one _prisma_migrations table in dev, so a migration name
+      # used by two services is skipped by whichever deploys second.
+      - run: node deploy/scripts/check-duplicate-migration-names.cjs
       - name: Check canonical analytics modules
         run: node tools/analytics/sync.mjs --check
 
