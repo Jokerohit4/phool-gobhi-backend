@@ -4,3 +4,4 @@ CREATE DATABASE gymdb;
 CREATE DATABASE bookingdb;
 CREATE DATABASE buddydb;
 CREATE DATABASE challengedb;
+CREATE DATABASE notificationdb;

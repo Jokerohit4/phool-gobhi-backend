@@ -1,0 +1,305 @@
+[
+  {
+    "path": "/main",
+    "label": "Home"
+  },
+  {
+    "path": "/notifications",
+    "label": "Notification inbox"
+  },
+  {
+    "path": "/details",
+    "label": "Gym details",
+    "parameter": "gymId"
+  },
+  {
+    "path": "/mySessions",
+    "label": "My bookings"
+  },
+  {
+    "path": "/myAttendance",
+    "label": "My attendance"
+  },
+  {
+    "path": "/attendanceWarnings",
+    "label": "Attendance warnings"
+  },
+  {
+    "path": "/editProfile",
+    "label": "Edit profile"
+  },
+  {
+    "path": "/buddyProfileSetup",
+    "label": "Buddy profile setup"
+  },
+  {
+    "path": "/buddyMatches",
+    "label": "Buddy matches"
+  },
+  {
+    "path": "/buddyLeague",
+    "label": "Buddy league"
+  },
+  {
+    "path": "/buddyChat",
+    "label": "Buddy chat",
+    "parameter": "matchId"
+  },
+  {
+    "path": "/cancellationPolicy",
+    "label": "Cancellation policy"
+  },
+  {
+    "path": "/wallet",
+    "label": "Wallet"
+  },
+  {
+    "path": "/referral",
+    "label": "Referrals"
+  },
+  {
+    "path": "/giftTeaser",
+    "label": "Gift preview"
+  },
+  {
+    "path": "/giftReveal",
+    "label": "Gift reveal",
+    "parameter": "subscriptionId"
+  },
+  {
+    "path": "/independentGym",
+    "label": "Independent gym"
+  },
+  {
+    "path": "/saveMyGym",
+    "label": "Save my gym"
+  },
+  {
+    "path": "/gymHome",
+    "label": "My gym"
+  },
+  {
+    "path": "/browseGyms",
+    "label": "Browse gyms"
+  },
+  {
+    "path": "/exploreMap",
+    "label": "Explore map"
+  },
+  {
+    "path": "/explore/food-dex",
+    "label": "Food Dex"
+  },
+  {
+    "path": "/coinWallet",
+    "label": "Coin wallet"
+  },
+  {
+    "path": "/challenges",
+    "label": "Challenges"
+  },
+  {
+    "path": "/challengeDetail",
+    "label": "Challenge details",
+    "parameter": "challengeId"
+  },
+  {
+    "path": "/progressHub",
+    "label": "Progress"
+  },
+  {
+    "path": "/run/start",
+    "label": "Start a run"
+  },
+  {
+    "path": "/run/history",
+    "label": "Run history"
+  },
+  {
+    "path": "/run/detail",
+    "label": "Run details",
+    "parameter": "runId"
+  },
+  {
+    "path": "/healthDashboard",
+    "label": "Health dashboard"
+  },
+  {
+    "path": "/healthSettings",
+    "label": "Health settings"
+  },
+  {
+    "path": "/stepsHistory",
+    "label": "Steps history"
+  },
+  {
+    "path": "/routines",
+    "label": "Routines"
+  },
+  {
+    "path": "/exercisePicker",
+    "label": "Exercise library"
+  },
+  {
+    "path": "/createRoutine",
+    "label": "Create a routine"
+  },
+  {
+    "path": "/weeklyPlan",
+    "label": "Weekly workout plan"
+  },
+  {
+    "path": "/starterTemplates",
+    "label": "Starter workouts"
+  },
+  {
+    "path": "/homeRoutines",
+    "label": "Home workouts"
+  },
+  {
+    "path": "/exerciseDetail",
+    "label": "Exercise details",
+    "parameter": "exerciseId"
+  },
+  {
+    "path": "/trainingProgress",
+    "label": "Training progress"
+  },
+  {
+    "path": "/workoutHistory",
+    "label": "Workout history"
+  },
+  {
+    "path": "/trackBody",
+    "label": "Track body measurements"
+  },
+  {
+    "path": "/dailyNumbers",
+    "label": "Daily numbers"
+  },
+  {
+    "path": "/healthPrivacy",
+    "label": "Health privacy"
+  },
+  {
+    "path": "/nudgeSettings",
+    "label": "Nudge settings"
+  },
+  {
+    "path": "/weeklyRecap",
+    "label": "Weekly recap"
+  },
+  {
+    "path": "/weekSummary",
+    "label": "Week summary"
+  },
+  {
+    "path": "/personalisation",
+    "label": "Personalisation"
+  },
+  {
+    "path": "/assistantChat",
+    "label": "Assistant chat"
+  },
+  {
+    "path": "/assistantHistory",
+    "label": "Assistant history"
+  },
+  {
+    "path": "/assistantMemories",
+    "label": "Assistant memories"
+  },
+  {
+    "path": "/ledgerFoodLog",
+    "label": "Food log"
+  },
+  {
+    "path": "/ledgerFoodPhoto",
+    "label": "Food photo"
+  },
+  {
+    "path": "/ledgerDocuments",
+    "label": "Health documents"
+  },
+  {
+    "path": "/healthProfile",
+    "label": "Health profile"
+  },
+  {
+    "path": "/plan/edit",
+    "label": "Edit plan"
+  },
+  {
+    "path": "/plan/score",
+    "label": "Health score"
+  },
+  {
+    "path": "/plan/foodSetup",
+    "label": "Food setup"
+  },
+  {
+    "path": "/healthAppointments",
+    "label": "Health appointments"
+  },
+  {
+    "path": "/coach/health",
+    "label": "Coach health"
+  },
+  {
+    "path": "/coach/roadmap",
+    "label": "Coach roadmap"
+  },
+  {
+    "path": "/coach/habits/water",
+    "label": "Water habits"
+  },
+  {
+    "path": "/coach/habits/supplements",
+    "label": "Supplements"
+  },
+  {
+    "path": "/coach/profileCards",
+    "label": "Coach profile"
+  },
+  {
+    "path": "/tabs/map",
+    "label": "Map tab"
+  },
+  {
+    "path": "/tabs/buddy",
+    "label": "Buddy tab"
+  },
+  {
+    "path": "/tabs/profile",
+    "label": "Profile tab"
+  },
+  {
+    "path": "/tabs/me",
+    "label": "Me tab"
+  },
+  {
+    "path": "/tabs/train",
+    "label": "Train tab"
+  },
+  {
+    "path": "/buddyProfileView",
+    "label": "Matched buddy profile",
+    "parameter": "matchId"
+  },
+  {
+    "path": "/healthConsent",
+    "label": "Health consent"
+  },
+  {
+    "path": "/assistantConsent",
+    "label": "Assistant consent"
+  },
+  {
+    "path": "/plan/consents",
+    "label": "Plan consents"
+  },
+  {
+    "path": "/coach/roadmap/vaultConsent",
+    "label": "Coach Vault consent"
+  }
+]

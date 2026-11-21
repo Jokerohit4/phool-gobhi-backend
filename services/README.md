@@ -7,3 +7,4 @@
 - `buddy-service/`: Gym-buddy matchmaking (discovery, swipes, matches, chat).
 - `challenge-service/`: Gamification (badges, streaks, coins, challenges).
 - `health-service/`: Health & activity (exercise records, routines, workout sessions, biomarkers).
+- [`notification-service/`](notification-service/README.md) runs staff-configured customer push campaigns.

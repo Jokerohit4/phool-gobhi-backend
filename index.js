@@ -47,6 +47,7 @@ const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-s
 const BUDDY_SERVICE_URL = process.env.BUDDY_SERVICE_URL || 'http://buddy-service:5007';
 const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';
 const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:5010';
 
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
@@ -318,6 +319,15 @@ app.use('/api/challenges', proxy(CHALLENGE_SERVICE_URL, {
 app.use('/api/health', proxy(HEALTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(HEALTH_SERVICE_URL),
   limit: '15mb',
+}));
+
+app.use('/api/notifications', (req, res, next) => {
+  const campaignRoute = /^\/admin\/(?:options|campaigns(?:\/[a-f0-9-]{36}(?:\/(?:status|test|runs))?)?)$/i;
+  if (req.path === '/events' || campaignRoute.test(req.path)) return next();
+  res.sendStatus(404);
+}, proxy(NOTIFICATION_SERVICE_URL, {
+  proxyReqOptDecorator: withGoogleIdToken(NOTIFICATION_SERVICE_URL),
+  limit: '24kb',
 }));
 
 const PORT = process.env.PORT || process.env.GATEWAY_PORT || 5000;
