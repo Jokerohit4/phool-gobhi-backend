@@ -39,6 +39,34 @@ test('authorized payment is captured, while mismatched captured payments never g
     reset();Object.assign(payment, values);await assert.rejects(service.settleCoachingPayment('order_test', 'pay_test'));assert.equal(membership, null);assert.equal(order.status, 'PENDING');
   }
 });
+test('a captured guidance-only offer grants coaching without physical benefits', async () => {
+  reset();
+  order.amountPaise = 123400; payment.amount = 123400;
+  order.offerSnapshot = { region: 'REST_INDIA', city: 'Mumbai', amountPaise: 123400, title: '90-Day Guided Health' };
+  await service.settleCoachingPayment('order_test', 'pay_test');
+  assert.equal(order.status, 'SUCCESS');
+  assert.equal(membership.freeDelightSessionsRemaining, 0);
+  assert.equal(membership.labCreditsRemaining, 0);
+  assert.equal(membership.gymPassStatus, 'NOT_INCLUDED');
+  assert.equal(membership.offerSnapshot.city, 'Mumbai');
+  assert.equal(fulfillments[0].details.region, 'REST_INDIA');
+});
+test('configured plan duration and included sessions are settled from the paid snapshot', async () => {
+  reset('MONTHLY_4499');
+  order.offerSnapshot = { region: 'GURUGRAM', durationDays: 120, freeFormSessions: 5, labCredits: 0, benefits: { gymAccess: false, trainerFloorSessions: true, doorstepLabs: false } };
+  await service.settleCoachingPayment('order_test', 'pay_test');
+  assert.equal(membership.freeDelightSessionsRemaining, 5);
+  assert.equal(membership.labCreditsRemaining, 0);
+  assert.equal(+membership.planEndsAt - +membership.purchasedAt, 120 * 86400000);
+  assert.equal(membership.gymPassStatus, 'NOT_INCLUDED');
+});
+test('trainer add-on sessions and expiry use its purchased configuration', async () => {
+  reset('TRAINER_ADDON_1499');membership = { userId: 4, planType: 'MONTHLY_4499', planStatus: 'ACTIVE', planEndsAt: new Date(Date.now() + 86400000) };
+  order.offerSnapshot = { region: 'GURUGRAM', sessions: 6, validityDays: 45 };
+  await service.settleCoachingPayment('order_test', 'pay_test');
+  assert.equal(grants[0].remaining, 6);
+  assert.ok(grants[0].expiresAt > new Date(Date.now() + 44 * 86400000));
+});
 test('add-on replay creates one four-session grant with a thirty-day expiry', async () => {
   reset('TRAINER_ADDON_1499');membership = { userId: 4, planType: 'MONTHLY_4499', planStatus: 'ACTIVE', planEndsAt: new Date(Date.now() + 86400000) };
   await service.settleCoachingPayment('order_test', 'pay_test');await service.settleCoachingPayment('order_test', 'pay_test');

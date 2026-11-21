@@ -3,6 +3,9 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import prisma from '../db/prisma.js';
+import { membershipBenefits } from '../services/coachingCatalog.js';
+import { loadCoachingCatalog } from '../services/coachingOfferService.js';
+import { getCoachingConfig, saveCoachingConfig, coachingConfigHistory } from '../services/coachingConfigService.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { membershipView, createCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
 const router = Router();
@@ -19,7 +22,10 @@ router.put('/mine', requireRole('customer'), run(async req => {
   await prisma.coachingMembership.upsert({ where: { userId: req.userId }, create: { userId: req.userId, hasExistingGym: req.body.hasExistingGym }, update: { hasExistingGym: req.body.hasExistingGym } });
   return membershipView(req.userId);
 }));
-router.post('/orders', requireRole('customer'), run(req => createCoachingOrder(req.userId, req.body.product)));
+router.get('/catalog', requireRole('customer'), run(req => loadCoachingCatalog(req.query.city)));
+router.get('/admin/config', requireRole('gobhi'), run(async () => ({ ...(await getCoachingConfig()), history: await coachingConfigHistory() })));
+router.put('/admin/config', requireRole('gobhi'), run(req => saveCoachingConfig(req.body.config, req.body.expectedVersion, req.userId)));
+router.post('/orders', requireRole('customer'), run(req => createCoachingOrder(req.userId, req.body.product, { city: req.body.city, offerId: req.body.offerId })));
 router.post('/verify', requireRole('customer'), run(async req => {
   const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
   if (typeof orderId !== 'string' || typeof razorpayPaymentId !== 'string') throw Object.assign(new Error('Payment identifiers are required'), { status: 400 });
@@ -59,6 +65,8 @@ router.get('/admin/fulfillment', requireRole('gobhi'), run(async () => {
 }));
 router.post('/admin/fulfillment/:userId/sessions', requireRole('gobhi'), run(req => consumeSession(Number(req.params.userId), req.body.kind, req.userId, req.body.idempotencyKey)));
 router.patch('/admin/fulfillment/:userId/gym', requireRole('gobhi'), run(async req => {
+  const member = await prisma.coachingMembership.findUnique({ where: { userId: Number(req.params.userId) } });
+  if (!member || !membershipBenefits(member).gymAccess) throw Object.assign(new Error('Gym access is not included in this regional plan'), { status: 409 });
   if (!['AWAITING_ASSIGNMENT', 'ASSIGNED', 'ACTIVE', 'CANCELLED'].includes(req.body.status)) throw Object.assign(new Error('Choose a gym pass status'), { status: 400 });
   return prisma.coachingMembership.update({ where: { userId: Number(req.params.userId) }, data: { gymPassStatus: req.body.status } });
 }));
@@ -70,7 +78,11 @@ router.patch('/admin/requests/:id', requireRole('gobhi'), run(async req => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(${row.userId}::bigint)`;
     const current = await tx.coachingFulfillment.findUnique({ where: { id: row.id } });
     if (current.status === 'CANCELLED' || current.status === 'COMPLETED') return current;
-    if (current.kind === 'LAB' && req.body.status === 'CANCELLED') await tx.coachingMembership.updateMany({ where: { userId: row.userId, activeOrderId: current.details?.membershipOrderId ?? null, planStatus: { in: ['TRIAL_72H', 'ACTIVE'] }, labCreditsRemaining: { lt: 2 } }, data: { labCreditsRemaining: { increment: 1 } } });
+    if (current.kind === 'LAB' && req.body.status === 'CANCELLED') {
+      const member = await tx.coachingMembership.findUnique({ where: { userId: row.userId } });
+      const includedPanels = member?.offerSnapshot?.labCredits ?? 2;
+      await tx.coachingMembership.updateMany({ where: { userId: row.userId, activeOrderId: current.details?.membershipOrderId ?? null, planStatus: { in: ['TRIAL_72H', 'ACTIVE'] }, labCreditsRemaining: { lt: includedPanels } }, data: { labCreditsRemaining: { increment: 1 } } });
+    }
     return tx.coachingFulfillment.update({ where: { id: row.id }, data: { status: req.body.status, completedBy: req.userId } });
   });
 }));

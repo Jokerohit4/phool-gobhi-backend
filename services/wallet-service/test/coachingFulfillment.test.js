@@ -36,6 +36,19 @@ test('trial gate and Day-90 second-panel gate are enforced by the server', async
   await assert.rejects(api.requestLab(7, '123 Sample Street', 'request-0001'));
   member.purchasedAt = new Date(Date.now() - 89 * day);await api.requestLab(7, '123 Sample Street', 'request-0001');assert.equal(member.labCreditsRemaining, 0);
 });
+test('guidance-only memberships cannot redeem labs or gym sessions even with stray credits', async () => {
+  reset();member.offerSnapshot = { region: 'REST_INDIA' };
+  await assert.rejects(api.requestLab(7, '123 Sample Street', 'request-remote'));
+  await assert.rejects(api.consumeSession(7, 'FREE_SESSION', 99, 'session-remote'), { status: 403 });
+  await assert.rejects(api.consumeSession(7, 'ADDON_SESSION', 99, 'session-remote'), { status: 403 });
+  assert.equal(records.length, 0);
+  assert.equal(member.labCreditsRemaining, 2);
+});
+test('a configured single-panel plan books a baseline rather than waiting until Day 90', async () => {
+  reset();member.planType = 'MONTHLY_4499';member.offerSnapshot = { region: 'GURUGRAM', labCredits: 1, benefits: { doorstepLabs: true } };member.labCreditsRemaining = 1;
+  await api.requestLab(7, '123 Sample Street', 'request-single-panel');
+  assert.equal(member.labCreditsRemaining, 0);assert.equal(records[0].details.panel, 'BASELINE');
+});
 test('session completion is idempotent and cannot overdraw the final session', async () => {
   reset();await Promise.all([api.consumeSession(7, 'FREE_SESSION', 99, 'session-0001'), api.consumeSession(7, 'FREE_SESSION', 99, 'session-0001')]);assert.equal(member.freeDelightSessionsRemaining, 1);
   const outcomes = await Promise.allSettled([api.consumeSession(7, 'FREE_SESSION', 99, 'session-0002'), api.consumeSession(7, 'FREE_SESSION', 99, 'session-0003')]);

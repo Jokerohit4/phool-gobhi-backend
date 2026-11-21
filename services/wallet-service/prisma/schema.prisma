@@ -253,6 +253,7 @@ model CoachingSubscription {
 
 model CoachingMembership {
   userId Int @id
+  offerSnapshot Json @default("{}")
   planType String @default("FREE")
   planStatus String @default("INACTIVE")
   trialEndsAt DateTime?
@@ -267,8 +268,25 @@ model CoachingMembership {
   updatedAt DateTime @updatedAt
   @@schema("wallet")
 }
+model CoachingCatalogConfig {
+  id Int @id @default(1)
+  version Int @default(1)
+  config Json
+  updatedBy Int?
+  updatedAt DateTime @updatedAt
+  @@schema("wallet")
+}
+model CoachingCatalogConfigHistory {
+  id Int @id @default(autoincrement())
+  version Int @unique
+  config Json
+  updatedBy Int
+  createdAt DateTime @default(now())
+  @@schema("wallet")
+}
 model CoachingOrder {
   id Int @id @default(autoincrement())
+  offerSnapshot Json @default("{}")
   userId Int
   product String
   amountPaise Int
