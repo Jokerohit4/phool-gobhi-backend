@@ -355,8 +355,11 @@ export async function signupService({ name, email, password, role, type, gobhiTy
 export async function loginService({ email, password }) {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) throw { status: 404, error: ERROR_MESSAGES.USER_NOT_FOUND.message, errorCode: ERROR_MESSAGES.USER_NOT_FOUND.code };
-    const isMatch = await compare(password, user.password);
+    // Uniform 401 for unknown user / missing hash / wrong password (no account
+    // enumeration; a null hash on an OTP-only account never throws).
+    const isMatch = user && typeof user.password === 'string' && typeof password === 'string'
+      ? await compare(password, user.password)
+      : false;
     if (!isMatch) throw { status: 401, error: ERROR_MESSAGES.INVALID_CREDENTIALS.message, errorCode: ERROR_MESSAGES.INVALID_CREDENTIALS.code };
     if (!user.isActive) throw { status: 403, error: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.message, errorCode: ERROR_MESSAGES.ACCOUNT_DEACTIVATED.code };
     const accessToken = generateAccessToken(user.id, user.role, user.type);
