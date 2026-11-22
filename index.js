@@ -181,14 +181,14 @@ const eventsIngestLimiter = rateLimit({
 });
 
 // Coarse per-IP backstop for the public, unauthenticated GET discovery routes
-// (gym list/detail/slots/...). Generous by default (300/min) and tunable via
+// (gym list/detail/slots/...). Generous by default (3000/min) and tunable via
 // GATEWAY_PUBLIC_GET_RATE_LIMIT (0 disables). Requests that carry a bearer
 // token (the mobile apps) are not counted: this targets anonymous scraping.
 // Note: the website BFF calls these anonymously from shared server egress IPs,
 // so raise the env value if that traffic starts seeing 429s.
 const PUBLIC_GET_RATE_LIMIT = Number.isFinite(Number(process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT))
   && process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT !== undefined && process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT !== ''
-  ? Number(process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT) : 300;
+  ? Number(process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT) : 3000;
 const publicDiscoveryLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: PUBLIC_GET_RATE_LIMIT,
