@@ -54,7 +54,16 @@ const signup = async (req, res) => {
         errorCode: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.code,
       });
     }
-    const result = await signupService(req.body ?? {});
+    // Trainers are created only by their employing partner (createTrainerService);
+    // the OTP path refuses new trainers too.
+    if (req.body?.role === ROLES.TRAINER) {
+      return res.status(403).json({
+        error: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.message,
+        errorCode: ERROR_MESSAGES.GOBHI_SIGNUP_FORBIDDEN.code,
+      });
+    }
+    // Self-signup is always the base tier; ignore any client-supplied tier.
+    const result = await signupService({ ...(req.body ?? {}), type: 'general' });
     res.status(201).json(result);
   } catch (err) {
     console.error('Signup controller error:', JSON.stringify(err, null, 2));
