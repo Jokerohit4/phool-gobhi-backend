@@ -38,3 +38,10 @@ test('exact names outrank other variants, and nonsense returns an empty array', 
   assert.equal((await searchExercisesService(7, { q: 'Barbell Bench Press' }))[0].id, 4);
   assert.deepEqual(await searchExercisesService(7, { q: 'zzxxxyy' }), []);
 });
+
+test('invalid or repeated muscleGroup/equipment filters are rejected with status 400', async () => {
+  for (const filter of [{ muscleGroup: ['chest', 'back'] }, { muscleGroup: 'nope' }, { equipment: ['dumbbell', 'cable'] }, { equipment: 'laser' }]) {
+    await assert.rejects(searchExercisesService(7, filter), (err) => err.status === 400, JSON.stringify(filter));
+  }
+  assert.ok((await searchExercisesService(7, { muscleGroup: 'chest', equipment: 'barbell' })).length > 0);
+});

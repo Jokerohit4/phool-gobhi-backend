@@ -22,6 +22,15 @@ const loadSystemExercises = () => systemExercisesCache.get('system', () => prism
 }));
 
 export async function searchExercisesService(userId, { q, muscleGroup, equipment } = {}) {
+  // Query-string values can arrive as arrays (?muscleGroup=a&muscleGroup=b) or junk;
+  // reject them as 400 instead of letting Prisma throw a 500.
+  for (const [field, value, allowed] of [['muscleGroup', muscleGroup, MUSCLE_GROUPS], ['equipment', equipment, EQUIPMENT]]) {
+    if (value !== undefined && value !== null && value !== '' && !allowed.includes(value)) {
+      const err = new Error(`Invalid ${field}`);
+      err.status = 400;
+      throw err;
+    }
+  }
   const [system, custom] = await Promise.all([
     loadSystemExercises(),
     prisma.exercise.findMany({
