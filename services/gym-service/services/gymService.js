@@ -115,7 +115,11 @@ const byDistanceKm = (a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Inf
 const sortRating = (g) => (g.ratingCount > 0 && g.rating != null ? g.rating : (g.googleRating ?? 0));
 const sortRatingCount = (g) => (g.ratingCount > 0 ? g.ratingCount : (g.googleRatingCount ?? 0));
 
-export async function listGyms({ city, minPrice, maxPrice, search, amenities, sort, userLat, userLng }) {
+// Hard upper bound on one GET /api/gyms response. Without ?limit the full
+// (filtered, sorted) list is returned as before, but never more than this.
+export const MAX_GYM_LIST_LIMIT = 1000;
+
+export async function listGyms({ city, minPrice, maxPrice, search, amenities, sort, userLat, userLng, limit, offset }) {
   const where = {
     isActive: true,
     isApproved: true,
@@ -219,6 +223,14 @@ export async function listGyms({ city, minPrice, maxPrice, search, amenities, so
   // the order already established above — a river or highway loop can make
   // road distance rank differently than straight-line, but re-sorting on it
   // isn't worth an external call becoming load-bearing for page order.
+  // Pagination applies after filtering/sorting (those are in-memory), and
+  // before the road-distance lookup so only the returned page is enriched.
+  const start = Number.isInteger(offset) && offset > 0 ? offset : 0;
+  const cap = Number.isInteger(limit) && limit > 0
+    ? Math.min(limit, MAX_GYM_LIST_LIMIT)
+    : MAX_GYM_LIST_LIMIT;
+  if (start > 0 || gyms.length > cap) gyms = gyms.slice(start, start + cap);
+
   if (userLat != null && userLng != null) {
     const roadDistances = await getRoadDistancesKm(userLat, userLng, gyms);
     gyms = gyms.map(gym => ({
