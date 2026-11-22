@@ -1,5 +1,6 @@
 import multer from 'multer';
 import cloudinary from '../config/cloudinary.js';
+import { CloudinaryStorage } from './cloudinaryStorage.js';
 
 const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME &&
   process.env.CLOUDINARY_API_KEY &&
@@ -7,7 +8,6 @@ const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME &&
 
 let photoStorage;
 if (hasCloudinary) {
-  const { CloudinaryStorage } = await import('multer-storage-cloudinary');
   photoStorage = new CloudinaryStorage({
     cloudinary,
     params: {
