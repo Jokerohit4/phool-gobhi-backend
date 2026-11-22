@@ -12,6 +12,7 @@
 // Run with: node --experimental-test-module-mocks --test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { dayStartHour } from '../utils/loggingDayContext.js';
 
 let sessionRows = [];
 let lastFindManyArgs = null;
@@ -19,8 +20,11 @@ let lastFindManyArgs = null;
 let getStatsService;
 
 function isoDay(offsetDays = 0) {
-  // The service groups IST calendar days; UTC yesterday can be a different week.
-  const d = new Date(Date.now() + 330 * 60 * 1000);
+  // The service groups IST *logging* days: the calendar day shifted back by the
+  // day-start hour (4 by default), so between 00:00 and 04:00 IST it is still
+  // yesterday's logging day and a session row carries that day. UTC yesterday
+  // can also be a different week.
+  const d = new Date(Date.now() + 330 * 60 * 1000 - dayStartHour() * 3600 * 1000);
   d.setUTCHours(0, 0, 0, 0);
   d.setUTCDate(d.getUTCDate() - offsetDays);
   return d.toISOString().slice(0, 10);

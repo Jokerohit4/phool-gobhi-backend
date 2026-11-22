@@ -1,5 +1,6 @@
 import multer from 'multer';
 import cloudinary from '../config/cloudinary.js';
+import { CloudinaryStorage } from './cloudinaryStorage.js';
 
 const ALLOWED_PROFILE_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -14,7 +15,6 @@ const hasCloudinary = process.env.CLOUDINARY_CLOUD_NAME &&
 
 let profilePictureStorage;
 if (hasCloudinary) {
-  const { CloudinaryStorage } = await import('multer-storage-cloudinary');
   profilePictureStorage = new CloudinaryStorage({
     cloudinary,
     params: {
