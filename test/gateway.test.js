@@ -19,7 +19,7 @@ const UAParserResult = {
   device: { type: 'mobile' },
 };
 
-let isPublicRoute, authMiddleware, eventsHandler;
+let isPublicRoute, authMiddleware, eventsHandler, isSlowProxyRoute;
 
 test('setup: mock proxy/rate-limit/analytics/ua-parser, import gateway once', async (t) => {
   t.mock.module('express-http-proxy', { exports: { default: () => () => {} } });
@@ -31,7 +31,7 @@ test('setup: mock proxy/rate-limit/analytics/ua-parser, import gateway once', as
       UAParser: class MockUAParser { getResult() { return UAParserResult; } },
     },
   });
-  ({ isPublicRoute, authMiddleware, eventsHandler } = await import('../index.js'));
+  ({ isPublicRoute, authMiddleware, eventsHandler, isSlowProxyRoute } = await import('../index.js'));
   assert.equal(typeof isPublicRoute, 'function');
   assert.equal(typeof authMiddleware, 'function');
   assert.equal(typeof eventsHandler, 'function');
@@ -459,4 +459,36 @@ test('loader facts handler sets cache headers and answers If-None-Match with 304
   loaderFactsHandler({ query: {}, headers: { 'if-none-match': headers.etag } }, res304);
   assert.equal(res304.statusCode, 304);
   assert.equal(res304.ended, true);
+});
+
+// ---- hardening -------------------------------------------------------------
+
+test('isPublicRoute: anchored discovery routes do not match look-alike paths', () => {
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/slotsEvil'), false);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/classesadmin'), false);
+  assert.equal(isPublicRoute('GET', '/api/gyms/123/reviews/9'), true);
+  assert.equal(isPublicRoute('GET', '/healthz-internal'), false);
+  assert.equal(isPublicRoute('GET', '/health'), true);
+});
+
+test('authMiddleware: only HS256 tokens are accepted', () => {
+  const mk = (alg) => jwt.sign({ id: 1, role: 'customer' }, process.env.JWT_SECRET, { algorithm: alg });
+  const ok = { method: 'GET', path: '/api/bookings/mine', headers: { authorization: 'Bearer ' + mk('HS256') } };
+  let passed = false;
+  authMiddleware(ok, makeRes(), () => { passed = true; });
+  assert.equal(passed, true);
+  const bad = { method: 'GET', path: '/api/bookings/mine', headers: { authorization: 'Bearer ' + mk('HS384') } };
+  const res = makeRes();
+  authMiddleware(bad, res, () => assert.fail('HS384 token must be rejected'));
+  assert.equal(res.statusCode, 401);
+});
+
+test('isSlowProxyRoute: uploads and health AI routes get the long timeout', () => {
+  assert.equal(isSlowProxyRoute('POST', '/api/health/ledger/ai/prescribe'), true);
+  assert.equal(isSlowProxyRoute('POST', '/api/health/sessions/4/photo'), true);
+  assert.equal(isSlowProxyRoute('POST', '/api/gyms/3/images'), true);
+  assert.equal(isSlowProxyRoute('GET', '/api/gyms/3'), false);
+  assert.equal(isSlowProxyRoute('GET', '/api/bookings/mine'), false);
+  assert.equal(isSlowProxyRoute('POST', '/api/bookings'), false);
+  assert.equal(isSlowProxyRoute('GET', '/api/health/daily-activity'), false);
 });
