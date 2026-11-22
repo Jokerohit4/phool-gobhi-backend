@@ -18,7 +18,8 @@ app.get('/health', async (req, res) => {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: 'Booking Service is healthy' });
   } catch (err) {
-    res.status(503).json({ status: 'unhealthy', error: err.message });
+    console.error('Health check failed:', err);
+    res.status(503).json({ status: 'unhealthy', error: 'Service unavailable' });
   }
 });
 
