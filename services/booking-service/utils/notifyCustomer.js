@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import axios from 'axios';
+import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';

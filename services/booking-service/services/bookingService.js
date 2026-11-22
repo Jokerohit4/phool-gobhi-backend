@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../db/prisma.js';
 import axios from 'axios';
+import '../utils/axiosDefaults.js';
 import { notifyPartner, sendPartnerPush } from '../utils/notifyPartner.js';
 import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';

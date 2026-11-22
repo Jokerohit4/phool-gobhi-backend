@@ -1,4 +1,5 @@
 import axios from 'axios';
+import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
 
 const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://challenge-service:5008';

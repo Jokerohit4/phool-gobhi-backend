@@ -4,6 +4,7 @@
 
 import admin from 'firebase-admin';
 import axios from 'axios';
+import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
 
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';

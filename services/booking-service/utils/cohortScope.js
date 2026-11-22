@@ -18,6 +18,7 @@
 // UNKNOWN_USERS. Where a report stitches anonymous ids to the user (Traffic),
 // the filter is applied to the stitched identity.
 import axios from 'axios';
+import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
 
 export const ALL_COHORTS = ['FRIENDS_AND_FAMILY', 'GENERATED_ACCOUNTS', 'TESTING_ACCOUNTS', 'UNKNOWN_USERS'];
