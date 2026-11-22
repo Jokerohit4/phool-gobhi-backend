@@ -1,4 +1,5 @@
 import axios from 'axios';
+import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
 
 const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';

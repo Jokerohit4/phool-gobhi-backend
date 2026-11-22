@@ -13,6 +13,9 @@ const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-s
 export const listGyms = async (req, res) => {
   try {
     const { city, minPrice, maxPrice, search, amenities, sort } = req.query;
+    // Optional pagination (?limit=&offset=); ignored when not a positive/non-negative integer.
+    const limit = /^\d+$/.test(String(req.query.limit ?? '')) ? parseInt(req.query.limit, 10) : undefined;
+    const offset = /^\d+$/.test(String(req.query.offset ?? '')) ? parseInt(req.query.offset, 10) : undefined;
     const userLat = parseFloat(req.headers['x-user-lat']);
     const userLng = parseFloat(req.headers['x-user-lng']);
     const gyms = await gymService.listGyms({
@@ -22,6 +25,8 @@ export const listGyms = async (req, res) => {
       search,
       amenities,
       sort,
+      limit,
+      offset,
       userLat: isNaN(userLat) ? null : userLat,
       userLng: isNaN(userLng) ? null : userLng,
     });

@@ -8,7 +8,6 @@ import { isPersonaSwitchEnabled } from '../services/gymLinkService.js';
 import { normalizeFitnessGoals } from '../constants/userEnums.js';
 import { normalizeSportsPlayed, VALID_SPORTS } from '../constants/sports.js';
 import { linkGym } from '../services/gymLinkService.js';
-import { normalizePhone } from '../services/authService.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { loadProfileCompletionBonusAmount } from '../services/profileCompletionBonusService.js';
 
@@ -340,7 +339,7 @@ export const uploadProfilePicture = async (req, res) => {
   }
 };
 
-// PUT /users/:userId — update name, phone, profileImageUrl, fcmToken
+// PUT /users/:userId — update name, profileImageUrl, fcmToken
 // PUT /users/:userId/app-mode — the user deliberately switching which
 // experience the app leads with ("I want to try a gym" / "not into gyms").
 //
@@ -440,7 +439,7 @@ export const updateProfile = async (req, res) => {
     // Legacy persona ids (muscle_builder/zen_seeker/general_fit) -> enum values.
     if (req.body && req.body.fitnessGoals !== undefined) req.body.fitnessGoals = normalizeFitnessGoals(req.body.fitnessGoals);
     const {
-      name, phone, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
+      name, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
       currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
       weeklyFrequencyIntent, linkedGymId, experienceLevel, trainingTenure, homeUnclaimedGymId,
       wellnessFocuses, wellnessDayPattern, wellnessSleepPattern, wellnessSetupCompleted,
@@ -562,19 +561,10 @@ export const updateProfile = async (req, res) => {
     if (gender !== undefined && gender !== null && !VALID_GENDERS.includes(gender)) {
       return res.status(400).json({ error: `Invalid gender. Must be one of: ${VALID_GENDERS.join(', ')}` });
     }
-    // Phone is the account's login identity and is keyed bare-10-digit
-    // everywhere (OTP store, Firebase path, User.phone). Without this the app
-    // could PUT "+91 93548 59197" and create a second, unreachable "identity"
-    // that no OTP lookup would ever match. Normalize to the canonical form so
-    // every writer agrees (a change of number stays unverified but at least
-    // resolves to the same key), and reject anything not a valid Indian mobile.
-    if (phone !== undefined) {
-      const normalizedPhone = normalizePhone(phone);
-      if (!normalizedPhone) {
-        return res.status(400).json({ error: 'Invalid phone number', code: 'INVALID_PHONE' });
-      }
-      req.body.phone = normalizedPhone;
-    }
+    // Phone is the account's login identity (keyed by OTP/Firebase). It is
+    // deliberately NOT updatable here: changing it without proving ownership
+    // of the new number would let a stolen session take over the login
+    // identity. A `phone` field in the body is ignored.
     // Email is optional but must be a plausible address when set — an invalid
     // one silently breaks staff Google sign-in (which resolves accounts by
     // email) and all mail. '' clears it (the app sends empty for "remove").
@@ -643,7 +633,6 @@ export const updateProfile = async (req, res) => {
 
     const updates = {};
     if (name !== undefined) updates.name = name;
-    if (phone !== undefined) updates.phone = req.body.phone;
     if (email !== undefined) updates.email = email === '' ? null : req.body.email;
     if (profileImageUrl !== undefined) updates.profileImageUrl = profileImageUrl;
     if (fcmToken !== undefined) updates.fcmToken = fcmToken;

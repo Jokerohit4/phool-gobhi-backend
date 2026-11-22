@@ -49,6 +49,34 @@ const CHALLENGE_SERVICE_URL = process.env.CHALLENGE_SERVICE_URL || 'http://chall
 const HEALTH_SERVICE_URL = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
 const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:5010';
 
+// Upstream timeouts. express-http-proxy applies `timeout` as a socket idle
+// timeout and answers 504 when it trips. Default 60s, configurable; the known
+// slow routes (uploads, health AI / photo recognition / prescriptions) get a
+// longer budget.
+function positiveInt(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+const PROXY_TIMEOUT_MS = positiveInt(process.env.GATEWAY_PROXY_TIMEOUT_MS, 60000);
+const PROXY_SLOW_TIMEOUT_MS = Math.max(
+  PROXY_TIMEOUT_MS,
+  positiveInt(process.env.GATEWAY_PROXY_SLOW_TIMEOUT_MS, 120000),
+);
+const SLOW_UPLOAD_MOUNT = /^\/api\/(auth|users|gyms|buddy|health)(\/|\?|$)/;
+const SLOW_HEALTH_AI = /^\/api\/health\/.*(\/ai(\/|$)|prescri|recogni|assistant|photo|guidance|report|ledger|vault)/i;
+export function isSlowProxyRoute(method, url) {
+  const m = String(method || '').toUpperCase();
+  const path = String(url || '').split('?')[0];
+  if (SLOW_HEALTH_AI.test(path)) return true;
+  // multipart uploads / large writes on the mounts that raise the body limit
+  return m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS' && SLOW_UPLOAD_MOUNT.test(path);
+}
+function timedProxy(target, opts = {}) {
+  const normal = proxy(target, { ...opts, timeout: PROXY_TIMEOUT_MS });
+  const slow = proxy(target, { ...opts, timeout: PROXY_SLOW_TIMEOUT_MS });
+  return (req, res, next) => (isSlowProxyRoute(req.method, req.originalUrl) ? slow : normal)(req, res, next);
+}
+
 // Routes that do NOT require JWT verification
 const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/buddy\/public\/[A-Fa-f0-9]{12}$/ },
@@ -62,16 +90,16 @@ const PUBLIC_ROUTES = [
   { method: 'GET', pattern: /^\/api\/gyms(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/nearest-distance(\?.*)?$/ },
   { method: 'GET', pattern: /^\/api\/gyms\/\d+(\?.*)?$/ },
-  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots/ },
-  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/availability/ },
-  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews/ },
-  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/subscription-plans/ },
-  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/operating-hours/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/slots(\/|$)/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/availability(\/|$)/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/reviews(\/|$)/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/subscription-plans(\/|$)/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/operating-hours(\/|$)/ },
   // Also covers GET /api/gyms/:id/classes/:classId/occurrences — mutating
   // methods (POST/PUT/DELETE) aren't matched here (isPublicRoute checks
   // method too) and still require partner auth via requireRole('partner')
   // in gym-service.
-  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/classes/ },
+  { method: 'GET', pattern: /^\/api\/gyms\/\d+\/classes(\/|$)/ },
   { method: 'POST', pattern: /^\/api\/wallet\/webhooks\/razorpay$/ },
   { method: 'POST', pattern: /^\/api\/wallet\/coaching\/webhook$/ },
   { method: 'POST', pattern: /^\/api\/events$/ },
@@ -79,7 +107,7 @@ const PUBLIC_ROUTES = [
   // Content, not an API resource: served straight from the gateway so all
   // clients (web BFFs + Flutter) read one canonical list.
   { method: 'GET', pattern: /^\/content\/loader-facts$/ },
-  { method: 'GET', pattern: /^\/health/ },
+  { method: 'GET', pattern: /^\/health(\/|$)/ },
 ];
 
 export function isPublicRoute(method, path) {
@@ -100,7 +128,7 @@ export function authMiddleware(req, res, next) {
   const isExplore = req.path === '/api/auth/explore' || req.path.startsWith('/api/auth/explore/');
   if (!token) return isExplore ? exploreAuthFailure() : res.status(401).json({ error: 'Unauthorized' });
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     req.headers['x-user-id'] = String(payload.id);
     req.headers['x-user-role'] = payload.role || '';
     req.headers['x-user-type'] = payload.type || '';
@@ -152,6 +180,24 @@ const eventsIngestLimiter = rateLimit({
   message: { error: 'Too many events' },
 });
 
+// Coarse per-IP backstop for the public, unauthenticated GET discovery routes
+// (gym list/detail/slots/...). Generous by default (3000/min) and tunable via
+// GATEWAY_PUBLIC_GET_RATE_LIMIT (0 disables). Requests that carry a bearer
+// token (the mobile apps) are not counted: this targets anonymous scraping.
+// Note: the website BFF calls these anonymously from shared server egress IPs,
+// so raise the env value if that traffic starts seeing 429s.
+const PUBLIC_GET_RATE_LIMIT = Number.isFinite(Number(process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT))
+  && process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT !== undefined && process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT !== ''
+  ? Number(process.env.GATEWAY_PUBLIC_GET_RATE_LIMIT) : 3000;
+const publicDiscoveryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: PUBLIC_GET_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => PUBLIC_GET_RATE_LIMIT <= 0 || Boolean(req.headers['authorization']),
+  message: { error: 'Too many requests. Please slow down.' },
+});
+
 // Client replays are not dropped here. A client event_id is a stable id, and
 // the analytics sink de-duplicates on the eventId derived from it below, so a
 // replay is ingested with the same id and occurrence time and collapses
@@ -163,6 +209,7 @@ const RATE_LIMITED_ROUTES = [
   { method: 'POST', pattern: /^\/api\/wallet\/(orders|verify)$/, limiter: walletAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/wallet\/coaching\/(orders|verify|refund)$/, limiter: walletAttemptLimiter },
   { method: 'POST', pattern: /^\/api\/events$/, limiter: eventsIngestLimiter },
+  { method: 'GET', pattern: /^\/api\/gyms(\/nearest-distance|\/\d+(\/(slots|availability|reviews|subscription-plans|operating-hours|classes)(\/.*)?)?)?$/, limiter: publicDiscoveryLimiter },
 ];
 app.use((req, res, next) => {
   const match = RATE_LIMITED_ROUTES.find(r => r.method === req.method && r.pattern.test(req.path));
@@ -270,7 +317,7 @@ app.post('/api/events', express.json({ limit: '128kb' }), eventsHandler);
 // service's URL (see utils/googleIdToken.js) — on Cloud Run this is what lets
 // each service's IAM invoker check confirm the call genuinely came from this
 // gateway, rather than trusting the x-user-id headers alone. No-ops locally.
-app.use('/api/auth', proxy(AUTH_SERVICE_URL, {
+app.use('/api/auth', timedProxy(AUTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(AUTH_SERVICE_URL),
   // Raised for the same reason as /api/users and /api/gyms below — this
   // mount now also carries the careers page's resume-upload multipart body.
@@ -282,32 +329,32 @@ app.use('/api/auth', proxy(AUTH_SERVICE_URL, {
 // pictures) — raised to match the receiving service's own multer cap so
 // that cap is what actually rejects an oversized file, not this proxy
 // buffer failing first with an unparseable HTML error.
-app.use('/api/users', proxy(AUTH_SERVICE_URL, {
+app.use('/api/users', timedProxy(AUTH_SERVICE_URL, {
   proxyReqPathResolver: req => '/users' + req.url,
   proxyReqOptDecorator: withGoogleIdToken(AUTH_SERVICE_URL),
   limit: '15mb',
 }));
-app.use('/api/wallet', proxy(WALLET_SERVICE_URL, {
+app.use('/api/wallet', timedProxy(WALLET_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(WALLET_SERVICE_URL),
 }));
-app.use('/api/gyms', proxy(GYM_SERVICE_URL, {
+app.use('/api/gyms', timedProxy(GYM_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(GYM_SERVICE_URL),
   limit: '15mb',
 }));
-app.use('/api/bookings', proxy(BOOKING_SERVICE_URL, {
+app.use('/api/bookings', timedProxy(BOOKING_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(BOOKING_SERVICE_URL),
 }));
 // Buddy matchmaking: no public routes (nothing added to PUBLIC_ROUTES above)
 // — discovery/swipes/matches/chat all require a verified JWT. Raised limit
 // to match the multi-photo profile upload, same reasoning as /api/gyms.
-app.use('/api/buddy', proxy(BUDDY_SERVICE_URL, {
+app.use('/api/buddy', timedProxy(BUDDY_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(BUDDY_SERVICE_URL),
   limit: '15mb',
 }));
 // Gamification suite (badges/streaks/coins/challenges): no public routes —
 // same posture as buddy-service, everything requires a verified JWT. Plain
 // JSON only (no uploads), so no raised limit needed.
-app.use('/api/challenges', proxy(CHALLENGE_SERVICE_URL, {
+app.use('/api/challenges', timedProxy(CHALLENGE_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(CHALLENGE_SERVICE_URL),
 }));
 // Health & Activity (exercise records, routines, workout sessions, device
@@ -316,7 +363,7 @@ app.use('/api/challenges', proxy(CHALLENGE_SERVICE_URL, {
 // carries the workout-photo multipart upload (POST /sessions/:id/photo), which
 // must reach health-service's own multer cap rather than fail first in this
 // proxy's smaller default body buffer.
-app.use('/api/health', proxy(HEALTH_SERVICE_URL, {
+app.use('/api/health', timedProxy(HEALTH_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(HEALTH_SERVICE_URL),
   limit: '15mb',
 }));
@@ -325,7 +372,7 @@ app.use('/api/notifications', (req, res, next) => {
   const campaignRoute = /^\/admin\/(?:options|campaigns(?:\/[a-f0-9-]{36}(?:\/(?:status|test|runs))?)?)$/i;
   if (req.path === '/events' || campaignRoute.test(req.path)) return next();
   res.sendStatus(404);
-}, proxy(NOTIFICATION_SERVICE_URL, {
+}, timedProxy(NOTIFICATION_SERVICE_URL, {
   proxyReqOptDecorator: withGoogleIdToken(NOTIFICATION_SERVICE_URL),
   limit: '24kb',
 }));

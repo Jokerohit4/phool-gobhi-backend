@@ -140,18 +140,18 @@ test('the profile-completion-bonus rollback reverts the change stamps', async ()
 });
 
 
-test('profile identity writes the normalized phone and email, not the raw input', async () => {
+test('profile update writes the normalized email and ignores a phone change', async () => {
   stored = { ...baseUser };
   updateCalls = [];
   fetchImpl = async () => ({ ok: true, status: 204, json: async () => ({}) });
   const res = fakeRes();
   await updateProfile(reqWith({ phone: '+91 98765 43210', email: ' User@Example.COM ' }), res);
   assert.equal(res.statusCode, 200);
-  assert.equal(updateCalls[0].phone, '9876543210');
+  assert.equal('phone' in updateCalls[0], false);
   assert.equal(updateCalls[0].email, 'user@example.com');
 });
 
-test('an empty email clears it, while a null login phone is rejected', async () => {
+test('an empty email clears it, and a phone field never reaches the update', async () => {
   stored = { ...baseUser, email: 'user@example.com' };
   updateCalls = [];
   const cleared = fakeRes();
@@ -159,9 +159,8 @@ test('an empty email clears it, while a null login phone is rejected', async () 
   assert.equal(cleared.statusCode, 200);
   assert.equal(updateCalls[0].email, null);
   updateCalls = [];
-  const rejected = fakeRes();
-  await updateProfile(reqWith({ phone: null }), rejected);
-  assert.equal(rejected.statusCode, 400);
-  assert.equal(rejected.body.code, 'INVALID_PHONE');
-  assert.equal(updateCalls.length, 0);
+  const ignored = fakeRes();
+  await updateProfile(reqWith({ phone: null, name: 'N' }), ignored);
+  assert.equal(ignored.statusCode, 200);
+  assert.equal('phone' in updateCalls[0], false);
 });

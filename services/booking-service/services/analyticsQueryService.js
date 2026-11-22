@@ -1,5 +1,6 @@
 import pg from 'pg';
 import axios from 'axios';
+import '../utils/axiosDefaults.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { queryBigQuery } from '../utils/bigQueryAnalytics.js';
 import { analyticsEnvironment } from '../utils/analyticsTransport.js';

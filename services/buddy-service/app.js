@@ -25,7 +25,8 @@ app.get('/health', async (req, res) => {
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: 'Buddy Service is healthy' });
   } catch (err) {
-    res.status(503).json({ status: 'unhealthy', error: err.message });
+    console.error('Health check failed:', err);
+    res.status(503).json({ status: 'unhealthy', error: 'Service unavailable' });
   }
 });
 
@@ -45,7 +46,10 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: 'Too many photos in one upload (max 6)' });
   }
   console.error('Unhandled error:', err);
-  res.status(err?.status || 500).json({ error: err?.message || 'Server error' });
+  // Never leak internal detail (SQL, hostnames, stack text) on 5xx; the full
+  // error is logged above. 4xx messages are intentional and kept.
+  const status = err?.status || 500;
+  res.status(status).json({ error: status >= 500 ? 'Server error' : (err?.message || 'Server error') });
 });
 
 // Start server

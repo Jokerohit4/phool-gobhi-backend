@@ -11,6 +11,7 @@
 // check-ins); a steps-only user with zero presence stays off the board.
 import prisma from '../db/prisma.js';
 import axios from 'axios';
+import '../utils/axiosDefaults.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { scoreWindow, computeScores, windowDaysFor } from './attendanceScoreService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
