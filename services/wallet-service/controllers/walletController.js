@@ -285,8 +285,12 @@ export const getCustomerIdsWithPurchasedSubscription = async (req, res) => {
 export const payoutPartner = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description } = req.body;
-    const result = await payoutWalletService(Number(userId), amount, description);
+    const { amount, description, idempotencyKey } = req.body;
+    if (idempotencyKey != null &&
+        (typeof idempotencyKey !== 'string' || idempotencyKey.length < 1 || idempotencyKey.length > 128)) {
+      return res.status(400).json({ error: 'idempotencyKey must be a string of 1-128 characters' });
+    }
+    const result = await payoutWalletService(Number(userId), amount, description, idempotencyKey ?? null);
     track('partner_payout_recorded', Number(userId), { amount: result.transaction.amount });
     res.json({ data: result });
   } catch (err) {

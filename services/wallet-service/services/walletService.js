@@ -795,10 +795,31 @@ export async function applyAttendanceSaasBillService(gymId, month) {
   return { ...bill, applied: true, balance: wallet.balance };
 }
 
-export async function payoutWalletService(userId, amount, description) {
+// Optional caller-supplied idempotency key for payouts, namespaced per user so
+// it can never collide with the key space of credit/debit callers.
+function payoutIdempotencyStorageKey(userId, idempotencyKey) {
+  return idempotencyKey ? `payout:${userId}:${idempotencyKey}` : null;
+}
+
+async function replayPayout(userId, storageKey, explicitAmount, amount) {
+  const existing = await prisma.walletTransaction.findUnique({ where: { idempotencyKey: storageKey } });
+  if (!existing) return null;
+  if (explicitAmount && Number(existing.amount) !== Number(amount)) {
+    throw new Error('idempotencyKey was already used for a different payout');
+  }
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  return { wallet: serializeWallet(wallet), transaction: serializeTransaction(existing) };
+}
+
+export async function payoutWalletService(userId, amount, description, idempotencyKey = null) {
   const explicitAmount = amount != null;
   if (explicitAmount && (!Number.isFinite(amount) || amount <= 0)) {
     throw new Error('Nothing to pay out');
+  }
+  const storageKey = payoutIdempotencyStorageKey(userId, idempotencyKey);
+  if (storageKey) {
+    const replay = await replayPayout(userId, storageKey, explicitAmount, amount);
+    if (replay) return replay;
   }
 
   // Bounded retry, not a single read-check-write: needed only for the "pay
@@ -812,7 +833,9 @@ export async function payoutWalletService(userId, amount, description) {
     const payoutAmount = explicitAmount ? amount : Number(wallet.balance);
     if (payoutAmount <= 0) throw new Error('Nothing to pay out');
 
-    const result = await prisma.$transaction(async (tx) => {
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
       // Atomic check-and-decrement: the WHERE clause re-validates
       // balance>=payoutAmount against the row's value AT UPDATE TIME under
       // Postgres's row lock, not against the `wallet` snapshot read above —
@@ -830,11 +853,21 @@ export async function payoutWalletService(userId, amount, description) {
           walletId: wallet.id,
           type: 'payout',
           amount: payoutAmount,
-          description: description || 'Manual payout to partner'
+          description: description || 'Manual payout to partner',
+          ...(storageKey ? { idempotencyKey: storageKey } : {}),
         }
       });
       return { wallet: updated, transaction };
-    });
+      });
+    } catch (err) {
+      // Unique violation on idempotencyKey: a concurrent identical request won
+      // the race (this tx, including the decrement, rolled back) — replay it.
+      if (storageKey && err.code === 'P2002') {
+        const replay = await replayPayout(userId, storageKey, explicitAmount, amount);
+        if (replay) return replay;
+      }
+      throw err;
+    }
 
     if (result) {
       return { wallet: serializeWallet(result.wallet), transaction: serializeTransaction(result.transaction) };
@@ -1483,10 +1516,11 @@ export async function ensurePaymentCapturedService(paymentId, order) {
   const razorpay = razorpayClient();
   const payment = await razorpay.payments.fetch(paymentId);
   if (payment.order_id && payment.order_id !== order.orderId) return false;
-  if (payment.status === 'captured') return true;
-  if (payment.status !== 'authorized') return false;
-
+  // The amount must match the order for an already-captured payment too:
+  // crediting the order amount against a smaller capture would mint money.
   const paise = Math.round(Number(order.amount) * 100);
+  if (payment.status === 'captured') return Number(payment.amount) === paise;
+  if (payment.status !== 'authorized') return false;
   if (Number(payment.amount) !== paise) return false;
   try {
     const captured = await razorpay.payments.capture(paymentId, paise, payment.currency || 'INR');
@@ -1495,7 +1529,7 @@ export async function ensurePaymentCapturedService(paymentId, order) {
     // A concurrent path (webhook vs /verify vs reconciler, or a late
     // auto-capture) may have captured it first, which makes this call fail.
     const again = await razorpay.payments.fetch(paymentId);
-    if (again.status === 'captured') return true;
+    if (again.status === 'captured') return Number(again.amount) === paise;
     throw err;
   }
 }
