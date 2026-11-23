@@ -99,6 +99,42 @@ node scripts/analytics-digest.cjs
 node scripts/investor-metrics.cjs
 ```
 
+## App vs web reports
+
+Both reports read the deduplicating `events_between` function through
+`scripts/analytics-client.cjs` and use the shared definitions in
+`scripts/analytics-identity.cjs`. Caveats that apply to every number they print:
+
+- **Web is not the app.** Client events carry `properties.platform` = `ios`, `android`
+  or `web`. About 90% of `session_started` users in 30 days are anonymous marketing-site
+  visitors (`anon_...` ids, platform `web`). Server events (`signup_completed`,
+  `login_completed`, `booking_created`, ...) have no platform; reports attribute them
+  through the person's first client-reported platform (ios/android preferred over web).
+- **Identity.** A device is anonymous (`anon_...`) until an `identify` event whose
+  `anon_distinct_id` property links it to the numeric user id. Reports fold anonymous events
+  into the user through that link; unlinked devices stay separate people.
+- **Booking funnel event** is `booking_created` (not `booking_confirmed`).
+- Days are IST calendar days. Queries are time-bounded (`scanDays`) to stay far below
+  the 256 MiB per-query cap.
+
+`node scripts/analytics-digest.cjs` (30-day window) prints the traffic mix, the booking funnel
+split by app / ios / android / web / unknown, and the **app activation funnel**: saw a screen,
+requested OTP, logged in, signup_completed, coach_onboarding_completed, home_viewed,
+workout_started, returned on a later IST day. Each stage counts unique people; the output states
+both "reached" (did it at least once) and "funnel" (reached every stage up to this one).
+
+`node scripts/retention-by-signup-day.cjs [--since YYYY-MM-DD] [--until YYYY-MM-DD]
+[--platform app|web|ios|android|all] [--json]` prints, per signup day and in total: cohort size,
+D1/D3/D7 return, "any later day" return, % onboarded, % who started a workout within 24h and the
+median active minutes after onboarding on day 1. A user returns on day N when they have any event
+on signup day + N other than identify / signup_completed / login_completed; only users whose
+day N has fully passed count toward DN. Platform comes from the person's first client event, so
+a user seen on both ios and android is counted once, under the first.
+
+Server activation milestones `first_workout_started`, `first_food_logged` and `first_water_logged`
+(health-service, since 2026-11-23) fire the first time the action is persisted. They are derived
+from existing rows, so count distinct users, never rows.
+
 The demo partner seeder requires `ANALYTICS_ENVIRONMENT=dev`, commits its operational
 seed before publishing warehouse events, and scopes cleanup to the selected demo gym.
 Its warehouse phase is not atomic with that PostgreSQL transaction; an operator must

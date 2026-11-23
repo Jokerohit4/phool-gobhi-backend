@@ -16,8 +16,10 @@ exports.warehouseClient = async function warehouseClient() {
   },async publish(rows) {
     const {publishRows}=await import('../utils/analyticsTransport.js');
     await publishRows(rows,{client,topic:`projects/phool-gobhi/topics/analytics-events-${environment}`});
-  },async native(sql,parameters=[]) {
-    const {queryParameters}=compileAnalyticsQuery('SELECT 1',[],{dataset:'analytics_'+environment});
+  },async native(sql,parameters=[],{scanDays=null}={}) {
+    const {queryParameters:base}=compileAnalyticsQuery('SELECT 1',[],{dataset:'analytics_'+environment});
+    // Optional time bound: scan_since = now - scanDays (keeps the per-query byte cap safe).
+    const queryParameters=scanDays?base.map(p=>p.name==='scan_since'?{...p,parameterValue:{value:new Date(Date.now()-scanDays*86400000).toISOString()}}:p):base;
     const table='`phool-gobhi.analytics_'+environment+'.events_between`(@scan_since,@as_of,@event_names)';
     return queryBigQuery(sql.replace(/WAREHOUSE_EVENTS/g,table),[],{native:true,queryParameters:[...queryParameters,...parameters],client});
   }};
