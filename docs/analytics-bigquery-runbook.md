@@ -131,6 +131,70 @@ on signup day + N other than identify / signup_completed / login_completed; only
 day N has fully passed count toward DN. Platform comes from the person's first client event, so
 a user seen on both ios and android is counted once, under the first.
 
+### Admin endpoint: retention by signup cohort
+
+`GET /api/bookings/admin/analytics/retention-signup-cohorts` (gobhi role; booking-service route
+`/admin/analytics/retention-signup-cohorts`, reaches booking-service through the existing
+`/api/bookings` gateway proxy). It is the CLI above as an endpoint, one warehouse query per
+request (about 2 MB scanned for a 12-day window; the usual 256 MiB cap and one-minute cache apply).
+
+Query string (all optional; bad values are a 400, never silently widened):
+
+| param | values | default |
+|---|---|---|
+| `since` | `YYYY-MM-DD` IST signup day, within the last 180 days | 30 days ago |
+| `until` | `YYYY-MM-DD`, inclusive, not before `since` | today (IST) |
+| `platform` | `app` (ios+android), `ios`, `android`, `web`, `all` | `app` |
+| `granularity` | `day`, `week` (Monday-start IST weeks) | `week` |
+| `cohort` | same account-cohort filter as the other admin analytics | all |
+
+Platform attribution: the `platform` property stamped on the `signup_completed` event itself
+(auth-service, from the `x-app-platform` header) when present, otherwise the person's first
+client-reported platform. People with neither are "unknown" and only appear under `platform=all`.
+
+Response (counts, not rates, for the retention columns; `*Pct` are 0-100 numbers with one
+decimal, or `null` when the cohort is empty):
+
+```json
+{
+  "data": {
+    "since": "2026-11-12",
+    "until": "2026-11-23",
+    "platform": "app",
+    "granularity": "week",
+    "generatedAt": "2026-11-23T18:21:25.035Z",
+    "cohorts": [
+      {
+        "start": "2026-11-16",
+        "size": 25,
+        "d1": { "returned": 7, "eligible": 24 },
+        "d3": { "returned": 1, "eligible": 19 },
+        "d7": { "returned": 0, "eligible": 0 },
+        "anyLater": { "returned": 8, "eligible": 25 },
+        "onboarded": 22,
+        "onboardedPct": 88,
+        "workoutWithin24h": 3,
+        "workoutWithin24hPct": 12,
+        "medianActiveMinutesDay1": 1.1,
+        "activeMinutesSample": 21
+      }
+    ],
+    "total": { "size": 30, "d1": { "returned": 9, "eligible": 27 }, "d3": { "returned": 3, "eligible": 22 },
+               "d7": { "returned": 0, "eligible": 3 }, "anyLater": { "returned": 11, "eligible": 28 },
+               "onboarded": 27, "onboardedPct": 90, "workoutWithin24h": 5, "workoutWithin24hPct": 16.7,
+               "medianActiveMinutesDay1": 1.4, "activeMinutesSample": 25 }
+  }
+}
+```
+
+(The sample row is abbreviated from a real prod run; `start` is the bucket's first day: the day
+itself for `day`, the Monday for `week`.) UI rules: show `returned/eligible`, and treat
+`eligible: 0` as "not yet measurable" (day N has not fully passed), never as 0%. A user counts
+toward DN only after signup day + N is over, so the newest cohorts are always partial.
+`medianActiveMinutesDay1` is `null` when nobody in the cohort onboarded on their signup day;
+`activeMinutesSample` is how many people it is based on. Check small cohorts (size under about 10)
+before reading anything into a rate.
+
 Server activation milestones `first_workout_started`, `first_food_logged` and `first_water_logged`
 (health-service, since 2026-11-23) fire the first time the action is persisted. They are derived
 from existing rows, so count distinct users, never rows.

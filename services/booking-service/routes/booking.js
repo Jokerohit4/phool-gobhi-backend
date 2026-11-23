@@ -131,6 +131,7 @@ router.get('/admin/analytics/push-types', requireRole('gobhi'), analyticsCtrl.ge
 router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl.getRevenueTrend);
 router.get('/admin/analytics/supply-health', requireRole('gobhi'), analyticsCtrl.getSupplyHealth);
 router.get('/admin/analytics/retention', requireRole('gobhi'), analyticsCtrl.getRetentionCohorts);
+router.get('/admin/analytics/retention-signup-cohorts', requireRole('gobhi'), analyticsCtrl.getRetentionSignupCohortsReport);
 router.get('/admin/analytics/website-traffic', requireRole('gobhi'), analyticsCtrl.getWebsiteTraffic);
 router.get('/admin/analytics/traffic', requireRole('gobhi'), analyticsCtrl.getTraffic);
 router.get('/admin/analytics/location-reach', requireRole('gobhi'), analyticsCtrl.getLocationReach);
