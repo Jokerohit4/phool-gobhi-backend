@@ -4,6 +4,10 @@ import { isToday, todayWindowDays } from '../utils/analyticsWindow.js';
 
 const PRODUCTS = ['all', 'customer', 'partner', 'website'];
 const PLATFORMS = ['both', 'android', 'ios'];
+// Heatmap drill-down bounds: the busiest users per weekday/hour cell, and the
+// most-used screens/actions per user in that cell.
+const CELL_USER_LIMIT = 25;
+const CELL_WHAT_LIMIT = 3;
 
 // `now` is only used for days=today (midnight IST until now), so tests and the
 // builder pass the report's own as-of instant.
@@ -107,6 +111,16 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
     FROM visits GROUP BY app, platform
   ), frequency AS (
     SELECT actor, COUNT(DISTINCT ${date('ts')}) AS active_days FROM current_events GROUP BY actor
+  ), stamped AS (
+    SELECT actor, event, COALESCE(screen, event) AS what, ${text(weekday)} AS wd, ${text(hour)} AS hr FROM current_events
+  ), cell_users AS (
+    SELECT wd, hr, actor, COUNT(*) AS n,
+      ROW_NUMBER() OVER (PARTITION BY wd, hr ORDER BY COUNT(*) DESC, actor) AS rk
+    FROM stamped GROUP BY wd, hr, actor
+  ), cell_what AS (
+    SELECT wd, hr, actor, what, COUNT(*) AS n,
+      ROW_NUMBER() OVER (PARTITION BY wd, hr, actor ORDER BY COUNT(*) DESC, what) AS rk
+    FROM stamped WHERE event != 'session_started' GROUP BY wd, hr, actor, what
   ), results AS (
     SELECT 'summary' AS kind, '' AS label, '' AS app, '' AS platform,
       COUNT(*) AS n, COUNT(DISTINCT actor) AS users,
@@ -135,6 +149,12 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
     SELECT 'hour', ${text(weekday)}, '', ${text(hour)}, COUNT(*), COUNT(DISTINCT actor), 0, 0, 0, 0
     FROM current_events GROUP BY 2, 4
     UNION ALL
+    SELECT 'cell_user', wd, actor, hr, n, 0, 0, 0, 0, 0 FROM cell_users WHERE rk <= ${CELL_USER_LIMIT}
+    UNION ALL
+    SELECT 'cell_what', CONCAT(w.wd, '|', w.what), w.actor, w.hr, w.n, 0, 0, 0, 0, 0
+    FROM cell_what w JOIN cell_users u ON u.wd = w.wd AND u.hr = w.hr AND u.actor = w.actor
+    WHERE w.rk <= ${CELL_WHAT_LIMIT} AND u.rk <= ${CELL_USER_LIMIT}
+    UNION ALL
     SELECT 'product', '', e.app, e.platform, COUNT(*), COUNT(DISTINCT e.actor),
       SUM(CASE WHEN e.event = 'screen_viewed' THEN 1 ELSE 0 END),
       COALESCE(t.sessions, 0), COALESCE(t.seconds, 0), COALESCE(t.measured, 0)
@@ -158,6 +178,30 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
   return { sql, values, queryParameters, filters: reported, asOf: end.toISOString() };
 }
 
+// Per weekday/hour cell: who was active, how many events, and what they used.
+// Actors are "<product>:<id>"; numeric ids are auth user ids, anything else is
+// an anonymous visitor that never logged in.
+function heatmapUsers(rows) {
+  const cells = new Map();
+  const slot = (wd, hr, actor) => {
+    const key = `${wd}-${hr}`;
+    if (!cells.has(key)) cells.set(key, new Map());
+    const users = cells.get(key);
+    if (!users.has(actor)) {
+      const split = actor.indexOf(':');
+      users.set(actor, { app: actor.slice(0, split), id: actor.slice(split + 1), events: 0, activity: [] });
+    }
+    return users.get(actor);
+  };
+  for (const row of rows.filter(r => r.kind === 'cell_user')) slot(row.label, row.platform, row.app).events = row.n;
+  for (const row of rows.filter(r => r.kind === 'cell_what')) {
+    const bar = row.label.indexOf('|');
+    slot(row.label.slice(0, bar), row.platform, row.app).activity.push({ label: row.label.slice(bar + 1), n: row.n });
+  }
+  return Object.fromEntries([...cells].map(([key, users]) => [key,
+    [...users.values()].map(u => ({ ...u, activity: u.activity.sort((a, b) => b.n - a.n) })).sort((a, b) => b.events - a.events)]));
+}
+
 export function trafficReport(rows, { filters, asOf }) {
   const numeric = ['n', 'users', 'views', 'sessions', 'seconds', 'measured'];
   const normalized = rows.map(row => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, numeric.includes(key) ? Number(value) || 0 : value])));
@@ -172,7 +216,7 @@ export function trafficReport(rows, { filters, asOf }) {
     daily: of('daily').sort((a, b) => a.label.localeCompare(b.label)),
     screens: of('screen').sort((a, b) => b.seconds - a.seconds || b.views - a.views).slice(0, 30),
     actions: of('action').sort((a, b) => b.users - a.users || b.n - a.n).slice(0, 30),
-    heatmap: of('hour'), breakdown: of('product').sort((a, b) => b.users - a.users),
+    heatmap: of('hour'), heatmapUsers: heatmapUsers(normalized), breakdown: of('product').sort((a, b) => b.users - a.users),
     frequency: of('frequency').sort((a, b) => Number(a.label) - Number(b.label)), sessionLengths: of('length'),
   };
 }

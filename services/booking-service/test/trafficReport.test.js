@@ -196,3 +196,22 @@ test('warehouse queries are bounded and all user selections are bound parameters
   for (const days of [0, -1, 1.5, 366, Infinity, 'x']) assert.throws(() => trafficFilters({ days }), { status: 400 });
   assert.throws(() => buildTrafficQuery({}, { bigQuery: true, dataset: 'bad`' }));
 });
+
+test('heatmap drill-down lists who was active per cell with their top screens and actions', () => {
+  const report = fixtureReport([
+    event('10:00', 'screen_viewed', { user: '42', props: { screen_name: 'Home' } }),
+    event('10:01', 'screen_viewed', { user: '42', props: { screen_name: 'Home' } }),
+    event('10:02', 'plan_tapped', { user: '42' }),
+    event('10:03', 'screen_viewed', { user: 'anon_z', props: { screen_name: 'Workout' } }),
+  ], { product: 'customer', days: 1 });
+  const cell = report.heatmapUsers['1-15'];
+  assert.deepEqual(cell.map(u => [u.app, u.id, u.events]), [['customer', '42', 3], ['customer', 'anon_z', 1]]);
+  assert.deepEqual(cell[0].activity, [{ label: 'Home', n: 2 }, { label: 'plan_tapped', n: 1 }]);
+  assert.equal(cell.length, report.heatmap.find(row => row.label === '1' && row.platform === '15').users);
+});
+
+test('the warehouse query includes the heatmap drill-down branches', () => {
+  const sql = buildTrafficQuery({ days: 7 }, { bigQuery: true, asOf: AS_OF }).sql;
+  assert.match(sql, /'cell_user'/);
+  assert.match(sql, /'cell_what'/);
+});
