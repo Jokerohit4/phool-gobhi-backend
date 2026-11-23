@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 // Daily 08:00 IST "drink water" push to every active customer that has a push
 // token. Triggered by a Cloud Scheduler job (POST /internal/water-reminder/run).
 //
+// Enabled in prod through WATER_REMINDER_ENABLED in deploy/services.json; the
+// Cloud Scheduler job water-reminder-prod fires it at 08:00 Asia/Kolkata.
+//
 // Safety rails (this goes to live users and cannot be unsent):
 //  * Off unless WATER_REMINDER_ENABLED === 'true'. A dry run (`dryRun: true`)
 //    works either way, counts the recipients and sends nothing.
