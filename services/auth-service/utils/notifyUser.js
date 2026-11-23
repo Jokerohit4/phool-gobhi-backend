@@ -48,3 +48,19 @@ export async function notifyUser(fcmToken, { title, body, data = {} }) {
     console.error('[FCM] Notify user failed:', err.message);
   }
 }
+
+// Best-effort batch push (one FCM message per recipient, up to 500 per call).
+// Returns the per-message results ({success, error}) in input order, or null
+// when FCM is not configured/initialised. Never throws: a failed batch is
+// reported by the caller as "all failed" rather than aborting a scheduled run.
+export async function sendEachPush(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  try {
+    if (!initAdmin()) return null;
+    const batch = await admin.messaging().sendEach(messages);
+    return batch.responses;
+  } catch (err) {
+    console.error('[FCM] Batch send failed:', err.message);
+    return null;
+  }
+}
