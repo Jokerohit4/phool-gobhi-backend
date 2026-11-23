@@ -5,6 +5,7 @@ import { generateWindowedSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { DOC_MAX_BYTES, DOC_ALLOWED_FORMATS, isPublicIdInGymFolder, signDocUpload, fetchUploadedDoc, discardUploadedDoc } from '../utils/docUpload.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
 import { sanitizeApiResponse } from '../utils/normalizeDecimal.js';
 
@@ -589,6 +590,73 @@ export const addGymDoc = async (req, res) => {
       return res.status(201).json({ data: result });
     }
     res.status(201).json({ data: { url: docUrl, brandDocs: result } });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+function parseGymId(raw) {
+  return /^[0-9]{1,10}$/.test(String(raw)) ? Number(raw) : null;
+}
+
+// Signed params for a browser-direct document upload, scoped to a gym the
+// caller owns. Counterpart of the multipart addGymDoc; see utils/docUpload.js.
+export const getDocUploadSignature = async (req, res) => {
+  try {
+    const gymId = parseGymId(req.params.id);
+    if (!gymId) return res.status(400).json({ error: 'Invalid gym id' });
+    if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
+    await gymService.assertGymOwnedBy(gymId, req.userId);
+    res.json({ data: signDocUpload(gymId) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+// Body: {publicId, resourceType?} (+ optional client hints docType/bytes/format,
+// which are ignored: size, format and URL are read back from Cloudinary).
+export const registerGymDoc = async (req, res) => {
+  try {
+    const gymId = parseGymId(req.params.id);
+    if (!gymId) return res.status(400).json({ error: 'Invalid gym id' });
+    if (!hasCloudinary) return res.status(500).json({ error: 'Image storage is not configured' });
+    await gymService.assertGymOwnedBy(gymId, req.userId);
+
+    const { publicId, resourceType } = req.body || {};
+    if (!isPublicIdInGymFolder(publicId, gymId)) {
+      return res.status(400).json({ error: 'Document does not belong to this gym' });
+    }
+    if (resourceType !== undefined && resourceType !== 'image') {
+      return res.status(400).json({ error: 'Unsupported document resource type' });
+    }
+
+    let asset;
+    try {
+      asset = await fetchUploadedDoc(publicId);
+    } catch (err) {
+      const notFound = err?.http_code === 404 || err?.error?.http_code === 404;
+      return res.status(notFound ? 400 : 502).json({
+        error: notFound ? 'Uploaded document not found' : 'Could not verify the uploaded document',
+      });
+    }
+    if (asset?.type !== 'upload' || asset?.public_id !== publicId || typeof asset?.secure_url !== 'string') {
+      return res.status(400).json({ error: 'Uploaded document not found' });
+    }
+    if (!DOC_ALLOWED_FORMATS.includes(String(asset.format || '').toLowerCase())) {
+      await discardUploadedDoc(publicId);
+      return res.status(400).json({ error: 'Invalid file type. Only PDF and images (JPG, PNG, WebP) are allowed.' });
+    }
+    if (!(asset.bytes > 0) || asset.bytes > DOC_MAX_BYTES) {
+      await discardUploadedDoc(publicId);
+      return res.status(413).json({ error: 'Document is larger than 10 MB' });
+    }
+
+    const result = await gymService.registerGymDoc(gymId, req.userId, asset.secure_url);
+    const status = result.alreadyRegistered ? 200 : 201;
+    if (result.pending) return res.status(status).json({ data: result });
+    res.status(status).json({
+      data: { url: asset.secure_url, brandDocs: result.brandDocs, alreadyRegistered: result.alreadyRegistered === true },
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
