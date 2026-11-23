@@ -28,6 +28,7 @@ test('setup: mock @prisma/client once, import the real module once', async (t) =
           this.coinEconomyConfig = {
             findUnique: (...args) => prismaMock.findUnique(...args),
             upsert: (...args) => prismaMock.upsert(...args),
+            updateMany: (...args) => prismaMock.updateMany(...args),
           };
         }
       },
@@ -240,4 +241,60 @@ test('a milestone whose week key has redundant formatting (e.g. "02") is normali
   prismaMock.upsert = async (args) => { upsertArgs = args; return { ...args.create, updatedAt: new Date() }; };
   await updateEconomyConfig({ ...VALID_BASE, milestones: { '02': 50 }, qualifyingCheckinsPerWeek: 2 });
   assert.deepEqual(upsertArgs.create.milestones, { '2': 50 });
+});
+
+// ---- optimistic concurrency (expectedUpdatedAt) ----------------------------
+const OC_T0 = new Date('2026-10-01T10:00:00.000Z');
+const OC_BODY = { ...VALID_BASE, qualifyingCheckinsPerWeek: 2 };
+
+function installStatefulRow() {
+  const state = { row: { id: 1, ...OC_BODY, updatedAt: OC_T0 }, upserts: 0, updateManys: 0 };
+  prismaMock.findUnique = async () => (state.row ? { ...state.row } : null);
+  prismaMock.upsert = async ({ update }) => {
+    state.upserts++;
+    state.row = { ...state.row, ...update, updatedAt: new Date() };
+    return { ...state.row };
+  };
+  prismaMock.updateMany = async ({ where, data }) => {
+    state.updateManys++;
+    if (!state.row || state.row.updatedAt.getTime() !== where.updatedAt.getTime()) return { count: 0 };
+    state.row = { ...state.row, ...data };
+    return { count: 1 };
+  };
+  return state;
+}
+
+test('expectedUpdatedAt matching: writes and returns the new updatedAt', async (t) => {
+  const state = installStatefulRow();
+  const out = await updateEconomyConfig({ ...OC_BODY, coinsPerCheckin: 12, expectedUpdatedAt: OC_T0.toISOString() }, 1);
+  assert.equal(out.coinsPerCheckin, 12);
+  assert.ok(out.updatedAt.getTime() > OC_T0.getTime());
+  assert.equal(state.row.coinsPerCheckin, 12);
+});
+
+test('expectedUpdatedAt stale: 409 CONFIG_CONFLICT, nothing written', async () => {
+  const state = installStatefulRow();
+  await assert.rejects(
+    updateEconomyConfig({ ...OC_BODY, coinsPerCheckin: 12, expectedUpdatedAt: '2020-01-01T00:00:00.000Z' }, 1),
+    (e) => e.status === 409 && e.errorCode === 'CONFIG_CONFLICT' && e.currentUpdatedAt === OC_T0.toISOString(),
+  );
+  assert.equal(state.row.coinsPerCheckin, 10);
+  assert.equal(state.upserts, 0);
+});
+
+test('expectedUpdatedAt absent: unchanged behaviour (plain upsert)', async () => {
+  const state = installStatefulRow();
+  await updateEconomyConfig({ ...OC_BODY, coinsPerCheckin: 12 }, 1);
+  assert.equal(state.upserts, 1);
+  assert.equal(state.updateManys, 0);
+});
+
+test('concurrent double save from one page load: second conflicts', async () => {
+  const state = installStatefulRow();
+  const results = await Promise.allSettled([
+    updateEconomyConfig({ ...OC_BODY, coinsPerCheckin: 11, expectedUpdatedAt: OC_T0.toISOString() }, 1),
+    updateEconomyConfig({ ...OC_BODY, coinsPerCheckin: 13, expectedUpdatedAt: OC_T0.toISOString() }, 2),
+  ]);
+  assert.deepEqual(results.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
+  assert.equal(state.row.coinsPerCheckin, results.find((r) => r.status === 'fulfilled').value.coinsPerCheckin);
 });
