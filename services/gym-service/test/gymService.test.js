@@ -1,4 +1,4 @@
-﻿// Business-logic tests for gymService.js.
+// Business-logic tests for gymService.js.
 //
 // Target functions (mostly internal, tested via exports that call them):
 //   normalizeGymMoney   - via addReview (Decimal fields normalized to numbers)

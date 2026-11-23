@@ -1550,7 +1550,7 @@ export async function ensurePaymentCapturedService(paymentId, order) {
 // money collected by Razorpay, customer wallet never credited).
 async function settleRazorpayOrder(razorpay, order) {
   // fetchPayments throws if the order is unknown to Razorpay (e.g. created
-  // against a different key set) �?" the caller treats that as unresolved.
+  // against a different key set) — the caller treats that as unresolved.
   const payments = await razorpay.orders.fetchPayments(order.orderId);
   const list = payments?.items ?? [];
 
@@ -1578,7 +1578,7 @@ async function settleRazorpayOrder(razorpay, order) {
 // Finds unsettled top-up orders older than the settle window and settles them
 // against Razorpay. `userId` scopes it to one customer (the lazy on-read
 // path); omitting it reconciles everything (the periodic sweep / internal
-// trigger). Failures are swallowed per-order �?" a single bad order must never
+// trigger). Failures are swallowed per-order — a single bad order must never
 // stall the rest of the sweep.
 //
 // PENDING covers orders that were never claimed; PROCESSING covers orders a
