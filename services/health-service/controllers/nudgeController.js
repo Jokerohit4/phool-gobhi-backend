@@ -14,7 +14,7 @@ export const getUnlogged = async (req, res) => {
 export const getNudgeSettings = async (req, res) => {
   try {
     const optedOut = await nudgeService.getOptOutsService(req.userId);
-    res.json({ data: { types: nudgeService.NUDGE_TYPES, optedOut } });
+    res.json({ data: { types: nudgeService.OPT_OUT_TYPES, optedOut } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -27,7 +27,7 @@ export const updateNudgeSettings = async (req, res) => {
       return res.status(400).json({ error: 'optedOut must be a boolean' });
     }
     const result = await nudgeService.setOptOutService(req.userId, type, optedOut);
-    res.json({ data: { types: nudgeService.NUDGE_TYPES, optedOut: result } });
+    res.json({ data: { types: nudgeService.OPT_OUT_TYPES, optedOut: result } });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }

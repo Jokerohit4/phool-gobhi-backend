@@ -38,6 +38,13 @@ let scoreBands = {};
 // discarding the answer.
 let scored = [];
 
+// Lifecycle feed: recent signups (as auth-service reports them), their
+// activity rows, and workout sessions; plus captured analytics events.
+let lifecycleCandidates = [];
+let lifecycleActivity = [];
+let lifecycleSessions = [];
+let tracked = [];
+
 let nudge;
 
 // Offsets are measured from the SAME fixed clock the assertions inject,
@@ -77,6 +84,13 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
             },
           };
           this.nudgeLog = {
+            findFirst: async ({ where }) =>
+              nudgeLogs.find(
+                (l) =>
+                  l.userId === where.userId &&
+                  l.type === where.type &&
+                  (!where.sentAt || l.sentAt >= where.sentAt.gte),
+              ) ?? null,
             findMany: async ({ where }) =>
               nudgeLogs
                 .filter((l) => l.userId === where.userId && l.sentAt >= where.sentAt.gte)
@@ -89,9 +103,27 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
             },
           };
           this.workoutSession = {
-            groupBy: async () => groupedSessions,
+            groupBy: async ({ where }) => {
+              // The lifecycle activity query is scoped by userId; the comeback
+              // query is not.
+              if (!where?.userId) return groupedSessions;
+              return lifecycleSessions
+                .filter((r) => where.userId.in.includes(r.userId) && (!where.endedAt || r.ended))
+                .map((r) => ({ userId: r.userId, _max: { startedAt: r.startedAt } }));
+            },
             findMany: async () => [],
           };
+          for (const [model, field] of [
+            ['waterLog', 'water'], ['foodLog', 'food'],
+            ['planItemCompletion', 'plan'], ['wellnessMoodCheckIn', 'mood'],
+          ]) {
+            this[model] = {
+              groupBy: async ({ where }) =>
+                lifecycleActivity
+                  .filter((r) => r.kind === field && where.userId.in.includes(r.userId))
+                  .map((r) => ({ userId: r.userId, _max: { createdAt: r.at } })),
+            };
+          }
           // Mirrors the real where clause: a target must exist, still be open
           // and not be under calm mode to be a candidate at all.
           this.healthGoal = {
@@ -122,6 +154,14 @@ test('setup: mock prisma, FCM and the unlogged feed once', async (t) => {
       findUnloggedUsersService: async () => unloggedUsers,
       getUnloggedAttendanceService: async () => [],
     },
+  });
+
+  t.mock.module('../utils/fetchLifecycleCandidates.js', {
+    exports: { fetchLifecycleCandidates: async () => lifecycleCandidates },
+  });
+
+  t.mock.module('../utils/analytics.js', {
+    exports: { track: (name, userId, props) => tracked.push({ name, userId, props }) },
   });
 
   t.mock.module('../utils/fetchUserProfile.js', {
@@ -155,6 +195,10 @@ function reset() {
   healthTargets = [];
   scoreBands = {};
   scored = [];
+  lifecycleCandidates = [];
+  lifecycleActivity = [];
+  lifecycleSessions = [];
+  tracked = [];
 }
 
 // An IST day `offset` days from the fixed clock, 'YYYY-MM-DD'. Positive is the
@@ -575,7 +619,7 @@ test('the wire enum and the service type list cannot drift apart', () => {
   // Postgres will accept. A type in one and not the other is a 400 in the
   // settings screen or an "invalid input value for enum" at write time, and
   // both only show up once a real user taps the switch.
-  assert.deepEqual(values.sort(), [...nudge.NUDGE_TYPES].sort());
+  assert.deepEqual(values.sort(), [...nudge.OPT_OUT_TYPES, ...nudge.LIFECYCLE_TYPES].sort());
 });
 
 test('localDateIST turns over exactly at 4 AM IST', () => {
@@ -611,4 +655,213 @@ test('an unknown nudge type is rejected rather than silently stored', async () =
     assert.equal(err.status, 400);
     return true;
   });
+});
+
+// ---------------------------------------------------------------------------
+// Lifecycle nudges (2026-11-23): the first-week gap. These are the rules that
+// keep a brand-new user from being nagged or double-sent.
+// ---------------------------------------------------------------------------
+
+// A recent signup as auth-service reports it. `ageHours` is measured from the
+// fixed clock.
+function signup(id, ageHours, overrides = {}) {
+  return {
+    id,
+    createdAt: hoursAgo(ageHours),
+    hasToken: true,
+    onboardingComplete: true,
+    freeTimeWindow: null,
+    ...overrides,
+  };
+}
+
+const NO_ACTIVITY = { last: null, completedWorkout: false };
+
+test('lifecycle timing table: who is due which nudge', () => {
+  const stage = (c, a = NO_ACTIVITY) => nudge.lifecycleStageFor(c, a, FIXED_NOW);
+
+  // Incomplete onboarding: resume between 3h and 48h, then never.
+  const inc = (h) => stage(signup(1, h, { onboardingComplete: false }));
+  assert.equal(inc(1), null);
+  assert.equal(inc(3).type, 'onboarding_resume');
+  assert.equal(inc(47).type, 'onboarding_resume');
+  assert.equal(inc(49), null);
+
+  // Onboarded, nothing done: first step 24-72h, follow-up 72h-7d.
+  assert.equal(stage(signup(1, 23)), null);
+  assert.equal(stage(signup(1, 24)).type, 'first_step');
+  assert.equal(stage(signup(1, 71)).type, 'first_step');
+  assert.equal(stage(signup(1, 72)).type, 'first_step_followup');
+  assert.equal(stage(signup(1, 24 * 6)).type, 'first_step_followup');
+
+  // Past a week with nothing ever: the soft comeback, up to the 60-day cutoff.
+  assert.deepEqual(stage(signup(1, 24 * 8)), { type: 'comeback', variant: 'soft' });
+  assert.equal(stage(signup(1, 24 * 61)), null);
+});
+
+test('lifecycle: any activity counts, and a finished workout hands over to the existing comeback', () => {
+  const stage = (a, ageHours = 50) => nudge.lifecycleStageFor(signup(1, ageHours), a, FIXED_NOW);
+
+  // Did one small thing yesterday: no first-step push at all.
+  assert.equal(stage({ last: hoursAgo(20), completedWorkout: false }), null);
+  // Active, then quiet 10 days: soft comeback. 3 days quiet: nothing.
+  assert.deepEqual(stage({ last: daysAgo(10), completedWorkout: false }, 24 * 20), { type: 'comeback', variant: 'soft' });
+  assert.equal(stage({ last: daysAgo(3), completedWorkout: false }, 24 * 20), null);
+  // Churned (quiet 90 days): not a comeback.
+  assert.equal(stage({ last: daysAgo(90), completedWorkout: false }, 24 * 100), null);
+  // Completed a workout once: owned by the workout comeback, never both.
+  assert.equal(stage({ last: daysAgo(10), completedWorkout: true }, 24 * 20), null);
+});
+
+test('sweep sends first_step once, records it, emits nudge_sent without PII', async () => {
+  reset();
+  lifecycleCandidates = [signup(5, 30)];
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.first_step, 1);
+  assert.equal(result.sent, 1);
+  assert.deepEqual(created.map((c) => [c.userId, c.type]), [[5, 'first_step']]);
+  assert.equal(sent[0].payload.data.nudge, 'first_step');
+  assert.deepEqual(Object.keys(sent[0].payload.data).sort(), ['nudge', 'route', 'type']);
+  assert.equal(tracked.length, 1);
+  assert.equal(tracked[0].name, 'nudge_sent');
+  assert.deepEqual(tracked[0].props, { nudge_type: 'first_step', hours_since_signup: 30 });
+  // Founder rule: a first step never pushes a workout.
+  assert.ok(!/work ?out|train|session/i.test(sent[0].payload.title + ' ' + sent[0].payload.body));
+});
+
+test('lifecycle nudges are never repeated, even weeks later', async () => {
+  reset();
+  lifecycleCandidates = [signup(5, 30)];
+  nudgeLogs = [{ userId: 5, type: 'first_step', sentAt: daysAgo(20) }];
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.first_step, 0);
+  assert.equal(created.length, 0);
+});
+
+test('a double run of the sweep sends a lifecycle nudge once', async () => {
+  reset();
+  lifecycleCandidates = [signup(5, 30)];
+
+  await nudge.runNudgeSweepService(middayIST);
+  await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(sent.length, 1);
+});
+
+test('lifecycle: users without an FCM token are counted as no_token and never sent', async () => {
+  reset();
+  lifecycleCandidates = [
+    signup(1, 30),
+    signup(2, 30, { hasToken: false }),
+    signup(3, 10, { hasToken: false, onboardingComplete: false }),
+    // Not due anything: must not be counted as an unreachable nudge target.
+    signup(4, 5, { hasToken: false }),
+  ];
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.first_step, 1);
+  assert.equal(result.lifecycle_no_token, 2);
+  assert.deepEqual(sent.map((s) => s.userId), [1]);
+  assert.equal(created.length, 1, 'an unreachable user must not burn a log row');
+  // Token coverage over every recent signup the sweep saw.
+  assert.deepEqual(result.lifecycle_coverage, {
+    candidates: 4, withToken: 1, onboarded: 3, onboardedWithToken: 1,
+  });
+});
+
+test('lifecycle: opt-out (one switch for all three), weekly cap, 24h gap and free time all apply', async () => {
+  reset();
+  lifecycleCandidates = [
+    signup(1, 30),                                        // opted out of lifecycle
+    signup(2, 30),                                        // another nudge 5h ago
+    signup(3, 30, { freeTimeWindow: 'evening' }),         // free later, now is midday
+    signup(4, 30),                                        // control: sent
+  ];
+  optOuts = [{ userId: 1, type: 'lifecycle' }];
+  nudgeLogs = [{ userId: 2, type: 'log', sentAt: hoursAgo(5) }];
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.first_step, 1);
+  assert.deepEqual(sent.map((s) => s.userId), [4]);
+  assert.equal(result.deferred, 1);
+
+  // Weekly cap counts lifecycle sends with everything else.
+  reset();
+  lifecycleCandidates = [signup(9, 30)];
+  nudgeLogs = [
+    { userId: 9, type: 'log', sentAt: daysAgo(2) },
+    { userId: 9, type: 'comeback', sentAt: daysAgo(4) },
+    { userId: 9, type: 'log', sentAt: daysAgo(6) },
+  ];
+  assert.equal((await nudge.runNudgeSweepService(middayIST)).first_step, 0);
+});
+
+test('lifecycle: the sweep reads real activity rows (water, mood, plan tick, workout)', async () => {
+  reset();
+  lifecycleCandidates = [signup(1, 30), signup(2, 30), signup(3, 30), signup(4, 30), signup(5, 30)];
+  lifecycleActivity = [
+    { userId: 1, kind: 'water', at: hoursAgo(10) },
+    { userId: 2, kind: 'mood', at: hoursAgo(10) },
+    { userId: 3, kind: 'plan', at: hoursAgo(10) },
+  ];
+  lifecycleSessions = [{ userId: 4, startedAt: hoursAgo(10), ended: false }];
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  // Only user 5 did nothing at all.
+  assert.deepEqual(sent.map((s) => s.userId), [5]);
+  assert.equal(result.first_step, 1);
+});
+
+test('generalised comeback: soft variant for never-finished-a-workout, cooled down for 14 days', async () => {
+  reset();
+  // User 1 was active 10 days ago (water), never finished a workout.
+  lifecycleCandidates = [signup(1, 24 * 20)];
+  lifecycleActivity = [{ userId: 1, kind: 'water', at: daysAgo(10) }];
+
+  const first = await nudge.runNudgeSweepService(middayIST);
+  assert.equal(first.comeback_soft, 1);
+  assert.equal(created[0].type, 'comeback');
+  const body = sent[0].payload.title + ' ' + sent[0].payload.body;
+  assert.ok(!/work ?out|session|train/i.test(body), 'soft comeback never asks for a workout');
+  assert.equal(tracked[0].props.variant, 'soft');
+
+  // Eight days later it is still quiet: inside the 14-day cooldown, no repeat.
+  const later = new Date(FIXED_NOW.getTime() + 8 * 24 * 60 * 60 * 1000);
+  const second = await nudge.runNudgeSweepService(later);
+  assert.equal(second.comeback_soft, 0);
+});
+
+test('a user who finished a workout is left to the workout comeback, not the soft one', async () => {
+  reset();
+  lifecycleCandidates = [signup(1, 24 * 20)];
+  lifecycleActivity = [{ userId: 1, kind: 'water', at: daysAgo(10) }];
+  lifecycleSessions = [{ userId: 1, startedAt: daysAgo(10), ended: true }];
+
+  const result = await nudge.runNudgeSweepService(middayIST);
+
+  assert.equal(result.comeback_soft, 0);
+  assert.equal(sent.length, 0);
+});
+
+test('lifecycle sends respect quiet hours', async () => {
+  reset();
+  lifecycleCandidates = [signup(1, 30)];
+  const result = await nudge.runNudgeSweepService(nightIST);
+  assert.equal(result.skipped, 'quiet_hours');
+  assert.equal(sent.length, 0);
+});
+
+test('one lifecycle opt-out row is accepted by settings and listed', async () => {
+  reset();
+  assert.deepEqual(await nudge.setOptOutService(1, 'lifecycle', true), ['lifecycle']);
+  assert.ok(nudge.OPT_OUT_TYPES.includes('lifecycle'));
+  // The three sendable types are unchanged.
+  assert.deepEqual(nudge.NUDGE_TYPES, ['log', 'comeback', 'target']);
 });

@@ -27,6 +27,7 @@ import {
 import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import { getNotificationCustomers } from '../controllers/notificationAudienceController.js';
+import { getLifecycleCandidates } from '../controllers/lifecycleAudienceController.js';
 import requireGobhi from '../middleware/requireGobhi.js';
 import requireCustomer from '../middleware/requireCustomer.js';
 import { uploadResume } from '../utils/gcsResume.js';
@@ -84,6 +85,8 @@ router.patch('/me', verifyToken, updateMe);
 // Registered before '/internal/:id' so 'account-cohorts' is never read as an id.
 router.get('/internal/account-cohorts', requireInternal, getAccountCohortsInternal);
 router.post('/internal/notification-customers', requireInternal, getNotificationCustomers);
+// Recent customers + onboarding/token flags for health-service's lifecycle nudges.
+router.post('/internal/lifecycle-candidates', requireInternal, getLifecycleCandidates);
 router.get('/internal/:id', requireInternal, getUserInternal);
 router.get('/internal/by-phone/:phone', requireInternal, getUserByPhoneInternal);
 router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);

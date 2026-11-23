@@ -76,6 +76,7 @@ test('setup: mock prisma and FCM once', async (t) => {
             findMany: async ({ where }) => optOuts.filter((o) => o.userId === where.userId),
           };
           this.nudgeLog = {
+            findFirst: async () => null,
             findMany: async ({ where }) =>
               nudgeLogs
                 .filter((l) => l.userId === where.userId && l.sentAt >= where.sentAt.gte)
@@ -133,6 +134,10 @@ test('setup: mock prisma and FCM once', async (t) => {
       findUnloggedUsersService: async () => unloggedUsers,
       getUnloggedAttendanceService: async () => [],
     },
+  });
+
+  t.mock.module('../utils/fetchLifecycleCandidates.js', {
+    exports: { fetchLifecycleCandidates: async () => [] },
   });
 
   t.mock.module('../utils/fetchUserProfile.js', {

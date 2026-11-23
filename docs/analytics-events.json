@@ -1352,5 +1352,17 @@
     "source": "client",
     "app": "phool_gobhi",
     "since": "2026-10-30"
+  },
+  "nudge_sent": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-11-23",
+    "notes": "a health nudge push left for FCM (lifecycle nudges + log/comeback/target). props nudge_type (log|comeback|target|onboarding_resume|first_step|first_step_followup), variant ('soft' for the never-finished-a-workout comeback, else absent), hours_since_signup (whole hours, lifecycle sends only). Never the copy or anything the user logged. Sent = accepted by FCM, so a user without a token produces no event"
+  },
+  "nudge_opened": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-11-23",
+    "notes": "customer app: the user opened the app from a health nudge push (data.type=health_nudge). props nudge_type (the push's `nudge` key), route (the push's `route` key). Pair with nudge_sent for send-to-open; the customer app emits it"
   }
 }
