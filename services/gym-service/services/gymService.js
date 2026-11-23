@@ -892,6 +892,35 @@ export async function addGymDoc(gymId, partnerId, url) {
   return applyGymDocAdd(gymId, { url });
 }
 
+// Persist a document that was uploaded straight from the browser. Same row /
+// edit-request path as the multipart upload (addGymDoc), plus idempotency so a
+// retried register call does not duplicate the document or its review request.
+export async function registerGymDoc(gymId, partnerId, url) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+
+  if ((gym.brandDocs || []).includes(url)) {
+    return { alreadyRegistered: true, brandDocs: gym.brandDocs };
+  }
+  if (gym.isApproved) {
+    const existing = await prisma.gymEditRequest.findFirst({
+      where: { gymId, changeType: 'doc_add', status: 'pending', payload: { path: ['url'], equals: url } },
+    });
+    if (existing) return { alreadyRegistered: true, pending: true, editRequest: existing };
+    const editRequest = await createEditRequest(gymId, partnerId, 'doc_add', { url });
+    return { pending: true, editRequest };
+  }
+  return { brandDocs: await applyGymDocAdd(gymId, { url }) };
+}
+
+// Ownership check only (no mutation) - used before handing out upload signatures.
+export async function assertGymOwnedBy(gymId, partnerId) {
+  const gym = await prisma.gym.findUnique({ where: { id: gymId }, select: { partnerId: true } });
+  if (!gym) throw { status: 404, error: 'Gym not found' };
+  if (gym.partnerId !== partnerId) throw { status: 403, error: 'Forbidden' };
+}
+
 export async function deleteGymDoc(gymId, partnerId, url) {
   const gym = await prisma.gym.findUnique({ where: { id: gymId } });
   if (!gym) throw { status: 404, error: 'Gym not found' };

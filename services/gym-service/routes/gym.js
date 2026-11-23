@@ -107,6 +107,9 @@ router.delete('/:id/images/:imageId', requireRole('partner'), ctrl.deleteGymImag
 // Brand/verification documents (field 'file'); stored as URLs in Gym.brandDocs[]
 router.post('/:id/docs', requireRole('partner'), uploadGymDoc.single('file'), ctrl.addGymDoc);
 router.delete('/:id/docs', requireRole('partner'), ctrl.deleteGymDoc);
+// Browser-direct doc upload: signed params, then register what Cloudinary stored.
+router.get('/:id/docs/signature', requireRole('partner'), ctrl.getDocUploadSignature);
+router.post('/:id/docs/register', requireRole('partner'), ctrl.registerGymDoc);
 router.get('/:id/slot-prices', requireRole('partner'), ctrl.getSlotPrices);
 router.put('/:id/slot-prices', requireRole('partner'), ctrl.updateSlotPrices);
 // A partner's own pending/reviewed edit requests for this gym (status banners).
