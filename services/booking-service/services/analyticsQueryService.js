@@ -57,7 +57,26 @@ export async function getTraffic(input) {
   const result = bigQuery
     ? await queryBigQuery(report.sql, [], { native: true, queryParameters: report.queryParameters })
     : await getPool().query(report.sql, report.values);
-  return trafficReport(result.rows, report);
+  const built = trafficReport(result.rows, report);
+  await attachHeatmapNames(built);
+  return built;
+}
+
+// Adds a display name to each heatmap user whose id is a numeric auth user id.
+// Anonymous visitors and failed lookups keep name: null; names are a nicety, so
+// a lookup failure must never fail the report.
+async function attachHeatmapNames(report) {
+  const users = Object.values(report.heatmapUsers || {}).flat();
+  const ids = [...new Set(users.filter(u => u.app !== 'website' && /^\d+$/.test(u.id)).map(u => Number(u.id)))].slice(0, 1000);
+  const names = new Map();
+  if (ids.length) {
+    try {
+      const headers = { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) };
+      const res = await axios.post(`${AUTH_SERVICE_URL}/internal/users/batch`, { ids }, { headers, timeout: 5000 });
+      for (const u of res.data?.data || []) names.set(String(u.id), u.name ? String(u.name).trim() : null);
+    } catch (_) { /* leave names null */ }
+  }
+  for (const u of users) u.name = names.get(u.id) ?? null;
 }
 
 // ---- Supply / partner onboarding funnel + approval SLA --------------------
