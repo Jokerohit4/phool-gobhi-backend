@@ -54,7 +54,7 @@ test('setup: mock prisma once, import erasureService once', async (t) => {
           for (const model of [
             'challengeCheckpointVisit', 'rewardIssuance', 'challengeTeamMember',
             'challengeWinner', 'attendanceEventLog', 'userStreakWeek', 'userStreak',
-            'coinLedgerEntry', 'coinBalance', 'pairedStreak',
+            'coinLedgerEntry', 'coinBalance', 'pairedStreak', 'organizationMember',
           ]) {
             this[model] = { deleteMany: record(model, 'deleteMany') };
           }
@@ -149,6 +149,7 @@ test('everything keyed to the user is covered, both sides of the shared rows', a
   for (const model of [
     'challengeTeamMember', 'challengeWinner', 'attendanceEventLog',
     'userStreakWeek', 'userStreak', 'coinLedgerEntry', 'coinBalance', 'pairedStreak',
+    'organizationMember',
   ]) {
     assert.ok(touched.has(model), `${model} holds this user's data and must be erased`);
   }

@@ -1,5 +1,6 @@
 import prisma from '../db/prisma.js';
 import { challengeActivity } from '../services/challengeActivityService.js';
+import { orgActivityForUsers } from '../services/orgActivityService.js';
 import { hasCoachScopeService } from '../services/coachConsentService.js';
 import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 
@@ -20,5 +21,19 @@ export async function getChallengeActivityInternal(req, res) {
     return res.json({ data });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.error || 'Could not load activity' });
+  }
+}
+
+// Batch per-day activity for company leaderboards (challenge-service). Internal
+// only; returns day keys and step counts, never workout contents.
+export async function getOrgActivityInternal(req, res) {
+  try {
+    const ids = [...new Set(String(req.query.ids ?? '').split(',').map((s) => parseInt(s, 10)).filter((n) => Number.isInteger(n) && n > 0))];
+    if (ids.length === 0) return res.status(400).json({ error: 'ids is required (comma-separated user ids)' });
+    if (ids.length > 500) return res.status(400).json({ error: 'ids must contain at most 500 user ids' });
+    const data = await orgActivityForUsers(prisma, { userIds: ids, from: req.query.from, to: req.query.to });
+    return res.json({ data });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.status ? error.error : 'Could not load activity' });
   }
 }

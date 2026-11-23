@@ -7,6 +7,7 @@ connectDB();
 import express from 'express';
 import prisma from './db/prisma.js';
 import challengeRoutes from './routes/challenges.js';
+import organizationRoutes from './routes/organizations.js';
 
 const app = express();
 app.use(analyticsMiddleware());
@@ -26,6 +27,8 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Before challengeRoutes: that router has a bare `/:id` route.
+app.use('/', organizationRoutes);
 app.use('/', challengeRoutes);
 
 app.use((err, req, res, next) => {

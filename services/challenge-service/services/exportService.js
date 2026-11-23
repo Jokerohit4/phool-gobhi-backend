@@ -9,7 +9,7 @@ import prisma from '../db/prisma.js';
 // data the person is entitled to see - that is the whole point of an access
 // right existing alongside an erasure right.
 export async function buildExportService(userId) {
-  const [balance, ledger, attendance, streak, streakWeeks, enrollments, teamMemberships, wins, redemptions, sprouts] =
+  const [balance, ledger, attendance, streak, streakWeeks, enrollments, teamMemberships, wins, redemptions, sprouts, companies] =
     await Promise.all([
       prisma.coinBalance.findUnique({ where: { userId } }),
       prisma.coinLedgerEntry.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -33,6 +33,11 @@ export async function buildExportService(userId) {
         orderBy: { id: 'asc' },
       }),
       prisma.sproutSpawn.findMany({ where: { caughtByUserId: userId }, orderBy: { caughtAt: 'asc' } }),
+      prisma.organizationMember.findMany({
+        where: { userId },
+        include: { org: { select: { name: true } }, team: { select: { name: true } } },
+        orderBy: { addedAt: 'asc' },
+      }),
     ]);
 
   return {
@@ -76,6 +81,10 @@ export async function buildExportService(userId) {
     redemptions: redemptions.map((r) => ({
       at: r.id, item: r.catalogItem?.title ?? null, category: r.catalogItem?.category ?? null,
       coinCost: r.coinCost, status: r.status,
+    })),
+    companies: companies.map((c) => ({
+      company: c.org?.name ?? null, team: c.team?.name ?? null, status: c.status,
+      addedAt: c.addedAt, joinedAt: c.joinedAt, removedAt: c.removedAt,
     })),
     sproutsCaught: sprouts.map((s) => ({ at: s.caughtAt, species: s.speciesKey, lat: s.lat, lng: s.lng })),
   };

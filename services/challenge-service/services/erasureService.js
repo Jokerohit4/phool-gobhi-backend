@@ -45,6 +45,10 @@ export async function eraseUserService(userId) {
         })]
       : []),
     prisma.challengeTeamMember.deleteMany({ where: { userId } }),
+    // Company membership records both who this person is (phone) and which
+    // employer's programme they are in. The company, its teams and its
+    // leaderboards are not personal data and stay.
+    prisma.organizationMember.deleteMany({ where: { userId } }),
     prisma.challengeWinner.deleteMany({ where: { userId } }),
     prisma.challengeEnrollment.deleteMany({ where: { userId } }),
     // The attendance log is the most sensitive thing in this service: a

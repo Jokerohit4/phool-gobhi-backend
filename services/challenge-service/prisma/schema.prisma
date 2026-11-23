@@ -676,3 +676,133 @@ model HeldWorkoutCredit {
   @@index([userId, day])
   @@schema("challenge")
 }
+
+// ---------------------------------------------------------------------------
+// Corporate wellness: company ("organization") profiles with a private member
+// list, optional teams and time-boxed leaderboards.
+//
+// Access is membership-only. There is NO self-join and no join code: staff
+// (gobhi) add members from the admin portal / API, by phone. A phone with no
+// account yet is kept as an `invited` row and linked the first time that user
+// opens the app (see orgService.claimInvites).
+//
+// An organization can expire (`expiresAt`, null = never). After expiry it
+// turns into a normal one: it stops showing in the app, nothing is deleted,
+// and every member simply continues as a normal user. Staff can extend
+// `expiresAt` to bring it back.
+// ---------------------------------------------------------------------------
+
+enum OrgStatus {
+  active
+  expired
+  archived
+
+  @@schema("challenge")
+}
+
+enum OrgMemberStatus {
+  invited
+  active
+  removed
+
+  @@schema("challenge")
+}
+
+enum OrgLeaderboardStatus {
+  active
+  archived
+
+  @@schema("challenge")
+}
+
+// What a leaderboard ranks on. All three work from a phone alone:
+//   active_days   distinct days with a gym check-in, a finished workout, or 3000+ steps
+//   workout_days  distinct days with a finished workout of 10+ minutes
+//   steps         total steps (phone sensor / Health Connect / Apple Health)
+enum OrgLeaderboardScoring {
+  active_days
+  workout_days
+  steps
+
+  @@schema("challenge")
+}
+
+model Organization {
+  id           Int                  @id @default(autoincrement())
+  name         String
+  slug         String               @unique
+  status       OrgStatus            @default(active)
+  startsAt     DateTime             @default(now())
+  // null = the company profile never expires.
+  expiresAt    DateTime?
+  // Set once, when the profile lapsed and became a normal one.
+  convertedAt  DateTime?
+  contactName  String?
+  contactEmail String?
+  notes        String?
+  createdBy    Int
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  members      OrganizationMember[]
+  teams        OrganizationTeam[]
+  leaderboards OrgLeaderboard[]
+
+  @@index([status, expiresAt])
+  @@schema("challenge")
+}
+
+model OrganizationTeam {
+  id        Int                  @id @default(autoincrement())
+  orgId     Int
+  org       Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime             @default(now())
+  members   OrganizationMember[]
+
+  @@unique([orgId, name])
+  @@schema("challenge")
+}
+
+model OrganizationMember {
+  id          Int               @id @default(autoincrement())
+  orgId       Int
+  org         Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // null until the invited phone has an account.
+  userId      Int?
+  // 10-digit Indian mobile, normalised exactly like auth-service.
+  phone       String
+  // Optional label staff typed in; the app shows the account name once linked.
+  displayName String?
+  teamId      Int?
+  team        OrganizationTeam? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  status      OrgMemberStatus   @default(invited)
+  addedBy     Int
+  addedAt     DateTime          @default(now())
+  joinedAt    DateTime?
+  removedAt   DateTime?
+
+  @@unique([orgId, phone])
+  @@index([userId, status])
+  @@index([phone, status])
+  @@schema("challenge")
+}
+
+model OrgLeaderboard {
+  id          Int                   @id @default(autoincrement())
+  orgId       Int
+  org         Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  scoring     OrgLeaderboardScoring @default(active_days)
+  startsAt    DateTime              @default(now())
+  // null = no end date (unlimited). The org's own expiry still applies.
+  endsAt      DateTime?
+  status      OrgLeaderboardStatus  @default(active)
+  showTeams   Boolean               @default(true)
+  createdBy   Int
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([orgId, status])
+  @@schema("challenge")
+}
