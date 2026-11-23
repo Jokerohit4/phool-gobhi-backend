@@ -28,6 +28,8 @@ import verifyToken from '../middleware/verifyToken.js';
 import requireInternal from '../middleware/requireInternal.js';
 import { getNotificationCustomers } from '../controllers/notificationAudienceController.js';
 import { getLifecycleCandidates } from '../controllers/lifecycleAudienceController.js';
+import requireInternalOrScheduler from '../middleware/requireInternalOrScheduler.js';
+import { runWaterReminderInternal } from '../controllers/waterReminderController.js';
 import requireGobhi from '../middleware/requireGobhi.js';
 import requireCustomer from '../middleware/requireCustomer.js';
 import { uploadResume } from '../utils/gcsResume.js';
@@ -93,6 +95,8 @@ router.post('/internal/users/batch', requireInternal, getUsersBatchInternal);
 // Scheduled trigger (see .github/workflows) — nudges gym-linked signups
 // with no activity N days after registering.
 router.post('/internal/attendance-saas/reengagement-sweep', requireInternal, runAttendanceSaasReengagementSweep);
+// Daily 08:00 IST water reminder (Cloud Scheduler, OIDC) - off unless WATER_REMINDER_ENABLED=true.
+router.post('/internal/water-reminder/run', requireInternalOrScheduler, runWaterReminderInternal);
 // Internal: per-gym "users joined this month" counts, the numerator of the
 // attendance-SaaS monthly flat-per-user bill (wallet-service computes the
 // amount and debits the partner wallet).
