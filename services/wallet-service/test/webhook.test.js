@@ -3,7 +3,7 @@
 // Verifies HMAC signature verification, event routing (payment.authorized,
 // payment.captured, payment.failed), wallet crediting, idempotent claim
 // semantics, and the 500-on-error policy. Processing errors return 500 so
-// Razorpay redelivers �?" the per-order idempotent credit (razorpay-topup:<id>)
+// Razorpay redelivers — the per-order idempotent credit (razorpay-topup:<id>)
 // makes a redelivery safe against double-crediting. Signature failures return
 // 400 (Razorpay never retries 4xx), so a spoofed delivery can't force retries.
 //

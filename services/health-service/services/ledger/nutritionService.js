@@ -122,7 +122,7 @@ function addInto(target, source) {
  *
  * Unverified rows are excluded unless the caller explicitly asks. The seeded
  * catalogue is all `verified: false` (see prisma/seed/foods.seed.js), so the
- * default would otherwise return an empty list â€” which is exactly the state we
+ * default would otherwise return an empty list — which is exactly the state we
  * want to be visible rather than papered over with numbers nobody has checked.
  * The Flutter app sets includeUnverified so the food log still works.
  */
@@ -787,7 +787,7 @@ export async function logSavedMeal(prisma, { userId, savedMealId, localDate, slo
   // because this write is many rows at once and there is no day for them to be
   // scoped to otherwise: an empty `localDate` still satisfies the column type,
   // so the repeat would report success while writing rows that `getDayTotals`
-  // â€” which queries `where: { localDate }` â€” could never match again. The
+  // — which queries `where: { localDate }` — could never match again. The
   // client sends the device date, and this refuses to trust it blindly.
   if (!isIsoDay(localDate)) {
     throw badRequest('localDate must be YYYY-MM-DD');
