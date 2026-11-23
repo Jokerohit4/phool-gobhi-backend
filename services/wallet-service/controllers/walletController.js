@@ -45,6 +45,7 @@ import * as exportService from '../services/exportService.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { track } from '../utils/analytics.js';
+import { errorBody } from '../utils/configConcurrency.js';
 import { parseLimit, parseCursor } from '../utils/pagination.js';
 import { runReconcileThrottled, clearReconcileThrottle } from '../utils/reconcileThrottle.js';
 
@@ -718,7 +719,9 @@ export const getGiftBonusPayoutsAnalytics = async (req, res) => {
 // Settings page prefill.
 export const getWalletTopupConfigHandler = async (req, res) => {
   try {
-    const config = await getWalletTopupConfigCached();
+    // gobhi (admin Settings prefill) reads fresh so its updatedAt is a valid
+    // optimistic-concurrency token; customers keep the 30s cache.
+    const config = await getWalletTopupConfigCached({ fresh: req.userRole === 'gobhi' });
     res.json({ data: config });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
@@ -729,15 +732,15 @@ export const getWalletTopupConfigHandler = async (req, res) => {
 // see phool-gobhi-admin's Settings page, "Wallet top-up amounts" section.
 export const updateWalletTopupConfigHandler = async (req, res) => {
   try {
-    const { presets, allowCustomAmount, minCustomAmount, maxCustomAmount } = req.body;
-    const config = await updateWalletTopupConfig({ presets, allowCustomAmount, minCustomAmount, maxCustomAmount }, req.userId);
+    const { presets, allowCustomAmount, minCustomAmount, maxCustomAmount, expectedUpdatedAt } = req.body;
+    const config = await updateWalletTopupConfig({ presets, allowCustomAmount, minCustomAmount, maxCustomAmount, expectedUpdatedAt }, req.userId);
     track('wallet_topup_config_updated', req.userId, {
       preset_count: config.presets.length,
       allow_custom_amount: config.allowCustomAmount,
     });
     res.json({ data: config });
   } catch (err) {
-    res.status(err.status || 400).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 400).json(errorBody(err));
   }
 };
 

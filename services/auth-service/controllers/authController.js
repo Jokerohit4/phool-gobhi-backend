@@ -32,6 +32,7 @@ import {
   diffChangedFlags,
 } from '../config/featureFlagRegistry.js';
 import { socialFromConfig } from '../services/socialConfigService.js';
+import { writeSingleton, parseExpectedUpdatedAt, errorBody } from '../utils/configConcurrency.js';
 import {
   appConfigBundleCache, APP_CONFIG_KEY, launchGateCache, LAUNCH_GATE_KEY,
   evictAppConfigBundle, evictLaunchGate,
@@ -201,11 +202,11 @@ const getOtpConfigAdmin = async (req, res) => {
 
 const updateOtpConfigAdmin = async (req, res) => {
   try {
-    const updated = await updateOtpProvider(req.body?.provider, req.user.id);
+    const updated = await updateOtpProvider(req.body?.provider, req.user.id, req.body?.expectedUpdatedAt);
     evictAppConfigBundle();
     res.json({ data: { provider: updated.provider }, updatedAt: updated.updatedAt });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json(errorBody(err));
   }
 };
 
@@ -224,11 +225,11 @@ const getProfileCompletionBonusAdmin = async (req, res) => {
 
 const updateProfileCompletionBonusAdmin = async (req, res) => {
   try {
-    const updated = await updateProfileCompletionBonusAmount(req.body?.amount, req.user.id);
+    const updated = await updateProfileCompletionBonusAmount(req.body?.amount, req.user.id, req.body?.expectedUpdatedAt);
     evictAppConfigBundle();
     res.json({ data: { amount: updated.amount }, updatedAt: updated.updatedAt });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json(errorBody(err));
   }
 };
 
@@ -277,6 +278,13 @@ const DEFAULT_APP_VERSION_CONFIG = {
 async function loadAppVersionConfig() {
   const row = await prisma.appVersionSetting.findUnique({ where: { id: 1 } });
   return row?.config || DEFAULT_APP_VERSION_CONFIG;
+}
+
+// Admin variant: also returns the row's updatedAt, the ETag the admin portal
+// echoes back as expectedUpdatedAt (null when no row has ever been saved).
+async function loadAppVersionConfigAdmin() {
+  const row = await prisma.appVersionSetting.findUnique({ where: { id: 1 } });
+  return { config: row?.config || DEFAULT_APP_VERSION_CONFIG, updatedAt: row?.updatedAt || null };
 }
 
 // Kill-switch defaults for customer-app features, derived from the registry —
@@ -482,8 +490,8 @@ const getFeatureFlagRegistry = async (req, res) => {
 // gobhi-only — admin portal's raw view/edit of the full config blob.
 const getAppConfigAdmin = async (req, res) => {
   try {
-    const config = await loadAppVersionConfig();
-    res.json({ data: config });
+    const { config, updatedAt } = await loadAppVersionConfigAdmin();
+    res.json({ data: config, updatedAt });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -515,12 +523,15 @@ const updateAppConfigAdmin = async (req, res) => {
         });
       }
     }
+    const expected = parseExpectedUpdatedAt(req.body?.expectedUpdatedAt);
     const previous = await loadAppVersionConfig();
 
-    const updated = await prisma.appVersionSetting.upsert({
-      where: { id: 1 },
-      create: { id: 1, config, updatedBy: req.user.id },
+    // Compare-and-set when the caller sent expectedUpdatedAt (409 on a stale
+    // value, nothing written); plain upsert otherwise.
+    const updated = await writeSingleton(prisma.appVersionSetting, {
+      create: { config, updatedBy: req.user.id },
       update: { config, updatedBy: req.user.id },
+      expected,
     });
     evictAppConfigBundle();
     // Audit only the flags that actually moved. A history row is written for
@@ -551,9 +562,9 @@ const updateAppConfigAdmin = async (req, res) => {
         );
       }
     }
-    res.json({ data: updated.config, changedFlags });
+    res.json({ data: updated.config, changedFlags, updatedAt: updated.updatedAt });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json(errorBody(err));
   }
 };
 
@@ -608,8 +619,9 @@ const getLaunchStatus = async (req, res) => {
 // gobhi-only — admin portal's raw view/edit of the launch gate (Settings page).
 const getLaunchGateAdmin = async (req, res) => {
   try {
-    const gate = await loadLaunchGate();
-    res.json({ data: gate });
+    const row = await prisma.launchGateSetting.findUnique({ where: { id: 1 } });
+    const gate = row ? { enabled: row.enabled, launchAt: row.launchAt } : DEFAULT_LAUNCH_GATE;
+    res.json({ data: gate, updatedAt: row?.updatedAt || null });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
   }
@@ -628,15 +640,16 @@ const updateLaunchGateAdmin = async (req, res) => {
         return res.status(400).json({ error: 'launchAt must be a valid date' });
       }
     }
-    const updated = await prisma.launchGateSetting.upsert({
-      where: { id: 1 },
-      create: { id: 1, enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
+    const expected = parseExpectedUpdatedAt(req.body?.expectedUpdatedAt);
+    const updated = await writeSingleton(prisma.launchGateSetting, {
+      create: { enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
       update: { enabled, launchAt: parsedLaunchAt, updatedBy: req.user.id },
+      expected,
     });
     evictLaunchGate();
-    res.json({ data: { enabled: updated.enabled, launchAt: updated.launchAt } });
+    res.json({ data: { enabled: updated.enabled, launchAt: updated.launchAt }, updatedAt: updated.updatedAt });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Server error' });
+    res.status(err.status || 500).json(errorBody(err));
   }
 };
 

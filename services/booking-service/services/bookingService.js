@@ -10,6 +10,7 @@ import { clusterSameTimeVisits } from '../utils/visitClustering.js';
 import { summarizeVisitPatterns } from '../utils/visitPatterns.js';
 import { shapeUpcomingBooking } from '../utils/upcomingBooking.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
+import { writeSingleton, parseExpectedUpdatedAt } from '../utils/configConcurrency.js';
 import { signQrToken, verifyQrToken } from '../utils/qrToken.js';
 import { recordAttendanceEvent } from '../utils/notifyChallengeService.js';
 import { recordPresence, liveSnapshot } from './presenceService.js';
@@ -1015,7 +1016,7 @@ const POLICY_CACHE_KEY = 'cancellation-policy';
 const policyCache = createTtlCache(15_000);
 export function clearCancellationPolicyCache() { policyCache.clear(); }
 
-export async function updateCancellationPolicy(tiers, updatedBy) {
+export async function updateCancellationPolicy(tiers, updatedBy, expectedUpdatedAt) {
   if (!Array.isArray(tiers) || !tiers.length) {
     throw { status: 400, error: 'tiers must be a non-empty array' };
   }
@@ -1024,10 +1025,13 @@ export async function updateCancellationPolicy(tiers, updatedBy) {
       throw { status: 400, error: 'each tier needs a refundRate between 0 and 1' };
     }
   }
-  const saved = await prisma.cancellationPolicySetting.upsert({
-    where: { id: 1 },
-    create: { id: 1, tiers, updatedBy },
+  // Optional optimistic concurrency: a stale expectedUpdatedAt throws a 409
+  // CONFIG_CONFLICT and writes nothing (see utils/configConcurrency.js).
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  const saved = await writeSingleton(prisma.cancellationPolicySetting, {
+    create: { tiers, updatedBy },
     update: { tiers, updatedBy },
+    expected,
   });
   // Evict after the write commits. evict() also detaches any in-flight read
   // that started before the write so it cannot repopulate the old tiers.

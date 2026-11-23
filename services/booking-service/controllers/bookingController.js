@@ -3,6 +3,7 @@ import * as globalLeaderboardService from '../services/globalLeaderboardService.
 import * as exportService from '../services/exportService.js';
 import * as checkinDaysService from '../services/checkinDaysService.js';
 import { parseLimit, parseCursor } from '../utils/pagination.js';
+import { errorBody } from '../utils/configConcurrency.js';
 
 const MY_BOOKINGS_DEFAULT_LIMIT = 50;
 const MY_BOOKINGS_MAX_LIMIT = 100;
@@ -65,11 +66,11 @@ export const getCancellationPolicy = async (req, res) => {
 
 export const updateCancellationPolicy = async (req, res) => {
   try {
-    const { tiers } = req.body || {};
-    const policy = await bookingService.updateCancellationPolicy(tiers, req.userId);
+    const { tiers, expectedUpdatedAt } = req.body || {};
+    const policy = await bookingService.updateCancellationPolicy(tiers, req.userId, expectedUpdatedAt);
     res.json({ data: policy });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json(errorBody(err));
   }
 };
 

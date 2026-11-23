@@ -1,4 +1,5 @@
 import { loadChallengeAudience, loadChallengeAudienceCached } from '../services/challengeAudience.js';
+import { errorBody } from '../utils/configConcurrency.js';
 import * as coinLedgerService from '../services/coinLedgerService.js';
 import * as onboardingRewardService from '../services/onboardingRewardService.js';
 import * as erasureService from '../services/erasureService.js';
@@ -314,7 +315,7 @@ export const updateCoinEconomyConfigAdmin = async (req, res) => {
     const updated = await coinEconomyConfigService.updateEconomyConfig(req.body || {}, req.userId);
     res.json({ data: updated });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json(errorBody(err));
   }
 };
 

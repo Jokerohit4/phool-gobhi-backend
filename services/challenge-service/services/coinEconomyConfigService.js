@@ -1,5 +1,6 @@
 import prisma from '../db/prisma.js';
 import { createTtlCache } from '../utils/ttlCache.js';
+import { writeSingleton, parseExpectedUpdatedAt } from '../utils/configConcurrency.js';
 
 // Read-only DISPLAY cache (GET /coins/catalog scarcity numbers). 30s in-process,
 // single-flight, failures not cached, evicted by updateEconomyConfig below.
@@ -94,6 +95,9 @@ export async function updateEconomyConfig(
     coinsPerVerifiedWorkout,
     gymTrialMonthlyCap,
     gymTrialPerUserLimit,
+    // Optional optimistic concurrency: stale -> 409 CONFIG_CONFLICT, nothing
+    // written (see utils/configConcurrency.js).
+    expectedUpdatedAt,
   },
   updatedBy
 ) {
@@ -134,11 +138,8 @@ export async function updateEconomyConfig(
     gymTrialPerUserLimit: gymTrialPerUserLimitValue,
     updatedBy,
   };
-  const updated = await prisma.coinEconomyConfig.upsert({
-    where: { id: 1 },
-    create: { id: 1, ...data },
-    update: data,
-  });
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  const updated = await writeSingleton(prisma.coinEconomyConfig, { create: data, update: data, expected });
   economyConfigDisplayCache.evict('economy');
   return {
     coinsPerCheckin: updated.coinsPerCheckin,
