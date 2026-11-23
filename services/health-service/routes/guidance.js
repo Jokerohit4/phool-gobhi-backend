@@ -7,6 +7,7 @@ import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js'
 import { saveDocument, signedDocumentUrl, deleteObjects } from '../services/ledger/medicalDocumentStorage.js';
 import { createReportService, processReportService, parseReportDate } from '../services/reportService.js';
 import { validateMarkers, riskBucket } from '../utils/guidanceExtraction.js';
+import { validateReportReadings } from '../utils/reportReadings.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { invalidateBlendedScore } from '../services/ledger/blendedScoreCache.js';
 import { listAdminReports, adminReportLink } from '../services/adminReportsService.js';
@@ -25,7 +26,16 @@ async function ownReport(userId, id) {
   if (!row) throw Object.assign(new Error('Report not found'), { status: 404 });
   return row;
 }
-const reportView = r => ({ id: r.id, fileName: r.fileName, status: r.status, createdAt: r.createdAt, reportDate: r.reportDate, detectedReportDate: r.detectedReportDate, proposedProfile: r.proposedProfile || {}, proposedMarkers: { ...(r.proposedMarkers || {}), ...Object.fromEntries((r.extractions || []).filter(x => ['hba1c', 'triglycerides'].includes(x.metric)).map(x => [x.metric, x.normalizedValue])) } });
+const canReadAgain = r => r.status === 'COMPLETED' && r.proposedReadings == null && r.readConsentAt != null;
+const reportView = r => ({
+  id: r.id, fileName: r.fileName, status: r.status, createdAt: r.createdAt,
+  reportDate: r.reportDate, detectedReportDate: r.detectedReportDate,
+  proposedProfile: r.proposedProfile || {},
+  proposedMarkers: { ...(r.proposedMarkers || {}), ...Object.fromEntries((r.extractions || []).filter(x => ['hba1c', 'triglycerides'].includes(x.metric)).map(x => [x.metric, x.normalizedValue])) },
+  proposedReadings: r.proposedReadings ?? null,
+  confirmedReadings: r.confirmedReadings ?? null,
+  canReadAgain: canReadAgain(r),
+});
 
 router.get('/guidance/me', requireAuth, run(async req => ({
   profile: await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } }),
@@ -54,7 +64,10 @@ router.get('/guidance/reports/:id/link', requireAuth, run(async req => ({ url: a
 router.post('/guidance/reports/:id/retry', requireRole('customer'), requireFeatureFlag('reportSubscription'), run(async req => {
   const row = await ownReport(req.userId, req.params.id);
   const stalled = ['PENDING', 'PROCESSING'].includes(row.status) && Date.now() - new Date(row.processingStartedAt || row.createdAt).getTime() > 300000;
-  if (row.status !== 'FAILED' && !stalled) bad('This report is still being read. Try again in a few minutes');
+  if (row.status !== 'FAILED' && !stalled && !canReadAgain(row)) {
+    if (row.status === 'COMPLETED') return reportView(row);
+    bad('This report is still being read. Try again in a few minutes');
+  }
   const claimed = await prisma.healthReport.updateMany({ where: { id: row.id, status: row.status, processingToken: row.processingToken }, data: { status: 'PENDING', processingToken: null } });
   if (claimed.count) await processReportService(row.id).catch(() => {});
   return reportView(await ownReport(req.userId, row.id));
@@ -68,14 +81,26 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
   if (details.gender && !['male', 'female', 'other', 'prefer_not_to_say'].includes(details.gender)) bad('Check gender');
   if (details.age != null && (!Number.isInteger(details.age) || details.age < 0 || details.age > 120)) bad('Check age');
   const markers = validateMarkers(req.body.markers);
+  const readings = req.body.readings === undefined ? undefined : validateReportReadings(req.body.readings);
+  const confirmedReadings = readings ?? report.confirmedReadings ?? null;
   const liverFlag = req.body.liverFlag === true;
   const reportDate = parseReportDate(req.body.reportDate);
   const previous = await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } });
   const canonical = obj => JSON.stringify(Object.fromEntries(Object.entries(obj || {}).sort(([a], [b]) => a.localeCompare(b))));
-  if (previous?.sourceReportId === report.id && canonical(previous.confirmedDetails) === canonical(details) && canonical(previous.confirmedMarkers) === canonical(markers) && previous.liverFlag === liverFlag && (!reportDate || reportDate === report.reportDate)) return previous;
+  const existingReadings = Array.isArray(report.confirmedReadings) ? report.confirmedReadings : [];
+  const readingsUnchanged = readings === undefined || (
+    readings.length === existingReadings.length &&
+    readings.every((reading, index) => canonical(reading) === canonical(existingReadings[index]))
+  );
+  if (previous?.sourceReportId === report.id && canonical(previous.confirmedDetails) === canonical(details) && canonical(previous.confirmedMarkers) === canonical(markers) && previous.liverFlag === liverFlag && (!reportDate || reportDate === report.reportDate) && readingsUnchanged) return { ...previous, confirmedReadings };
   const data = { sourceReportId: report.id, confirmedDetails: details, confirmedMarkers: markers, liverFlag, riskBucket: riskBucket(markers, liverFlag), confirmedAt: new Date(), clinicalStatus: 'PENDING', clinicalNote: null, clinicianName: null, clinicianRegistration: null, reviewedBy: null, reviewedAt: null, agreedActions: [] };
   const result = await prisma.$transaction(async tx => {
-    if (reportDate) await tx.healthReport.update({ where: { id: report.id }, data: { reportDate } });
+    if (reportDate || readings !== undefined) {
+      await tx.healthReport.update({
+        where: { id: report.id, userId: req.userId, status: 'COMPLETED' },
+        data: { ...(reportDate ? { reportDate } : {}), ...(readings === undefined ? {} : { confirmedReadings: readings }) },
+      });
+    }
     const localDate = reportDate || report.reportDate || report.detectedReportDate || report.createdAt.toISOString().slice(0, 10);
     for (const extraction of report.extractions) {
       if (!['hba1c', 'triglycerides'].includes(extraction.metric) || markers[extraction.metric] == null) continue;
@@ -86,7 +111,7 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
     return tx.guidanceProfile.upsert({ where: { userId: req.userId }, create: { userId: req.userId, ...data }, update: data });
   });
   await invalidateBlendedScore(req.userId);
-  return result;
+  return { ...result, confirmedReadings };
 }));
 router.patch('/guidance/me', requireRole('customer'), run(async req => {
   const data = { concern: cap(req.body.concern, 500), existingAdvice: cap(req.body.existingAdvice, 2000) };

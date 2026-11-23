@@ -189,6 +189,128 @@ test('rotate: late reuse revokes the whole family and returns E120', async (t) =
   assert.deepEqual(revokedWhere, { familyId: 'f1', revokedAt: null });
 });
 
+// ---- rotate(): lost-rotation recovery -----------------------------------------
+// Prod 2026-11-23: the app was killed/suspended after the server rotated but
+// before it stored the new token, so the next launch replayed the previous
+// token and the whole family was revoked. While the successor is still unused,
+// the session has not diverged and must be recoverable.
+
+function wireFamily({ parentUsedAgoMs, head = {} }) {
+  prisma.refreshToken.findUnique = async ({ where }) => {
+    if (where.jti === 'j1') return makeRow({ usedAt: new Date(NOW_UTC - parentUsedAgoMs), replacedByJti: 'head1' });
+    if (where.jti === 'head1') return makeRow({ jti: 'head1', ...head });
+    return null;
+  };
+  const revoked = [];
+  prisma.refreshToken.updateMany = async (args) => {
+    if (args.data && args.data.revokedAt) revoked.push(args.where.familyId);
+    return { count: 1 };
+  };
+  return revoked;
+}
+
+test('rotate: replaying the previous token hours later recovers when its successor was never used', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const logs = captureWarnings(t);
+  const revoked = wireFamily({ parentUsedAgoMs: 16 * 60 * 60 * 1000 }); // 16 h, as seen in prod
+
+  const out = await rotate(signTestToken({ jti: 'j1', familyId: 'f1' }));
+  assert.equal(jwt.verify(out.refreshToken, process.env.JWT_REFRESH_SECRET).jti, 'head1');
+  assert.equal(revoked.length, 0, 'a lost response must not revoke the family');
+  assert.equal(logs[0].message, 'refresh_recovered_lost_rotation');
+  assert.equal(logs[0].sinceUsedMs, 16 * 60 * 60 * 1000);
+});
+
+test('rotate: replaying the previous token is still theft once its successor has been used', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  captureWarnings(t);
+  const revoked = wireFamily({
+    parentUsedAgoMs: 60 * 60 * 1000,
+    head: { usedAt: new Date(NOW_UTC - 30 * 60 * 1000), replacedByJti: 'head2' },
+  });
+
+  await assertThrows(rotate(signTestToken({ jti: 'j1', familyId: 'f1' })), { status: 403, errorCode: 'E120' });
+  assert.deepEqual(revoked, ['f1']);
+});
+
+test('rotate: no recovery when the successor is revoked, expired, or the replay is older than the window', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  captureWarnings(t);
+
+  for (const scenario of [
+    { parentUsedAgoMs: 60_000, head: { revokedAt: new Date(NOW_UTC - 1000) } },
+    { parentUsedAgoMs: 60_000, head: { expiresAt: new Date(NOW_UTC - 1) } },
+    { parentUsedAgoMs: 8 * DAY_MS, head: {} },
+  ]) {
+    const revoked = wireFamily(scenario);
+    await assertThrows(rotate(signTestToken({ jti: 'j1', familyId: 'f1' })), { status: 403, errorCode: 'E120' });
+    assert.deepEqual(revoked, ['f1'], JSON.stringify(scenario));
+  }
+});
+
+test('rotate: recovery does not rotate or create anything — it re-hands the same successor', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  captureWarnings(t);
+  wireFamily({ parentUsedAgoMs: 5 * 60 * 60 * 1000 });
+  createCalls = [];
+  prisma.refreshToken.create = async (args) => { createCalls.push(args); return {}; };
+
+  await rotate(signTestToken({ jti: 'j1', familyId: 'f1' }));
+  assert.equal(createCalls.length, 0);
+});
+
+// ---- rotate(): rejections are logged with a diagnosable reason ---------------
+
+function captureWarnings(t) {
+  const lines = [];
+  t.mock.method(console, 'warn', (line) => lines.push(JSON.parse(line)));
+  return lines;
+}
+
+test('rotate: late reuse logs reuse_after_grace with how long ago the token was used', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const logs = captureWarnings(t);
+  prisma.refreshToken.findUnique = async ({ where }) =>
+    (where.jti === 'j1' ? makeRow({ usedAt: new Date(NOW_UTC - 11_650), replacedByJti: 's1' }) : null);
+  prisma.refreshToken.updateMany = async () => ({ count: 1 });
+
+  const token = signTestToken({ jti: 'j1', familyId: 'f1' });
+  await assertThrows(rotate(token), { status: 403, errorCode: 'E120' });
+
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].message, 'refresh_rejected');
+  assert.equal(logs[0].reason, 'reuse_after_grace_family_revoked');
+  assert.equal(logs[0].errorCode, 'E120');
+  assert.equal(logs[0].sinceUsedMs, 11_650);
+  assert.equal(logs[0].familyId, 'f1');
+  assert.ok(!JSON.stringify(logs[0]).includes(token), 'the token itself must never be logged');
+});
+
+test('rotate: an already-revoked family logs family_already_revoked', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOW_UTC });
+  const logs = captureWarnings(t);
+  prisma.refreshToken.findUnique = async () => makeRow({ revokedAt: new Date(NOW_UTC - 5000) });
+
+  await assertThrows(rotate(signTestToken({ jti: 'j1', familyId: 'f1' })), { status: 403, errorCode: 'E120' });
+  assert.equal(logs[0].reason, 'family_already_revoked');
+  assert.equal(logs[0].revokedAgoMs, 5000);
+});
+
+test('rotate: unknown row, bad signature and missing jti each log a distinct reason', async (t) => {
+  const logs = captureWarnings(t);
+  prisma.refreshToken.findUnique = async () => null;
+
+  await assertThrows(rotate(signTestToken({ jti: 'nope', familyId: 'f1' })), { status: 403, errorCode: 'E109' });
+  await assertThrows(rotate(jwt.sign({ id: 5, jti: 'j1', familyId: 'f1' }, 'a-different-secret')), { status: 403, errorCode: 'E109' });
+  await assertThrows(rotate(signTestToken({ jti: undefined, familyId: undefined })), { status: 403, errorCode: 'E109' });
+
+  assert.deepEqual(
+    logs.map((l) => l.reason),
+    ['token_row_not_found', 'jwt_verify_failed', 'legacy_token_without_jti'],
+  );
+  assert.equal(logs[1].jwtError, 'JsonWebTokenError');
+});
+
 // ---- rotate(): losing the atomic claim --------------------------------------
 
 test('rotate: losing the atomic claim falls back to the reuse path', async (t) => {

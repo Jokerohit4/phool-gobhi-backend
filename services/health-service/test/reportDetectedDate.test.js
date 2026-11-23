@@ -164,9 +164,9 @@ describe('detected date storage', () => {
     const out = parseDocumentAIResponse({
       document: { text: 'Collected: 04 Mar 2026\nLDL 118 mg/dL', entities: [] },
     });
-    assert.deepEqual(Object.keys(out).sort(), ['detectedDate', 'extractions', 'markers', 'profile']);
+    assert.deepEqual(Object.keys(out).sort(), ['detectedDate', 'extractions', 'markers', 'profile', 'readings']);
     assert.equal(out.extractions[0].metric, 'ldl');
-    assert.match(reportServiceSource, /const \{ extractions, detectedDate, profile, markers \} = await extractBiomarkersFromPDF/);
+    assert.match(reportServiceSource, /const \{ extractions, readings, detectedDate, profile, markers \} = await extractBiomarkersFromPDF/);
   });
 
   test('the detector reads the document text, not the trained entities', () => {

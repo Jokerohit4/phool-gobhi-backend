@@ -1,6 +1,7 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { extractGuidanceDetails } from './guidanceExtraction.js';
+import { extractReportReadings } from './reportReadings.js';
 import { METRIC_BOUNDS, METRIC_UNITS } from '../services/biometricService.js';
 
 dotenv.config();
@@ -198,7 +199,12 @@ export function parseDocumentAIResponse(data) {
   entities.map(fromEntity).forEach(consider);
   fromText(documentText).filter((ex) => !best.has(ex.metric)).forEach(consider);
 
-  return { extractions: [...best.values()], detectedDate: detectReportDateFromText(documentText), ...extractGuidanceDetails(documentText) };
+  return {
+    extractions: [...best.values()],
+    readings: extractReportReadings(data?.document),
+    detectedDate: detectReportDateFromText(documentText),
+    ...extractGuidanceDetails(documentText),
+  };
 }
 
 /**

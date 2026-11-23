@@ -457,6 +457,11 @@ export async function buildFullExportService(userId) {
     guidance: {
       profile: await prisma.guidanceProfile.findUnique({ where: { userId } }),
       requests: await prisma.guidanceRequest.findMany({ where: { userId } }),
+      reportReadings: await prisma.healthReport.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, reportDate: true, proposedReadings: true, confirmedReadings: true },
+      }),
     },
     ledger: {
       // The goal, its constraints, and the targets derived from them. Decimals

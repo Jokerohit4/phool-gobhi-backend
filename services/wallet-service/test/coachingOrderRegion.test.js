@@ -57,3 +57,32 @@ test('trainer checkout cannot be used by a guidance-only member', async () => {
   await assert.rejects(service.createCoachingOrder(7, 'TRAINER_ADDON_1499'), { status: 403 });
   assert.equal(providerOrders.length, 0);
 });
+
+test('coupon quotes revalidate on checkout and reuse only matching orders', async t => {
+  reset();
+  const oldCoupons = process.env.COACHING_COUPONS_JSON;
+  t.after(() => {
+    if (oldCoupons === undefined) delete process.env.COACHING_COUPONS_JSON;
+    else process.env.COACHING_COUPONS_JSON = oldCoupons;
+  });
+  const offer = coachingCatalog('Gurugram').plans[0];
+  process.env.COACHING_COUPONS_JSON = JSON.stringify({
+    SAVE10: { percentOff: 10, products: [offer.product] },
+    EXPIRED: { percentOff: 25, expiresAt: '2020-01-01T00:00:00Z' },
+  });
+  const selection = { city: 'Gurugram', offerId: offer.offerId, couponCode: ' save10 ' };
+  const quote = await service.quoteCoachingOrder(offer.product, selection);
+  assert.deepEqual(quote, {
+    originalAmountPaise: 449900, amountPaise: 404910, discountPaise: 44990, couponCode: 'SAVE10',
+  });
+  await assert.rejects(service.quoteCoachingOrder(offer.product, { ...selection, couponCode: 'EXPIRED' }), { status: 400 });
+  await assert.rejects(service.createCoachingOrder(7, offer.product, { ...selection, expectedAmountPaise: 1 }), { status: 409 });
+  assert.equal(providerOrders.length, 0);
+  const order = await service.createCoachingOrder(7, offer.product, { ...selection, expectedAmountPaise: quote.amountPaise });
+  assert.equal(providerOrders[0].amount, quote.amountPaise);
+  assert.equal(orders[0].offerSnapshot.discount.couponCode, 'SAVE10');
+  assert.equal((await service.createCoachingOrder(7, offer.product, selection)).orderId, order.orderId);
+  const fullPrice = await service.createCoachingOrder(7, offer.product, { ...selection, couponCode: null });
+  assert.notEqual(fullPrice.orderId, order.orderId);
+  assert.equal(providerOrders[1].amount, quote.originalAmountPaise);
+});

@@ -7,7 +7,7 @@ import { membershipBenefits } from '../services/coachingCatalog.js';
 import { loadCoachingCatalog } from '../services/coachingOfferService.js';
 import { getCoachingConfig, saveCoachingConfig, coachingConfigHistory } from '../services/coachingConfigService.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
-import { membershipView, createCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
+import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
 const router = Router();
 const run = fn => async (req, res) => { try { res.json({ data: await fn(req) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? e.message : 'Could not complete this request right now. Please try again.' }); } };
 router.get('/mine', requireRole('customer'), run(async req => {
@@ -25,7 +25,11 @@ router.put('/mine', requireRole('customer'), run(async req => {
 router.get('/catalog', requireRole('customer'), run(req => loadCoachingCatalog(req.query.city)));
 router.get('/admin/config', requireRole('gobhi'), run(async () => ({ ...(await getCoachingConfig()), history: await coachingConfigHistory() })));
 router.put('/admin/config', requireRole('gobhi'), run(req => saveCoachingConfig(req.body.config, req.body.expectedVersion, req.userId)));
-router.post('/orders', requireRole('customer'), run(req => createCoachingOrder(req.userId, req.body.product, { city: req.body.city, offerId: req.body.offerId })));
+router.post('/orders', requireRole('customer'), run(req => {
+  const { product, city, offerId, couponCode, expectedAmountPaise, quoteOnly } = req.body;
+  const selection = { city, offerId, couponCode, expectedAmountPaise };
+  return quoteOnly === true ? quoteCoachingOrder(product, selection) : createCoachingOrder(req.userId, product, selection);
+}));
 router.post('/verify', requireRole('customer'), run(async req => {
   const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
   if (typeof orderId !== 'string' || typeof razorpayPaymentId !== 'string') throw Object.assign(new Error('Payment identifiers are required'), { status: 400 });

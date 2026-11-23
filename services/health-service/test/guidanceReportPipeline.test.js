@@ -48,6 +48,17 @@ test('identity-only extraction completes without manufacturing normal markers', 
   reset();read = async () => ({ profile: { name: 'Patient' }, markers: {}, extractions: [] });
   assert.equal((await processReport(1)).status, 'COMPLETED');assert.equal(rows.length, 0);assert.deepEqual(report.proposedMarkers, {});
 });
+test('readings are persisted while earlier user-confirmed readings survive re-reading', async () => {
+  reset();
+  const confirmed = [{ label: 'Glucose', value: '80', unit: 'mg/dL' }];
+  const proposed = [{ label: 'Glucose', value: '90', unit: 'mg/dL' }];
+  report.confirmedReadings = confirmed;
+  read = async () => ({ profile: {}, markers: {}, extractions: [], readings: proposed });
+  assert.equal((await processReport(1)).status, 'COMPLETED');
+  assert.deepEqual(report.proposedReadings, proposed);
+  assert.deepEqual(report.confirmedReadings, confirmed);
+  assert.deepEqual(rows, []);
+});
 test('reader failure stays retryable and does not modify a user-supplied report date', async () => {
   reset();read = async () => { throw new Error('provider unavailable'); };
   await assert.rejects(processReport(1));assert.equal(report.status, 'FAILED');

@@ -12,6 +12,7 @@ import healthRoutes from './routes/health.js';
 const app = express();
 app.use(analyticsMiddleware());
 
+app.use('/guidance/reports/:id/confirm', express.json({ limit: '1mb' }));
 app.use(express.json());
 app.use(loggingDayMiddleware);
 

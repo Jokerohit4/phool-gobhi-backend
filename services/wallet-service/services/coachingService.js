@@ -6,6 +6,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { membershipBenefits, trainerAddonOffer } from './coachingCatalog.js';
 import { loadCoachingOffer, loadTrainerAddon } from './coachingOfferService.js';
 import { getCoachingConfig } from './coachingConfigService.js';
+import { coachingPrice } from './coachingCoupons.js';
 
 export const COACHING_PRODUCTS = Object.freeze({ MONTHLY_4499: 449900, QUARTERLY_11999: 1199900, TRAINER_ADDON_1499: 149900 });
 const HOUR = 3600000, DAY = HOUR * 24;
@@ -86,6 +87,11 @@ export async function membershipView(userId) {
   const addonOffer = hasGuidance(row) && membershipBenefits(row).trainerFloorSessions ? trainerAddonOffer((await getCoachingConfig()).config) : null;
   return { trainer_addon: addonOffer, free_delight_sessions_total: row?.offerSnapshot?.freeFormSessions ?? (row?.planType && row.planType !== 'FREE' ? 2 : 0), region: row?.offerSnapshot?.region || (row ? 'GURUGRAM' : null), service_city: row?.offerSnapshot?.city || null, benefits: membershipBenefits(row), offer: row?.offerSnapshot || {}, membership_order_id: row?.activeOrderId || null, purchased_at: row?.purchasedAt || null, plan_type: row?.planType || 'FREE', plan_status: row?.planStatus || 'INACTIVE', trial_ends_at: row?.trialEndsAt || null, plan_ends_at: row?.planEndsAt || null, isGuided: hasGuidance(row, now), has_existing_gym: row?.hasExistingGym || false, free_delight_sessions_remaining: row?.freeDelightSessionsRemaining || 0, addon_trainer_sessions_remaining: grants.reduce((a, g) => a + g.remaining, 0), addon_grants: grants.map(g => ({ remaining: g.remaining, expires_at: g.expiresAt })), lab_credits_remaining: row?.labCreditsRemaining || 0, gym_pass_status: row?.gymPassStatus || 'NOT_ISSUED', trial_cleared: !!row?.trialEndsAt && row.trialEndsAt <= now, fulfillment: await prisma.coachingFulfillment.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 30 }) };
 }
+export async function quoteCoachingOrder(product, selection) {
+  const offer = await loadCoachingOffer(product, selection.city, selection.offerId);
+  return coachingPrice(offer, selection.couponCode);
+}
+
 export async function createCoachingOrder(userId, product, selection = {}) {
   if (!Object.hasOwn(COACHING_PRODUCTS, product)) fail('Choose one of the two guided plans or trainer add-on');
   if (!eligibleCoachingAccount(await coachingAccount(userId))) fail('Add your exact date of birth in your profile. Guided health support is available to adults aged 18 and over.', 403);
@@ -93,12 +99,19 @@ export async function createCoachingOrder(userId, product, selection = {}) {
   if (addon && !hasGuidance(row)) fail('An active guided plan is required', 403);
   if (addon && !membershipBenefits(row).trainerFloorSessions) fail('Trainer floor sessions are only available with Gurugram bundles', 403);
   const offerSnapshot = addon ? await loadTrainerAddon(selection.offerId) : { ...await loadCoachingOffer(product, selection.city, selection.offerId), city: selection.city.trim() };
-  const matchesOffer = order => order?.offerSnapshot?.offerId === offerSnapshot.offerId && order?.offerSnapshot?.region === offerSnapshot.region;
+  const price = coachingPrice(offerSnapshot, selection.couponCode);
+  const { amountPaise } = price;
+  if (selection.expectedAmountPaise !== undefined && selection.expectedAmountPaise !== amountPaise) {
+    fail('The checkout price changed. Review the total and try again.', 409);
+  }
+  if (price.couponCode) offerSnapshot.discount = price;
+  const matchesOffer = order => order?.offerSnapshot?.offerId === offerSnapshot.offerId &&
+    order?.offerSnapshot?.region === offerSnapshot.region && order.amountPaise === amountPaise &&
+    order.offerSnapshot?.discount?.couponCode === price.couponCode;
   if (!addon && hasGuidance(row)) fail('You already have an active guided plan', 409);
   const existing = await prisma.coachingOrder.findFirst({ where: { userId, product, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
   const out = order => ({ orderId: order.orderId, keyId: process.env.RAZORPAY_KEY_ID, amount: order.amountPaise / 100, currency: 'INR', product: order.product, title: order.offerSnapshot?.title || null, region: order.offerSnapshot?.region || 'GURUGRAM' });
   if (existing && matchesOffer(existing)) return out(existing);
-  const amountPaise = offerSnapshot.amountPaise;
   const rpOrder = await provider().orders.create({ amount: amountPaise, currency: 'INR', receipt: `coach-${userId}-${Date.now()}`, notes: { purpose: 'guided_coaching', userId: String(userId), product, region: offerSnapshot.region } });
   try { return out(await prisma.$transaction(async tx => {
     await locked(tx, userId);

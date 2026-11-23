@@ -2172,6 +2172,10 @@ model HealthReport {
   mimeType    String       @default("application/pdf")
   proposedProfile Json?
   proposedMarkers Json?
+  // Ordered readings as printed, including tests without a BiometricMetric.
+  // Null means this report predates general reading extraction.
+  proposedReadings Json?
+  confirmedReadings Json?
   readConsentAt DateTime?
   processingStartedAt DateTime?
   processingToken String?

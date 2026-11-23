@@ -3,9 +3,18 @@ import assert from 'node:assert/strict';
 import express from 'express';
 
 let server, base, profile = null, writtenBiometrics = 0, entitlement = { isGuided: false }, requests = [];
+let reads = 0;
 const report = { id: 1, userId: 7, fileName: 'report.pdf', storagePath: 'private/7/report', status: 'COMPLETED', createdAt: new Date('2026-11-01'), reportDate: null, proposedProfile: { name: 'Patient' }, extractions: [{ id: 11, metric: 'hba1c', normalizedValue: 7.1 }] };
 const db = {
-  healthReport: { findFirst: async ({ where }) => where.userId === 7 && where.id === 1 ? report : null, update: async ({ data }) => Object.assign(report, data) },
+  healthReport: {
+    findFirst: async ({ where }) => where.userId === 7 && where.id === 1 ? report : null,
+    update: async ({ data }) => Object.assign(report, data),
+    updateMany: async ({ where, data }) => {
+      if (Object.entries(where).some(([key, value]) => report[key] !== value)) return { count: 0 };
+      Object.assign(report, data);
+      return { count: 1 };
+    },
+  },
   guidanceProfile: {
     findUnique: async () => profile,
     upsert: async ({ create, update }) => profile = profile ? { ...profile, ...update } : create,
@@ -19,7 +28,14 @@ db.$transaction = async fn => fn(db);
 before(async t => {
   t.mock.module('../db/prisma.js', { exports: { default: db } });
   t.mock.module('../middleware/requireFeatureFlag.js', { exports: { requireFeatureFlag: () => (_req, _res, next) => next() } });
-  t.mock.module('../services/reportService.js', { exports: { createReportService: async () => report, processReportService: async () => {}, parseReportDate: value => value || null } });
+  t.mock.module('../services/reportService.js', { exports: {
+    createReportService: async () => report,
+    processReportService: async () => {
+      reads++;
+      Object.assign(report, { status: 'COMPLETED', proposedReadings: [{ label: 'Glucose', value: 'Negative' }] });
+    },
+    parseReportDate: value => value || null,
+  } });
   t.mock.module('../services/ledger/medicalDocumentStorage.js', { exports: { MAX_UPLOAD_BYTES: 10485760, isAllowedMimeType: () => true, isAllowedReportMimeType: () => true, saveDocument: async () => '', signedDocumentUrl: async () => 'https://private.example/signed', deleteObjects: async () => ({ failed: [] }) } });
   t.mock.module('../services/ledger/blendedScoreCache.js', { exports: { invalidateBlendedScore: async () => {} } });
   t.mock.module('../utils/googleIdToken.js', { exports: { googleIdTokenHeader: async () => ({}) } });
@@ -91,4 +107,30 @@ test('only staff can open another customer’s confirmed source for clinical rev
   assert.equal((await call('/guidance/admin/7/report-link')).status, 403);
   const result = await call('/guidance/admin/7/report-link', undefined, { role: 'gobhi' });
   assert.equal(result.status, 200);assert.equal(result.body.data.url, 'https://private.example/signed');
+});
+test('an arbitrary reading is editable and persists on the report across old clients', async () => {
+  const readings = [{ label: 'Bilirubin', value: '<0.2', unit: 'mg/dL', referenceRange: '0–0.3' }];
+  assert.equal((await call('/guidance/reports/1/confirm', { ...confirmation, readings }, { user: 8 })).status, 404);
+  assert.equal((await call('/guidance/reports/1/confirm', { ...confirmation, readings: [{ label: 'Bilirubin', value: 0.2 }] })).status, 400);
+  const saved = await call('/guidance/reports/1/confirm', { ...confirmation, readings });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.body.data.confirmedReadings, readings);
+  assert.deepEqual((await call('/guidance/reports/1')).body.data.confirmedReadings, readings);
+  await call('/guidance/reports/1/confirm', confirmation);
+  assert.deepEqual(report.confirmedReadings, readings);
+});
+test('a saved report with reading consent can be re-read once for the new data', async () => {
+  const confirmed = report.confirmedReadings;
+  report.proposedReadings = null;
+  assert.equal((await call('/guidance/reports/1')).body.data.canReadAgain, false);
+  report.readConsentAt = new Date();
+  assert.equal((await call('/guidance/reports/1')).body.data.canReadAgain, true);
+  assert.equal((await call('/guidance/reports/1/retry', {}, { user: 8 })).status, 404);
+  const reread = await call('/guidance/reports/1/retry', {});
+  assert.equal(reread.status, 200);
+  assert.equal(reread.body.data.canReadAgain, false);
+  assert.deepEqual(reread.body.data.proposedReadings, [{ label: 'Glucose', value: 'Negative' }]);
+  assert.deepEqual(reread.body.data.confirmedReadings, confirmed);
+  assert.equal((await call('/guidance/reports/1/retry', {})).status, 200);
+  assert.equal(reads, 1);
 });

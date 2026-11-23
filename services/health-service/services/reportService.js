@@ -123,7 +123,7 @@ export async function processReportService(reportId) {
     if (!claimed.count) return { status: report.status };
     const signedUrl = await signedDocumentUrl(report.storagePath);
     if (!signedUrl) throw new Error('Could not read stored report');
-    const { extractions, detectedDate, profile, markers } = await extractBiomarkersFromPDF(signedUrl, report.mimeType || 'application/pdf');
+    const { extractions, readings, detectedDate, profile, markers } = await extractBiomarkersFromPDF(signedUrl, report.mimeType || 'application/pdf');
     const proposed = await write({ proposedProfile: profile || {}, proposedMarkers: markers || {} });
     if (!proposed.count) return { status: 'SUPERSEDED' };
     // A printed date is separate from, and cannot overwrite, the user's date.
@@ -133,7 +133,7 @@ export async function processReportService(reportId) {
       });
     }
     const completed = await prisma.$transaction(async tx => {
-      const owned = await tx.healthReport.updateMany({ where: { id: reportId, processingToken: token, status: 'PROCESSING' }, data: { status: 'COMPLETED', processedAt: new Date() } });
+      const owned = await tx.healthReport.updateMany({ where: { id: reportId, processingToken: token, status: 'PROCESSING' }, data: { status: 'COMPLETED', processedAt: new Date(), proposedReadings: readings || [] } });
       if (!owned.count) return false;
       const verified = await tx.reportExtraction.findMany({ where: { reportId, isVerified: true }, select: { metric: true } });
       const keep = new Set(verified.map(x => x.metric));
