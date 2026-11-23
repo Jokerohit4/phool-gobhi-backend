@@ -690,7 +690,7 @@ function referralCodeFor(userId) {
   return `PG${userId.toString(36).toUpperCase()}`;
 }
 
-async function issueSessionForUser({ phone, name, email, role = 'customer', type = 'general', gobhiType, referralCode, linkedGymId }) {
+async function issueSessionForUser({ phone, name, email, role = 'customer', type = 'general', gobhiType, referralCode, linkedGymId }, client = {}) {
   if (!VALID_ROLES.includes(role)) {
     throw { status: 400, error: ERROR_MESSAGES.INVALID_ROLE.message, errorCode: ERROR_MESSAGES.INVALID_ROLE.code };
   }
@@ -820,6 +820,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
     role: user.role,
     user_type: user.type,
     linked_gym_id: user.linkedGymId ?? null,
+    ...client,
   });
 
   // Tell partners, at login, whether their gym already exists so the app can
@@ -841,7 +842,7 @@ async function issueSessionForUser({ phone, name, email, role = 'customer', type
   };
 }
 
-export async function verifyOtpService({ phone: rawPhone, otp, name, email, role = 'customer', type = 'general', gobhiType, referralCode, linkedGymId }) {
+export async function verifyOtpService({ phone: rawPhone, otp, name, email, role = 'customer', type = 'general', gobhiType, referralCode, linkedGymId }, client = {}) {
   if (!rawPhone) {
     throw { status: 400, error: ERROR_MESSAGES.PHONE_REQUIRED.message, errorCode: ERROR_MESSAGES.PHONE_REQUIRED.code };
   }
@@ -874,10 +875,10 @@ export async function verifyOtpService({ phone: rawPhone, otp, name, email, role
     await redis.del(`otp_code:${phone}`, `otp_attempts:${phone}`);
   }
 
-  return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode, linkedGymId });
+  return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode, linkedGymId }, client);
 }
 
-export async function verifyFirebaseTokenService({ idToken, name, email, role = 'customer', type = 'general', gobhiType, referralCode, linkedGymId }) {
+export async function verifyFirebaseTokenService({ idToken, name, email, role = 'customer', type = 'general', gobhiType, referralCode, linkedGymId }, client = {}) {
   if (!idToken) {
     throw { status: 400, error: 'idToken is required', errorCode: 'ID_TOKEN_REQUIRED' };
   }
@@ -901,7 +902,7 @@ export async function verifyFirebaseTokenService({ idToken, name, email, role = 
     throw { status: 400, error: 'Firebase token has an invalid phone number', errorCode: 'INVALID_PHONE_IN_TOKEN' };
   }
 
-  return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode, linkedGymId });
+  return issueSessionForUser({ phone, name, email, role, type, gobhiType, referralCode, linkedGymId }, client);
 }
 
 // Staff-only Google sign-in (admin portal). Unlike verifyFirebaseTokenService
