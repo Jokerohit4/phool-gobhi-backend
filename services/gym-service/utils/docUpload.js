@@ -11,6 +11,31 @@ export const DOC_MAX_BYTES = 10 * 1024 * 1024;
 export const DOC_ALLOWED_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
 const DOC_ROOT_FOLDER = 'phool-gobhi/docs';
 
+// A document URL we are willing to persist from a client-supplied value (the
+// legacy JSON {url} variant of POST /:id/docs, brandDocs on gym create/update,
+// and doc_add edit requests). Admins open these as plain links, so anything
+// other than an asset on OUR Cloudinary cloud is refused: https only, host
+// res.cloudinary.com, first path segment = the configured cloud name, no
+// credentials, port, query or fragment, bounded length, no dot segments.
+export const DOC_URL_MAX_LENGTH = 500;
+
+export function isTrustedDocUrl(value, cloudName = process.env.CLOUDINARY_CLOUD_NAME) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > DOC_URL_MAX_LENGTH) return false;
+  if (typeof cloudName !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(cloudName)) return false;
+  let u;
+  try {
+    u = new URL(value);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:' || u.hostname !== 'res.cloudinary.com') return false;
+  if (u.username || u.password || u.port || u.search || u.hash) return false;
+  if (!u.pathname.startsWith('/' + cloudName + '/') || u.pathname.length === cloudName.length + 2) return false;
+  if (u.pathname.split('/').some((seg) => seg === '.' || seg === '..')) return false;
+  if (/%2e|%2f|%5c/i.test(u.pathname)) return false;
+  return true;
+}
+
 export function docFolderForGym(gymId) {
   return `${DOC_ROOT_FOLDER}/${gymId}`;
 }
