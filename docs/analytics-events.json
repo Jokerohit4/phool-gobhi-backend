@@ -1381,6 +1381,38 @@
     "source": "client",
     "app": "phool_gobhi",
     "since": "2026-11-23",
-    "notes": "customer app: the user opened the app from a health nudge push (data.type=health_nudge). props nudge_type (the push's `nudge` key), route (the push's `route` key). Pair with nudge_sent for send-to-open; the customer app emits it"
+    "retired": true,
+    "retiredSince": "2026-11-23",
+    "notes": "RETIRED 2026-11-23, replaced by push_opened (push_type nudge:<nudge>) which carries notification_id and also covers every other push. Kept listed so historical rows and old app builds stay valid. Was: customer app opened from a health nudge push; props nudge_type, route"
+  },
+  "push_sent": {
+    "source": "server",
+    "service": "auth-service|booking-service|buddy-service|health-service|wallet-service|notification-service",
+    "since": "2026-11-23",
+    "notes": "an FCM message was accepted by FCM for one recipient token (one notification_id per user per send; a user with several devices still has one token on file). distinct_id = recipient user id. props notification_id (uuid, also in the push's data payload), push_type (taxonomy in docs/analytics-bigquery-runbook.md), service, recipient_role (customer|partner when known), fcm_message_id (when FCM returns one), campaign_id (notification-service campaigns). Never title, body or any content. 'Sent' means FCM accepted it, not that the device received it"
+  },
+  "push_failed": {
+    "source": "server",
+    "service": "auth-service|booking-service|buddy-service|health-service|wallet-service|notification-service",
+    "since": "2026-11-23",
+    "notes": "FCM rejected a push send. distinct_id = recipient user id. props notification_id, push_type, service, error_code (FCM error code, e.g. messaging/registration-token-not-registered), plus recipient_role/campaign_id as push_sent. A user with no stored token produces no event (no send was attempted)"
+  },
+  "push_delivered": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-11-23",
+    "notes": "the app received a push (foreground handler or background/data handler). props notification_id and push_type (both from the push's data payload), app_state (foreground|background|terminated|unknown), seconds_since_sent (optional, from data.sent_at). The OS delivers a visible notification without running app code, so this undercounts delivery; an open implies delivery"
+  },
+  "push_opened": {
+    "source": "client",
+    "apps": [
+      "phool_gobhi",
+      "phool_gobhi_partner"
+    ],
+    "since": "2026-11-23",
+    "notes": "the user tapped a push and the app opened. props notification_id, push_type, app_state (foreground|background|terminated|unknown; state at tap time), seconds_since_sent (optional). Replaces nudge_opened (push_type nudge:<nudge>)"
   }
 }

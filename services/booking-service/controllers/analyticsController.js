@@ -1,5 +1,6 @@
 import * as analyticsQuery from '../services/analyticsQueryService.js';
 import * as savedFunnels from '../services/savedFunnelService.js';
+import * as pushFunnel from '../services/pushFunnelService.js';
 import { assertPartnerOwnsGym } from '../services/bookingService.js';
 import { resolveCohortScope } from '../utils/cohortScope.js';
 
@@ -109,6 +110,23 @@ export const getTrend = async (req, res) => {
 export const getRetentionCohorts = async (req, res) => {
   try {
     res.json({ data: await analyticsQuery.getRetentionCohorts(req.query.weeks, await scopeOf(req)) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Push-notification funnel (sent -> delivered -> opened) and its type filter list.
+export const getPushFunnel = async (req, res) => {
+  try {
+    res.json({ data: await pushFunnel.getPushFunnel(req.query) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  }
+};
+
+export const getPushTypes = async (req, res) => {
+  try {
+    res.json({ data: await pushFunnel.getPushTypes(req.query) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }

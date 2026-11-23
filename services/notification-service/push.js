@@ -1,5 +1,6 @@
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
+import { sendWithTelemetry } from './utils/pushTelemetry.js';
 
 let messaging;
 
@@ -27,5 +28,7 @@ export async function sendPush(run, userId, token) {
   messaging ??= getMessaging(initializeApp({
     credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)),
   }, 'notification-campaigns'));
-  return messaging.send(pushMessage(run, userId, token));
+  return sendWithTelemetry((message) => messaging.send(message), pushMessage(run, userId, token), {
+    recipientId: userId, recipientRole: 'customer', pushType: 'campaign', campaignId: run.campaign_id, service: 'notification-service',
+  });
 }

@@ -171,7 +171,7 @@ export async function runAttendanceSaasReengagementSweepService() {
           title: "Don't lose your streak!",
           body: 'Check in at your gym on Phool Gobhi to keep your attendance on record.',
           data: { type: 'attendance_saas_reengagement' },
-        });
+        }, { recipientId: user.id, recipientRole: 'customer' });
         track('attendance_saas_reengagement_sent', user.id, {
           linked_gym_id: user.linkedGymId,
           had_fcm_token: Boolean(user.fcmToken),

@@ -78,6 +78,13 @@ export function enqueueWarehouse(rowOrPromise) {
   task.finally(() => outside.delete(task));
 }
 
+// Run fn outside any request scope, so events it emits publish in the background
+// and are never drained (awaited) before an HTTP response ends. For telemetry that
+// follows slow side effects (push sends) which must not add response latency.
+export function detachFromRequest(fn) {
+  return requests.exit(fn);
+}
+
 export async function flushAnalytics() {
   await Promise.allSettled([...outside]);
 }

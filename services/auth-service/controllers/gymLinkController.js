@@ -135,7 +135,7 @@ async function notifyGymOfLinkRequest(gymId) {
       title: 'New member request',
       body: 'Someone says they train at your gym. Review and confirm.',
       data: { type: 'gym_link_request', gymId },
-    });
+    }, { recipientId: gym.partnerId, recipientRole: 'partner' });
   } catch (err) {
     console.error('[gym-link] notify gym failed:', err?.message || err);
   }
@@ -236,7 +236,7 @@ async function notifyMembersApproved(gymId, userIds) {
       title: gym?.name ? `You're in at ${gym.name}` : "You're in",
       body: 'The gym approved you. Scan the poster to check in.',
       data: { type: 'gym_link_approved', gymId },
-    })));
+    }, { recipientId: u.id, recipientRole: 'customer' })));
   } catch (err) {
     console.error('[gym-link] notify members approved failed:', err?.message || err);
   }

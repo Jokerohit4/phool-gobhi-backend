@@ -471,7 +471,15 @@
         "dev": {
           "plain": {
             "NODE_ENV": "development",
-            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app"
+            "AUTH_SERVICE_URL": "https://auth-service-dev-pwixdiy6va-el.a.run.app",
+            "ANALYTICS_PROVIDER": "bigquery",
+            "ANALYTICS_SERVICE_NAME": "notification-service",
+            "ANALYTICS_ENVIRONMENT": "dev",
+            "ANALYTICS_TOPIC": "projects/phool-gobhi/topics/analytics-events-dev",
+            "ANALYTICS_BIGQUERY_PROJECT": "phool-gobhi",
+            "ANALYTICS_BIGQUERY_DATASET": "analytics_dev",
+            "ANALYTICS_BIGQUERY_LOCATION": "asia-south1",
+            "ANALYTICS_MAX_BYTES_BILLED": "268435456"
           },
           "secrets": {
             "SECRETS_JSON": "notification-service-secrets"
