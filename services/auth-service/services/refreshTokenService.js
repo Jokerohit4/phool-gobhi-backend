@@ -14,6 +14,12 @@ const REFRESH_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 // race, not theft — see rotate() below. Anything outside this window is
 // timed like an attacker replaying a stolen token, and revokes the family.
 const REUSE_GRACE_MS = 10 * 1000;
+// How long after a rotation a client may still present the PREVIOUS token and
+// be handed the (still unused) successor — see handleAlreadyUsedToken. It only
+// applies while nothing has used that successor, so it does not let a replay
+// fork or outlive a live session. Bounded so an old stolen token cannot be
+// exchanged indefinitely.
+const LOST_ROTATION_RECOVERY_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Issues the first token in a brand-new rotation family — called by every
 // login path (loginService, issueSessionForUser via OTP/Firebase). Returns a
@@ -37,6 +43,19 @@ export async function revokeFamily(familyId) {
   });
 }
 
+// Every 403 below maps to one of two client-visible codes (E109 / E120), so
+// the response alone cannot say WHY a session ended. This logs the specific
+// reason (never the token) so a "users got signed out" report can be traced to
+// a cause from Cloud Run logs instead of guessed at. The thrown shape is
+// unchanged.
+function reject(error, errorCode, reason, ctx = {}) {
+  console.warn(JSON.stringify({ message: 'refresh_rejected', reason, errorCode, ...ctx }));
+  return { status: 403, error, errorCode };
+}
+
+const INVALID = 'Invalid or expired refresh token';
+const REVOKED = 'Session revoked, please log in again';
+
 // Verifies + rotates a refresh token. Returns { accessTokenPayload: {id},
 // refreshToken } on success. Throws { status, error, errorCode } on any
 // rejection — same shape refreshTokenService/authController already expect.
@@ -44,26 +63,32 @@ export async function rotate(token, { beforeRotate } = {}) {
   let payload;
   try {
     payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-  } catch {
-    throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
+  } catch (err) {
+    // TokenExpiredError vs JsonWebTokenError (bad signature/malformed) tells a
+    // lapsed session apart from a secret mismatch or a corrupted client token.
+    throw reject(INVALID, 'E109', 'jwt_verify_failed', { jwtError: err?.name });
   }
   const { id: userId, jti, familyId } = payload;
   if (!jti || !familyId) {
     // Pre-rotation tokens (issued before this feature shipped) carry no
     // jti/familyId and can never match a RefreshToken row — reject cleanly
     // rather than throwing on the null-jti lookup below.
-    throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
+    throw reject(INVALID, 'E109', 'legacy_token_without_jti', { userId });
   }
 
   const row = await prisma.refreshToken.findUnique({ where: { jti } });
   if (!row) {
-    throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
+    throw reject(INVALID, 'E109', 'token_row_not_found', { userId, familyId, jti });
   }
   if (row.revokedAt) {
-    throw { status: 403, error: 'Session revoked, please log in again', errorCode: 'E120' };
+    throw reject(REVOKED, 'E120', 'family_already_revoked', {
+      userId, familyId, jti,
+      revokedAgoMs: Date.now() - row.revokedAt.getTime(),
+      wasUsed: Boolean(row.usedAt),
+    });
   }
   if (row.expiresAt.getTime() <= Date.now()) {
-    throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
+    throw reject(INVALID, 'E109', 'token_row_expired', { userId, familyId, jti });
   }
 
   // Finish fallible account checks before consuming this single-use token.
@@ -117,13 +142,51 @@ export async function rotate(token, { beforeRotate } = {}) {
 // same-instant lost race land in the exact same state (row.usedAt set,
 // replacedByJti pointing at whoever won) and are handled identically.
 async function handleAlreadyUsedToken(row, userId, familyId) {
-  const withinGrace = Date.now() - row.usedAt.getTime() <= REUSE_GRACE_MS;
+  const sinceUsedMs = Date.now() - row.usedAt.getTime();
+  const withinGrace = sinceUsedMs <= REUSE_GRACE_MS;
   if (!withinGrace) {
+    // Lost-rotation recovery. A mobile client can be killed or suspended (iOS
+    // background launches, a dropped response, a slow cold start) after the
+    // server rotated but before the new token reached its secure storage.
+    // Production evidence (2026-11-23): three users were signed out because
+    // the token minted by their LAST refresh was never used — the next launch
+    // replayed the previous, already-consumed token and the family was revoked.
+    // If the successor of the presented token has never been used, revoked or
+    // expired, the session has not diverged: nobody has advanced past it, so
+    // handing the same successor out again exposes nothing the lost response
+    // did not. Once that successor is used, a later replay of this token
+    // still hits the theft path below, and anything older than the recovery
+    // window is treated as theft too.
+    const head = row.replacedByJti
+      ? await prisma.refreshToken.findUnique({ where: { jti: row.replacedByJti } })
+      : null;
+    if (
+      head &&
+      !head.usedAt &&
+      !head.revokedAt &&
+      head.expiresAt.getTime() > Date.now() &&
+      sinceUsedMs <= LOST_ROTATION_RECOVERY_MS
+    ) {
+      console.warn(JSON.stringify({
+        message: 'refresh_recovered_lost_rotation',
+        userId, familyId, jti: row.jti, headJti: head.jti, sinceUsedMs,
+      }));
+      return {
+        userId,
+        refreshToken: signRefreshToken(userId, head.jti, familyId, head.expiresAt),
+      };
+    }
+
     // Reuse of an already-rotated token well after the fact — theft
     // signal. Revoke the whole family so the stolen token (and the
     // legitimate one it was cloned from) both stop working.
     await revokeFamily(familyId);
-    throw { status: 403, error: 'Session revoked, please log in again', errorCode: 'E120' };
+    // sinceUsedMs is the key number for diagnosis: just over the grace window
+    // points at a client that missed/lost its rotation response, a large value
+    // at a stale or cloned credential (restored backup, second device).
+    throw reject(REVOKED, 'E120', 'reuse_after_grace_family_revoked', {
+      userId, familyId, jti: row.jti, sinceUsedMs, graceMs: REUSE_GRACE_MS,
+    });
   }
   // Benign race: re-hand-out the token this row was already rotated into,
   // rather than rotating again (which would just create a second race).
@@ -131,7 +194,9 @@ async function handleAlreadyUsedToken(row, userId, familyId) {
     ? await prisma.refreshToken.findUnique({ where: { jti: row.replacedByJti } })
     : null;
   if (!nextRow || nextRow.revokedAt) {
-    throw { status: 403, error: 'Invalid or expired refresh token', errorCode: 'E109' };
+    throw reject(INVALID, 'E109', 'grace_successor_missing_or_revoked', {
+      userId, familyId, jti: row.jti, sinceUsedMs,
+    });
   }
   return {
     userId,
