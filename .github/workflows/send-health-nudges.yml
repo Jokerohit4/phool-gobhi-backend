@@ -6,6 +6,14 @@ name: Send health nudges (FR-08)
 # and has gone quiet for a week, and the target nudge for someone who set a
 # score target and has fallen behind pace on it.
 #
+# Since 2026-11-23 the same sweep also sends the LIFECYCLE nudges for new users
+# (onboarding_resume, first_step, first_step_followup, and the soft comeback
+# for people who never finished a workout). The response adds a count per type,
+# `lifecycle_no_token` (due a nudge but no FCM token registered) and
+# `lifecycle_coverage` {candidates, withToken, onboarded, onboardedWithToken},
+# which is the push-token coverage of recent signups: read it in this run log.
+# No workflow change was needed; the matrix is still dev only.
+#
 # The sweep's response reports a per-type count, so the `target` key appearing
 # here is the thing to look for after adding a nudge type: it is 0 until a
 # real user has a live target and is behind on it.

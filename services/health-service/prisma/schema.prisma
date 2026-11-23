@@ -870,6 +870,12 @@ enum NudgeType {
   // keys on (userId, type) and stores the value by name, so order is
   // irrelevant.
   target
+  // Lifecycle nudges for new users (migration 20261123000000). `lifecycle` is
+  // the opt-out key only: it is never written to NudgeLog.
+  onboarding_resume
+  first_step
+  first_step_followup
+  lifecycle
 
   @@schema("health")
 }

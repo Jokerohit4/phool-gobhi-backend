@@ -207,12 +207,12 @@ test('every type the service offers is a value Postgres will actually store', { 
   // validates against NUDGE_TYPES, Prisma generates an enum client from the
   // schema, and Postgres has its own copy of the type. They can drift, and only
   // this test compares all three.
-  for (const type of nudge.NUDGE_TYPES) {
+  for (const type of nudge.OPT_OUT_TYPES) {
     await nudge.setOptOutService(BASE + 30, type, true);
   }
 
   const stored = await nudge.getOptOutsService(BASE + 30);
-  assert.deepEqual(stored.sort(), [...nudge.NUDGE_TYPES].sort());
+  assert.deepEqual(stored.sort(), [...nudge.OPT_OUT_TYPES].sort());
 
   // And the round trip the user actually performs.
   await nudge.setOptOutService(BASE + 30, 'target', false);

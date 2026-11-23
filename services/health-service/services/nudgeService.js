@@ -6,6 +6,8 @@ import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { isWellnessProfile } from '../utils/persona.js';
 import { findUnloggedUsersService } from './unloggedService.js';
 import { getScoreTargetState } from './ledger/scoreTargetService.js';
+import { fetchLifecycleCandidates } from '../utils/fetchLifecycleCandidates.js';
+import { track } from '../utils/analytics.js';
 
 
 // FR-08. Three nudges, all earned by something the user actually did or chose:
@@ -26,6 +28,43 @@ import { getScoreTargetState } from './ledger/scoreTargetService.js';
 // failure mode of a nudge bug is not a wrong pixel; it is a push
 // notification to a real person at three in the morning.
 export const NUDGE_TYPES = ['log', 'comeback', 'target'];
+
+// Lifecycle nudges (2026-11-23): the first-week gap. A new user who never did
+// a workout was eligible for none of the above. They are deliberately NOT
+// workout prompts - Home shows one card at a time and workouts are not the
+// first thing a new user is ready for - they point at the Today plan, a glass
+// of water, a mood check-in or the streak.
+//
+//   onboarding_resume   - signed up, never finished onboarding (3h-48h)
+//   first_step          - finished onboarding, no activity of any kind (24h-72h)
+//   first_step_followup - still nothing (72h-7d)
+//
+// Each is sent AT MOST ONCE per user, ever (see canSendService). Users who go
+// quiet later, and users inactive 7+ days who never finished a workout, are
+// handled by the generalised `comeback` (variant 'soft').
+export const LIFECYCLE_TYPES = ['onboarding_resume', 'first_step', 'first_step_followup'];
+
+// One opt-out row (`lifecycle`) silences all LIFECYCLE_TYPES, so the settings
+// screen gets one extra switch instead of three. NUDGE_TYPES stays the set of
+// types that can actually be SENT under their own name.
+export const LIFECYCLE_OPT_OUT = 'lifecycle';
+export const OPT_OUT_TYPES = [...NUDGE_TYPES, LIFECYCLE_OPT_OUT];
+
+export function optOutKey(type) {
+  return LIFECYCLE_TYPES.includes(type) ? LIFECYCLE_OPT_OUT : type;
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const RESUME_FROM_HOURS = 3;
+const RESUME_UNTIL_HOURS = 48;
+const FIRST_STEP_FROM_HOURS = 24;
+const FIRST_STEP_UNTIL_HOURS = 72;
+const FOLLOWUP_UNTIL_HOURS = 7 * 24;
+// The soft comeback can repeat while someone stays quiet (the workout one
+// does too); this spaces it to once per fortnight so a long absence is not
+// three pushes in a week.
+const SOFT_COMEBACK_COOLDOWN_DAYS = 14;
 
 // PRD S7.4: max 3 a week, never two within 24 hours, quiet 22:00-09:00.
 export const MAX_PER_WEEK = 3;
@@ -99,11 +138,24 @@ export function isWithinFreeTime(freeTimeWindow, now = new Date()) {
 /// Whether this user may be sent this nudge right now. Checks the opt-out
 /// first because it is the user's own instruction and outranks everything
 /// else here.
-export async function canSendService(userId, type, now = new Date()) {
+export async function canSendService(userId, type, now = new Date(), opts = {}) {
   const optedOut = await prisma.nudgeOptOut.findUnique({
-    where: { userId_type: { userId, type } },
+    where: { userId_type: { userId, type: optOutKey(type) } },
   });
   if (optedOut) return { allowed: false, reason: 'opted_out' };
+
+  // Lifecycle nudges are once-per-user-ever. Checked against the log (not
+  // the 7-day window below), so a user who got it 3 weeks ago never gets it
+  // again, and a double-run of the sweep cannot double-send.
+  if (LIFECYCLE_TYPES.includes(type)) {
+    const already = await prisma.nudgeLog.findFirst({ where: { userId, type } });
+    if (already) return { allowed: false, reason: 'already_sent' };
+  }
+  if (opts.sameTypeCooldownDays) {
+    const since = new Date(now.getTime() - opts.sameTypeCooldownDays * DAY_MS);
+    const last = await prisma.nudgeLog.findFirst({ where: { userId, type, sentAt: { gte: since } } });
+    if (last) return { allowed: false, reason: 'type_cooldown' };
+  }
 
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const recent = await prisma.nudgeLog.findMany({
@@ -161,11 +213,49 @@ const COPY = {
   },
 };
 
-async function sendService(userId, type, now = new Date()) {
-  const { allowed, reason } = await canSendService(userId, type, now);
+// Lifecycle copy. Several variants per type, picked deterministically from
+// the user id so a user always sees the same one (idempotent retries) while
+// the population sees a mix. Rules the founder set: low commitment, never
+// "go work out", never implies the person failed. English only, like the
+// existing nudges: there is no language field on the user server-side, so
+// nothing to localise on (see report). Food logging is NOT offered: on the
+// customer Home it stays locked until 3 active days, which a user with no
+// activity cannot have. Routes reuse the app's existing keys ('quick_log' =
+// health dashboard / Today); an unknown key just opens the app.
+const LIFECYCLE_COPY = {
+  onboarding_resume: [
+    { title: 'Your plan is almost ready', body: 'Pick up where you left off - it takes about a minute.', route: 'open' },
+    { title: 'Nearly there', body: 'A couple more answers and your plan is set up for you.', route: 'open' },
+  ],
+  first_step: [
+    { title: 'Your plan for today is ready', body: 'Have a look whenever you feel like it.', route: 'quick_log' },
+    { title: 'A glass of water?', body: 'Log one in a tap and your day is underway.', route: 'quick_log' },
+    { title: 'How are you feeling today?', body: 'A one-tap check-in. No pressure.', route: 'quick_log' },
+  ],
+  first_step_followup: [
+    { title: 'Start a streak today', body: 'One small thing is enough to begin it.', route: 'quick_log' },
+    { title: 'Today\'s plan is waiting', body: 'Tick one easy item - a glass of water counts.', route: 'quick_log' },
+  ],
+  // The generalised comeback for people who never finished a workout. No
+  // workout ask: the workout comeback above says "plan one session".
+  comeback_soft: [
+    { title: 'Welcome back whenever you are ready', body: 'Today\'s plan is here - a glass of water is a fine start.', route: 'quick_log' },
+    { title: 'Your plan is still here', body: 'Take a look when it suits you.', route: 'quick_log' },
+  ],
+};
+
+function pickCopy(type, variant, userId) {
+  const key = variant === 'soft' && type === 'comeback' ? 'comeback_soft' : type;
+  const options = LIFECYCLE_COPY[key];
+  if (!options) return COPY[type];
+  return options[userId % options.length];
+}
+
+async function sendService(userId, type, now = new Date(), opts = {}) {
+  const { allowed, reason } = await canSendService(userId, type, now, opts);
   if (!allowed) return { sent: false, reason };
 
-  const copy = COPY[type];
+  const copy = pickCopy(type, opts.variant, userId);
   const sent = await notifyUser(userId, {
     title: copy.title,
     body: copy.body,
@@ -178,6 +268,19 @@ async function sendService(userId, type, now = new Date()) {
   // burn the user's weekly budget on a notification they never saw.
   if (!sent) return { sent: false, reason: 'no_token' };
   await prisma.nudgeLog.create({ data: { userId, type } });
+
+  // Server analytics. Props are the nudge kind and age only - never copy,
+  // never anything the user logged.
+  try {
+    const props = { nudge_type: type };
+    if (opts.variant) props.variant = opts.variant;
+    if (opts.signupAt) {
+      props.hours_since_signup = Math.max(0, Math.floor((now.getTime() - new Date(opts.signupAt).getTime()) / HOUR_MS));
+    }
+    track('nudge_sent', userId, props);
+  } catch {
+    // Telemetry never decides whether a nudge counts as sent.
+  }
   return { sent: true };
 }
 
@@ -248,8 +351,167 @@ export async function runNudgeSweepService(now = new Date()) {
     }
   }
 
-  results.sent = results.log + results.comeback + results.target;
+  const lifecycle = await runLifecycleSweep(now);
+  Object.assign(results, {
+    onboarding_resume: lifecycle.onboarding_resume,
+    first_step: lifecycle.first_step,
+    first_step_followup: lifecycle.first_step_followup,
+    comeback_soft: lifecycle.comeback_soft,
+    lifecycle_no_token: lifecycle.no_token,
+    lifecycle_coverage: lifecycle.coverage,
+  });
+  results.suppressed += lifecycle.suppressed;
+  results.deferred += lifecycle.deferred;
+
+  results.sent =
+    results.log + results.comeback + results.target +
+    lifecycle.onboarding_resume + lifecycle.first_step +
+    lifecycle.first_step_followup + lifecycle.comeback_soft;
   return results;
+}
+
+/// Which lifecycle nudge, if any, a recent signup is due, from age and
+/// activity alone (no sending rules - caps, quiet hours and opt-outs are
+/// applied afterwards). Pure so the timing table is testable without a
+/// database.
+///
+/// candidate:  { createdAt, onboardingComplete }
+/// activity:   { last: Date|null, completedWorkout: boolean } - `last` is the
+///             most recent of any water/food/workout/plan-tick/mood row.
+///
+/// Returns { type, variant? } or null.
+///
+/// Onboarding completion has no timestamp server-side, so signup time stands
+/// in for it: leavers quit about a minute after finishing onboarding, so the
+/// difference is noise next to the 24h/72h thresholds.
+export function lifecycleStageFor(candidate, activity, now = new Date()) {
+  const ageHours = (now.getTime() - new Date(candidate.createdAt).getTime()) / HOUR_MS;
+
+  if (!candidate.onboardingComplete) {
+    return ageHours >= RESUME_FROM_HOURS && ageHours < RESUME_UNTIL_HOURS
+      ? { type: 'onboarding_resume' }
+      : null;
+  }
+
+  // Finished a workout once: the existing comeback owns them.
+  if (activity.completedWorkout) return null;
+
+  if (!activity.last) {
+    if (ageHours >= FIRST_STEP_FROM_HOURS && ageHours < FIRST_STEP_UNTIL_HOURS) return { type: 'first_step' };
+    if (ageHours >= FIRST_STEP_UNTIL_HOURS && ageHours < FOLLOWUP_UNTIL_HOURS) return { type: 'first_step_followup' };
+    // Never did anything and past the first week: anchor on signup. Same
+    // 7-day floor and 60-day churn ceiling as the workout comeback.
+    if (ageHours >= COMEBACK_AFTER_DAYS * 24 && ageHours < COMEBACK_UNTIL_DAYS * 24) {
+      return { type: 'comeback', variant: 'soft' };
+    }
+    return null;
+  }
+
+  const quietDays = (now.getTime() - new Date(activity.last).getTime()) / DAY_MS;
+  if (quietDays >= COMEBACK_AFTER_DAYS && quietDays < COMEBACK_UNTIL_DAYS) {
+    return { type: 'comeback', variant: 'soft' };
+  }
+  return null;
+}
+
+/// Most recent activity of any kind, and whether a workout was ever
+/// completed, for a batch of users. Grouped in SQL, one query per source.
+export async function findLifecycleActivityService(userIds) {
+  const result = new Map(userIds.map((id) => [id, { last: null, completedWorkout: false }]));
+  if (!userIds.length) return result;
+  const where = { userId: { in: userIds } };
+  const bump = (rows, field) => {
+    for (const row of rows) {
+      const at = row._max?.[field];
+      const entry = result.get(row.userId);
+      if (at && entry && (!entry.last || at > entry.last)) entry.last = at;
+    }
+  };
+  bump(await prisma.waterLog.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
+  bump(await prisma.foodLog.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
+  bump(await prisma.planItemCompletion.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
+  bump(await prisma.wellnessMoodCheckIn.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
+  bump(await prisma.workoutSession.groupBy({ by: ['userId'], where, _max: { startedAt: true } }), 'startedAt');
+  const finished = await prisma.workoutSession.groupBy({
+    by: ['userId'],
+    where: { ...where, endedAt: { not: null } },
+    _max: { startedAt: true },
+  });
+  for (const row of finished) {
+    const entry = result.get(row.userId);
+    if (entry) entry.completedWorkout = true;
+  }
+  return result;
+}
+
+/// The lifecycle half of the sweep. Every send still goes through
+/// sendService, so quiet hours (checked by the caller), the weekly cap, the
+/// 24h gap, opt-outs and once-ever idempotency all apply.
+///
+/// A user with no registered FCM token is counted in `no_token` and skipped
+/// BEFORE sending, so the number says how many people we would have nudged
+/// but cannot reach. `coverage` is the token coverage across every recent
+/// signup the sweep saw, read straight from the run log.
+export async function runLifecycleSweep(now = new Date()) {
+  const out = {
+    onboarding_resume: 0, first_step: 0, first_step_followup: 0, comeback_soft: 0,
+    no_token: 0, suppressed: 0, deferred: 0,
+    coverage: { candidates: 0, withToken: 0, onboarded: 0, onboardedWithToken: 0 },
+  };
+
+  const candidates = await fetchLifecycleCandidates({
+    createdBefore: new Date(now.getTime() - RESUME_FROM_HOURS * HOUR_MS),
+  });
+  for (const c of candidates) {
+    out.coverage.candidates += 1;
+    if (c.hasToken) out.coverage.withToken += 1;
+    if (c.onboardingComplete) {
+      out.coverage.onboarded += 1;
+      if (c.hasToken) out.coverage.onboardedWithToken += 1;
+    }
+  }
+
+  // Activity only matters for people who finished onboarding.
+  const activity = await findLifecycleActivityService(
+    candidates.filter((c) => c.onboardingComplete).map((c) => c.id),
+  );
+
+  for (const c of candidates) {
+    const stage = lifecycleStageFor(
+      c,
+      activity.get(c.id) ?? { last: null, completedWorkout: false },
+      now,
+    );
+    if (!stage) continue;
+
+    if (!c.hasToken) {
+      out.no_token += 1;
+      continue;
+    }
+    // The resume nudge goes to someone who has not told us when they are
+    // free yet; the rest wait for a sweep inside their window. Deferring
+    // costs nothing - the stage windows are wide enough to span several runs.
+    if (stage.type !== 'onboarding_resume' && !isWithinFreeTime(c.freeTimeWindow, now)) {
+      out.deferred += 1;
+      continue;
+    }
+
+    const opts = { signupAt: c.createdAt, variant: stage.variant };
+    if (stage.variant === 'soft') opts.sameTypeCooldownDays = SOFT_COMEBACK_COOLDOWN_DAYS;
+    const result = await sendService(c.id, stage.type, now, opts);
+    if (result.sent) {
+      out[stage.variant === 'soft' ? 'comeback_soft' : stage.type] += 1;
+    } else if (result.reason === 'no_token') {
+      out.no_token += 1;
+    } else {
+      out.suppressed += 1;
+    }
+  }
+
+  if (out.no_token > 0) {
+    console.log(`[nudge] lifecycle skipped reason=no_token count=${out.no_token}`);
+  }
+  return out;
 }
 
 /// Users who have logged before and have gone quiet. Grouped in SQL rather
@@ -348,8 +610,8 @@ export async function getOptOutsService(userId) {
 }
 
 export async function setOptOutService(userId, type, optedOut) {
-  if (!NUDGE_TYPES.includes(type)) {
-    const err = new Error(`type must be one of: ${NUDGE_TYPES.join(', ')}`);
+  if (!OPT_OUT_TYPES.includes(type)) {
+    const err = new Error(`type must be one of: ${OPT_OUT_TYPES.join(', ')}`);
     err.status = 400;
     throw err;
   }
