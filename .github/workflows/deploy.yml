@@ -210,6 +210,10 @@ jobs:
       # Services share one _prisma_migrations table in dev, so a migration name
       # used by two services is skipped by whichever deploys second.
       - run: node deploy/scripts/check-duplicate-migration-names.cjs
+
+      # Mojibake (em dash read as cp1252/cp437, U+FFFD), invalid UTF-8 or a stray BOM
+      # in any tracked text file. Pure Node, no install needed.
+      - run: node deploy/scripts/check-text-encoding.cjs
       - name: Check canonical analytics modules
         run: node tools/analytics/sync.mjs --check
 
