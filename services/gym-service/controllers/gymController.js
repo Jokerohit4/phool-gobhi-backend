@@ -8,6 +8,7 @@ import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { DOC_MAX_BYTES, DOC_ALLOWED_FORMATS, isPublicIdInGymFolder, signDocUpload, fetchUploadedDoc, discardUploadedDoc } from '../utils/docUpload.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
 import { sanitizeApiResponse } from '../utils/normalizeDecimal.js';
+import { toPublicGym, toPublicGyms } from '../utils/publicGym.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -31,7 +32,9 @@ export const listGyms = async (req, res) => {
       userLat: isNaN(userLat) ? null : userLat,
       userLng: isNaN(userLng) ? null : userLng,
     });
-    res.json({ data: sanitizeApiResponse(gyms) });
+    // Public route: identity is not available here, so everyone gets the
+    // public view (see utils/publicGym.js).
+    res.json({ data: sanitizeApiResponse(toPublicGyms(gyms)) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -85,7 +88,7 @@ export const getGym = async (req, res) => {
       isNaN(userLat) ? null : userLat,
       isNaN(userLng) ? null : userLng
     );
-    res.json({ data: sanitizeApiResponse(gym) });
+    res.json({ data: sanitizeApiResponse(toPublicGym(gym)) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
