@@ -77,27 +77,20 @@ export function resolveClientClose({ localDate, now = new Date() }) {
 /**
  * Close yesterday (IST) for every eligible user. Safe to re-run.
  *
- * Eligible = coachJourney on, a live coach `basic` consent, and an existing
+ * Eligible = a live coach `basic` consent, and an existing
  * JourneyProgress row. Nutrition/device consent and HealthGoal do not establish
  * eligibility: coach-only journeys still close with every Food flag off, and a
  * nutrition-only user must never receive a One Plan snapshot.
  *
- * `isEnabled` is required rather than defaulted to "on": a caller that forgets
- * to pass it gets a no-op, not an ungated write.
+ * The `coachJourney` flag was retired (always on), so there is no flag check here.
  *
  * Sequential, not Promise.all: this runs against a Neon compute budget that has
  * been exhausted once already, and the user count makes serial fine.
  */
-export async function runDayCloseSweep(prisma, { now = new Date(), isEnabled } = {}) {
+export async function runDayCloseSweep(prisma, { now = new Date() } = {}) {
   const localDate = yesterdayIST(now);
   const today = serverTodayIST(now);
   const result = { localDate, eligible: 0, closed: 0, alreadyClosed: 0, skipped: 0, failed: 0, disabled: false };
-
-  if (typeof isEnabled !== 'function') return { ...result, disabled: true };
-  const coachOn = await isEnabled('coachJourney');
-  if (!coachOn) {
-    return { ...result, disabled: true };
-  }
 
   const coachConsents = await prisma.coachConsent.findMany({
     where: { revokedAt: null, scopes: { has: BASIC_SCOPE } },

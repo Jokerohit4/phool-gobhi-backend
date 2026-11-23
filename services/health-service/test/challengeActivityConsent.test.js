@@ -13,14 +13,26 @@ test('setup internal activity controller', async t => {
 function response() {
   return { code: 200, body: null, status(value) { this.code = value; return this; }, json(value) { this.body = value; return this; } };
 }
-test('revoked consent and disabled features prevent any activity read', async () => {
-  for (const settings of [[true, false], [false, true]]) {
-    [enabled, consent] = settings; reads = 0;
-    const res = response();
-    await handler({ query: { userId: '42', since: '2026-10-20', metric: 'water_consistency' } }, res);
-    assert.equal(res.code, 403);
-    assert.equal(reads, 0);
-  }
+test('revoked consent prevents any activity read', async () => {
+  [enabled, consent] = [true, false]; reads = 0;
+  const res = response();
+  await handler({ query: { userId: '42', since: '2026-10-20', metric: 'water_consistency' } }, res);
+  assert.equal(res.code, 403);
+  assert.equal(reads, 0);
+});
+test('the workout metric is still behind the workoutTracking flag', async () => {
+  [enabled, consent] = [false, true]; reads = 0;
+  const res = response();
+  await handler({ query: { userId: '42', since: '2026-10-20', metric: 'workout_consistency' } }, res);
+  assert.equal(res.code, 403);
+  assert.equal(reads, 0);
+});
+test('non-workout metrics no longer depend on any flag (coachJourney retired)', async () => {
+  [enabled, consent] = [false, true]; reads = 0;
+  const res = response();
+  await handler({ query: { userId: '42', since: '2026-10-20', metric: 'water_consistency' } }, res);
+  assert.equal(res.code, 200);
+  assert.equal(reads, 1);
 });
 test('consented activity response exposes only a count', async () => {
   enabled = true; consent = true;

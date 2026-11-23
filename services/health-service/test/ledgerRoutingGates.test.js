@@ -137,13 +137,8 @@ test('every ledger route is behind the healthLedger flag, except the coach surfa
   for (const which of ['coachGated', 'coachBasic']) {
     const decl = routes.match(new RegExp(`const ${which} = \\[([^\\]]*)\\]`))?.[1] || '';
     assert.ok(decl, `${which} is not declared`);
-    // coachGated names the flag outright; coachBasic inherits it by spreading
-    // coachGated, and must never reach for the flag any other way.
-    assert.match(
-      decl,
-      /requireCoachJourney|\.\.\.coachGated\b/,
-      `${which} must check the coachJourney flag (directly or via coachGated)`,
-    );
+    // coachJourney is retired: neither array may name it.
+    assert.doesNotMatch(decl, /requireCoachJourney/, `${which} must not reference the retired coachJourney gate`);
     assert.doesNotMatch(
       decl,
       /requireFeatureFlag/,

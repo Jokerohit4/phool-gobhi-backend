@@ -1,7 +1,7 @@
 # Weekly summary contract notes
 
-Weeks are Monday-start IST days. The authenticated read requires coachJourney
-and weeklySummary. Layers use persisted journey unlocks plus current consent,
+Weeks are Monday-start IST days. The authenticated read requires the
+weeklySummary flag (coachJourney is retired and always on). Layers use persisted journey unlocks plus current consent,
 flags and setup, including wellness focus filtering. With no basic consent or
 journey, layers and totals are empty. Cache hits recheck access and IST today.
 The endpoint does not run journey synchronization, analytics, or goal writes.
@@ -49,8 +49,8 @@ on the **dev auth-service** (not production):
 
 1. GET /app-config/admin and retain the entire response.data config object.
 2. Set config.features.weeklySummary = { "enabled": true }, preserving all other
-   config fields and feature entries. Ensure coachJourney is enabled through the
-   same existing override mechanism if it is not already on.
+   config fields and feature entries. (coachJourney is retired; no
+   companion flag is needed.)
 3. PUT /app-config/admin with { "config": <the complete updated config>,
    "note": "Enable weekly summary dev dogfood" }.
 4. Verify GET /app-config returns features.weeklySummary.enabled = true. Allow

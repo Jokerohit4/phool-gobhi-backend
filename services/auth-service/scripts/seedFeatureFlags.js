@@ -70,7 +70,7 @@ export const PROFILES = {
   },
   'all-on': {
     summary: 'EVERY flag on - local/dev only, never prod',
-    // Deliberately includes healthVault (uploads medical reports), cycleTracking
+    // Deliberately includes reportSubscription (uploads medical reports for guidance), cycleTracking
     // (reverses FR-27), foodPhotoLogging (sends a photo to a third-party model)
     // and streaksCoins, whose own registry entry says not to enable it until the
     // coin sink exists. Several are held for legal sign-off. This exists for a
@@ -99,8 +99,9 @@ export const PROFILES = {
     // referral. Then the low-risk no-dependency surfaces: badges, homeTrackHome,
     // nonPartnerAttendance, brandedOnboarding.
     //
-    // Off, and each for a recorded reason rather than caution: healthVault
-    // (legal sign-off pending on medical report upload), healthLedger and
+    // Off, and each for a recorded reason rather than caution: reportSubscription
+    // (legal sign-off pending on medical report reading for subscription
+    // guidance; it replaced healthVault, which was retired and is always on), healthLedger and
     // foodPhotoLogging (a photo of someone's plate to a third-party model, and
     // the ledger holds records under a `medical_records` consent scope),
     // cycleTracking (reverses FR-27; consent wording unreviewed), fhirExport
@@ -129,11 +130,8 @@ export const PROFILES = {
     // relation is the one that bites, which is why workoutTracking is on here:
     // healthMetrics would be dead without it.
     //
-    // `coachJourney` (registered 2026-10-16) is the next candidate to name here,
-    // right next to workoutTracking — the journey is graded on the workout log,
-    // so it belongs beside it, and its other dep (nonPartnerAttendance) is
-    // already on. It is deliberately left out of this profile until the
-    // app-version minimum is raised. When it is added, coachAssistant and
+    // `coachJourney` and `healthVault` were retired on 2026-11-23 (permanently on,
+    // not toggles) so they appear in no profile. coachAssistant and
     // referralHomeTrigger stay out: both are off here for their own recorded
     // reasons above and are named only in the all-on/local profile.
     on: () => [

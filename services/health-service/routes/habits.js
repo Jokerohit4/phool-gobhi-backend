@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
 import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
 import * as habitsCtrl from '../controllers/habitsController.js';
 
@@ -10,7 +9,7 @@ import * as habitsCtrl from '../controllers/habitsController.js';
 //
 // Two gate shapes, and the split is the point:
 //
-//   coachBasic       the coachJourney flag + the coach `basic` scope. Water
+//   coachBasic       auth + the coach `basic` scope. Water
 //                    is layer-1 of the journey — it is the habit everyone
 //                    gets at start, so it needs nothing beyond the consent
 //                    the whole plan already hangs off.
@@ -26,7 +25,7 @@ import * as habitsCtrl from '../controllers/habitsController.js';
 // to keep alive, and a second gate would only widen who can write a log.
 const router = Router();
 
-const coachBasic = [requireAuth, requireCoachJourney, requireCoachConsent('basic')];
+const coachBasic = [requireAuth, requireCoachConsent('basic')];
 const coachSupplements = [...coachBasic, requireCoachConsent('supplements')];
 
 router.get('/habits/today', ...coachBasic, habitsCtrl.getToday);

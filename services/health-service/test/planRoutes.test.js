@@ -88,10 +88,10 @@ test('the two gate arrays compose the existing middlewares in the right order', 
       .replace(/,\s*$/, '');
   assert.match(
     seq(requirePlanSrc, 'planGated'),
-    /^requireAuth,\s*requireCoachJourney,\s*requireCoachConsent\('basic'\)$/,
+    /^requireAuth,\s*requireCoachConsent\('basic'\)$/,
   );
   const soft = seq(requirePlanSrc, 'planSoftGated');
-  assert.match(soft, /^requireAuth,\s*requireCoachJourney$/);
+  assert.match(soft, /^requireAuth$/);
   // The soft gate must NOT check consent — the controller turns a missing
   // consent into 200 no_plan, and a middleware 403 would make that
   // unreachable.

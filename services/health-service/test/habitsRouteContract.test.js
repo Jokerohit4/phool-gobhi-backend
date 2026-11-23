@@ -63,8 +63,8 @@ test('the gate arrays are shaped exactly as the contract orders them', () => {
   const basic = routes.match(/const coachBasic = \[([^\]]*)\]/)?.[1]?.trim();
   assert.equal(
     basic,
-    "requireAuth, requireCoachJourney, requireCoachConsent('basic')",
-    'coachBasic must be requireAuth + the coachJourney flag + the basic scope',
+    "requireAuth, requireCoachConsent('basic')",
+    'coachBasic must be requireAuth + the basic scope (coachJourney flag retired)',
   );
   // The supplements gate is coachBasic plus the scope — spread, not restated,
   // so the two cannot drift apart.

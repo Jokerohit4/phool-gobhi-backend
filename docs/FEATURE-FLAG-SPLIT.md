@@ -1,5 +1,15 @@
 # Feature-flag split — `healthMetrics` → `workoutTracking` / `healthMetrics` / `healthVault`
 
+> **Update 2026-11-23 — `healthVault` (and `coachJourney`) retired.** The vault is permanently on:
+> `healthVault` is no longer a registry flag and the vault routes (`/reports/upload|list|pending|verify`)
+> are `requireAuth` only. `GET /app-config` still emits `features.healthVault` and
+> `features.coachJourney` as constant `{ "enabled": true }` (see `LEGACY_ALWAYS_ON_FLAGS` in
+> `auth-service/config/featureFlagRegistry.js`) because installed apps treat a missing key as OFF;
+> stored/admin-written values for them are ignored. The report-upload-to-guidance/subscription flow
+> (`POST /guidance/reports`, retry) is gated by the new `reportSubscription` flag (clientKey
+> `reportSubscriptionEnabled`, group health, dataClass medical, default off). Everything below about
+> `healthVault` is historical.
+
 Status: **implemented in code, not deployed.** The registry, the route split, the client gates and
 the admin portal all exist on `dev` working trees. Two things have deliberately NOT happened: the
 config backfill (§8 step 6) and any deploy. Until the backfill runs, `workoutTracking` is absent

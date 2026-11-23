@@ -33,7 +33,7 @@ test('setup: mock layerState + journey deps once, import day close deps once', a
 
   t.mock.module(new URL('../utils/fetchInternal.js', import.meta.url).href, {
     namedExports: {
-      getAppConfig: async () => ({ flags: { coachJourney: true, healthMetrics: true, healthLedger: true } }),
+      getAppConfig: async () => ({ flags: { healthMetrics: true, healthLedger: true } }),
       fetchInternal: async () => ({ data: { days: [] } }),
     },
   });
@@ -150,7 +150,6 @@ function fakePrisma({ consents = [], coachConsents = [], goals = [], journeys = 
   };
 }
 
-const on = async () => true;
 const consent = (userId, version = LEDGER_POLICY_VERSION) => ({
   userId, revokedAt: null, scopes: ['logs', 'nutrition'], scopeVersions: { nutrition: version },
 });
@@ -170,12 +169,12 @@ test('sweep: closes yesterday for eligible users; a second run writes nothing', 
     coachConsents: [coachConsent(1), coachConsent(2)],
     journeys: [{ userId: 1 }, { userId: 2 }],
   });
-  const first = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const first = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(first.localDate, '2026-09-30');
   assert.equal(first.closed, 2);
   assert.ok(prisma.state.created.every((r) => r.localDate === '2026-09-30'));
 
-  const second = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const second = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(second.closed, 0);
   assert.equal(second.alreadyClosed, 2);
   assert.equal(prisma.state.created.length, 2, 'the re-run must not create another row');
@@ -187,30 +186,11 @@ test('sweep: nutrition-only users never qualify even with every feature flag on'
     goals: [{ userId: 1 }, { userId: 2 }],
     journeys: [{ userId: 1 }],
   });
-  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.eligible, 0);
   assert.equal(out.closed, 0);
   assert.equal(prisma.state.created.length, 0);
   assert.deepEqual(prisma.state.eligibilityReads, ['coachConsent']);
-});
-
-test('sweep: coach flag off disables closing even with nutrition flags on', async () => {
-  const flagsRead = [];
-  const prisma = fakePrisma({
-    consents: [consent(1)],
-    coachConsents: [coachConsent(9)],
-    goals: [{ userId: 1 }, { userId: 9 }],
-    journeys: [{ userId: 9 }],
-  });
-  const out = await runDayCloseSweep(prisma, {
-    now: RUN_AT,
-    isEnabled: async (flag) => { flagsRead.push(flag); return flag !== 'coachJourney'; },
-  });
-  assert.equal(out.disabled, true);
-  assert.equal(out.eligible, 0);
-  assert.equal(prisma.state.created.length, 0);
-  assert.deepEqual(prisma.state.eligibilityReads, []);
-  assert.deepEqual(flagsRead, ['coachJourney']);
 });
 
 test('sweep: coach-only journey closes with all Food and health flags off and no HealthGoal', async () => {
@@ -220,10 +200,7 @@ test('sweep: coach-only journey closes with all Food and health flags off and no
     goals: [{ userId: 1 }],
     journeys: [{ userId: 9 }],
   });
-  const out = await runDayCloseSweep(prisma, {
-    now: RUN_AT,
-    isEnabled: async (f) => f === 'coachJourney',
-  });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.disabled, false);
   assert.equal(out.eligible, 1);
   assert.equal(out.closed, 1);
@@ -235,7 +212,7 @@ test('sweep: coach-only journey closes with all Food and health flags off and no
 
 test('sweep: basic consent plus HealthGoal without a journey is skipped', async () => {
   const prisma = fakePrisma({ coachConsents: [coachConsent(9)], goals: [{ userId: 9 }] });
-  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.eligible, 0);
   assert.equal(out.closed, 0);
   assert.equal(out.skipped, 1);
@@ -252,7 +229,7 @@ test('sweep: a journey with revoked basic consent or no basic scope is not close
     goals: [{ userId: 9 }, { userId: 10 }],
     journeys: [{ userId: 9 }, { userId: 10 }, { userId: 11 }],
   });
-  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.closed, 0);
   assert.equal(out.eligible, 0);
   assert.equal(out.skipped, 0, 'only live basic consents are candidates');
@@ -266,7 +243,7 @@ test('sweep: a coach journey with nutrition consent is still closed exactly once
     goals: [{ userId: 1 }],
     journeys: [{ userId: 1 }],
   });
-  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.closed, 1);
   assert.equal(prisma.state.created.length, 1);
 });
@@ -278,17 +255,18 @@ test('sweep: one failed close is counted and does not prevent the next eligible 
     journeys: [{ userId: 1 }, { userId: 2 }],
     failUserIds: [1],
   });
-  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: on });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
   assert.equal(out.eligible, 2);
   assert.equal(out.failed, 1);
   assert.equal(out.closed, 1);
   assert.equal(prisma.state.created[0].userId, 2);
 });
 
-test('sweep: a caller that forgets isEnabled gets a no-op, not an ungated write', async () => {
-  const prisma = fakePrisma({ consents: [consent(1)], coachConsents: [coachConsent(9)], goals: [{ userId: 1 }, { userId: 9 }] });
-  const out = await runDayCloseSweep(prisma, { now: RUN_AT });
-  assert.equal(out.disabled, true);
-  assert.equal(prisma.state.created.length, 0);
-  assert.deepEqual(prisma.state.eligibilityReads, []);
+test('sweep: no flag is consulted (coachJourney retired) - a caller-supplied isEnabled is ignored', async () => {
+  const flagsRead = [];
+  const prisma = fakePrisma({ coachConsents: [coachConsent(9)], goals: [{ userId: 9 }], journeys: [{ userId: 9 }] });
+  const out = await runDayCloseSweep(prisma, { now: RUN_AT, isEnabled: async (f) => { flagsRead.push(f); return false; } });
+  assert.equal(out.disabled, false);
+  assert.equal(out.closed, 1);
+  assert.deepEqual(flagsRead, []);
 });

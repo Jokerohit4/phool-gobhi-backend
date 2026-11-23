@@ -8,7 +8,6 @@ import { foodPieceGrams } from '../services/ledger/foodPiecePortions.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
-import { isFeatureEnabled } from '../middleware/requireFeatureFlag.js';
 import { currentNutritionTarget } from '../services/ledger/currentTarget.js';
 import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
@@ -986,7 +985,7 @@ export const sweepFoodPhotos = handle(async () => {
 // log shows what happened, including how many were skipped and why that is not
 // an error.
 export const runDayCloseSweepInternal = handle(async () =>
-  dayCloseService.runDayCloseSweep(prisma, { isEnabled: isFeatureEnabled }),
+  dayCloseService.runDayCloseSweep(prisma),
 );
 // Kept (the Food layer's targets screen): restored verbatim from the pre-one-plan controller.
 export const getTargetActivityDetail = handle(async (req) => {

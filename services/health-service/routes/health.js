@@ -27,7 +27,6 @@ import { requireAssistantConsent } from '../middleware/requireAssistantConsent.j
 import { requireDeviceHealthConsent } from '../middleware/requireDeviceHealthConsent.js';
 import { requireBiometricWriteConsent } from '../middleware/requireBiometricConsent.js';
 import { anyOf } from '../middleware/anyOf.js';
-import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
 import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
 import * as biometricConsentCtrl from '../controllers/biometricConsentController.js';
 import * as healthProfileCtrl from '../controllers/healthProfileController.js';
@@ -83,7 +82,7 @@ router.use(contentRouter);
 //                   feature decision.
 //   metricsGated  → `healthMetrics`    health score, biomarkers, health profile,
 //                   data export. The derived-score half.
-//   vaultGated    → `healthVault`      Local Health Vault (report upload/verify).
+//   vaultGated    → auth only          Local Health Vault (report upload/verify). Permanently on.
 //
 // The transitional `either` gate below is NOT a third permanent shape — see
 // requireAnyFeatureFlag for why it exists and when it goes away.
@@ -109,19 +108,16 @@ const workoutGated = [
 // deliberate diff rather than something nobody notices.
 const metricsGated = [requireAuth, requireFeatureFlag('healthMetrics')];
 
-// Local Health Vault (PDF Reports). Was inherited from `healthMetrics`, which
-// meant the most consent-sensitive surface in the app was switched by a boolean
-// whose name was about health scores and which also turned on the workout log.
-// Standalone now, default off, pending legal sign-off — see the registry.
+// Local Health Vault (PDF Reports). The `healthVault` flag was retired: the vault
+// is permanently on, so these routes need auth only. (The report-upload-to-
+// guidance/subscription flow is gated separately by `reportSubscription` in
+// routes/guidance.js.)
 //
-// Deliberately NOT dependent on healthMetrics or workoutTracking: a user who
-// uploaded a report while the vault was on must be able to reach it to read,
-// verify or erase it after it is switched off. Same rule as DELETE /me and the
+// Deliberately NOT dependent on healthMetrics or workoutTracking: the vault
+// collects its own data and depends on nothing. Same rule as DELETE /me and the
 // /runs/consent delete — a consent record or extracted biomarker may never be
-// stranded behind a feature switch. That is also why this is not gated on
-// `workoutTracking` the way the registry's own dependency note would suggest:
-// the vault collects its own data and depends on nothing.
-const vaultGated = [requireAuth, requireFeatureFlag('healthVault')];
+// stranded behind a feature switch.
+const vaultGated = [requireAuth];
 router.post(
   '/reports/upload',
   ...vaultGated,
@@ -389,9 +385,9 @@ router.get('/health-profile/consent', requireAuth, healthProfileCtrl.getConsent)
 router.post('/health-profile/consent', ...profileWrite, requireAdult, healthProfileCtrl.grantConsent);
 router.delete('/health-profile/consent', requireAuth, healthProfileCtrl.revokeConsent);
 // Medicine reminders from day 1 of the coach journey. The coach gate — the
-// coachJourney flag plus the coach `basic` scope — is tried FIRST and the old
+// coach `basic` scope — is tried FIRST and the old
 // profileWrite gate SECOND: when both reject, anyOf sends the SECOND gate's
-// error, so with the coachJourney flag off a user still sees exactly today's
+// error, so a user without coach consent still sees exactly the old
 // refusal (brandedOnboarding's FEATURE_DISABLED), never the coach gate's.
 // Reads and deletes stay requireAuth-only, as before: seeing and erasing
 // your own reminders never depends on a feature switch.
@@ -400,7 +396,7 @@ router.delete('/health-profile/consent', requireAuth, healthProfileCtrl.revokeCo
 // health-profile consent inside the service (see the B8 HANDOFF) — the route
 // gate here is only half of "reachable from day 1" until that check accepts
 // the coach path too.
-const coachMedications = [requireAuth, requireCoachJourney, requireCoachConsent('basic')];
+const coachMedications = [requireAuth, requireCoachConsent('basic')];
 router.get('/health-profile/medications', requireAuth, healthProfileCtrl.listMedications);
 router.post(
   '/health-profile/medications',

@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import {
   FEATURE_FLAGS,
   FLAG_SCHEMA_VERSION,
+  LEGACY_ALWAYS_ON_FLAGS,
   defaultFeatures,
   flagNames,
   flagRegistry,
@@ -184,7 +185,9 @@ test('the customer app does not read a flag the registry does not declare', (t) 
   const dart = readFileSync(customerAppModel, 'utf8');
   const read = new Set();
   for (const m of dart.matchAll(/features\['([A-Za-z][A-Za-z0-9]*)'\]/g)) read.add(m[1]);
-  const names = flagNames();
+  // Retired always-on flags (coachJourney/healthVault) are still served to old
+  // builds; a build that has not dropped the decoder yet is not drift.
+  const names = [...flagNames(), ...LEGACY_ALWAYS_ON_FLAGS.map((f) => f.name)];
   // otp and profileCompletionBonus are not registry entries — they are served
   // from their own singleton setting rows (OtpProviderSetting,
   // ProfileCompletionBonusSetting), which is where an admin edits them.

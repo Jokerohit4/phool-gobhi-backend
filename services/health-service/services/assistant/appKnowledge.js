@@ -154,9 +154,8 @@ Activity. Wallet: Profile -> Wallet Balance.
 
 /// The coach journey (B16) — what the coach knows about the journey, its
 /// layers and the roadmap. Folded into the prompt ONLY when the coachAssistant
-/// flag is on: the journey screens ship behind the coachJourney flag, so on a
-/// build without them this would be exactly the roadmap-as-if-released
-/// mistake the manual above exists to prevent.
+/// flag is on: the coachJourney flag was retired (always on), but coachAssistant
+/// itself is still a kill switch for this grounded path.
 ///
 /// Numbers here must match services/journey/journeyConfig.js. The test
 /// assistantGobhi.test.js checks the thresholds against it.

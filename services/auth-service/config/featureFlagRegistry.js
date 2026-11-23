@@ -47,7 +47,7 @@
 /** Bumped whenever the flag SET changes shape, so a client can tell a flag that
  * is off from a server that predates the flag existing. Emitted as
  * `schemaVersion` on GET /api/auth/app-config. */
-export const FLAG_SCHEMA_VERSION = 5;
+export const FLAG_SCHEMA_VERSION = 6;
 
 /**
  * Ordering within a group is only for the admin portal's render order. `deps`
@@ -99,30 +99,6 @@ export const FEATURE_FLAGS = [
       'half, which is what the name always implied. Requires `workoutTracking` because the ' +
       'behavioural component of the blend is computed from training data. ' +
       'See docs/phool-gobhi-health-metrics-implementation-plan-2026-08-27.html.',
-  },
-  {
-    name: 'healthVault',
-    defaultEnabled: false,
-    deps: [],
-    clientKey: 'healthVaultEnabled',
-    group: 'health',
-    dataClass: 'medical',
-    blastRadius: 'Local Health Vault: report upload, pending extractions, extraction verification',
-    rationale:
-      'Split out of `healthMetrics` on 2026-10-04, standalone on purpose. Uploading a ' +
-      'medical report is the most sensitive collection in the app, and tying it to a ' +
-      'boolean that also turned on workout logging is not a risk posture anyone should ' +
-      'accept. Standalone also keeps user-owned data reachable: this file already ' +
-      'establishes at health.js ("a user must always be able to delete their own data, ' +
-      'even if the feature that collected it is switched off"), and a vault reachable only ' +
-      'while health metrics are on would produce extracted biomarkers the user can neither ' +
-      'export nor erase in-app. Off until legal sign-off on report upload.\n\n' +
-      'NOT THE SAME SURFACE as `healthLedger`\'s medical documents. This is a report you ' +
-      'upload for the AI to EXTRACT biomarkers from (/reports/upload, /pending, ' +
-      '/verify); that is a record the user keeps and re-reads under its own ' +
-      '`medical_records` consent scope (/ledger/medical-documents). Two different ' +
-      'uploads, two different flags, and conflating them is the mistake this split exists ' +
-      'to prevent.',
   },
   {
     name: 'healthLedger',
@@ -256,6 +232,25 @@ export const FEATURE_FLAGS = [
       'government-standard record. clientKey is null — this is a query-parameter branch on ' +
       'an existing route, with no client-side surface to gate.',
   },
+  {
+    name: 'reportSubscription',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'reportSubscriptionEnabled',
+    group: 'health',
+    dataClass: 'medical',
+    blastRadius:
+      "Report-upload-to-guidance flow: POST /guidance/reports (+ retry), which prefills the user's details from an uploaded health report and feeds the subscription suggestion",
+    rationale:
+      'Added 2026-11-23 when the `healthVault` and `coachJourney` toggles were retired (both are ' +
+      'now permanently on). Uploading a medical report so we can read it, prefill the user\'s ' +
+      'details and suggest a subscription is still the most sensitive collection in the app and ' +
+      'sends the document to a third-party reader, so it keeps a kill switch of its own: fail-' +
+      'CLOSED, off until the report-reading consent wording is signed off. No dependencies — the ' +
+      'vault itself is permanent. Enforced server-side in health-service routes/guidance.js ' +
+      '(defense in depth); the plain vault routes (reports/upload|list|pending|verify|delete) ' +
+      'are unconditional. NOT the same surface as the medical documents of `healthLedger`.',
+  },
   // ------------------------------------------------------------ gamification
   {
     name: 'badges',
@@ -383,7 +378,7 @@ export const FEATURE_FLAGS = [
   {
     name: 'homeIntroduction',
     defaultEnabled: false,
-    deps: ['coachJourney'],
+    deps: [],
     clientKey: 'homeIntroductionEnabled',
     group: 'coach',
     dataClass: 'health-derived',
@@ -392,36 +387,17 @@ export const FEATURE_FLAGS = [
       'New accounts begin with water logging and a completed workout before Today. ' +
       'The server persists completion and bounded activity coin claims; reminders are optional. ' +
       'Journey layers open at 7/10/15 elapsed days with consent/setup still required. ' +
-      'Existing accounts retain full Home. Coach Journey must be enabled separately.',
+      'Existing accounts retain full Home. The Coach Journey itself is permanently on.',
   },
   {
     name: 'weeklySummary',
     defaultEnabled: false,
-    deps: ['coachJourney'],
+    deps: [],
     clientKey: 'weeklySummaryEnabled',
     group: 'coach',
     dataClass: 'health-derived',
     blastRadius: 'Weekly habit summary read endpoint and client entry points',
     rationale: 'Weekly food, water, plan and workout review; defaults off and uses the existing admin app-config override for development dogfood.',
-  },
-  {
-    name: 'coachJourney',
-    defaultEnabled: false,
-    deps: ['workoutTracking', 'nonPartnerAttendance'],
-    clientKey: 'coachJourneyEnabled',
-    group: 'coach',
-    dataClass: 'health-derived',
-    blastRadius:
-      "Gobhi's one plan: layers, Today card, score. Off = no plan or score anywhere",
-    rationale:
-      'Umbrella flag for Gobhi\'s one plan: the layered journey (a few layers at a ' +
-      'time, unlocked as the user shows up), the Today card, the plan/habit APIs, and ' +
-      'letting the plan and score read on `basic` consent alone. In prod it needs ' +
-      '`workoutTracking` (the daily log the journey is graded on) and ' +
-      '`nonPartnerAttendance` (non-partner gym search and check-in) on too, which is ' +
-      'why both are deps: without them the journey has nothing to score. Off means no ' +
-      'plan and no score anywhere; the pre-plan health screens keep working unchanged. ' +
-      'Keep off until the app-version minimum is raised.',
   },
   {
     name: 'selfLinkGym',
@@ -436,8 +412,8 @@ export const FEATURE_FLAGS = [
       'Lets a customer attach themselves to a partner gym without a QR, so it is a ' +
       'membership claim the gym can be billed off — needs the raised app-version minimum ' +
       'first, because older builds do not read the linked-member fields /me returns and ' +
-      'would fall back to the marketplace Home silently. Deliberately its own flag rather ' +
-      'than part of coachJourney so the link surface can be held back independently.',
+      'would fall back to the marketplace Home silently. Deliberately its own flag so ' +
+      'the link surface can be held back independently.',
   },
   {
     name: 'personaSwitch',
@@ -457,7 +433,7 @@ export const FEATURE_FLAGS = [
   {
     name: 'referralHomeTrigger',
     defaultEnabled: false,
-    deps: ['coachJourney'],
+    deps: [],
     clientKey: 'referralHomeTriggerEnabled',
     group: 'coach',
     dataClass: 'none',
@@ -465,23 +441,21 @@ export const FEATURE_FLAGS = [
     rationale:
       'A second referral trigger that credits the referrer when the referred friend reaches ' +
       'their 3rd showed-up day instead of only on their first completed booking. It is ' +
-      'evaluated inside journeyService.get, so it is inert without `coachJourney` — hence ' +
-      'the dep rather than a bare flag. Money moves on it, so it is last in the rollout ' +
+      'evaluated inside journeyService.get (the journey is permanently on). Money moves on it, so it is last in the rollout ' +
       'order and stays off until the showed-up-day rules are verified on dev.',
   },
   {
     name: 'coachAssistant',
     defaultEnabled: false,
-    deps: ['coachJourney'],
+    deps: [],
     clientKey: 'coachAssistantEnabled',
     group: 'coach',
     dataClass: 'health-derived',
     blastRadius: 'The new grounded AI coach guardrail path (reads plan summary and approved content)',
     rationale:
       'Kill switch for the new grounded guardrail path in the AI coach — it answers with the ' +
-      'user\'s plan summary plus approved articles and exercise content. Kept separate from ' +
-      'coachJourney so the assistant can be pulled without taking the journey down, and ' +
-      'layered on `coachJourney` because there is nothing to ground on without a journey. ' +
+      'user\'s plan summary plus approved articles and exercise content. Kept ' +
+      'independently switchable so the assistant can be pulled without taking the journey down. ' +
       'Off until the disclaimer and grounding wording are reviewed.',
   },
   {
@@ -497,6 +471,44 @@ export const FEATURE_FLAGS = [
       'row, so it needs a real kill switch rather than just a hidden button in the app.',
   },
 ];
+
+/**
+ * LEGACY ALWAYS-ON KEYS — retired flags that must keep being served.
+ *
+ * `coachJourney` and `healthVault` were removed as toggles on 2026-11-23: both
+ * features are permanently on. They are NOT in FEATURE_FLAGS (so they have no
+ * admin toggle, no deps, no gate anywhere in the servers) — but every already-
+ * installed customer app reads `features.coachJourney.enabled` /
+ * `features.healthVault.enabled` (clientKeys `coachJourneyEnabled` /
+ * `healthVaultEnabled`) from GET /app-config and treats a MISSING key as OFF.
+ * Dropping the keys would silently switch both features off for every user on an
+ * old build. So the public response keeps emitting them as constant
+ * `{ enabled: true }`, forced AFTER the stored-blob merge so no stored value (an
+ * admin app that still PUTs them, an old row) can turn them off.
+ *
+ * Do not add new entries here lightly: this is a compatibility shim for flags that
+ * were already shipped in released clients, and each entry is emitted forever (or
+ * until the minimum supported app version no longer reads it).
+ */
+export const LEGACY_ALWAYS_ON_FLAGS = [
+  { name: 'coachJourney', clientKey: 'coachJourneyEnabled' },
+  { name: 'healthVault', clientKey: 'healthVaultEnabled' },
+];
+const LEGACY_NAMES = new Set(LEGACY_ALWAYS_ON_FLAGS.map((f) => f.name));
+
+/** `{ coachJourney: {enabled:true}, healthVault: {enabled:true} }` for the public response. */
+export function legacyAlwaysOnFeatures() {
+  return Object.fromEntries(LEGACY_ALWAYS_ON_FLAGS.map((f) => [f.name, { enabled: true }]));
+}
+
+/** True for a retired flag name that writes must tolerate (and ignore). */
+export const isLegacyAlwaysOnFlag = (name) => LEGACY_NAMES.has(name);
+
+/** Drops retired keys from a features blob (copy; input untouched). */
+export function stripLegacyFlags(features) {
+  if (!features || typeof features !== 'object' || Array.isArray(features)) return features;
+  return Object.fromEntries(Object.entries(features).filter(([k]) => !LEGACY_NAMES.has(k)));
+}
 
 const BY_NAME = new Map(FEATURE_FLAGS.map((f) => [f.name, f]));
 
@@ -557,6 +569,10 @@ export function validateFeaturePayload(features) {
   const unknown = [];
   const malformed = [];
   for (const [name, value] of Object.entries(features)) {
+    // Retired always-on flags (see LEGACY_ALWAYS_ON_FLAGS): an admin app that
+    // has not been updated yet may still send them. Accept and ignore — the
+    // value is never read and never overrides the constant `true`.
+    if (LEGACY_NAMES.has(name)) continue;
     if (!known.has(name)) {
       unknown.push(name);
       continue;

@@ -32,7 +32,7 @@ router.get('/guidance/me', requireAuth, run(async req => ({
   requests: await prisma.guidanceRequest.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 30 }),
   reports: (await prisma.healthReport.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 20, include: { extractions: true } })).map(reportView),
 })));
-router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('healthVault'), uploadMedicalDocumentMiddleware, run(async req => {
+router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('reportSubscription'), uploadMedicalDocumentMiddleware, run(async req => {
   if (req.body?.readConsent !== 'true' && req.body?.readConsent !== true) bad('Confirm permission to read your report');
   if (!req.file || !['application/pdf', 'image/jpeg', 'image/png'].includes(req.file.mimetype)) bad('Choose a PDF, JPEG or PNG report');
   const bytes = req.file.buffer;
@@ -51,7 +51,7 @@ router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('he
 }));
 router.get('/guidance/reports/:id', requireAuth, run(async req => reportView(await ownReport(req.userId, req.params.id))));
 router.get('/guidance/reports/:id/link', requireAuth, run(async req => ({ url: await signedDocumentUrl((await ownReport(req.userId, req.params.id)).storagePath) })));
-router.post('/guidance/reports/:id/retry', requireRole('customer'), requireFeatureFlag('healthVault'), run(async req => {
+router.post('/guidance/reports/:id/retry', requireRole('customer'), requireFeatureFlag('reportSubscription'), run(async req => {
   const row = await ownReport(req.userId, req.params.id);
   const stalled = ['PENDING', 'PROCESSING'].includes(row.status) && Date.now() - new Date(row.processingStartedAt || row.createdAt).getTime() > 300000;
   if (row.status !== 'FAILED' && !stalled) bad('This report is still being read. Try again in a few minutes');

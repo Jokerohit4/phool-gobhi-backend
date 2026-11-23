@@ -43,7 +43,7 @@ test('on-layer keys use the supplied consent snapshot without loading another jo
 test('getLayers returns array with 5 layers for a new user', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 0, steadyWeeks: 0 };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   // At least layer 1 should be present
   assert.ok(Array.isArray(layers));
@@ -54,7 +54,7 @@ test('getLayers returns array with 5 layers for a new user', async () => {
 test('layer on state when unlocked and prerequisites met', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: Array.from({ length: 5 }, (_, i) => ({ layer: i + 1, unlocked: true, unlockedAt: new Date().toISOString() })), showedUpDays: 10, steadyWeeks: 3 };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   const l1 = layers.find(l => l.layer === 1);
   assert.equal(l1.state, 'on');
@@ -63,7 +63,7 @@ test('layer on state when unlocked and prerequisites met', async () => {
 test('layer locked when prerequisites not met', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: [{ layer: 2, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 0, steadyWeeks: 0 };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   const l2 = layers.find(l => l.layer === 2);
   // Accept any valid state for now
@@ -73,7 +73,7 @@ test('layer locked when prerequisites not met', async () => {
 test('layer needs_consent when consent missing', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 5, steadyWeeks: 1 };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   const l1 = layers.find(l => l.layer === 1);
   // State depends on consent in real implementation; ensure state is one of known values
@@ -83,16 +83,19 @@ test('layer needs_consent when consent missing', async () => {
 test('flags off layers omitted', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = { layers: Array.from({ length: 5 }, (_, i) => ({ layer: i + 1, unlocked: true, unlockedAt: new Date().toISOString() })), showedUpDays: 0, steadyWeeks: 0 };
-  const flags = { coachJourney: false, healthMetrics: true, healthLedger: true };
+  // coachJourney is retired, so layers 1/3/4 carry no flag and are always present;
+  // only the food-ledger layers (2, 5) are omitted when their flags are off.
+  const flags = { healthMetrics: true, healthLedger: false };
   const layers = await getLayers(prisma, 1, { journey, flags });
-  const hasLayerRequiringCoach = layers.some(l => l.layer === 3);
-  assert.equal(hasLayerRequiringCoach, false);
+  assert.equal(layers.some(l => l.layer === 3), true);
+  assert.equal(layers.some(l => l.layer === 2), false);
+  assert.equal(layers.some(l => l.layer === 5), false);
 });
 
 test('layer needs_setup for food when target missing', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => null } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 5, steadyWeeks: 1 };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   const l1 = layers.find(l => l.layer === 1);
   assert.ok(['needs_setup','on','locked','needs_consent'].includes(l1.state));
@@ -101,7 +104,7 @@ test('layer needs_setup for food when target missing', async () => {
 test('layer needs_consent policy_updated state present', async () => {
   const prisma = { nutritionTarget: { findFirst: async () => ({ targetCals: 2000 }) } };
   const journey = { layers: [{ layer: 1, unlocked: true, unlockedAt: new Date().toISOString() }], showedUpDays: 5, steadyWeeks: 1 };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   const l1 = layers.find(l => l.layer === 1);
   assert.ok(typeof l1.state === 'string');
@@ -115,7 +118,7 @@ test('experienced user has 5 layers unlocked but none on without consent', async
     showedUpDays: 100,
     steadyWeeks: 10,
   };
-  const flags = { coachJourney: true, healthMetrics: true, healthLedger: true };
+  const flags = { healthMetrics: true, healthLedger: true };
   const layers = await getLayers(prisma, 1, { journey, flags });
   assert.equal(layers.length, 5);
   const onCount = layers.filter(l => l.state === 'on').length;

@@ -18,7 +18,7 @@ const prisma = {
   journeyProgress:{findUnique:async()=>({unlocked:[{layer:1},{layer:2}]})},
 };
 function reset() {
-  flags = {coachJourney:true,weeklySummary:true,healthMetrics:true,healthLedger:true};
+  flags = {weeklySummary:true,healthMetrics:true,healthLedger:true};
   layers = ['workout','water','food']; basic=true; calls=[]; cacheValue=null; cacheWrites=[];
   logs = dates.flatMap(localDate => ['breakfast','lunch'].map(slot=>({localDate,slot,nutrients:{kcal:900}})));
   water = dates.map(localDate=>({localDate,_sum:{ml:2200}}));
@@ -64,9 +64,9 @@ function fixture(name, body) {
   assert.deepEqual(body,JSON.parse(readFileSync(file,'utf8')));
 }
 
-test('contract gates authentication and both feature flags',async()=>{
+test('contract gates authentication and the weeklySummary flag',async()=>{
   reset();assert.equal((await request('',false)).status,401);
-  for(const flag of ['coachJourney','weeklySummary']){reset();flags[flag]=false;assert.equal((await request()).status,403);}
+  for(const flag of ['weeklySummary']){reset();flags[flag]=false;assert.equal((await request()).status,403);}
 });
 test('contract rejects malformed, non-Monday, repeated and future week values',async()=>{
   reset();for(const query of ['?week=','?week=2026-02-30','?week=2026-10-27','?week=2026-11-02','?week=2026-10-26&week=2026-10-19']) assert.equal((await request(query)).status,400,query);

@@ -8,7 +8,7 @@ test('weeklySummary defaults off in every environment; dev uses stored overrides
       process.env.APP_ENV=env;process.env.K_SERVICE=service;
       assert.equal(defaultFeatures().weeklySummary.enabled,expected);
     }
-    assert.deepEqual(FEATURE_FLAGS.find(f=>f.name==='weeklySummary').deps,['coachJourney']);
+    assert.deepEqual(FEATURE_FLAGS.find(f=>f.name==='weeklySummary').deps,[]);
   } finally {
     if(oldEnv===undefined)delete process.env.APP_ENV;else process.env.APP_ENV=oldEnv;
     if(oldService===undefined)delete process.env.K_SERVICE;else process.env.K_SERVICE=oldService;

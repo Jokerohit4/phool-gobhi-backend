@@ -1,5 +1,15 @@
 # Dev feature flags enabled
 
+> **2026-11-23 — `coachJourney` and `healthVault` retired.** Both are permanently on and are no
+> longer toggles: they are not in the registry, have no admin switch and no server gate. Entries
+> below that mention them as a dependency or an enabled flag are historical. `GET /app-config` still
+> emits `features.coachJourney` and `features.healthVault` as constant `{ "enabled": true }` for
+> installed apps that read them. The replacement `reportSubscription` flag (default off) gates the
+> report-upload-to-guidance/subscription flow.
+
+(Original document follows.)
+# Dev feature flags enabled
+
 ## Weekly habit summary activation, 30 October 2026
 
 At the owner's request, the dev config now enables `weeklySummary` (registered

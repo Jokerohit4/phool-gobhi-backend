@@ -11,13 +11,13 @@ export const JOURNEY = {
   // (device health for body) but is never required.
   layers: [
     { layer: 1, key: 'basics',      layerKeys: ['workout','water'],  unlock: { type: 'start' },
-      consent: { scope: 'coach.basic' }, flags: ['coachJourney'] },
+      consent: { scope: 'coach.basic' }, flags: [] },
     { layer: 2, key: 'food',        layerKeys: ['food'],             unlock: { type: 'showed_up_days', need: 3 }, earlyAllowed: true,
       consent: { scope: 'nutrition' }, flags: ['healthMetrics','healthLedger'], needsSetup: true },
     { layer: 3, key: 'body',        layerKeys: ['steps','sleep'],    unlock: { type: 'elapsed_days', need: 7 },
-      consent: null, flags: ['coachJourney'], optionalConsent: { scope: 'device_health' } },
+      consent: null, flags: [], optionalConsent: { scope: 'device_health' } },
     { layer: 4, key: 'supplements', layerKeys: ['supplements'],      unlock: { type: 'elapsed_days', need: 10 },
-      consent: { scope: 'coach.supplements' }, flags: ['coachJourney'] },
+      consent: { scope: 'coach.supplements' }, flags: [] },
     { layer: 5, key: 'health',      layerKeys: ['health'],           unlock: { type: 'elapsed_days', need: 15 },
       consent: { scope: 'medical_records' }, flags: ['healthMetrics','healthLedger'] },
   ],

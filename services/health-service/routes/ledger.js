@@ -4,7 +4,6 @@ import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { requireAdult } from '../middleware/requireAdult.js';
 import { requireNutritionConsent, requireMedicalRecordsConsent, requirePhotoConsent } from '../middleware/requireLedgerConsent.js';
 import { requireBiometricConsentForIntakeWeight } from '../middleware/requireBiometricConsent.js';
-import { requireCoachJourney } from '../middleware/requireCoachJourney.js';
 import { requireCoachConsent } from '../middleware/requireCoachConsent.js';
 import * as ledgerCtrl from '../controllers/ledgerController.js';
 import * as ledgerConsentCtrl from '../controllers/ledgerConsentController.js';
@@ -45,21 +44,21 @@ const consentGated = [...ledgerGated];
 
 // The coach journey's gates, mirroring the two shapes above.
 //
-//   coachGated  - auth + the coachJourney flag. NOT built on ledgerGated:
+//   coachGated  - auth only (the coachJourney flag was retired; the journey is always on). NOT built on ledgerGated:
 //                 healthMetrics and healthLedger describe the food ledger and
 //                 the derived-score surface, not the coach's plan, and the
 //                 journey must work for a user who has neither flag on. This
 //                 is the gate the coach-consent routes sit behind: reading
 //                 and granting consent must be reachable without the scope,
 //                 or there is no way to opt in.
-//   coachBasic   - auth + the flag + the coach `basic` scope. The gate the
+//   coachBasic   - auth + the coach `basic` scope. The gate the
 //                 either-gated routes below accept INSTEAD of nutrition, for
 //                 a user who granted the coach consent but never the diary's.
-const coachGated = [requireAuth, requireCoachJourney];
+const coachGated = [requireAuth];
 const coachBasic = [...coachGated, requireCoachConsent('basic')];
 
-const planGated = [requireAuth, requireCoachJourney, requireCoachConsent('basic')];
-const planSoftGated = [requireAuth, requireCoachJourney];
+const planGated = [requireAuth, requireCoachConsent('basic')];
+const planSoftGated = [requireAuth];
 
 // ---- Consent --------------------------------------------------------------
 
@@ -243,7 +242,7 @@ router.delete('/ledger/appointments/:id', ...medical, appointmentCtrl.deleteAppo
 
 // ---- Score ----------------------------------------------------------------
 //
-// The READS and WRITES are planGated (coachJourney + basic scope):
+// The READS and WRITES are planGated (basic scope):
 // a coach user's score is derived from the plan the coach built, so the
 // `basic` scope is the consent that covers reading and writing it.
 router.get('/ledger/score', ...planGated, ledgerCtrl.getScoreSeries);

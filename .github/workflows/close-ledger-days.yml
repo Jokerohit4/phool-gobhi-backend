@@ -30,8 +30,8 @@ name: Close ledger days
 # `schedule` fires ONLY from the default branch (`main`), which lags `dev`, so
 # until this reaches `main` the only way to run it is workflow_dispatch. The
 # matrix is dev-only on purpose: prod is added by hand, in a reviewed change,
-# once health-service is promoted and coachJourney is enabled there. The
-# service no-ops while coachJourney is off; Food flags do not gate the sweep.
+# once health-service is promoted. The coachJourney flag was retired (always
+# on), so the sweep no longer no-ops on it; Food flags do not gate the sweep.
 
 on:
   schedule:
@@ -47,7 +47,7 @@ jobs:
   close-days:
     strategy:
       matrix:
-        env: [dev]   # prod deliberately absent until promotion and coachJourney enablement are reviewed
+        env: [dev]   # prod deliberately absent until promotion is reviewed
       fail-fast: false
     runs-on: ubuntu-latest
     steps:

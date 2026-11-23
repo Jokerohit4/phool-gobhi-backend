@@ -9,7 +9,8 @@ export async function getChallengeActivityInternal(req, res) {
     const userId = Number(req.query.userId);
     if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid user' });
     const workout = req.query.metric === 'workout_consistency';
-    const enabled = await isFeatureEnabled(workout ? 'workoutTracking' : 'coachJourney');
+    // coachJourney was retired (always on); only the workout metric still has a flag.
+    const enabled = workout ? await isFeatureEnabled('workoutTracking') : true;
     // Personal challenges do not widen consent or keep reading after revocation.
     if (!enabled || !await hasCoachScopeService(userId, 'basic')) {
       return res.status(403).json({ error: 'Activity sharing is off for this account' });

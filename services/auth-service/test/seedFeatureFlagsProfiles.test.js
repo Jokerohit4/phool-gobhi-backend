@@ -51,7 +51,7 @@ test('defaults reproduces the registry defaults exactly', () => {
 
 test('all-on is the only profile that touches every flag', () => {
   // It is labelled local/dev only, because it includes the flags the registry
-  // holds for legal sign-off (healthVault, cycleTracking, foodPhotoLogging,
+  // holds for legal sign-off (reportSubscription, cycleTracking, foodPhotoLogging,
   // fhirExport) and streaksCoins, whose own entry says not to enable it until
   // the coin sink exists.
   assert.deepEqual(on('all-on').sort(), flagNames().sort());
@@ -107,7 +107,7 @@ test('launch-candidate enables no medical surface and only the one named AI surf
   // in the registry - legal sign-off, an unreviewed disclaimer, a photo leaving
   // the device, or an unvalidated export format.
   const withheld = [
-    'healthVault',
+    'reportSubscription',
     'healthLedger',
     'foodPhotoLogging',
     'cycleTracking',

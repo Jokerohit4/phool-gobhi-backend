@@ -24,6 +24,8 @@ import {
   defaultFeatures,
   flagNames,
   flagRegistry,
+  legacyAlwaysOnFeatures,
+  stripLegacyFlags,
   // Pure, dependency-free helpers that moved here from this file so the admin
   // route, the contract tests and scripts/seedFeatureFlags.js cannot disagree
   // about what a valid flag payload is. Re-exported below: callers that
@@ -323,6 +325,8 @@ async function loadAppVersionConfigAdmin() {
 // (or without) those rows existing.
 const DEFAULT_FEATURES = {
   ...defaultFeatures(),
+  // Retired always-on flags still read by installed apps (see LEGACY_ALWAYS_ON_FLAGS).
+  ...legacyAlwaysOnFeatures(),
   otp: { provider: 'firebase' },
   profileCompletionBonus: { amount: 20 },
 };
@@ -431,6 +435,10 @@ const getAppConfig = async (req, res) => {
     features = {
       ...DEFAULT_FEATURES,
       ...(config?.features || {}),
+      // LEGACY ALWAYS-ON KEYS: forced AFTER the stored-blob merge so a stored or
+      // admin-written value for a retired flag can never turn the feature off
+      // for an installed app (it treats a missing/false key as OFF).
+      ...legacyAlwaysOnFeatures(),
       otp: { provider: otpProvider },
       profileCompletionBonus: { amount: bonusAmount },
     };
@@ -448,7 +456,9 @@ const getAppConfig = async (req, res) => {
     // own flag list to tell "off" apart from "my server is older than this
     // flag" — which is the failure that silently turned prod's workout logging
     // into visible-but-403 buttons.
-    flagsKnown: flagNames(),
+    // Includes the retired always-on names: old clients diff their own list
+    // against this, and a retired flag is still "known" (served as true).
+    flagsKnown: [...flagNames(), ...Object.keys(legacyAlwaysOnFeatures())],
     forceUpdate,
     updateAvailable,
     minVersion: entry.minVersion,
@@ -523,6 +533,10 @@ const updateAppConfigAdmin = async (req, res) => {
         });
       }
     }
+    // Retired always-on flags (coachJourney/healthVault) may still be sent by a
+    // not-yet-updated admin app. They passed validation above; drop them here so
+    // they are never stored, audited or read. /app-config forces them true anyway.
+    if (config.features !== undefined) config.features = stripLegacyFlags(config.features);
     const expected = parseExpectedUpdatedAt(req.body?.expectedUpdatedAt);
     const previous = await loadAppVersionConfig();
 
@@ -543,7 +557,7 @@ const updateAppConfigAdmin = async (req, res) => {
     // but a toggle that cannot be switched on because the audit insert hit a
     // constraint is worse — the flag is the live control and the history is
     // bookkeeping.
-    const changedFlags = diffChangedFlags(previous?.features, config.features);
+    const changedFlags = diffChangedFlags(stripLegacyFlags(previous?.features), config.features);
     if (changedFlags.length) {
       try {
         await prisma.appConfigHistory.create({

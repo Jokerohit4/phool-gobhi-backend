@@ -2,7 +2,7 @@
 
 ## Flow
 
-All customer sign-ins enter the optional report step when the existing `healthVault` flag is enabled. Continuing with or without a report opens the two guided plans; skipping plans continues new/incomplete profiles to onboarding and complete profiles to Today. Signup keeps a Back route to the report screen. A PDF/JPEG/PNG report is stored in the private medical bucket and read through Document AI. Only explicitly labelled identity and marker fields are proposed. A patient must confirm ownership and edit/confirm values before those values become a guidance profile or enter biometric history.
+All customer sign-ins enter the optional report step when the `reportSubscription` flag is enabled (the `healthVault` toggle was retired and is always on). Continuing with or without a report opens the two guided plans; skipping plans continues new/incomplete profiles to onboarding and complete profiles to Today. Signup keeps a Back route to the report screen. A PDF/JPEG/PNG report is stored in the private medical bucket and read through Document AI. Only explicitly labelled identity and marker fields are proposed. A patient must confirm ownership and edit/confirm values before those values become a guidance profile or enter biometric history.
 
 The free explanation comes before the two subscription plans. Skipping subscriptions continues onboarding with confirmed name/gender prefilled. Report age is not converted into a birthday. The current adult-profile requirement remains: an exact birthday is confirmed before paid checkout when missing, and reused in onboarding. Training preferences are never inferred from a report. Today and the free logging flows are unchanged.
 
@@ -66,7 +66,7 @@ Collection/onboarding records are durable even if notification delivery fails. C
 3. Keep the existing private `MEDICAL_BUCKET_NAME`, ADC storage access, `GOOGLE_PROJECT_ID` and `GOOGLE_DOCUMENT_AI_PROCESSOR_ID` configured for health. The processor needs PDF/image OCR. No synthetic extraction fallback is used when OCR is unavailable.
 4. Keep wallet's existing `RAZORPAY_KEY_ID`, `RAZORPAY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` configured. Register captured and authorized payment events on the signed webhook. Web checkout loads the provider's official checkout script; native checkout uses the installed Flutter package.
 5. Deploy the founder portal and account-erasure fan-out after the wallet erasure endpoint exists. Wallet financial rows remain; coaching contact/collection details are redacted and fulfillment deactivated on hard account erasure. Health guidance data and requests participate in health erasure and account export. Deleting the source report also removes its current guidance review.
-6. Enable the existing `healthVault` flag for the intended environment to expose report-first signup. Existing reading/deletion of owned guidance records is not conditioned on a paid plan. Existing coach/assistant feature flags retain their normal meanings.
+6. Enable the `reportSubscription` flag for the intended environment to expose report-first signup. Existing reading/deletion of owned guidance records is not conditioned on a paid plan. Existing coach/assistant feature flags retain their normal meanings.
 
 This change does not deploy a real clinician/lab network. Signed review notes and appointment confirmations are recorded by authorized operations staff after fulfillment. New guidance copy is initially English; it uses the current app theme and existing core flows.
 

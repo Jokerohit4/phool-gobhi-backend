@@ -27,7 +27,7 @@
 // Run with: node --experimental-test-module-mocks --test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -231,36 +231,15 @@ test('hasCoachScopeService: live true; revoked false; no row false', async () =>
 
 // ---- the two middlewares --------------------------------------------------------
 
-test('the coach-journey gate: flag on passes, flag off refuses with FEATURE_DISABLED', async (t) => {
-  let flagOn = false;
-  await t.mock.module('../middleware/requireFeatureFlag.js', {
-    exports: {
-      isFeatureEnabled: async (name) => (name === 'coachJourney' ? flagOn : false),
-      requireFeatureFlag: () => async (req, res, next) => next(),
-      requireAnyFeatureFlag: () => async (req, res, next) => next(),
-      isAnyFeatureEnabled: async () => false,
-    },
-  });
-  const { requireCoachJourney } = await import('../middleware/requireCoachJourney.js');
-
-  flagOn = true;
-  let nextCalled = false;
-  const passRes = { status: () => { throw new Error('flag-on must not reject'); }, json: () => {} };
-  await requireCoachJourney({ userId: 7 }, passRes, () => { nextCalled = true; });
-  assert.equal(nextCalled, true);
-
-  flagOn = false;
-  nextCalled = false;
-  const res = {
-    statusCode: 200,
-    body: null,
-    status(code) { this.statusCode = code; return this; },
-    json(body) { this.body = body; return this; },
-  };
-  await requireCoachJourney({ userId: 7 }, res, () => { nextCalled = true; });
-  assert.equal(nextCalled, false);
-  assert.equal(res.statusCode, 403);
-  assert.deepEqual(res.body, { error: 'FEATURE_DISABLED' });
+test('the coach-journey flag gate is retired: the middleware is gone and nothing reads the flag', () => {
+  // coachJourney is permanently on. There is no requireCoachJourney middleware
+  // to call and no route/service may consult a 'coachJourney' flag any more.
+  assert.equal(existsSync(join(here, '..', 'middleware', 'requireCoachJourney.js')), false);
+  for (const rel of [['routes', 'ledger.js'], ['routes', 'journey.js'], ['routes', 'habits.js'], ['routes', 'health.js'], ['middleware', 'requirePlan.js']]) {
+    const src = read(...rel);
+    assert.doesNotMatch(src, /requireCoachJourney/, rel.join('/') + ' still references requireCoachJourney');
+    assert.doesNotMatch(src, /['"]coachJourney['"]/, rel.join('/') + ' still checks the coachJourney flag');
+  }
 });
 
 test('the coach-consent gate: scope live passes, missing refuses, outage fails closed', async (t) => {
@@ -330,21 +309,18 @@ test('granting is adults-only; revoking carries no gate at all', () => {
   assert.match(routes, /router\.delete\('\/coach-consent\/:scope', requireAuth, coachConsentCtrl\.revokeConsent\)/);
 });
 
-test('the coach routes read the same flag the prescription/plan context reads (B7 handoff)', () => {
-  // UB4: the score/appointment/plan routes are now planGated (coachJourney + basic consent).
-  // The planGated middleware includes requireCoachJourney which checks the coachJourney flag.
-  // The routes must use planGated, and planGated must include requireCoachJourney.
+test('the coach routes are gated on the basic consent scope alone (coachJourney flag retired)', () => {
+  // UB4: the score/appointment/plan routes are planGated (basic consent). The
+  // coachJourney flag no longer exists, so the gate arrays carry no flag check.
   const routes = read('routes', 'ledger.js');
-  assert.match(routes, /const coachGated = \[requireAuth, requireCoachJourney\]/);
-  assert.match(routes, /const planGated = \[requireAuth, requireCoachJourney, requireCoachConsent\('basic'\)\]/);
-  assert.match(routes, /const planSoftGated = \[requireAuth, requireCoachJourney\]/);
-  
-  const middleware = read('middleware', 'requireCoachJourney.js');
-  assert.match(middleware, /isFeatureEnabled\('coachJourney'\)/);
-  
+  assert.match(routes, /const coachGated = \[requireAuth\];/);
+  assert.match(routes, /const planGated = \[requireAuth, requireCoachConsent\('basic'\)\];/);
+  assert.match(routes, /const planSoftGated = \[requireAuth\];/);
+
   const planMiddleware = read('middleware', 'requirePlan.js');
-  assert.match(planMiddleware, /requireCoachJourney/);
-  
+  assert.doesNotMatch(planMiddleware, /requireCoachJourney/);
+  assert.match(planMiddleware, /requireCoachConsent\('basic'\)/);
+
   // Score routes should be on planGated
   assert.match(routes, /router\.get\('\/ledger\/score', \.\.\.planGated,/);
   assert.match(routes, /router\.get\('\/ledger\/score\/calm', \.\.\.planGated,/);

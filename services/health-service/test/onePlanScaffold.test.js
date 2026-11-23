@@ -112,10 +112,10 @@ test('the two gate arrays compose the existing middlewares in the right order', 
       .replace(/,\s*$/, '');
   assert.match(
     seq(requirePlanSrc, 'planGated'),
-    /^requireAuth,\s*requireCoachJourney,\s*requireCoachConsent\('basic'\)$/,
+    /^requireAuth,\s*requireCoachConsent\('basic'\)$/,
   );
   const soft = seq(requirePlanSrc, 'planSoftGated');
-  assert.match(soft, /^requireAuth,\s*requireCoachJourney$/);
+  assert.match(soft, /^requireAuth$/);
   // The soft gate must NOT check consent — the controller turns a missing
   // consent into 200 no_plan, and a middleware 403 would make that
   // unreachable.
@@ -129,10 +129,10 @@ test('routes/health.js mounts the plan router next to the journey router', () =>
 // ---- The layer table -------------------------------------------------------
 
 const EXPECTED_LAYERS = [
-  { key: 'basics', consent: 'coach.basic', flags: ['coachJourney'], needsSetup: false, optionalConsent: null },
+  { key: 'basics', consent: 'coach.basic', flags: [], needsSetup: false, optionalConsent: null },
   { key: 'food', consent: 'nutrition', flags: ['healthMetrics', 'healthLedger'], needsSetup: true, optionalConsent: null },
-  { key: 'body', consent: null, flags: ['coachJourney'], needsSetup: false, optionalConsent: 'device_health' },
-  { key: 'supplements', consent: 'coach.supplements', flags: ['coachJourney'], needsSetup: false, optionalConsent: null },
+  { key: 'body', consent: null, flags: [], needsSetup: false, optionalConsent: 'device_health' },
+  { key: 'supplements', consent: 'coach.supplements', flags: [], needsSetup: false, optionalConsent: null },
   { key: 'health', consent: 'medical_records', flags: ['healthMetrics', 'healthLedger'], needsSetup: false, optionalConsent: null },
 ];
 

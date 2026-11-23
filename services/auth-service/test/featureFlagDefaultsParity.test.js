@@ -205,7 +205,7 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
 
   // Flags the cubit deliberately does not carry. Each is read straight off
   // AppConfigStore by the widgets that need it (app_config_store.dart's
-  // healthLedgerVisible / foodPhotoLoggingVisible / coachJourneyVisible /
+  // healthLedgerVisible / foodPhotoLoggingVisible /
   // selfLinkGymVisible), where the getter can fold in a parent flag - the ledger
   // gate also has to account for healthMetrics, and food-photo logging and the
   // coach-journey / self-link surfaces have no home-screen cubit field. The last
@@ -215,15 +215,14 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
   const readFromTheStore = new Set([
     'healthLedgerEnabled',
     'foodPhotoLoggingEnabled',
-    'coachJourneyEnabled',
+    'reportSubscriptionEnabled',
     'homeIntroductionEnabled',
     'selfLinkGymEnabled',
     'personaSwitchEnabled',
     'referralHomeTriggerEnabled',
     'coachAssistantEnabled',
     'exploreFoodFindsEnabled',
-    // weeklySummaryVisible on AppConfigStore folds in coachJourneyVisible and the
-    // widgets/routes read that getter directly; the cubit holds no field for it.
+    // the widgets/routes read the AppConfigStore getter directly; the cubit holds no field for it.
     'weeklySummaryEnabled',
   ]);
 

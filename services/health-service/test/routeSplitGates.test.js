@@ -178,11 +178,11 @@ test('report upload, pending extractions and verification are on the vault gate 
 });
 
 test('the vault gate depends on no other flag', () => {
-  // Reading back a report a user uploaded while the vault was on must survive
-  // the vault being switched off — hence not layered on healthMetrics or
-  // workoutTracking. See the declaration comment.
+  // healthVault is retired (permanently on): the vault is auth-only and must
+  // not be layered on healthMetrics or workoutTracking either.
   const decl = routes.match(/const vaultGated = \[([^\]]*)\]/)?.[1] || '';
-  assert.match(decl, /requireFeatureFlag\('healthVault'\)/);
+  assert.match(decl, /^requireAuth$/);
+  assert.doesNotMatch(decl, /requireFeatureFlag/, 'healthVault is retired; the vault carries no flag gate');
   assert.doesNotMatch(
     decl,
     /workoutTracking|healthMetrics/,
@@ -222,11 +222,11 @@ test('the DPDPA export accepts either flag — an access right may not fail clos
 
 test('medication reminder writes are either-gated: the coach gate first, profileWrite second', () => {
   // B8 makes the medication reminders reachable from day 1 of the coach
-  // journey (coachJourney flag + the coach `basic` scope) while keeping the
+  // journey (the coach `basic` scope) while keeping the
   // old profileWrite path for branded-onboarding users. The order is
   // load-bearing, exactly as on the ledger's plan and score routes: when both
-  // gates reject, anyOf sends the SECOND gate's error, so with the
-  // coachJourney flag off the client still sees today's refusal
+  // gates reject, anyOf sends the SECOND gate's error, so for a user
+  // without coach consent the client still sees today's refusal
   // (brandedOnboarding's FEATURE_DISABLED), never the coach gate's.
   const either = /anyOf\(\s*coachMedications\s*,\s*profileWrite\s*\)/;
   const writes = all
@@ -247,7 +247,7 @@ test('medication reminder writes are either-gated: the coach gate first, profile
   // The coach half of the pair: auth first, its OWN flag, exactly one scope.
   const decl = routes.match(/const coachMedications = \[([^\]]*)\]/)?.[1] || '';
   assert.ok(decl, 'coachMedications is not declared');
-  assert.match(decl, /^requireAuth, requireCoachJourney, requireCoachConsent\('basic'\)$/);
+  assert.match(decl, /^requireAuth, requireCoachConsent\('basic'\)$/);
 });
 
 // ---- Deletion must never be stranded --------------------------------------

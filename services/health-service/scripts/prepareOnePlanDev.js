@@ -96,10 +96,6 @@ async function main() {
     );
     assert.equal(indexes.length, 1, 'One Plan sourceRef index is missing');
     assert.match(indexes[0].indexdef, /\("userId", "sourceRef"\)/);
-    // Rebuild reads live flags. An unavailable config must not silently produce
-    // an empty desired plan and deactivate the user's existing suggested rows.
-    const { isFeatureEnabled } = await import('../middleware/requireFeatureFlag.js');
-    assert.equal(await isFeatureEnabled('coachJourney'), true, 'Dev coachJourney must be enabled and readable before migration');
     const report = await prepareOnePlanDev(prisma, { apply: args.includes('--apply') });
     console.log(`ONE_PLAN_DEV_RESULT=${JSON.stringify(report)}`);
   } finally {
