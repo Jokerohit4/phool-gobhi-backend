@@ -112,15 +112,15 @@ export function buildTrafficQuery(input = {}, { bigQuery = false, asOf = new Dat
   ), frequency AS (
     SELECT actor, COUNT(DISTINCT ${date('ts')}) AS active_days FROM current_events GROUP BY actor
   ), stamped AS (
-    SELECT actor, event, screen, ${text(weekday)} AS wd, ${text(hour)} AS hr FROM current_events
+    SELECT actor, event, COALESCE(screen, event) AS what, ${text(weekday)} AS wd, ${text(hour)} AS hr FROM current_events
   ), cell_users AS (
     SELECT wd, hr, actor, COUNT(*) AS n,
       ROW_NUMBER() OVER (PARTITION BY wd, hr ORDER BY COUNT(*) DESC, actor) AS rk
     FROM stamped GROUP BY wd, hr, actor
   ), cell_what AS (
-    SELECT wd, hr, actor, COALESCE(screen, event) AS what, COUNT(*) AS n,
-      ROW_NUMBER() OVER (PARTITION BY wd, hr, actor ORDER BY COUNT(*) DESC, COALESCE(screen, event)) AS rk
-    FROM stamped WHERE event != 'session_started' GROUP BY wd, hr, actor, COALESCE(screen, event)
+    SELECT wd, hr, actor, what, COUNT(*) AS n,
+      ROW_NUMBER() OVER (PARTITION BY wd, hr, actor ORDER BY COUNT(*) DESC, what) AS rk
+    FROM stamped WHERE event != 'session_started' GROUP BY wd, hr, actor, what
   ), results AS (
     SELECT 'summary' AS kind, '' AS label, '' AS app, '' AS platform,
       COUNT(*) AS n, COUNT(DISTINCT actor) AS users,
