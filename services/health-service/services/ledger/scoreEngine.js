@@ -184,8 +184,8 @@ export function computeMisses({
   // from a day of tracked eating that missed the target, and conflating them
   // makes both numbers mean less.
   // Suppress when: food layer is locked (food not in unlockedLayerKeys), food
-  // not set up (no nutrition target), or foodNoPenalty flag is set (early
-  // food period before 3 showed-up days).
+  // not set up (no nutrition target), or foodNoPenalty flag is set
+  // (legacy: food was once unlocked early, before 3 showed-up days).
   if (!foodLocked && !foodNotSetUp && !foodNoPenalty) {
     if (!totals || !totals.hasAnyFood) {
       lines.push({

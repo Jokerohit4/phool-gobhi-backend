@@ -140,3 +140,44 @@ test('getJourneySummary still 404s without a journey', async () => {
   db.progress = null;
   await assert.rejects(getJourneySummary(1), (err) => err.status === 404 && err.code === 'JOURNEY_NOT_STARTED');
 });
+
+// Food is open from day 0: a journey that still has food locked (no showed-up
+// days, no early request) picks it up lazily on the next read.
+test('food (layer 2) is unlocked at day 0 for an existing journey with food still locked', async () => {
+  reset();
+  db.progress.foodEarlyAt = null;
+  showedUp = [];
+  const journey = await getJourney(1);
+  const food = journey.layers.find((l) => l.layer === 2);
+  assert.equal(food.unlocked, true);
+  assert.equal(food.earlyAllowed, false);
+  assert.ok(db.progress.unlocked.some((u) => u.layer === 2), 'persisted');
+  assert.deepEqual(rebuilds, ['unlock'], 'plan rebuilt once so food rows appear');
+  // idempotent: settled, no more writes or rebuilds
+  const writes = updates.length;
+  await getJourney(1);
+  assert.equal(updates.length, writes);
+  assert.deepEqual(rebuilds, ['unlock']);
+  // the next locked layer is body, not food
+  assert.equal(journey.next?.layer, 3);
+});
+
+test('wellness journeys keep their focus-based food rule', async () => {
+  reset();
+  db.progress.foodEarlyAt = null;
+  db.progress.wellnessOnly = true;
+  db.progress.wellnessFocuses = ['sleep'];
+  showedUp = [];
+  const journey = await getJourney(1);
+  assert.equal(journey.layers.find((l) => l.layer === 2).unlocked, false);
+});
+
+test('POST food-early is a harmless no-op that returns the journey', async () => {
+  reset();
+  db.progress.foodEarlyAt = null;
+  showedUp = [];
+  const { unlockFoodEarly } = await import('../services/journey/journeyService.js');
+  const journey = await unlockFoodEarly(1);
+  assert.equal(journey.layers.find((l) => l.layer === 2).unlocked, true);
+  assert.equal(db.progress.foodEarlyAt, null, 'foodEarlyAt is no longer stamped');
+});

@@ -218,9 +218,9 @@ const COPY = {
 // the population sees a mix. Rules the founder set: low commitment, never
 // "go work out", never implies the person failed. English only, like the
 // existing nudges: there is no language field on the user server-side, so
-// nothing to localise on (see report). Food logging is NOT offered: on the
-// customer Home it stays locked until 3 active days, which a user with no
-// activity cannot have. Routes reuse the app's existing keys ('quick_log' =
+// nothing to localise on (see report). Food logging is not offered here: the
+// lifecycle nudges stay low-commitment (food is open from day 0 now, but it
+// needs consent + a target first). Routes reuse the app's existing keys ('quick_log' =
 // health dashboard / Today); an unknown key just opens the app.
 const LIFECYCLE_COPY = {
   onboarding_resume: [
