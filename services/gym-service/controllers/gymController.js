@@ -5,9 +5,10 @@ import { generateWindowedSlots } from '../utils/slots.js';
 import { track } from '../utils/analytics.js';
 import { isSlotInPastOrTooSoon, getDayOfWeek, todayDateStringIST, MIN_LEAD_MINUTES } from '../utils/slotTiming.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
-import { DOC_MAX_BYTES, DOC_ALLOWED_FORMATS, isPublicIdInGymFolder, signDocUpload, fetchUploadedDoc, discardUploadedDoc } from '../utils/docUpload.js';
+import { DOC_MAX_BYTES, DOC_ALLOWED_FORMATS, isTrustedDocUrl, isPublicIdInGymFolder, signDocUpload, fetchUploadedDoc, discardUploadedDoc } from '../utils/docUpload.js';
 import { hasCloudinary, uploadBufferToCloudinary, signCloudinaryUpload, withGymImageTransform } from '../utils/upload.js';
 import { sanitizeApiResponse } from '../utils/normalizeDecimal.js';
+import { toPublicGym, toPublicGyms } from '../utils/publicGym.js';
 
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 
@@ -31,7 +32,9 @@ export const listGyms = async (req, res) => {
       userLat: isNaN(userLat) ? null : userLat,
       userLng: isNaN(userLng) ? null : userLng,
     });
-    res.json({ data: sanitizeApiResponse(gyms) });
+    // Public route: identity is not available here, so everyone gets the
+    // public view (see utils/publicGym.js).
+    res.json({ data: sanitizeApiResponse(toPublicGyms(gyms)) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -85,7 +88,7 @@ export const getGym = async (req, res) => {
       isNaN(userLat) ? null : userLat,
       isNaN(userLng) ? null : userLng
     );
-    res.json({ data: sanitizeApiResponse(gym) });
+    res.json({ data: sanitizeApiResponse(toPublicGym(gym)) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -572,8 +575,14 @@ export const addGymDoc = async (req, res) => {
       });
       docUrl = result.secure_url;
     } else if (req.body?.url) {
-      // Already uploaded straight to Cloudinary from the browser using a
-      // signature from getUploadSignature above — just persist the result.
+      // Legacy JSON variant: the client claims the file is already on
+      // Cloudinary. Never persist an arbitrary URL (admins open it as a
+      // link) - it must be an asset on our own cloud. The multipart branch
+      // above and POST /:id/docs/register (which reads the URL back from
+      // Cloudinary) are unaffected.
+      if (!isTrustedDocUrl(req.body.url)) {
+        return res.status(400).json({ error: 'Document url must be a Cloudinary asset of this platform' });
+      }
       docUrl = req.body.url;
     } else {
       return res.status(400).json({ error: 'No document provided' });

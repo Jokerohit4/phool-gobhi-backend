@@ -4,6 +4,7 @@ import { generateTimeSlots, generateWindowedSlots } from '../utils/slots.js';
 import { getDayOfWeek } from '../utils/slotTiming.js';
 import * as placesService from './placesService.js';
 import { getRoadDistancesKm } from './roadDistanceService.js';
+import { isTrustedDocUrl } from '../utils/docUpload.js';
 
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -28,6 +29,13 @@ function normalizeGymMoney(gym) {
     if (out[f] != null) out[f] = Number(out[f]);
   }
   return out;
+}
+
+// Throws 400 unless every entry is a document URL on our own Cloudinary cloud.
+function assertTrustedDocUrls(urls) {
+  if (!Array.isArray(urls) || !urls.every((u) => isTrustedDocUrl(u))) {
+    throw { status: 400, error: 'brandDocs must be an array of Cloudinary document urls of this platform' };
+  }
 }
 
 const SUBSCRIPTION_PLANS = [
@@ -401,6 +409,7 @@ async function fetchGoogleRatingFields(placeId) {
 }
 
 export async function createGym(partnerId, data) {
+  if (data && data.brandDocs !== undefined && data.brandDocs !== null) assertTrustedDocUrls(data.brandDocs);
   const {
     name,
     description,
@@ -528,6 +537,8 @@ export async function updateGym(gymId, partnerId, data) {
   if (gym.partnerId !== partnerId) {
     throw { status: 403, error: 'Forbidden' };
   }
+
+  if (data && 'brandDocs' in data) assertTrustedDocUrls(data.brandDocs);
 
   const updateData = {};
   const allowedFields = [
@@ -1210,6 +1221,13 @@ export async function approveEditRequest(id, gobhiId) {
   if (!request) throw { status: 404, error: 'Edit request not found' };
   if (request.status !== 'pending') {
     throw { status: 400, error: `Edit request is already ${request.status}` };
+  }
+
+  // A doc_add queued before URL validation existed may carry an arbitrary
+  // link; refuse to publish it onto the gym (checked before the claim so the
+  // request stays pending and can be rejected instead).
+  if (request.changeType === 'doc_add' && !isTrustedDocUrl(request.payload?.url)) {
+    throw { status: 400, error: 'Document url is not a Cloudinary asset of this platform; reject this request' };
   }
 
   // Atomically claim the request BEFORE applying any side effect. This is
