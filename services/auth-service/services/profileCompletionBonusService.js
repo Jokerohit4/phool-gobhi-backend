@@ -1,4 +1,5 @@
 import prisma from '../db/prisma.js';
+import { writeSingleton, parseExpectedUpdatedAt } from '../utils/configConcurrency.js';
 
 
 // Default ₹ bonus credited once when a profile crosses from incomplete to
@@ -24,7 +25,7 @@ export async function loadProfileCompletionBonusAdmin() {
   };
 }
 
-export async function updateProfileCompletionBonusAmount(amount, updatedBy) {
+export async function updateProfileCompletionBonusAmount(amount, updatedBy, expectedUpdatedAt) {
   const value = Number(amount);
   if (!Number.isInteger(value) || value < 0 || value > MAX_PROFILE_COMPLETION_BONUS) {
     throw {
@@ -32,9 +33,10 @@ export async function updateProfileCompletionBonusAmount(amount, updatedBy) {
       error: `amount must be a whole number between 0 and ${MAX_PROFILE_COMPLETION_BONUS} (0 disables the bonus)`,
     };
   }
-  return prisma.profileCompletionBonusSetting.upsert({
-    where: { id: 1 },
-    create: { id: 1, amount: value, updatedBy },
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  return writeSingleton(prisma.profileCompletionBonusSetting, {
+    create: { amount: value, updatedBy },
     update: { amount: value, updatedBy },
+    expected,
   });
 }

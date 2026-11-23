@@ -1,4 +1,5 @@
 import prisma from '../db/prisma.js';
+import { writeSingleton, parseExpectedUpdatedAt } from '../utils/configConcurrency.js';
 
 
 const VALID_PROVIDERS = ['fast2sms', 'firebase', 'skip'];
@@ -27,14 +28,15 @@ export async function loadOtpProviderAdmin() {
   };
 }
 
-export async function updateOtpProvider(provider, updatedBy) {
+export async function updateOtpProvider(provider, updatedBy, expectedUpdatedAt) {
   if (!VALID_PROVIDERS.includes(provider)) {
     throw { status: 400, error: `provider must be one of ${VALID_PROVIDERS.join(', ')}` };
   }
-  return prisma.otpProviderSetting.upsert({
-    where: { id: 1 },
-    create: { id: 1, provider, updatedBy },
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  return writeSingleton(prisma.otpProviderSetting, {
+    create: { provider, updatedBy },
     update: { provider, updatedBy },
+    expected,
   });
 }
 
