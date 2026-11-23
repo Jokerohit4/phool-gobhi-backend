@@ -1,5 +1,5 @@
 import prisma from '../db/prisma.js';
-import { normalizePhone, lookupUserIdByPhone, fetchUsersByIds } from './orgDirectory.js';
+import { normalizePhone, lookupUserIdByPhone, fetchUsersByIds, fetchOrgConsent } from './orgDirectory.js';
 import { effectiveOrgStatus, daysLeft, leaderboardWindow, parseOptionalDate } from '../utils/orgWindow.js';
 
 // Corporate-wellness organizations: company profile lifecycle, private
@@ -419,8 +419,16 @@ export async function getMyOrganizations(userId, now = new Date()) {
     // Same expiry rule as everywhere else, so a lapsed profile disappears the
     // moment it lapses, not when the sweep next runs.
   })).filter((m) => effectiveOrgStatus(m.org, now) === 'active');
+  // One light check, only when there is a company to show: has this person
+  // given the health-data consent that entering a leaderboard needs? null =
+  // could not be checked just now (the app then asks nothing rather than nags).
+  let needsConsent = null;
+  if (memberships.length) {
+    const c = await fetchOrgConsent([userId]);
+    if (c.complete) needsConsent = c.data[userId] !== true;
+  }
   return memberships.map((m) => ({
-    id: m.org.id, name: m.org.name, expiresAt: m.org.expiresAt, unlimited: m.org.expiresAt == null,
+    id: m.org.id, name: m.org.name, needsConsent, expiresAt: m.org.expiresAt, unlimited: m.org.expiresAt == null,
     daysLeft: daysLeft(m.org, now),
     team: m.team ? { id: m.team.id, name: m.team.name } : null,
     leaderboards: m.org.leaderboards.map((b) => serializeBoard(b, m.org, now)),

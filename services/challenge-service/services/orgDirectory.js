@@ -78,3 +78,25 @@ export async function fetchOrgActivity(userIds, fromDay, toDay) {
   }
   return { data: out, complete };
 }
+
+// { [userId]: boolean } = has a live health-data (coach 'basic') consent.
+// `complete:false` means health-service could not answer, so callers must treat
+// consent as UNKNOWN rather than as "no".
+export async function fetchOrgConsent(userIds) {
+  const out = {};
+  if (!userIds.length) return { data: out, complete: true };
+  const base = HEALTH_SERVICE_URL();
+  const headers = await internalHeaders(base);
+  let complete = true;
+  for (let i = 0; i < userIds.length; i += 500) {
+    try {
+      const query = new URLSearchParams({ ids: userIds.slice(i, i + 500).join(',') });
+      const res = await fetch(`${base}/internal/org-consent?${query}`, { headers, signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error(`org-consent ${res.status}`);
+      Object.assign(out, (await res.json())?.data ?? {});
+    } catch (_) {
+      complete = false;
+    }
+  }
+  return { data: out, complete };
+}

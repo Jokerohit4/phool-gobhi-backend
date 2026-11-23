@@ -28,14 +28,12 @@ export function scoreMember({ scoring, attendanceDays = [], workoutDays = [], st
   return { score, activeDays: active.size, workoutDays: workouts.size, steps };
 }
 
-// "Rohitashwa Singh" -> "Rohitashwa S." Colleagues see each other by name, but
-// never a full surname or a photo. Your own row shows your full name.
+// Colleagues see each other by full name, and nothing else about them: no
+// photo, no phone, no email. (Members are told this before they agree to enter.)
 export function displayNameFor(name, isMe) {
   const clean = String(name ?? '').trim().replace(/\s+/g, ' ');
   if (!clean) return isMe ? 'You' : 'Member';
-  if (isMe) return clean;
-  const [first, ...rest] = clean.split(' ');
-  return rest.length ? `${first} ${rest[rest.length - 1][0].toUpperCase()}.` : first;
+  return clean;
 }
 
 // Standard competition ranking on score alone (1, 2, 2, 4): equal scores share

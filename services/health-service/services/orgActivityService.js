@@ -5,9 +5,10 @@ import { isQualifyingSession } from './journey/showedUpDays.js';
 // leaderboards. Only day keys and step counts leave this service, never what a
 // workout contained.
 //
-// Consent matches the personal challenges: finished workouts are read only for
-// people with a live 'basic' coach consent. Steps come from the same
-// DailyActivityMetric rows the global leaderboard already uses.
+// Consent: everything here (workouts AND steps) is returned only for people
+// with a live 'basic' coach consent. Everyone else comes back as
+// `consented: false` and is not ranked, so joining a company board is an
+// explicit opt-in to share activity, never something done to a member.
 //
 // Window is in IST calendar days ('YYYY-MM-DD', inclusive).
 
@@ -22,15 +23,27 @@ export function validateWindow(from, to) {
   if (span > MAX_WINDOW_DAYS) throw { status: 400, error: `window must be at most ${MAX_WINDOW_DAYS} days` };
 }
 
+// Who has a live 'basic' coach consent. Entering a company leaderboard needs it:
+// without it nothing about the person is read or ranked.
+async function consentedUserIds(prisma, userIds) {
+  const rows = await prisma.coachConsent.findMany({
+    where: { userId: { in: userIds }, revokedAt: null }, select: { userId: true, scopes: true },
+  });
+  return new Set(rows.filter((c) => (c.scopes || []).includes('basic')).map((c) => c.userId));
+}
+
+export async function orgConsentForUsers(prisma, userIds) {
+  const consented = await consentedUserIds(prisma, userIds);
+  return Object.fromEntries(userIds.map((id) => [id, consented.has(id)]));
+}
+
 export async function orgActivityForUsers(prisma, { userIds, from, to }) {
   validateWindow(from, to);
   const start = new Date(`${from}T00:00:00+05:30`);
   const end = new Date(new Date(`${to}T00:00:00+05:30`).getTime() + 86400000);
 
-  const [consents, sessions, steps] = await Promise.all([
-    prisma.coachConsent.findMany({
-      where: { userId: { in: userIds }, revokedAt: null }, select: { userId: true, scopes: true },
-    }),
+  const [consented, sessions, steps] = await Promise.all([
+    consentedUserIds(prisma, userIds),
     prisma.workoutSession.findMany({
       where: {
         userId: { in: userIds }, startedAt: { gte: start }, endedAt: { gte: start, lt: end }, NOT: { type: 'rest' },
@@ -46,8 +59,9 @@ export async function orgActivityForUsers(prisma, { userIds, from, to }) {
     }),
   ]);
 
-  const consented = new Set(consents.filter((c) => (c.scopes || []).includes('basic')).map((c) => c.userId));
-  const out = Object.fromEntries(userIds.map((id) => [id, { workoutDays: [], stepsByDay: {} }]));
+  // People without consent come back as `consented: false` with NOTHING else:
+  // no steps either, so a non-consenting member's data is never even read out.
+  const out = Object.fromEntries(userIds.map((id) => [id, { consented: consented.has(id), workoutDays: [], stepsByDay: {} }]));
 
   const days = new Map();
   for (const s of sessions) {
@@ -59,6 +73,6 @@ export async function orgActivityForUsers(prisma, { userIds, from, to }) {
     days.get(s.userId).add(day);
   }
   for (const [userId, set] of days) out[userId].workoutDays = [...set].sort();
-  for (const row of steps) out[row.userId].stepsByDay[row.date] = row.steps;
+  for (const row of steps) if (consented.has(row.userId)) out[row.userId].stepsByDay[row.date] = row.steps;
   return out;
 }

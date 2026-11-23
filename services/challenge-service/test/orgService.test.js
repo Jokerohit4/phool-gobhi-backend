@@ -73,6 +73,7 @@ function model(name, { defaults = () => ({}), unique = [] } = {}) {
 const accounts = new Map(); // phone -> { id, name, leaderboardOptIn }
 let directoryDown = false;
 let activity = { data: {}, complete: true };
+let consentMap = {}; let consentComplete = true;
 
 let svc; let boards; let real;
 
@@ -97,6 +98,7 @@ test('setup', async (t) => {
       fetchUsersByIds: async (ids) => Object.fromEntries(
         [...accounts.entries()].filter(([, u]) => ids.includes(u.id)).map(([phone, u]) => [u.id, { ...u, phone }])),
       fetchOrgActivity: async () => activity,
+      fetchOrgConsent: async () => ({ data: consentMap, complete: consentComplete }),
     },
   });
   svc = await import('../services/orgService.js');
@@ -105,7 +107,7 @@ test('setup', async (t) => {
 
 function reset() {
   for (const k of Object.keys(db)) db[k] = [];
-  accounts.clear(); directoryDown = false; activity = { data: {}, complete: true };
+  accounts.clear(); directoryDown = false; activity = { data: {}, complete: true }; consentMap = {}; consentComplete = true;
   boards.clearOrgBoardCache();
 }
 const PHONE = { a: '9876543210', b: '9876543211', c: '9876543212' };
@@ -255,16 +257,16 @@ test('a leaderboard can be unlimited, or have an end date, and the end must foll
   await assert.rejects(svc.updateLeaderboard(org.id, board.id, { endsAt: '2026-11-01' }), (e) => e.status === 400);
 });
 
-test('standings rank only members, respect opt-out, and show colleagues by short name', async () => {
+test('standings rank only members, respect opt-out, and show colleagues by full name', async () => {
   reset();
   const { org, board } = await seedBoard();
   activity = { complete: true, data: {
-    11: { workoutDays: ['2026-12-02', '2026-12-03', '2026-12-04'], stepsByDay: {} },
-    22: { workoutDays: ['2026-12-02'], stepsByDay: { '2026-12-05': 8000 } },
-    33: { workoutDays: ['2026-12-02', '2026-12-03', '2026-12-04', '2026-12-05'], stepsByDay: {} },
+    11: { consented: true, workoutDays: ['2026-12-02', '2026-12-03', '2026-12-04'], stepsByDay: {} },
+    22: { consented: true, workoutDays: ['2026-12-02'], stepsByDay: { '2026-12-05': 8000 } },
+    33: { consented: true, workoutDays: ['2026-12-02', '2026-12-03', '2026-12-04', '2026-12-05'], stepsByDay: {} },
   } };
   const out = await boards.getBoardStandings(org.id, board.id, 22, NOW);
-  assert.deepEqual(out.entries.map((e) => [e.rank, e.name, e.score, e.isMe]), [[1, 'Asha R.', 3, false], [2, 'Bala Kumar', 2, true]]);
+  assert.deepEqual(out.entries.map((e) => [e.rank, e.name, e.score, e.isMe]), [[1, 'Asha Rao', 3, false], [2, 'Bala Kumar', 2, true]]);
   assert.equal(out.totalRanked, 2, 'the opted-out member is neither ranked nor shown');
   assert.equal(out.me.rank, 2);
   assert.deepEqual(out.teams.map((t) => [t.name, t.score]), [['Sales', 3], ['Ops', 2]]);
@@ -322,4 +324,61 @@ test('an opted-out member can still open the board but is not ranked', async () 
   const out = await boards.getBoardStandings(org.id, board.id, 33, NOW);
   assert.equal(out.me.rank, null);
   assert.equal(out.me.hidden, true);
+  assert.equal(out.me.needsConsent, false, 'opted out is a different state from not yet consented');
+});
+
+// ---- Health-data consent is the price of entry -------------------------------
+
+test('a member who has not given health-data consent is not ranked, and is told they need to', async () => {
+  reset();
+  const { org, board } = await seedBoard();
+  activity = { complete: true, data: {
+    11: { consented: true, workoutDays: ['2026-12-02'], stepsByDay: {} },
+    22: { consented: false, workoutDays: [], stepsByDay: {} },
+    33: { consented: false, workoutDays: [], stepsByDay: {} },
+  } };
+  const asBala = await boards.getBoardStandings(org.id, board.id, 22, NOW);
+  assert.deepEqual(asBala.entries.map((e) => e.name), ['Asha Rao']);
+  assert.equal(asBala.me.rank, null);
+  assert.equal(asBala.me.needsConsent, true);
+  assert.equal(asBala.me.hidden, false);
+  assert.equal(asBala.pendingConsent, 1, 'Bala is waiting on consent (Chitra opted out, which is separate)');
+  // and a consenting member sees the same board without being prompted
+  const asAsha = await boards.getBoardStandings(org.id, board.id, 11, NOW);
+  assert.equal(asAsha.me.needsConsent, false);
+});
+
+test('agreeing takes effect at once, not after the cache expires', async () => {
+  reset();
+  const { org, board } = await seedBoard();
+  activity = { complete: true, data: { 11: { consented: true, workoutDays: ['2026-12-02'], stepsByDay: {} }, 22: { consented: false, workoutDays: [], stepsByDay: {} } } };
+  assert.equal((await boards.getBoardStandings(org.id, board.id, 22, NOW)).me.needsConsent, true);
+  activity = { complete: true, data: { 11: { consented: true, workoutDays: ['2026-12-02'], stepsByDay: {} }, 22: { consented: true, workoutDays: ['2026-12-03', '2026-12-04'], stepsByDay: {} } } };
+  const after = await boards.getBoardStandings(org.id, board.id, 22, NOW);
+  assert.equal(after.me.needsConsent, false);
+  assert.equal(after.me.rank, 1);
+});
+
+test('if consent cannot be checked nobody is ranked, rather than guessing', async () => {
+  reset();
+  const { org, board } = await seedBoard();
+  activity = { data: {}, complete: false };
+  const out = await boards.getBoardStandings(org.id, board.id, 11, NOW);
+  assert.deepEqual(out.entries, []);
+  assert.equal(out.complete, false);
+  assert.equal(out.pendingConsent, null);
+  assert.equal(out.me.needsConsent, false, 'do not nag someone on a guess');
+});
+
+test('the company card carries needsConsent so the app can ask before they open a board', async () => {
+  reset();
+  user(PHONE.a, 11, 'Asha Rao');
+  const org = await svc.createOrg({ name: 'Acme' }, 1);
+  await svc.addMembers(org.id, [{ phone: PHONE.a }], 1);
+  consentMap = { 11: false };
+  assert.equal((await svc.getMyOrganizations(11))[0].needsConsent, true);
+  consentMap = { 11: true };
+  assert.equal((await svc.getMyOrganizations(11))[0].needsConsent, false);
+  consentComplete = false;
+  assert.equal((await svc.getMyOrganizations(11))[0].needsConsent, null, 'unknown, not "no"');
 });

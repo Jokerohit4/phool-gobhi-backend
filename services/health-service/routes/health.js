@@ -1,4 +1,4 @@
-import { getChallengeActivityInternal, getOrgActivityInternal } from '../controllers/challengeActivityController.js';
+import { getChallengeActivityInternal, getOrgActivityInternal, getOrgConsentInternal } from '../controllers/challengeActivityController.js';
 import { Router } from 'express';
 import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag, requireAnyFeatureFlag } from '../middleware/requireFeatureFlag.js';
@@ -453,6 +453,7 @@ router.get('/internal/export/:userId', requireInternal, exportCtrl.exportUserInt
 router.get('/internal/challenge-activity', requireInternal, getChallengeActivityInternal);
 // Batch per-day activity for challenge-service's company leaderboards.
 router.get('/internal/org-activity', requireInternal, getOrgActivityInternal);
+router.get('/internal/org-consent', requireInternal, getOrgConsentInternal);
 router.get('/internal/daily-activity', requireInternal, activityCtrl.getDailyActivityInternal);
 
 // ---- Account-wide deletion (called by the same flow that deletes the rest

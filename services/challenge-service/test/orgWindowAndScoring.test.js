@@ -142,8 +142,9 @@ test('team score is the average, so a bigger team does not win by size', () => {
   assert.deepEqual(teams.map((t) => [t.name, t.score, t.rank]), [['Small', 5, 1], ['Big', 2, 2]]);
 });
 
-test('colleagues are shown as first name + last initial; you see your own full name', () => {
-  assert.equal(displayNameFor('Rohitashwa Singh', false), 'Rohitashwa S.');
+test('colleagues are shown by full name, and only that', () => {
+  assert.equal(displayNameFor('Rohitashwa Singh', false), 'Rohitashwa Singh');
+  assert.equal(displayNameFor('  Asha   Rao ', false), 'Asha Rao');
   assert.equal(displayNameFor('Rohitashwa Singh', true), 'Rohitashwa Singh');
   assert.equal(displayNameFor('Aarav', false), 'Aarav');
   assert.equal(displayNameFor('  ', false), 'Member');

@@ -1,5 +1,5 @@
 import prisma from '../db/prisma.js';
-import { fetchUsersByIds, fetchOrgActivity } from './orgDirectory.js';
+import { fetchUsersByIds, fetchOrgActivity, fetchOrgConsent } from './orgDirectory.js';
 import { effectiveOrgStatus, leaderboardWindow, istDayStartUtc, istDayEndExclusiveUtc } from '../utils/orgWindow.js';
 import { scoreMember, rankMembers, rankTeams, displayNameFor } from './orgScoring.js';
 import { serializeBoard } from './orgService.js';
@@ -25,22 +25,37 @@ async function computeStandings(board, org, win) {
   const users = await fetchUsersByIds(userIds);
   // Opt-out is respected here too: someone who hides themselves from
   // leaderboards is not ranked or shown, even on a company board.
-  const ranked = members.filter((m) => users[m.userId] && users[m.userId].leaderboardOptIn !== false);
+  const optedIn = members.filter((m) => users[m.userId] && users[m.userId].leaderboardOptIn !== false);
+  const optedInIds = optedIn.map((m) => m.userId);
+
+  // Entering the competition needs a live health-data consent. People who have
+  // not given it are NOT ranked and none of their activity is read.
+  let activity = { data: {}, complete: true };
+  let consent = {};
+  if (optedInIds.length) {
+    if (win.status === 'upcoming') {
+      const c = await fetchOrgConsent(optedInIds);
+      consent = c.data; activity.complete = c.complete;
+    } else {
+      activity = await fetchOrgActivity(optedInIds, win.startDay, win.endDay);
+      consent = Object.fromEntries(Object.entries(activity.data).map(([id, v]) => [id, v?.consented === true]));
+    }
+  }
+  // If consent could not be checked, nobody is ranked rather than guessing.
+  const ranked = activity.complete ? optedIn.filter((m) => consent[m.userId] === true) : [];
   const rankedIds = ranked.map((m) => m.userId);
+  const pendingConsent = activity.complete ? optedIn.length - ranked.length : null;
+  const pendingIds = activity.complete ? new Set(optedInIds.filter((id) => consent[id] !== true)) : new Set();
 
   let attendance = [];
-  let activity = { data: {}, complete: true };
   if (win.status !== 'upcoming' && rankedIds.length) {
-    [attendance, activity] = await Promise.all([
-      prisma.attendanceEventLog.findMany({
-        where: {
-          userId: { in: rankedIds },
-          attendedAt: { gte: istDayStartUtc(win.startDay), lt: istDayEndExclusiveUtc(win.endDay) },
-        },
-        select: { userId: true, attendedAt: true },
-      }),
-      fetchOrgActivity(rankedIds, win.startDay, win.endDay),
-    ]);
+    attendance = await prisma.attendanceEventLog.findMany({
+      where: {
+        userId: { in: rankedIds },
+        attendedAt: { gte: istDayStartUtc(win.startDay), lt: istDayEndExclusiveUtc(win.endDay) },
+      },
+      select: { userId: true, attendedAt: true },
+    });
   }
   const attendanceByUser = new Map();
   for (const row of attendance) {
@@ -66,6 +81,9 @@ async function computeStandings(board, org, win) {
     members: rankMembers(rows),
     teams: board.showTeams ? rankTeams(rows) : [],
     complete: activity.complete,
+    pendingConsent,
+    pendingIds,
+    optedInIds: new Set(optedInIds),
   };
 }
 
@@ -89,7 +107,9 @@ export async function getBoardStandings(orgId, boardId, requesterId, now = new D
   const key = `${board.id}:${win.endDay}:${board.scoring}:${board.showTeams}`;
   const hit = cache.get(key);
   let standings;
-  if (CACHE_TTL_MS > 0 && hit && now.getTime() - hit.at < CACHE_TTL_MS) {
+  // Someone still waiting on consent always gets a fresh read, so agreeing
+  // shows up straight away instead of after the cache expires.
+  if (CACHE_TTL_MS > 0 && hit && now.getTime() - hit.at < CACHE_TTL_MS && !hit.value.pendingIds.has(requesterId)) {
     standings = hit.value;
   } else {
     standings = await computeStandings(board, board.org, win);
@@ -116,9 +136,17 @@ export async function getBoardStandings(orgId, boardId, requesterId, now = new D
     totalRanked: entries.length,
     teams: standings.teams.map((t) => ({ rank: t.rank, name: t.name, members: t.members, score: t.score, isMine: t.teamId === membership.teamId })),
     me: mine
-      ? { rank: mine.rank, score: mine.score, activeDays: mine.activeDays, team: membership.team?.name ?? null, teamRank: myTeam?.rank ?? null }
-      : { rank: null, score: 0, activeDays: 0, team: membership.team?.name ?? null, teamRank: null, hidden: true },
-    // false = part of the data could not be read just now, so scores may read low.
+      ? { rank: mine.rank, score: mine.score, activeDays: mine.activeDays, team: membership.team?.name ?? null, teamRank: myTeam?.rank ?? null, needsConsent: false }
+      : {
+          rank: null, score: 0, activeDays: 0, team: membership.team?.name ?? null, teamRank: null,
+          // opted out of leaderboards entirely
+          hidden: !standings.optedInIds.has(requesterId),
+          // opted in but has not given health-data consent, so is not entered yet
+          needsConsent: standings.pendingIds.has(requesterId),
+        },
+    // How many members are not yet in because they have not given consent.
+    pendingConsent: standings.pendingConsent,
+    // false = part of the data could not be read just now, so nobody is ranked.
     complete: standings.complete,
   };
 }
@@ -137,6 +165,7 @@ export async function getBoardStandingsAdmin(orgId, boardId, now = new Date()) {
       workoutDays: r.workoutDays, steps: r.steps,
     })),
     teams: standings.teams,
+    pendingConsent: standings.pendingConsent,
     complete: standings.complete,
   };
 }
