@@ -1,5 +1,7 @@
 > Warehouse migration (26 October 2026): BigQuery replaces the PostgreSQL analytics sink. See [audit and plan](analytics-bigquery-audit-and-plan.md) and [operations runbook](analytics-bigquery-runbook.md) for current architecture, configuration, validation and rollback. Earlier rollout notes below describe historical deployments.
 
+> Correction (2026-11-23): the live booking event is `booking_created`; `booking_confirmed` below is not emitted anywhere. Client events carry `platform` = ios | android | web, so app funnels must be split from marketing-site traffic (about 90% of `session_started` users are anonymous `web` visitors). Use `scripts/analytics-digest.cjs` and `scripts/retention-by-signup-day.cjs`; see the runbook section "App vs web reports".
+
 # Phool Gobhi — Eventing & Funnels
 
 How product events are captured across the Flutter apps and the Node backend, and

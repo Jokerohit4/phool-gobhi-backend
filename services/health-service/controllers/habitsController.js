@@ -1,4 +1,5 @@
 import { isoDayIST } from '../utils/sessionDay.js';
+import { firstWaterLogProbe } from '../services/activationEvents.js';
 import { payRoutineClaims, retryRoutineWorkouts, recordRoutineWater, recordRoutineCheckIn } from '../services/routineJourneyService.js';
 import prisma from '../db/prisma.js';
 import * as habitsService from '../services/habitsService.js';
@@ -78,12 +79,14 @@ export const saveMoodCheckIn = async (req, res) => {
 
 export const logWater = async (req, res) => {
   try {
+    const firstWater = await firstWaterLogProbe(prisma, req.userId);
     const data = await habitsService.logWater(prisma, {
       userId: req.userId,
       ml: req.body?.ml,
       requestId: req.body?.requestId,
       localDate: req.body?.localDate,
     });
+    firstWater.emit({ ml: req.body?.ml });
     return res.status(201).json({ data });
   } catch (err) {
     return fail(res, err, 'habits');
