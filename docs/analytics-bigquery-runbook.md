@@ -176,3 +176,92 @@ The migration code/configuration is promoted through dev. A future normal produc
 release must include this migration commit; the pre-migration main manifest still
 selects PostgreSQL. Current production images are the separately validated patches
 recorded in the deployment receipt, preserving its existing application version.
+
+## Push telemetry (2026-11-23, dev only until released)
+
+Every FCM message the backend sends is recorded and followed sent -> delivered -> opened.
+
+### Push payload (all sends)
+
+Three extra STRING keys in the FCM `data` payload; the visible notification, channel,
+priority and every existing data key are unchanged (no message was made data-only):
+
+| key | value |
+|---|---|
+| `notification_id` | uuid v4, one per recipient token send |
+| `push_type` | stable type, see below |
+| `sent_at` | epoch milliseconds (string) |
+
+### Server events (source `server`, distinct_id = recipient user id)
+
+- `push_sent` props: `notification_id`, `push_type`, `service`, `recipient_role`
+  (`customer`|`partner`, only when known), `fcm_message_id` (when FCM returns one),
+  `campaign_id` (notification-service campaigns only). Emitted after FCM accepts the send.
+- `push_failed` props: `notification_id`, `push_type`, `service`, `error_code` (FCM code,
+  e.g. `messaging/registration-token-not-registered`), plus `recipient_role` / `campaign_id`.
+- Never title, body or other content. A user with no stored token produces no event
+  (no send was attempted). Telemetry is detached from the request scope and never awaited.
+
+### Client events (source `client`; apps `phool_gobhi`, `phool_gobhi_partner`)
+
+`push_delivered` and `push_opened`, props `notification_id`, `push_type` (both copied from
+the push's data payload), `app_state` (`foreground|background|terminated|unknown`),
+`seconds_since_sent` (optional, from `data.sent_at`). `nudge_opened` is retired; use
+`push_opened` with `push_type` `nudge:*`.
+
+### push_type taxonomy
+
+| push_type | sender | recipient_role |
+|---|---|---|
+| `booking_confirmed`, `booking_cancelled`, `booking_completed` | booking-service | customer |
+| `session_reminder` (data.type `booking_reminder`) | booking-service | customer |
+| `new_booking`, `daily_briefing` | booking-service | partner |
+| `gift_ready` | wallet-service | customer |
+| `buddy_match`, `buddy_message` | buddy-service | customer |
+| `nudge:<kind>` (`first_step`, `first_step_followup`, `comeback`, `log`, `target`, `onboarding_resume`) | health-service | customer |
+| `gym_link_request` | auth-service | partner |
+| `gym_link_approved`, `attendance_saas_reengagement` | auth-service | customer |
+| `campaign` | notification-service (`campaign_id` in the event) | customer |
+
+### Admin read API (booking-service, `requireRole('gobhi')`, via `/api/bookings`)
+
+Both read BigQuery through `events_between` (deduped), cached one minute, 256 MiB cap
+(a 7-day window scans about 1.5 MB). They need `ANALYTICS_READ_PROVIDER=bigquery`
+(else 503). Bad `days`/`platform`/`role`/`type` is a 400.
+
+`GET /api/bookings/admin/analytics/push-funnel?days=7|30|90&type=&platform=ios|android&role=customer|partner|gobhi`
+(`days` default 30; all filters optional)
+
+```json
+{"data":{"days":30,"generatedAt":"2026-11-23T12:00:00.000Z",
+ "totals":{"sent":4,"failed":1,"delivered":3,"opened":2,"deliveredRate":0.75,"openRate":0.5,"openOfDeliveredRate":0.6667},
+ "byType":[{"type":"booking_confirmed","sent":2,"failed":0,"delivered":2,"opened":2,"deliveredRate":1,"openRate":1}],
+ "byDay":[{"date":"2026-11-22","sent":4,"delivered":3,"opened":2}],
+ "byPlatform":[{"platform":"android","sent":2,"delivered":2,"opened":1},{"platform":"ios","sent":2,"delivered":1,"opened":1}],
+ "timeToOpenSeconds":{"p50":120,"p90":240,"count":2},
+ "failuresByCode":[{"code":"messaging/registration-token-not-registered","count":1}]}}
+```
+
+`GET /api/bookings/admin/analytics/push-types?days=7|30|90` (filter dropdown, most-sent first)
+
+```json
+{"data":{"days":30,"generatedAt":"2026-11-23T12:00:00.000Z","types":[{"type":"booking_confirmed","sent":2},{"type":"nudge:comeback","sent":1}]}}
+```
+
+Rules: `sent` = notification_ids FCM accepted; `failed` = notification_ids FCM rejected
+(not in `sent`, so rates use `sent` as the denominator). Each notification_id counts once
+per stage. `delivered` and `opened` only count rows whose `push_sent` is in the window; an
+open with no delivered row counts as delivered. Rates are 0-1, 4 decimals, 0 when the
+denominator is 0. `byDay` is the IST calendar day of the send. `platform` comes from the
+notification's own client event, else the recipient's latest platform on any push client
+event in the window, else `unknown` (so `unknown` is large until the apps ship receipts).
+`timeToOpenSeconds` is send -> first open (only opens at or after the send).
+
+### Limits of "delivered"
+
+The backend only knows FCM accepted the message (`push_sent`). `push_delivered` is a
+client event, and the OS shows a visible notification without running app code, so a
+killed or backgrounded app (especially iOS) may never report delivery: `delivered` is a
+lower bound, and `opened` is the reliable stage. Users who disabled notifications or whose
+token is stale still count as sent until FCM reports an error on a later send. Sends
+from before this release have no `notification_id` and are not in any report.

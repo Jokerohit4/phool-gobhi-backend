@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { sendWithTelemetry } from './pushTelemetry.js';
 
 import { fetchUserProfileInternal } from './fetchUserProfile.js';
 
@@ -39,11 +40,11 @@ export async function notifyUser(userId, { title, body, data = {} }) {
     const fcmToken = profile?.fcmToken;
     if (!fcmToken) return false;
 
-    await admin.messaging().send({
+    await sendWithTelemetry((message) => admin.messaging().send(message), {
       token: fcmToken,
       notification: { title, body },
       data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-    });
+    }, { recipientId: userId, recipientRole: 'customer', service: 'health-service' });
     return true;
   } catch (err) {
     console.error('[FCM] notifyUser failed for', userId, err.message);

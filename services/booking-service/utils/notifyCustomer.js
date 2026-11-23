@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { sendWithTelemetry } from './pushTelemetry.js';
 import axios from 'axios';
 import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
@@ -38,7 +39,7 @@ export async function notifyCustomer(customerId, { title, body, data = {} }) {
     const fcmToken = userRes.data?.fcmToken;
     if (!fcmToken) return;
 
-    await admin.messaging().send({
+    await sendWithTelemetry((message) => admin.messaging().send(message), {
       token: fcmToken,
       notification: { title, body },
       data: Object.fromEntries(
@@ -59,7 +60,7 @@ export async function notifyCustomer(customerId, { title, body, data = {} }) {
           },
         },
       },
-    });
+    }, { recipientId: customerId, recipientRole: 'customer', service: 'booking-service' });
   } catch (err) {
     console.error('[FCM] Notify customer failed:', err.message);
   }

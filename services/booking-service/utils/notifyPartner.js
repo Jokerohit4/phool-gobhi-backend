@@ -3,6 +3,7 @@
 // → Service Accounts → Generate new private key → paste the JSON as a single line.
 
 import admin from 'firebase-admin';
+import { sendWithTelemetry } from './pushTelemetry.js';
 import axios from 'axios';
 import './axiosDefaults.js';
 import { googleIdTokenHeader } from './googleIdToken.js';
@@ -46,7 +47,7 @@ export async function resolvePartnerFcmToken(gymId) {
     headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(AUTH_SERVICE_URL)) },
   });
   const fcmToken = userRes.data?.fcmToken;
-  return fcmToken ? { fcmToken, gymName: gym?.name || '' } : null;
+  return fcmToken ? { fcmToken, gymName: gym?.name || '', partnerId } : null;
 }
 
 /// Fire one FCM push at a gym's partner. Best-effort like notifyPartner —
@@ -56,7 +57,7 @@ export async function sendPartnerPush(gymId, title, body, data = {}) {
     if (!initAdmin()) return false;
     const resolved = await resolvePartnerFcmToken(gymId);
     if (!resolved) return false;
-    await admin.messaging().send({
+    await sendWithTelemetry((message) => admin.messaging().send(message), {
       token: resolved.fcmToken,
       notification: { title, body },
       data: { ...data, gymId: String(gymId), gymName: resolved.gymName },
@@ -68,7 +69,7 @@ export async function sendPartnerPush(gymId, title, body, data = {}) {
         headers: { 'apns-priority': '10' },
         payload: { aps: { 'mutable-content': 1, sound: 'default' } },
       },
-    });
+    }, { recipientId: resolved.partnerId, recipientRole: 'partner', service: 'booking-service' });
     return true;
   } catch (err) {
     console.error('[FCM] sendPartnerPush failed:', err.message);
@@ -83,7 +84,7 @@ export async function notifyPartner(gymId, booking) {
     const resolved = await resolvePartnerFcmToken(gymId);
     if (!resolved) return;
 
-    await admin.messaging().send({
+    await sendWithTelemetry((message) => admin.messaging().send(message), {
       token: resolved.fcmToken,
       notification: {
         title: resolved.gymName ? `New Booking — ${resolved.gymName}` : 'New Booking!',
@@ -111,7 +112,7 @@ export async function notifyPartner(gymId, booking) {
           },
         },
       },
-    });
+    }, { recipientId: resolved.partnerId, recipientRole: 'partner', service: 'booking-service' });
   } catch (err) {
     console.error('[FCM] Notify partner failed:', err.message);
   }

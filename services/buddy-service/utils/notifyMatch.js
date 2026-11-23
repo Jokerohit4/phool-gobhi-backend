@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { sendWithTelemetry } from './pushTelemetry.js';
 import { getUserInternal } from '../services/authClient.js';
 
 let initialized = false;
@@ -30,7 +31,7 @@ export async function notifyMatch(userId, otherUserName) {
     const user = await getUserInternal(userId);
     if (!user?.fcmToken) return;
 
-    await admin.messaging().send({
+    await sendWithTelemetry((message) => admin.messaging().send(message), {
       token: user.fcmToken,
       notification: {
         title: "It's a match!",
@@ -42,7 +43,7 @@ export async function notifyMatch(userId, otherUserName) {
         priority: 'high',
         notification: { channelId: 'buddy_match_channel' },
       },
-    });
+    }, { recipientId: userId, recipientRole: 'customer', service: 'buddy-service' });
   } catch (err) {
     console.error('[FCM] Notify match failed:', err.message);
   }

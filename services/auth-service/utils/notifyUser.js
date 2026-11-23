@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { sendWithTelemetry } from './pushTelemetry.js';
 
 // Separate from firebaseAdmin.js's initAdmin (used for ID-token verification,
 // where a missing/broken Firebase config should fail the caller's request)
@@ -30,11 +31,13 @@ function initAdmin() {
 // wallet-service's copies, auth-service already has the User row in hand
 // wherever this is called from, so there's no need for the cross-service
 // HTTP round trip those two do just to fetch the token.
-export async function notifyUser(fcmToken, { title, body, data = {} }) {
+// telemetry = { recipientId, recipientRole } for the push_sent/push_failed events
+// (auth-service has the user row at every call site; omit and no event is emitted).
+export async function notifyUser(fcmToken, { title, body, data = {} }, telemetry = {}) {
   if (!fcmToken) return;
   try {
     if (!initAdmin()) return;
-    await admin.messaging().send({
+    await sendWithTelemetry((message) => admin.messaging().send(message), {
       token: fcmToken,
       notification: { title, body },
       data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
@@ -43,7 +46,7 @@ export async function notifyUser(fcmToken, { title, body, data = {} }) {
         headers: { 'apns-priority': '10' },
         payload: { aps: { 'mutable-content': 1, sound: 'default' } },
       },
-    });
+    }, { ...telemetry, service: 'auth-service' });
   } catch (err) {
     console.error('[FCM] Notify user failed:', err.message);
   }
