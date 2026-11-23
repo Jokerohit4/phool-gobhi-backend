@@ -2,6 +2,7 @@
 import { buildFullExportService } from '../services/exportService.js';
 import prisma from '../db/prisma.js';
 import semver from 'semver';
+import { clientAnalyticsProps } from '../utils/clientContext.js';
 import { signupService, loginService, deleteUserService, refreshTokenService, logoutService, sendOtpService, verifyOtpService, verifyFirebaseTokenService, googleSignInService, listStaffService, createStaffService, updateStaffStatusService, setAccountCohortService, setAccountCohortBulkService, listUsersByCohortService, listNonDefaultCohortIdsService, normalizePhone, runAttendanceSaasReengagementSweepService, countGymJoinedUsersByMonthService, assertPartnerOwnsGym, createTrainerService, listTrainersForGymService, updateTrainerStatusService } from '../services/authService.js';
 import { ROLES } from '../constants/userEnums.js';
 import { resolvePersona } from '../services/personaService.js';
@@ -157,7 +158,7 @@ const sendOtp = async (req, res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    const result = await verifyOtpService(req.body ?? {});
+    const result = await verifyOtpService(req.body ?? {}, clientAnalyticsProps(req.headers));
     res.status(result.isNewUser ? 201 : 200).json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });
@@ -166,7 +167,7 @@ const verifyOtp = async (req, res) => {
 
 const verifyFirebaseToken = async (req, res) => {
   try {
-    const result = await verifyFirebaseTokenService(req.body ?? {});
+    const result = await verifyFirebaseTokenService(req.body ?? {}, clientAnalyticsProps(req.headers));
     res.status(result.isNewUser ? 201 : 200).json(result);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Server error', errorCode: err.errorCode });

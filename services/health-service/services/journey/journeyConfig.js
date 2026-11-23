@@ -3,6 +3,9 @@ import { isoDayIST } from '../../utils/sessionDay.js';
 // Matches the Contracts section of phool-gobhi-build-plan.html exactly.
 
 export const JOURNEY = {
+  // Food (layer 2) is open from day 0 (founder decision 2026-11-23); it used to
+  // unlock after 3 showed-up days or an early request. Its consent + nutrition
+  // target gates in layerState still apply.
   // The single layer table (one-plan Contracts). consent is the scope required
   // to turn the layer on; null means no consent needed. flags lists the
   // app-config feature flags the layer requires — the server omits a layer
@@ -12,7 +15,7 @@ export const JOURNEY = {
   layers: [
     { layer: 1, key: 'basics',      layerKeys: ['workout','water'],  unlock: { type: 'start' },
       consent: { scope: 'coach.basic' }, flags: [] },
-    { layer: 2, key: 'food',        layerKeys: ['food'],             unlock: { type: 'showed_up_days', need: 3 }, earlyAllowed: true,
+    { layer: 2, key: 'food',        layerKeys: ['food'],             unlock: { type: 'start' },
       consent: { scope: 'nutrition' }, flags: ['healthMetrics','healthLedger'], needsSetup: true },
     { layer: 3, key: 'body',        layerKeys: ['steps','sleep'],    unlock: { type: 'elapsed_days', need: 7 },
       consent: null, flags: [], optionalConsent: { scope: 'device_health' } },

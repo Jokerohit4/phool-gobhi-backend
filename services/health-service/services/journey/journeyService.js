@@ -66,14 +66,12 @@ async function computeUnlockedLayers(userId, progress, showedUpDays, steadyWeeks
     }
   }
 
-  // Layer 2 (food) - 3 showed-up days or early request
-  const foodUnlock = JOURNEY.layers.find((l) => l.key === 'food');
-  if (showedUpDays.length >= foodUnlock.unlock.need) {
-    // Find when the 3rd day was reached
-    const thirdDay = showedUpDays[showedUpDays.length - foodUnlock.unlock.need];
-    unlocked.push({ layer: 2, at: new Date(`${thirdDay}T00:00:00Z`).toISOString(), via: 'showed_up' });
-  } else if (progress.foodEarlyAt) {
-    unlocked.push({ layer: 2, at: progress.foodEarlyAt.toISOString(), via: 'early' });
+  // Layer 2 (food) is open from day 0 (it used to need 3 showed-up days or an
+  // early request). Applied on every read, so existing journeys that still have
+  // food locked pick it up lazily (syncUnlocks persists it and rebuilds the plan).
+  // Wellness journeys keep their focus-based rule above.
+  if (!progress.wellnessOnly && !unlocked.some((u) => u.layer === 2)) {
+    unlocked.push({ layer: 2, at: progress.startedAt?.toISOString() ?? now, via: 'start_level' });
   }
 
   // Calendar time since the server-owned journey start; activity cannot
@@ -336,7 +334,10 @@ export async function startJourney(userId, { experienceLevel, goals, daysPerWeek
       userId,
       startLevel: level,
       startedAt: new Date(),
-      unlocked: [{ layer: 1, at: new Date().toISOString(), via: 'start' }],
+      unlocked: [
+        { layer: 1, at: new Date().toISOString(), via: 'start' },
+        { layer: 2, at: new Date().toISOString(), via: 'start' },
+      ],
       easyStartUntil,
       quitReason: quitReason ?? null,
     },
@@ -500,19 +501,9 @@ export async function unlockFoodEarly(userId) {
     throw err;
   }
 
-  if (progress.foodEarlyAt) {
-    return getJourney(userId);
-  }
-
-  await prisma.journeyProgress.update({
-    where: { userId },
-    data: { foodEarlyAt: new Date() },
-  });
-  invalidateJourneyCaches(userId);
-
-  // Rebuild plan for early unlock
-  await rebuildPlan(prisma, userId, { reason: 'unlock', layer: 2, how: 'early' });
-
+  // Food is open from day 0, so there is nothing left to unlock early. The
+  // endpoint stays for older app builds: it just returns the current journey
+  // (reading it lazily unlocks food for any journey that predates the change).
   return getJourney(userId);
 }
 

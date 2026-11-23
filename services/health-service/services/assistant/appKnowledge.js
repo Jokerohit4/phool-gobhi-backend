@@ -171,8 +171,8 @@ opens up as the person keeps showing up.
   shows steady weeks, not a daily streak — missing a day is normal.
 - **Layers** unlock in order and never lock again:
   1. Workout days + water — from the start.
-  2. Food — after 3 showed-up days, or straight away with "Want it now?" on
-     the Plan tab.
+  2. Food — open from day 0 (it still needs the nutrition consent and a
+     food target).
   3. Steps + sleep — after 7 days.
   4. Supplements — after 10 days. This is a tick list for supplements
      they ALREADY take; Gobhi never suggests one or a dose.

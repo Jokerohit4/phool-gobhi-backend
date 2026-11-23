@@ -3,6 +3,7 @@ import * as savedFunnels from '../services/savedFunnelService.js';
 import * as pushFunnel from '../services/pushFunnelService.js';
 import { assertPartnerOwnsGym } from '../services/bookingService.js';
 import { resolveCohortScope } from '../utils/cohortScope.js';
+import { getRetentionSignupCohorts } from '../services/retentionSignupCohorts.js';
 
 // ?cohort=all|FRIENDS_AND_FAMILY,TESTING_ACCOUNTS,... (see utils/cohortScope.js).
 // A bad value is a 400 and an unreachable auth-service a 503; neither may fall
@@ -314,5 +315,14 @@ export const getUserJourney = async (req, res) => {
     res.json({ data: { ...journey, profile } });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Retention by signup cohort (IST day/week buckets). Warehouse-only.
+export const getRetentionSignupCohortsReport = async (req, res) => {
+  try {
+    res.json({ data: await getRetentionSignupCohorts(req.query) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }
 };

@@ -207,7 +207,8 @@ test('grounding survives every read failing', async () => {
 test('the journey guide matches journeyConfig.js thresholds', async () => {
   const { JOURNEY_GUIDE } = await import('../services/assistant/appKnowledge.js');
   const need = (key) => JOURNEY.layers.find((l) => l.key === key).unlock.need;
-  assert.match(JOURNEY_GUIDE, new RegExp(`after ${need('food')} showed-up days`));
+  assert.equal(JOURNEY.layers.find((l) => l.key === 'food').unlock.type, 'start');
+  assert.match(JOURNEY_GUIDE, /Food — open from day 0/);
   assert.match(JOURNEY_GUIDE, new RegExp(`Steps \\+ sleep — after ${need('body')} days`));
   assert.match(JOURNEY_GUIDE, new RegExp(`Supplements — after ${need('supplements')} days`));
   assert.match(JOURNEY_GUIDE, new RegExp(`Health reports — after ${need('health')} days`));
