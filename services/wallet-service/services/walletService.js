@@ -6,6 +6,7 @@ import { notifyCustomer } from '../utils/notifyCustomer.js';
 import { track } from '../utils/analytics.js';
 import { DEFAULT_WALLET_TOPUP_CONFIG, HARD_MAX_TOPUP_AMOUNT } from '../utils/walletConstants.js';
 import { pageArgs, finishPage } from '../utils/pagination.js';
+import { writeSingleton, parseExpectedUpdatedAt } from '../utils/configConcurrency.js';
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
 const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
@@ -174,7 +175,11 @@ export async function getWalletTopupConfig() {
   return serializeTopupConfig(row);
 }
 
-export async function getWalletTopupConfigCached() {
+// `fresh: true` bypasses the cache. The admin portal reads with it: the
+// updatedAt it gets back is the ETag it later sends as expectedUpdatedAt, so a
+// value up to 30s stale would turn every save into a spurious conflict.
+export async function getWalletTopupConfigCached({ fresh = false } = {}) {
+  if (fresh) return getWalletTopupConfig();
   if (walletTopupConfigCache && walletTopupConfigCache.expiresAt > Date.now()) {
     return walletTopupConfigCache.value;
   }
@@ -183,7 +188,7 @@ export async function getWalletTopupConfigCached() {
   return value;
 }
 
-export async function updateWalletTopupConfig({ presets, allowCustomAmount, minCustomAmount, maxCustomAmount }, updatedBy) {
+export async function updateWalletTopupConfig({ presets, allowCustomAmount, minCustomAmount, maxCustomAmount, expectedUpdatedAt }, updatedBy) {
   if (!Array.isArray(presets)) {
     throw { status: 400, error: 'presets must be an array' };
   }
@@ -218,11 +223,11 @@ export async function updateWalletTopupConfig({ presets, allowCustomAmount, minC
     if (min > max) throw { status: 400, error: 'minCustomAmount cannot be greater than maxCustomAmount' };
   }
 
-  const saved = await prisma.walletTopupConfig.upsert({
-    where: { id: 1 },
-    create: { id: 1, presets: cleanPresets, allowCustomAmount: allowCustom, minCustomAmount: min, maxCustomAmount: max, updatedBy },
-    update: { presets: cleanPresets, allowCustomAmount: allowCustom, minCustomAmount: min, maxCustomAmount: max, updatedBy },
-  });
+  // Optional optimistic concurrency: a stale expectedUpdatedAt throws a 409
+  // CONFIG_CONFLICT and writes nothing (see utils/configConcurrency.js).
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  const fields = { presets: cleanPresets, allowCustomAmount: allowCustom, minCustomAmount: min, maxCustomAmount: max, updatedBy };
+  const saved = await writeSingleton(prisma.walletTopupConfig, { create: fields, update: fields, expected });
   walletTopupConfigCache = null; // best-effort local bust — see cache comment above re: cross-instance staleness
   return serializeTopupConfig(saved);
 }
