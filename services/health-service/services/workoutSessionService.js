@@ -1,6 +1,7 @@
 import { isoDayIST, workoutElapsedSeconds } from '../utils/sessionDay.js';
 import { recordRoutineWorkout } from './routineJourneyService.js';
 import prisma from '../db/prisma.js';
+import { firstWorkoutProbe } from './activationEvents.js';
 import { computeProgression } from './progressionService.js';
 import { randomInt } from 'node:crypto';
 import { notifyWorkoutFinished } from '../utils/notifyChallengeService.js';
@@ -196,8 +197,11 @@ export async function startSessionService(userId, templateId, attendance, client
 
   const createData = { userId, ...attachData, ...(clientRef ? { clientRef } : {}) };
 
+  const firstWorkout = await firstWorkoutProbe(prisma, userId);
   try {
-    return await withPhotoUrl(await createSessionRow(createData, templateId, userId));
+    const created = await withPhotoUrl(await createSessionRow(createData, templateId, userId));
+    firstWorkout.emit({ templateId });
+    return created;
   } catch (err) {
     if (clientRef && err?.code === 'P2002') {
       const raced = await prisma.workoutSession.findUnique({

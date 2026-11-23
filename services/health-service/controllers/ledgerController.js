@@ -21,6 +21,7 @@ import * as foodAdminService from '../services/ledger/foodAdminService.js';
 import * as foodEmbeddingService from '../services/ledger/foodEmbeddingService.js';
 import prisma from '../db/prisma.js';
 import { track } from '../utils/analytics.js';
+import { firstFoodLogProbe } from '../services/activationEvents.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import { evaluateWeeklyRewards, evaluateUserReward } from '../services/rewardService.js';
 import { injectAiPrescription } from '../services/aiPrescriptionService.js';
@@ -386,6 +387,7 @@ export const refreshFoodEmbeddings = handle(async (req) => {
 
 export const logFood = handle(async (req) => {
   const b = req.body || {};
+  const firstFood = await firstFoodLogProbe(prisma, req.userId);
   // Two ways in, one route. A catalogue log carries `foodItemId`; a hand-typed
   // one carries `name` + `kcal` instead. Branching here rather than adding a
   // second route keeps the client's one "log a food" call one call, and the
@@ -401,6 +403,7 @@ export const logFood = handle(async (req) => {
       servingLabel: b.servingLabel,
     });
     track('health_food_logged', req.userId, { slot: b.slot, source: 'custom' });
+    firstFood.emit({ loggedCount: 1, source: 'custom' });
     return out;
   }
 
@@ -415,6 +418,7 @@ export const logFood = handle(async (req) => {
     source: 'search',
   });
   track('health_food_logged', req.userId, { slot: b.slot, source: 'search' });
+  firstFood.emit({ loggedCount: 1, source: 'search' });
   return out;
 });
 
@@ -426,6 +430,7 @@ export const logFood = handle(async (req) => {
 // event mirrors that rather than inventing a slot the rows did not get.
 export const repeatFoodLogs = handle(async (req) => {
   const b = req.body || {};
+  const firstFood = await firstFoodLogProbe(prisma, req.userId);
   const out = await nutritionService.repeatDay(prisma, {
     userId: req.userId,
     fromLocalDate: b.fromLocalDate,
@@ -438,6 +443,7 @@ export const repeatFoodLogs = handle(async (req) => {
     logged_count: out?.logged ?? null,
     skipped_count: Array.isArray(out?.skipped) ? out.skipped.length : null,
   });
+  firstFood.emit({ loggedCount: out?.logged ?? null, source: 'repeat_day' });
   return out;
 });
 
@@ -521,6 +527,7 @@ export const listSavedMeals = handle(async (req) =>
 
 export const logSavedMeal = handle(async (req) => {
   const b = req.body || {};
+  const firstFood = await firstFoodLogProbe(prisma, req.userId);
   const out = await nutritionService.logSavedMeal(prisma, {
     userId: req.userId,
     savedMealId: req.params.id,
@@ -539,6 +546,7 @@ export const logSavedMeal = handle(async (req) => {
     logged_count: out?.logged ?? null,
     skipped_count: Array.isArray(out?.skipped) ? out.skipped.length : null,
   });
+  firstFood.emit({ loggedCount: out?.logged ?? null, source: 'saved_meal' });
   return out;
 });
 
@@ -922,6 +930,7 @@ export const uploadFoodPhoto = handle(async (req) => {
 
 export const confirmFoodPhoto = handle(async (req) => {
   const b = req.body || {};
+  const firstFood = await firstFoodLogProbe(prisma, req.userId);
   const out = await foodPhotoService.confirmPhotoLog(prisma, {
     userId: req.userId,
     photoPath: b.photoPath,
@@ -945,6 +954,7 @@ export const confirmFoodPhoto = handle(async (req) => {
     logged_count: out.logged,
     pending_count: out.pending,
   });
+  firstFood.emit({ loggedCount: out.logged, source: 'photo_confirmed' });
   // The launch metric, as a funnel rather than a dashboard-only number: if
   // corrections stay high, this is the event that says the feature is not
   // earning its per-photo cost.
