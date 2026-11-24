@@ -20,7 +20,7 @@ const db = {
     upsert: async ({ create, update }) => profile = profile ? { ...profile, ...update } : create,
     updateMany: async ({ where, data }) => { if (!profile || where.sourceReportId !== profile.sourceReportId || +where.confirmedAt !== +profile.confirmedAt) return { count: 0 }; Object.assign(profile, data); return { count: 1 }; },
   },
-  reportExtraction: { update: async () => ({}) },
+  reportExtraction: { update: async () => ({}), delete: async () => ({}) },
   biometricEntry: { upsert: async () => { writtenBiometrics++; } },
   guidanceRequest: { findFirst: async () => requests[0], create: async ({ data }) => { const row = { id: requests.length + 1, ...data };requests.push(row);return row; } },
 };
@@ -35,6 +35,7 @@ before(async t => {
       Object.assign(report, { status: 'COMPLETED', proposedReadings: [{ label: 'Glucose', value: 'Negative' }] });
     },
     parseReportDate: value => value || null,
+    findExistingReport: async () => null,
   } });
   t.mock.module('../services/ledger/medicalDocumentStorage.js', { exports: { MAX_UPLOAD_BYTES: 10485760, isAllowedMimeType: () => true, isAllowedReportMimeType: () => true, saveDocument: async () => '', signedDocumentUrl: async () => 'https://private.example/signed', deleteObjects: async () => ({ failed: [] }) } });
   t.mock.module('../services/ledger/blendedScoreCache.js', { exports: { invalidateBlendedScore: async () => {} } });

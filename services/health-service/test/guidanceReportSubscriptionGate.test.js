@@ -31,7 +31,7 @@ before(async (t) => {
     },
   });
   t.mock.module('../services/reportService.js', {
-    exports: { createReportService: async () => ({}), processReportService: async () => {}, parseReportDate: (v) => v || null },
+    exports: { createReportService: async () => ({}), processReportService: async () => {}, parseReportDate: (v) => v || null, findExistingReport: async () => null },
   });
   t.mock.module('../services/ledger/medicalDocumentStorage.js', {
     exports: {

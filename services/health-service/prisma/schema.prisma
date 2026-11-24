@@ -2196,6 +2196,14 @@ model HealthReport {
   // Never written when reportDate is set. The user's word is the source of truth
   // and OCR only fills a gap the user left.
   detectedReportDate String?
+  // Why a FAILED report failed, as a short code the app turns into advice
+  // (TOO_LONG / UNREADABLE need a different file; BUSY / STALLED / READ_FAILED /
+  // UNAVAILABLE are worth another try). Null on every report that did not fail.
+  failureCode String?
+  // SHA-256 of the uploaded bytes. The same person re-uploading the same file
+  // is answered from the report they already have instead of paying for the
+  // storage write and a second OCR pass. Per user: never compared across users.
+  fileSha256  String?
   processedAt DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -2203,6 +2211,7 @@ model HealthReport {
   extractions ReportExtraction[]
 
   @@index([userId])
+  @@index([userId, fileSha256])
   @@schema("health")
 }
 

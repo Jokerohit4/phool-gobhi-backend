@@ -5,6 +5,7 @@ import { extractBiomarkersFromPDF } from '../utils/ocrService.js';
 import { signedDocumentUrl } from './ledger/medicalDocumentStorage.js';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
+import { classifyFailure, isStalledReport, STALL_MS } from '../utils/reportFailure.js';
 
 
 /**
@@ -76,7 +77,23 @@ export function parseReportDate(value) {
   return date;
 }
 
-export async function createReportService({ userId, storagePath, fileName, sizeBytes = null, mimeType = null, reportDate = null }) {
+/**
+ * The report this user already uploaded with exactly these bytes, if any.
+ *
+ * Re-uploading the same file is common (a retry after a bad connection, a second
+ * visit to the screen) and each one used to cost a storage write and a paid OCR
+ * pass to produce the same rows again. A FAILED copy does not count: someone
+ * uploading a file that failed once is asking for another attempt.
+ */
+export async function findExistingReport(userId, fileSha256) {
+  if (!fileSha256) return null;
+  return prisma.healthReport.findFirst({
+    where: { userId, fileSha256, status: { not: 'FAILED' } },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function createReportService({ userId, storagePath, fileName, sizeBytes = null, mimeType = null, reportDate = null, fileSha256 = null }) {
   // Before the try, not inside it. A bad date from the upload form is a client
   // error and must not be laundered into the 500 below, which would tell a user
   // their upload failed rather than that they mistyped the date.
@@ -91,6 +108,7 @@ export async function createReportService({ userId, storagePath, fileName, sizeB
         status: 'PENDING',
         reportDate: parsedReportDate,
         mimeType: mimeType || 'application/pdf',
+        fileSha256,
       },
     });
 
@@ -116,10 +134,10 @@ export async function processReportService(reportId) {
     const report = await prisma.healthReport.findUnique({ where: { id: reportId } });
     if (!report) throw { status: 404, error: 'Report not found' };
     if (/^https?:\/\//i.test(report.storagePath || '')) {
-      await prisma.healthReport.update({ where: { id: reportId }, data: { status: 'FAILED' } });
+      await prisma.healthReport.update({ where: { id: reportId }, data: { status: 'FAILED', failureCode: 'UNREADABLE' } });
       return { status: 'FAILED', message: 'Stored report predates the current storage layout' };
     }
-    const claimed = await prisma.healthReport.updateMany({ where: { id: reportId, status: 'PENDING' }, data: { status: 'PROCESSING', processingStartedAt: new Date(), processingToken: token } });
+    const claimed = await prisma.healthReport.updateMany({ where: { id: reportId, status: 'PENDING' }, data: { status: 'PROCESSING', processingStartedAt: new Date(), processingToken: token, failureCode: null } });
     if (!claimed.count) return { status: report.status };
     const signedUrl = await signedDocumentUrl(report.storagePath);
     if (!signedUrl) throw new Error('Could not read stored report');
@@ -145,7 +163,7 @@ export async function processReportService(reportId) {
     return { status: completed ? 'COMPLETED' : 'SUPERSEDED', extractionsCount: extractions?.length || 0 };
   } catch (err) {
     console.error('[report] processing failed for report', reportId);
-    await write({ status: 'FAILED' }).catch(() => {});
+    await write({ status: 'FAILED', failureCode: classifyFailure(err) }).catch(() => {});
     throw { status: 500, error: 'Report processing failed' };
   }
 }
@@ -323,21 +341,62 @@ export async function verifyExtractionService({ extractionId, userId, confirmedV
  * app cannot show back is a row they cannot tell apart from another.
  */
 export async function listReportsService(userId) {
+  // A report whose reader died mid-way stays PENDING/PROCESSING forever, and the
+  // list would show it spinning until the user deleted it. Writes bump
+  // updatedAt, so a row untouched for longer than a read can take is dead.
+  // FAILED is the honest state: the app then offers another attempt.
+  await prisma.healthReport.updateMany({
+    where: {
+      userId,
+      status: { in: ['PENDING', 'PROCESSING'] },
+      updatedAt: { lt: new Date(Date.now() - 2 * STALL_MS) },
+    },
+    data: { status: 'FAILED', failureCode: 'STALLED', processingToken: null },
+  }).catch((err) => console.error('[report] stalled sweep failed:', err?.message));
+
   const reports = await prisma.healthReport.findMany({
     where: { userId },
     orderBy: { createdAt: 'desc' },
-    include: {
-      // Just the flag, not the rows: the list needs to say "2 waiting for you"
-      // and must not carry every extracted value to the device to count them.
-      extractions: { select: { isVerified: true } },
-    },
+    select: SUMMARY_SELECT,
   });
 
-  return reports.map(({ storagePath, extractions, ...safe }) => ({
-    ...safe,
+  return reports.map(toReportSummary);
+}
+
+// Only what a list row shows. The old shape spread the whole row, which carried
+// every reading as JSON and the internal processing token to the device for
+// nothing. Extractions are selected as a flag, not rows: the list needs to say
+// "2 waiting for you" and must not ship every extracted value to count them.
+const SUMMARY_SELECT = {
+  id: true,
+  fileName: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  processingStartedAt: true,
+  reportDate: true,
+  detectedReportDate: true,
+  failureCode: true,
+  extractions: { select: { isVerified: true } },
+};
+
+function toReportSummary({ extractions, updatedAt, processingStartedAt, ...row }) {
+  return {
+    ...row,
+    failureCode: row.status === 'FAILED' ? row.failureCode ?? 'READ_FAILED' : null,
+    stalled: isStalledReport({ ...row, updatedAt, processingStartedAt }),
     extractionCount: extractions.length,
     pendingCount: extractions.filter((e) => !e.isVerified).length,
-  }));
+  };
+}
+
+/** One report in the list shape, or null when it is not this user's. */
+export async function getReportSummaryService({ reportId, userId }) {
+  const row = await prisma.healthReport.findFirst({
+    where: { id: Number(reportId), userId },
+    select: SUMMARY_SELECT,
+  });
+  return row ? toReportSummary(row) : null;
 }
 
 /**

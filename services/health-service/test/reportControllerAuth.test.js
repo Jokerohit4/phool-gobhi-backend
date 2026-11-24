@@ -10,6 +10,8 @@ mock.module('../services/reportService.js', { namedExports: {
   getPendingExtractionsService: capture('pending', []),
   verifyExtractionService: capture('verify', { message: 'Verified' }),
   listReportsService: capture('list', []),
+  findExistingReport: async () => null,
+  getReportSummaryService: capture('summary', { id: 42, fileName: 'demo.pdf', status: 'COMPLETED' }),
   deleteReportService: capture('delete', { deleted: true }),
 } });
 mock.module('../services/ledger/medicalDocumentStorage.js', { namedExports: {

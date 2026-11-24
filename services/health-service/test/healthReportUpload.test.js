@@ -434,7 +434,9 @@ test('the upload forwards the date, and a bad one is not a 500', () => {
 
   // And the stored date comes back to the client, because a date picker and the
   // stored value that disagree is otherwise only discoverable weeks later.
-  assert.match(controllerSource, /reportDate:\s*report\.reportDate \?\? null/);
+  // The response is the report in the list shape, and that shape selects the date.
+  assert.match(controllerSource, /getReportSummaryService\(\{ reportId: report\.id, userId \}\)/);
+  assert.match(reportServiceSource, /reportDate: true/);
 });
 
 test('the upload is a single file with a bounded size', () => {

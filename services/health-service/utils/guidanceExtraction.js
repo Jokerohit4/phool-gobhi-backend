@@ -33,8 +33,17 @@ export function validateMarkers(input = {}) {
   }
   return out;
 }
+// The common adult upper limit for the liver enzymes. Labs print their own range
+// and it varies, so this only decides AMBER (a prompt for the clinician review
+// that every confirmed report gets), never anything stronger.
+export const LIVER_ENZYME_ULN = 40;
+
 export function riskBucket(markers, liverFlag = false) {
   if (markers.hba1c >= 6.5 || markers.systolic >= 140 || markers.diastolic >= 90) return 'RED';
-  if (markers.hba1c >= 5.7 || markers.triglycerides >= 150 || liverFlag) return 'AMBER';
-  return Object.keys(markers).length ? 'GREEN' : 'UNSET';
+  const liverHigh = markers.sgot > LIVER_ENZYME_ULN || markers.sgpt > LIVER_ENZYME_ULN;
+  if (markers.hba1c >= 5.7 || markers.triglycerides >= 150 || liverFlag || liverHigh) return 'AMBER';
+  // GREEN is a positive statement, and every threshold above hangs on HbA1c. A
+  // report where it was not read (or a lone normal triglyceride) is incomplete,
+  // not healthy, and telling someone they are green on that is the wrong error.
+  return markers.hba1c != null ? 'GREEN' : 'UNSET';
 }
