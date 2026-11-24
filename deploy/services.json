@@ -121,6 +121,8 @@
             "ALLOW_DEV_OTP": "false",
             "OTP_PROVIDER": "firebase",
             "WATER_REMINDER_ENABLED": "true",
+            "MEAL_REMINDERS_ENABLED": "true",
+            "WORKOUT_REMINDERS_ENABLED": "true",
             "WATER_REMINDER_SCHEDULER_SA": "water-reminder-scheduler@phool-gobhi.iam.gserviceaccount.com",
             "WATER_REMINDER_AUDIENCE": "https://auth-service-prod-pwixdiy6va-el.a.run.app",
             "ANALYTICS_ENVIRONMENT": "prod",
