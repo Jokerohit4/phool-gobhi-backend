@@ -58,3 +58,14 @@ export function isStalledReport(report, now = Date.now()) {
   const at = new Date(since).getTime();
   return Number.isFinite(at) && now - at > STALL_MS;
 }
+
+// The bytes must be what the declared type says. A multipart MIME type is a claim
+// from the client; sniffing the first bytes keeps a renamed file from reaching a
+// paid read (and from being labelled application/pdf to the reader).
+export function matchesDeclaredType(mimeType, bytes) {
+  if (!bytes || bytes.length < 8) return false;
+  if (mimeType === 'application/pdf') return bytes.subarray(0, 5).toString('latin1') === '%PDF-';
+  if (mimeType === 'image/png') return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  if (mimeType === 'image/jpeg') return bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+  return false;
+}

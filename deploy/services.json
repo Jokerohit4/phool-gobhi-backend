@@ -429,7 +429,9 @@
               "FOOD_TEXT_AI_LOOKUP": "true",
               "SHOWED_UP_DAYS_CACHE_TTL_MS": "60000",
               "JOURNEY_CACHE_TTL_MS": "60000",
-              "PLAN_TODAY_RESPONSE_CACHE_TTL_MS": "15000"
+              "PLAN_TODAY_RESPONSE_CACHE_TTL_MS": "15000",
+              "REPORT_LLM_ENABLED": "true",
+              "REPORT_LLM_DAILY_CAP": "150"
 
           },
           "secrets": {

@@ -9,6 +9,7 @@ import {
   isAllowedMimeType,
   MAX_UPLOAD_BYTES,
 } from '../services/ledger/medicalDocumentStorage.js';
+import { matchesDeclaredType } from '../utils/reportFailure.js';
 import { parseReportDate } from '../services/reportService.js';
 import { readDartLibrary } from './helpers/dartLibrary.js';
 
@@ -28,31 +29,41 @@ const reportServiceSource = readFileSync(join(here, '..', 'services', 'reportSer
 
 // ---- MIME policy ----------------------------------------------------------
 
-test('a lab report is PDF-only, and images are rejected with a reason', () => {
-  // The asymmetry with isAllowedMimeType is deliberate and is the whole point of
-  // this predicate. A JPEG of a lab report is a real file a real person has, and
-  // Document AI cannot read it - so the honest answer is a clear rejection at the
-  // door rather than a parsing failure the user reads as "your report is broken".
-  assert.equal(isAllowedReportMimeType('application/pdf'), true);
-
-  for (const mime of ['image/jpeg', 'image/png', 'image/heic', 'application/octet-stream']) {
-    assert.equal(
-      isAllowedReportMimeType(mime),
-      false,
-      `${mime} must not reach OCR: it cannot be parsed and would report as a corrupt report`,
-    );
+test('a lab report may be a PDF or a photo, and anything else is rejected with a reason', () => {
+  // A phone photo of a printed report is how most people hold one. PDF, JPEG and
+  // PNG are what Document AI reads here; HEIC and the rest are refused at the
+  // door rather than failing later as a parsing error the user reads as "your
+  // report is broken".
+  for (const mime of ['application/pdf', 'image/jpeg', 'image/png']) {
+    assert.equal(isAllowedReportMimeType(mime), true, mime);
+  }
+  for (const mime of ['image/heic', 'image/webp', 'application/octet-stream', 'text/plain']) {
+    assert.equal(isAllowedReportMimeType(mime), false, `${mime} must not reach OCR`);
   }
 });
 
-test('a medical document may still be a photo, so the two predicates are not the same', () => {
+test('the report type is the file\x27s own, sniffed from its bytes, and passed to the reader', () => {
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0]);
+  const jpeg = Buffer.from([255, 216, 255, 224, 0, 16, 74, 70, 73, 70]);
+  const pdf = Buffer.from('%PDF-1.4 body');
+  assert.equal(matchesDeclaredType('application/pdf', pdf), true);
+  assert.equal(matchesDeclaredType('image/png', png), true);
+  assert.equal(matchesDeclaredType('image/jpeg', jpeg), true);
+  // A renamed file: the claim and the bytes disagree.
+  assert.equal(matchesDeclaredType('application/pdf', png), false);
+  assert.equal(matchesDeclaredType('image/jpeg', pdf), false);
+  assert.equal(matchesDeclaredType('image/png', Buffer.from('x')), false);
+  // Without this, a photo would reach Document AI labelled application/pdf.
+  assert.match(controllerSource, /mimeType:\s*req\.file\.mimetype/);
+  assert.match(controllerSource, /matchesDeclaredType\(req\.file\.mimetype, req\.file\.buffer\)/);
+});
+
+test('a medical document is still wider than a report, so the two predicates are not the same', () => {
   // If these ever converge, the report path has either silently narrowed the
   // document path or vice versa. Both would be a behaviour change nobody asked
   // for, so it is asserted rather than left to a reader to notice.
-  assert.equal(isAllowedMimeType('image/jpeg'), true, 'a photo of a prescription is a normal upload');
-  assert.notEqual(
-    isAllowedReportMimeType('image/jpeg'),
-    isAllowedMimeType('image/jpeg'),
-  );
+  assert.equal(isAllowedMimeType('image/heic'), true, 'a photo of a prescription is a normal upload');
+  assert.notEqual(isAllowedReportMimeType('image/heic'), isAllowedMimeType('image/heic'));
 });
 
 test('the report size cap matches the medical document cap', () => {

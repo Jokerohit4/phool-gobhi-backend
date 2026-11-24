@@ -58,10 +58,8 @@ export const uploadMedicalDocumentMiddleware = handleUpload;
 // not a guarantee.
 //
 // The one difference is the accepted type. A lab report is fed to Document AI,
-// which reads PDFs, so this rejects images at the door. They are accepted for
-// medical documents, where nothing reads the content and a photo of a
-// prescription is a normal thing to attach — but here a rejected JPEG is a
-// clear message instead of a parsing failure the user will read as "your lab
+// which reads PDFs, JPEG and PNG, so anything else is rejected at the door with
+// a clear message instead of a parsing failure the user will read as "your lab
 // report is broken".
 const reportUpload = multer({
   storage: multer.memoryStorage(),
@@ -72,7 +70,7 @@ const reportUpload = multer({
   fileFilter: (_req, file, cb) => {
     if (isAllowedReportMimeType(file.mimetype)) return cb(null, true);
     cb(
-      Object.assign(new Error('Upload the lab report as a PDF'), {
+      Object.assign(new Error('Upload the lab report as a PDF, JPEG or PNG'), {
         status: 400,
         code: 'UNSUPPORTED_TYPE',
       }),
