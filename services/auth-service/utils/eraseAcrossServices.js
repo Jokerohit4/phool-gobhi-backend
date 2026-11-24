@@ -31,11 +31,15 @@ const ERASURE_TARGETS = [
 /// decide the policy (see deleteUserService: it refuses to delete the User
 /// row unless every downstream succeeded, leaving the account intact and
 /// retryable instead of stranding unreachable orphan data).
-export async function eraseUserAcrossServices(userId) {
+export async function eraseUserAcrossServices(userId, serviceName) {
   const results = [];
   const failures = [];
+  const targets = serviceName === undefined
+    ? ERASURE_TARGETS
+    : ERASURE_TARGETS.filter((target) => target.name === serviceName);
+  if (targets.length === 0) throw new Error('Unknown erasure service');
 
-  for (const target of ERASURE_TARGETS) {
+  for (const target of targets) {
     const base = target.url();
     try {
       // fetch, not axios — this service has no axios dependency and uses

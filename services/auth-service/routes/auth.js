@@ -31,6 +31,7 @@ import { getLifecycleCandidates } from '../controllers/lifecycleAudienceControll
 import requireInternalOrScheduler from '../middleware/requireInternalOrScheduler.js';
 import { runRemindersInternal, runWaterReminderInternal } from '../controllers/waterReminderController.js';
 import requireGobhi from '../middleware/requireGobhi.js';
+import { deleteAdminUserData } from '../controllers/adminUserDataController.js';
 import requireCustomer from '../middleware/requireCustomer.js';
 import { uploadResume } from '../utils/gcsResume.js';
 
@@ -141,6 +142,7 @@ router.patch('/admin/staff/:id', requireGobhi, updateStaffStatus);
 // Account cohort (friends & family / generated / testing / unknown) — staff-only.
 // The bulk route is registered first so 'bulk' is never read as a :id.
 router.get('/admin/users', requireGobhi, listUsersByCohort);
+router.delete('/admin/users/:id/data/:scope', requireGobhi, deleteAdminUserData);
 router.patch('/admin/users/cohort/bulk', requireGobhi, setAccountCohortBulk);
 router.patch('/admin/users/:id/cohort', requireGobhi, setAccountCohort);
 

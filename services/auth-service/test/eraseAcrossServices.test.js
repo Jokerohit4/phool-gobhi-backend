@@ -68,6 +68,17 @@ test('booking finances are retained while wallet erases coaching PII', async () 
   assert.ok(postCalls.some((u) => u.includes('wallet')));
 });
 
+test('a single category only calls its matching service', async () => {
+  postCalls = [];
+  postBehaviour = () => ({ ok: true, status: 200, json: async () => ({ data: { erased: true } }) });
+  const result = await eraseUserAcrossServices(42, 'health-service');
+  assert.equal(result.ok, true);
+  assert.equal(postCalls.length, 1);
+  assert.match(postCalls[0], /health.*\/internal\/erase\/42$/);
+  await assert.rejects(eraseUserAcrossServices(42, 'mistyped-service'), /Unknown erasure service/);
+  assert.equal(postCalls.length, 1);
+});
+
 test('one failing service marks the whole erasure as not ok, and names it', async () => {
   postCalls = [];
   postBehaviour = (url) => {

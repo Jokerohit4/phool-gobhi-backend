@@ -17,15 +17,18 @@ process.env.ACCOUNT_DELETION_MODE = 'erase';
 let ops;
 let txCalls;
 let erasureResult;
+let erasureCalls = [];
+let customerRole;
 let router;
 let deleteUserService;
+let adminUserDataCategories;
 
 function model(name) {
   return {
     deleteMany: (args) => ({ op: `${name}.deleteMany`, args }),
     updateMany: (args) => ({ op: `${name}.updateMany`, args }),
     delete: (args) => ({ op: `${name}.delete`, args }),
-    findUnique: async () => null,
+    findUnique: async () => name === 'user' && customerRole ? { role: customerRole } : null,
     findFirst: async () => null,
     findMany: async () => [],
   };
@@ -51,10 +54,16 @@ test('setup: mock prisma + erasure fan-out, import routes and service once', asy
     },
   });
   t.mock.module('../utils/eraseAcrossServices.js', {
-    exports: { eraseUserAcrossServices: async () => erasureResult },
+    exports: {
+      eraseUserAcrossServices: async (...args) => {
+        erasureCalls.push(args);
+        return erasureResult;
+      },
+    },
   });
   ({ default: router } = await import('../routes/auth.js'));
   ({ deleteUserService } = await import('../services/authService.js'));
+  ({ adminUserDataCategories } = await import('../controllers/adminUserDataController.js'));
 });
 
 function routeFor(method, path) {
@@ -101,4 +110,76 @@ test('if any downstream erasure fails, nothing in auth-service is touched', asyn
   erasureResult = { ok: false, results: [], failures: [{ service: 'health-service' }] };
   await assert.rejects(deleteUserService(42), (err) => err.errorCode === 'ERASURE_INCOMPLETE' && err.status === 502);
   assert.equal(txCalls, 0);
+});
+
+async function requestAdminDeletion(scope, { role = 'gobhi', id = '42' } = {}) {
+  const [guard, handler] = routeFor('delete', '/admin/users/:id/data/:scope').route.stack;
+  const req = { params: { id, scope }, headers: { 'x-user-id': '10', 'x-user-role': role } };
+  const res = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+  let handling;
+  guard.handle(req, res, () => { handling = handler.handle(req, res); });
+  await handling;
+  return res;
+}
+
+test('admin deletion is staff-only and unavailable outside the dev service', async (t) => {
+  const oldService = process.env.K_SERVICE;
+  t.after(() => {
+    if (oldService === undefined) delete process.env.K_SERVICE;
+    else process.env.K_SERVICE = oldService;
+  });
+  customerRole = 'customer';
+  erasureCalls = [];
+  txCalls = 0;
+  for (const service of ['', 'auth-service-prod', 'health-service-dev']) {
+    process.env.K_SERVICE = service;
+    assert.deepEqual(adminUserDataCategories(), []);
+    assert.equal((await requestAdminDeletion('all')).statusCode, 404);
+  }
+  process.env.K_SERVICE = 'auth-service-dev';
+  assert.ok(adminUserDataCategories().some(({ id }) => id === 'explore'));
+  assert.equal((await requestAdminDeletion('all', { role: 'customer' })).statusCode, 403);
+  assert.equal((await requestAdminDeletion('all', { id: '2147483648' })).statusCode, 400);
+  assert.equal((await requestAdminDeletion('toString')).statusCode, 400);
+  customerRole = 'partner';
+  assert.equal((await requestAdminDeletion('all')).statusCode, 404);
+  assert.deepEqual(erasureCalls, []);
+  assert.equal(txCalls, 0);
+});
+
+test('dev category erasure is scoped and Delete all hard-erases even in archive mode', async (t) => {
+  const previous = { K_SERVICE: process.env.K_SERVICE, ACCOUNT_DELETION_MODE: process.env.ACCOUNT_DELETION_MODE };
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  process.env.K_SERVICE = 'auth-service-dev';
+  process.env.ACCOUNT_DELETION_MODE = 'archive';
+  customerRole = 'customer';
+  txCalls = 0;
+  erasureCalls = [];
+  erasureResult = { ok: true, results: [], failures: [] };
+
+  assert.equal((await requestAdminDeletion('health')).statusCode, 200);
+  assert.deepEqual(erasureCalls, [[42, 'health-service']]);
+  assert.equal(txCalls, 0);
+  assert.equal((await requestAdminDeletion('explore')).statusCode, 200);
+  assert.deepEqual(ops.map((op) => op.split('.')[0]), [
+    'exploreReceiptEvent', 'exploreClaim', 'exploreLocationReceipt', 'exploreRewardReceipt', 'exploreProgress',
+  ]);
+
+  erasureResult = { ok: false, failures: [{ service: 'buddy-service' }] };
+  assert.equal((await requestAdminDeletion('all')).statusCode, 502);
+  assert.equal(txCalls, 1);
+
+  erasureResult = { ok: true, results: [], failures: [] };
+  assert.equal((await requestAdminDeletion('all')).statusCode, 200);
+  assert.deepEqual(erasureCalls.slice(1), [[42], [42]]);
+  assert.match(ops.at(-1), /^user\.delete /);
 });

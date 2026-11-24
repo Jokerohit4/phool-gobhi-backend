@@ -432,54 +432,54 @@ async function archiveAccount(userId) {
   return { message: 'User deleted', archived: true };
 }
 
+export async function eraseExploreData(userId) {
+  await prisma.$transaction(exploreErasureOperations(userId));
+}
+
+function exploreErasureOperations(userId) {
+  return [
+    prisma.exploreReceiptEvent.deleteMany({ where: { userId } }),
+    prisma.exploreClaim.deleteMany({ where: { userId } }),
+    prisma.exploreLocationReceipt.deleteMany({ where: { userId } }),
+    prisma.exploreRewardReceipt.deleteMany({ where: { userId } }),
+    prisma.exploreProgress.deleteMany({ where: { userId } }),
+  ];
+}
+
+export async function eraseAccount(userId) {
+  const erasure = await eraseUserAcrossServices(userId);
+  if (!erasure.ok) {
+    console.error('deleteUserService: refusing to delete User row —', erasure.failures);
+    throw {
+      status: 502,
+      error: 'Could not delete all of your data right now. Please try again.',
+      errorCode: 'ERASURE_INCOMPLETE',
+      failedServices: erasure.failures.map((f) => f.service),
+    };
+  }
+
+  // Remove auth-owned records and identity atomically. Referrals keep their
+  // accounts and lose only the link to this user.
+  await prisma.$transaction([
+    ...exploreErasureOperations(userId),
+    prisma.refreshToken.deleteMany({ where: { userId } }),
+    prisma.savedAddress.deleteMany({ where: { userId } }),
+    prisma.partnerBankAccount.deleteMany({ where: { userId } }),
+    prisma.appModeHistory.deleteMany({ where: { userId } }),
+    prisma.gymLink.deleteMany({ where: { userId } }),
+    prisma.gymMemberRecord.deleteMany({ where: { userId } }),
+    prisma.gymMemberPayment.deleteMany({ where: { userId } }),
+    prisma.userDevice.deleteMany({ where: { userId } }),
+    prisma.user.updateMany({ where: { referredByUserId: userId }, data: { referredByUserId: null } }),
+    prisma.user.delete({ where: { id: userId } }),
+  ]);
+  return { message: 'User deleted', erased: erasure.results };
+}
+
 export async function deleteUserService(userId) {
   try {
     if (accountDeletionMode() === 'archive') return await archiveAccount(userId);
-    const erasure = await eraseUserAcrossServices(userId);
-    if (!erasure.ok) {
-      console.error('deleteUserService: refusing to delete User row —', erasure.failures);
-      throw {
-        status: 502,
-        error: 'Could not delete all of your data right now. Nothing was deleted — please try again.',
-        errorCode: 'ERASURE_INCOMPLETE',
-        // Named so support/logs can see which service to chase, without
-        // leaking service topology to the client.
-        failedServices: erasure.failures.map((f) => f.service),
-      };
-    }
-
-    // Auth-service's own rows go in ONE transaction with the User row.
-    // Four of these tables hold a foreign key to User with no ON DELETE
-    // CASCADE, so a bare user.delete threw a FK violation for anyone who had
-    // ever logged in (every account has RefreshToken rows) — deletion could
-    // never succeed for a real user. AppModeHistory has no FK at all, so it
-    // would otherwise have outlived the account as orphaned personal data.
-    // People this user referred keep their accounts; only the back-link to a
-    // now-deleted person is cleared. All-or-nothing: if any step fails the
-    // account is untouched and the user can simply try again.
-    await prisma.$transaction([
-      prisma.exploreReceiptEvent.deleteMany({ where: { userId } }),
-      prisma.refreshToken.deleteMany({ where: { userId } }),
-      prisma.exploreClaim.deleteMany({ where: { userId } }),
-      prisma.exploreLocationReceipt.deleteMany({ where: { userId } }),
-      prisma.exploreRewardReceipt.deleteMany({ where: { userId } }),
-      prisma.exploreProgress.deleteMany({ where: { userId } }),
-      prisma.savedAddress.deleteMany({ where: { userId } }),
-      prisma.partnerBankAccount.deleteMany({ where: { userId } }),
-      prisma.appModeHistory.deleteMany({ where: { userId } }),
-      // Coach-journey B2: GymLink (membership history) and UserDevice (install
-      // ids) both key on userId with no cascade, and both outlive as personal
-      // data if left behind.
-      prisma.gymLink.deleteMany({ where: { userId } }),
-      // What gyms recorded about this person (locker, notes, payments, ...) is
-      // personal data keyed on userId too.
-      prisma.gymMemberRecord.deleteMany({ where: { userId } }),
-      prisma.gymMemberPayment.deleteMany({ where: { userId } }),
-      prisma.userDevice.deleteMany({ where: { userId } }),
-      prisma.user.updateMany({ where: { referredByUserId: userId }, data: { referredByUserId: null } }),
-      prisma.user.delete({ where: { id: userId } }),
-    ]);
-    return { message: 'User deleted', erased: erasure.results };
+    return await eraseAccount(userId);
   } catch (err) {
     if (err?.errorCode === 'ERASURE_INCOMPLETE' || err?.errorCode === 'ARCHIVE_INCOMPLETE' || err?.errorCode === 'USER_NOT_FOUND') throw err;
     if (err.name === 'PrismaClientInitializationError') {

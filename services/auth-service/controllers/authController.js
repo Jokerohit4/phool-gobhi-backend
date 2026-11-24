@@ -1,5 +1,6 @@
 
 import { buildFullExportService } from '../services/exportService.js';
+import { adminUserDataCategories } from './adminUserDataController.js';
 import prisma from '../db/prisma.js';
 import semver from 'semver';
 import { clientAnalyticsProps } from '../utils/clientContext.js';
@@ -706,7 +707,9 @@ const getAccountCohortsInternal = async (_req, res) => {
 const listUsersByCohort = async (req, res) => {
   try {
     const { cohort, limit, cursor } = req.query;
-    res.json({ data: await listUsersByCohortService({ cohort, limit, cursor }) });
+    const data = await listUsersByCohortService({ cohort, limit, cursor });
+    const deletionCategories = adminUserDataCategories();
+    res.json({ data: deletionCategories.length ? { ...data, deletionCategories } : data });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || 'Server error' });
   }
