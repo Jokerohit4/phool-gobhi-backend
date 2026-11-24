@@ -582,6 +582,12 @@
     "since": "2026-10-01",
     "notes": "customer onboarding permission step resolved — props permission (location|notifications), granted (bool)"
   },
+  "notification_permission_status": {
+    "source": "client",
+    "apps": ["phool_gobhi", "phool_gobhi_partner"],
+    "since": "2026-11-24",
+    "notes": "once a day per signed-in install: the OS notification permission as the app sees it. props status (granted | denied | not_determined | provisional), source (launch | resume). denied = the user muted the app in OS settings (the server cannot see this: FCM still reports the send as accepted). Count distinct users by their LATEST status in the window"
+  },
   "onboarding_completed": {
     "source": "client",
     "apps": [
