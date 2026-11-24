@@ -218,6 +218,38 @@ test('failures are counted by FCM error code, with no tokens in the summary', as
   assert.ok(!JSON.stringify(out).includes('tok-'));
 });
 
+test('a token FCM says is dead is cleared; other failures are not; a cleanup error never fails the run', async () => {
+  const cleared = [];
+  const deps = fakeDeps(users(4), {
+    sendResult: (messages) =>
+      messages.map((_, i) =>
+        i === 1 ? { success: false, error: { code: 'messaging/registration-token-not-registered' } }
+        : i === 2 ? { success: false, error: { code: 'messaging/internal-error' } }
+        : i === 3 ? { success: false, error: { code: 'messaging/invalid-registration-token' } }
+        : { success: true },
+      ),
+  });
+  deps.clearTokens = async (pairs) => { cleared.push(...pairs); return pairs.length; };
+  const out = await runReminderService({ now: ist('12:00'), env: ALL_ON, deps });
+  assert.equal(out.sent, 1);
+  assert.equal(out.failed, 3);
+  assert.deepEqual(cleared, [{ id: 2, token: 'tok-2' }, { id: 4, token: 'tok-4' }]); // not the internal-error one
+  assert.equal(out.tokensCleared, 2);
+  assert.ok(!JSON.stringify(out).includes('tok-'));
+  resetReminderStateForTests();
+  const failing = fakeDeps(users(2), { sendResult: (m) => m.map(() => ({ success: false, error: { code: 'messaging/registration-token-not-registered' } })) });
+  failing.clearTokens = async () => { throw new Error('db down'); };
+  const out2 = await runReminderService({ now: ist('12:00'), env: ALL_ON, deps: failing });
+  assert.equal(out2.failed, 2);
+  assert.equal(out2.tokensCleared, 0);
+  resetReminderStateForTests();
+  const clean = fakeDeps(users(2));
+  let called = false;
+  clean.clearTokens = async () => { called = true; return 0; };
+  await runReminderService({ now: ist('12:00'), env: ALL_ON, deps: clean });
+  assert.equal(called, false);
+});
+
 test('FCM unavailable is reported as failed and the slot stays retryable', async () => {
   const bad = fakeDeps(users(3), { sendResult: () => null });
   const out = await runReminderService({ now: ist('20:00'), env: ALL_ON, deps: bad });

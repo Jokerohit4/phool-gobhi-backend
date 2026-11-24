@@ -23,6 +23,12 @@ import { SLOTS, findDueSlot, findSlotByTime, buildSlotMessage } from './reminder
 // telemetry events (the push telemetry work ships with the next dev->main release).
 
 const PAGE_SIZE = 250; // also keeps each FCM batch well under the 500 limit
+// FCM answers these for a token that will never work again (app uninstalled, data
+// cleared, token rotated). Such a token is cleared so it stops counting as a recipient.
+const DEAD_TOKEN_CODES = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+]);
 const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
 
 const sentSlots = new Set();
@@ -78,6 +84,20 @@ async function defaultDeps() {
         take: PAGE_SIZE,
       }),
     sendEach: sendEachPush,
+    // Only clears a token that is still the one FCM rejected (a newer token the user
+    // registered in the meantime is left alone). Never throws.
+    clearTokens: async (pairs) => {
+      let cleared = 0;
+      for (const { id, token } of pairs) {
+        try {
+          const r = await prisma.user.updateMany({ where: { id, fcmToken: token }, data: { fcmToken: '' } });
+          cleared += r.count;
+        } catch (err) {
+          console.error('[reminders] clearing a dead token failed:', err.message);
+        }
+      }
+      return cleared;
+    },
   };
 }
 
@@ -142,6 +162,7 @@ export async function runReminderService({ dryRun = false, slot: slotParam, now 
   let failed = 0;
   const failures = {};
   let fcmUnavailable = false;
+  let tokensCleared = 0;
   const nowMs = now.getTime();
 
   for (;;) {
@@ -156,19 +177,28 @@ export async function runReminderService({ dryRun = false, slot: slotParam, now 
       failures.fcm_unavailable = (failures.fcm_unavailable ?? 0) + page.length;
       break;
     }
-    for (const r of results) {
+    const dead = [];
+    results.forEach((r, i) => {
       if (r?.success) {
         sent += 1;
       } else {
         failed += 1;
         const code = r?.error?.code || 'unknown';
         failures[code] = (failures[code] ?? 0) + 1;
+        if (DEAD_TOKEN_CODES.has(code) && page[i]) dead.push({ id: page[i].id, token: page[i].fcmToken });
+      }
+    });
+    if (dead.length && d.clearTokens) {
+      try {
+        tokensCleared += await d.clearTokens(dead);
+      } catch {
+        // cleaning is best-effort; a failed cleanup must never fail the run
       }
     }
   }
 
   if (fcmUnavailable && sent === 0) sentSlots.delete(key); // nothing went out: allow a retry
-  const summary = { dryRun: false, slot: slot.time, type: message.pushType, recipients, sent, failed, failures, istDate: date };
+  const summary = { dryRun: false, slot: slot.time, type: message.pushType, recipients, sent, failed, failures, tokensCleared, istDate: date };
   console.log('[reminders]', JSON.stringify(summary));
   return summary;
 }
