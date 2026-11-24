@@ -22,7 +22,7 @@ export function validateReportReadings(input) {
   });
 }
 
-const identityLabel = /^(?:patient(?:\b|_)|name\b|age\b|sex\b|gender\b|address\b|date\b|report(?:ed|\s*(?:no|id|date))\b|sample(?:\s*(?:no|id|date))\b|collected\b|received\b|referr(?:ed|ing)\b|page\b|barcode\b|accession\b|signature\b)/i;
+export const identityLabel = /^(?:patient(?:\b|_)|name\b|age\b|sex\b|gender\b|address\b|date\b|report(?:ed|\s*(?:no|id|date))\b|sample(?:\s*(?:no|id|date))\b|collected\b|received\b|referr(?:ed|ing)\b|page\b|barcode\b|accession\b|signature\b|lab\s*(?:no|id|name)\b|mobile\b|phone\b|contact\b|e-?mail\b|tel\b|website\b|www\b|nabl\b|cin\b|gstin?\b|pan\b|doctor\b|dr\b|consultant\b|pathologist\b|technician\b|technologist\b|approved\b|authori[sz]ed\b|printed\b|processed\b)/i;
 
 // These are column headings found across labs. Test names in the rows are data.
 function columnRole(text) {
@@ -84,31 +84,83 @@ function headerColumns(words) {
   return roles.indexOf('label') !== -1 && roles.indexOf('label') < roles.indexOf('value') ? columns : null;
 }
 
+// A row found after the table's own header has gone stale (a new page without a
+// repeated header, or a large blank after the last row) is accepted only when it
+// looks like a result: a short label and a bare number, comparator or a single
+// qualitative word. Inside a live table anything with a label and a value is
+// kept, as before. Outside one, narrative sentences and footers are the risk,
+// and a bare number is the signature of a real lab row.
+const STRICT_VALUE = /^(?:[<>≤≥]=?\s*)?\d[\d.,]*(?:\s*[-–]\s*\d[\d.,]*)?$|^(?:negative|positive|nil|absent|present|reactive|non[\s-]?reactive|trace|detected|not\s+detected)$/i;
+const looksLikeResult = reading => STRICT_VALUE.test(reading.value) && reading.label.split(/\s+/).length <= 8;
+
+// A label printed over two lines: "Glycosylated Hemoglobin" on one row and
+// "(HbA1c)" on the next, in whichever order the lab chose. Joined only when the
+// shape says so, because a label-only row is just as often a section heading.
+const OPEN_ENDING = /[(\-/,&]$|\b(?:and|of|with|for)$/i;
+const isParenthetical = text => text.startsWith('(');
+const SAME_BLOCK = 0.05;
+
 function fromLayout(document) {
   const readings = [];
+  // Carried across pages: lab tables routinely continue on the next page
+  // without repeating their header, and every row there used to be lost.
+  let columns = null;
+  let boundaries = [];
+  let stale = false;
   for (const page of document.pages || []) {
-    let columns = null;
-    let boundaries = [];
-    let lastY = 0;
+    let lastY = null;
+    let previous = null; // { reading, y }: the last row on this page that became a reading
+    let dangling = null; // { text, y }: a label-only row waiting for its value row
+    // A new page may open with a repeated patient header rather than the table.
+    if (columns) stale = true;
     for (const row of spatialRows(wordsForPage(page, document.text))) {
       const header = headerColumns(row.words);
       if (header) {
         columns = header;
         boundaries = header.slice(1).map((col, i) => (header[i].x + col.x) / 2);
         lastY = row.y;
+        stale = false;
+        previous = dangling = null;
         continue;
       }
       if (!columns) continue;
       // A large blank separates the lab table from narrative and footer text.
-      if (row.y - lastY > 0.075) { columns = null; continue; }
+      // It no longer ends the table (a second panel on the same page often has
+      // no header of its own); it only tightens what is accepted afterwards.
+      if (lastY !== null && row.y - lastY > 0.075) stale = true;
       lastY = row.y;
       const cells = columns.map(() => []);
       for (const word of row.words) {
         const index = boundaries.findLastIndex(x => word.x >= x) + 1;
         cells[index].push(word.word);
       }
-      const reading = cleanReading(cells.map(parts => parts.join(' ')), columns.map(c => c.role));
-      if (reading) readings.push(reading);
+      const text = cells.map(parts => parts.join(' '));
+      const roles = columns.map(c => c.role);
+      const reading = cleanReading(text, roles);
+      if (reading) {
+        if (stale && !looksLikeResult(reading)) { dangling = null; continue; }
+        if (dangling && row.y - dangling.y < SAME_BLOCK && isParenthetical(reading.label)) {
+          reading.label = `${dangling.text} ${reading.label}`.slice(0, limits.label);
+        }
+        readings.push(reading);
+        previous = { reading, y: row.y };
+        dangling = null;
+        continue;
+      }
+      // No value on this row. When only the label cell has text it is half of a
+      // wrapped label or a section heading.
+      const label = text[0]?.replace(/\s+/g, ' ').trim();
+      const labelOnly = roles[0] === 'label' && label && text.slice(1).every(cell => !cell);
+      if (labelOnly && !identityLabel.test(label) && !columnRole(label)) {
+        if (previous && row.y - previous.y < SAME_BLOCK && (isParenthetical(label) || OPEN_ENDING.test(previous.reading.label))) {
+          previous.reading.label = `${previous.reading.label} ${label}`.slice(0, limits.label);
+          previous.y = row.y;
+        } else {
+          dangling = { text: label, y: row.y };
+        }
+      } else {
+        dangling = null;
+      }
     }
   }
   return readings;

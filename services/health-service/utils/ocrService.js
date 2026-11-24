@@ -2,6 +2,8 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { extractGuidanceDetails } from './guidanceExtraction.js';
 import { extractReportReadings } from './reportReadings.js';
+import { enrichParsedReport } from './reportLlm.js';
+import { isPageLimitError } from './reportFailure.js';
 import { METRIC_BOUNDS, METRIC_UNITS } from '../services/biometricService.js';
 
 dotenv.config();
@@ -19,7 +21,7 @@ const PROCESSOR_ID = process.env.GOOGLE_DOCUMENT_AI_PROCESSOR_ID;
  * array would invite a caller to treat "a biomarker and its date" as one
  * finding from one place when they are two independent guesses.
  */
-export async function extractBiomarkersFromPDF(pdfUrl, mimeType = 'application/pdf') {
+export async function extractBiomarkersFromPDF(pdfUrl, mimeType = 'application/pdf', options = {}) {
   if (!GOOGLE_PROJECT_ID || !PROCESSOR_ID) {
     console.error('Google Document AI credentials missing');
     throw new Error('OCR_CONFIG_MISSING');
@@ -29,26 +31,72 @@ export async function extractBiomarkersFromPDF(pdfUrl, mimeType = 'application/p
     // Note: In a real GCP environment, we would use the @google-cloud/documentai SDK.
     // This implementation uses the REST API for transparency and fewer heavy dependencies.
     const accessToken = await getGoogleAccessToken();
-    
-    const response = await axios.post(
+    const content = await fetchPdfAsBase64(pdfUrl);
+    const post = options.post || axios.post;
+    const call = processOptions => post(
       `https://${LOCATION}-documentai.googleapis.com/v1/projects/${GOOGLE_PROJECT_ID}/locations/${LOCATION}/processors/${PROCESSOR_ID}:process`,
-      {
-        rawDocument: {
-          mimeType,
-          content: await fetchPdfAsBase64(pdfUrl),
-        },
-      },
-      {
-        timeout: 90000,
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }
-    );
+      { rawDocument: { mimeType, content }, ...(processOptions ? { processOptions } : {}) },
+      { timeout: 90000, headers: { Authorization: `Bearer ${accessToken}` } },
+    ).then(res => res.data);
 
-    return parseDocumentAIResponse(response.data);
+    // One request for the whole file; only a refusal on page count pays for more.
+    // The online endpoint accepts a limited number of pages, and a full-body
+    // health check routinely has more, so the first and last windows are read
+    // and merged (a shorter file's overlap is removed when the parts are merged).
+    let documents;
+    try {
+      documents = [await call()];
+    } catch (err) {
+      if (!isPageLimitError(err)) throw err;
+      documents = await Promise.all([call({ fromStart: PAGE_WINDOW }), call({ fromEnd: PAGE_WINDOW })]);
+    }
+
+    const parsed = mergeParsed(documents.map(parseDocumentAIResponse));
+    const text = documents.map(doc => doc?.document?.text || '').join('\n');
+    return await enrichParsedReport(parsed, text, options);
   } catch (err) {
-    console.error('OCR API Error:', err.response?.data || err.message);
+    // The class of failure is logged, not the response: a provider's error body
+    // can echo the document it was sent.
+    console.error('OCR API Error:', err.response?.status || err.code || err.message);
     throw err;
   }
+}
+
+const PAGE_WINDOW = 15;
+
+const sameReading = row => [row.label, row.value, row.unit, row.referenceRange].map(part => String(part ?? '').toLowerCase().replace(/\s+/g, '')).join('|');
+
+/**
+ * Folds the results of reading a long file in windows back into one result,
+ * with the same shape parseDocumentAIResponse returns. Overlapping pages read
+ * twice collapse because every merge keeps one of each: one extraction per
+ * metric (the most confident), one reading per label/value/unit/range, the
+ * first profile value, the most confident date.
+ */
+export function mergeParsed(parts) {
+  if (parts.length === 1) return parts[0];
+  const best = new Map();
+  for (const ex of parts.flatMap(part => part.extractions || [])) {
+    const current = best.get(ex.metric);
+    if (!current || ex.confidence > current.confidence) best.set(ex.metric, ex);
+  }
+  const seen = new Set();
+  const readings = [];
+  for (const row of parts.flatMap(part => part.readings || [])) {
+    const id = sameReading(row);
+    if (!seen.has(id)) { seen.add(id); readings.push(row); }
+  }
+  const first = (pick, keys) => Object.fromEntries(keys.map(key => [key, parts.map(pick).map(obj => obj?.[key]).find(value => value != null) ?? null]));
+  const dates = parts.map(part => part.detectedDate).filter(Boolean);
+  const markers = {};
+  for (const part of parts) for (const [key, value] of Object.entries(part.markers || {})) if (markers[key] == null) markers[key] = value;
+  return {
+    extractions: [...best.values()],
+    readings: readings.slice(0, 500),
+    detectedDate: dates.sort((a, b) => b.confidence - a.confidence)[0] || null,
+    profile: first(part => part.profile, ['name', 'age', 'gender', 'address']),
+    markers,
+  };
 }
 
 async function fetchPdfAsBase64(url) {
@@ -77,7 +125,7 @@ async function getGoogleAccessToken() {
 // failed every report that contained it - which was every real one. A marker
 // with no enum member is not extracted; it is not something we can store.
 const MARKER_PATTERNS = [
-  ['hba1c', /\b(?:hb\s*a1c|a1c|glyc(?:at|osyl)ated\s+ha?emoglobin|ha?emoglobin\s+a1c)\b/i],
+  ['hba1c', /\b(?:hb\s*a1c|a1c|glyc(?:at|osylat)ed\s+ha?emoglobin|ha?emoglobin\s+a1c)\b/i],
   ['hdl', /\b(?:hdl|high[\s-]density\s+lipoprotein)\b/i],
   ['ldl', /\b(?:ldl|low[\s-]density\s+lipoprotein)\b/i],
   ['triglycerides', /\btriglycerides?\b/i],

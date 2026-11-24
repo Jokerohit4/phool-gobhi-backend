@@ -5,9 +5,12 @@ import { requireAuth, requireRole, requireInternal } from '../middleware/require
 import { requireFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js';
 import { saveDocument, signedDocumentUrl, deleteObjects } from '../services/ledger/medicalDocumentStorage.js';
-import { createReportService, processReportService, parseReportDate } from '../services/reportService.js';
+import { createHash } from 'node:crypto';
+import { createReportService, processReportService, parseReportDate, findExistingReport } from '../services/reportService.js';
 import { validateMarkers, riskBucket } from '../utils/guidanceExtraction.js';
 import { validateReportReadings } from '../utils/reportReadings.js';
+import { valuesFromReadings, BIOMETRIC_KEYS, MARKER_KEYS } from '../utils/readingMetrics.js';
+import { isStalledReport, estimatePdfPages, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { invalidateBlendedScore } from '../services/ledger/blendedScoreCache.js';
 import { listAdminReports, adminReportLink } from '../services/adminReportsService.js';
@@ -27,20 +30,39 @@ async function ownReport(userId, id) {
   return row;
 }
 const canReadAgain = r => r.status === 'COMPLETED' && r.proposedReadings == null && r.readConsentAt != null;
+// Typed values the person would otherwise have to copy out of the readings list by
+// hand. Readings are the source; the extractor's own markers and the entity
+// extractions override them where both exist, as before.
+const proposedMarkersFor = r => ({
+  ...valuesFromReadings(r.proposedReadings, MARKER_KEYS),
+  ...(r.proposedMarkers || {}),
+  ...Object.fromEntries((r.extractions || []).filter(x => ['hba1c', 'triglycerides'].includes(x.metric)).map(x => [x.metric, x.normalizedValue])),
+});
 const reportView = r => ({
   id: r.id, fileName: r.fileName, status: r.status, createdAt: r.createdAt,
   reportDate: r.reportDate, detectedReportDate: r.detectedReportDate,
   proposedProfile: r.proposedProfile || {},
-  proposedMarkers: { ...(r.proposedMarkers || {}), ...Object.fromEntries((r.extractions || []).filter(x => ['hba1c', 'triglycerides'].includes(x.metric)).map(x => [x.metric, x.normalizedValue])) },
+  proposedMarkers: proposedMarkersFor(r),
   proposedReadings: r.proposedReadings ?? null,
   confirmedReadings: r.confirmedReadings ?? null,
   canReadAgain: canReadAgain(r),
+  failureCode: r.status === 'FAILED' ? r.failureCode ?? 'READ_FAILED' : null,
+  stalled: isStalledReport(r),
+});
+// The list needs a row, not the report: readings can run to hundreds per file and
+// opening one fetches it by id.
+const SUMMARY_FIELDS = { id: true, fileName: true, status: true, createdAt: true, updatedAt: true, processingStartedAt: true, reportDate: true, detectedReportDate: true, failureCode: true };
+const reportSummary = r => ({
+  id: r.id, fileName: r.fileName, status: r.status, createdAt: r.createdAt,
+  reportDate: r.reportDate, detectedReportDate: r.detectedReportDate,
+  failureCode: r.status === 'FAILED' ? r.failureCode ?? 'READ_FAILED' : null,
+  stalled: isStalledReport(r),
 });
 
 router.get('/guidance/me', requireAuth, run(async req => ({
   profile: await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } }),
   requests: await prisma.guidanceRequest.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 30 }),
-  reports: (await prisma.healthReport.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 20, include: { extractions: true } })).map(reportView),
+  reports: (await prisma.healthReport.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 10, select: SUMMARY_FIELDS })).map(reportSummary),
 })));
 router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('reportSubscription'), uploadMedicalDocumentMiddleware, run(async req => {
   if (req.body?.readConsent !== 'true' && req.body?.readConsent !== true) bad('Confirm permission to read your report');
@@ -48,10 +70,17 @@ router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('re
   const bytes = req.file.buffer;
   const matches = req.file.mimetype === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-' : req.file.mimetype === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
   if (!matches) bad('The file content does not match its PDF or image type');
+  // Before any storage write or paid read: a file that is plainly too long is
+  // refused with advice, and the same file uploaded again is answered from the
+  // report the person already has.
+  if (req.file.mimetype === 'application/pdf' && (estimatePdfPages(bytes) || 0) > MAX_REPORT_PAGES) bad(`This report has more than ${MAX_REPORT_PAGES} pages. Upload only the pages with your results.`);
+  const fileSha256 = createHash('sha256').update(bytes).digest('hex');
+  const existing = await findExistingReport(req.userId, fileSha256);
+  if (existing) return reportView(await ownReport(req.userId, existing.id));
   const path = await saveDocument({ buffer: req.file.buffer, mimeType: req.file.mimetype, userId: req.userId });
   let report;
   try {
-    report = await createReportService({ userId: req.userId, storagePath: path, fileName: cap(req.file.originalname, 160) || 'Blood report', mimeType: req.file.mimetype });
+    report = await createReportService({ userId: req.userId, storagePath: path, fileName: cap(req.file.originalname, 160) || 'Blood report', mimeType: req.file.mimetype, fileSha256 });
     await prisma.healthReport.update({ where: { id: report.id }, data: { readConsentAt: new Date() } });
   } catch (e) { await deleteObjects([path]).catch(() => {}); throw e; }
   // Await the reader: Cloud Run can suspend background work after a response.
@@ -63,7 +92,7 @@ router.get('/guidance/reports/:id', requireAuth, run(async req => reportView(awa
 router.get('/guidance/reports/:id/link', requireAuth, run(async req => ({ url: await signedDocumentUrl((await ownReport(req.userId, req.params.id)).storagePath) })));
 router.post('/guidance/reports/:id/retry', requireRole('customer'), requireFeatureFlag('reportSubscription'), run(async req => {
   const row = await ownReport(req.userId, req.params.id);
-  const stalled = ['PENDING', 'PROCESSING'].includes(row.status) && Date.now() - new Date(row.processingStartedAt || row.createdAt).getTime() > 300000;
+  const stalled = isStalledReport(row);
   if (row.status !== 'FAILED' && !stalled && !canReadAgain(row)) {
     if (row.status === 'COMPLETED') return reportView(row);
     bad('This report is still being read. Try again in a few minutes');
@@ -80,9 +109,15 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
   const details = { name: cap(input.name, 120), address: cap(input.address, 500), gender: input.gender || null, age: input.age == null || input.age === '' ? null : Number(input.age) };
   if (details.gender && !['male', 'female', 'other', 'prefer_not_to_say'].includes(details.gender)) bad('Check gender');
   if (details.age != null && (!Number.isInteger(details.age) || details.age < 0 || details.age > 120)) bad('Check age');
-  const markers = validateMarkers(req.body.markers);
+  const typedMarkers = validateMarkers(req.body.markers);
   const readings = req.body.readings === undefined ? undefined : validateReportReadings(req.body.readings);
   const confirmedReadings = readings ?? report.confirmedReadings ?? null;
+  // The readings the person just reviewed are the source of truth. A typed value
+  // the client sent wins (they edited it), but a marker the list carries and the
+  // form left empty is filled from the list, so the two can no longer disagree.
+  const reviewed = confirmedReadings ?? report.proposedReadings;
+  const markers = { ...valuesFromReadings(reviewed, MARKER_KEYS), ...typedMarkers };
+  const biometrics = { ...valuesFromReadings(reviewed, BIOMETRIC_KEYS), ...Object.fromEntries(['hba1c', 'triglycerides'].filter(key => markers[key] != null).map(key => [key, markers[key]])) };
   const liverFlag = req.body.liverFlag === true;
   const reportDate = parseReportDate(req.body.reportDate);
   const previous = await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } });
@@ -102,9 +137,17 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
       });
     }
     const localDate = reportDate || report.reportDate || report.detectedReportDate || report.createdAt.toISOString().slice(0, 10);
+    // Every value the reader proposed is settled here, not just the two that feed
+    // guidance. One the person kept is saved; one they removed or emptied is
+    // dropped. Left alone, the rest would sit unconfirmed and turn up again as
+    // "waiting for you" in the vault for a report already reviewed.
     for (const extraction of report.extractions) {
-      if (!['hba1c', 'triglycerides'].includes(extraction.metric) || markers[extraction.metric] == null) continue;
-      const value = markers[extraction.metric];
+      if (!BIOMETRIC_KEYS.includes(extraction.metric)) continue;
+      const value = biometrics[extraction.metric];
+      if (value == null) {
+        if (!extraction.isVerified) await tx.reportExtraction.delete({ where: { id: extraction.id } });
+        continue;
+      }
       await tx.reportExtraction.update({ where: { id: extraction.id }, data: { isVerified: true, normalizedValue: value } });
       await tx.biometricEntry.upsert({ where: { userId_metric_localDate: { userId: req.userId, metric: extraction.metric, localDate } }, create: { userId: req.userId, metric: extraction.metric, value, unit: extraction.metric === 'hba1c' ? '%' : 'mg/dL', source: 'manual', localDate }, update: { value, source: 'manual' } });
     }

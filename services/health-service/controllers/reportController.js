@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   createReportService,
   processReportService,
@@ -5,7 +6,10 @@ import {
   verifyExtractionService,
   listReportsService,
   deleteReportService,
+  findExistingReport,
+  getReportSummaryService,
 } from '../services/reportService.js';
+import { estimatePdfPages, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
 import { isAllowedReportMimeType, saveDocument } from '../services/ledger/medicalDocumentStorage.js';
 
 // The Local Health Vault: upload a lab report, let OCR propose the numbers, and
@@ -51,6 +55,22 @@ export const uploadReport = async (req, res) => {
       });
     }
 
+    // Before any storage write or paid read: a file that is plainly too long is
+    // refused with advice, and the same bytes uploaded again are answered from
+    // the report this user already has.
+    if ((estimatePdfPages(req.file.buffer) || 0) > MAX_REPORT_PAGES) {
+      return res.status(400).json({
+        error: `This report has more than ${MAX_REPORT_PAGES} pages. Upload only the pages with your results.`,
+        code: 'TOO_LONG',
+      });
+    }
+    const fileSha256 = createHash('sha256').update(req.file.buffer).digest('hex');
+    const existing = await findExistingReport(userId, fileSha256);
+    if (existing) {
+      const summary = await getReportSummaryService({ reportId: existing.id, userId });
+      return res.status(200).json({ data: summary });
+    }
+
     const storagePath = await saveDocument({
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
@@ -75,32 +95,27 @@ export const uploadReport = async (req, res) => {
       storagePath,
       fileName,
       reportDate: req.body?.reportDate,
+      fileSha256,
     });
 
-    // Processing is async and deliberately not awaited: OCR takes seconds to
-    // minutes, and the user is told to expect a pending list rather than left
-    // watching a spinner for two minutes to learn there was one error number in
-    // their bloodwork.
-    processReportService(report.id).catch((err) =>
-      console.error(`[reports] async processing failed for report ${report.id}:`, err?.message),
+    // Awaited, like the guidance upload. This used to start processing and
+    // return, but Cloud Run can freeze an instance as soon as the response is
+    // sent, so the read could stop half way and leave the report PENDING for
+    // good. Waiting costs the user the length of one read; the app shows
+    // progress for it. A failed read is not an upload error: the file is saved,
+    // the report row says FAILED with a reason, and the person can try again.
+    await processReportService(report.id).catch((err) =>
+      console.error(`[reports] processing failed for report ${report.id}:`, err?.message),
     );
 
-    // storagePath never leaves the service. Neither does the raw OCR output —
-    // the client gets the id and the status, and comes back for the pending
-    // extractions via GET /reports/pending once processing finishes.
+    // storagePath never leaves the service. Neither does the raw OCR output.
+    // The row comes back in the list shape, with the final status and the number
+    // of values waiting, so the screen needs no second request to draw it.
     //
     // reportDate is echoed because the user's date picker and the stored value
     // can disagree, and a silent disagreement is only discovered weeks later
     // when a trend looks wrong with no way to see why.
-    res.status(201).json({
-      data: {
-        id: report.id,
-        fileName: report.fileName,
-        status: report.status,
-        createdAt: report.createdAt,
-        reportDate: report.reportDate ?? null,
-      },
-    });
+    res.status(201).json({ data: await getReportSummaryService({ reportId: report.id, userId }) });
   } catch (err) {
     // code is passed through so the app can say "that date isn't real" rather
     // than "upload failed" - the two are very different things to a user who

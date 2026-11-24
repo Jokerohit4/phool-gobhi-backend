@@ -21,6 +21,15 @@ test('triage uses confirmed thresholds; missing values are not a green assessmen
   assert.equal(riskBucket({}, true), 'AMBER');
   assert.equal(riskBucket({ hba1c: 5.2, triglycerides: 120 }), 'GREEN');
 });
+test('green needs HbA1c; partial reports are unset, and raised liver enzymes are amber', () => {
+  assert.equal(riskBucket({ triglycerides: 120 }), 'UNSET');
+  assert.equal(riskBucket({ systolic: 118, diastolic: 76 }), 'UNSET');
+  assert.equal(riskBucket({ hba1c: 5.2, sgpt: 41 }), 'AMBER');
+  assert.equal(riskBucket({ hba1c: 5.2, sgot: 60 }), 'AMBER');
+  assert.equal(riskBucket({ hba1c: 5.2, sgot: 40, sgpt: 35 }), 'GREEN');
+  assert.equal(riskBucket({ sgpt: 120 }), 'AMBER');
+  assert.equal(riskBucket({ hba1c: 6.6, sgpt: 120 }), 'RED');
+});
 test('confirmation rejects negative, infinite, boolean, unknown and implausible values', () => {
   for (const markers of [{ hba1c: -1 }, { systolic: Infinity }, { hba1c: true }, { diagnosis: 1 }, { hba1c: 300 }]) assert.throws(() => validateMarkers(markers));
   assert.deepEqual(validateMarkers({ hba1c: '6.2', triglycerides: '', sgpt: null }), { hba1c: 6.2 });
