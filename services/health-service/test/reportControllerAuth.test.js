@@ -25,7 +25,7 @@ function request() {
     headers: { 'x-user-id': '7', 'x-user-role': 'customer' },
     body: { userId: 999, extractionId: 42, confirmedValue: 5.4 },
     params: { id: '42' },
-    file: { buffer: Buffer.from('demo'), mimetype: 'application/pdf', originalname: 'demo.pdf' },
+    file: { buffer: Buffer.from('%PDF-1.4 demo'), mimetype: 'application/pdf', originalname: 'demo.pdf' },
   };
   const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
   requireAuth(req, res, () => {});

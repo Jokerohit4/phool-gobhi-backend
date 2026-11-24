@@ -149,3 +149,18 @@ test('typed markers are proposed from the readings when the extractor found none
   assert.equal(view.body.data.proposedMarkers.sgpt, 55);
   assert.equal(view.body.data.failureCode, null);
 });
+
+test('a typed HbA1c reaches health history even when the reader found no row for it', async () => {
+  report.extractions = [];
+  report.proposedReadings = [];
+  upserts = [];
+  const ok = await json('/guidance/reports/1/confirm', { belongsToMe: true, details: {}, markers: { hba1c: 6.1 }, readings: [], liverFlag: false });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(upserts, [['hba1c', 6.1]]);
+
+  // A value the biometric store would refuse stays out of history (but still counts for guidance).
+  upserts = [];
+  const odd = await json('/guidance/reports/1/confirm', { belongsToMe: true, details: {}, markers: { hba1c: 2.5 }, readings: [], liverFlag: false });
+  assert.equal(odd.status, 200);
+  assert.deepEqual(upserts, []);
+});

@@ -9,7 +9,7 @@ import {
   findExistingReport,
   getReportSummaryService,
 } from '../services/reportService.js';
-import { estimatePdfPages, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
+import { estimatePdfPages, matchesDeclaredType, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
 import { isAllowedReportMimeType, saveDocument } from '../services/ledger/medicalDocumentStorage.js';
 
 // The Local Health Vault: upload a lab report, let OCR propose the numbers, and
@@ -45,12 +45,18 @@ export const uploadReport = async (req, res) => {
     }
 
     // Re-checked here as well as in the multer filter. The filter is a claim
-    // from the client, and OCR only reads PDFs — an image uploaded here would be
-    // labelled application/pdf to Document AI and fail with an error that looks
-    // like a corrupt file rather than a wrong format.
+    // from the client, so the type is checked again and the bytes are sniffed:
+    // the real type goes to the reader, and a renamed file never reaches a paid
+    // read.
     if (!isAllowedReportMimeType(req.file.mimetype)) {
       return res.status(400).json({
-        error: 'Upload the lab report as a PDF',
+        error: 'Upload the lab report as a PDF, JPEG or PNG',
+        code: 'UNSUPPORTED_TYPE',
+      });
+    }
+    if (!matchesDeclaredType(req.file.mimetype, req.file.buffer)) {
+      return res.status(400).json({
+        error: 'The file content does not match its PDF or image type',
         code: 'UNSUPPORTED_TYPE',
       });
     }
@@ -58,7 +64,7 @@ export const uploadReport = async (req, res) => {
     // Before any storage write or paid read: a file that is plainly too long is
     // refused with advice, and the same bytes uploaded again are answered from
     // the report this user already has.
-    if ((estimatePdfPages(req.file.buffer) || 0) > MAX_REPORT_PAGES) {
+    if (req.file.mimetype === 'application/pdf' && (estimatePdfPages(req.file.buffer) || 0) > MAX_REPORT_PAGES) {
       return res.status(400).json({
         error: `This report has more than ${MAX_REPORT_PAGES} pages. Upload only the pages with your results.`,
         code: 'TOO_LONG',
@@ -94,6 +100,7 @@ export const uploadReport = async (req, res) => {
       userId,
       storagePath,
       fileName,
+      mimeType: req.file.mimetype,
       reportDate: req.body?.reportDate,
       fileSha256,
     });

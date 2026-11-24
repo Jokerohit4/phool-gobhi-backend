@@ -72,17 +72,17 @@ export function isAllowedMimeType(mimeType) {
 /**
  * Whether this module may store a file as a health-vault lab report.
  *
- * Stricter than isAllowedMimeType, and the difference is the OCR step: only a
- * PDF reaches Document AI. A JPEG of a lab report is a real thing people have,
- * and rejecting it is the honest answer for now, because the alternative is
- * uploading it, labelling a JPEG as application/pdf, and reporting a parsing
- * failure for a file that was perfectly readable to a human.
+ * PDF, JPEG and PNG: the three types Document AI reads here. A phone photo of a
+ * printed report is how most people hold one, so photos are accepted, and the
+ * file's real type is passed to the reader (see reportController) instead of
+ * assuming a PDF. HEIC and WebP stay out: neither is read reliably, and a clear
+ * rejection beats a parsing failure the user reads as "my report is broken".
  *
- * Images remain accepted by isAllowedMimeType for the medical-document path,
- * where nothing reads them and a photo of a prescription is a normal upload.
+ * isAllowedMimeType is wider still, for the medical-document path where nothing
+ * reads the content.
  */
 export function isAllowedReportMimeType(mimeType) {
-  return mimeType === 'application/pdf';
+  return mimeType === 'application/pdf' || mimeType === 'image/jpeg' || mimeType === 'image/png';
 }
 
 function extensionFor(mimeType) {

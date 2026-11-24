@@ -9,8 +9,8 @@ import { createHash } from 'node:crypto';
 import { createReportService, processReportService, parseReportDate, findExistingReport } from '../services/reportService.js';
 import { validateMarkers, riskBucket } from '../utils/guidanceExtraction.js';
 import { validateReportReadings } from '../utils/reportReadings.js';
-import { valuesFromReadings, BIOMETRIC_KEYS, MARKER_KEYS } from '../utils/readingMetrics.js';
-import { isStalledReport, estimatePdfPages, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
+import { valuesFromReadings, BIOMETRIC_KEYS, BIOMETRIC_BOUNDS, MARKER_KEYS } from '../utils/readingMetrics.js';
+import { isStalledReport, estimatePdfPages, matchesDeclaredType, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { invalidateBlendedScore } from '../services/ledger/blendedScoreCache.js';
 import { listAdminReports, adminReportLink } from '../services/adminReportsService.js';
@@ -68,8 +68,7 @@ router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('re
   if (req.body?.readConsent !== 'true' && req.body?.readConsent !== true) bad('Confirm permission to read your report');
   if (!req.file || !['application/pdf', 'image/jpeg', 'image/png'].includes(req.file.mimetype)) bad('Choose a PDF, JPEG or PNG report');
   const bytes = req.file.buffer;
-  const matches = req.file.mimetype === 'application/pdf' ? bytes.subarray(0, 5).toString() === '%PDF-' : req.file.mimetype === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-  if (!matches) bad('The file content does not match its PDF or image type');
+  if (!matchesDeclaredType(req.file.mimetype, bytes)) bad('The file content does not match its PDF or image type');
   // Before any storage write or paid read: a file that is plainly too long is
   // refused with advice, and the same file uploaded again is answered from the
   // report the person already has.
@@ -141,6 +140,7 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
     // guidance. One the person kept is saved; one they removed or emptied is
     // dropped. Left alone, the rest would sit unconfirmed and turn up again as
     // "waiting for you" in the vault for a report already reviewed.
+    const settled = new Set();
     for (const extraction of report.extractions) {
       if (!BIOMETRIC_KEYS.includes(extraction.metric)) continue;
       const value = biometrics[extraction.metric];
@@ -150,6 +150,17 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
       }
       await tx.reportExtraction.update({ where: { id: extraction.id }, data: { isVerified: true, normalizedValue: value } });
       await tx.biometricEntry.upsert({ where: { userId_metric_localDate: { userId: req.userId, metric: extraction.metric, localDate } }, create: { userId: req.userId, metric: extraction.metric, value, unit: extraction.metric === 'hba1c' ? '%' : 'mg/dL', source: 'manual', localDate }, update: { value, source: 'manual' } });
+      settled.add(extraction.metric);
+    }
+    // A value the person typed, or that came from a reading, counts even when the
+    // reader never produced an extraction row for it (a layout it missed). Left
+    // out, HbA1c would steer the risk bucket but never reach their history or
+    // score. Same sanity bounds as the biometric store, so a typo stays out.
+    for (const [metric, value] of Object.entries(biometrics)) {
+      if (settled.has(metric)) continue;
+      const bounds = BIOMETRIC_BOUNDS[metric];
+      if (!bounds || value < bounds[0] || value > bounds[1]) continue;
+      await tx.biometricEntry.upsert({ where: { userId_metric_localDate: { userId: req.userId, metric, localDate } }, create: { userId: req.userId, metric, value, unit: metric === 'hba1c' ? '%' : 'mg/dL', source: 'manual', localDate }, update: { value, source: 'manual' } });
     }
     return tx.guidanceProfile.upsert({ where: { userId: req.userId }, create: { userId: req.userId, ...data }, update: data });
   });
