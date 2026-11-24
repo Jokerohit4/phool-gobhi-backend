@@ -58,7 +58,7 @@ export async function sweepExpiredOrgs(now = new Date()) {
   return count;
 }
 
-function serializeOrg(org, counts = {}, now = new Date()) {
+export function serializeOrg(org, counts = {}, now = new Date()) {
   return {
     id: org.id,
     name: org.name,

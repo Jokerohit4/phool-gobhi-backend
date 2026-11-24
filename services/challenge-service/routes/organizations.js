@@ -19,6 +19,7 @@ router.get('/admin/orgs', requireRole('gobhi'), ctrl.listOrgsAdmin);
 router.post('/admin/orgs', requireRole('gobhi'), ctrl.createOrgAdmin);
 router.get('/admin/orgs/:id', requireRole('gobhi'), ctrl.getOrgAdmin);
 router.put('/admin/orgs/:id', requireRole('gobhi'), ctrl.updateOrgAdmin);
+router.get('/admin/orgs/:id/dashboard', requireRole('gobhi'), ctrl.getDashboardAdmin);
 router.post('/admin/orgs/:id/members', requireRole('gobhi'), ctrl.addMembersAdmin);
 router.put('/admin/orgs/:id/members/:memberId', requireRole('gobhi'), ctrl.setMemberTeamAdmin);
 router.delete('/admin/orgs/:id/members/:memberId', requireRole('gobhi'), ctrl.removeMemberAdmin);

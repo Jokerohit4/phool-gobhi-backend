@@ -1,5 +1,6 @@
 import * as orgs from '../services/orgService.js';
 import { getBoardStandings, getBoardStandingsAdmin } from '../services/orgLeaderboardService.js';
+import { getOrgDashboard } from '../services/orgDashboardService.js';
 
 // Thin HTTP layer. Services throw `{ status, error }` for anything the caller
 // should see (4xx keeps its message); everything else is a generic 500.
@@ -33,6 +34,7 @@ export const deleteTeamAdmin = wrap('deleteTeamAdmin', (req) => orgs.deleteTeam(
 export const createBoardAdmin = (req, res) => orgs.createLeaderboard(req.params.id, req.body ?? {}, req.userId)
   .then((data) => res.status(201).json({ data })).catch((e) => fail(res, e, 'createBoardAdmin'));
 export const updateBoardAdmin = wrap('updateBoardAdmin', (req) => orgs.updateLeaderboard(req.params.id, req.params.boardId, req.body ?? {}));
+export const getDashboardAdmin = wrap('getDashboardAdmin', (req) => getOrgDashboard(req.params.id, { days: req.query.days }));
 export const getBoardAdmin = wrap('getBoardAdmin', (req) => getBoardStandingsAdmin(req.params.id, req.params.boardId));
 
 // ---- Internal ----
