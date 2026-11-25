@@ -169,7 +169,9 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
   await invalidateBlendedScore(req.userId);
   // Best effort and never awaited: the person already has their answer, so a
   // slow or failed push must not hold up or fail the confirm.
-  const notice = riskNoticeFor(previous?.riskBucket, result.riskBucket);
+  // Off unless REPORT_RISK_PUSH_ENABLED=true (dev only until the cutoffs are
+  // clinically signed off).
+  const notice = process.env.REPORT_RISK_PUSH_ENABLED === 'true' ? riskNoticeFor(previous?.riskBucket, result.riskBucket) : null;
   if (notice) notifyUser(req.userId, notice).catch(() => {});
   return { ...result, confirmedReadings };
 }));
