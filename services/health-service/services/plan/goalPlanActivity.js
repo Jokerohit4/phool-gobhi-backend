@@ -1,4 +1,4 @@
-import { COUNTED_WORKOUT_WHERE, IST_OFFSET_MS, dayToDate, isoDayIST } from '../../utils/sessionDay.js';
+import { COUNTED_WORKOUT_WHERE, isoDayIST, loggingDayStart, shiftDay } from '../../utils/sessionDay.js';
 import { sumFoodLogs } from '../ledger/nutritionService.js';
 import { foodTargetProgress } from '../ledger/foodTargetProgress.js';
 import { getConsentStatusService } from '../consentService.js';
@@ -48,8 +48,8 @@ export async function readGoalActivity(prisma, userId, days, permissions) {
         userId, type: { in: ['walk', 'walking'] },
         ...(!permissions.device ? { source: { in: ['manual', 'gps_tracker'] } } : {}),
         startedAt: {
-          gte: new Date(dayToDate(range.gte).getTime() - IST_OFFSET_MS),
-          lt: new Date(dayToDate(range.lte).getTime() + 2 * 86400000),
+          gte: loggingDayStart(range.gte),
+          lt: loggingDayStart(shiftDay(range.lte, 1)),
         },
       }, select: { startedAt: true, durationSeconds: true },
     }) : [],

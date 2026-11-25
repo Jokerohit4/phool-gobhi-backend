@@ -88,63 +88,10 @@ export const PROFILES = {
     on: () => ['badges'],
   },
   'launch-candidate': {
-    summary: 'marketplace + gym-buddy + referrals + workout log + health scores + Gobhi assistant; medical off',
-    // Mirrors the launch table in docs/FEATURE-FLAG-SPLIT.md §9, which is the
-    // recorded product decision - this profile is that table made executable,
-    // not a second opinion. Still a proposal until somebody signs it off.
-    //
-    // On: workoutTracking (the daily hook, ~150 sessions/user/year against ~30
-    // bookings) and healthMetrics (the differentiator), plus the two flags that
-    // are already live in production and default on for that reason - buddy and
-    // referral. Then the low-risk no-dependency surfaces: badges, homeTrackHome,
-    // nonPartnerAttendance, brandedOnboarding.
-    //
-    // Off, and each for a recorded reason rather than caution: reportSubscription
-    // (legal sign-off pending on medical report reading for subscription
-    // guidance; it replaced healthVault, which was retired and is always on), healthLedger and
-    // foodPhotoLogging (a photo of someone's plate to a third-party model, and
-    // the ledger holds records under a `medical_records` consent scope),
-    // cycleTracking (reverses FR-27; consent wording unreviewed), fhirExport
-    // (no HAPI validator run yet, so nobody should be handed a file labelled a
-    // government-standard record), healthPersonalisation (an AI surface, and
-    // the only consent-bearing write in health-service), recapSharing and
-    // runTracker (not the launch hook), and streaksCoins (its own registry
-    // entry says DO NOT ENABLE until the coin sink exists - the app never calls
-    // /coins/redeem), challenges (the catalogue is geo-fenced to two cities, so
-    // this reads as a broken feature everywhere else) and buddyPairedStreaks
-    // (known unmatch bug: coins keep accruing for a match that no longer
-    // exists).
-    //
-    // fitnessAssistant was moved from off to ON by the owner on 2026-11-12: the
-    // Gobhi assistant is part of the launch product (the mood check-in, health
-    // score and home all hand people into it). The reasons it used to be off are
-    // not gone and are recorded here rather than forgotten: the app still asks
-    // for consent before the first chat, but the disclaimer wording has not been
-    // signed off, and with few users the model has little data to draw on. It is
-    // named explicitly, and it needs healthMetrics, which this profile enables.
-    //
-    // Note on deps, because it is easy to get backwards: `deps` makes a child
-    // INERT while its parent is off. It never switches a child on. So enabling
-    // healthMetrics here does NOT implicitly enable healthPersonalisation,
-    // cycleTracking or fhirExport - they stay off until named. The reverse
-    // relation is the one that bites, which is why workoutTracking is on here:
-    // healthMetrics would be dead without it.
-    //
-    // `coachJourney` and `healthVault` were retired on 2026-11-23 (permanently on,
-    // not toggles) so they appear in no profile. coachAssistant and
-    // referralHomeTrigger stay out: both are off here for their own recorded
-    // reasons above and are named only in the all-on/local profile.
-    on: () => [
-      'workoutTracking',
-      'healthMetrics',
-      'fitnessAssistant',
-      'buddy',
-      'referral',
-      'badges',
-      'homeTrackHome',
-      'nonPartnerAttendance',
-      'brandedOnboarding',
-    ],
+    summary: 'marketplace, gym buddy, referrals, badges, and home gym attendance',
+    // Health and Coach are available in every profile. This list controls
+    // only the remaining rollout switches; consent still governs data access.
+    on: () => ['badges', 'buddy', 'homeTrackHome', 'nonPartnerAttendance', 'referral'],
   },
 };
 

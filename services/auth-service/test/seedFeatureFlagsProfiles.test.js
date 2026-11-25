@@ -1,11 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// A profile in scripts/seedFeatureFlags.js is a safety claim about an
-// environment: `all-off` is the incident kill switch, `consent-minimal` is the
-// promise that nothing which collects personal data is reachable, and
-// `launch-candidate` is a proposal that must not quietly grow a medical or
-// consent-bearing flag. None of those are visible in a diff, and the CLI-level
+// A profile in scripts/seedFeatureFlags.js is a flag posture for an
+// environment: `all-off` turns off every configurable flag, `consent-minimal` is the
+// profile for testing consent with minimal optional features, and
+// `launch-candidate` is an allowlist for the remaining launch switches. None of those are visible in a diff, and the CLI-level
 // checks only prove the names parse - so the contents are asserted here.
 //
 // Nothing in this file touches a database. The write path (read-modify-write of
@@ -83,55 +82,27 @@ test('consent-minimal only enables flags that collect nothing', () => {
   );
 });
 
-test('launch-candidate matches the launch table in docs/FEATURE-FLAG-SPLIT.md §9', () => {
-  // The profile is that table made executable, so the two must not drift. If
-  // this fails, either the table moved (update this) or the profile did (update
-  // the table) - but they cannot both be right and different.
+test('launch-candidate enables the remaining launch switches from docs/FEATURE-FLAG-SPLIT.md §9', () => {
   assert.deepEqual(on('launch-candidate').sort(), [
     'badges',
-    'brandedOnboarding',
     'buddy',
-    'fitnessAssistant',
-    'healthMetrics',
     'homeTrackHome',
     'nonPartnerAttendance',
     'referral',
-    'workoutTracking',
   ]);
 });
 
-test('launch-candidate enables no medical surface and only the one named AI surface', () => {
-  // The whole point of the profile: the health SCORE and the Gobhi assistant
-  // ship (the assistant by an explicit owner decision on 2026-11-12), the
-  // consent-bearing and medical collection does not. Each of these is off for a recorded reason
-  // in the registry - legal sign-off, an unreviewed disclaimer, a photo leaving
-  // the device, or an unvalidated export format.
+test('launch-candidate leaves optional health experiments off', () => {
   const withheld = [
-    'reportSubscription',
-    'healthLedger',
     'foodPhotoLogging',
     'cycleTracking',
     'fhirExport',
-    'healthPersonalisation',
     'recapSharing',
     'runTracker',
   ];
   for (const flag of withheld) {
     assert.ok(!on('launch-candidate').includes(flag), `launch-candidate must not enable ${flag}`);
   }
-});
-
-test('launch-candidate does not rely on deps auto-enabling anything', () => {
-  // `deps` makes a child INERT while its parent is off; it never switches a
-  // child on. So healthMetrics being on must not be the reason any AI or
-  // medical flag is on - if one of them appears in this profile it has to be
-  // named deliberately, which the test above enforces.
-  const healthDependents = FEATURE_FLAGS.filter((f) => f.deps.includes('healthMetrics')).map((f) => f.name);
-  assert.ok(healthDependents.length >= 5, 'sanity: several flags depend on healthMetrics');
-  const enabledDependents = on('launch-candidate').filter((f) => healthDependents.includes(f));
-  // The Gobhi assistant is the one dependent that is on, and it is named in the
-  // profile on purpose; nothing else may ride in on healthMetrics.
-  assert.deepEqual(enabledDependents, ['fitnessAssistant'], 'only the named fitnessAssistant should be on among healthMetrics dependents');
 });
 
 test('launch-candidate leaves the known-broken gamification flags off', () => {

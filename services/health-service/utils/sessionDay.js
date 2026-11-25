@@ -88,6 +88,10 @@ export function workoutElapsedSeconds(session) {
 export function isoDayIST(value = new Date()) {
   return istDateString(new Date(new Date(value).getTime() - dayStartHour() * 3600000));
 }
+// The instant at which this user's logging day starts.
+export function loggingDayStart(localDate) {
+  return new Date(dayToDate(localDate).getTime() - IST_OFFSET_MS + dayStartHour() * 3600000);
+}
 export function shiftDay(localDate, days) {
   return dayString(addDays(dayToDate(localDate), days));
 }
