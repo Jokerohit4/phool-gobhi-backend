@@ -14,6 +14,8 @@ import { isStalledReport, estimatePdfPages, matchesDeclaredType, MAX_REPORT_PAGE
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { invalidateBlendedScore } from '../services/ledger/blendedScoreCache.js';
 import { listAdminReports, adminReportLink } from '../services/adminReportsService.js';
+import { notifyUser } from '../utils/notifyUser.js';
+import { riskNoticeFor } from '../utils/reportRiskNotice.js';
 
 const router = Router();
 const run = fn => async (req, res) => { try { res.json({ data: await fn(req, res) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? (e.error || e.message) : 'Could not complete this request right now. Please try again.' }); } };
@@ -165,6 +167,10 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
     return tx.guidanceProfile.upsert({ where: { userId: req.userId }, create: { userId: req.userId, ...data }, update: data });
   });
   await invalidateBlendedScore(req.userId);
+  // Best effort and never awaited: the person already has their answer, so a
+  // slow or failed push must not hold up or fail the confirm.
+  const notice = riskNoticeFor(previous?.riskBucket, result.riskBucket);
+  if (notice) notifyUser(req.userId, notice).catch(() => {});
   return { ...result, confirmedReadings };
 }));
 router.patch('/guidance/me', requireRole('customer'), run(async req => {

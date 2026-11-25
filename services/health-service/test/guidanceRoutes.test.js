@@ -4,6 +4,7 @@ import express from 'express';
 
 let server, base, profile = null, writtenBiometrics = 0, entitlement = { isGuided: false }, requests = [];
 let reads = 0;
+const pushes = [];
 const report = { id: 1, userId: 7, fileName: 'report.pdf', storagePath: 'private/7/report', status: 'COMPLETED', createdAt: new Date('2026-11-01'), reportDate: null, proposedProfile: { name: 'Patient' }, extractions: [{ id: 11, metric: 'hba1c', normalizedValue: 7.1 }] };
 const db = {
   healthReport: {
@@ -39,6 +40,7 @@ before(async t => {
   } });
   t.mock.module('../services/ledger/medicalDocumentStorage.js', { exports: { MAX_UPLOAD_BYTES: 10485760, isAllowedMimeType: () => true, isAllowedReportMimeType: () => true, saveDocument: async () => '', signedDocumentUrl: async () => 'https://private.example/signed', deleteObjects: async () => ({ failed: [] }) } });
   t.mock.module('../services/ledger/blendedScoreCache.js', { exports: { invalidateBlendedScore: async () => {} } });
+  t.mock.module('../utils/notifyUser.js', { exports: { notifyUser: async (userId, notice) => { pushes.push({ userId, notice }); return true; } } });
   t.mock.module('../utils/googleIdToken.js', { exports: { googleIdTokenHeader: async () => ({}) } });
   t.mock.module('axios', { exports: { default: { get: async () => ({ data: { data: entitlement } }) } } });
   const router = (await import('../routes/guidance.js')).default;
@@ -69,6 +71,7 @@ test('unconfirmed identity and invalid values never write health data', async ()
 test('confirmation stores explicit identity and verified markers without inventing DOB', async () => {
   const result = await call('/guidance/reports/1/confirm', confirmation);
   assert.equal(result.status, 200);assert.equal(profile.riskBucket, 'RED');assert.equal(profile.confirmedDetails.age, 31);assert.equal(profile.confirmedDetails.dateOfBirth, undefined);assert.equal(writtenBiometrics, 1);
+  assert.equal(pushes.length, 1);assert.equal(pushes[0].userId, 7);assert.equal(pushes[0].notice.data.type, 'report_risk');
 });
 test('customers cannot write clinical clearance; a named clinician and current report are required', async () => {
   const review = { sourceReportId: 1, confirmedAt: profile.confirmedAt.toISOString(), clinicianName: 'Reviewing clinician', clinicianRegistration: 'REG-TEST', clinicalNote: 'Recorded external signed review', clinicalStatus: 'CLEARED', agreedActions: ['Follow the agreed routine'], attestReviewed: true };
@@ -83,6 +86,7 @@ test('replaying identical confirmation keeps clinical notes; changed markers res
   await call('/guidance/reports/1/confirm', confirmation);assert.equal(profile.clinicalStatus, 'CLEARED');
   await call('/guidance/reports/1/confirm', { ...confirmation, markers: { hba1c: 7.5 } });
   assert.equal(profile.clinicalStatus, 'PENDING');assert.equal(profile.clinicalNote, null);
+  assert.equal(pushes.length, 1, 'same bucket again sends no second push');
 });
 test('paid request gates do not gate report reads; form support requires clearance', async () => {
   assert.equal((await call('/guidance/requests', { kind: 'COACH_CALL' })).status, 403);
