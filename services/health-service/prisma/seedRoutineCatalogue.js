@@ -23,8 +23,18 @@ async function main() {
     console.log(
       `Routine catalogue: ${out.created} created, ${out.textsAdded} translations added, ` +
       `${out.total - out.created - out.skipped.length} already present` +
-      (out.skipped.length ? `, ${out.skipped.length} skipped (name already used: ${out.skipped.join(', ')})` : '') + '.',
+      (out.skipped.length ? `, ${out.skipped.length} skipped` : '') + '.',
     );
+    if (out.skipped.length > 0) {
+      // A skip means a system routine already uses this name but has no key, so
+      // the migration's by-name backfill did not match it (renamed by hand?).
+      // Plans look routines up by key, so staying quiet would silently drop it.
+      console.error(
+        `ERROR: not created because a system routine with that name already exists without a key: ` +
+        `${out.skipped.join(', ')}. Set its key in the database (see the routine_catalogue migration) and re-run.`,
+      );
+      process.exitCode = 1;
+    }
   } finally {
     await prisma.$disconnect();
   }
