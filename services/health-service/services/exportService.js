@@ -346,8 +346,9 @@ export function seriesToCsv({ sessions, biometrics }) {
 // be deleting on request something we never showed on request - so keep the
 // two in step.
 export async function buildFullExportService(userId) {
-  const [consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, cycleDayLogs, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent, moodCheckIns] =
+  const [goalPlan, consent, ledgerConsent, personalisation, weeklyGoal, activePlan, templates, customExercises, records, activity, biometrics, feedback, assistantConsent, assistantConversations, assistantMemories, cycleProfile, cyclePhases, cycleDayLogs, healthGoal, nutritionTarget, customFoods, foodLogs, savedMeals, planItems, planCompletions, snapshots, conditions, appointments, photoLogs, medicalDocuments, biometricConsent, healthProfile, medicationReminders, healthProfileConsent, foodRequests, waterLogs, supplementSchedules, supplementLogs, journeyProgress, coachConsent, moodCheckIns] =
     await Promise.all([
+      prisma.goalPlan.findUnique({ where: { userId } }),
       prisma.healthConsent.findUnique({ where: { userId } }),
       prisma.ledgerConsent.findUnique({ where: { userId } }),
       prisma.personalisationProfile.findUnique({ where: { userId } }),
@@ -734,6 +735,13 @@ export async function buildFullExportService(userId) {
     // The user's weekly training target, and whether they chose it or it was
     // derived from their onboarding answer. Exported for the same reason it
     // is erased: it's their preference, not our configuration.
+    goalPlan: goalPlan ? {
+      startDate: goalPlan.startDate,
+      draft: goalPlan.draft,
+      schedule: goalPlan.schedule,
+      completions: goalPlan.completions,
+      updatedAt: goalPlan.updatedAt,
+    } : null,
     weeklyGoal: weeklyGoal
       ? { sessionsPerWeek: weeklyGoal.sessionsPerWeek, setByUser: weeklyGoal.setByUser, updatedAt: weeklyGoal.updatedAt }
       : null,
@@ -867,6 +875,7 @@ export async function buildFullExportService(userId) {
       localDate: entry.localDate,
       slot: entry.slot,
       mood: entry.mood,
+      energy: entry.energy ?? null,
       factors: entry.factors,
       support: entry.support,
       note: entry.note,

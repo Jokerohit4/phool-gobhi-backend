@@ -1,8 +1,9 @@
 import prisma from '../db/prisma.js';
 import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
 import {
-  startOfIsoWeek, addDays, dayString, dayToDate, COUNTED_WORKOUT_WHERE,
+  startOfIsoWeek, addDays, dayString, dayToDate, COUNTED_WORKOUT_WHERE, isoDayIST,
 } from '../utils/sessionDay.js';
+import { savedGoalSchedule, scheduledWorkouts } from './plan/goalPlanTargets.js';
 
 // Re-exported for the sibling readers (stats, consistency streak) that have
 // always imported their week boundary from here, so there is exactly one
@@ -131,13 +132,18 @@ async function weeklyCountsService(userId, weeks = 3) {
 /// offering to re-plan the goal downward (FR-17). Two weeks, not one: a
 /// single missed week is a week, not a pattern, and offering to lower
 /// someone's goal after one bad week would be its own kind of discouraging.
-export async function getGoalStateService(userId) {
-  const [goal, { thisWeekStart, counts }] = await Promise.all([
-    resolveGoalService(userId),
+export async function getGoalStateService(userId, { persist = true } = {}) {
+  const [schedule, { thisWeekStart, counts }] = await Promise.all([
+    savedGoalSchedule(prisma, userId),
     weeklyCountsService(userId, 3),
   ]);
 
   const weekStart = dayString(thisWeekStart);
+  const hasPersonalPlan = schedule.some(day => day.date === isoDayIST());
+  const goal = hasPersonalPlan ? {
+    sessionsPerWeek: scheduledWorkouts(schedule, weekStart, dayString(addDays(thisWeekStart, 6))),
+    source: 'goal_plan',
+  } : await resolveGoalService(userId, { persist });
   const completedThisWeek = counts.get(weekStart) ?? 0;
   const previousWeeks = [...counts.entries()]
     .filter(([key]) => key !== weekStart)
@@ -155,7 +161,7 @@ export async function getGoalStateService(userId) {
     // Only meaningful once there are two complete weeks of history to judge;
     // a brand-new account has previousWeeks all zero and would otherwise be
     // offered a smaller goal before its first session.
-    suggestReplan: shortfallStreak && previousWeeks.some((w) => w.completed > 0),
+    suggestReplan: !hasPersonalPlan && shortfallStreak && previousWeeks.some((w) => w.completed > 0),
     min: MIN_SESSIONS_PER_WEEK,
     max: MAX_SESSIONS_PER_WEEK,
   };

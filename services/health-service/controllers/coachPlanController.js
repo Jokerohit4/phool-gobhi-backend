@@ -7,6 +7,17 @@ import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import { getMedicalRecordsConsentService } from '../services/ledger/ledgerConsentService.js';
 import { getJourney, invalidateJourneyCaches, unlockFoodEarly } from '../services/journey/journeyService.js';
 import { track } from '../utils/analytics.js';
+import { goalPlanView, normalizeGoalDraft, prepareGoalPlan, recordGoalTask, saveGoalPlan } from '../services/plan/goalPlanService.js';
+import { getNutritionConsentService } from '../services/ledger/ledgerConsentService.js';
+import { currentNutritionTarget } from '../services/ledger/currentTarget.js';
+import { isoDayIST } from '../utils/sessionDay.js';
+import { fetchUserProfileInternal } from '../utils/fetchUserProfile.js';
+import { hasCoachScopeService } from '../services/coachConsentService.js';
+import { hasBiometricConsentService } from '../services/biometricConsentService.js';
+import { hasHealthProfileConsentService } from '../services/healthProfileConsentService.js';
+import { suggestGoalPlan } from '../services/plan/goalPlanPersonalisation.js';
+import { goalPlanHealthSelect, goalPlanProfile, readOnboardingInputs } from '../services/plan/goalPlanOnboardingInputs.js';
+import { goalActivitySources, readGoalActivity } from '../services/plan/goalPlanActivity.js';
 
 
 function handle(fn) {
@@ -40,6 +51,140 @@ export const getToday = handle(async (req, res) => {
 export const getPlan = handle(async (req, res) => {
   const plan = await todayService.buildPlanDefinition(prisma, req.userId);
   res.json(plan);
+});
+
+export const getGoalPlan = handle(async (req, res) => {
+  const { userId } = req;
+  const current = await prisma.goalPlan.findUnique({ where: { userId } });
+  if (current) return res.json(await withGoalActivity(userId, goalPlanView(current)));
+  if (req.query.suggest !== '1') return res.json(goalPlanView(null));
+  const onboarding = readOnboardingInputs(req.query.onboardingInputs);
+  const uses = (input) => !onboarding || onboarding.has(input);
+  const healthSelect = goalPlanHealthSelect(onboarding);
+  const usesPrescription = ['trainingHistory', 'trainingLocation', 'fitnessGoals', 'workoutFrequency'].every(uses);
+  const [profile, basic, nutritionConsent, biometric, healthProfileConsent, medicalConsent, health] = await Promise.all([
+    fetchUserProfileInternal(userId, { purpose: 'goal_plan' }),
+    (usesPrescription || uses('returnBarrier')) && hasCoachScopeService(userId, 'basic'),
+    getNutritionConsentService(userId),
+    uses('bodyWeight') && hasBiometricConsentService(userId),
+    (uses('allergies') || uses('healthConcerns')) && hasHealthProfileConsentService(userId),
+    uses('reportGuidance') && getMedicalRecordsConsentService(userId),
+    Object.keys(healthSelect).length ? prisma.healthProfile.findUnique({
+      where: { userId },
+      select: healthSelect,
+    }) : null,
+  ]);
+  const today = isoDayIST();
+  const [prescription, nutrition, weight, journey, allergy, concern, guidance] = await Promise.all([
+    // Starter prescriptions may encode omitted training answers.
+    basic && usesPrescription ? prisma.prescription.findUnique({ where: { userId } }) : null,
+    nutritionConsent.granted && !nutritionConsent.needsReconsent
+      ? currentNutritionTarget(prisma, userId)
+      : null,
+    biometric && !health?.weightDeclined ? prisma.biometricEntry.findFirst({
+      where: { userId, metric: 'weight', unit: 'kg', source: 'manual', localDate: { lte: today } },
+      orderBy: { localDate: 'desc' }, select: { value: true },
+    }) : null,
+    basic && uses('returnBarrier') ? prisma.journeyProgress.findUnique({ where: { userId }, select: { quitReason: true } }) : null,
+    healthProfileConsent && uses('allergies') ? prisma.healthProfile.findUnique({ where: { userId }, select: { allergyStatus: true } }) : null,
+    healthProfileConsent && uses('healthConcerns') ? prisma.healthCondition.findFirst({ where: { userId, source: 'user_stated' }, select: { id: true } }) : null,
+    medicalConsent?.granted && !medicalConsent.needsReconsent
+      ? prisma.guidanceProfile.findUnique({ where: { userId }, select: { confirmedAt: true } })
+      : null,
+  ]);
+  const slots = prescription?.workoutSlots ?? [];
+  const templateIds = slots.map((slot) => slot.templateId).filter(Number.isInteger);
+  const templates = templateIds.length ? await prisma.workoutTemplate.findMany({
+    where: { id: { in: templateIds }, OR: [{ userId }, { isSystem: true }] },
+    select: { id: true, name: true, estMinutes: true, exercises: {
+      take: 12, orderBy: { order: 'asc' }, select: {
+        targetSets: true, targetReps: true, targetDurationSeconds: true,
+        exercise: { select: { name: true } },
+      },
+    } },
+  }) : [];
+  const byId = new Map(templates.map((template) => [template.id, template]));
+  const seed = {
+    steps: prescription?.stepsPerDay,
+    sleepMinutes: prescription?.sleepMinutes,
+    waterMl: nutrition?.waterMl,
+    nutrition: nutrition ? {
+      kcal: Number(nutrition.kcal), protein: Number(nutrition.proteinG), fat: Number(nutrition.fatG),
+    } : null,
+    workouts: slots.map((slot, index) => {
+      const template = byId.get(slot.templateId);
+      return {
+        id: `seed-${index}`, weekday: slot.weekday, title: (slot.title || template?.name)?.slice(0, 80),
+        minutes: Math.min(180, Math.max(5, template?.estMinutes ?? 30)),
+        exercises: template?.exercises.map((move) => ({
+          name: move.exercise.name.slice(0, 80),
+          sets: Math.min(20, Math.max(1, move.targetSets ?? 1)),
+          ...(move.targetDurationSeconds
+            ? { seconds: Math.min(600, move.targetDurationSeconds) }
+            : { reps: Math.min(100, Math.max(1, move.targetReps ?? 10)) }),
+        })) ?? [],
+      };
+    }),
+  };
+  const personalisation = profile || onboarding ? suggestGoalPlan({
+    profile: goalPlanProfile(profile, onboarding), health: health ?? {}, quitReason: journey?.quitReason, seed, today,
+    body: { weightKg: weight?.value == null ? null : Number(weight.value) },
+    sensitive: { allergyStatus: allergy?.allergyStatus, hasIssue: Boolean(concern) },
+    hasConfirmedReport: Boolean(guidance?.confirmedAt),
+    includeWellnessGoals: onboarding?.has('wellnessGoals') === true,
+  }) : null;
+  res.json({
+    ...goalPlanView(null, today), seed, personalisation,
+    ...(onboarding ? { onboardingInputsApplied: true } : {}),
+  });
+});
+
+async function withGoalActivity(userId, response) {
+  const { plan, today } = response;
+  if (!plan) return response;
+  const days = [...plan.history, ...plan.schedule].filter(day => day.date <= today);
+  const sources = await goalActivitySources(userId, days);
+  const activity = await readGoalActivity(prisma, userId, days, sources);
+  const view = goalPlanView({ ...plan, schedule: [...plan.history, ...plan.schedule] }, today, activity);
+  return { ...view, sources };
+}
+
+async function validateGoalNutrition(userId, draft, current) {
+  if (!draft.nutrition) return;
+  const { kcal } = draft.nutrition;
+  if (kcal === current?.draft?.nutrition?.kcal) return;
+  const consent = await getNutritionConsentService(userId);
+  if (!consent.granted || consent.needsReconsent) return;
+  const target = await currentNutritionTarget(prisma, userId);
+  if (!target || kcal === Number(target.kcal)) return;
+  const { min, max } = prescriptionService.boundsFor(target).kcal;
+  if (kcal < min || kcal > max) {
+    throw Object.assign(new Error(`Calories must be between ${min} and ${max} for this plan`), { status: 400 });
+  }
+}
+
+export const previewGoalPlan = handle(async (req, res) => {
+  const current = await prisma.goalPlan.findUnique({ where: { userId: req.userId } });
+  const draft = normalizeGoalDraft(req.body?.draft);
+  await validateGoalNutrition(req.userId, draft, current);
+  const today = isoDayIST();
+  res.json(goalPlanView({ ...prepareGoalPlan(draft, current, today), revision: current?.revision ?? 0 }, today));
+});
+
+export const putGoalPlan = handle(async (req, res) => {
+  const draft = normalizeGoalDraft(req.body?.draft);
+  const current = await prisma.goalPlan.findUnique({ where: { userId: req.userId } });
+  await validateGoalNutrition(req.userId, draft, current);
+  const saved = await saveGoalPlan(prisma, req.userId, { draft, revision: req.body?.revision });
+  if (saved.plan.revision !== current?.revision) {
+    track(current ? (saved.plan.startDate === current.startDate ? 'goal_plan_edited' : 'goal_plan_phase_started') : 'goal_plan_saved', req.userId, {});
+  }
+  res.json(await withGoalActivity(req.userId, saved));
+});
+
+export const putGoalPlanTask = handle(async (req, res) => {
+  const saved = await recordGoalTask(prisma, req.userId, req.body || {});
+  res.json(await withGoalActivity(req.userId, saved));
 });
 
 // POST /plan/items/:id/complete

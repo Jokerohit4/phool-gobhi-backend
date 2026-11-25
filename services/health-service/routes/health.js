@@ -54,6 +54,7 @@ import contentRouter from './content.js';
 // The one-plan router (UA1). Carries its own planGated/planSoftGated gates
 // (auth + journey + coach basic consent), so it mounts, not spreads.
 import planRouter from './plan.js';
+import goalPlanRouter from './goalPlan.js';
 import weekSummaryRouter from './weekSummary.js';
 import guidanceRouter from './guidance.js';
 
@@ -64,6 +65,7 @@ const router = Router();
 router.use(ledgerRouter);
 router.use(journeyRouter);
 router.use(planRouter);
+router.use(goalPlanRouter);
 router.use(weekSummaryRouter);
 router.use(guidanceRouter);
 router.use(habitsRouter);

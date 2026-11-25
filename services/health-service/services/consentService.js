@@ -162,6 +162,7 @@ export async function deleteAllDataService(userId) {
     // erasureCompleteness.test.js caught exactly that: the table was added
     // with the plan generator and never listed here.
     prisma.prescription.deleteMany({ where: { userId } }),
+    prisma.goalPlan.deleteMany({ where: { userId } }),
     prisma.healthCondition.deleteMany({ where: { userId } }),
     prisma.doctorAppointment.deleteMany({ where: { userId } }),
     // The goal row is the FK parent of NutritionTarget, so it goes after it.

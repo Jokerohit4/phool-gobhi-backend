@@ -107,3 +107,56 @@ test('a genuinely unknown fitness goal is still a 400', async () => {
   assert.match(res.body.error, /fitnessGoals/);
   assert.equal(updateCalls.length, 0);
 });
+
+test('the weight loss amount persists, survives an older client save and clears with the goal', async () => {
+  stored = { ...baseUser };
+  updateCalls = [];
+  const save = fakeRes();
+  await updateProfile(reqWith({ fitnessGoals: ['weight_loss'], weightLossTargetKg: 4.5 }), save);
+  assert.equal(save.statusCode, 200);
+  assert.equal(save.body.data.weightLossTargetKg, 4.5);
+
+  const keep = fakeRes();
+  await updateProfile(reqWith({ fitnessGoals: ['weight_loss', 'muscle_gain'] }), keep);
+  assert.equal(keep.statusCode, 200);
+  assert.equal(stored.weightLossTargetKg, 4.5);
+  const clear = fakeRes();
+  await updateProfile(reqWith({ fitnessGoals: ['muscle_gain'] }), clear);
+  assert.equal(clear.statusCode, 200);
+  assert.equal(stored.weightLossTargetKg, null);
+});
+
+test('invalid weight loss amounts and amounts without that goal cannot be saved', async () => {
+  stored = { ...baseUser };
+  updateCalls = [];
+  for (const body of [
+    ...[0, -2, '5', true].map(weightLossTargetKg => ({ fitnessGoals: ['weight_loss'], weightLossTargetKg })),
+    { fitnessGoals: ['muscle_gain'], weightLossTargetKg: 5 },
+  ]) {
+    const res = fakeRes();
+    await updateProfile(reqWith(body), res);
+    assert.equal(res.statusCode, 400);
+  }
+  assert.equal(updateCalls.length, 0);
+});
+
+test('goal preferences persist through updates that omit them and can be cleared', async () => {
+  stored = { ...baseUser };
+  updateCalls = [];
+  const preferences = ['immune_health', 'immune_health/sleep'];
+  const save = fakeRes();
+  await updateProfile(reqWith({ goalPreferences: [...preferences, preferences[0]] }), save);
+  assert.equal(save.statusCode, 200);
+  assert.deepEqual(save.body.data.goalPreferences, preferences);
+
+  await updateProfile(reqWith({ fitnessGoals: ['general_fitness'] }), fakeRes());
+  assert.deepEqual(stored.goalPreferences, preferences);
+
+  const invalid = fakeRes();
+  await updateProfile(reqWith({ goalPreferences: ['immune health', null] }), invalid);
+  assert.equal(invalid.statusCode, 400);
+  assert.equal(updateCalls.length, 2);
+
+  await updateProfile(reqWith({ goalPreferences: [] }), fakeRes());
+  assert.deepEqual(stored.goalPreferences, []);
+});

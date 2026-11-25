@@ -12,6 +12,8 @@ function legacyMe(user, gymLinkSource, gymLinkStatus = null) {
   return {
     id: user.id, phone: user.phone, name: user.name, email: user.email, role: user.role, type: user.type,
     gender: user.gender, dateOfBirth: user.dateOfBirth, fitnessGoals: user.fitnessGoals,
+    weightLossTargetKg: user.weightLossTargetKg ?? null,
+    goalPreferences: user.goalPreferences ?? [],
     sportsPlayed: user.sportsPlayed ?? [], referralCode: user.referralCode, linkedGymId: user.linkedGymId,
     // gymLinkStatus (added with gym-side approval): whether the gym has confirmed the link.
     gymLinkSource, gymLinkStatus, trainerGymId: user.trainerGymId, leaderboardOptIn: user.leaderboardOptIn,
@@ -51,7 +53,7 @@ function wideRow(overrides = {}) {
   };
 }
 
-let stored; let linkRow; let selectSeen; let getMe; let ME_SELECT;
+let stored; let linkRow; let selectSeen; let getMe; let getUserInternal; let ME_SELECT;
 
 test('setup', async (t) => {
   t.mock.module('@prisma/client', {
@@ -70,7 +72,7 @@ test('setup', async (t) => {
       Prisma: {},
     },
   });
-  ({ getMe, ME_SELECT } = await import('../controllers/authController.js'));
+  ({ getMe, getUserInternal, ME_SELECT } = await import('../controllers/authController.js'));
 });
 
 async function call() {
@@ -80,7 +82,7 @@ async function call() {
 }
 
 test('unlinked user: /me is byte-identical to the legacy full-row mapper', async () => {
-  stored = wideRow(); linkRow = null;
+  stored = wideRow({ fitnessGoals: ['weight_loss'], weightLossTargetKg: 4.5, goalPreferences: ['weight_loss/walking'] }); linkRow = null;
   const res = await call();
   assert.equal(JSON.stringify(res.body), JSON.stringify(legacyMe(stored, null)));
   assert.ok(selectSeen && !('passwordHash' in selectSeen));
@@ -109,6 +111,22 @@ test('gymLinkStatus: a self link nobody at the gym has answered is pending', asy
   const res = await call();
   assert.equal(res.body.gymLinkSource, 'self');
   assert.equal(res.body.gymLinkStatus, 'pending');
+});
+
+test('internal goal plan lookup returns onboarding preferences without unrelated account data', async () => {
+  stored = wideRow({ fitnessGoals: ['weight_loss'], goalPreferences: ['weight_loss/walking'], weightLossTargetKg: 7 });
+  const res = { status() { return this; }, json(body) { this.body = body; } };
+  await getUserInternal({ params: { id: '42' }, query: { purpose: 'goal_plan' } }, res);
+  assert.equal(res.body.weightLossTargetKg, 7);
+  assert.deepEqual(res.body.goalPreferences, ['weight_loss/walking']);
+  assert.equal(res.body.trainingTenure, 'one_to_3_years');
+  for (const field of ['phone', 'email', 'fcmToken', 'passwordHash', 'profileImageUrl', 'referralCode']) {
+    assert.equal(field in selectSeen, false);
+    assert.equal(field in res.body, false);
+  }
+  await getUserInternal({ params: { id: '42' }, query: {} }, res);
+  assert.equal('weightLossTargetKg' in res.body, false);
+  assert.equal(res.body.phone, stored.phone);
 });
 
 test('gymLinkStatus: approval is required even after a booked visit', async () => {

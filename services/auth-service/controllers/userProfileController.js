@@ -166,6 +166,8 @@ function formatUser(user) {
     gender: user.gender || null,
     dateOfBirth: user.dateOfBirth || null,
     fitnessGoals: user.fitnessGoals || [],
+    weightLossTargetKg: user.weightLossTargetKg ?? null,
+    goalPreferences: user.goalPreferences ?? [],
     sportsPlayed: user.sportsPlayed || [],
     recommendedEquipment: user.recommendedEquipment ?? null,
     experienceLevel: user.experienceLevel || null,
@@ -440,6 +442,8 @@ export const updateProfile = async (req, res) => {
     if (req.body && req.body.fitnessGoals !== undefined) req.body.fitnessGoals = normalizeFitnessGoals(req.body.fitnessGoals);
     const {
       name, profileImageUrl, fcmToken, email, gender, dateOfBirth, fitnessGoals,
+      weightLossTargetKg,
+      goalPreferences,
       currentlyWorksOut, workoutIntent, trainingLocationPref, trainingLocationOther, freeTimeWindow,
       weeklyFrequencyIntent, linkedGymId, experienceLevel, trainingTenure, homeUnclaimedGymId,
       wellnessFocuses, wellnessDayPattern, wellnessSleepPattern, wellnessSetupCompleted,
@@ -499,6 +503,12 @@ export const updateProfile = async (req, res) => {
       'under_five', 'five_to_six', 'six_to_seven', 'seven_to_nine',
       'over_nine', 'varies', 'prefer_not_to_say',
     ]);
+    if (goalPreferences !== undefined &&
+        (!Array.isArray(goalPreferences) || goalPreferences.length > 64 ||
+          goalPreferences.some((value) => typeof value !== 'string' || value.length > 64 ||
+            !/^[a-z_]+(?:\/[a-z_]+)?$/.test(value)))) {
+      return res.status(400).json({ error: 'Invalid goalPreferences' });
+    }
     if (wellnessFocuses !== undefined && wellnessFocuses !== null
         && (!Array.isArray(wellnessFocuses)
           || wellnessFocuses.length > validWellnessFocuses.size
@@ -585,6 +595,11 @@ export const updateProfile = async (req, res) => {
         return res.status(400).json({ error: `Invalid fitnessGoals. Must be an array of: ${VALID_FITNESS_GOALS.join(', ')}` });
       }
     }
+    if (weightLossTargetKg != null &&
+        (!Number.isFinite(weightLossTargetKg) || weightLossTargetKg <= 0 || weightLossTargetKg > 350 ||
+          !fitnessGoals?.includes('weight_loss'))) {
+      return res.status(400).json({ error: 'A positive weightLossTargetKg requires the weight_loss fitness goal.' });
+    }
     let cleanSports;
     if (sportsPlayed !== undefined && sportsPlayed !== null) {
       cleanSports = normalizeSportsPlayed(sportsPlayed);
@@ -643,6 +658,12 @@ export const updateProfile = async (req, res) => {
     }
     if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (fitnessGoals !== undefined) updates.fitnessGoals = fitnessGoals || [];
+    if (goalPreferences !== undefined) updates.goalPreferences = [...new Set(goalPreferences)];
+    if (fitnessGoals !== undefined && !fitnessGoals?.includes('weight_loss')) {
+      updates.weightLossTargetKg = null;
+    } else if (weightLossTargetKg !== undefined) {
+      updates.weightLossTargetKg = weightLossTargetKg;
+    }
     if (sportsPlayed !== undefined) updates.sportsPlayed = cleanSports || [];
     if (recommendedEquipment !== undefined) updates.recommendedEquipment = recommendedEquipment;
     // linkedGymId is the gym-join attribution written when a customer follows

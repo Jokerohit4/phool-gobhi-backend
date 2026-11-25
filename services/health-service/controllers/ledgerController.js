@@ -8,7 +8,7 @@ import { foodPieceGrams } from '../services/ledger/foodPiecePortions.js';
 import * as ledgerPlanService from '../services/ledger/ledgerPlanService.js';
 import * as scoreService from '../services/ledger/scoreService.js';
 import * as dayCloseService from '../services/ledger/dayCloseService.js';
-import { currentNutritionTarget } from '../services/ledger/currentTarget.js';
+import { nutritionTargetForGoalDay } from '../services/plan/goalPlanTargets.js';
 import * as targetService from '../services/ledger/targetService.js';
 import * as intakeService from '../services/ledger/ledgerIntakeService.js';
 import * as attainmentService from '../services/ledger/attainmentService.js';
@@ -451,7 +451,7 @@ export const getDayTotals = handle(async (req) => {
   const { localDate } = req.params;
   const [day, target] = await Promise.all([
     nutritionService.getDayTotals(prisma, req.userId, localDate),
-    currentNutritionTarget(prisma, req.userId, localDate),
+    nutritionTargetForGoalDay(prisma, req.userId, localDate),
   ]);
   const targets = target
     ? {
@@ -1007,7 +1007,7 @@ export const getTargetActivityDetail = handle(async (req) => {
 });
 
 export const getTargets = handle(async (req) => {
-  const target = await currentNutritionTarget(prisma, req.userId);
+  const target = await nutritionTargetForGoalDay(prisma, req.userId);
   if (!target) return null;
   // Decimal columns come back as strings over JSON, which would make the
   // client parse every number. Normalised once, here.

@@ -1,4 +1,4 @@
-import { hourIST, isoDayIST } from '../utils/sessionDay.js';
+import { dayToDate, hourIST, isoDayIST } from '../utils/sessionDay.js';
 import prisma from '../db/prisma.js';
 
 import { notifyUser } from '../utils/notifyUser.js';
@@ -255,7 +255,10 @@ async function sendService(userId, type, now = new Date(), opts = {}) {
   const { allowed, reason } = await canSendService(userId, type, now, opts);
   if (!allowed) return { sent: false, reason };
 
-  const copy = pickCopy(type, opts.variant, userId);
+  const original = pickCopy(type, opts.variant, userId);
+  const copy = opts.personalPlan && original.route === 'quick_log'
+    ? { title: 'Your plan is ready when you are', body: 'See what?s next on Today.', route: '/main' }
+    : original;
   const sent = await notifyUser(userId, {
     title: copy.title,
     body: copy.body,
@@ -333,7 +336,16 @@ export async function runNudgeSweepService(now = new Date()) {
     }
   }
 
-  for (const userId of await findTargetCandidatesService(now)) {
+  const targetCandidates = await findTargetCandidatesService(now);
+  const personalPlanUsers = new Set(targetCandidates.length && prisma.goalPlan?.findMany
+    ? (await prisma.goalPlan.findMany({
+      where: { userId: { in: targetCandidates } }, select: { userId: true },
+    })).map(row => row.userId) : []);
+  for (const userId of targetCandidates) {
+    if (personalPlanUsers.has(userId)) {
+      results.suppressed += 1;
+      continue;
+    }
     // Like the comeback nudge, this has no clock of its own, so it waits for a
     // run inside the user's free-time window rather than interrupting a
     // morning they are busy in. Deferring costs nothing from the budget; the
@@ -430,6 +442,14 @@ export async function findLifecycleActivityService(userIds) {
   bump(await prisma.waterLog.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
   bump(await prisma.foodLog.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
   bump(await prisma.planItemCompletion.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
+  if (prisma.goalPlan?.findMany) {
+    const plans = await prisma.goalPlan.findMany({ where, select: { userId: true, completions: true } });
+    bump(plans.flatMap(({ userId, completions }) => {
+      result.get(userId).personalPlan = true;
+      const last = Object.keys(completions).filter(date => completions[date].length).sort().at(-1);
+      return last ? [{ userId, _max: { localDate: dayToDate(last) } }] : [];
+    }), 'localDate');
+  }
   bump(await prisma.wellnessMoodCheckIn.groupBy({ by: ['userId'], where, _max: { createdAt: true } }), 'createdAt');
   bump(await prisma.workoutSession.groupBy({ by: ['userId'], where, _max: { startedAt: true } }), 'startedAt');
   const finished = await prisma.workoutSession.groupBy({
@@ -496,7 +516,7 @@ export async function runLifecycleSweep(now = new Date()) {
       continue;
     }
 
-    const opts = { signupAt: c.createdAt, variant: stage.variant };
+    const opts = { signupAt: c.createdAt, variant: stage.variant, personalPlan: activity.get(c.id)?.personalPlan };
     if (stage.variant === 'soft') opts.sameTypeCooldownDays = SOFT_COMEBACK_COOLDOWN_DAYS;
     const result = await sendService(c.id, stage.type, now, opts);
     if (result.sent) {

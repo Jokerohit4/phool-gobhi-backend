@@ -1,4 +1,4 @@
-import { calendarDayNumberIST, calendarPartsIST } from '../../utils/sessionDay.js';
+import { calendarDayNumberIST, calendarPartsIST, isoDayIST } from '../../utils/sessionDay.js';
 import prisma from '../../db/prisma.js';
 import { fetchAttendanceSince } from '../../utils/fetchAttendance.js';
 import { fetchUserProfileInternal } from '../../utils/fetchUserProfile.js';
@@ -314,10 +314,13 @@ export async function buildUserContextService(userId) {
   // defensively: these tables are newer than every other read here, and a
   // missing row or a failed read costs the coach a line, never the answer.
   const optional = (q) => (q ? q.catch(() => null) : Promise.resolve(null));
-  const [healthProfile, medicationCount, healthProfileConsent] = await Promise.all([
+  const [healthProfile, medicationCount, healthProfileConsent, goalPlan] = await Promise.all([
     optional(prisma.healthProfile?.findUnique({ where: { userId } })),
     optional(prisma.medicationReminder?.count({ where: { userId, active: true } })),
     optional(prisma.healthProfileConsent?.findUnique({ where: { userId } })),
+    optional(prisma.goalPlan?.findUnique({
+      where: { userId }, select: { startDate: true, schedule: true },
+    })),
   ]);
   const profileLines = summariseForCoach(healthProfile, { medicationCount: medicationCount || 0 });
   const mayShareHealthConcerns =
@@ -385,7 +388,17 @@ export async function buildUserContextService(userId) {
   if (profileLines.lifestyle) parts.push(profileLines.lifestyle);
   parts.push(summariseAttendance(events), summariseSessions(sessions));
 
-  if (weeklyGoal?.sessionsPerWeek) {
+  const activeDays = goalPlan?.schedule.filter(day => day.date >= goalPlan.startDate) ?? [];
+  const planDay = activeDays.findIndex(day => day.date === isoDayIST());
+  if (planDay >= 0) {
+    const keys = activeDays[planDay].tasks.map(task => task.key);
+    const actions = [
+      keys.includes('walk') && 'a walk',
+      keys.some(key => key.startsWith('workout-')) && 'a workout',
+      keys.some(key => key.startsWith('habit-')) && 'a personal habit',
+    ].filter(Boolean);
+    parts.push(`Active personal plan: day ${planDay + 1} of ${activeDays.length}.${actions.length ? ` Scheduled today: ${actions.join(', ')}.` : ''}`);
+  } else if (weeklyGoal?.sessionsPerWeek) {
     parts.push(`Weekly goal: ${pluralise(weeklyGoal.sessionsPerWeek, 'session', 'sessions')}.`);
   }
   if (personalisation?.experienceLevel) {

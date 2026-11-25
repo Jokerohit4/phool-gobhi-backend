@@ -23,6 +23,7 @@ import { routineSnapshot, recordRoutineWater } from './routineJourneyService.js'
 // score and the tick state stay one fact.
 import { isIsoDay } from './ledger/isoDay.js';
 import { currentNutritionTarget } from './ledger/currentTarget.js';
+import { savedGoalSchedule } from './plan/goalPlanTargets.js';
 
 // The coach journey's default water, before any body data exists. Imported from
 // journeyConfig to keep the two in sync.
@@ -86,9 +87,14 @@ function resolveDay(localDate) {
  * Mirrors prescriptionService.buildPlan exactly: same source function, same
  * fallback, so /habits/today and /ledger/prescription answer with one number.
  */
-export async function waterTargetMl(prisma, userId) {
-  const target = await currentNutritionTarget(prisma, userId);
-  return target ? Number(target.waterMl) : JOURNEY_DEFAULT_WATER_ML;
+export async function waterTargetMl(prisma, userId, day = todayLocalDate()) {
+  const [target, schedule] = await Promise.all([
+    currentNutritionTarget(prisma, userId, day),
+    savedGoalSchedule(prisma, userId),
+  ]);
+  const own = schedule.find(entry => entry.date === day)?.tasks.find(task => task.key === 'water');
+  if (!target?.doctorPlan?.targetFields?.includes('waterMl') && own) return own.amount;
+  return Number(target?.waterMl ?? JOURNEY_DEFAULT_WATER_ML);
 }
 
 /**
@@ -109,7 +115,7 @@ export async function getToday(prisma, { userId, localDate } = {}) {
     return null;
   });
   const [targetMl, waterLogs, schedules, dayLogs, routine] = await Promise.all([
-    waterTargetMl(prisma, userId),
+    waterTargetMl(prisma, userId, day),
     prisma.waterLog.findMany({
       where: { userId, localDate: day },
       orderBy: { id: 'asc' },
@@ -170,7 +176,7 @@ export async function logWater(prisma, { userId, ml, localDate, requestId } = {}
   // The prescription target and the day total are independent reads; start the
   // target before awaiting the aggregate so the two round trips overlap instead
   // of running in series on every drink.
-  const targetP = waterTargetMl(prisma, userId);
+  const targetP = waterTargetMl(prisma, userId, day);
   // A rejection is surfaced by the await below; swallow the interim rejection so
   // it is not reported as unhandled while the aggregate is still in flight.
   targetP.catch(() => {});

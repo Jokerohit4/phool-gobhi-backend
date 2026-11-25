@@ -894,6 +894,18 @@ model Prescription {
   @@schema("health")
 }
 
+model GoalPlan {
+  userId      Int      @id
+  revision    Int      @default(1)
+  startDate   String
+  draft       Json
+  schedule    Json
+  completions Json
+  updatedAt   DateTime @updatedAt
+
+  @@schema("health")
+}
+
 // FR-08. Which nudge types a user has switched off. A row means "stop
 // sending me this one" — absence means allowed, so the default is opt-in
 // without needing a row per user per type.

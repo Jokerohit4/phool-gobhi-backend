@@ -46,6 +46,8 @@ export async function buildFullExportService(userId) {
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
+      weightLossTargetKg: user.weightLossTargetKg ?? null,
+      goalPreferences: user.goalPreferences ?? [],
       sportsPlayed: user.sportsPlayed,
       experienceLevel: user.experienceLevel,
       trainingTenure: user.trainingTenure,

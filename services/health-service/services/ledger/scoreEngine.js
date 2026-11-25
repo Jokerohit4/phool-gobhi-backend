@@ -10,6 +10,7 @@ import {
 } from './constants.js';
 
 import { isQualifyingSession } from '../journey/showedUpDays.js';
+import { foodTargetProgress } from './foodTargetProgress.js';
 
 // The score engine.
 //
@@ -301,8 +302,8 @@ export function computeEarns({
   }
 
   if (targets && totals) {
-    const proteinRatio = pct(totals.proteinG || 0, targets.proteinG);
-    if (proteinRatio !== null && proteinRatio >= 0.9) {
+    const { proteinRatio, kcalRatio, proteinMet, caloriesMet } = foodTargetProgress(totals, targets);
+    if (proteinMet) {
       lines.push({
         key: 'protein_met',
         label: `Protein ${Math.round(totals.proteinG)} g (${Math.round(proteinRatio * 100)}%)`,
@@ -311,8 +312,7 @@ export function computeEarns({
       });
     }
 
-    const kcalRatio = pct(totals.kcal || 0, targets.kcal);
-    if (kcalRatio !== null && Math.abs(1 - kcalRatio) <= POINTS.caloriesOnTargetRatio) {
+    if (caloriesMet) {
       lines.push({
         key: 'calories_on_target',
         label: `Calories ${Math.round(totals.kcal)} (${Math.round(kcalRatio * 100)}%)`,

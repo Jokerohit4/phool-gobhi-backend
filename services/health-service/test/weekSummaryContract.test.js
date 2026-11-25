@@ -129,3 +129,19 @@ test('a day under a doctor plan is judged against the doctor kcal target',async(
   assert.equal(data.days[0].food.targetKcal,4321);
   assert.notEqual(data.days[1].food?.targetKcal,4321);
 });
+
+test('the weekly recap uses the same dated tasks as the personal plan', async () => {
+  reset();
+  const localDate = dates[4];
+  prisma.goalPlan = { findUnique: async () => ({
+    schedule: [{ date: localDate, tasks: [{ key: 'habit-breathing', points: 5 }] }],
+    completions: { [localDate]: ['habit-breathing'] },
+  }) };
+  try {
+    const { status, body } = await request();
+    assert.equal(status, 200);
+    assert.deepEqual(body.data.days[4].plan, { done: 1, total: 1, targetHit: true, source: 'live' });
+  } finally {
+    delete prisma.goalPlan;
+  }
+});

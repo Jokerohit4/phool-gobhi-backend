@@ -5,6 +5,8 @@ import { sumFoodLogs } from './ledger/nutritionService.js';
 import { nutritionTargetFromHistory } from './ledger/currentTarget.js';
 import { activeDoctorPlans, applyDoctorTargets } from './ledger/doctorPlan.js';
 import { resolveDay } from './plan/rowProgress.js';
+import { goalActivitySources, readGoalActivity } from './plan/goalPlanActivity.js';
+import { applyGoalDayTargets, scheduledWorkouts } from './plan/goalPlanTargets.js';
 import { getLayers, getOnLayerKeys } from './plan/layerState.js';
 import { hasCoachScopeService } from './coachConsentService.js';
 import { resolveGoalService } from './goalService.js';
@@ -80,6 +82,20 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
   const weekEnd = dates[6];
   const isCurrentWeek = weekStart === weekStartOf(today);
   const access = await (deps.access ?? weekSummaryAccess)(prisma, userId);
+  const goalPlan = await prisma.goalPlan?.findUnique({
+    where: { userId }, select: { schedule: true, completions: true },
+  });
+  const goalDays = goalPlan?.schedule.filter(day => day.date <= today && dates.includes(day.date)) ?? [];
+  if (goalDays.length) {
+    // Live sources can change with a log edit or a consent change, independently of plan revision.
+    const sources = await goalActivitySources(userId, goalDays);
+    const automatic = await readGoalActivity(prisma, userId, goalDays, sources);
+    return computeWeekSummary(prisma, {
+      userId, today, weekStart, dates, weekEnd, isCurrentWeek,
+      layers: [...new Set([...access.layers, 'plan'])], onLayerKeys: access.onLayerKeys,
+      goalPlan, goalDays, automatic,
+    }, deps);
+  }
   const { layers, onLayerKeys } = access;
   const signature = JSON.stringify([today, layers, onLayerKeys]);
   const key = `health:week:${userId}:${weekStart}`;
@@ -90,11 +106,11 @@ export async function getWeekSummary(prisma, { userId, week, now = new Date() },
   }, deps));
 }
 
-async function computeWeekSummary(prisma, { userId, today, weekStart, dates, weekEnd, isCurrentWeek, layers, onLayerKeys, signature, key }, deps) {
+async function computeWeekSummary(prisma, { userId, today, weekStart, dates, weekEnd, isCurrentWeek, layers, onLayerKeys, signature, key, goalPlan, goalDays = [], automatic = {} }, deps) {
   const cache = deps.cache ?? redis;
   // Re-check consent/layers before every cache hit, including consent withdrawal.
   try {
-    const cached = JSON.parse(await cache.get(key));
+    const cached = key ? JSON.parse(await cache.get(key)) : null;
     if (cached?.signature === signature) return cached.data;
   } catch { /* cache failure must not fail a read */ }
 
@@ -107,14 +123,16 @@ async function computeWeekSummary(prisma, { userId, today, weekStart, dates, wee
     layers.includes('plan') ? prisma.scoreDaySnapshot.findMany({ where: range, select: { localDate: true, paused: true, planSummary: true } }) : [],
     layers.includes('workouts') ? prisma.workoutSession.findMany({ where: { ...range, ...COUNTED_WORKOUT_WHERE }, select: { localDate: true } }) : [],
     layers.some(l => l === 'food' || l === 'water') ? prisma.nutritionTarget.findMany({ where: { userId }, orderBy: { effectiveFrom: 'asc' } }) : [],
-    layers.includes('workouts') ? (deps.goal ?? (id => resolveGoalService(id, { persist: false })))(userId) : null,
+    layers.includes('workouts') ? (goalPlan ? {
+      sessionsPerWeek: scheduledWorkouts(goalPlan.schedule, weekStart, weekEnd), source: 'goal_plan',
+    } : (deps.goal ?? (id => resolveGoalService(id, { persist: false })))(userId)) : null,
     layers.length ? prisma.healthGoal.findUnique({ where: { userId } }) : null,
     layers.length ? (deps.showedUp ?? ((id, from, to) => getShowedUpDays(id, from, { to, limit: 7 })))(userId, weekStart, weekEnd) : [],
     // The doctor override that applied on each day, as the score saw it: one
     // consent read + one document read for the whole week, not one pair per day.
     needsTargets ? loadDoctorPlans(prisma, userId, elapsed, deps) : new Map(),
     // Today's live plan resolves alongside the rest rather than after it.
-    layers.includes('plan') && dates.includes(today)
+    layers.includes('plan') && dates.includes(today) && !goalDays.some(day => day.date === today)
       ? (deps.resolveDay ?? resolveDay)(prisma, { userId, localDate: today, onLayerKeys })
       : null,
   ]);
@@ -129,8 +147,14 @@ async function computeWeekSummary(prisma, { userId, today, weekStart, dates, wee
     const paused = !isFuture && (snapshot ? snapshot.paused === true
       : Boolean(healthGoal?.pausedFrom && healthGoal?.pausedUntil && localDate >= healthGoal.pausedFrom && localDate <= healthGoal.pausedUntil));
     const day = { localDate, isToday, isFuture, paused };
+    const goalDay = goalDays.find(entry => entry.date === localDate);
     if (layers.includes('plan')) {
       if (isFuture) day.plan = null;
+      else if (goalDay) {
+        const complete = new Set([...(goalPlan.completions[localDate] ?? []), ...(automatic[localDate] ?? [])]);
+        const done = goalDay.tasks.filter(task => complete.has(task.key)).length;
+        day.plan = { done, total: goalDay.tasks.length, targetHit: done === goalDay.tasks.length, source: 'live' };
+      }
       else if (!isToday) {
         // Legacy snapshots have no counts or target decision. Unknown is not a miss.
         const summary = snapshot?.planSummary;
@@ -140,7 +164,9 @@ async function computeWeekSummary(prisma, { userId, today, weekStart, dates, wee
         day.plan = { ...live.counts, targetHit: live.earned >= live.target, source: 'live' };
       }
     }
-    const target = applyDoctorTargets(nutritionTargetFromHistory(history, localDate), doctorPlans.get(localDate) ?? null);
+    const target = applyGoalDayTargets(
+      applyDoctorTargets(nutritionTargetFromHistory(history, localDate), doctorPlans.get(localDate) ?? null), goalDay,
+    );
     if (layers.includes('food')) {
       if (isFuture) day.food = null;
       else {
@@ -167,7 +193,9 @@ async function computeWeekSummary(prisma, { userId, today, weekStart, dates, wee
     daysElapsed: dates.filter(d => d <= today).length, pausedDays: days.filter(d => d.paused).length,
     layers, days, totals: summarizeDays(days, layers, goal, workouts.length),
   };
-  try { await cache.set(key, JSON.stringify({ signature, data }), 'EX', isCurrentWeek ? 60 : 600); } catch { /* best effort */ }
+  if (key) {
+    try { await cache.set(key, JSON.stringify({ signature, data }), 'EX', isCurrentWeek ? 60 : 600); } catch { /* best effort */ }
+  }
   return data;
 }
 

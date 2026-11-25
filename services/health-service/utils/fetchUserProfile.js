@@ -11,12 +11,13 @@ const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 // goal — the caller falls back to a neutral default — because failing to
 // read an onboarding preference is not a reason to show someone a broken
 // home screen. Same fire-and-forget posture as notifyChallengeService.
-export async function fetchUserProfileInternal(userId) {
+export async function fetchUserProfileInternal(userId, { purpose } = {}) {
   try {
     // `/internal/:id`, matching booking- and wallet-service's notify helpers.
     // (CLAUDE.md's `/internal/users/:authId` is stale — that path doesn't
     // exist; `/internal/users/batch` is a different, POST-only endpoint.)
     const res = await axios.get(`${AUTH_SERVICE_URL}/internal/${userId}`, {
+      ...(purpose ? { params: { purpose } } : {}),
       headers: {
         'x-internal-key': INTERNAL_API_KEY,
         ...(await googleIdTokenHeader(AUTH_SERVICE_URL)),

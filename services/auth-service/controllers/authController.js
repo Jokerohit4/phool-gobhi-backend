@@ -734,7 +734,7 @@ const setAccountCohortBulk = async (req, res) => {
 };
 
 export const ME_SELECT = Object.fromEntries([
-  'id', 'phone', 'name', 'email', 'role', 'type', 'gender', 'dateOfBirth', 'fitnessGoals', 'sportsPlayed',
+  'id', 'phone', 'name', 'email', 'role', 'type', 'gender', 'dateOfBirth', 'fitnessGoals', 'weightLossTargetKg', 'goalPreferences', 'sportsPlayed',
   'referralCode', 'linkedGymId', 'trainerGymId', 'leaderboardOptIn', 'experienceLevel', 'trainingTenure', 'homeUnclaimedGymId',
   'pendingGymPromptGymId', 'gymLinkNotice', 'firstVisitBadgeConsent', 'currentlyWorksOut', 'workoutIntent',
   'wellnessFocuses', 'wellnessDayPattern', 'wellnessSleepPattern', 'wellnessSetupCompleted',
@@ -779,6 +779,8 @@ const getMe = async (req, res) => {
       gender: user.gender,
       dateOfBirth: user.dateOfBirth,
       fitnessGoals: user.fitnessGoals,
+      weightLossTargetKg: user.weightLossTargetKg ?? null,
+      goalPreferences: user.goalPreferences ?? [],
       sportsPlayed: user.sportsPlayed ?? [],
       referralCode: user.referralCode,
       linkedGymId: user.linkedGymId,
@@ -835,10 +837,39 @@ const getMe = async (req, res) => {
 // Also extended for booking-service: referredByUserId lets completeBooking
 // check, on a customer's first completed session, whether to fire the
 // referral wallet credit.
+const GOAL_PLAN_PROFILE_SELECT = Object.freeze({
+  dateOfBirth: true,
+  fitnessGoals: true,
+  goalPreferences: true,
+  weightLossTargetKg: true,
+  sportsPlayed: true,
+  experienceLevel: true,
+  trainingTenure: true,
+  weeklyFrequencyIntent: true,
+  currentlyWorksOut: true,
+  workoutIntent: true,
+  wellnessFocuses: true,
+  wellnessDayPattern: true,
+  wellnessSleepPattern: true,
+  trainingLocationPref: true,
+  trainingLocationOther: true,
+  appMode: true,
+  freeTimeWindow: true,
+  gymSubscriptionEndDate: true,
+  linkedGymId: true,
+  homeUnclaimedGymId: true,
+});
+
 const getUserInternal = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });
+    const where = { id: parseInt(req.params.id) };
+    const forGoalPlan = req.query?.purpose === 'goal_plan';
+    const user = await prisma.user.findUnique({
+      where,
+      ...(forGoalPlan ? { select: GOAL_PLAN_PROFILE_SELECT } : {}),
+    });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (forGoalPlan) return res.json(user);
     const membership = user.linkedGymId ? await prisma.gymLink.findFirst({
       where: { userId: user.id, gymId: user.linkedGymId, removedAt: null },
       orderBy: { linkedAt: 'desc' },
