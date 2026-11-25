@@ -8,6 +8,7 @@
     "dev": "nodemon app.js",
     "test": "node --experimental-test-module-mocks --test",
     "seed:foods": "node prisma/seed/run.js",
+    "seed:routines": "node prisma/seed.js && node prisma/seedRoutineCatalogue.js",
     "seed:foods:status": "node prisma/seed/status.js --status",
     "seed:foods:signoff": "node prisma/seed/signoff.js",
     "db:deploy": "prisma migrate deploy",

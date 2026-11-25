@@ -39,17 +39,23 @@ async function attachLastDone(templates, userId) {
   return templates.map((t) => ({ ...t, lastDoneAt: lastByTemplate.get(t.id) || null }));
 }
 
-// System templates are identical for every user and only ever change when a
-// seed script (prisma/seed*Templates.js) is run - there is no API that writes
-// them (the user-facing create/update/delete are all scoped to the caller's own
-// templates). So they are cached in-process for 10 minutes per instance; after a
-// reseed an instance can serve the old set until its TTL lapses or it restarts.
-export const SYSTEM_TEMPLATES_TTL_MS = 10 * 60_000;
+// System templates are identical for every user and change only through the
+// seed (prisma/seedRoutineCatalogue.js) or the admin routine editor, so they
+// are cached in-process per instance. Admin writes on this instance evict the
+// entry (see routines/catalogueAdminService.js); other instances catch up when
+// the TTL lapses.
+//
+// This plain list keeps the shape older app builds expect: they show every
+// template here under "My Routines" and resolve a plan day against it. So it
+// carries only the routines flagged `legacyListed` (the original 16 plus the
+// ones the coached-plan engine can place in a week). The rest of the catalogue
+// is served by GET /templates/catalogue.
+export const SYSTEM_TEMPLATES_TTL_MS = 60_000;
 export const systemTemplatesCache = createTtlCache({ ttlMs: SYSTEM_TEMPLATES_TTL_MS, maxEntries: 1 });
 const loadSystemTemplates = () => systemTemplatesCache.get('system', () => prisma.workoutTemplate.findMany({
-  where: { isSystem: true },
+  where: { isSystem: true, isPublished: true, OR: [{ legacyListed: true }, { key: null }] },
   include: includeExercises,
-  orderBy: { name: 'asc' },
+  orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
 }));
 
 // Returns the caller's own templates AND every system template (H-21) —
@@ -64,14 +70,18 @@ const loadSystemTemplates = () => systemTemplatesCache.get('system', () => prism
 // routines keep their order — they built those for themselves, and re-ranking
 // someone's own list by our guess would be presumptuous. Before the setup is
 // answered, equipmentFit is null and nothing moves.
-export async function listTemplatesService(userId) {
+//
+// `scope: 'mine'` returns only the caller's own routines. Newer clients use it
+// for "My Routines" and read starters from the catalogue endpoint, so a copy
+// and its source are never mixed in one list.
+export async function listTemplatesService(userId, { scope } = {}) {
   const [own, system, profile] = await Promise.all([
     prisma.workoutTemplate.findMany({
       where: { userId },
       include: includeExercises,
       orderBy: { updatedAt: 'desc' },
     }),
-    loadSystemTemplates(),
+    scope === 'mine' ? [] : loadSystemTemplates(),
     // Best-effort: a failed read costs the fit badge, never the list.
     (async () => prisma.personalisationProfile.findUnique({
       where: { userId }, select: { homeEquipment: true, homeSetupAt: true },

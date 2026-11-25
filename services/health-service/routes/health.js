@@ -5,6 +5,7 @@ import { requireFeatureFlag, requireAnyFeatureFlag } from '../middleware/require
 import * as consentCtrl from '../controllers/consentController.js';
 import * as exerciseCtrl from '../controllers/exerciseController.js';
 import * as templateCtrl from '../controllers/templateController.js';
+import * as routineCatalogueCtrl from '../controllers/routineCatalogueController.js';
 import * as sessionCtrl from '../controllers/sessionController.js';
 import * as activityCtrl from '../controllers/activityController.js';
 import * as progressCtrl from '../controllers/progressController.js';
@@ -259,6 +260,9 @@ router.get('/exercises/:id/history', ...workoutGated, exerciseCtrl.getExerciseHi
 
 // ---- Routines (templates) ---------------------------------------------
 router.get('/templates', ...workoutGated, templateCtrl.listTemplates);
+// The routine catalogue (starters). Registered before any /templates/:id route.
+router.get('/templates/catalogue', ...workoutGated, routineCatalogueCtrl.listCatalogue);
+router.post('/templates/:id/clone', ...workoutGated, routineCatalogueCtrl.cloneTemplate);
 router.post('/templates', ...workoutGated, templateCtrl.createTemplate);
 router.put('/templates/:id', ...workoutGated, templateCtrl.updateTemplate);
 router.delete('/templates/:id', ...workoutGated, templateCtrl.deleteTemplate);
@@ -469,6 +473,11 @@ router.delete('/me', requireAuth, consentCtrl.deleteAllMyData);
 // ---- Admin (gobhi) — aggregate only, no per-user drill-down, per the
 // customer-only visibility decision in the implementation plan -----------
 router.get('/admin/adoption-summary', requireRole('gobhi'), adminCtrl.getAdoptionSummary);
+// Staff-managed routine catalogue (system templates).
+router.get('/admin/templates', requireRole('gobhi'), routineCatalogueCtrl.adminList);
+router.post('/admin/templates', requireRole('gobhi'), routineCatalogueCtrl.adminCreate);
+router.get('/admin/templates/:id', requireRole('gobhi'), routineCatalogueCtrl.adminGet);
+router.put('/admin/templates/:id', requireRole('gobhi'), routineCatalogueCtrl.adminUpdate);
 // Whether the readiness suggestions are landing at all (GS-5) — aggregate
 // counts only, no per-user rows.
 router.get('/admin/suggestion-feedback', requireRole('gobhi'), suggestionFeedbackCtrl.getFeedbackStats);
