@@ -257,7 +257,7 @@ async function sendService(userId, type, now = new Date(), opts = {}) {
 
   const original = pickCopy(type, opts.variant, userId);
   const copy = opts.personalPlan && original.route === 'quick_log'
-    ? { title: 'Your plan is ready when you are', body: 'See what?s next on Today.', route: '/main' }
+    ? { title: 'Your plan is ready when you are', body: 'See what to do next on Today.', route: '/main' }
     : original;
   const sent = await notifyUser(userId, {
     title: copy.title,
