@@ -431,7 +431,8 @@
               "JOURNEY_CACHE_TTL_MS": "60000",
               "PLAN_TODAY_RESPONSE_CACHE_TTL_MS": "15000",
               "REPORT_LLM_ENABLED": "true",
-              "REPORT_LLM_DAILY_CAP": "150"
+              "REPORT_LLM_DAILY_CAP": "150",
+              "REPORT_RISK_PUSH_ENABLED": "true"
 
           },
           "secrets": {

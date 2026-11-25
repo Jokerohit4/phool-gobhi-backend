@@ -4,6 +4,7 @@ import express from 'express';
 
 let server, base, profile = null, writtenBiometrics = 0, entitlement = { isGuided: false }, requests = [];
 let reads = 0;
+process.env.REPORT_RISK_PUSH_ENABLED = 'true';
 const pushes = [];
 const report = { id: 1, userId: 7, fileName: 'report.pdf', storagePath: 'private/7/report', status: 'COMPLETED', createdAt: new Date('2026-11-01'), reportDate: null, proposedProfile: { name: 'Patient' }, extractions: [{ id: 11, metric: 'hba1c', normalizedValue: 7.1 }] };
 const db = {
