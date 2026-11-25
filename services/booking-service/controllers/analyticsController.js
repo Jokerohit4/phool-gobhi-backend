@@ -1,6 +1,7 @@
 import * as analyticsQuery from '../services/analyticsQueryService.js';
 import * as savedFunnels from '../services/savedFunnelService.js';
 import * as pushFunnel from '../services/pushFunnelService.js';
+import * as notificationPermission from '../services/notificationPermissionService.js';
 import { assertPartnerOwnsGym } from '../services/bookingService.js';
 import { resolveCohortScope } from '../utils/cohortScope.js';
 import { getRetentionSignupCohorts } from '../services/retentionSignupCohorts.js';
@@ -128,6 +129,15 @@ export const getPushFunnel = async (req, res) => {
 export const getPushTypes = async (req, res) => {
   try {
     res.json({ data: await pushFunnel.getPushTypes(req.query) });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  }
+};
+
+// Users whose latest OS notification permission is denied (muted), from client events.
+export const getNotificationPermission = async (req, res) => {
+  try {
+    res.json({ data: await notificationPermission.getNotificationPermission(req.query) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || 'Server error' });
   }

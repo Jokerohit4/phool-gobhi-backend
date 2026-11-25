@@ -127,6 +127,7 @@ router.get('/admin/analytics/city-breakdown', requireRole('gobhi'), analyticsCtr
 // Gamification wave 1: per-gym badge_earned counts, a supply-density signal.
 router.get('/admin/analytics/badges-summary', requireRole('gobhi'), analyticsCtrl.getBadgeSummary);
 router.get('/admin/analytics/push-funnel', requireRole('gobhi'), analyticsCtrl.getPushFunnel);
+router.get('/admin/analytics/notification-permission', requireRole('gobhi'), analyticsCtrl.getNotificationPermission);
 router.get('/admin/analytics/push-types', requireRole('gobhi'), analyticsCtrl.getPushTypes);
 router.get('/admin/analytics/revenue-trend', requireRole('gobhi'), analyticsCtrl.getRevenueTrend);
 router.get('/admin/analytics/supply-health', requireRole('gobhi'), analyticsCtrl.getSupplyHealth);
