@@ -1,0 +1,2892 @@
+{
+  "routines": [
+    {
+      "key": "gym_starter_push_a",
+      "category": "push",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Push Day A",
+          "description": "Chest, shoulders and triceps",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुश डे ए",
+          "description": "छाती · कंधे · ट्राइसेप्स",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "push day e",
+          "description": "chhati · kandhe · triceps",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Bench Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 120
+        },
+        {
+          "name": "Incline Dumbbell Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Cable Overhead Triceps Extension",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Lateral Raise",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Triceps Pushdown",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 0
+    },
+    {
+      "key": "gym_starter_legs",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Leg Day",
+          "description": "Quads, hamstrings and glutes",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "लेग डे",
+          "description": "क्वाड्स · हैमस्ट्रिंग · ग्लूट्स",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "leg de",
+          "description": "quads · hamstring · gluts",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Squat",
+          "sets": 3,
+          "reps": 8,
+          "rest": 150
+        },
+        {
+          "name": "Leg Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 120
+        },
+        {
+          "name": "Deadlift",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Cable Pull-Through",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Calf Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 10
+    },
+    {
+      "key": "gym_starter_full_body_x3",
+      "category": "full_body",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Full Body x3 — Beginner-friendly",
+          "description": "Beginner-friendly full-body starter, three days a week",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "फुल बॉडी x3",
+          "description": "शुरुआती-अनुकूल · 6 अभ्यास · सप्ताह में 3 दिन प्रशिक्षण",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "full body x3",
+          "description": "shuruaati-anukul · 6 abhyas · saptah mein 3 din prashikshan",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Leg Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Cable Pull-Through",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Barbell Bench Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 90
+        },
+        {
+          "name": "Seated Cable Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 90
+        },
+        {
+          "name": "Plank",
+          "sets": 3,
+          "seconds": 30,
+          "rest": 45
+        }
+      ],
+      "sortOrder": 20
+    },
+    {
+      "key": "gym_starter_upper_abs",
+      "category": "full_body",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Upper & Abs",
+          "description": "Back, chest, shoulders and core",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "ऊपरी और पेट",
+          "description": "पीठ · छाती · कंधे · कोर",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "upari aur pet",
+          "description": "peeth · chhati · kandhe · core",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Lat Pulldown",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Barbell Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Barbell Bench Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 90
+        },
+        {
+          "name": "Face Pull",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Cable Crunch",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Plank",
+          "sets": 3,
+          "seconds": 30,
+          "rest": 45
+        }
+      ],
+      "sortOrder": 30
+    },
+    {
+      "key": "home_full_body_20",
+      "category": "full_body",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Full body — no equipment",
+          "description": "Squat, incline push-up, glute bridge, plank, dead bug — one round.",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Incline Push-up",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Glute Bridge",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Plank",
+          "sets": 3,
+          "seconds": 30,
+          "rest": 60
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 40
+    },
+    {
+      "key": "home_full_body_15",
+      "category": "full_body",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Full body — 15 minute",
+          "description": "The 20-minute full-body routine, two rounds, shorter rest.",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 2,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Incline Push-up",
+          "sets": 2,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Glute Bridge",
+          "sets": 2,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Plank",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 60
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 2,
+          "reps": 10,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 50
+    },
+    {
+      "key": "home_push",
+      "category": "push",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Push — bodyweight",
+          "description": "Incline push-up, pike push-up, chair dip.",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Incline Push-up",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Pike Push-up",
+          "sets": 3,
+          "reps": 8,
+          "rest": 60
+        },
+        {
+          "name": "Chair Dip",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 60
+    },
+    {
+      "key": "home_pull",
+      "category": "pull",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Pull — no bar",
+          "description": "Towel row, superman — everything a pull-up bar would otherwise cover.",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Towel Row",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Superman",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 70
+    },
+    {
+      "key": "home_legs",
+      "category": "legs",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Legs — bodyweight",
+          "description": "Squat, split squat, calf raise, wall sit.",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Split Squat",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Calf Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Wall Sit",
+          "sets": 3,
+          "seconds": 30,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 80
+    },
+    {
+      "key": "home_core_10",
+      "category": "core",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Core — 10 minute",
+          "description": "Plank, side plank, dead bug, hollow hold.",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Plank",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 60
+        },
+        {
+          "name": "Side Plank",
+          "sets": 2,
+          "seconds": 20,
+          "rest": 60
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 2,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Hollow Hold",
+          "sets": 2,
+          "seconds": 20,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 90
+    },
+    {
+      "key": "home_cardio_low_impact",
+      "category": "cardio",
+      "goal": "fatLoss",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Low-impact cardio (no jumping)",
+          "description": "March in place, step-back lunge, shadow boxing.",
+          "guidance": "Keep a sustainable pace. Complete the listed sets with their rests; this is not an all-out circuit."
+        }
+      },
+      "exercises": [
+        {
+          "name": "March in Place",
+          "sets": 3,
+          "seconds": 60,
+          "rest": 60
+        },
+        {
+          "name": "Step-Back Lunge",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Shadow Boxing",
+          "sets": 3,
+          "seconds": 60,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 100
+    },
+    {
+      "key": "home_mobility",
+      "category": "mobility",
+      "goal": "mobility",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Mobility & stretch",
+          "description": "A gentle full-body flow. No target pace — move at whatever speed feels right.",
+          "guidance": "Move slowly through a comfortable range. For one-sided movements, split the listed time equally between sides."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Yoga Flow",
+          "sets": 1,
+          "seconds": 900,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 110
+    },
+    {
+      "key": "home_push_intermediate",
+      "category": "push",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Push — intermediate",
+          "description": "The push routine, more sets and higher reps.",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Incline Push-up",
+          "sets": 4,
+          "reps": 14,
+          "rest": 60
+        },
+        {
+          "name": "Pike Push-up",
+          "sets": 4,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Chair Dip",
+          "sets": 4,
+          "reps": 14,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 120
+    },
+    {
+      "key": "home_legs_intermediate",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Legs — intermediate",
+          "description": "The legs routine, more sets and a longer wall sit.",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 4,
+          "reps": 18,
+          "rest": 60
+        },
+        {
+          "name": "Split Squat",
+          "sets": 4,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Calf Raise",
+          "sets": 4,
+          "reps": 18,
+          "rest": 60
+        },
+        {
+          "name": "Wall Sit",
+          "sets": 3,
+          "seconds": 45,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 130
+    },
+    {
+      "key": "home_full_body_intermediate",
+      "category": "full_body",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Full body — intermediate",
+          "description": "The full-body circuit, four rounds.",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 4,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Incline Push-up",
+          "sets": 4,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Glute Bridge",
+          "sets": 4,
+          "reps": 18,
+          "rest": 60
+        },
+        {
+          "name": "Plank",
+          "sets": 4,
+          "seconds": 40,
+          "rest": 60
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 4,
+          "reps": 12,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 140
+    },
+    {
+      "key": "home_desk_reset",
+      "category": "mobility",
+      "goal": "mobility",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Desk reset — 8 minute",
+          "description": "A short mobility break. Neck, shoulders and hips — built for a workday, not a workout.",
+          "guidance": "Move slowly through a comfortable range. For one-sided movements, split the listed time equally between sides."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Yoga Flow",
+          "sets": 1,
+          "seconds": 480,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 150
+    },
+    {
+      "key": "gym_pull_a",
+      "category": "pull",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Pull Day A",
+          "description": "Back and biceps · controlled working sets",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुल डे ए",
+          "description": "पीठ और बाइसेप्स · नियंत्रित कार्य सेट",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "pul day e",
+          "description": "peeth aur biceps · niyantrit karya set",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Lat Pulldown",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Cable Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Single-Arm Dumbbell Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Face Pull",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Hammer Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 160
+    },
+    {
+      "key": "dumbbell_upper_body",
+      "category": "full_body",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Dumbbell Upper Body",
+          "description": "Dumbbells and bench · upper body",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "डम्बल ऊपरी शरीर",
+          "description": "डम्बल और बेंच · ऊपरी शरीर",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "dambal upari shareer",
+          "description": "dambal aur bench · upari shrir",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Dumbbell Bench Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Single-Arm Dumbbell Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Dumbbell Shoulder Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Lateral Raise",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Dumbbell Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 170
+    },
+    {
+      "key": "dumbbell_lower_body",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Dumbbell Lower Body",
+          "description": "Dumbbells · legs and glutes",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "डम्बल लोअर बॉडी",
+          "description": "डम्बल · पैर और नितंब",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "dambal lower body",
+          "description": "dambal · pair aur nitamb",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Goblet Squat",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Romanian Deadlift",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Reverse Lunge",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Hip Thrust",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Calf Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 180
+    },
+    {
+      "key": "arms_and_shoulders",
+      "category": "push",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Arms and Shoulders",
+          "description": "Dumbbells and cables · accessory session",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "हथियार और कंधे",
+          "description": "डम्बल और केबल · सहायक सत्र",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "hathiyar aur kandhe",
+          "description": "dambal aur cable · sahayak satra",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Seated Dumbbell Shoulder Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Lateral Raise",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "EZ-Bar Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Rope Triceps Pushdown",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Face Pull",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 190
+    },
+    {
+      "key": "strength_foundations_a",
+      "category": "full_body",
+      "goal": "strength",
+      "level": "intermediate",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Strength Foundations A",
+          "description": "Barbell and cables · rest between heavy sets",
+          "guidance": "Use controlled reps and a load that leaves about 2 reps in reserve. Rest fully between heavy sets."
+        },
+        "hi": {
+          "name": "स्ट्रेंथ फ़ाउंडेशन ए",
+          "description": "बारबेल और केबल · भारी सेट के बीच आराम",
+          "guidance": "नियंत्रित रेप्स करें और ऐसा वज़न लें जिससे लगभग 2 रेप्स और कर सकें। भारी सेटों के बीच पूरा आराम करें।"
+        },
+        "hinglish": {
+          "name": "strength foundation e",
+          "description": "barbel aur cable · bhari set ke beech aram",
+          "guidance": "Controlled reps karein aur aisa wazan lein jisse lagbhag 2 reps aur kar sakein. Heavy sets ke beech poora aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Squat",
+          "sets": 3,
+          "reps": 5,
+          "rest": 180
+        },
+        {
+          "name": "Barbell Bench Press",
+          "sets": 3,
+          "reps": 5,
+          "rest": 180
+        },
+        {
+          "name": "Barbell Row",
+          "sets": 3,
+          "reps": 6,
+          "rest": 150
+        },
+        {
+          "name": "Plank",
+          "sets": 3,
+          "seconds": 30,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 200
+    },
+    {
+      "key": "strength_foundations_b",
+      "category": "full_body",
+      "goal": "strength",
+      "level": "intermediate",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Strength Foundations B",
+          "description": "Barbell and pulldown · full body",
+          "guidance": "Use controlled reps and a load that leaves about 2 reps in reserve. Rest fully between heavy sets."
+        },
+        "hi": {
+          "name": "स्ट्रेंथ फ़ाउंडेशन बी",
+          "description": "बारबेल और पुलडाउन · पूरा शरीर",
+          "guidance": "नियंत्रित रेप्स करें और ऐसा वज़न लें जिससे लगभग 2 रेप्स और कर सकें। भारी सेटों के बीच पूरा आराम करें।"
+        },
+        "hinglish": {
+          "name": "strength foundation bi",
+          "description": "barbel aur puladown · pura shrir",
+          "guidance": "Controlled reps karein aur aisa wazan lein jisse lagbhag 2 reps aur kar sakein. Heavy sets ke beech poora aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Deadlift",
+          "sets": 2,
+          "reps": 5,
+          "rest": 180
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 3,
+          "reps": 5,
+          "rest": 180
+        },
+        {
+          "name": "Lat Pulldown",
+          "sets": 3,
+          "reps": 6,
+          "rest": 120
+        },
+        {
+          "name": "Split Squat",
+          "sets": 3,
+          "reps": 8,
+          "rest": 90
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 210
+    },
+    {
+      "key": "upper_body_strength",
+      "category": "full_body",
+      "goal": "strength",
+      "level": "intermediate",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Upper Body Strength",
+          "description": "Gym · low-rep compound lifts",
+          "guidance": "Use controlled reps and a load that leaves about 2 reps in reserve. Rest fully between heavy sets."
+        },
+        "hi": {
+          "name": "ऊपरी शारीरिक शक्ति",
+          "description": "जिम · लो-रेप कंपाउंड लिफ्ट",
+          "guidance": "नियंत्रित रेप्स करें और ऐसा वज़न लें जिससे लगभग 2 रेप्स और कर सकें। भारी सेटों के बीच पूरा आराम करें।"
+        },
+        "hinglish": {
+          "name": "upari sharirik shakti",
+          "description": "jim · lo-rep compound lift",
+          "guidance": "Controlled reps karein aur aisa wazan lein jisse lagbhag 2 reps aur kar sakein. Heavy sets ke beech poora aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Bench Press",
+          "sets": 4,
+          "reps": 5,
+          "rest": 180
+        },
+        {
+          "name": "Barbell Row",
+          "sets": 4,
+          "reps": 6,
+          "rest": 150
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 3,
+          "reps": 5,
+          "rest": 150
+        },
+        {
+          "name": "Lat Pulldown",
+          "sets": 3,
+          "reps": 6,
+          "rest": 120
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 220
+    },
+    {
+      "key": "lower_body_strength",
+      "category": "legs",
+      "goal": "strength",
+      "level": "intermediate",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Lower Body Strength",
+          "description": "Gym · squat and hinge focus",
+          "guidance": "Use controlled reps and a load that leaves about 2 reps in reserve. Rest fully between heavy sets."
+        },
+        "hi": {
+          "name": "निचली शारीरिक शक्ति",
+          "description": "जिम · स्क्वाट और हिंज फोकस",
+          "guidance": "नियंत्रित रेप्स करें और ऐसा वज़न लें जिससे लगभग 2 रेप्स और कर सकें। भारी सेटों के बीच पूरा आराम करें।"
+        },
+        "hinglish": {
+          "name": "nichli sharirik shakti",
+          "description": "jim · squat aur hinj focus",
+          "guidance": "Controlled reps karein aur aisa wazan lein jisse lagbhag 2 reps aur kar sakein. Heavy sets ke beech poora aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Squat",
+          "sets": 4,
+          "reps": 5,
+          "rest": 180
+        },
+        {
+          "name": "Romanian Deadlift",
+          "sets": 3,
+          "reps": 6,
+          "rest": 150
+        },
+        {
+          "name": "Leg Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Standing Calf Raise",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 230
+    },
+    {
+      "key": "full_body_conditioning",
+      "category": "full_body",
+      "goal": "fatLoss",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Full Body Conditioning",
+          "description": "Dumbbells · strength with a cardio finish",
+          "guidance": "Keep a sustainable pace. Complete the listed sets with their rests; this is not an all-out circuit."
+        },
+        "hi": {
+          "name": "पूर्ण शारीरिक कंडीशनिंग",
+          "description": "डम्बल · कार्डियो फिनिश के साथ ताकत",
+          "guidance": "टिकाऊ रफ़्तार रखें। बताए गए सेट आराम के साथ पूरे करें; यह पूरी ताक़त लगाने वाला सर्किट नहीं है।"
+        },
+        "hinglish": {
+          "name": "purna sharirik conditioning",
+          "description": "dambal · cardio finish ke saath taakat",
+          "guidance": "Tikau raftaar rakhein. Bataye gaye sets aaram ke saath poore karein; yeh poori taakat lagane waala circuit nahi hai."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Goblet Squat",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Dumbbell Bench Press",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Single-Arm Dumbbell Row",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Dumbbell Romanian Deadlift",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 240
+    },
+    {
+      "key": "low_impact_conditioning",
+      "category": "cardio",
+      "goal": "fatLoss",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Low-Impact Conditioning",
+          "description": "No equipment · easy on jumping",
+          "guidance": "Keep a sustainable pace. Complete the listed sets with their rests; this is not an all-out circuit."
+        },
+        "hi": {
+          "name": "कम प्रभाव वाली कंडीशनिंग",
+          "description": "कोई उपकरण नहीं · कूदना आसान",
+          "guidance": "टिकाऊ रफ़्तार रखें। बताए गए सेट आराम के साथ पूरे करें; यह पूरी ताक़त लगाने वाला सर्किट नहीं है।"
+        },
+        "hinglish": {
+          "name": "kam prabhav wali conditioning",
+          "description": "koi upkaran nahin · kudna aasan",
+          "guidance": "Tikau raftaar rakhein. Bataye gaye sets aaram ke saath poore karein; yeh poori taakat lagane waala circuit nahi hai."
+        }
+      },
+      "exercises": [
+        {
+          "name": "March in Place",
+          "sets": 2,
+          "seconds": 60,
+          "rest": 30
+        },
+        {
+          "name": "Bodyweight Squat",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Wall Push-up",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Step Jack",
+          "sets": 2,
+          "seconds": 45,
+          "rest": 30
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        }
+      ],
+      "sortOrder": 250
+    },
+    {
+      "key": "gym_conditioning_mix",
+      "category": "cardio",
+      "goal": "fatLoss",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Gym Conditioning Mix",
+          "description": "Gym · moderate cardio and resistance",
+          "guidance": "Keep a sustainable pace. Complete the listed sets with their rests; this is not an all-out circuit."
+        },
+        "hi": {
+          "name": "जिम कंडीशनिंग मिक्स",
+          "description": "जिम · मध्यम कार्डियो और प्रतिरोध",
+          "guidance": "टिकाऊ रफ़्तार रखें। बताए गए सेट आराम के साथ पूरे करें; यह पूरी ताक़त लगाने वाला सर्किट नहीं है।"
+        },
+        "hinglish": {
+          "name": "jim conditioning mix",
+          "description": "jim · madhyam cardio aur pratirodh",
+          "guidance": "Tikau raftaar rakhein. Bataye gaye sets aaram ke saath poore karein; yeh poori taakat lagane waala circuit nahi hai."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Stationary Bike",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 60
+        },
+        {
+          "name": "Leg Press",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Machine Chest Press",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Seated Cable Row",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 260
+    },
+    {
+      "key": "bodyweight_conditioning",
+      "category": "cardio",
+      "goal": "fatLoss",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Bodyweight Conditioning",
+          "description": "No equipment · steady effort with rests",
+          "guidance": "Keep a sustainable pace. Complete the listed sets with their rests; this is not an all-out circuit."
+        },
+        "hi": {
+          "name": "बॉडीवेट कंडीशनिंग",
+          "description": "कोई उपकरण नहीं · आराम के साथ स्थिर प्रयास",
+          "guidance": "टिकाऊ रफ़्तार रखें। बताए गए सेट आराम के साथ पूरे करें; यह पूरी ताक़त लगाने वाला सर्किट नहीं है।"
+        },
+        "hinglish": {
+          "name": "bodyweight conditioning",
+          "description": "koi upkaran nahin · aaram ke saath sthir prayas",
+          "guidance": "Tikau raftaar rakhein. Bataye gaye sets aaram ke saath poore karein; yeh poori taakat lagane waala circuit nahi hai."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 3,
+          "reps": 12,
+          "rest": 45
+        },
+        {
+          "name": "Incline Push-up",
+          "sets": 3,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Step-Back Lunge",
+          "sets": 3,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Mountain Climber",
+          "sets": 3,
+          "seconds": 30,
+          "rest": 45
+        },
+        {
+          "name": "Shadow Boxing",
+          "sets": 3,
+          "seconds": 60,
+          "rest": 45
+        }
+      ],
+      "sortOrder": 270
+    },
+    {
+      "key": "walk_jog_starter",
+      "category": "cardio",
+      "goal": "stamina",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Walk-Jog Starter",
+          "description": "Outdoors or treadmill · 4 jog bouts with easy recovery",
+          "guidance": "Use a conversational pace. The rests between repeated timed bouts are easy recovery periods."
+        },
+        "hi": {
+          "name": "वॉक-जॉग स्टार्टर",
+          "description": "आउटडोर या ट्रेडमिल · आसान रिकवरी के साथ 4 जॉगिंग मुकाबले",
+          "guidance": "ऐसी रफ़्तार रखें जिसमें बात कर सकें। बार-बार होने वाली समयबद्ध गतिविधियों के बीच हल्का आराम करें।"
+        },
+        "hinglish": {
+          "name": "vock-jog starter",
+          "description": "outdoor ya treadmill · aasan recovery ke saath 4 jogging mukable",
+          "guidance": "Aisi raftaar rakhein jismein baat kar sakein. Baar-baar hone waali timed activities ke beech halka aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 300,
+          "rest": 0,
+          "phase": "warm_up",
+          "instructions": "Begin with an easy walk and gradually build your pace."
+        },
+        {
+          "name": "Jogging",
+          "sets": 4,
+          "seconds": 60,
+          "rest": 90
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 300,
+          "rest": 0,
+          "phase": "cool_down",
+          "instructions": "Gradually slow to an easy walk and let your breathing settle."
+        }
+      ],
+      "sortOrder": 280
+    },
+    {
+      "key": "cycling_endurance",
+      "category": "cardio",
+      "goal": "stamina",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Cycling Endurance",
+          "description": "Stationary bike · 15 minutes of steady cycling plus preparation",
+          "guidance": "Use a conversational pace. The rests between repeated timed bouts are easy recovery periods."
+        },
+        "hi": {
+          "name": "साइकिल चलाने की सहनशक्ति",
+          "description": "स्थिर बाइक · 15 मिनट की स्थिर साइकिलिंग और तैयारी",
+          "guidance": "ऐसी रफ़्तार रखें जिसमें बात कर सकें। बार-बार होने वाली समयबद्ध गतिविधियों के बीच हल्का आराम करें।"
+        },
+        "hinglish": {
+          "name": "cycle chalane ki sahanshakti",
+          "description": "sthir bike · 15 minute ki sthir cycling aur taiyari",
+          "guidance": "Aisi raftaar rakhein jismein baat kar sakein. Baar-baar hone waali timed activities ke beech halka aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Stationary Bike",
+          "sets": 1,
+          "seconds": 300,
+          "rest": 0,
+          "phase": "warm_up",
+          "instructions": "Pedal easily and gradually increase your pace."
+        },
+        {
+          "name": "Cycling",
+          "sets": 1,
+          "seconds": 900,
+          "rest": 60
+        },
+        {
+          "name": "Stationary Bike",
+          "sets": 1,
+          "seconds": 300,
+          "rest": 0,
+          "phase": "cool_down",
+          "instructions": "Reduce resistance and pedal more slowly as your breathing settles."
+        }
+      ],
+      "sortOrder": 290
+    },
+    {
+      "key": "cardio_machine_mix",
+      "category": "cardio",
+      "goal": "stamina",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Cardio Machine Mix",
+          "description": "Gym · conversational effort",
+          "guidance": "Use a conversational pace. The rests between repeated timed bouts are easy recovery periods."
+        },
+        "hi": {
+          "name": "कार्डियो मशीन मिक्स",
+          "description": "जिम · बातचीत का प्रयास",
+          "guidance": "ऐसी रफ़्तार रखें जिसमें बात कर सकें। बार-बार होने वाली समयबद्ध गतिविधियों के बीच हल्का आराम करें।"
+        },
+        "hinglish": {
+          "name": "cardio machine mix",
+          "description": "jim · baatcheet ka prayas",
+          "guidance": "Aisi raftaar rakhein jismein baat kar sakein. Baar-baar hone waali timed activities ke beech halka aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 60
+        },
+        {
+          "name": "Stationary Bike",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 60
+        },
+        {
+          "name": "Elliptical",
+          "sets": 1,
+          "seconds": 300,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 300
+    },
+    {
+      "key": "at_home_stamina",
+      "category": "cardio",
+      "goal": "stamina",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "At-Home Stamina",
+          "description": "No equipment · timed rounds",
+          "guidance": "Use a conversational pace. The rests between repeated timed bouts are easy recovery periods."
+        },
+        "hi": {
+          "name": "घर पर सहनशक्ति",
+          "description": "कोई उपकरण नहीं · 4 अभ्यास · समयबद्ध राउंड",
+          "guidance": "ऐसी रफ़्तार रखें जिसमें बात कर सकें। बार-बार होने वाली समयबद्ध गतिविधियों के बीच हल्का आराम करें।"
+        },
+        "hinglish": {
+          "name": "ghar par sahanshakti",
+          "description": "koi upkaran nahin · 4 abhyas · samaybaddh round",
+          "guidance": "Aisi raftaar rakhein jismein baat kar sakein. Baar-baar hone waali timed activities ke beech halka aaram karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "March in Place",
+          "sets": 3,
+          "seconds": 60,
+          "rest": 30
+        },
+        {
+          "name": "Step Jack",
+          "sets": 3,
+          "seconds": 45,
+          "rest": 30
+        },
+        {
+          "name": "Shadow Boxing",
+          "sets": 3,
+          "seconds": 60,
+          "rest": 30
+        },
+        {
+          "name": "Standing Knee Drive",
+          "sets": 3,
+          "seconds": 45,
+          "rest": 30
+        }
+      ],
+      "sortOrder": 310
+    },
+    {
+      "key": "first_workout_at_home",
+      "category": "full_body",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "First Workout at Home",
+          "description": "No equipment · two gentle working sets",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        },
+        "hi": {
+          "name": "घर पर पहला वर्कआउट",
+          "description": "कोई उपकरण नहीं · दो सौम्य कार्य सेट",
+          "guidance": "हल्के वज़न से शुरू करें और 2–3 रेप्स की गुंजाइश रखें। वज़न बढ़ाने से पहले हर मूवमेंट सीखें; स्ट्रेंथ सेशन के बीच रिकवरी का एक दिन रखें।"
+        },
+        "hinglish": {
+          "name": "ghar par pehla varkout",
+          "description": "koi upkaran nahin · do saumya karya set",
+          "guidance": "Halke wazan se shuru karein aur 2–3 reps ki gunjaish rakhein. Wazan badhane se pehle har movement seekhein; strength sessions ke beech recovery ka ek din rakhein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 2,
+          "reps": 8,
+          "rest": 60
+        },
+        {
+          "name": "Wall Push-up",
+          "sets": 2,
+          "reps": 8,
+          "rest": 60
+        },
+        {
+          "name": "Glute Bridge",
+          "sets": 2,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Bird Dog",
+          "sets": 2,
+          "reps": 8,
+          "rest": 60
+        },
+        {
+          "name": "March in Place",
+          "sets": 1,
+          "seconds": 120,
+          "rest": 30
+        }
+      ],
+      "sortOrder": 320
+    },
+    {
+      "key": "first_workout_at_the_gym",
+      "category": "full_body",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "First Workout at the Gym",
+          "description": "Machines · learn the movements",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        },
+        "hi": {
+          "name": "जिम में पहला वर्कआउट",
+          "description": "मशीनें · 5 अभ्यास · गतिविधियां सीखें",
+          "guidance": "हल्के वज़न से शुरू करें और 2–3 रेप्स की गुंजाइश रखें। वज़न बढ़ाने से पहले हर मूवमेंट सीखें; स्ट्रेंथ सेशन के बीच रिकवरी का एक दिन रखें।"
+        },
+        "hinglish": {
+          "name": "jim mein pehla varkout",
+          "description": "machine · 5 abhyas · gatividhiyan sikhen",
+          "guidance": "Halke wazan se shuru karein aur 2–3 reps ki gunjaish rakhein. Wazan badhane se pehle har movement seekhein; strength sessions ke beech recovery ka ek din rakhein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Leg Press",
+          "sets": 2,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Machine Chest Press",
+          "sets": 2,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Lat Pulldown",
+          "sets": 2,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Leg Curl",
+          "sets": 2,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Stationary Bike",
+          "sets": 1,
+          "seconds": 300,
+          "rest": 30
+        }
+      ],
+      "sortOrder": 330
+    },
+    {
+      "key": "quick_home_session",
+      "category": "full_body",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Quick Home Session",
+          "description": "No equipment · short full-body session",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        },
+        "hi": {
+          "name": "त्वरित गृह सत्र",
+          "description": "कोई उपकरण नहीं · छोटा पूर्ण-शरीर सत्र",
+          "guidance": "हल्के वज़न से शुरू करें और 2–3 रेप्स की गुंजाइश रखें। वज़न बढ़ाने से पहले हर मूवमेंट सीखें; स्ट्रेंथ सेशन के बीच रिकवरी का एक दिन रखें।"
+        },
+        "hinglish": {
+          "name": "tvarit grah satra",
+          "description": "koi upkaran nahin · chhota purn-shrir satra",
+          "guidance": "Halke wazan se shuru karein aur 2–3 reps ki gunjaish rakhein. Wazan badhane se pehle har movement seekhein; strength sessions ke beech recovery ka ek din rakhein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Bodyweight Squat",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Incline Push-up",
+          "sets": 2,
+          "reps": 8,
+          "rest": 45
+        },
+        {
+          "name": "Glute Bridge",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Dead Bug",
+          "sets": 2,
+          "reps": 8,
+          "rest": 45
+        }
+      ],
+      "sortOrder": 340
+    },
+    {
+      "key": "dumbbell_basics",
+      "category": "full_body",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Dumbbell Basics",
+          "description": "Dumbbells · simple starting routine",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        },
+        "hi": {
+          "name": "डम्बल मूल बातें",
+          "description": "डम्बल · सरल आरंभिक दिनचर्या",
+          "guidance": "हल्के वज़न से शुरू करें और 2–3 रेप्स की गुंजाइश रखें। वज़न बढ़ाने से पहले हर मूवमेंट सीखें; स्ट्रेंथ सेशन के बीच रिकवरी का एक दिन रखें।"
+        },
+        "hinglish": {
+          "name": "dambal mool baaten",
+          "description": "dambal · saral aarambhik dincharya",
+          "guidance": "Halke wazan se shuru karein aur 2–3 reps ki gunjaish rakhein. Wazan badhane se pehle har movement seekhein; strength sessions ke beech recovery ka ek din rakhein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Goblet Squat",
+          "sets": 2,
+          "reps": 8,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Floor Press",
+          "sets": 2,
+          "reps": 8,
+          "rest": 90
+        },
+        {
+          "name": "Single-Arm Dumbbell Row",
+          "sets": 2,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Romanian Deadlift",
+          "sets": 2,
+          "reps": 10,
+          "rest": 90
+        }
+      ],
+      "sortOrder": 350
+    },
+    {
+      "key": "core_stability",
+      "category": "core",
+      "goal": "mobility",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Core Stability",
+          "description": "No equipment · controlled core work",
+          "guidance": "Move slowly through a comfortable range. For one-sided movements, split the listed time equally between sides."
+        },
+        "hi": {
+          "name": "कोर स्थिरता",
+          "description": "कोई उपकरण नहीं · 4 अभ्यास · नियंत्रित मुख्य कार्य",
+          "guidance": "आरामदायक सीमा में धीरे-धीरे चलें। एक तरफ़ वाले व्यायाम में बताए गए समय को दोनों तरफ़ बराबर बाँटें।"
+        },
+        "hinglish": {
+          "name": "core sthirta",
+          "description": "koi upkaran nahin · 4 abhyas · niyantrit mukhya karya",
+          "guidance": "Aaramdayak seema mein dheere-dheere chalein. Ek taraf waali exercise mein bataye gaye samay ko dono taraf barabar baantein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Dead Bug",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Bird Dog",
+          "sets": 2,
+          "reps": 10,
+          "rest": 45
+        },
+        {
+          "name": "Plank",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 45
+        },
+        {
+          "name": "Side Plank",
+          "sets": 2,
+          "seconds": 20,
+          "rest": 45
+        }
+      ],
+      "sortOrder": 360
+    },
+    {
+      "key": "daily_mobility",
+      "category": "mobility",
+      "goal": "mobility",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Daily Mobility",
+          "description": "No equipment · comfortable range of motion",
+          "guidance": "Move slowly through a comfortable range. For one-sided movements, split the listed time equally between sides."
+        },
+        "hi": {
+          "name": "दैनिक गतिशीलता",
+          "description": "कोई उपकरण नहीं · गति की आरामदायक सीमा",
+          "guidance": "आरामदायक सीमा में धीरे-धीरे चलें। एक तरफ़ वाले व्यायाम में बताए गए समय को दोनों तरफ़ बराबर बाँटें।"
+        },
+        "hinglish": {
+          "name": "dainik gatisheelta",
+          "description": "koi upkaran nahin · gati ki aaramdayak seema",
+          "guidance": "Aaramdayak seema mein dheere-dheere chalein. Ek taraf waali exercise mein bataye gaye samay ko dono taraf barabar baantein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Cat-Cow",
+          "sets": 2,
+          "seconds": 45,
+          "rest": 15
+        },
+        {
+          "name": "Thoracic Rotation",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        },
+        {
+          "name": "Hip Flexor Stretch",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        },
+        {
+          "name": "Ankle Mobility Rock",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        },
+        {
+          "name": "Shoulder Cross-Body Stretch",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        }
+      ],
+      "sortOrder": 370
+    },
+    {
+      "key": "lower_body_mobility",
+      "category": "legs",
+      "goal": "mobility",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Lower Body Mobility",
+          "description": "No equipment · hips and legs",
+          "guidance": "Move slowly through a comfortable range. For one-sided movements, split the listed time equally between sides."
+        },
+        "hi": {
+          "name": "निचली शारीरिक गतिशीलता",
+          "description": "कोई उपकरण नहीं · कूल्हे और पैर",
+          "guidance": "आरामदायक सीमा में धीरे-धीरे चलें। एक तरफ़ वाले व्यायाम में बताए गए समय को दोनों तरफ़ बराबर बाँटें।"
+        },
+        "hinglish": {
+          "name": "nichli sharirik gatishilta",
+          "description": "koi upkaran nahin · kulhe aur pair",
+          "guidance": "Aaramdayak seema mein dheere-dheere chalein. Ek taraf waali exercise mein bataye gaye samay ko dono taraf barabar baantein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "90-90 Hip Switch",
+          "sets": 2,
+          "seconds": 45,
+          "rest": 15
+        },
+        {
+          "name": "Figure Four Stretch",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        },
+        {
+          "name": "Standing Hamstring Stretch",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        },
+        {
+          "name": "Calf Stretch",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        }
+      ],
+      "sortOrder": 380
+    },
+    {
+      "key": "desk_break_reset",
+      "category": "mobility",
+      "goal": "mobility",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Desk Break Reset",
+          "description": "No equipment · a gentle movement break",
+          "guidance": "Move slowly through a comfortable range. For one-sided movements, split the listed time equally between sides."
+        },
+        "hi": {
+          "name": "डेस्क ब्रेक रीसेट",
+          "description": "कोई उपकरण नहीं · एक हल्का मूवमेंट ब्रेक",
+          "guidance": "आरामदायक सीमा में धीरे-धीरे चलें। एक तरफ़ वाले व्यायाम में बताए गए समय को दोनों तरफ़ बराबर बाँटें।"
+        },
+        "hinglish": {
+          "name": "desk break reset",
+          "description": "koi upkaran nahin · ek halka movement brek",
+          "guidance": "Aaramdayak seema mein dheere-dheere chalein. Ek taraf waali exercise mein bataye gaye samay ko dono taraf barabar baantein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Wall Angel",
+          "sets": 2,
+          "reps": 8,
+          "rest": 30
+        },
+        {
+          "name": "Chest Doorway Stretch",
+          "sets": 2,
+          "seconds": 30,
+          "rest": 15
+        },
+        {
+          "name": "Neck Side Stretch",
+          "sets": 2,
+          "seconds": 20,
+          "rest": 15
+        },
+        {
+          "name": "March in Place",
+          "sets": 1,
+          "seconds": 120,
+          "rest": 30
+        }
+      ],
+      "sortOrder": 390
+    },
+    {
+      "key": "gym_push_b",
+      "category": "push",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Push Day B",
+          "description": "Chest · shoulders · triceps · machine and cable focus",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुश डे बी",
+          "description": "छाती · कंधे · ट्राइसेप्स · मशीन और केबल पर ज़ोर",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "push day bi",
+          "description": "chhati · kandhe · triceps · machine aur cable par zor",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Machine Chest Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Dumbbell Shoulder Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Cable Fly",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Lateral Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Rope Triceps Pushdown",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 400
+    },
+    {
+      "key": "gym_pull_b",
+      "category": "pull",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Pull Day B",
+          "description": "Back · rear shoulders · biceps · heavier rows",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुल डे बी",
+          "description": "पीठ · पिछले कंधे · बाइसेप्स · भारी रो",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "pul day bi",
+          "description": "peeth · pichhle kandhe · biceps · bhari row",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Row",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Close-Grip Lat Pulldown",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Chest-Supported Dumbbell Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Reverse Pec Deck",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "EZ-Bar Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 410
+    },
+    {
+      "key": "gym_legs_b",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Leg Day B",
+          "description": "Hamstrings · glutes · quads · hinge and single-leg focus",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "लेग डे बी",
+          "description": "हैमस्ट्रिंग्स · ग्लूट्स · क्वाड्स · हिंज और एक-पैर पर ज़ोर",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "leg day bi",
+          "description": "hamstrings · gluts · quads · hinj aur ek-pair par zor",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Romanian Deadlift",
+          "sets": 3,
+          "reps": 8,
+          "rest": 150
+        },
+        {
+          "name": "Bulgarian Split Squat",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Leg Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Barbell Hip Thrust",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Standing Calf Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 420
+    },
+    {
+      "key": "gym_push_intermediate",
+      "category": "push",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Push — gym intermediate",
+          "description": "Chest · shoulders · triceps · heavier compound work",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुश — जिम इंटरमीडिएट",
+          "description": "छाती · कंधे · ट्राइसेप्स · भारी कंपाउंड व्यायाम",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "push — gym intermediate",
+          "description": "chhati · kandhe · triceps · bhari compound exercise",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Incline Barbell Bench Press",
+          "sets": 4,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 4,
+          "reps": 6,
+          "rest": 150
+        },
+        {
+          "name": "Cable Fly",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Lateral Raise",
+          "sets": 4,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Cable Overhead Triceps Extension",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 430
+    },
+    {
+      "key": "gym_pull_intermediate",
+      "category": "pull",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Pull — gym intermediate",
+          "description": "Back · biceps · pull-ups and rows",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुल — जिम इंटरमीडिएट",
+          "description": "पीठ · बाइसेप्स · पुल-अप और रो",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "pul — gym intermediate",
+          "description": "peeth · biceps · pull-up aur row",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Pull-up",
+          "sets": 4,
+          "reps": 6,
+          "rest": 120
+        },
+        {
+          "name": "Barbell Row",
+          "sets": 4,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Seated Cable Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Face Pull",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Barbell Curl",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 440
+    },
+    {
+      "key": "gym_legs_intermediate",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": true,
+      "texts": {
+        "en": {
+          "name": "Legs — gym intermediate",
+          "description": "Quads · hamstrings · glutes · calves · heavy squat and hinge",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "लेग्स — जिम इंटरमीडिएट",
+          "description": "क्वाड्स · हैमस्ट्रिंग्स · ग्लूट्स · पिंडलियाँ · भारी स्क्वाट और हिंज",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "legs — gym intermediate",
+          "description": "quads · hamstrings · gluts · pindliyan · bhari squat aur hinj",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Squat",
+          "sets": 4,
+          "reps": 6,
+          "rest": 180
+        },
+        {
+          "name": "Romanian Deadlift",
+          "sets": 3,
+          "reps": 8,
+          "rest": 150
+        },
+        {
+          "name": "Leg Press",
+          "sets": 3,
+          "reps": 12,
+          "rest": 120
+        },
+        {
+          "name": "Seated Leg Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Standing Calf Raise",
+          "sets": 4,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 450
+    },
+    {
+      "key": "dumbbell_push",
+      "category": "push",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Dumbbell Push",
+          "description": "Dumbbells and bench · chest · shoulders · triceps",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "डंबल पुश",
+          "description": "डंबल और बेंच · छाती · कंधे · ट्राइसेप्स",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "dumbbell push",
+          "description": "dumbbell aur bench · chhati · kandhe · triceps",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Dumbbell Bench Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Dumbbell Shoulder Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Incline Dumbbell Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Lateral Raise",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Dumbbell Triceps Extension",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 460
+    },
+    {
+      "key": "dumbbell_pull",
+      "category": "pull",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Dumbbell Pull",
+          "description": "Dumbbells and bench · back · rear shoulders · biceps",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "डंबल पुल",
+          "description": "डंबल और बेंच · पीठ · पिछले कंधे · बाइसेप्स",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "dumbbell pul",
+          "description": "dumbbell aur bench · peeth · pichhle kandhe · biceps",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Single-Arm Dumbbell Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Chest-Supported Dumbbell Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Dumbbell Reverse Fly",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Dumbbell Shrug",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Hammer Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 470
+    },
+    {
+      "key": "home_pull_bodyweight",
+      "category": "pull",
+      "goal": "beginner",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Pull — bodyweight",
+          "description": "Back and rear shoulders · inverted and towel rows",
+          "guidance": "Start light and leave 2–3 reps in reserve. Learn each movement before adding load; allow a recovery day between strength sessions."
+        },
+        "hi": {
+          "name": "पुल — बॉडीवेट",
+          "description": "पीठ और पिछले कंधे · इनवर्टेड और तौलिया रो",
+          "guidance": "हल्के वज़न से शुरू करें और 2–3 रेप्स की गुंजाइश रखें। वज़न बढ़ाने से पहले हर मूवमेंट सीखें; स्ट्रेंथ सेशन के बीच रिकवरी का एक दिन रखें।"
+        },
+        "hinglish": {
+          "name": "pul — bodyweight",
+          "description": "peeth aur pichhle kandhe · inverted aur tauliya row",
+          "guidance": "Halke wazan se shuru karein aur 2–3 reps ki gunjaish rakhein. Wazan badhane se pehle har movement seekhein; strength sessions ke beech recovery ka ek din rakhein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Inverted Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Towel Row",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Superman",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Bird Dog",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        },
+        {
+          "name": "Prone Y Raise",
+          "sets": 3,
+          "reps": 10,
+          "rest": 60
+        }
+      ],
+      "sortOrder": 480
+    },
+    {
+      "key": "home_pull_up_bar",
+      "category": "pull",
+      "goal": "muscleBuilding",
+      "level": "intermediate",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Pull — pull-up bar",
+          "description": "Pull-up bar · back · biceps",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "पुल — पुल-अप बार",
+          "description": "पुल-अप बार · पीठ · बाइसेप्स",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "pul — pull-up bar",
+          "description": "pull-up bar · peeth · biceps",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Pull-up",
+          "sets": 4,
+          "reps": 6,
+          "rest": 90
+        },
+        {
+          "name": "Inverted Row",
+          "sets": 4,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Chin-up",
+          "sets": 3,
+          "reps": 6,
+          "rest": 90
+        },
+        {
+          "name": "Superman",
+          "sets": 3,
+          "reps": 15,
+          "rest": 45
+        },
+        {
+          "name": "Prone Y Raise",
+          "sets": 3,
+          "reps": 12,
+          "rest": 45
+        },
+        {
+          "name": "Brisk Walking",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 490
+    },
+    {
+      "key": "upper_body_a",
+      "category": "full_body",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Upper Body A",
+          "description": "Chest · back · shoulders · triceps · heavier day",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "ऊपरी शरीर ए",
+          "description": "छाती · पीठ · कंधे · ट्राइसेप्स · भारी दिन",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "upari shrir e",
+          "description": "chhati · peeth · kandhe · triceps · bhari din",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Bench Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Barbell Row",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Overhead Press",
+          "sets": 3,
+          "reps": 8,
+          "rest": 120
+        },
+        {
+          "name": "Lat Pulldown",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Rope Triceps Pushdown",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 500
+    },
+    {
+      "key": "upper_body_b",
+      "category": "full_body",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Upper Body B",
+          "description": "Chest · back · shoulders · biceps · dumbbell and cable day",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "ऊपरी शरीर बी",
+          "description": "छाती · पीठ · कंधे · बाइसेप्स · डंबल और केबल दिन",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "upari shrir bi",
+          "description": "chhati · peeth · kandhe · biceps · dumbbell aur cable din",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Incline Dumbbell Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Cable Row",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Seated Dumbbell Shoulder Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Face Pull",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Dumbbell Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 510
+    },
+    {
+      "key": "lower_body_a",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Lower Body A",
+          "description": "Quads · hamstrings · glutes · squat day",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "निचला शरीर ए",
+          "description": "क्वाड्स · हैमस्ट्रिंग्स · ग्लूट्स · स्क्वाट दिन",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "nichla shrir e",
+          "description": "quads · hamstrings · gluts · squat din",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Barbell Squat",
+          "sets": 3,
+          "reps": 8,
+          "rest": 150
+        },
+        {
+          "name": "Romanian Deadlift",
+          "sets": 3,
+          "reps": 8,
+          "rest": 150
+        },
+        {
+          "name": "Leg Press",
+          "sets": 3,
+          "reps": 10,
+          "rest": 120
+        },
+        {
+          "name": "Seated Leg Curl",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Standing Calf Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 520
+    },
+    {
+      "key": "lower_body_b",
+      "category": "legs",
+      "goal": "muscleBuilding",
+      "level": "beginner",
+      "legacy": false,
+      "texts": {
+        "en": {
+          "name": "Lower Body B",
+          "description": "Quads · glutes · calves · machine and lunge day",
+          "guidance": "Choose a load that leaves 1–3 reps in reserve. Complete each exercise before moving on."
+        },
+        "hi": {
+          "name": "निचला शरीर बी",
+          "description": "क्वाड्स · ग्लूट्स · पिंडलियाँ · मशीन और लंज दिन",
+          "guidance": "ऐसा वज़न चुनें जिससे 1–3 रेप्स और कर सकें। आगे बढ़ने से पहले हर व्यायाम पूरा करें।"
+        },
+        "hinglish": {
+          "name": "nichla shrir bi",
+          "description": "quads · gluts · pindliyan · machine aur lunge din",
+          "guidance": "Aisa wazan chunein jisse 1–3 reps aur kar sakein. Aage badhne se pehle har exercise poori karein."
+        }
+      },
+      "exercises": [
+        {
+          "name": "Hack Squat",
+          "sets": 3,
+          "reps": 10,
+          "rest": 120
+        },
+        {
+          "name": "Barbell Hip Thrust",
+          "sets": 3,
+          "reps": 10,
+          "rest": 90
+        },
+        {
+          "name": "Walking Lunge",
+          "sets": 3,
+          "reps": 12,
+          "rest": 90
+        },
+        {
+          "name": "Leg Extension",
+          "sets": 3,
+          "reps": 12,
+          "rest": 60
+        },
+        {
+          "name": "Seated Calf Raise",
+          "sets": 3,
+          "reps": 15,
+          "rest": 60
+        },
+        {
+          "name": "Treadmill Walk",
+          "sets": 1,
+          "seconds": 600,
+          "rest": 0
+        }
+      ],
+      "sortOrder": 530
+    }
+  ]
+}

@@ -413,6 +413,22 @@ jobs:
           echo "::error::Health check failed — rolled back ${{ matrix.service }}-${{ steps.env.outputs.ENV }} to ${{ steps.prev-revision.outputs.revision }}"
           exit 1
 
+      # Seed the routine catalogue (the starter / system routines the app and the
+      # admin portal read). This runs LAST and only on success, after the new
+      # revision is serving and has passed its health check. Older revisions list
+      # every system routine to older app builds, so seeding earlier would show
+      # all of them to live users between the seed and the cutover, and for good
+      # if the health check failed and the deploy rolled back. It first adds any
+      # library exercise the catalogue names that is still missing, then creates
+      # missing routines. Create-only and idempotent: an existing routine's
+      # exercises and text are never rewritten, so users' schedules and staff
+      # edits survive every deploy.
+      - if: success() && matrix.service == 'health-service'
+        working-directory: ${{ steps.svcmeta.outputs.source-dir }}
+        env:
+          DATABASE_URL: ${{ steps.dburl.outputs.database-url }}
+        run: npm run seed:routines
+
   one-plan-dev-data:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev' && (inputs.one_plan_data == 'dry-run' || inputs.one_plan_data == 'apply')
     concurrency:

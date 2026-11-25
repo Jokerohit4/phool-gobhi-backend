@@ -1,4 +1,8 @@
 import { withPreparation } from './routinePreparation.js';
+// SUPERSEDED by prisma/seedRoutineCatalogue.js (data: prisma/catalogue/routines.json),
+// which seeds these same routines through the catalogue and is wired into deploy.
+// Kept only so the 4-week home plan seed below and its tests keep working; do not
+// add routines here.
 // The home track's starter content (docs/../sprint2/PG-HUNT-001 §13):
 // 12 no-equipment system routines + the 4-week beginner plan built from
 // them. Content entry against infrastructure that already shipped (the
