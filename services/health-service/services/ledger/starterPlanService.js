@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { isoDayIST } from '../../utils/sessionDay.js';
 import { quitReasonBias } from '../../utils/quitReasonBias.js';
 // The coach journey's plan engine (B7): the starter plan a new member gets
@@ -79,60 +80,78 @@ const TEMPLATE_LEVEL_BY_EXPERIENCE = {
 // "three sessions a week" looks like.
 const SLOT_WEEKDAY_PATTERN = [0, 2, 3, 5, 1, 4, 6];
 
-// The gym pool: the four starter routines ported from the customer app
-// (prisma/seedBeginnerTemplates.js). The first three sessions of a beginner
-// week are all "Full Body x3 - Beginner-friendly" - the routine whose own
-// description says "train 3 days a week", and the one the app's starter week
-// shows - and a fourth session onwards brings in the split.
+// The pools name routines by their catalogue `key` (prisma/catalogue/routines.json),
+// not by display name: an admin can rename a routine, and a plan that looked it
+// up by name would silently lose it.
+//
+// The gym pool. The first three sessions of a beginner week are all "Full Body
+// x3 - Beginner-friendly" - the routine whose own description says "train 3 days
+// a week", and the one the app's starter week shows - and a fourth session
+// onwards brings in the push / pull / legs split. The B days sit last so they
+// are candidates for a personalised week without displacing the A days.
 const GYM_TEMPLATE_POOL = {
   beginner: [
-    'Full Body x3 — Beginner-friendly',
-    'Full Body x3 — Beginner-friendly',
-    'Full Body x3 — Beginner-friendly',
-    'Push Day A',
-    'Leg Day',
-    'Upper & Abs',
-    'Full Body x3 — Beginner-friendly',
-  ],
-  intermediate: [],
-};
-
-// The home pool: the no-equipment system routines seedHomeTrack.js already
-// ships, so a home user's plan is built from content that exists rather than
-// gym machinery they do not have.
-const HOME_TEMPLATE_POOL = {
-  beginner: [
-    'Full body — 15 minute',
-    'Full body — no equipment',
-    'Core — 10 minute',
-    'Low-impact cardio (no jumping)',
-    'Push — bodyweight',
-    'Pull — no bar',
-    'Legs — bodyweight',
-    'Mobility & stretch',
-    'Desk reset — 8 minute',
+    'gym_starter_full_body_x3',
+    'gym_starter_full_body_x3',
+    'gym_starter_full_body_x3',
+    'gym_starter_push_a',
+    'gym_pull_a',
+    'gym_starter_legs',
+    'gym_starter_upper_abs',
+    'gym_push_b',
+    'gym_pull_b',
+    'gym_legs_b',
   ],
   intermediate: [
-    'Full body — intermediate',
-    'Push — intermediate',
-    'Legs — intermediate',
+    'gym_push_intermediate',
+    'gym_pull_intermediate',
+    'gym_legs_intermediate',
+    'gym_push_intermediate',
+    'gym_pull_intermediate',
+    'gym_legs_intermediate',
+  ],
+};
+
+// The home pool: the no-equipment system routines, so a home user's plan is
+// built from content that exists rather than gym machinery they do not have.
+const HOME_TEMPLATE_POOL = {
+  beginner: [
+    'home_full_body_15',
+    'home_full_body_20',
+    'home_core_10',
+    'home_cardio_low_impact',
+    'home_push',
+    'home_pull',
+    'home_legs',
+    'home_mobility',
+    'home_desk_reset',
+  ],
+  intermediate: [
+    'home_full_body_intermediate',
+    'home_push_intermediate',
+    'home_legs_intermediate',
   ],
 };
 
 // A fitness centre or sports preference does not mean the user wants a
 // weight-based gym routine. Begin with general movement and mobility work.
 const MOVEMENT_TEMPLATE_POOL = {
-  beginner: [
-    'Low-impact cardio (no jumping)',
-    'Mobility & stretch',
-    'Desk reset — 8 minute',
-  ],
-  intermediate: [
-    'Low-impact cardio (no jumping)',
-    'Mobility & stretch',
-    'Desk reset — 8 minute',
-  ],
+  beginner: ['home_cardio_low_impact', 'home_mobility', 'home_desk_reset'],
+  intermediate: ['home_cardio_low_impact', 'home_mobility', 'home_desk_reset'],
 };
+
+// English titles for the pool keys, used only when the routine row is missing
+// (a database that has not been seeded yet) so a slot still says what it is.
+let titlesByKey = null;
+function titleForKey(key) {
+  if (!titlesByKey) {
+    titlesByKey = new Map(
+      JSON.parse(readFileSync(new URL('../../prisma/catalogue/routines.json', import.meta.url), 'utf8'))
+        .routines.map((r) => [r.key, r.texts.en.name]),
+    );
+  }
+  return titlesByKey.get(key) ?? key;
+}
 
 function poolFor(location, requestedLevel) {
   const pool = location === 'home'
@@ -224,11 +243,11 @@ export async function buildWorkoutSlots(prisma, {
   if (count === 0) return [];
 
   const requestedLevel = TEMPLATE_LEVEL_BY_EXPERIENCE[experienceLevel] ?? 'beginner';
-  const names = poolFor(location, requestedLevel);
+  const keys = poolFor(location, requestedLevel);
 
   const [rows, profile, recentSessions] = await Promise.all([
     prisma.workoutTemplate.findMany({
-    where: { isSystem: true, name: { in: [...new Set(names)] } },
+    where: { isSystem: true, key: { in: [...new Set(keys)] } },
       include: { exercises: { include: { exercise: true } } },
     }),
     userId && prisma.personalisationProfile?.findUnique
@@ -238,9 +257,9 @@ export async function buildWorkoutSlots(prisma, {
       orderBy: { startedAt: 'desc' }, take: 8, select: { templateId: true },
     }) : [],
   ]);
-  const byName = new Map(rows.map((r) => [r.name, r]));
+  const byKey = new Map(rows.map((r) => [r.key, r]));
   const recentIds = new Set(recentSessions.map((session) => session.templateId));
-  const rankedCandidates = [...byName.values()].map((template) => {
+  const rankedCandidates = [...byKey.values()].map((template) => {
     const fit = location === 'home' ? equipmentFit(template, profile) : null;
     const lowImpactPreference = profile?.programmingMode === 'low_impact_recovery';
     const lowImpact = /low-impact|mobility|stretch/i.test(template.name);
@@ -275,14 +294,14 @@ export async function buildWorkoutSlots(prisma, {
   for (let i = 0; i < count; i++) {
     // Cycle through the ranked catalog while avoiding consecutive duplicates
     // whenever the selected pool contains alternatives.
-    const name = names[i % names.length];
+    const key = keys[i % keys.length];
     const alternatives = hasPersonalContext ? candidates.filter((candidate) =>
       i === 0 || candidate.template.id !== slots[i - 1].templateId,
     ) : [];
     const template = hasPersonalContext
       ? (alternatives.length ? alternatives : candidates)[0]?.template
-      : byName.get(name);
-    const fallbackName = name;
+      : byKey.get(key);
+    const fallbackName = titleForKey(key);
     slots.push({
       weekday: weekdays[i],
       location,
@@ -444,7 +463,7 @@ export async function refreshWorkoutSlotsForProfile(prisma, userId) {
   ]);
   if (journey?.wellnessOnly) return false;
   if (!prescription?.workoutSlots?.length) return false;
-  const homeNames = new Set(Object.values(HOME_TEMPLATE_POOL).flat());
+  const homeNames = new Set(Object.values(HOME_TEMPLATE_POOL).flat().map(titleForKey));
   const location = prescription.workoutSlots[0]?.location
     ?? (prescription.workoutSlots.some((slot) => homeNames.has(slot.title)) ? 'home' : 'gym');
   const experienceLevel = journeyExperienceForProfile(profile, journey?.startLevel ?? DEFAULT_EXPERIENCE_LEVEL);

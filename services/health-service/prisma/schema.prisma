@@ -175,15 +175,50 @@ model WorkoutTemplate {
   description String?
   estMinutes  Int?
   level       TemplateLevel?
+  // The routine catalogue (system rows only; all null/default on a user's own
+  // template). `key` is the stable slug seeds, plans and the admin portal use
+  // instead of the display name. `category` is push | pull | legs | full_body |
+  // cardio | core | mobility; `goal` is one of utils/workoutGoals.js
+  // ROUTINE_GOALS. `legacyListed` keeps the original 16 rows in the plain
+  // GET /templates list that older app builds show under "My Routines": new
+  // catalogue rows are served by /templates/catalogue instead.
+  key          String?        @unique
+  category     String?
+  goal         String?
+  sortOrder    Int            @default(0)
+  isPublished  Boolean        @default(true)
+  legacyListed Boolean        @default(false)
+  version      Int            @default(1)
+  updatedBy    Int?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
   exercises TemplateExercise[]
   sessions  WorkoutSession[]
   planDays  WorkoutPlanDay[]
+  texts     WorkoutTemplateText[]
 
   @@index([userId])
   @@index([isSystem])
+  @@schema("health")
+}
+
+// Per-language name, description and coaching guidance for a catalogue
+// routine, one row per language like ExerciseContent. lang is en | hinglish |
+// hi; English is required and the others fall back to it.
+model WorkoutTemplateText {
+  id          Int             @id @default(autoincrement())
+  templateId  Int
+  lang        String
+  name        String
+  description String?
+  guidance    String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  template WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, lang])
   @@schema("health")
 }
 

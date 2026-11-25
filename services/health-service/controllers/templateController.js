@@ -2,7 +2,7 @@ import * as templateService from '../services/templateService.js';
 
 export const listTemplates = async (req, res) => {
   try {
-    const templates = await templateService.listTemplatesService(req.userId);
+    const templates = await templateService.listTemplatesService(req.userId, { scope: req.query.scope });
     res.json({ data: templates });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });

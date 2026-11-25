@@ -1,4 +1,8 @@
 import { withPreparation } from './routinePreparation.js';
+// SUPERSEDED by prisma/seedRoutineCatalogue.js (data: prisma/catalogue/routines.json),
+// which seeds these same routines through the catalogue and is wired into deploy.
+// Kept only so the 4-week home plan seed below and its tests keep working; do not
+// add routines here.
 // The coach journey's beginner gym content (B7): the four starter routines
 // the customer app bundles (lib/data/workout/starter_templates.dart), ported
 // to system WorkoutTemplates so the plan engine can name a real template in

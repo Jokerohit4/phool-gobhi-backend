@@ -327,6 +327,17 @@ jobs:
           npx prisma generate
           npm run seed:foods
 
+      # Seed the routine catalogue (the starter / system routines the app and the
+      # admin portal read). It first adds any library exercise the catalogue
+      # names that is still missing, then creates missing routines. Create-only
+      # and idempotent: an existing routine's exercises and text are never
+      # rewritten, so users' schedules and staff edits survive every deploy.
+      - if: matrix.service == 'health-service'
+        working-directory: ${{ steps.svcmeta.outputs.source-dir }}
+        env:
+          DATABASE_URL: ${{ steps.dburl.outputs.database-url }}
+        run: npm run seed:routines
+
       - id: flags
         run: node deploy/scripts/build-deploy-flags.cjs "${{ matrix.service }}" "${{ steps.env.outputs.ENV }}"
 

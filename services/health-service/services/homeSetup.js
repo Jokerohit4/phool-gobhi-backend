@@ -35,7 +35,7 @@ export const TRAINING_SPACES = ['small', 'room', 'outdoor'];
 // barbell/machine/cable map to full_home_gym: a home setup that has them is a
 // home gym, and nobody who picked "just dumbbells" should be offered a cable
 // crossover.
-const EXERCISE_EQUIPMENT_NEEDS = {
+export const EXERCISE_EQUIPMENT_NEEDS = {
   bodyweight: null,
   other: null,
   dumbbell: 'dumbbells',
