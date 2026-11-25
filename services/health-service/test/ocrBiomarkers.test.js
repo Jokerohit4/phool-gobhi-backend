@@ -7,6 +7,23 @@ const entity = (mentionText, extra = {}) => ({ mentionText, confidence: 0.9, ...
 const parse = (entities = [], text = '') => parseDocumentAIResponse({ document: { entities, text } }).extractions;
 const byMetric = (extractions) => Object.fromEntries(extractions.map((e) => [e.metric, e]));
 
+test('labelled form fields recover values when OCR text order separates them', () => {
+  const text = 'Indiranagar\nPriya Mehta\nPatient Name\nPatient Address\n';
+  const field = value => {
+    const startIndex = text.indexOf(value);
+    return { textAnchor: { textSegments: [{ startIndex, endIndex: startIndex + value.length }] } };
+  };
+  const parsed = parseDocumentAIResponse({ document: {
+    text,
+    entities: [entity('31', { type: 'patient_age' })],
+    pages: [{ formFields: [
+      { fieldName: field('Patient Name'), fieldValue: field('Priya Mehta') },
+      { fieldName: field('Patient Address'), fieldValue: field('Indiranagar') },
+    ] }],
+  } });
+  assert.deepEqual(parsed.profile, { name: 'Priya Mehta', age: 31, gender: null, address: 'Indiranagar' });
+});
+
 describe('parseDocumentAIResponse biomarkers', () => {
   test('emits only BiometricMetric members, so createMany cannot reject the report', () => {
     const out = parse([

@@ -2,6 +2,7 @@ import axios from 'axios';
 import prisma from '../db/prisma.js';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import { signedDocumentUrl } from './ledger/medicalDocumentStorage.js';
+import { publicProposedProfile } from '../utils/guidanceExtraction.js';
 
 const invalid = message => { throw Object.assign(new Error(message), { status: 400 }); };
 const sourceModel = source => {
@@ -45,7 +46,7 @@ export async function listAdminReports({ source = 'snapshot', cursor, userId, st
       status: source === 'snapshot' ? row.status : 'SAVED', createdAt: row.createdAt,
       reportDate: row.reportDate || row.docDate || null, detectedReportDate: row.detectedReportDate || null,
       processedAt: row.processedAt || null,
-      proposedProfile: row.proposedProfile || {}, proposedMarkers: row.proposedMarkers || {},
+      proposedProfile: publicProposedProfile(row.proposedProfile), proposedMarkers: row.proposedMarkers || {},
     })),
   };
 }

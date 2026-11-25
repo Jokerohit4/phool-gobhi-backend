@@ -14,11 +14,12 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   if (originalKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY; else process.env.GOOGLE_MAPS_API_KEY = originalKey;
 });
-test('GPS resolves only a locality name, with a bounded provider request', async () => {
+test('GPS resolves locality components in address results with a bounded provider request', async () => {
+  body.results[0].types = ['street_address'];
   assert.deepEqual(await cityFromCoordinates(28.45, 77.03), { city: 'Gurugram' });
   const url = new URL(requests[0].url);
   assert.equal(url.searchParams.get('latlng'), '28.45,77.03');
-  assert.equal(url.searchParams.get('result_type'), 'locality');
+  assert.equal(url.searchParams.has('result_type'), false);
   assert.ok(requests[0].options.signal);
 });
 test('a Gurugram district alone is never treated as Gurugram city', async () => {

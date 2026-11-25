@@ -6,6 +6,7 @@ import { signedDocumentUrl } from './ledger/medicalDocumentStorage.js';
 import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
 import { classifyFailure, isStalledReport, STALL_MS } from '../utils/reportFailure.js';
+import { PATIENT_DETAILS_VERSION } from '../utils/guidanceExtraction.js';
 
 
 /**
@@ -142,7 +143,10 @@ export async function processReportService(reportId) {
     const signedUrl = await signedDocumentUrl(report.storagePath);
     if (!signedUrl) throw new Error('Could not read stored report');
     const { extractions, readings, detectedDate, profile, markers } = await extractBiomarkersFromPDF(signedUrl, report.mimeType || 'application/pdf');
-    const proposed = await write({ proposedProfile: profile || {}, proposedMarkers: markers || {} });
+    const proposed = await write({
+      proposedProfile: { ...profile, _patientDetailsVersion: PATIENT_DETAILS_VERSION },
+      proposedMarkers: markers || {},
+    });
     if (!proposed.count) return { status: 'SUPERSEDED' };
     // A printed date is separate from, and cannot overwrite, the user's date.
     if (detectedDate?.date && !report.reportDate) {

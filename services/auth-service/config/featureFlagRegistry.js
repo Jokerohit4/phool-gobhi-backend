@@ -55,7 +55,7 @@ export const FLAG_SCHEMA_VERSION = 6;
  * regardless of its own value, so the portal shows it as blocked rather than
  * pretending it does something.
  */
-export const FEATURE_FLAGS = [
+const featureDefinitions = [
   {
     name: 'exploreFoodFinds',
     defaultEnabled: false,
@@ -67,65 +67,7 @@ export const FEATURE_FLAGS = [
     rationale: 'Enables the renewable Food Finds grid independently of Sprouts and coins. Defaults off until the Increment A pilot is ready; rollback preserves saved history and queued claims.',
   },
   // ---------------------------------------------------------------- training
-  {
-    name: 'workoutTracking',
-    defaultEnabled: false,
-    deps: [],
-    clientKey: 'workoutTrackingEnabled',
-    group: 'training',
-    dataClass: 'training-log',
-    blastRadius:
-      'Exercise library, custom exercises, routines, workout sessions, sets, progress summary, muscle readiness',
-    rationale:
-      'Split out of `healthMetrics` on 2026-10-04. The workout log is the product\'s ' +
-      'high-frequency loop (~150 sessions/user/year against ~30 bookings), so it must be ' +
-      'shippable without dragging every health feature with it. It previously shared one ' +
-      'boolean with the Local Health Vault — PDF upload of medical reports — which meant the ' +
-      'daily hook could not ship without the most consent-sensitive surface in the app. ' +
-      'Deliberately fail-closed like its siblings: it collects new personal data.',
-  },
   // ------------------------------------------------------------------ health
-  {
-    name: 'healthMetrics',
-    defaultEnabled: false,
-    deps: ['workoutTracking'],
-    clientKey: 'healthMetricsEnabled',
-    group: 'health',
-    dataClass: 'health-derived',
-    blastRadius: 'Blended health score, behavioural/biological breakdown, biomarker snapshot, health profile',
-    rationale:
-      'NARROWED on 2026-10-04. Previously this one boolean also gated the workout ' +
-      'engine; those routes moved to `workoutTracking`. What is left is the derived-score ' +
-      'half, which is what the name always implied. Requires `workoutTracking` because the ' +
-      'behavioural component of the blend is computed from training data. ' +
-      'See docs/phool-gobhi-health-metrics-implementation-plan-2026-08-27.html.',
-  },
-  {
-    name: 'healthLedger',
-    defaultEnabled: false,
-    deps: ['healthMetrics'],
-    clientKey: 'healthLedgerEnabled',
-    group: 'health',
-    dataClass: 'medical',
-    blastRadius: 'Brokerage-style daily health score, candlestick/line chart, nutrition targets, food log',
-    rationale:
-      'The brokerage-style daily health score, its chart, the nutrition target engine, ' +
-      'the food log and the optional medical-records vault. Layered on healthMetrics so ' +
-      'it can be pulled without taking workout logging down. ' +
-      '(phool-gobhi-health-ledger-plan-20260927.html)\n\n' +
-      'Highest bar in the system, for three reasons:\n' +
-      "  1. It is the first feature here whose premise is a SCORE. Every other health " +
-      'feature logs; this one grades. The plan\'s own eating-disorder guard (a calorie ' +
-      'target that never drops below BMR, under-eating never rewarded, a "calm mode" ' +
-      'that removes red entirely) is a product requirement, not a nice-to-have.\n' +
-      '  2. It stores what is close to a medical record — conditions, the doctor\'s own ' +
-      'advice, lab slips — behind its own `medical_records` consent scope. CDSCO\'s ' +
-      '"General Wellness Software" carve-out only holds while the app tracks the ' +
-      "doctor's plan and never writes one, so this is the flag to pull if that line is " +
-      'ever questioned.\n' +
-      '  3. Photo food logging sends an image to a third-party model provider. That has ' +
-      'its own sub-flag below.',
-  },
   {
     name: 'foodPhotoLogging',
     defaultEnabled: false,
@@ -143,21 +85,6 @@ export const FEATURE_FLAGS = [
       'over a photo of their plate.)',
   },
   {
-    name: 'healthPersonalisation',
-    defaultEnabled: false,
-    deps: ['healthMetrics'],
-    clientKey: 'healthPersonalisationEnabled',
-    group: 'health',
-    dataClass: 'health-derived',
-    blastRadius: 'Non-neutral AI programming modes (records a per-user privacyVersion)',
-    rationale:
-      'The only consent-bearing write in health-service: a non-neutral programming mode ' +
-      'records a privacyVersion. The consent wording needs review before a real user ' +
-      'agrees to it. Kept separate from healthMetrics so the consent gate can be held ' +
-      'independently of the feature existing. See ' +
-      'docs/phool-gobhi-counsel-brief-20260908.html.',
-  },
-  {
     name: 'recapSharing',
     defaultEnabled: false,
     deps: ['healthMetrics'],
@@ -169,21 +96,6 @@ export const FEATURE_FLAGS = [
       'The only feature producing an artifact meant to leave the platform. The payload ' +
       'carries no PII by construction, but "we believe it carries no PII" is exactly the ' +
       'sort of claim worth having checked before it becomes shareable.',
-  },
-  {
-    name: 'fitnessAssistant',
-    defaultEnabled: false,
-    deps: ['healthMetrics'],
-    clientKey: 'fitnessAssistantEnabled',
-    group: 'health',
-    dataClass: 'health-derived',
-    blastRadius: 'AI coach chat panel (reads training history)',
-    rationale:
-      'An AI answering questions about someone\'s body is a bigger claim than logging ' +
-      'their sets, and the disclaimer wording wants sign-off. Independently switchable so ' +
-      'the assistant can be pulled without taking anything else down. Cold-start note: ' +
-      'with no user base the model has no data to be useful from, so this is the flag to ' +
-      'leave off until there is real density.',
   },
   {
     name: 'runTracker',
@@ -231,25 +143,6 @@ export const FEATURE_FLAGS = [
       'against the NRCeS IG: until then we must not hand anyone a file labelled as a ' +
       'government-standard record. clientKey is null — this is a query-parameter branch on ' +
       'an existing route, with no client-side surface to gate.',
-  },
-  {
-    name: 'reportSubscription',
-    defaultEnabled: false,
-    deps: [],
-    clientKey: 'reportSubscriptionEnabled',
-    group: 'health',
-    dataClass: 'medical',
-    blastRadius:
-      "Report-upload-to-guidance flow: POST /guidance/reports (+ retry), which prefills the user's details from an uploaded health report and feeds the subscription suggestion",
-    rationale:
-      'Added 2026-11-23 when the `healthVault` and `coachJourney` toggles were retired (both are ' +
-      'now permanently on). Uploading a medical report so we can read it, prefill the user\'s ' +
-      'details and suggest a subscription is still the most sensitive collection in the app and ' +
-      'sends the document to a third-party reader, so it keeps a kill switch of its own: fail-' +
-      'CLOSED, off until the report-reading consent wording is signed off. No dependencies — the ' +
-      'vault itself is permanent. Enforced server-side in health-service routes/guidance.js ' +
-      '(defense in depth); the plain vault routes (reports/upload|list|pending|verify|delete) ' +
-      'are unconditional. NOT the same surface as the medical documents of `healthLedger`.',
   },
   // ------------------------------------------------------------ gamification
   {
@@ -348,18 +241,6 @@ export const FEATURE_FLAGS = [
   },
   // --------------------------------------------------------------- onboarding
   {
-    name: 'brandedOnboarding',
-    defaultEnabled: false,
-    deps: [],
-    clientKey: 'brandedOnboardingEnabled',
-    group: 'onboarding',
-    dataClass: 'health-derived',
-    blastRadius: 'Onboarding question graph and the health-profile writes it produces',
-    rationale:
-      'Gates COLLECTION only. Off means the existing two-step onboarding runs untouched, ' +
-      'so this can ship dark and be turned on for a cohort.',
-  },
-  {
     name: 'homeTrackHome',
     defaultEnabled: false,
     deps: ['workoutTracking'],
@@ -445,20 +326,6 @@ export const FEATURE_FLAGS = [
       'order and stays off until the showed-up-day rules are verified on dev.',
   },
   {
-    name: 'coachAssistant',
-    defaultEnabled: false,
-    deps: [],
-    clientKey: 'coachAssistantEnabled',
-    group: 'coach',
-    dataClass: 'health-derived',
-    blastRadius: 'The new grounded AI coach guardrail path (reads plan summary and approved content)',
-    rationale:
-      'Kill switch for the new grounded guardrail path in the AI coach — it answers with the ' +
-      'user\'s plan summary plus approved articles and exercise content. Kept ' +
-      'independently switchable so the assistant can be pulled without taking the journey down. ' +
-      'Off until the disclaimer and grounding wording are reviewed.',
-  },
-  {
     name: 'nonPartnerAttendance',
     defaultEnabled: false,
     deps: [],
@@ -493,8 +360,18 @@ export const FEATURE_FLAGS = [
 export const LEGACY_ALWAYS_ON_FLAGS = [
   { name: 'coachJourney', clientKey: 'coachJourneyEnabled' },
   { name: 'healthVault', clientKey: 'healthVaultEnabled' },
+  { name: 'workoutTracking', clientKey: 'workoutTrackingEnabled' },
+  { name: 'healthMetrics', clientKey: 'healthMetricsEnabled' },
+  { name: 'healthLedger', clientKey: 'healthLedgerEnabled' },
+  { name: 'healthPersonalisation', clientKey: 'healthPersonalisationEnabled' },
+  { name: 'fitnessAssistant', clientKey: 'fitnessAssistantEnabled' },
+  { name: 'brandedOnboarding', clientKey: 'brandedOnboardingEnabled' },
+  { name: 'reportSubscription', clientKey: 'reportSubscriptionEnabled' },
+  { name: 'coachAssistant', clientKey: 'coachAssistantEnabled' },
 ];
 const LEGACY_NAMES = new Set(LEGACY_ALWAYS_ON_FLAGS.map((f) => f.name));
+export const FEATURE_FLAGS = featureDefinitions
+  .map((flag) => ({ ...flag, deps: flag.deps.filter((dependency) => !LEGACY_NAMES.has(dependency)) }));
 
 /** `{ coachJourney: {enabled:true}, healthVault: {enabled:true} }` for the public response. */
 export function legacyAlwaysOnFeatures() {

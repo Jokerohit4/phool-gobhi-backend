@@ -123,7 +123,7 @@ test('every flag referenced in service code is registered', () => {
     const text = readFileSync(file, 'utf8');
     for (const m of text.matchAll(FLAG_REFERENCE)) referenced.add(m[1]);
   }
-  const names = flagNames();
+  const names = [...flagNames(), ...LEGACY_ALWAYS_ON_FLAGS.map((flag) => flag.name)];
   const unregistered = [...referenced].filter((n) => !names.includes(n)).sort();
   assert.deepEqual(
     unregistered,

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { isoDayIST } from '../../utils/sessionDay.js';
 import { quitReasonBias } from '../../utils/quitReasonBias.js';
+import { HEALTH_PROFILE_POLICY_VERSION } from '../healthProfileConsentService.js';
 // The coach journey's plan engine (B7): the starter plan a new member gets
 // on day one, and the rebuild that keeps it honest afterwards.
 //
@@ -346,6 +347,14 @@ function weekdayOf(localDate) {
  * data produces a target), and the week's workout slots - one per
  * daysPerWeek, spread across the week, templates by level and location.
  */
+async function activityNeedsReview(prisma, userId) {
+  const consent = await prisma.healthProfileConsent?.findUnique?.({ where: { userId } });
+  if (!consent || consent.revokedAt || consent.policyVersion !== HEALTH_PROFILE_POLICY_VERSION) return false;
+  return Boolean(await prisma.healthCondition.findFirst({
+    where: { userId, source: 'user_stated' }, select: { id: true },
+  }));
+}
+
 export async function createStarterPlan(prisma, userId, {
   experienceLevel = null,
   goals = [],
@@ -403,7 +412,7 @@ export async function createStarterPlan(prisma, userId, {
   const focuses = new Set(wellnessProfile?.wellnessFocuses ?? []);
   const stepsByPattern = { mostly_seated: 2500, mixed: 4000, mostly_on_feet: 6000, variable_schedule: 3000 };
   const wellnessSteps = stepsByPattern[wellnessProfile?.wellnessDayPattern] ?? 3000;
-  const slots = wellnessOnly ? [] : await buildWorkoutSlots(prisma, {
+  const slots = wellnessOnly || await activityNeedsReview(prisma, userId) ? [] : await buildWorkoutSlots(prisma, {
     experienceLevel: profileLevel,
     location,
     sessions,
@@ -463,7 +472,7 @@ export async function keepManualWorkoutSlots(prisma, userId, previous, generated
   const ownedIds = new Set(owned.map((template) => template.id));
   const manual = previous.filter((slot) =>
     slot.manual || ownedIds.has(slot.templateId) || (slot.templateId && !slot.title),
-  ).slice(0, generated.length);
+  ).slice(0, generated.length || previous.length);
   const byDay = new Map(manual.map((slot) => [slot.weekday, slot]));
   for (const slot of generated) {
     if (byDay.size === generated.length) break;
@@ -489,7 +498,7 @@ export async function refreshWorkoutSlotsForProfile(prisma, userId) {
   const location = previous[0]?.location
     ?? (previous.some((slot) => homeNames.has(slot.title)) ? 'home' : 'gym');
   const experienceLevel = journeyExperienceForProfile(profile, journey?.startLevel ?? DEFAULT_EXPERIENCE_LEVEL);
-  const generated = await buildWorkoutSlots(prisma, {
+  const generated = await activityNeedsReview(prisma, userId) ? [] : await buildWorkoutSlots(prisma, {
     experienceLevel,
     location,
     sessions: previous.length,

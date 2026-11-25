@@ -7,7 +7,7 @@ import { uploadMedicalDocumentMiddleware } from '../middleware/medicalUpload.js'
 import { saveDocument, signedDocumentUrl, deleteObjects } from '../services/ledger/medicalDocumentStorage.js';
 import { createHash } from 'node:crypto';
 import { createReportService, processReportService, parseReportDate, findExistingReport } from '../services/reportService.js';
-import { validateMarkers, riskBucket } from '../utils/guidanceExtraction.js';
+import { PATIENT_DETAILS_VERSION, publicProposedProfile, validateMarkers, riskBucket } from '../utils/guidanceExtraction.js';
 import { validateReportReadings } from '../utils/reportReadings.js';
 import { valuesFromReadings, BIOMETRIC_KEYS, BIOMETRIC_BOUNDS, MARKER_KEYS } from '../utils/readingMetrics.js';
 import { isStalledReport, estimatePdfPages, matchesDeclaredType, MAX_REPORT_PAGES } from '../utils/reportFailure.js';
@@ -31,19 +31,19 @@ async function ownReport(userId, id) {
   if (!row) throw Object.assign(new Error('Report not found'), { status: 404 });
   return row;
 }
-const canReadAgain = r => r.status === 'COMPLETED' && r.proposedReadings == null && r.readConsentAt != null;
-// Typed values the person would otherwise have to copy out of the readings list by
-// hand. Readings are the source; the extractor's own markers and the entity
-// extractions override them where both exist, as before.
+const canReadAgain = r => r.status === 'COMPLETED' && r.readConsentAt != null &&
+  (r.proposedReadings == null ||
+    (!r.proposedProfile?.name && r.proposedProfile?._patientDetailsVersion !== PATIENT_DETAILS_VERSION));
+// Prefer the readings shown to the person, with older extraction formats as fallbacks.
 const proposedMarkersFor = r => ({
-  ...valuesFromReadings(r.proposedReadings, MARKER_KEYS),
   ...(r.proposedMarkers || {}),
   ...Object.fromEntries((r.extractions || []).filter(x => ['hba1c', 'triglycerides'].includes(x.metric)).map(x => [x.metric, x.normalizedValue])),
+  ...valuesFromReadings(r.proposedReadings, MARKER_KEYS),
 });
 const reportView = r => ({
   id: r.id, fileName: r.fileName, status: r.status, createdAt: r.createdAt,
   reportDate: r.reportDate, detectedReportDate: r.detectedReportDate,
-  proposedProfile: r.proposedProfile || {},
+  proposedProfile: publicProposedProfile(r.proposedProfile),
   proposedMarkers: proposedMarkersFor(r),
   proposedReadings: r.proposedReadings ?? null,
   confirmedReadings: r.confirmedReadings ?? null,
@@ -89,6 +89,18 @@ router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('re
   await processReportService(report.id).catch(() => {});
   return reportView(await ownReport(req.userId, report.id));
 }));
+// Recover an upload whose connection closed before it could return the report
+// ID. The fingerprint stays in the request body and is scoped to this account.
+router.post('/guidance/reports/resume', requireRole('customer'), requireFeatureFlag('reportSubscription'), run(async req => {
+  const fileSha256 = req.body?.fileSha256;
+  if (typeof fileSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(fileSha256)) bad('Invalid report fingerprint');
+  const report = await prisma.healthReport.findFirst({
+    where: { userId: req.userId, fileSha256 },
+    orderBy: { createdAt: 'desc' },
+    include: { extractions: true },
+  });
+  return report ? reportView(report) : null;
+}));
 router.get('/guidance/reports/:id', requireAuth, run(async req => reportView(await ownReport(req.userId, req.params.id))));
 router.get('/guidance/reports/:id/link', requireAuth, run(async req => ({ url: await signedDocumentUrl((await ownReport(req.userId, req.params.id)).storagePath) })));
 router.post('/guidance/reports/:id/retry', requireRole('customer'), requireFeatureFlag('reportSubscription'), run(async req => {
@@ -118,6 +130,9 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
   // form left empty is filled from the list, so the two can no longer disagree.
   const reviewed = confirmedReadings ?? report.proposedReadings;
   const markers = { ...valuesFromReadings(reviewed, MARKER_KEYS), ...typedMarkers };
+  if (!Object.keys(markers).length && !reviewed?.some(reading => String(reading.value ?? '').trim())) {
+    bad('Add a report value before confirming, or continue without the report');
+  }
   const biometrics = { ...valuesFromReadings(reviewed, BIOMETRIC_KEYS), ...Object.fromEntries(['hba1c', 'triglycerides'].filter(key => markers[key] != null).map(key => [key, markers[key]])) };
   const liverFlag = req.body.liverFlag === true;
   const reportDate = parseReportDate(req.body.reportDate);

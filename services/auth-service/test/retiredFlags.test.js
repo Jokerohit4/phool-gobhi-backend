@@ -72,10 +72,10 @@ test('app-config still emits coachJourney and healthVault as { enabled: true } w
   assert.deepEqual(res.body.features.healthVault, { enabled: true });
   assert.ok(res.body.flagsKnown.includes('coachJourney'));
   assert.ok(res.body.flagsKnown.includes('healthVault'));
-  assert.deepEqual(
-    LEGACY_ALWAYS_ON_FLAGS.map((f) => f.clientKey),
-    ['coachJourneyEnabled', 'healthVaultEnabled'],
-  );
+  for (const { name } of LEGACY_ALWAYS_ON_FLAGS) {
+    assert.deepEqual(res.body.features[name], { enabled: true });
+    assert.ok(res.body.flagsKnown.includes(name));
+  }
 });
 
 test('app-config emits the legacy keys even when the config read fails', async () => {
@@ -132,23 +132,16 @@ test('stripLegacyFlags drops only the retired keys and leaves the input untouche
 
 // (c) reportSubscription ------------------------------------------------------
 
-test('reportSubscription is registered, fail-closed, dependency-free and medical', () => {
-  const flag = FEATURE_FLAGS.find((f) => f.name === 'reportSubscription');
-  assert.ok(flag, 'reportSubscription missing from the registry');
-  assert.equal(flag.clientKey, 'reportSubscriptionEnabled');
-  assert.equal(flag.group, 'health');
-  assert.equal(flag.dataClass, 'medical');
-  assert.equal(flag.defaultEnabled, false);
-  assert.deepEqual(flag.deps, []);
-  assert.deepEqual(defaultFeatures().reportSubscription, { enabled: false });
-});
-
-test('app-config serves reportSubscription off by default and on when stored on', async () => {
+test('core health and coach features cannot be disabled through rollout config', async () => {
   await reset();
-  assert.deepEqual((await call(ctl.getAppConfig)).body.features.reportSubscription, { enabled: false });
-  await reset();
-  db.config = { features: { reportSubscription: { enabled: true } } };
-  assert.deepEqual((await call(ctl.getAppConfig)).body.features.reportSubscription, { enabled: true });
+  db.config = { features: Object.fromEntries(
+    LEGACY_ALWAYS_ON_FLAGS.map(({ name }) => [name, { enabled: false }]),
+  ) };
+  const res = await call(ctl.getAppConfig);
+  for (const { name } of LEGACY_ALWAYS_ON_FLAGS) {
+    assert.deepEqual(res.body.features[name], { enabled: true });
+    assert.equal(defaultFeatures()[name], undefined);
+  }
 });
 
 // (d) dependency graph --------------------------------------------------------
@@ -168,7 +161,7 @@ test('the retired flags are not registry flags and nothing depends on them', () 
 });
 
 test('flags that used to depend on coachJourney are now dependency-free and keep their own default', () => {
-  for (const name of ['homeIntroduction', 'weeklySummary', 'referralHomeTrigger', 'coachAssistant']) {
+  for (const name of ['homeIntroduction', 'weeklySummary', 'referralHomeTrigger']) {
     const flag = FEATURE_FLAGS.find((f) => f.name === name);
     assert.deepEqual(flag.deps, [], `${name}.deps`);
     assert.equal(flag.defaultEnabled, false, `${name}.defaultEnabled`);

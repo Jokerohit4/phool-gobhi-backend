@@ -251,8 +251,37 @@ export function parseDocumentAIResponse(data) {
     extractions: [...best.values()],
     readings: extractReportReadings(data?.document),
     detectedDate: detectReportDateFromText(documentText),
-    ...extractGuidanceDetails(documentText),
+    ...extractGuidanceDetails([patientFormText(data?.document), documentText].join('\n')),
   };
+}
+
+const PATIENT_ENTITIES = new Set(['patient_name', 'patient_age', 'patient_sex', 'patient_gender', 'patient_address']);
+const PATIENT_FORM_KEY = /^(?:patient(?:['’]s)? (?:name|age|sex|gender|address)|name of (?:the )?patient|patient|name|age(?: ?\/ ?(?:sex|gender))?|sex|gender)$/i;
+
+function patientFormText(document) {
+  const text = document?.text || '';
+  const read = layout => {
+    const anchor = layout?.textAnchor;
+    return (anchor?.content || (anchor?.textSegments || [])
+      .map(({ startIndex, endIndex }) => text.slice(Number(startIndex || 0), Number(endIndex)))
+      .join('')).replace(/\s+/g, ' ').trim();
+  };
+  const fields = [];
+  for (const entity of document?.entities || []) {
+    const type = String(entity.type || '').toLowerCase();
+    if (PATIENT_ENTITIES.has(type) && entity.mentionText?.trim()) {
+      fields.push(type.replace('_', ' ') + ': ' + entity.mentionText.replace(/\s+/g, ' ').trim());
+    }
+  }
+  for (const page of document?.pages || []) {
+    for (const field of page.formFields || []) {
+      const label = read(field.fieldName).replace(/[：:-]$/, '').trim();
+      if (!PATIENT_FORM_KEY.test(label)) continue;
+      const value = read(field.fieldValue);
+      if (value) fields.push(label + ': ' + value);
+    }
+  }
+  return fields.join('\n');
 }
 
 /**

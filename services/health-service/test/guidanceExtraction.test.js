@@ -11,6 +11,14 @@ test('only labelled patient identity is proposed; age never becomes DOB', () => 
 test('unlabelled names, dates and lab addresses do not fill patient details', () => {
   assert.deepEqual(extractGuidanceDetails('Doctor: Other Person\nAddress: Lab Street\nDate: 2026-01-01').profile, { name: null, age: null, gender: null, address: null });
 });
+test('patient headers can wrap onto the next line or share a line with other fields', () => {
+  assert.deepEqual(
+    extractGuidanceDetails('Lab Name: Central Diagnostics\nPatient Name\nMs. Priya Mehta UHID: 112233\nAge / Gender: 31Y / F\nPatient Address:\nIndiranagar').profile,
+    { name: 'Ms. Priya Mehta', age: 31, gender: 'female', address: 'Indiranagar' },
+  );
+  assert.equal(extractGuidanceDetails('Referring Doctor: Other Person\nName of the Patient Ananya Rao Age: 27').profile.name, 'Ananya Rao');
+  assert.equal(extractGuidanceDetails('Patient Name:\nReport Status\nLaboratory Name: Central Diagnostics').profile.name, null);
+});
 test('triage uses confirmed thresholds; missing values are not a green assessment', () => {
   assert.equal(riskBucket({}), 'UNSET');
   assert.equal(riskBucket({ hba1c: 6.5 }), 'RED');

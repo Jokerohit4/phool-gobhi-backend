@@ -65,20 +65,22 @@ const post = async (path) => {
   return { status: res.status, body: await res.json() };
 };
 
-test('reportSubscription off: upload and retry are refused with 403 FEATURE_DISABLED', async () => {
+test('reportSubscription off: upload, resume and retry are refused with 403 FEATURE_DISABLED', async () => {
   flags.reportSubscription = false;
-  for (const path of ['/guidance/reports', '/guidance/reports/1/retry']) {
+  for (const path of ['/guidance/reports', '/guidance/reports/resume', '/guidance/reports/1/retry']) {
     const res = await post(path);
     assert.equal(res.status, 403, path);
     assert.deepEqual(res.body, { error: 'FEATURE_DISABLED' }, path);
   }
 });
 
-test('reportSubscription on: upload and retry get past the gate', async () => {
+test('reportSubscription on: upload, resume and retry get past the gate', async () => {
   flags.reportSubscription = true;
   const upload = await post('/guidance/reports');
   assert.notEqual(upload.status, 403, 'upload must reach its handler (400: no consent/file)');
   assert.equal(upload.status, 400);
+  const resume = await post('/guidance/reports/resume');
+  assert.equal(resume.status, 400, 'resume must reach fingerprint validation');
   const retry = await post('/guidance/reports/1/retry');
   assert.equal(retry.status, 404, 'retry must reach ownReport');
 });
@@ -87,7 +89,7 @@ test('the gate names reportSubscription and nothing else; healthVault is no long
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'routes', 'guidance.js'), 'utf8');
   const gated = [...src.matchAll(/requireFeatureFlag\('(\w+)'\)/g)].map((m) => m[1]);
-  assert.deepEqual(gated, ['reportSubscription', 'reportSubscription']);
+  assert.deepEqual(gated, ['reportSubscription', 'reportSubscription', 'reportSubscription']);
   assert.doesNotMatch(src, /healthVault/);
   assert.ok(checked.every((n) => n === 'reportSubscription'));
 });

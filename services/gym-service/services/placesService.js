@@ -19,7 +19,7 @@ export async function cityFromCoordinates(lat, lng) {
   if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     throw { status: 400, error: 'Valid coordinates are required' };
   }
-  const params = new URLSearchParams({ latlng: `${lat},${lng}`, result_type: 'locality', language: 'en', key: requireApiKey() });
+  const params = new URLSearchParams({ latlng: `${lat},${lng}`, language: 'en', key: requireApiKey() });
   const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`, { signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw { status: 502, error: 'Could not resolve your city' };
   const body = await response.json();

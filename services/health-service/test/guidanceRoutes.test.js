@@ -6,10 +6,12 @@ let server, base, profile = null, writtenBiometrics = 0, entitlement = { isGuide
 let reads = 0;
 process.env.REPORT_RISK_PUSH_ENABLED = 'true';
 const pushes = [];
+let extractedProfile;
+const fingerprint = 'a'.repeat(64);
 const report = { id: 1, userId: 7, fileName: 'report.pdf', storagePath: 'private/7/report', status: 'COMPLETED', createdAt: new Date('2026-11-01'), reportDate: null, proposedProfile: { name: 'Patient' }, extractions: [{ id: 11, metric: 'hba1c', normalizedValue: 7.1 }] };
 const db = {
   healthReport: {
-    findFirst: async ({ where }) => where.userId === 7 && where.id === 1 ? report : null,
+    findFirst: async ({ where }) => where.userId === 7 && (where.id === 1 || where.fileSha256 === fingerprint) ? report : null,
     update: async ({ data }) => Object.assign(report, data),
     updateMany: async ({ where, data }) => {
       if (Object.entries(where).some(([key, value]) => report[key] !== value)) return { count: 0 };
@@ -35,6 +37,7 @@ before(async t => {
     processReportService: async () => {
       reads++;
       Object.assign(report, { status: 'COMPLETED', proposedReadings: [{ label: 'Glucose', value: 'Negative' }] });
+      if (extractedProfile) report.proposedProfile = extractedProfile;
     },
     parseReportDate: value => value || null,
     findExistingReport: async () => null,
@@ -55,9 +58,24 @@ async function call(path, body, { role = 'customer', user = 7 } = {}) {
   return { status: response.status, body: await response.json() };
 }
 const confirmation = { belongsToMe: true, details: { name: 'Priya', gender: 'female', age: 31, address: 'Indiranagar' }, markers: { hba1c: 7.1 }, liverFlag: false };
+
+test('an extraction with no usable values cannot be confirmed', async () => {
+  const result = await call('/guidance/reports/1/confirm', {
+    belongsToMe: true, details: {}, markers: {}, readings: [],
+  });
+  assert.equal(result.status, 400);
+});
 test('report reads are owner-bound and never expose storage capability', async () => {
   assert.equal((await call('/guidance/reports/1', undefined, { user: 8 })).status, 404);
   const own = await call('/guidance/reports/1');assert.equal(own.status, 200);assert.equal(Object.hasOwn(own.body.data, 'storagePath'), false);
+});
+test('an interrupted upload can only recover a matching report for its owner', async () => {
+  const path = '/guidance/reports/resume';
+  const body = { fileSha256: fingerprint };
+  assert.equal((await call(path, body)).body.data.id, 1);
+  assert.equal((await call(path, body, { user: 8 })).body.data, null);
+  assert.equal((await call(path, { fileSha256: 'b'.repeat(64) })).body.data, null);
+  assert.equal((await call(path, { fileSha256: 'bad' })).status, 400);
 });
 test('the all-report library and saved-file links are staff-only', async () => {
   assert.equal((await call('/guidance/admin/reports')).status, 403);
@@ -139,4 +157,13 @@ test('a saved report with reading consent can be re-read once for the new data',
   assert.deepEqual(reread.body.data.confirmedReadings, confirmed);
   assert.equal((await call('/guidance/reports/1/retry', {})).status, 200);
   assert.equal(reads, 1);
+});
+test('an older report with readings and missing patient details can be re-read once', async () => {
+  report.proposedProfile = { name: null };
+  extractedProfile = { name: null, age: 31, _patientDetailsVersion: 1 };
+  assert.equal((await call('/guidance/reports/1')).body.data.canReadAgain, true);
+  const reread = await call('/guidance/reports/1/retry', {});
+  assert.equal(reread.status, 200);
+  assert.equal(reread.body.data.canReadAgain, false);
+  assert.deepEqual(reread.body.data.proposedProfile, { name: null, age: 31 });
 });

@@ -55,7 +55,13 @@ async function refreshFlags() {
   return cachedFlags;
 }
 
+const coreFeatures = new Set([
+  'workoutTracking', 'healthMetrics', 'healthLedger', 'healthPersonalisation',
+  'fitnessAssistant', 'brandedOnboarding', 'reportSubscription', 'coachAssistant',
+]);
+
 export async function isFeatureEnabled(flagName) {
+  if (coreFeatures.has(flagName)) return true;
   const flags = await getFeatureFlags();
   return !!flags?.[flagName]?.enabled;
 }
@@ -64,6 +70,7 @@ export async function isFeatureEnabled(flagName) {
 // `workoutTracking` has been backfilled. Use for handlers that check their own
 // flag (booking-service's attendance fan-in) rather than route middleware.
 export async function isAnyFeatureEnabled(...flagNames) {
+  if (flagNames.some((name) => coreFeatures.has(name))) return true;
   const flags = await getFeatureFlags();
   return flagNames.some((name) => !!flags?.[name]?.enabled);
 }
