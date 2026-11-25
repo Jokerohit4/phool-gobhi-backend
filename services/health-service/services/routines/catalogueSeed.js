@@ -52,7 +52,7 @@ export function validateCatalogueData(routines) {
 }
 
 function buildRow(spec, order, byName, routineKey) {
-  const exercise = byName.get(spec.name);
+  const exercise = byName.get(spec.name.toLowerCase());
   const isReps = exercise.loggingType === REPS_TYPE;
   if (isReps && spec.reps === undefined) {
     throw new Error(`routine ${routineKey}: "${spec.name}" is counted in reps but has no "reps"`);
@@ -78,16 +78,24 @@ const textRow = (lang, t) => ({
 
 export async function seedRoutineCatalogue(prisma, routines) {
   validateCatalogueData(routines);
+  // Resolve names case-insensitively, the way seed.js decides an exercise
+  // already exists: a library that spells "Push-Up" must satisfy "Push-up", or
+  // this would fail every deploy after seed.js had (rightly) skipped adding it.
+  const library = await prisma.exercise.findMany({
+    where: { createdByUserId: null },
+    select: { id: true, name: true, loggingType: true },
+  });
+  const byName = new Map(library.map((e) => [e.name.toLowerCase(), e]));
   const wanted = catalogueExerciseNames(routines);
-  const found = await prisma.exercise.findMany({ where: { name: { in: wanted }, createdByUserId: null } });
-  const byName = new Map(found.map((e) => [e.name, e]));
-  const missing = wanted.filter((n) => !byName.has(n));
+  const missing = wanted.filter((n) => !byName.has(n.toLowerCase()));
   if (missing.length > 0) {
     throw new Error(`seedRoutineCatalogue: missing exercises [${missing.join(', ')}] — run "node prisma/seed.js" first.`);
   }
 
-  let created = 0;
-  let textsAdded = 0;
+  // Decide what to do for every routine, and build every row, BEFORE writing
+  // anything: a bad target (say a library exercise whose logging type differs
+  // from the data) must fail the run cleanly, not leave half the catalogue made.
+  const plan = [];
   const skipped = [];
   for (const r of routines) {
     const existing = await prisma.workoutTemplate.findUnique({ where: { key: r.key } });
@@ -97,23 +105,34 @@ export async function seedRoutineCatalogue(prisma, routines) {
       });
       const haveLangs = new Set(have.map((h) => h.lang));
       const add = Object.entries(r.texts).filter(([lang]) => !haveLangs.has(lang));
-      if (add.length > 0) {
-        await prisma.workoutTemplateText.createMany({
-          data: add.map(([lang, t]) => ({ templateId: existing.id, ...textRow(lang, t) })),
-          skipDuplicates: true,
-        });
-        textsAdded += add.length;
-      }
+      plan.push({ kind: 'texts', routine: r, existing, add });
       continue;
     }
     const en = r.texts.en;
     // A system routine that already carries this name but no key predates the
     // catalogue and was not matched by the migration: leave it alone rather
-    // than create a lookalike next to it.
+    // than create a lookalike next to it. Reported loudly by the caller.
     const sameName = await prisma.workoutTemplate.findFirst({ where: { isSystem: true, name: en.name } });
     if (sameName) { skipped.push(r.key); continue; }
-
     const rows = routineRows(r);
+    plan.push({ kind: 'create', routine: r, rows, built: rows.map((row, i) => buildRow(row, i, byName, r.key)) });
+  }
+
+  let created = 0;
+  let textsAdded = 0;
+  for (const step of plan) {
+    const r = step.routine;
+    if (step.kind === 'texts') {
+      if (step.add.length > 0) {
+        await prisma.workoutTemplateText.createMany({
+          data: step.add.map(([lang, t]) => ({ templateId: step.existing.id, ...textRow(lang, t) })),
+          skipDuplicates: true,
+        });
+        textsAdded += step.add.length;
+      }
+      continue;
+    }
+    const en = r.texts.en;
     await prisma.workoutTemplate.create({
       data: {
         userId: null,
@@ -121,14 +140,14 @@ export async function seedRoutineCatalogue(prisma, routines) {
         key: r.key,
         name: en.name,
         description: en.description ?? null,
-        estMinutes: estimateRoutineMinutes(rows),
+        estMinutes: estimateRoutineMinutes(step.rows),
         level: r.level,
         category: r.category,
         goal: r.goal ?? null,
         sortOrder: r.sortOrder ?? 0,
         isPublished: true,
         legacyListed: Boolean(r.legacy),
-        exercises: { create: rows.map((row, i) => buildRow(row, i, byName, r.key)) },
+        exercises: { create: step.built },
         texts: { create: Object.entries(r.texts).map(([lang, t]) => textRow(lang, t)) },
       },
     });

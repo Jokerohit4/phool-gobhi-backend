@@ -12,7 +12,7 @@ const read = (p) => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8')
 const routines = read('../prisma/catalogue/routines.json').routines;
 const library = read('../prisma/exerciseCatalogue.json').map((e, i) => ({ id: 1000 + i, ...e }));
 
-function fakePrisma({ missing = [], preexisting = [] } = {}) {
+function fakePrisma({ missing = [], preexisting = [], library: lib = library } = {}) {
   const templates = new Map(); // key -> row
   const texts = []; // { templateId, lang, ... }
   let nextId = 1;
@@ -20,7 +20,11 @@ function fakePrisma({ missing = [], preexisting = [] } = {}) {
   const db = {
     templates, texts,
     exercise: {
-      findMany: async ({ where }) => library.filter((e) => where.name.in.includes(e.name) && !missing.includes(e.name)),
+      // The seed reads the whole global library and matches names itself.
+      findMany: async ({ where }) => {
+        assert.equal(where.createdByUserId, null);
+        return lib.filter((e) => !missing.includes(e.name));
+      },
     },
     workoutTemplate: {
       findUnique: async ({ where }) => templates.get(where.key) ?? null,
@@ -117,4 +121,30 @@ test('bad data is rejected with the routine named', async () => {
   const dup = structuredClone(routines);
   dup[5].key = dup[4].key;
   await assert.rejects(() => seedRoutineCatalogue(fakePrisma(), dup), /duplicate key/);
+});
+
+test('library names are matched case-insensitively, like seed.js does', async () => {
+  // A prod library that spells exercises differently must not fail every deploy.
+  const shouted = library.map((e) => ({ ...e, name: e.name.toUpperCase() }));
+  const db = fakePrisma({ library: shouted });
+  const out = await seedRoutineCatalogue(db, routines);
+  assert.equal(out.created, routines.length);
+  assert.ok(db.templates.get('gym_push_b').exercises.every((e) => Number.isInteger(e.exerciseId)));
+});
+
+test('a target that does not fit the library fails before ANYTHING is written', async () => {
+  // Brisk Walking is timed in the data; a library that counts it in reps cannot
+  // take a seconds target. Routines earlier in the file must not be left behind.
+  const odd = library.map((e) => (e.name === 'Brisk Walking' ? { ...e, loggingType: 'sets_reps_weight' } : e));
+  const db = fakePrisma({ library: odd });
+  await assert.rejects(() => seedRoutineCatalogue(db, routines), /Brisk Walking.*counted in reps but has no "reps"/);
+  assert.equal(db.templates.size, 0, 'nothing was created');
+  assert.equal(db.texts.length, 0);
+});
+
+test('a keyless routine with a clashing name is reported, so the caller can fail loudly', async () => {
+  const db = fakePrisma();
+  db.templates.set('x', { id: 5, isSystem: true, name: 'Push Day B', key: 'x' });
+  const out = await seedRoutineCatalogue(db, routines);
+  assert.deepEqual(out.skipped, ['gym_push_b']);
 });
