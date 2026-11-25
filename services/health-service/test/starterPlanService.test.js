@@ -19,6 +19,7 @@
 // for, and what is written before the ask).
 //
 // Run with: node --experimental-test-module-mocks --test
+import { readFileSync } from 'node:fs';
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -64,33 +65,17 @@ const {
 } = await import('../services/ledger/starterPlanService.js');
 const { saveSettings, saveSlots } = await import('../services/ledger/prescriptionService.js');
 
-// The whole template catalogue the pools name: the gym starters (B7's seeds)
-// and the home track's (seedHomeTrack.js). Ids are arbitrary but stable per
-// name, the way system templates behave.
-const TEMPLATE_ROWS = [
-  ...[
-    'Full Body x3 — Beginner-friendly',
-    'Push Day A',
-    'Leg Day',
-    'Upper & Abs',
-  ].map((name, i) => ({ id: 101 + i, name, isSystem: true, level: 'beginner' })),
-  ...[
-    'Full body — 15 minute',
-    'Full body — no equipment',
-    'Core — 10 minute',
-    'Low-impact cardio (no jumping)',
-    'Push — bodyweight',
-    'Pull — no bar',
-    'Legs — bodyweight',
-    'Mobility & stretch',
-    'Desk reset — 8 minute',
-  ].map((name, i) => ({ id: 201 + i, name, isSystem: true, level: 'beginner' })),
-  ...[
-    'Full body — intermediate',
-    'Push — intermediate',
-    'Legs — intermediate',
-  ].map((name, i) => ({ id: 301 + i, name, isSystem: true, level: 'intermediate' })),
-];
+// The whole template catalogue the pools name, as catalogue rows (key + name):
+// the gym routines and the home track's. Ids are arbitrary but stable per key,
+// the way system templates behave. Built from the real data file so the pools
+// and the seed cannot drift apart.
+const CATALOGUE = JSON.parse(
+  readFileSync(new URL('../prisma/catalogue/routines.json', import.meta.url), 'utf8'),
+).routines;
+const TEMPLATE_ROWS = CATALOGUE.map((r, i) => ({
+  id: 101 + i, key: r.key, name: r.texts.en.name, isSystem: true, level: r.level,
+}));
+const idOf = (key) => TEMPLATE_ROWS.find((r) => r.key === key).id;
 
 function fakePrisma(overrides = {}) {
   const writes = [];
@@ -135,7 +120,7 @@ function fakePrisma(overrides = {}) {
     nutritionTarget: { findFirst: async () => state.nutritionTarget },
     workoutTemplate: {
       findMany: async ({ where }) =>
-        TEMPLATE_ROWS.filter((r) => r.isSystem && where?.name?.in?.includes(r.name)),
+        TEMPLATE_ROWS.filter((r) => r.isSystem && where?.key?.in?.includes(r.key)),
     },
     healthConsent: { findUnique: async () => null },
     ...overrides.prisma,
@@ -426,16 +411,43 @@ test('a home week is built from the home track, and experienced users get the ha
   });
   assert.ok(homeExp.every((s) => s.level === 'intermediate'));
 
-  // Experienced at the gym: no intermediate gym content exists yet, so the
-  // honest fallback is the beginner pool with its own level, not a slot
-  // claiming a difficulty its template does not have.
+  // Experienced at the gym: the intermediate push / pull / legs split.
   const gymExp = await buildWorkoutSlots(fakePrisma(), {
     experienceLevel: 'experienced',
     location: 'gym',
     sessions: 3,
   });
-  assert.ok(gymExp.every((s) => s.level === 'beginner'));
+  assert.deepEqual(gymExp.map((s) => s.title), [
+    'Push — gym intermediate', 'Pull — gym intermediate', 'Legs — gym intermediate',
+  ]);
+  assert.ok(gymExp.every((s) => s.level === 'intermediate'));
   assert.ok(gymExp.every((s) => s.templateId != null));
+});
+
+test('a beginner gym week of six brings in the push / pull / legs split, with a real pull day', async () => {
+  const slots = await buildWorkoutSlots(fakePrisma(), {
+    experienceLevel: 'new_to_gym',
+    location: 'gym',
+    sessions: 6,
+  });
+  assert.deepEqual(slots.map((s) => s.title), [
+    'Full Body x3 — Beginner-friendly', 'Full Body x3 — Beginner-friendly', 'Full Body x3 — Beginner-friendly',
+    'Push Day A', 'Pull Day A', 'Leg Day',
+  ]);
+  assert.equal(slots[4].templateId, idOf('gym_pull_a'));
+});
+
+test('pools name routines by key, so every pooled key exists in the catalogue', async () => {
+  const keys = new Set(CATALOGUE.map((r) => r.key));
+  for (const level of ['beginner', 'intermediate']) {
+    for (const location of ['gym', 'home']) {
+      const slots = await buildWorkoutSlots(fakePrisma(), {
+        experienceLevel: level === 'beginner' ? 'new_to_gym' : 'experienced', location, sessions: 7,
+      });
+      for (const slot of slots) assert.ok(slot.templateId != null, `${location}/${level} slot has no routine`);
+    }
+  }
+  assert.ok(keys.has('gym_pull_a') && keys.has('gym_push_intermediate'));
 });
 
 test('unseeded templates still produce a plan: the slot names the routine anyway', async () => {
