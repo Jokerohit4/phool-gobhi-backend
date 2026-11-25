@@ -910,6 +910,21 @@
     "since": "2026-09-29",
     "notes": "targets recalculated from current weight. props written, skipped"
   },
+  "goal_plan_saved": {
+    "source": "server",
+    "service": "health-service",
+    "notes": "The user saved a personal goal plan for the first time. No health data is included in event properties."
+  },
+  "goal_plan_edited": {
+    "source": "server",
+    "service": "health-service",
+    "notes": "The user saved changes to the current personal goal plan. No health data is included in event properties."
+  },
+  "goal_plan_phase_started": {
+    "source": "server",
+    "service": "health-service",
+    "notes": "The user saved a personal goal plan for a new phase. No health data is included in event properties."
+  },
   "health_prescription_saved": {
     "source": "server",
     "service": "health-service",

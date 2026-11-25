@@ -177,7 +177,13 @@ export const putGoalPlan = handle(async (req, res) => {
   await validateGoalNutrition(req.userId, draft, current);
   const saved = await saveGoalPlan(prisma, req.userId, { draft, revision: req.body?.revision });
   if (saved.plan.revision !== current?.revision) {
-    track(current ? (saved.plan.startDate === current.startDate ? 'goal_plan_edited' : 'goal_plan_phase_started') : 'goal_plan_saved', req.userId, {});
+    if (!current) {
+      track('goal_plan_saved', req.userId, {});
+    } else if (saved.plan.startDate === current.startDate) {
+      track('goal_plan_edited', req.userId, {});
+    } else {
+      track('goal_plan_phase_started', req.userId, {});
+    }
   }
   res.json(await withGoalActivity(req.userId, saved));
 });
