@@ -526,8 +526,7 @@ enum DailyActivitySource {
   @@schema("health")
 }
 
-// One row per user per day — upserted wholesale on every sync (see
-// activityService.syncDailyActivity), never partially patched.
+// One row per user per day. A sync updates only the measurements it provides.
 model DailyActivityMetric {
   id                  Int                 @id @default(autoincrement())
   userId              Int

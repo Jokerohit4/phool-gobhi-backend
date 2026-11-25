@@ -1,5 +1,8 @@
 import prisma from '../db/prisma.js';
 import { EXERCISE_RECORD_SOURCES, EXERCISE_RECORD_TYPES, DAILY_ACTIVITY_SOURCES } from '../constants/healthEnums.js';
+import { METRIC_UNITS, validateLocalDate, validateMetricValue } from './biometricService.js';
+import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
+import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
 
 // Cardio/yoga/other duration-based entries — manual create, and the same
 // endpoint doubles as the batch-upsert target for device-synced workout
@@ -61,46 +64,68 @@ export async function listExerciseRecordsService(userId, { limit = 50 } = {}) {
   });
 }
 
-// Batch upsert by date — the device-health sync path sends one row per day
-// since the last sync anchor. Whole-row replace per day, never a partial
-// patch (see the schema comment on DailyActivityMetric).
-export async function syncDailyActivityService(userId, rows) {
+function validateSyncRows(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     const err = new Error('rows must be a non-empty array');
     err.status = 400;
     throw err;
   }
   for (const row of rows) {
-    if (!row.date || !DAILY_ACTIVITY_SOURCES.includes(row.source)) {
+    if (!row || !row.date || !DAILY_ACTIVITY_SOURCES.includes(row.source)) {
       const err = new Error('Each row needs date and a valid source');
       err.status = 400;
       throw err;
     }
   }
-  return prisma.$transaction(
-    rows.map((row) =>
-      prisma.dailyActivityMetric.upsert({
-        where: { userId_date: { userId, date: row.date } },
-        update: {
-          steps: row.steps ?? null,
-          activeCalories: row.activeCalories ?? null,
-          distanceMeters: row.distanceMeters ?? null,
-          restingHeartRateBpm: row.restingHeartRateBpm ?? null,
-          source: row.source,
-          syncedAt: new Date(),
-        },
-        create: {
-          userId,
-          date: row.date,
-          steps: row.steps ?? null,
-          activeCalories: row.activeCalories ?? null,
-          distanceMeters: row.distanceMeters ?? null,
-          restingHeartRateBpm: row.restingHeartRateBpm ?? null,
-          source: row.source,
-        },
-      }),
-    ),
-  );
+}
+
+const activityFields = ['steps', 'activeCalories', 'distanceMeters', 'restingHeartRateBpm'];
+
+const validSleep = ({ date, sleepMinutes }) =>
+  Number.isInteger(sleepMinutes) && sleepMinutes > 0 &&
+  !validateMetricValue('sleep_minutes', sleepMinutes) && !validateLocalDate(date);
+
+function writeDeviceBiometric(userId, { date, source }, metric, value) {
+  const entry = { userId, metric, localDate: date, value, unit: METRIC_UNITS[metric], source };
+  return [
+    prisma.biometricEntry.createMany({ data: [entry], skipDuplicates: true }),
+    // Guard the update in the database so concurrent manual edits win too.
+    prisma.biometricEntry.updateMany({
+      where: {
+        userId, metric: entry.metric, localDate: entry.localDate,
+        source: { in: DAILY_ACTIVITY_SOURCES }, value: { not: entry.value },
+      },
+      data: { value: entry.value, source: entry.source },
+    }),
+  ];
+}
+
+// Older clients can send sleep alongside activity. Apply only measured fields
+// so partial reads and missing device permissions preserve earlier totals.
+export async function syncDailyActivityService(userId, rows) {
+  validateSyncRows(rows);
+  const activityWrites = rows.flatMap((row) => {
+    const measured = Object.fromEntries(activityFields
+      .filter((field) => row[field] != null)
+      .map((field) => [field, row[field]]));
+    if (Object.keys(measured).length === 0) return [];
+    const data = { ...measured, source: row.source };
+    return [prisma.dailyActivityMetric.upsert({
+      where: { userId_date: { userId, date: row.date } },
+      update: { ...data, syncedAt: new Date() },
+      create: { userId, date: row.date, ...data },
+    })];
+  });
+  const biometricWrites = rows.filter(validSleep)
+    .flatMap((row) => writeDeviceBiometric(userId, row, 'sleep_minutes', row.sleepMinutes));
+  if (activityWrites.length + biometricWrites.length === 0) return [];
+  const results = await prisma.$transaction([...activityWrites, ...biometricWrites]);
+  const changes = results.slice(activityWrites.length);
+  if (changes.some(({ count }) => count > 0)) {
+    emitJourneyInvalidate(userId);
+    await invalidateBlendedScore(userId);
+  }
+  return results.slice(0, activityWrites.length);
 }
 
 export async function getDailyActivityService(userId, { from, to } = {}) {

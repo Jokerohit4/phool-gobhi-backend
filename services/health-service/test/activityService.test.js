@@ -8,8 +8,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 let activityRows = [];
+let sleepRows = [];
 
 function resetFakes() {
+  sleepRows = [];
   activityRows = [
     { id: 1, userId: 1, date: '2026-09-01', steps: 8000, source: 'healthkit' },
     { id: 2, userId: 1, date: '2026-09-08', steps: 12000, source: 'healthkit' },
@@ -18,16 +20,46 @@ function resetFakes() {
   ];
 }
 
-let getDailyActivityService, getDailyActivityForUsersService;
+let getDailyActivityService, getDailyActivityForUsersService, syncDailyActivityService;
 let getDailyActivityInternal;
 
 test('setup: mock prisma once, import the services and controller once', async (t) => {
   resetFakes();
+  t.mock.module(new URL('../services/ledger/blendedScoreCache.js', import.meta.url).href, {
+    exports: { invalidateBlendedScore: async () => {} },
+  });
   t.mock.module('@prisma/client', {
     exports: {
       PrismaClient: class {
         constructor() {
+          this.$transaction = async (writes) => writes.map((write) => write());
+          this.biometricEntry = {
+            createMany: ({ data: [entry], skipDuplicates }) => () => {
+              assert.equal(skipDuplicates, true);
+              if (sleepRows.some((row) =>
+                row.userId === entry.userId && row.metric === entry.metric &&
+                row.localDate === entry.localDate)) return { count: 0 };
+              sleepRows.push({ ...entry });
+              return { count: 1 };
+            },
+            updateMany: ({ where, data }) => () => {
+              const matches = sleepRows.filter((row) =>
+                row.userId === where.userId && row.metric === where.metric &&
+                row.localDate === where.localDate && where.source.in.includes(row.source) &&
+                row.value !== where.value.not);
+              for (const row of matches) Object.assign(row, data);
+              return { count: matches.length };
+            },
+          };
           this.dailyActivityMetric = {
+            upsert: ({ where, create, update }) => () => {
+              const key = where.userId_date;
+              const existing = activityRows.find((row) =>
+                row.userId === key.userId && row.date === key.date);
+              if (existing) return Object.assign(existing, update);
+              activityRows.push(create);
+              return create;
+            },
             findMany: async ({ where, orderBy }) => {
               let rows = activityRows;
               if (where.userId !== undefined) {
@@ -55,10 +87,51 @@ test('setup: mock prisma once, import the services and controller once', async (
       Prisma: { Decimal: class Decimal {} },
     },
   });
-  ({ getDailyActivityService, getDailyActivityForUsersService } = await import(
+  ({ getDailyActivityService, getDailyActivityForUsersService, syncDailyActivityService } = await import(
     '../services/activityService.js'
   ));
   ({ getDailyActivityInternal } = await import('../controllers/activityController.js'));
+});
+
+test('device sleep sync updates imported entries and preserves manual sleep and existing steps', async () => {
+  resetFakes();
+  const row = { date: '2026-09-01', source: 'healthkit', sleepMinutes: 420 };
+  await syncDailyActivityService(1, [row]);
+  assert.deepEqual(sleepRows, [{
+    userId: 1, metric: 'sleep_minutes', localDate: row.date,
+    value: 420, unit: 'minutes', source: 'healthkit',
+  }]);
+  assert.equal(activityRows[0].steps, 8000);
+  await syncDailyActivityService(1, [{ ...row, steps: 9000, sleepMinutes: 430 }]);
+  assert.equal(sleepRows.length, 1);
+  assert.equal(sleepRows[0].value, 430);
+  assert.equal(activityRows[0].steps, 9000);
+  Object.assign(sleepRows[0], { source: 'manual', value: 445 });
+  await syncDailyActivityService(1, [{ ...row, sleepMinutes: 460 }]);
+  assert.equal(sleepRows[0].value, 445);
+  assert.equal(sleepRows[0].source, 'manual');
+  assert.equal(activityRows[0].steps, 9000);
+  resetFakes();
+});
+
+test('partial and empty device snapshots preserve previously synced activity', async () => {
+  resetFakes();
+  const date = '2026-09-01';
+  const source = 'healthkit';
+  await syncDailyActivityService(1, [{
+    date, source, steps: 8000, activeCalories: 300, distanceMeters: 6100,
+    restingHeartRateBpm: 55,
+  }]);
+  await syncDailyActivityService(1, [{ date, source, steps: 9000, restingHeartRateBpm: null }]);
+  const result = await syncDailyActivityService(1, [{ date, source, steps: null }]);
+  assert.equal(result.length, 0);
+  assert.equal(activityRows[0].steps, 9000);
+  assert.equal(activityRows[0].activeCalories, 300);
+  assert.equal(activityRows[0].distanceMeters, 6100);
+  assert.equal(activityRows[0].restingHeartRateBpm, 55);
+  await syncDailyActivityService(1, [{ date, source, steps: 0 }]);
+  assert.equal(activityRows[0].steps, 0);
+  resetFakes();
 });
 
 test('public read: only the requesting user\'s rows, honor the date range', async () => {

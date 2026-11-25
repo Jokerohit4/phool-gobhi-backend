@@ -292,6 +292,9 @@ router.get('/exercise-records', ...workoutGated, activityCtrl.listExerciseRecord
 // requireDeviceHealthConsent for why exercise-records (manual + device mixed)
 // is not gated the same way.
 router.post('/daily-activity/sync', ...workoutGated, requireDeviceHealthConsent, activityCtrl.syncDailyActivity);
+// Partial uploads use a separate route so older deployments reject them
+// instead of clearing the activity fields that were absent from the payload.
+router.post('/daily-activity/device-sync', ...workoutGated, requireDeviceHealthConsent, activityCtrl.syncDailyActivity);
 router.get('/daily-activity', ...workoutGated, activityCtrl.getDailyActivity);
 
 // ---- GPS run tracker (run-tracker-spec.html §10) -------------------------
