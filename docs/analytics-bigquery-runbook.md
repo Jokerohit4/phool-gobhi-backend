@@ -329,3 +329,40 @@ killed or backgrounded app (especially iOS) may never report delivery: `delivere
 lower bound, and `opened` is the reliable stage. Users who disabled notifications or whose
 token is stale still count as sent until FCM reports an error on a later send. Sends
 from before this release have no `notification_id` and are not in any report.
+
+## Notification permission report (muted users)
+
+The server cannot see that a user muted the app in OS settings (FCM still accepts the
+send), so the apps report it: client event `notification_permission_status`, once a day per
+signed-in install, props `status` (`granted`|`denied`|`not_determined`|`provisional`) and
+`source` (`launch`|`resume`), plus the standard `platform` and `app`
+(`phool_gobhi`|`phool_gobhi_partner`). `denied` = muted.
+
+`GET /api/bookings/admin/analytics/notification-permission?days=7|14|30&platform=ios|android&app=customer|partner`
+(booking-service, `requireRole('gobhi')`; `days` default 14, filters optional; bad values
+400; 503 unless `ANALYTICS_READ_PROVIDER=bigquery`). Same numbers from the CLI:
+`ANALYTICS_ENVIRONMENT=prod node scripts/notification-permission.cjs --days 14 [--platform ios] [--app partner] [--json]`.
+
+```json
+{"data":{"days":14,"generatedAt":"2026-11-24T12:00:00.000Z","reportingUsers":12,"mutedUsers":3,"mutedRate":0.25,
+ "byStatus":[{"status":"granted","users":6},{"status":"denied","users":3},{"status":"not_determined","users":2},{"status":"provisional","users":1}],
+ "byPlatform":[{"platform":"android","granted":6,"denied":2,"not_determined":0,"provisional":0},{"platform":"ios","granted":0,"denied":1,"not_determined":0,"provisional":1},{"platform":"unknown","granted":0,"denied":0,"not_determined":2,"provisional":0}],
+ "byApp":[{"app":"customer","granted":6,"denied":3,"not_determined":0,"provisional":0},{"app":"partner","granted":0,"denied":0,"not_determined":2,"provisional":1}],
+ "lastReportAt":"2026-11-24T11:30:00Z"}}
+```
+
+Semantics:
+- Reads `events_between` (deduped). Anonymous `anon_` ids and rows with an unknown status or
+  an app other than the two above are ignored.
+- Each person (distinct_id = user id) counts once, by their LATEST event inside the window.
+  Filters apply to events first, then the latest is taken, so a person on both apps with no
+  `app` filter counts once, under the app of their latest report (`byApp` and `byPlatform`
+  each sum to `reportingUsers`).
+- `mutedUsers` = latest status `denied`; `mutedRate` = mutedUsers / reportingUsers (0 when none).
+  `byStatus` always lists all four statuses. A `platform` other than ios/android becomes
+  `unknown`. `lastReportAt` is the newest report in the window, null if none.
+- Limits: only users on an app version that sends the event appear, and only if they opened
+  the app in the window (a user who muted and never returns is not seen). It counts people,
+  not FCM tokens, and says nothing about per-channel mutes. Read the numbers against the app
+  release date: right after the rollout `reportingUsers` is only the updated fraction of users.
+  A 14-day window scans on the order of MBs.
