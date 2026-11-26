@@ -1,4 +1,6 @@
-export const COACHING_REGIONS = ['GURUGRAM', 'REST_INDIA'];
+import { COACHING_REGIONS, validateCoachingV2Config } from './coachingV2Config.js';
+
+export { COACHING_REGIONS };
 export const COACHING_PLAN_KEYS = ['MONTHLY_4499', 'QUARTERLY_11999'];
 function remotePrice(name) {
   const raw = process.env[name];
@@ -49,7 +51,7 @@ function integer(value, label, min, max) {
 function boolean(value, label) { if (typeof value !== 'boolean') bad(`Check ${label}`); return value; }
 const booleanFields = ['enabled', 'featured', 'gymAccess', 'trainerSupport', 'mealRoutine', 'dietitianReview', 'doctorClearanceForRed'];
 const copyFields = ['gymDescription', 'trainerDescription', 'coachingDescription', 'mealDescription', 'clinicalDescription', 'labDescription', 'onboardingDescription'];
-export function validateCoachingConfig(input) {
+function validateLegacyConfig(input) {
   if (!input || typeof input !== 'object' || !input.regions || Object.keys(input.regions).sort().join() !== [...COACHING_REGIONS].sort().join()) bad('Both supported regions are required');
   return { regions: Object.fromEntries(COACHING_REGIONS.map(region => {
     const raw = input.regions[region];
@@ -84,4 +86,12 @@ export function validateCoachingConfig(input) {
     if (region === 'REST_INDIA' && addon.enabled) bad('Gym-floor add-ons are unavailable outside Gurugram');
     return [region, { label: text(raw.label, 'region label', 150), plans, addon }];
   })) };
+}
+
+export function validateCoachingConfig(input) {
+  if (input?.schemaVersion === 2) {
+    return { ...validateCoachingV2Config(input), ...(input.regions === undefined ? {} : validateLegacyConfig(input)) };
+  }
+  if (input?.schemaVersion !== undefined && input.schemaVersion !== 1) bad('Unsupported catalog schema version');
+  return validateLegacyConfig(input);
 }
