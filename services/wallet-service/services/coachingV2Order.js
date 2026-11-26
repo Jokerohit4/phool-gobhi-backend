@@ -6,7 +6,7 @@ export const V2_ADDON_BALANCES = {
   nutritionist_session: 'nutritionistSessionsRemaining',
 };
 
-export function priceCoachingV2Order(offer, selection, family) {
+export function priceCoachingV2Order(offer, selection, family, coupon, now) {
   const isAddon = !!offer.kind;
   const quantity = selection.quantity === undefined ? 1 : selection.quantity;
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > (isAddon ? MAX_COACHING_ADDON_QUANTITY : 1)) {
@@ -23,9 +23,8 @@ export function priceCoachingV2Order(offer, selection, family) {
   const volumeDiscountPaise = Math.floor(listAmountPaise * discountPct / 100);
   const subtotalPaise = listAmountPaise - volumeDiscountPaise;
   if (subtotalPaise < 100) throw Object.assign(new Error('The checkout total must be at least one rupee'), { status: 400 });
-  const { amountPaise, discountPaise: couponDiscountPaise, couponCode } = coachingPrice({
-    product: offer.key, amountPaise: subtotalPaise,
-  }, selection.couponCode);
+  const { amountPaise, discountPaise: couponDiscountPaise, couponCode } =
+    coachingPrice({ ...offer, amountPaise: subtotalPaise }, coupon, now);
   const lines = [{ type: 'list_price', key: offer.key, quantity, unitPaise, amountPaise: listAmountPaise }];
   if (volumeDiscountPaise) lines.push({ type: 'volume_discount', discountPct, amountPaise: -volumeDiscountPaise });
   if (couponDiscountPaise) lines.push({ type: 'coupon_discount', couponCode, amountPaise: -couponDiscountPaise });

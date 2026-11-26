@@ -1,19 +1,22 @@
-import { afterEach, before, beforeEach, test } from 'node:test';
+import { before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { coachingCatalog, coachingCatalogV2 } from '../services/coachingCatalog.js';
 import { defaultCoachingConfig } from '../services/coachingDefaults.js';
 import { defaultCoachingV2Config } from '../services/coachingV2Config.js';
+import { importCoachingCoupons } from '../scripts/importCoachingCoupons.js';
 
 const userId = 7;
 const day = 86400000;
 let api, configApi, router, extractUser, account, context, config, history, member, orders, grants, records, events, providerOrders, refunds, trackingFailure;
-let transactions;
+let coupons, redemptions, locks, failedPayments, beforeProviderOrder, db;
 let bookingRequests, bookingUnavailable;
 
 const copy = value => structuredClone(value ?? null);
 function matches(row, where) {
   return Object.entries(where).every(([key, value]) => {
+    if (key === 'NOT') return !matches(row, value);
+    if (key === 'order') return matches(orders.find(order => order.orderId === row.orderId), value);
     if (value?.in) return value.in.includes(row[key]);
     if (value && typeof value === 'object' && 'not' in value) return row[key] !== value.not;
     if (value?.lte) return row[key] <= value.lte;
@@ -30,12 +33,58 @@ function update(row, data) {
 }
 
 before(async t => {
-  const db = {
-    $queryRaw: async () => [],
-    $transaction: fn => {
-      const result = transactions.then(() => fn(db));
-      transactions = result.catch(() => {});
-      return result;
+  const orderView = (order, include) => copy(order && include?.couponRedemption
+    ? { ...order, couponRedemption: redemptions.find(row => row.orderId === order.orderId) }
+    : order);
+  const saveCoupon = data => {
+    const row = { id: coupons.length + 1, enabled: true, updatedAt: new Date(), ...data, offerKeys: data.offerKeys ?? null };
+    if (!Array.isArray(row.offerKeys)) row.offerKeys = null;
+    coupons.push(row);
+    return copy(row);
+  };
+  db = {
+    $transaction: async fn => {
+      if (Array.isArray(fn)) return Promise.all(fn);
+      const release = [];
+      const tx = { ...db, $queryRaw: async (sql, id) => {
+        const isCoupon = sql.join('').includes('FOR UPDATE');
+        const key = isCoupon ? `coupon:${id}` : `user:${id}`;
+        const previous = locks.get(key);
+        locks.set(key, new Promise(resolve => release.push(resolve)));
+        await previous;
+        return isCoupon ? coupons.filter(row => row.code === id) : [];
+      } };
+      try { return await fn(tx); }
+      finally { for (const unlock of release) unlock(); }
+    },
+    coupon: {
+      findUnique: async ({ where }) => copy(coupons.find(row => matches(row, where))),
+      findMany: async () => copy(coupons),
+      create: async ({ data }) => saveCoupon(data),
+      update: async ({ where, data }) => update(coupons.find(row => matches(row, where)), {
+        ...data, offerKeys: Array.isArray(data.offerKeys) ? data.offerKeys : null,
+      }),
+      upsert: async ({ where, create }) => copy(coupons.find(row => matches(row, where)) ?? saveCoupon(create)),
+    },
+    couponRedemption: {
+      create: async ({ data }) => redemptions.push({ ...data, status: 'reserved' }),
+      count: async ({ where }) => redemptions.filter(row => matches(row, where)).length,
+      findUnique: async ({ where }) => copy(redemptions.find(row => matches(row, where))),
+      update: async ({ where, data }) => update(redemptions.find(row => matches(row, where)), data),
+      updateMany: async ({ where, data }) => {
+        const rows = redemptions.filter(row => matches(row, where));
+        for (const row of rows) update(row, data);
+        return { count: rows.length };
+      },
+      groupBy: async () => {
+        const groups = new Map();
+        for (const { couponId, status } of redemptions) {
+          const key = `${couponId}:${status}`;
+          if (!groups.has(key)) groups.set(key, { couponId, status, _count: { _all: 0 } });
+          groups.get(key)._count._all++;
+        }
+        return [...groups.values()];
+      },
     },
     coachingMembership: {
       findUnique: async () => copy(member),
@@ -46,14 +95,15 @@ before(async t => {
     },
     coachingOrder: {
       findUnique: async ({ where }) => copy(orders.find(row => matches(row, where))),
-      findFirst: async ({ where }) => copy(orders.find(row => matches(row, where))),
-      findMany: async ({ where }) => copy(orders.filter(row => matches(row, where))),
+      findFirst: async ({ where, include }) => orderView(orders.find(row => matches(row, where)), include),
+      findMany: async ({ where, include }) => orders.filter(row => matches(row, where)).map(row => orderView(row, include)),
       create: async ({ data }) => {
-        const row = { id: orders.length + 1, status: 'PENDING', ...copy(data) };
+        const row = { id: orders.length + 1, status: 'PENDING', createdAt: new Date(), ...copy(data) };
         orders.push(row);
         return copy(row);
       },
       update: async ({ where, data }) => update(orders.find(row => matches(row, where)), data),
+      updateManyAndReturn: async ({ where, data }) => orders.filter(row => matches(row, where)).map(row => update(row, data)),
       updateMany: async ({ where, data }) => {
         const rows = orders.filter(row => matches(row, where));
         for (const row of rows) update(row, data);
@@ -110,10 +160,11 @@ before(async t => {
   } } });
   t.mock.module('razorpay', { exports: { default: class {
     orders = { create: async payload => {
+      await beforeProviderOrder();
       const order = { ...payload, id: `order_${providerOrders.length + 1}` };
       providerOrders.push(order);
       return order;
-    } };
+    }, fetchPayments: async id => ({ items: failedPayments.has(id) ? [{ status: 'failed' }] : [] }) };
     payments = {
       fetch: async id => {
         const providerOrder = providerOrders.find(row => `pay_${row.id}` === id);
@@ -133,7 +184,6 @@ before(async t => {
   ({ extractUser } = await import('../middleware/requireAuth.js'));
 });
 
-const originalCoupons = process.env.COACHING_COUPONS_JSON;
 beforeEach(() => {
   account = { dateOfBirth: '1995-01-01', isActive: true, name: 'Private Name', phone: '1234567890' };
   context = { hasUploadedReport: false, confirmedDetails: { name: 'Private Name' } };
@@ -141,12 +191,11 @@ beforeEach(() => {
   orders = []; grants = []; records = []; events = []; providerOrders = []; refunds = []; history = [];
   bookingRequests = [];
   bookingUnavailable = false;
-  transactions = Promise.resolve();
-  process.env.COACHING_COUPONS_JSON = JSON.stringify({ SAVE10: { percentOff: 10, products: ['ADDON_TRAINER', 'MED_30'] } });
-});
-afterEach(() => {
-  if (originalCoupons === undefined) delete process.env.COACHING_COUPONS_JSON;
-  else process.env.COACHING_COUPONS_JSON = originalCoupons;
+  locks = new Map();
+  failedPayments = new Set();
+  beforeProviderOrder = async () => {};
+  coupons = [{ id: 1, code: 'SAVE10', kind: 'percent', value: 10, enabled: true, offerKeys: ['ADDON_TRAINER', 'MED_30'] }];
+  redemptions = [];
 });
 
 function selection(key, city = 'Gurugram', details = {}) {
@@ -205,19 +254,20 @@ test('medical checkout requires an adult and an uploaded report or valid stated 
   assert.equal(providerOrders.length, 0);
 });
 
-test('add-ons need a matching active family and region and apply medical-only trainer tiers before coupons', async () => {
+test('add-ons need a matching active family and region, keep trainer tiers and reject coupons', async () => {
   await assert.rejects(quote('ADDON_TRAINER', { quantity: 4 }), { status: 403 });
   await assert.rejects(checkout('ADDON_TRAINER', { quantity: 4 }), { status: 403 });
   await buy('MED_30', { statedCondition: 'diabetes' });
   assert.equal((await quote('ADDON_TRAINER', { quantity: 3 })).amountPaise, 150000);
   assert.equal((await quote('ADDON_TRAINER', { quantity: 4 })).amountPaise, 180000);
-  const discounted = await quote('ADDON_TRAINER', { quantity: 4, couponCode: ' save10 ' });
+  const discounted = await quote('ADDON_TRAINER', { quantity: 4 });
   assert.deepEqual(discounted.lines, [
     { type: 'list_price', key: 'ADDON_TRAINER', quantity: 4, unitPaise: 50000, amountPaise: 200000 },
     { type: 'volume_discount', discountPct: 10, amountPaise: -20000 },
-    { type: 'coupon_discount', couponCode: 'SAVE10', amountPaise: -18000 },
-    { type: 'total', amountPaise: 162000 },
+    { type: 'total', amountPaise: 180000 },
   ]);
+  await assert.rejects(quote('ADDON_TRAINER', { quantity: 4, couponCode: ' save10 ' }), { status: 400, couponReason: 'not_eligible' });
+  await assert.rejects(checkout('ADDON_TRAINER', { quantity: 4, couponCode: ' save10 ' }), { status: 400, couponReason: 'not_eligible' });
   await assert.rejects(quote('ADDON_TRAINER', { quantity: 0 }), { status: 400 });
   await assert.rejects(quote('ADDON_TRAINER', { quantity: 4, expectedAmountPaise: 200000 }), { status: 409 });
   await assert.rejects(checkout('ADDON_TRAINER', { quantity: 4 }, 'Mumbai'), { status: 403 });
@@ -451,9 +501,185 @@ test('v2 events use the required props once and synchronous and asynchronous tra
   assert.equal(refunds.length, 1);
   assert.deepEqual(events, [
     ['offer_quote_created', userId, { offer_key: 'MED_30', region: 'GURUGRAM', amount_paise: 450000, coupon_code: 'SAVE10', addon_count: 0 }],
+    ['coupon_applied', userId, { coupon_code: 'SAVE10', reason: 'applied' }],
     ['offer_purchased', userId, { offer_key: 'MED_30', family: 'medical', region: 'GURUGRAM', amount_paise: 450000, coupon_code: 'SAVE10', is_renewal: false }],
     ['offer_quote_created', userId, { offer_key: 'ADDON_TRAINER', region: 'GURUGRAM', amount_paise: 180000, coupon_code: null, addon_count: 4 }],
     ['addon_purchased', userId, { addon_key: 'ADDON_TRAINER', quantity: 4, discount_pct: 10 }],
     ['offer_refund_requested', userId, { offer_key: 'MED_30', family: 'medical', hours_since_purchase: 2 }],
   ]);
+});
+
+const medicalCoupon = { statedCondition: 'diabetes', couponCode: 'SAVE10' };
+
+test('concurrent customers compete for the last coupon slots under the coupon lock', async () => {
+  coupons[0].maxRedemptions = 2;
+  const results = await Promise.allSettled([7, 8, 9, 10, 11].map(id =>
+    api.createCoachingOrder(id, 'MED_30', selection('MED_30', 'Gurugram', medicalCoupon))));
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 2);
+  const rejected = results.filter(result => result.status === 'rejected');
+  assert.equal(rejected.length, 3);
+  for (const { reason } of rejected) assert.equal(reason.couponReason, 'limit_reached');
+  assert.equal(redemptions.filter(row => row.status === 'reserved').length, 2);
+  assert.equal(orders.length, 2);
+  assert.equal(providerOrders.length, 5);
+  assert.equal(events.filter(([event]) => event === 'coupon_applied').length, 2);
+});
+
+test('pending checkout can be reused, while a redeemed coupon counts toward the customer limit', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-26T09:00:00Z') });
+  coupons[0].perCustomerLimit = 1;
+  const order = await checkout('MED_30', medicalCoupon);
+  assert.equal((await quote('MED_30', medicalCoupon)).couponCode, 'SAVE10');
+  assert.equal((await checkout('MED_30', medicalCoupon)).orderId, order.orderId);
+  assert.equal(redemptions.length, 1);
+  await Promise.all([settle(order), settle(order)]);
+  assert.equal(redemptions[0].status, 'redeemed');
+  t.mock.timers.setTime(+member.planEndsAt - day);
+  await assert.rejects(quote('MED_30', medicalCoupon), { couponReason: 'limit_reached' });
+  await assert.rejects(checkout('MED_30', medicalCoupon), { couponReason: 'limit_reached' });
+  assert.equal(orders.length, 1);
+});
+
+test('dates, eligibility, invalid codes and disabled coupons reject with coded telemetry', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-26T09:00:00Z') });
+  trackingFailure = 'sync';
+  const outcome = { status: 400, message: 'This coupon is invalid or unavailable for this plan.' };
+  coupons[0].activeFrom = new Date(Date.now() + 1);
+  await assert.rejects(quote('MED_30', medicalCoupon), { ...outcome, couponReason: 'expired' });
+  coupons[0].activeFrom = new Date(Date.now());
+  coupons[0].activeTo = new Date(Date.now() + 1);
+  assert.equal((await quote('MED_30', medicalCoupon)).amountPaise, 450000);
+  t.mock.timers.setTime(+coupons[0].activeTo);
+  await assert.rejects(checkout('MED_30', medicalCoupon), { ...outcome, couponReason: 'expired' });
+  coupons[0].activeTo = null;
+  trackingFailure = 'async';
+  await assert.rejects(quote('WELL_GYM', medicalCoupon), { ...outcome, couponReason: 'not_eligible' });
+  await assert.rejects(quote('MED_30', { ...medicalCoupon, couponCode: 'UNKNOWN' }), { ...outcome, couponReason: 'invalid' });
+  coupons[0].enabled = false;
+  await assert.rejects(quote('MED_30', medicalCoupon), { ...outcome, couponReason: 'disabled' });
+  assert.deepEqual(events.filter(([event]) => event === 'coupon_rejected').map(([, , props]) => props), [
+    { coupon_code: 'SAVE10', reason: 'expired' },
+    { coupon_code: 'SAVE10', reason: 'expired' },
+    { coupon_code: 'SAVE10', reason: 'not_eligible' },
+    { coupon_code: 'UNKNOWN', reason: 'invalid' },
+    { coupon_code: 'SAVE10', reason: 'disabled' },
+  ]);
+});
+
+test('fixed discounts leave at least 100 paise in the quote and provider order', async () => {
+  Object.assign(coupons[0], { kind: 'fixed', value: 999999, offerKeys: null });
+  const quoted = await quote('MED_30', medicalCoupon);
+  assert.equal(quoted.couponDiscountPaise, 499900);
+  assert.equal(quoted.amountPaise, 100);
+  const order = await checkout('MED_30', { ...medicalCoupon, expectedAmountPaise: 100 });
+  assert.equal(order.amountPaise, 100);
+  assert.equal(providerOrders[0].amount, 100);
+});
+
+test('checkout revalidates the coupon after requesting the provider order', async () => {
+  beforeProviderOrder = async () => { coupons[0].value = 20; };
+  await assert.rejects(checkout('MED_30', medicalCoupon), {
+    status: 409, message: 'The checkout price changed. Review the total and try again.',
+  });
+  assert.equal(orders.length, 0);
+  assert.equal(redemptions.length, 0);
+  assert.equal(events.length, 0);
+});
+
+test('replacement and reconciliation release reservations, and a late capture cannot exceed the limit', async () => {
+  Object.assign(coupons[0], { maxRedemptions: 1, offerKeys: null });
+  const first = await checkout('MED_30', medicalCoupon);
+  const replacement = await checkout('WELL_GYM', medicalCoupon);
+  assert.equal(orders[0].status, 'CANCELLED');
+  assert.deepEqual(redemptions.map(row => row.status), ['released', 'reserved']);
+  await settle(first);
+  assert.equal(orders[0].status, 'REFUNDED');
+  failedPayments.add(replacement.orderId);
+  await api.reconcileCoaching(userId);
+  await api.markCoachingPaymentFailed(replacement.orderId);
+  assert.equal(orders[1].status, 'FAILED');
+  assert.equal(redemptions[1].status, 'released');
+  await api.createCoachingOrder(8, 'MED_30', selection('MED_30', 'Gurugram', medicalCoupon));
+  await settle(replacement);
+  assert.equal(orders[1].status, 'REFUNDED');
+  assert.deepEqual(redemptions.map(row => row.status), ['released', 'released', 'reserved']);
+});
+
+test('a later successful payment on a failed order redeems the coupon if a slot remains', async () => {
+  coupons[0].maxRedemptions = 1;
+  const order = await checkout('MED_30', medicalCoupon);
+  await api.markCoachingPaymentFailed(order.orderId);
+  await settle(order);
+  await api.markCoachingPaymentFailed(order.orderId);
+  assert.equal(orders[0].status, 'SUCCESS');
+  assert.equal(redemptions[0].status, 'redeemed');
+});
+
+test('reconciliation cancels an abandoned coupon checkout after 24 hours', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-26T09:00:00Z') });
+  const order = await checkout('MED_30', medicalCoupon);
+  t.mock.timers.setTime(Date.now() + day - 1);
+  await api.reconcileCoaching(userId);
+  assert.equal((await checkout('MED_30', medicalCoupon)).orderId, order.orderId);
+  t.mock.timers.setTime(Date.now() + 1);
+  await api.reconcileCoaching(userId);
+  assert.equal(orders[0].status, 'CANCELLED');
+  assert.equal(redemptions[0].status, 'released');
+});
+
+test('gobhi admins can create, list and disable coupons with timestamp conflict handling', async () => {
+  const app = express();
+  app.use(express.json(), extractUser, router);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  const url = `http://127.0.0.1:${server.address().port}/admin/coupons`;
+  const request = (method, path = '', body, role = 'gobhi', actor = 91) => fetch(url + path, {
+    method, headers: { 'x-user-role': role, 'x-user-id': String(actor), 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  try {
+    assert.equal((await request('GET', '', undefined, 'customer')).status, 403);
+    const initial = { code: 'owner-15', kind: 'percent', value: 15 };
+    assert.equal((await request('POST', '', { ...initial, value: 100 })).status, 400);
+    const created = await request('POST', '', initial);
+    assert.equal(created.status, 200);
+    const { data: coupon } = await created.json();
+    assert.equal(coupon.code, 'OWNER-15');
+    assert.equal(coupon.updatedBy, 91);
+    await checkout('MED_30', { ...medicalCoupon, couponCode: coupon.code });
+    const { data: listed } = await (await request('GET')).json();
+    assert.deepEqual(listed.find(row => row.code === coupon.code).redemptionCounts, { reserved: 1, redeemed: 0, released: 0 });
+    const [disable, conflict] = await Promise.all([
+      request('PATCH', '/OWNER-15', { expectedUpdatedAt: coupon.updatedAt, enabled: false }, 'gobhi', 92),
+      request('PATCH', '/OWNER-15', { expectedUpdatedAt: coupon.updatedAt, enabled: false }, 'gobhi', 92),
+    ]).then(responses => responses.sort((a, b) => a.status - b.status));
+    const { data: disabled } = await disable.json();
+    assert.equal(disabled.enabled, false);
+    assert.equal(disabled.updatedBy, 92);
+    assert.equal(conflict.status, 409);
+    const body = await conflict.json();
+    assert.equal(body.errorCode, 'CONFIG_CONFLICT');
+    assert.equal(body.currentUpdatedAt, disabled.updatedAt);
+    await assert.rejects(quote('MED_30', { ...medicalCoupon, couponCode: coupon.code }), { couponReason: 'disabled' });
+    assert.equal(redemptions[0].status, 'reserved');
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('legacy coupon import is idempotent and preserves owner edits', async () => {
+  const raw = JSON.stringify({
+    LEGACY: { percentOff: 25, products: ['MONTHLY_4499'], expiresAt: '2030-01-01T00:00:00Z' },
+    INVALID: { percentOff: 100 },
+    ALL: { percentOff: 5 },
+  });
+  assert.deepEqual(await importCoachingCoupons(db, raw), { processed: 2, skipped: 1 });
+  const legacy = coupons.find(row => row.code === 'LEGACY');
+  assert.deepEqual(legacy.offerKeys, ['MONTHLY_4499']);
+  assert.equal(legacy.activeTo.toISOString(), '2030-01-01T00:00:00.000Z');
+  assert.equal(coupons.find(row => row.code === 'ALL').offerKeys, null);
+  legacy.enabled = false;
+  const snapshot = copy(coupons);
+  await importCoachingCoupons(db, raw);
+  assert.deepEqual(coupons, snapshot);
 });

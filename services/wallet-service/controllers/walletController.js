@@ -1,4 +1,4 @@
-import { settleCoachingPayment } from '../services/coachingService.js';
+import { settleCoachingPayment, markCoachingPaymentFailed } from '../services/coachingService.js';
 import {
   createWalletService,
   getWalletService,
@@ -836,6 +836,7 @@ export const handleRazorpayWebhook = async (req, res) => {
     } else if (event === 'payment.failed') {
       const { order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
+      if (!order || order.purpose === 'coaching') await markCoachingPaymentFailed(orderId);
 
       if (order) {
         const claimed = await claimRazorpayOrderService(orderId);

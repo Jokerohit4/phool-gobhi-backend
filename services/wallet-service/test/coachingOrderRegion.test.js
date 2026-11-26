@@ -2,16 +2,20 @@ import { test, before, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { coachingCatalog } from '../services/coachingCatalog.js';
 
-let service, member, orders, providerOrders;
+let service, member, orders, providerOrders, coupons;
 before(async t => {
   const db = {
     coachingCatalogConfig: { findUnique: async () => null },
-    $queryRaw: async () => [],
+    $queryRaw: async (sql, key) => sql.join('').includes('FOR UPDATE') && coupons[key] ? [coupons[key]] : [],
+    coupon: { findUnique: async ({ where }) => coupons[where.code] },
+    couponRedemption: { create: async () => {}, updateMany: async () => ({ count: 0 }) },
     coachingMembership: { updateMany: async () => ({ count: 0 }), findUnique: async () => member },
     coachingOrder: {
       findFirst: async ({ where }) => orders.find(o => o.userId === where.userId && o.product === where.product && o.status === where.status),
       update: async ({ where, data }) => Object.assign(orders.find(o => o.id === where.id), data),
-      updateMany: async () => ({ count: 0 }),
+      updateManyAndReturn: async ({ where, data }) => orders
+        .filter(order => order.userId === where.userId && order.status === where.status && !order.isAddon)
+        .map(order => Object.assign(order, data)),
       create: async ({ data }) => { const order = { id: orders.length + 1, status: 'PENDING', ...data }; orders.push(order); return order; },
     },
   };
@@ -26,7 +30,7 @@ before(async t => {
 });
 const original = process.env.COACHING_REMOTE_MONTHLY_PRICE_PAISE;
 afterEach(() => { if (original === undefined) delete process.env.COACHING_REMOTE_MONTHLY_PRICE_PAISE; else process.env.COACHING_REMOTE_MONTHLY_PRICE_PAISE = original; });
-function reset() { member = null; orders = []; providerOrders = []; }
+function reset() { member = null; orders = []; providerOrders = []; coupons = {}; }
 
 test('unselected city, unavailable remote pricing and stale quotes cannot create a provider order', async () => {
   reset();delete process.env.COACHING_REMOTE_MONTHLY_PRICE_PAISE;
@@ -58,18 +62,13 @@ test('trainer checkout cannot be used by a guidance-only member', async () => {
   assert.equal(providerOrders.length, 0);
 });
 
-test('coupon quotes revalidate on checkout and reuse only matching orders', async t => {
+test('coupon quotes revalidate on checkout and reuse only matching orders', async () => {
   reset();
-  const oldCoupons = process.env.COACHING_COUPONS_JSON;
-  t.after(() => {
-    if (oldCoupons === undefined) delete process.env.COACHING_COUPONS_JSON;
-    else process.env.COACHING_COUPONS_JSON = oldCoupons;
-  });
   const offer = coachingCatalog('Gurugram').plans[0];
-  process.env.COACHING_COUPONS_JSON = JSON.stringify({
-    SAVE10: { percentOff: 10, products: [offer.product] },
-    EXPIRED: { percentOff: 25, expiresAt: '2020-01-01T00:00:00Z' },
-  });
+  coupons = {
+    SAVE10: { id: 1, code: 'SAVE10', enabled: true, kind: 'percent', value: 10, offerKeys: [offer.product] },
+    EXPIRED: { id: 2, code: 'EXPIRED', enabled: true, kind: 'percent', value: 25, activeTo: new Date('2020-01-01T00:00:00Z') },
+  };
   const selection = { city: 'Gurugram', offerId: offer.offerId, couponCode: ' save10 ' };
   const quote = await service.quoteCoachingOrder(offer.product, selection);
   assert.deepEqual(quote, {

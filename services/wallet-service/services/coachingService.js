@@ -8,10 +8,11 @@ import { membershipBenefits, trainerAddonOffer } from './coachingCatalog.js';
 import { loadCoachingOffer, loadCoachingOfferV2, loadTrainerAddon } from './coachingOfferService.js';
 import { getCoachingConfig } from './coachingConfigService.js';
 import { priceCoachingV2Order, V2_ADDON_BALANCES } from './coachingV2Order.js';
-import { coachingPrice } from './coachingCoupons.js';
+import { coachingPrice, couponHasCapacity, loadCoachingCoupon, redeemCoachingCoupon, rejectCoupon, releaseCouponReservations, requestedCouponCode } from './coachingCoupons.js';
 
 export const COACHING_PRODUCTS = Object.freeze({ MONTHLY_4499: 449900, QUARTERLY_11999: 1199900, TRAINER_ADDON_1499: 149900 });
 const HOUR = 3600000, DAY = HOUR * 24;
+const COUPON_CHECKOUT_TTL_MS = DAY;
 const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 const provider = () => new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_SECRET });
 const emptyV2Balances = { trainerSessionsRemaining: 0, nutritionistSessionsRemaining: 0 };
@@ -24,8 +25,18 @@ const gymFulfillmentPaths = {
   cancel: '/internal/entitlements/cancel',
   addon: '/internal/entitlements/addon-balance',
 };
+const includeCouponStatus = { couponRedemption: { select: { status: true } } };
 function trackCoachingEvent(send) {
   try { void Promise.resolve(send()).catch(() => {}); } catch {}
+}
+async function withCouponTelemetry(userId, run) {
+  try { return await run(); }
+  catch (error) {
+    if (error.couponReason) trackCoachingEvent(() => track('coupon_rejected', userId, {
+      coupon_code: error.couponCode, reason: error.couponReason,
+    }));
+    throw error;
+  }
 }
 export async function eraseCoachingPersonalData(userId) {
   await prisma.$transaction([
@@ -263,10 +274,12 @@ async function prepareV2Checkout(userId, product, selection, member) {
   if (offer.family === 'medical' && !statedCondition && !(await guidanceContext(userId))?.hasUploadedReport) {
     fail('Upload a report or state diabetes or prediabetes to choose a medical plan', 403);
   }
-  const price = priceCoachingV2Order(offer, selection, member?.offerSnapshot?.family);
+  const code = requestedCouponCode(selection.couponCode, !!offer.kind);
+  const coupon = await loadCoachingCoupon(prisma, code);
+  const price = priceCoachingV2Order(offer, selection, member?.offerSnapshot?.family, coupon, new Date());
   checkExpectedAmount(selection, price.amountPaise);
   const offerSnapshot = { ...offer, city: selection.city.trim(), membershipOrderId: member?.activeOrderId ?? null, price };
-  return { offerSnapshot, price, term };
+  return { offerSnapshot, price, term, coupon };
 }
 
 function checkExpectedAmount(selection, amountPaise) {
@@ -279,10 +292,21 @@ async function requireAdultCheckout(userId) {
   if (!eligibleCoachingAccount(await coachingAccount(userId))) fail('Add your exact date of birth in your profile. Guided health support is available to adults aged 18 and over.', 403);
 }
 
-export async function quoteCoachingOrder(product, selection, userId) {
+export function quoteCoachingOrder(product, selection, userId) {
+  return withCouponTelemetry(userId, () => quoteOrder(product, selection, userId));
+}
+
+async function checkAvailableCoupon(coupon, userId) {
+  if (coupon && !await couponHasCapacity(prisma, coupon, userId, { quote: true })) {
+    rejectCoupon(coupon.code, 'limit_reached');
+  }
+}
+
+async function quoteOrder(product, selection, userId) {
   if (isV2Product(product)) {
     await requireAdultCheckout(userId);
-    const { offerSnapshot: offer, price, term } = await prepareV2Checkout(userId, product, selection, await refreshMembership(userId));
+    const { offerSnapshot: offer, price, term, coupon } = await prepareV2Checkout(userId, product, selection, await refreshMembership(userId));
+    await checkAvailableCoupon(coupon, userId);
     trackCoachingEvent(() => track('offer_quote_created', userId, {
       offer_key: offer.key, region: offer.region, amount_paise: price.amountPaise,
       coupon_code: price.couponCode, addon_count: offer.kind ? price.quantity : 0,
@@ -290,10 +314,17 @@ export async function quoteCoachingOrder(product, selection, userId) {
     return { ...price, product, region: offer.region, isRenewal: term.isRenewal, termStartsAt: term.termStartsAt };
   }
   const offer = await loadCoachingOffer(product, selection.city, selection.offerId);
-  return coachingPrice(offer, selection.couponCode);
+  const coupon = await loadCoachingCoupon(prisma, requestedCouponCode(selection.couponCode, false));
+  const price = coachingPrice(offer, coupon, new Date());
+  await checkAvailableCoupon(coupon, userId);
+  return price;
 }
 
-export async function createCoachingOrder(userId, product, selection = {}) {
+export function createCoachingOrder(userId, product, selection = {}) {
+  return withCouponTelemetry(userId, () => createOrder(userId, product, selection));
+}
+
+async function createOrder(userId, product, selection) {
   const v2 = isV2Product(product);
   await requireAdultCheckout(userId);
   const row = await refreshMembership(userId);
@@ -305,7 +336,8 @@ export async function createCoachingOrder(userId, product, selection = {}) {
     ? await loadTrainerAddon(selection.offerId)
     : { ...await loadCoachingOffer(product, selection.city, selection.offerId), city: selection.city.trim() });
   const addon = legacyAddon || !!offerSnapshot.kind;
-  const price = prepared?.price ?? coachingPrice(offerSnapshot, selection.couponCode);
+  const coupon = prepared ? prepared.coupon : await loadCoachingCoupon(prisma, requestedCouponCode(selection.couponCode, addon));
+  const price = prepared?.price ?? coachingPrice(offerSnapshot, coupon, new Date());
   const term = prepared?.term;
   const { amountPaise } = price;
   if (!v2) {
@@ -314,42 +346,89 @@ export async function createCoachingOrder(userId, product, selection = {}) {
   }
   const matchesOffer = order => order?.offerSnapshot?.offerId === offerSnapshot.offerId &&
     order?.offerSnapshot?.region === offerSnapshot.region && order.amountPaise === amountPaise &&
+    (!price.couponCode || !couponCheckoutExpired(order)) &&
     (v2 ? order.offerSnapshot.price?.couponCode === price.couponCode && order.offerSnapshot.price?.quantity === price.quantity &&
       order.offerSnapshot.membershipOrderId === offerSnapshot.membershipOrderId && order.isRenewal === term.isRenewal &&
       +order.termStartsAt === +term.termStartsAt : order.offerSnapshot.discount?.couponCode === price.couponCode);
   if (!v2 && !addon && (hasGuidance(row) || row?.scheduledOrderId)) fail('You already have an active or scheduled guided plan', 409);
-  const existing = await prisma.coachingOrder.findFirst({ where: { userId, product, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+  const pendingOrder = { where: { userId, product, status: 'PENDING' }, ...(price.couponCode && { include: includeCouponStatus }) };
+  const existing = await prisma.coachingOrder.findFirst({ ...pendingOrder, orderBy: { createdAt: 'desc' } });
   const out = order => ({
     orderId: order.orderId, keyId: process.env.RAZORPAY_KEY_ID, amount: order.amountPaise / 100, currency: 'INR',
     product: order.product, title: order.offerSnapshot?.title || null, region: order.offerSnapshot?.region || 'GURUGRAM',
     ...(v2 && { ...order.offerSnapshot.price, isRenewal: order.isRenewal, termStartsAt: order.termStartsAt }),
   });
   if (existing && matchesOffer(existing)) return out(existing);
+  await checkAvailableCoupon(coupon, userId);
   const rpOrder = await provider().orders.create({ amount: amountPaise, currency: 'INR', receipt: `coach-${userId}-${Date.now()}`, notes: { purpose: 'guided_coaching', userId: String(userId), product, region: offerSnapshot.region } });
-  try { return out(await prisma.$transaction(async tx => {
-    await locked(tx, userId);
-    const current = await currentMembership(tx, userId);
-    if (v2) {
-      const currentTerm = v2CheckoutTerm(current, offerSnapshot, new Date());
-      if ((current?.activeOrderId ?? null) !== offerSnapshot.membershipOrderId ||
-        currentTerm.isRenewal !== term.isRenewal || +currentTerm.termStartsAt !== +term.termStartsAt) {
+  try {
+    const created = await prisma.$transaction(async tx => {
+      await locked(tx, userId);
+      const current = await currentMembership(tx, userId);
+      if (v2) {
+        const currentTerm = v2CheckoutTerm(current, offerSnapshot, new Date());
+        if ((current?.activeOrderId ?? null) !== offerSnapshot.membershipOrderId ||
+          currentTerm.isRenewal !== term.isRenewal || +currentTerm.termStartsAt !== +term.termStartsAt) {
+          fail('Your guided plan changed. Refresh before paying.', 409);
+        }
+      } else if (addon ? (!hasGuidance(current) || !membershipBenefits(current).trainerFloorSessions) : hasGuidance(current) || current?.scheduledOrderId) {
         fail('Your guided plan changed. Refresh before paying.', 409);
       }
-    } else if (addon ? (!hasGuidance(current) || !membershipBenefits(current).trainerFloorSessions) : hasGuidance(current) || current?.scheduledOrderId) {
-      fail('Your guided plan changed. Refresh before paying.', 409);
-    }
-    const same = await tx.coachingOrder.findFirst({ where: { userId, product, status: 'PENDING' } });
-    if (same && matchesOffer(same)) return same;
-    if (same) await tx.coachingOrder.update({ where: { id: same.id }, data: { status: 'CANCELLED' } });
-    if (!addon) await tx.coachingOrder.updateMany({ where: { userId, status: 'PENDING', isAddon: false, product: { not: 'TRAINER_ADDON_1499' } }, data: { status: 'CANCELLED' } });
-    return tx.coachingOrder.create({ data: { userId, product, amountPaise, orderId: rpOrder.id, offerSnapshot, isAddon: addon, ...term } });
-  })); }
-  catch (e) {
+      const same = await tx.coachingOrder.findFirst(pendingOrder);
+      if (same && matchesOffer(same)) return { order: same, inserted: false };
+      if (addon && same) await tx.coachingOrder.update({ where: { id: same.id }, data: { status: 'CANCELLED' } });
+      if (!addon) {
+        const cancelled = await tx.coachingOrder.updateManyAndReturn({
+          where: { userId, status: 'PENDING', isAddon: false, product: { not: 'TRAINER_ADDON_1499' } },
+          data: { status: 'CANCELLED' }, select: { orderId: true },
+        });
+        if (cancelled.length) await releaseCouponReservations(tx, cancelled.map(row => row.orderId));
+      }
+      const currentCoupon = await loadCoachingCoupon(tx, price.couponCode, { lock: true });
+      if (currentCoupon) {
+        const now = new Date();
+        const currentPrice = v2 ? priceCoachingV2Order(offerSnapshot, selection, current?.offerSnapshot?.family, currentCoupon, now)
+          : coachingPrice(offerSnapshot, currentCoupon, now);
+        checkExpectedAmount({ expectedAmountPaise: amountPaise }, currentPrice.amountPaise);
+        if (!await couponHasCapacity(tx, currentCoupon, userId)) rejectCoupon(currentCoupon.code, 'limit_reached');
+      }
+      const order = await tx.coachingOrder.create({ data: { userId, product, amountPaise, orderId: rpOrder.id, offerSnapshot, isAddon: addon, ...term } });
+      if (currentCoupon) await tx.couponRedemption.create({ data: { couponId: currentCoupon.id, userId, orderId: order.orderId } });
+      return { order, inserted: true };
+    }, { isolationLevel: 'ReadCommitted' });
+    if (created.inserted && price.couponCode) trackCoachingEvent(() => track('coupon_applied', userId, {
+      coupon_code: price.couponCode, reason: 'applied',
+    }));
+    return out(created.order);
+  } catch (e) {
     if (e.code !== 'P2002') throw e;
-    const pending = await prisma.coachingOrder.findFirst({ where: { userId, product, status: 'PENDING' } });
+    const pending = await prisma.coachingOrder.findFirst(pendingOrder);
     if (!pending || !matchesOffer(pending)) throw e;
     return out(pending);
   }
+}
+
+export async function markCoachingPaymentFailed(orderId) {
+  if (!orderId) return;
+  const order = await prisma.coachingOrder.findUnique({ where: { orderId } });
+  await closePendingCoachingOrder(order, 'FAILED');
+}
+
+function couponCheckoutExpired(order) {
+  return order.couponRedemption?.status === 'reserved' &&
+    Date.now() - order.createdAt >= COUPON_CHECKOUT_TTL_MS;
+}
+
+async function closePendingCoachingOrder(order, status) {
+  if (order?.status !== 'PENDING') return;
+  const { orderId, userId } = order;
+  await prisma.$transaction(async tx => {
+    await locked(tx, userId);
+    const { count } = await tx.coachingOrder.updateMany({
+      where: { orderId, status: 'PENDING' }, data: { status },
+    });
+    if (count) await releaseCouponReservations(tx, [orderId]);
+  });
 }
 
 function v2PaymentEligible(order, member, now) {
@@ -397,6 +476,7 @@ export async function settleCoachingPayment(orderId, paymentId) {
     try { payment = await razorpay.payments.capture(paymentId, order.amountPaise, 'INR'); }
     catch (e) { payment = await razorpay.payments.fetch(paymentId); if (payment.status !== 'captured') throw e; }
   }
+  if (paymentMatches(payment, order) && payment.status === 'failed') await markCoachingPaymentFailed(orderId);
   if (!paymentMatches(payment, order) || payment.status !== 'captured') fail('Payment has not completed yet. Your order will reconcile automatically.', 409);
   const account = await coachingAccount(order.userId);
   const settled = await prisma.$transaction(async tx => {
@@ -411,8 +491,10 @@ export async function settleCoachingPayment(orderId, paymentId) {
         : !hasGuidance(member, now) && !member?.scheduledOrderId;
     // Delayed capture after another purchase or after the plan ends is refunded,
     // never silently discarded or used to reset somebody's current membership.
-    if (!eligibleCoachingAccount(account, now) || currentOrder.status === 'CANCELLED' || !eligible) {
+    if (!eligibleCoachingAccount(account, now) || currentOrder.status === 'CANCELLED' || !eligible ||
+        !await redeemCoachingCoupon(tx, currentOrder)) {
       await tx.coachingOrder.update({ where: { id: order.id }, data: { status: 'DUPLICATE_REFUND', paymentId, refundRequestedAt: now } });
+      if (offer?.price?.couponCode || offer?.discount?.couponCode) await releaseCouponReservations(tx, [orderId]);
       return;
     }
     const hasExistingGym = !!(account.linkedGymId || account.homeUnclaimedGymId || (account.currentlyWorksOut && account.trainingLocationPref === 'gym'));
@@ -430,7 +512,7 @@ export async function settleCoachingPayment(orderId, paymentId) {
     }
     await tx.coachingOrder.update({ where: { id: order.id }, data: { status: 'SUCCESS', paymentId, fulfilledAt: now } });
     return currentOrder;
-  });
+  }, { isolationLevel: 'ReadCommitted' });
   if (isV2(settled?.offerSnapshot)) {
     const offer = settled.offerSnapshot;
     if (offer.kind) {
@@ -451,13 +533,22 @@ export async function settleCoachingPayment(orderId, paymentId) {
   return true;
 }
 export async function reconcileCoaching(userId) {
-  const pending = await prisma.coachingOrder.findMany({ where: { userId, status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } }, take: 10, orderBy: { updatedAt: 'asc' } });
+  const pending = await prisma.coachingOrder.findMany({
+    where: { userId, status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } },
+    take: 10, orderBy: { updatedAt: 'asc' }, include: includeCouponStatus,
+  });
   for (const order of pending) {
     if (order.status.includes('REFUND')) { await refundCoachingOrder(order.id); continue; }
-    const payments = await provider().orders.fetchPayments(order.orderId);
-    const paid = payments.items?.find(p => ['captured', 'authorized'].includes(p.status));
+    const { items = [] } = await provider().orders.fetchPayments(order.orderId);
+    const paid = items.find(p => ['captured', 'authorized'].includes(p.status));
     if (paid) await settleCoachingPayment(order.orderId, paid.id);
-    else await prisma.coachingOrder.updateMany({ where: { id: order.id, status: { in: ['PENDING', 'FAILED', 'CANCELLED'] } }, data: { updatedAt: new Date() } });
+    else if (order.status === 'PENDING' && items.length && items.every(p => p.status === 'failed')) {
+      await closePendingCoachingOrder(order, 'FAILED');
+    } else if (order.status === 'PENDING' && items.length === 0 && couponCheckoutExpired(order)) {
+      await closePendingCoachingOrder(order, 'CANCELLED');
+    } else {
+      await prisma.coachingOrder.updateMany({ where: { id: order.id, status: { in: ['PENDING', 'FAILED', 'CANCELLED'] } }, data: { updatedAt: new Date() } });
+    }
   }
 }
 export async function activateDueCoachingRenewals() {
