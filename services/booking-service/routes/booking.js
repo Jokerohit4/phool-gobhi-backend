@@ -10,6 +10,10 @@ const router = Router();
 router.post('/internal/daily-briefing', requireInternal, ctrl.sendDailyBriefing);
 router.post('/internal/auto-complete', requireInternal, ctrl.autoCompleteSessions);
 router.post('/internal/session-reminders', requireInternal, ctrl.sendSessionReminders);
+router.post('/internal/entitlements', requireInternal, ctrl.createGymEntitlement);
+router.post('/internal/entitlements/cancel', requireInternal, ctrl.cancelGymEntitlement);
+router.post('/internal/entitlements/addon-balance', requireInternal, ctrl.grantGymAddon);
+router.get('/internal/entitlements/:userId', requireInternal, ctrl.getInternalEntitlement);
 router.get('/internal/slot-counts/:gymId', requireInternal, ctrl.getSlotCounts);
 router.get('/internal/slot-counts/:gymId/range', requireInternal, ctrl.getSlotCountsRange);
 // DPDPA access right (s.11). Called by auth-service's platform-wide export
@@ -40,6 +44,7 @@ router.get('/public/attendance-stats', ctrl.getPublicAttendanceStats);
 
 router.post('/', requireRole('customer'), ctrl.createBooking);
 router.get('/mine', requireRole('customer'), ctrl.getMyBookings);
+router.get('/mine/entitlement', requireRole('customer'), ctrl.getMyEntitlement);
 router.get('/mine/attendance-summary', requireRole('customer'), ctrl.getMyAttendanceSummary);
 router.get('/mine/attendance-warnings', requireRole('customer'), ctrl.getMyAttendanceWarnings);
 // Gamification wave 1: lifetime per-gym visit rollup for the badge shelf / fog-of-war map.
@@ -47,6 +52,9 @@ router.get('/mine/visited-gyms', requireRole('customer'), ctrl.getVisitedGyms);
 // gobhi too — the admin portal's /settings page reads this to prefill its editor.
 router.get('/cancellation-policy', requireRole('customer', 'gobhi'), ctrl.getCancellationPolicy);
 router.put('/cancellation-policy', requireRole('gobhi'), ctrl.updateCancellationPolicy);
+router.get('/admin/membership-payout-config', requireRole('gobhi'), ctrl.getMembershipPayoutConfig);
+router.put('/admin/membership-payout-config', requireRole('gobhi'), ctrl.updateMembershipPayoutConfig);
+router.post('/admin/bookings/:id/reverse-checkin-payout', requireRole('gobhi'), ctrl.reverseCheckinPayout);
 router.get('/gym/:gymId', requireRole('partner'), ctrl.getGymBookings);
 router.get('/gym/:gymId/summary', requireRole('partner'), ctrl.getGymSalesSummary);
 router.get('/gym/:gymId/attendance-summary', requireRole('partner'), ctrl.getGymAttendanceSummary);

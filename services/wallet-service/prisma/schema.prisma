@@ -188,9 +188,12 @@ model PartnerBankSettlement {
   partnerId      Int
   gymId          Int
   bookingId      Int
-  subscriptionId Int
+  subscriptionId Int?
+  entitlementId  Int?
+  addonBalanceId Int?
   amount         Decimal   @db.Decimal(19, 2)
   settledAt      DateTime?
+  reversedAt     DateTime?
   createdAt      DateTime  @default(now())
 
   @@index([partnerId, settledAt])
