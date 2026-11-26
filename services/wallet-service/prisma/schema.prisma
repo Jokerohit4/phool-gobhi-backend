@@ -309,6 +309,7 @@ model CoachingOrder {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   couponRedemption CouponRedemption?
+  sessionLogs CoachingSessionLog[]
   @@index([userId, status])
   @@schema("wallet")
 }
@@ -339,6 +340,30 @@ model CouponRedemption {
   coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
   order CoachingOrder @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
   @@index([couponId, status, userId])
+  @@schema("wallet")
+}
+model CoachingSessionLog {
+  id Int @id @default(autoincrement())
+  userId Int
+  kind String
+  mode String
+  heldAt DateTime
+  durationMinutes Int?
+  note String? @db.VarChar(500)
+  loggedBy Int
+  status String @default("logged")
+  confirmedAt DateTime?
+  disputeReason String? @db.VarChar(500)
+  resolution String?
+  resolvedAt DateTime?
+  resolvedBy Int?
+  idempotencyKey String @unique
+  membershipOrderId Int
+  membershipOrder CoachingOrder @relation(fields: [membershipOrderId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt, id])
+  @@index([status, resolution, createdAt, id])
   @@schema("wallet")
 }
 model CoachingAddonGrant {

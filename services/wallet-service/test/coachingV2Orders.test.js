@@ -10,7 +10,7 @@ const userId = 7;
 const day = 86400000;
 let api, configApi, router, extractUser, account, context, config, history, member, orders, grants, records, events, providerOrders, refunds, trackingFailure;
 let coupons, redemptions, locks, failedPayments, beforeProviderOrder, db;
-let bookingRequests, bookingUnavailable;
+let bookingRequests, bookingUnavailable, sessionLogs;
 
 const copy = value => structuredClone(value ?? null);
 function matches(row, where) {
@@ -20,6 +20,7 @@ function matches(row, where) {
     if (value?.in) return value.in.includes(row[key]);
     if (value && typeof value === 'object' && 'not' in value) return row[key] !== value.not;
     if (value?.lte) return row[key] <= value.lte;
+    if (value?.lt) return row[key] < value.lt;
     return row[key] === value;
   });
 }
@@ -42,6 +43,9 @@ before(async t => {
     coupons.push(row);
     return copy(row);
   };
+  const selected = (row, select) => copy(row && select
+    ? Object.fromEntries(Object.keys(select).map(field => [field, row[field]]))
+    : row);
   db = {
     $transaction: async fn => {
       if (Array.isArray(fn)) return Promise.all(fn);
@@ -93,6 +97,9 @@ before(async t => {
       update: async ({ data }) => update(member, data),
       updateMany: async ({ where, data }) => member && matches(member, where) ? (update(member, data), { count: 1 }) : { count: 0 },
     },
+    coachingSubscription: {
+      updateMany: async () => ({ count: 0 }),
+    },
     coachingOrder: {
       findUnique: async ({ where }) => copy(orders.find(row => matches(row, where))),
       findFirst: async ({ where, include }) => orderView(orders.find(row => matches(row, where)), include),
@@ -120,6 +127,11 @@ before(async t => {
     coachingAddonGrant: {
       create: async ({ data }) => grants.push(copy(data)),
       findMany: async () => copy(grants),
+      updateMany: async ({ where, data }) => {
+        const rows = grants.filter(row => matches(row, where));
+        for (const row of rows) update(row, data);
+        return { count: rows.length };
+      },
     },
     coachingFulfillment: {
       findUnique: async ({ where }) => copy(records.find(row => matches(row, where))),
@@ -134,6 +146,28 @@ before(async t => {
         for (const row of rows) update(row, data);
         return { count: rows.length };
       },
+    },
+    coachingSessionLog: {
+      findUnique: async ({ where, select }) => selected(sessionLogs.find(row => matches(row, where)), select),
+      create: async ({ data }) => {
+        const row = {
+          id: sessionLogs.length + 1, status: 'logged', confirmedAt: null, disputeReason: null,
+          resolution: null, resolvedBy: null, resolvedAt: null, createdAt: new Date(), updatedAt: new Date(), ...copy(data),
+        };
+        sessionLogs.push(row);
+        return copy(row);
+      },
+      findMany: async ({ where, select, orderBy, skip, take }) => {
+        assert.deepEqual(orderBy, [{ createdAt: 'desc' }, { id: 'desc' }]);
+        return sessionLogs.filter(row => matches(row, where))
+          .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id)
+          .slice(skip, skip + take).map(row => selected(row, select));
+      },
+      count: async ({ where }) => sessionLogs.filter(row => matches(row, where)).length,
+      update: async ({ where, data }) => update(sessionLogs.find(row => matches(row, where)), data),
+      updateManyAndReturn: async ({ where, data, select }) => sessionLogs.filter(row => matches(row, where))
+        .map(row => selected(update(row, data), select)),
+      deleteMany: async ({ where }) => { sessionLogs = sessionLogs.filter(row => !matches(row, where)); },
     },
   };
   t.mock.module('../db/prisma.js', { exports: { default: db } });
@@ -190,6 +224,7 @@ beforeEach(() => {
   config = member = trackingFailure = null;
   orders = []; grants = []; records = []; events = []; providerOrders = []; refunds = []; history = [];
   bookingRequests = [];
+  sessionLogs = [];
   bookingUnavailable = false;
   locks = new Map();
   failedPayments = new Set();
@@ -435,6 +470,9 @@ test('booking-service failure leaves the payment successful and internal reconci
   assert.equal(orders.find(row => row.orderId === order.orderId).status, 'SUCCESS');
   const fulfillment = records.find(row => row.kind === api.GYM_ENTITLEMENT_SYNC);
   assert.equal(fulfillment.status, 'PENDING');
+  const session = await db.coachingSessionLog.create({
+    data: { userId, kind: 'nutritionist', mode: 'online', createdAt: new Date(Date.now() - 3 * day) },
+  });
 
   bookingUnavailable = false;
   const app = express();
@@ -446,12 +484,221 @@ test('booking-service failure leaves the payment successful and internal reconci
     assert.equal((await fetch(url, { method: 'POST' })).status, 403);
     const response = await fetch(url, { method: 'POST', headers: { 'x-internal-key': 'test-reconcile-key' } });
     assert.equal(response.status, 200);
+    assert.equal(sessionLogs.find(row => row.id === session.id).status, 'auto_confirmed');
     assert.equal(fulfillment.status, 'COMPLETED');
     assert.deepEqual(bookingRequests.map(row => row.delivered), [false, true]);
     assert.deepEqual(bookingRequests[0].body, bookingRequests[1].body);
+    await db.coachingSessionLog.create({
+      data: { userId, kind: 'trainer', mode: 'online', createdAt: new Date(Date.now() - 3 * day) },
+    });
+    const standalone = await fetch(url.replace('/reconcile', '/auto-confirm'), {
+      method: 'POST', headers: { 'x-internal-key': 'test-reconcile-key' },
+    });
+    assert.equal(standalone.status, 200);
+    assert.deepEqual((await standalone.json()).data, { autoConfirmed: 1 });
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
+});
+
+const staffId = 91;
+function sessionInput(overrides = {}) {
+  return {
+    kind: 'nutritionist', mode: 'online', heldAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    durationMinutes: 30, note: 'Private session note', idempotencyKey: 'session-log-1', ...overrides,
+  };
+}
+const logSession = overrides => api.logCoachingSession(userId, staffId, sessionInput(overrides));
+const sessionEvents = () => events.filter(([name]) => name.startsWith('coaching_session_'));
+
+async function buyNutritionSessions() {
+  await buy('WELL_GYM');
+  await buy('ADDON_NUTRITIONIST', { quantity: 2 });
+}
+
+test('logging uses the matching balance and returns the original on concurrent and later replays', async () => {
+  await buyNutritionSessions();
+  const [first, retry] = await Promise.all([logSession(), logSession()]);
+  assert.deepEqual(first, retry);
+  assert.equal(first.status, 'logged');
+  assert.equal(first.membershipOrderId, member.activeOrderId);
+  assert.equal(first.loggedBy, staffId);
+  assert.equal(member.nutritionistSessionsRemaining, 1);
+  assert.equal(member.trainerSessionsRemaining, 0);
+  assert.equal(sessionLogs.length, 1);
+  assert.equal(records.filter(row => row.kind === 'NUTRITIONIST_SESSION').length, 1);
+
+  member.planStatus = 'INACTIVE';
+  account.isActive = false;
+  assert.deepEqual(await logSession({ kind: 'trainer', note: 'Changed body' }), first);
+  assert.deepEqual(sessionEvents(), [['coaching_session_logged', userId, { kind: 'nutritionist', mode: 'online' }]]);
+});
+
+test('logging refuses zero balance, inactive plans, and keys already used for legacy fulfillment', async () => {
+  await buy('WELL_GYM');
+  await assert.rejects(logSession(), { status: 409, message: 'No sessions of this kind remain' });
+  await buy('ADDON_NUTRITIONIST');
+  const key = 'session-used';
+  await api.consumeSession(userId, 'NUTRITIONIST_SESSION', staffId, key);
+  await assert.rejects(logSession({ idempotencyKey: key }), { status: 409, message: 'This request identifier was already used for session fulfillment' });
+  member.planStatus = 'INACTIVE';
+  await assert.rejects(logSession(), { status: 409, message: 'The guided plan is not active' });
+  assert.equal(sessionLogs.length, 0);
+  assert.deepEqual(sessionEvents(), []);
+});
+
+test('logging validates input and limits in-person sessions to Gurugram', async () => {
+  await buy('MED_30', { statedCondition: 'diabetes' }, 'Mumbai');
+  await assert.rejects(logSession({ kind: 'gym' }), { status: 400 });
+  await assert.rejects(logSession({ mode: 'phone' }), { status: 400 });
+  await assert.rejects(logSession({ heldAt: '2025-02-30T10:00:00Z' }), { status: 400 });
+  await assert.rejects(logSession({ heldAt: new Date(Date.now() + day).toISOString() }), { status: 400 });
+  await assert.rejects(logSession({ durationMinutes: 0 }), { status: 400 });
+  await assert.rejects(logSession({ note: 'x'.repeat(501) }), { status: 400 });
+  await assert.rejects(logSession({ kind: 'trainer', mode: 'in_person' }), { status: 409 });
+  const logged = await logSession({ kind: 'trainer', durationMinutes: null, note: null });
+  assert.equal(logged.durationMinutes, null);
+  assert.equal(logged.note, null);
+  assert.equal(member.trainerSessionsRemaining, 3);
+});
+
+test('session HTTP routes enforce roles, ownership, and newest-first pagination', async t => {
+  await buyNutritionSessions();
+  const app = express();
+  app.use('/coaching', express.json(), extractUser, router);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const base = 'http://127.0.0.1:' + server.address().port + '/coaching';
+  const request = (path, { role = 'customer', actor = userId, body } = {}) => fetch(base + path, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'x-user-id': String(actor), 'x-user-role': role, 'Content-Type': 'application/json' },
+    body: body && JSON.stringify(body),
+  });
+  const logPath = '/admin/fulfillment/' + userId + '/session-log';
+  assert.equal((await request(logPath, { body: sessionInput() })).status, 403);
+  const created = await request(logPath, { role: 'gobhi', actor: staffId, body: sessionInput() });
+  assert.equal(created.status, 200);
+  const first = (await created.json()).data;
+  const second = await logSession({ idempotencyKey: 'session-log-2' });
+  await db.coachingSessionLog.create({ data: { ...sessionLogs[0], id: second.id + 1, userId: 8 } });
+
+  const page = (await (await request('/sessions/mine?page=1&limit=1')).json()).data;
+  assert.equal(page.total, 2);
+  assert.equal(page.sessions[0].id, second.id);
+  assert.equal(page.sessions[0].note, 'Private session note');
+  assert.equal('loggedBy' in page.sessions[0], false);
+  assert.equal('idempotencyKey' in page.sessions[0], false);
+  const next = (await (await request('/sessions/mine?page=2&limit=1')).json()).data;
+  assert.equal(next.sessions[0].id, first.id);
+
+  const path = '/sessions/' + first.id;
+  assert.equal((await request(path + '/confirm', { actor: 8, body: {} })).status, 404);
+  assert.equal((await request(path + '/dispute', { actor: 8, body: { reason: 'Wrong customer' } })).status, 404);
+  assert.equal((await request(path + '/confirm', { role: 'gobhi', actor: staffId, body: {} })).status, 403);
+  assert.equal((await request(path + '/confirm', { body: {} })).status, 200);
+  assert.equal((await request(path + '/confirm', { body: {} })).status, 409);
+  assert.equal((await request(path + '/dispute', { body: { reason: 'Already confirmed' } })).status, 409);
+  assert.equal((await request('/admin/sessions/disputed')).status, 403);
+  const disputeResponse = await request('/sessions/' + second.id + '/dispute', { body: { reason: 'Review requested' } });
+  assert.equal(disputeResponse.status, 200);
+  const listResponse = await request('/admin/sessions/disputed', { role: 'gobhi', actor: staffId });
+  assert.equal((await listResponse.json()).data.sessions[0].id, second.id);
+  const resolvePath = '/admin/sessions/' + second.id + '/resolve';
+  const resolution = { resolution: 'recredited' };
+  assert.equal((await request(resolvePath, { body: resolution })).status, 403);
+  const resolved = await request(resolvePath, { role: 'gobhi', actor: staffId, body: resolution });
+  assert.equal((await resolved.json()).data.resolution, 'recredited');
+  assert.equal((await request('/internal/auto-confirm', { body: {} })).status, 403);
+});
+
+test('disputing keeps the balance consumed and upholding it closes the staff queue item', async () => {
+  await buyNutritionSessions();
+  const row = await logSession();
+  await assert.rejects(api.disputeCoachingSession(userId, row.id, ' '), { status: 400 });
+  const disputed = await api.disputeCoachingSession(userId, row.id, '  This session did not take place.  ');
+  assert.equal(disputed.disputeReason, 'This session did not take place.');
+  assert.equal(member.nutritionistSessionsRemaining, 1);
+  assert.deepEqual((await api.listDisputedCoachingSessions({})).sessions.map(row => row.id), [row.id]);
+  await assert.rejects(api.confirmCoachingSession(userId, row.id), { status: 409 });
+  const upheld = await api.resolveCoachingSession(row.id, staffId, 'upheld');
+  assert.equal(upheld.resolvedBy, staffId);
+  assert.equal(upheld.resolution, 'upheld');
+  assert.deepEqual(await api.resolveCoachingSession(row.id, 92, 'upheld'), upheld);
+  await assert.rejects(api.resolveCoachingSession(row.id, staffId, 'recredited'), { status: 409 });
+  assert.equal(member.nutritionistSessionsRemaining, 1);
+  assert.equal((await api.listDisputedCoachingSessions({})).total, 0);
+});
+
+test('concurrent re-credit retries restore exactly one session and cannot credit a replacement term', async () => {
+  await buyNutritionSessions();
+  const row = await logSession();
+  await api.disputeCoachingSession(userId, row.id, 'Wrong session');
+  const membershipOrderId = member.activeOrderId;
+  member.activeOrderId++;
+  await assert.rejects(api.resolveCoachingSession(row.id, staffId, 'recredited'), { status: 409 });
+  assert.equal(member.nutritionistSessionsRemaining, 1);
+  member.activeOrderId = membershipOrderId;
+  const [first, retry] = await Promise.all([
+    api.resolveCoachingSession(row.id, staffId, 'recredited'),
+    api.resolveCoachingSession(row.id, staffId, 'recredited'),
+  ]);
+  assert.deepEqual(first, retry);
+  assert.equal(first.resolution, 'recredited');
+  assert.equal(member.nutritionistSessionsRemaining, 2);
+  assert.equal((await api.listDisputedCoachingSessions({})).total, 0);
+});
+
+test('auto-confirm uses the age of the log and touches only older logged rows once', async () => {
+  await buyNutritionSessions();
+  await logSession();
+  await logSession({ idempotencyKey: 'session-log-2', heldAt: new Date(Date.now() - 5 * day).toISOString() });
+  const now = new Date();
+  const cutoff = new Date(+now - 2 * day);
+  sessionLogs[0].createdAt = new Date(+cutoff - 1);
+  sessionLogs[1].createdAt = cutoff;
+  await db.coachingSessionLog.create({ data: { ...sessionLogs[0], id: 3, status: 'disputed' } });
+  await db.coachingSessionLog.create({ data: { ...sessionLogs[0], id: 4, status: 'confirmed' } });
+  assert.deepEqual(await api.autoConfirmCoachingSessions(now), { autoConfirmed: 1 });
+  assert.deepEqual(await api.autoConfirmCoachingSessions(now), { autoConfirmed: 0 });
+  assert.deepEqual(sessionLogs.map(row => row.status), ['auto_confirmed', 'logged', 'disputed', 'confirmed']);
+  assert.deepEqual(sessionLogs[0].confirmedAt, now);
+  assert.equal(member.nutritionistSessionsRemaining, 0);
+});
+
+test('session events include only kind and mode, and telemetry errors do not fail operations', async () => {
+  await buyNutritionSessions();
+  await buy('ADDON_TRAINER', { quantity: 1 });
+  trackingFailure = 'sync';
+  const first = await logSession({ kind: 'trainer', mode: 'in_person' });
+  await api.confirmCoachingSession(userId, first.id);
+  trackingFailure = 'async';
+  const second = await logSession({ idempotencyKey: 'session-log-2' });
+  await api.disputeCoachingSession(userId, second.id, 'Private reason');
+  await logSession({ idempotencyKey: 'session-log-3' });
+  sessionLogs[2].createdAt = new Date(Date.now() - 3 * day);
+  assert.deepEqual(await api.autoConfirmCoachingSessions(), { autoConfirmed: 1 });
+  const trainer = { kind: 'trainer', mode: 'in_person' };
+  const nutritionist = { kind: 'nutritionist', mode: 'online' };
+  assert.deepEqual(sessionEvents(), [
+    ['coaching_session_logged', userId, trainer],
+    ['coaching_session_confirmed', userId, trainer],
+    ['coaching_session_logged', userId, nutritionist],
+    ['coaching_session_disputed', userId, nutritionist],
+    ['coaching_session_logged', userId, nutritionist],
+    ['coaching_session_confirmed', userId, nutritionist],
+  ]);
+});
+
+test('coaching account erasure removes private logs while retaining purchase records', async () => {
+  await buyNutritionSessions();
+  const row = await logSession();
+  await api.disputeCoachingSession(userId, row.id, 'Private reason');
+  assert.deepEqual(await api.eraseCoachingPersonalData(userId), { erased: true, financialRecordsRetained: true });
+  assert.equal(sessionLogs.length, 0);
+  assert.equal(orders.length, 2);
+  assert.equal(member.planStatus, 'INACTIVE');
+  assert.equal((await api.listDisputedCoachingSessions({})).total, 0);
 });
 
 test('scheduled gym renewal activates only when due and a refunded term queues cancellation', async t => {
