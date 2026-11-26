@@ -1219,7 +1219,7 @@
       "phool_gobhi"
     ],
     "since": "2026-11-07",
-    "notes": "a consent surface was put in front of the user. props consent_kind (health | ledger). health fires when the status loads and consent is not yet granted; ledger fires when the combined consent screen opens. The denominator for the *_consent_granted events: grants / prompts shown is the real consent rate"
+    "notes": "a consent surface was put in front of the user. props consent_kind (health | ledger | model_training). health fires when the status loads and consent is not yet granted; ledger fires when the combined consent screen opens; model_training fires when the optional model-training consent prompt opens. The denominator for the *_consent_granted events: grants / prompts shown is the real consent rate"
   },
   "workout_started": {
     "source": "client",
@@ -1435,5 +1435,131 @@
     ],
     "since": "2026-11-23",
     "notes": "the user tapped a push and the app opened. props notification_id, push_type, app_state (foreground|background|terminated|unknown; state at tap time), seconds_since_sent (optional). Replaces nudge_opened (push_type nudge:<nudge>)"
+  },
+  "offer_viewed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-11-26",
+    "notes": "an offer was viewed. Props offer_key, family and region."
+  },
+  "offer_renewal_prompt_shown": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-11-26",
+    "notes": "a renewal prompt was shown. Props offer_key and days_left."
+  },
+  "onboarding_log_prompt_shown": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-11-26",
+    "notes": "the onboarding logging prompt was shown. No event-specific props."
+  },
+  "onboarding_log_prompt_completed": {
+    "source": "client",
+    "app": "phool_gobhi",
+    "since": "2026-11-26",
+    "notes": "the onboarding logging prompt was completed. Prop action (report | meal | workout)."
+  },
+  "offer_quote_created": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. an offer quote was created. Props offer_key, region, amount_paise, coupon_code (campaign code), and addon_count."
+  },
+  "offer_purchased": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. an offer payment settled. Props offer_key, family, region, amount_paise, coupon_code (campaign code), and is_renewal."
+  },
+  "addon_purchased": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. an add-on was purchased. Props addon_key, quantity and discount_pct."
+  },
+  "coupon_applied": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a coupon was applied. Props coupon_code (campaign code) and reason (coded outcome)."
+  },
+  "coupon_rejected": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a coupon was rejected. Props coupon_code (campaign code) and reason (coded outcome)."
+  },
+  "offer_refund_requested": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. an offer refund was requested. Props offer_key, family and hours_since_purchase."
+  },
+  "coaching_session_logged": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a coaching session was logged. Props kind (trainer | nutritionist) and mode (online | in_person)."
+  },
+  "coaching_session_confirmed": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a coaching session was confirmed. Props kind (trainer | nutritionist) and mode (online | in_person)."
+  },
+  "coaching_session_disputed": {
+    "source": "server",
+    "service": "wallet-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a coaching session was disputed. Props kind (trainer | nutritionist) and mode (online | in_person)."
+  },
+  "membership_activated": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a membership term began. Props offer_key, source (activation source) and ends_at (ISO 8601 timestamp)."
+  },
+  "membership_visit_checked_in": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a member checked in. Props gym_id and covered_by (entitlement | addon)."
+  },
+  "membership_visit_payout_credited": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. the visit payout was credited. Props gym_id, amount_paise and channel (wallet | bank)."
+  },
+  "membership_visit_payout_failed": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. the visit payout was failed. Props gym_id, amount_paise and channel (wallet | bank)."
+  },
+  "membership_visit_payout_reversed": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. the visit payout was reversed. Props gym_id, amount_paise and channel (wallet | bank)."
+  },
+  "membership_addon_visit_consumed": {
+    "source": "server",
+    "service": "booking-service",
+    "since": "2026-11-26",
+    "notes": "registered ahead of the feature, not emitted yet. a membership add-on visit was consumed. Props gym_id and remaining."
+  },
+  "model_training_consent_granted": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-11-26",
+    "notes": "the user granted model-training consent. Prop version (policy version)."
+  },
+  "model_training_consent_revoked": {
+    "source": "server",
+    "service": "health-service",
+    "since": "2026-11-26",
+    "notes": "the user withdrew model-training consent. Prop version (policy version of the withdrawn grant)."
   }
 }

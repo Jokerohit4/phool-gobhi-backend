@@ -97,6 +97,7 @@ export async function deleteAllDataService(userId) {
     // In-app ledger choices are independent from OS health access, but are
     // still per-user consent records and must be erased with the account.
     prisma.ledgerConsent.deleteMany({ where: { userId } }),
+    prisma.modelTrainingConsent.deleteMany({ where: { userId } }),
     // The body-numbers consent row goes with the account like the device one.
     // It carries no values - only that consent was given and when - but it is
     // a per-person record and has no purpose once the person is gone.
