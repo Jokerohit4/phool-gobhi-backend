@@ -11,7 +11,7 @@ const fingerprint = 'a'.repeat(64);
 const report = { id: 1, userId: 7, fileName: 'report.pdf', storagePath: 'private/7/report', status: 'COMPLETED', createdAt: new Date('2026-11-01'), reportDate: null, proposedProfile: { name: 'Patient' }, extractions: [{ id: 11, metric: 'hba1c', normalizedValue: 7.1 }] };
 const db = {
   healthReport: {
-    findFirst: async ({ where }) => where.userId === 7 && (where.id === 1 || where.fileSha256 === fingerprint) ? report : null,
+    findFirst: async ({ where }) => where.userId === 7 && (where.id === 1 || where.fileSha256 === fingerprint || (where.id === undefined && where.fileSha256 === undefined)) ? report : null,
     update: async ({ data }) => Object.assign(report, data),
     updateMany: async ({ where, data }) => {
       if (Object.entries(where).some(([key, value]) => report[key] !== value)) return { count: 0 };
@@ -22,6 +22,7 @@ const db = {
   guidanceProfile: {
     findUnique: async () => profile,
     upsert: async ({ create, update }) => profile = profile ? { ...profile, ...update } : create,
+    update: async ({ data }) => profile = { ...profile, ...data },
     updateMany: async ({ where, data }) => { if (!profile || where.sourceReportId !== profile.sourceReportId || +where.confirmedAt !== +profile.confirmedAt) return { count: 0 }; Object.assign(profile, data); return { count: 1 }; },
   },
   reportExtraction: { update: async () => ({}), delete: async () => ({}) },
@@ -29,6 +30,7 @@ const db = {
   guidanceRequest: { findFirst: async () => requests[0], create: async ({ data }) => { const row = { id: requests.length + 1, ...data };requests.push(row);return row; } },
 };
 db.$transaction = async fn => fn(db);
+db.$executeRaw = async () => {};
 before(async t => {
   t.mock.module('../db/prisma.js', { exports: { default: db } });
   t.mock.module('../middleware/requireFeatureFlag.js', { exports: { requireFeatureFlag: () => (_req, _res, next) => next() } });
@@ -53,8 +55,8 @@ before(async t => {
   base = `http://127.0.0.1:${server.address().port}`;
 });
 after(() => new Promise(resolve => server.close(resolve)));
-async function call(path, body, { role = 'customer', user = 7 } = {}) {
-  const response = await fetch(base + path, { method: body === undefined ? 'GET' : 'POST', headers: { 'x-user-id': String(user), 'x-user-role': role, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+async function call(path, body, { role = 'customer', user = 7, method = body === undefined ? 'GET' : 'POST', key } = {}) {
+  const response = await fetch(base + path, { method, headers: { 'x-user-id': String(user), 'x-user-role': role, 'Content-Type': 'application/json', ...(key ? { 'x-internal-key': key } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   return { status: response.status, body: await response.json() };
 }
 const confirmation = { belongsToMe: true, details: { name: 'Priya', gender: 'female', age: 31, address: 'Indiranagar' }, markers: { hba1c: 7.1 }, liverFlag: false };
@@ -90,6 +92,9 @@ test('unconfirmed identity and invalid values never write health data', async ()
 test('confirmation stores explicit identity and verified markers without inventing DOB', async () => {
   const result = await call('/guidance/reports/1/confirm', confirmation);
   assert.equal(result.status, 200);assert.equal(profile.riskBucket, 'RED');assert.equal(profile.confirmedDetails.age, 31);assert.equal(profile.confirmedDetails.dateOfBirth, undefined);assert.equal(writtenBiometrics, 1);
+  assert.equal(profile.hasCondition, true);
+  assert.equal(profile.conditionSource, 'report');
+  assert.equal(profile.conditionType, null);
   assert.equal(pushes.length, 1);assert.equal(pushes[0].userId, 7);assert.equal(pushes[0].notice.data.type, 'report_risk');
 });
 test('customers cannot write clinical clearance; a named clinician and current report are required', async () => {
@@ -166,4 +171,76 @@ test('an older report with readings and missing patient details can be re-read o
   assert.equal(reread.status, 200);
   assert.equal(reread.body.data.canReadAgain, false);
   assert.deepEqual(reread.body.data.proposedProfile, { name: null, age: 31 });
+});
+
+const conditionPath = '/guidance/profile/condition';
+const answer = body => call(conditionPath, body, { method: 'PUT' });
+
+test('the customer can see and change their own self-declared answer', async () => {
+  profile = null;
+  assert.deepEqual((await call(conditionPath)).body.data, {
+    hasCondition: null, conditionType: null, conditionSource: null, conditionDeclaredAt: null, region: null,
+  });
+  assert.equal((await answer({ hasCondition: 'true' })).status, 400);
+  assert.equal((await answer({ hasCondition: false, conditionType: 'diabetes' })).status, 400);
+  assert.equal((await answer({ hasCondition: true, conditionType: 'other' })).status, 400);
+  const declared = (await answer({ hasCondition: true, conditionType: 'prediabetes' })).body.data;
+  assert.equal(declared.conditionSource, 'self_declared');
+  assert.equal(declared.conditionType, 'prediabetes');
+  assert.ok(Number.isFinite(Date.parse(declared.conditionDeclaredAt)));
+  const changed = (await answer({ hasCondition: false })).body.data;
+  assert.equal(changed.hasCondition, false);
+  assert.equal(changed.conditionType, null);
+  assert.deepEqual((await call(conditionPath)).body.data, changed);
+});
+
+test('confirming a report upgrades false, preserves true, and locks report-sourced answers for customers', async () => {
+  await answer({ hasCondition: false });
+  const confirm = () => call('/guidance/reports/1/confirm', confirmation);
+  assert.equal((await confirm()).status, 200);
+  assert.equal(profile.hasCondition, true);
+  assert.equal(profile.conditionSource, 'report');
+  assert.deepEqual(await answer({ hasCondition: false }), {
+    status: 409, body: { error: 'Your report set this answer. Contact support to change it.' },
+  });
+  assert.equal((await answer({ hasCondition: true, conditionType: 'diabetes' })).status, 409);
+  assert.equal((await answer({ hasCondition: true })).status, 200);
+  const staffPath = '/guidance/admin/7/condition';
+  assert.equal((await call(staffPath, { hasCondition: false }, { method: 'PUT' })).status, 403);
+  assert.equal((await call(staffPath, { hasCondition: false }, { method: 'PUT', role: 'gobhi' })).body.data.hasCondition, false);
+  await answer({ hasCondition: true, conditionType: 'diabetes' });
+  const declared = (await call(conditionPath)).body.data;
+  assert.equal((await confirm()).status, 200);
+  assert.deepEqual((await call(conditionPath)).body.data, declared);
+});
+
+test('internal checkout persists a declaration and normalized region, preserving a report answer', async t => {
+  const key = 'guidance-test-key';
+  const previousKey = process.env.INTERNAL_API_KEY;
+  process.env.INTERNAL_API_KEY = key;
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.INTERNAL_API_KEY;
+    else process.env.INTERNAL_API_KEY = previousKey;
+  });
+  profile = null;
+  const context = '/guidance/internal/7';
+  const submit = (body, auth = key) => call(`${context}/condition`, body, { method: 'PUT', key: auth });
+  assert.equal((await submit({ region: 'GURUGRAM' }, 'wrong')).status, 403);
+  assert.equal((await submit({ region: 'Gurgaon' })).status, 400);
+  const fields = (await submit({ region: 'REST_INDIA', statedCondition: 'diabetes' })).body.data;
+  assert.equal(fields.conditionType, 'diabetes');
+  assert.equal(fields.conditionSource, 'self_declared');
+  assert.equal(fields.region, 'REST_INDIA');
+  const current = (await call(context, undefined, { key })).body.data;
+  assert.deepEqual(current, { userId: 7, ...fields, hasUploadedReport: true });
+  await answer({ hasCondition: false });
+  await call('/guidance/reports/1/confirm', confirmation);
+  assert.deepEqual(await submit({ region: 'GURUGRAM', statedCondition: 'prediabetes' }), {
+    status: 409, body: { error: 'Your report set this answer. Contact support to change it.' },
+  });
+  const writing = (await submit({ region: 'GURUGRAM' })).body.data;
+  assert.equal(writing.hasCondition, true);
+  assert.equal(writing.conditionSource, 'report');
+  assert.equal(writing.conditionType, null);
+  assert.equal(writing.region, 'GURUGRAM');
 });

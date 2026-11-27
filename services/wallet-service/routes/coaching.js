@@ -32,7 +32,13 @@ router.put('/mine', requireRole('customer'), run(async req => {
   return membershipView(req.userId);
 }));
 router.get('/catalog', requireRole('customer'), run(req => loadCoachingCatalog(req.query.city)));
-router.get('/catalog/v2', requireRole('customer'), run(req => loadCoachingCatalogV2(req.query.city)));
+router.get('/catalog/v2', requireRole('customer'), run(async req => {
+  const catalog = await loadCoachingCatalogV2(req.query.city);
+  const context = await guidanceContext(req.userId);
+  const hasCondition = context?.hasCondition ?? null;
+  const suggestedFamily = hasCondition === null ? null : hasCondition ? 'medical' : 'wellness';
+  return { ...catalog, eligibility: { hasCondition, suggestedFamily } };
+}));
 router.get('/admin/config', requireRole('gobhi'), run(async () => ({ ...(await getCoachingConfig()), history: await coachingConfigHistory() })));
 router.put('/admin/config', requireRole('gobhi'), run(req => saveCoachingConfig(req.body.config, req.body.expectedVersion, req.userId)));
 router.get('/admin/coupons', requireRole('gobhi'), run(() => listCoachingCoupons()));
@@ -61,7 +67,7 @@ router.post('/labs', requireRole('customer'), run(async req => {
 }));
 router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId), { includeGymBalance: false })));
 router.post('/internal/auto-confirm', requireInternal, run(() => autoConfirmCoachingSessions()));
-router.post('/internal/reconcile', requireInternal, run(async () => {
+const runReconciliation = run(async () => {
   await autoConfirmCoachingSessions();
   await activateDueCoachingRenewals();
   await retryGymFulfillment();
@@ -70,7 +76,15 @@ router.post('/internal/reconcile', requireInternal, run(async () => {
   for (const { userId } of users) { await reconcileCoaching(userId); reconciled++; }
   await notifyCoachingFulfillment();
   return { reconciled };
-}));
+});
+router.post('/internal/reconcile', requireInternal, runReconciliation);
+router.post('/internal/scheduler/reconcile', (req, res, next) => {
+  if (!process.env.K_SERVICE) return requireInternal(req, res, next);
+  // The gateway supplies its own Cloud Run identity and sets a customer or staff user header.
+  // Only direct IAM invocations may use the scheduler endpoint.
+  if (req.get('x-user-id') !== undefined) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}, runReconciliation);
 router.get('/admin/fulfillment', requireRole('gobhi'), run(async () => {
   const users = await prisma.coachingMembership.findMany({ where: { planType: { not: 'FREE' } }, orderBy: { updatedAt: 'desc' }, take: 200 });
   const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
