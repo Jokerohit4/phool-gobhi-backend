@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { requireFeatureFlag, requireAnyFeatureFlag } from '../middleware/requireFeatureFlag.js';
 import * as consentCtrl from '../controllers/consentController.js';
+import * as modelTrainingConsentCtrl from '../controllers/modelTrainingConsentController.js';
 import * as exerciseCtrl from '../controllers/exerciseController.js';
 import * as templateCtrl from '../controllers/templateController.js';
 import * as routineCatalogueCtrl from '../controllers/routineCatalogueController.js';
@@ -254,6 +255,10 @@ router.post('/consent', ...consentGated, requireAdult, consentCtrl.grantConsent)
 router.delete('/consent', ...consentGated, consentCtrl.revokeConsent);
 router.get('/consent/status', ...consentGated, consentCtrl.getConsentStatus);
 
+router.get('/model-training/consent', requireAuth, modelTrainingConsentCtrl.getConsent);
+router.post('/model-training/consent', requireAuth, requireAdult, modelTrainingConsentCtrl.grantConsent);
+router.delete('/model-training/consent', requireAuth, modelTrainingConsentCtrl.revokeConsent);
+
 // ---- Exercise library ------------------------------------------------
 router.get('/exercises', ...workoutGated, exerciseCtrl.searchExercises);
 router.post('/exercises', ...workoutGated, exerciseCtrl.createCustomExercise);
@@ -456,6 +461,7 @@ router.post('/internal/erase/:userId', requireInternal, consentCtrl.eraseUserInt
 // by auth-service's platform-wide export fan-out; internal only, never
 // reachable through the gateway.
 router.get('/internal/export/:userId', requireInternal, exportCtrl.exportUserInternal);
+router.get('/internal/model-training/consent/:userId', requireInternal, modelTrainingConsentCtrl.getConsentInternal);
 // Multi-user daily-activity feed for booking-service's leaderboard score
 // (ids + from/to). Internal only — the public /daily-activity read stays
 // strictly per-user.
