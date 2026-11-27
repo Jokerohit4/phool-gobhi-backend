@@ -4,6 +4,7 @@ import * as exportService from '../services/exportService.js';
 import * as checkinDaysService from '../services/checkinDaysService.js';
 import { parseLimit, parseCursor } from '../utils/pagination.js';
 import { errorBody } from '../utils/configConcurrency.js';
+import * as membership from '../services/membershipService.js';
 
 const MY_BOOKINGS_DEFAULT_LIMIT = 50;
 const MY_BOOKINGS_MAX_LIMIT = 100;
@@ -18,9 +19,51 @@ export const createBooking = async (req, res) => {
     const booking = await bookingService.createBooking(req.userId, { gymId, date, startTime, endTime, classId });
     res.status(201).json({ data: booking });
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+    res.status(err.status || 500).json({
+      error: err.error || err.message || 'Server error',
+      ...(err.code === 'CLEARANCE_REQUIRED' ? { code: err.code } : {}),
+    });
   }
 };
+
+function membershipHandler(handle) {
+  return async (req, res) => {
+    try {
+      res.json({ data: await handle(req) });
+    } catch (err) {
+      res.status(err.status || 500).json(errorBody(err));
+    }
+  };
+}
+
+export const createGymEntitlement = membershipHandler(req => membership.createGymEntitlement(req.body ?? {}));
+export const cancelGymEntitlement = membershipHandler(req => membership.cancelGymEntitlement(req.body?.orderRef));
+export const grantGymAddon = membershipHandler(req => membership.grantGymAddon(req.body ?? {}));
+export const getMembershipPayoutConfig = membershipHandler(() => membership.getMembershipPayoutConfig());
+export const updateMembershipPayoutConfig = membershipHandler(req =>
+  membership.updateMembershipPayoutConfig(req.body?.payoutPaise, req.userId, req.body?.expectedUpdatedAt));
+
+export const getMyEntitlement = membershipHandler(async req => {
+  const result = await membership.getCustomerEntitlement(req.userId);
+  if (result.clearanceRequired) {
+    result.clearanceRequired = await bookingService.membershipClearanceRequired(req.userId);
+  }
+  return result;
+});
+
+export const getInternalEntitlement = membershipHandler(req => {
+  const customerId = Number(req.params.userId);
+  if (!Number.isInteger(customerId) || customerId <= 0 || customerId > 2147483647) {
+    throw { status: 400, error: 'Invalid customer id' };
+  }
+  return membership.getCustomerEntitlement(customerId);
+});
+
+export const reverseCheckinPayout = membershipHandler(req => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0 || id > 2147483647) throw { status: 400, error: 'Invalid booking id' };
+  return bookingService.reverseCheckinPayout(id);
+});
 
 export const getMyBookings = async (req, res) => {
   try {

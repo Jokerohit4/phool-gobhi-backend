@@ -12,10 +12,18 @@ import { coachingPrice } from './coachingCoupons.js';
 
 export const COACHING_PRODUCTS = Object.freeze({ MONTHLY_4499: 449900, QUARTERLY_11999: 1199900, TRAINER_ADDON_1499: 149900 });
 const HOUR = 3600000, DAY = HOUR * 24;
+const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-service:5005';
 const provider = () => new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_SECRET });
-const emptyV2Balances = { trainerSessionsRemaining: 0, nutritionistSessionsRemaining: 0, gymSessionsRemaining: 0 };
+const emptyV2Balances = { trainerSessionsRemaining: 0, nutritionistSessionsRemaining: 0 };
 const sessionBalances = new Map([['TRAINER_SESSION', 'trainerSessionsRemaining'], ['NUTRITIONIST_SESSION', 'nutritionistSessionsRemaining']]);
 const isV2 = offer => offer?.schemaVersion === 2;
+export const GYM_ENTITLEMENT_SYNC = 'GYM_ENTITLEMENT_SYNC';
+const termOrderRef = id => `coaching-term-${id}`;
+const gymFulfillmentPaths = {
+  activate: '/internal/entitlements',
+  cancel: '/internal/entitlements/cancel',
+  addon: '/internal/entitlements/addon-balance',
+};
 function trackCoachingEvent(send) {
   try { void Promise.resolve(send()).catch(() => {}); } catch {}
 }
@@ -55,6 +63,19 @@ export function signatureMatches(orderId, paymentId, signature) {
   return supplied.length === expected.length && crypto.timingSafeEqual(expected, supplied);
 }
 async function locked(tx, userId) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(${userId}::bigint)`; }
+
+// Queue the delivery in the same transaction as the payment, activation or
+// refund. Booking-service deduplicates each operation after that commit.
+function queueGymFulfillment(tx, order, action, payload) {
+  return tx.coachingFulfillment.create({ data: {
+    userId: order.userId,
+    kind: GYM_ENTITLEMENT_SYNC,
+    status: 'PENDING',
+    idempotencyKey: `gym:${action}:${order.id}`,
+    details: { action, payload },
+  } });
+}
+
 async function activateV2Term(tx, order, startsAt, purchasedAt, now, hasExistingGym) {
   const offer = order.offerSnapshot;
   const trialEndsAt = offer.refundPolicy === 'self_serve_72h' ? new Date(+purchasedAt + 72 * HOUR) : null;
@@ -65,11 +86,18 @@ async function activateV2Term(tx, order, startsAt, purchasedAt, now, hasExisting
     activeOrderId: order.id, scheduledOrderId: null, hasExistingGym, freeDelightSessionsRemaining: 0, labCreditsRemaining: 0,
     gymPassStatus: offer.components.gym ? 'AWAITING_ASSIGNMENT' : 'NOT_INCLUDED',
     trainerSessionsRemaining: offer.components.trainer?.sessions ?? 0,
-    nutritionistSessionsRemaining: offer.components.nutritionist?.sessions ?? 0, gymSessionsRemaining: 0,
+    nutritionistSessionsRemaining: offer.components.nutritionist?.sessions ?? 0,
   };
   const member = await tx.coachingMembership.upsert({ where: { userId: order.userId }, create: { userId: order.userId, ...data }, update: data });
   if (planStatus !== 'EXPIRED') {
     await tx.coachingFulfillment.create({ data: { userId: order.userId, kind: 'ONBOARDING', idempotencyKey: `onboarding:${order.id}`, details: { product: order.product, region: offer.region, city: offer.city } } });
+    if (offer.components.gym && offer.region === 'GURUGRAM') {
+      await queueGymFulfillment(tx, order, 'activate', {
+        customerId: order.userId, orderRef: termOrderRef(order.id), offerKey: offer.key,
+        startsAt: startsAt.toISOString(), endsAt: planEndsAt.toISOString(), region: offer.region,
+        requiresClearance: offer.family === 'medical', source: order.isRenewal ? 'renewal' : 'purchase',
+      });
+    }
   }
   return member;
 }
@@ -77,6 +105,10 @@ async function activateV2Term(tx, order, startsAt, purchasedAt, now, hasExisting
 // Call under the user lock wherever a current term is needed.
 async function currentMembership(tx, userId, now = new Date()) {
   const member = await tx.coachingMembership.findUnique({ where: { userId } });
+  return activateScheduledTerm(tx, member, now);
+}
+
+async function activateScheduledTerm(tx, member, now) {
   if (!member?.scheduledOrderId || member.planEndsAt > now) return member;
   const order = await tx.coachingOrder.findUnique({ where: { id: member.scheduledOrderId } });
   if (order?.status !== 'SUCCESS' || order.termStartsAt > now) return member;
@@ -84,16 +116,20 @@ async function currentMembership(tx, userId, now = new Date()) {
 }
 
 async function refreshMembership(userId) {
-  return prisma.$transaction(async tx => {
+  const { member, activated } = await prisma.$transaction(async tx => {
     await locked(tx, userId);
     const now = new Date();
-    const member = await currentMembership(tx, userId, now);
-    if (!member || !['ACTIVE', 'TRIAL_72H'].includes(member.planStatus)) return member;
+    const previous = await tx.coachingMembership.findUnique({ where: { userId } });
+    const member = await activateScheduledTerm(tx, previous, now);
+    const activated = member?.activeOrderId !== previous?.activeOrderId;
+    if (!member || !['ACTIVE', 'TRIAL_72H'].includes(member.planStatus)) return { member, activated };
     const planStatus = member.planEndsAt <= now ? 'EXPIRED' : member.planStatus === 'TRIAL_72H' && member.trialEndsAt <= now ? 'ACTIVE' : member.planStatus;
-    if (planStatus === member.planStatus) return member;
+    if (planStatus === member.planStatus) return { member, activated };
     await tx.coachingMembership.updateMany({ where: { userId }, data: { planStatus } });
-    return { ...member, planStatus };
+    return { member: { ...member, planStatus }, activated };
   });
+  if (activated) await retryGymFulfillment(userId).catch(logGymFulfillmentError);
+  return member;
 }
 export async function guidanceContext(userId) {
   const url = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
@@ -107,16 +143,45 @@ async function medicalClearanceRequired(userId) {
   return guidanceContext(userId).then(requiresClearance, () => true);
 }
 
-// Booking will use this eligibility and balance check for v2 gym access.
-export async function coachingGymEntitlement(userId) {
-  if (!eligibleCoachingAccount(await coachingAccount(userId))) return null;
-  const member = await refreshMembership(userId);
-  const offer = member?.offerSnapshot;
-  if (!hasGuidance(member) || !isV2(offer) || offer.region !== 'GURUGRAM') return null;
-  if (offer.family === 'medical' && await medicalClearanceRequired(userId)) return null;
-  const unlimited = offer.components.gym === 'unlimited';
-  if (!unlimited && !member.gymSessionsRemaining) return null;
-  return { membershipOrderId: member.activeOrderId, unlimited, sessionsRemaining: member.gymSessionsRemaining, expiresAt: member.planEndsAt };
+async function coachingGymEntitlement({ action, payload }) {
+  await axios.post(`${BOOKING_SERVICE_URL}${gymFulfillmentPaths[action]}`, payload, await bookingServiceOptions());
+}
+
+async function bookingServiceOptions() {
+  return {
+    timeout: 3000,
+    headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...(await googleIdTokenHeader(BOOKING_SERVICE_URL)) },
+  };
+}
+
+async function bookingGymAddonRemaining(userId) {
+  try {
+    const response = await axios.get(`${BOOKING_SERVICE_URL}/internal/entitlements/${userId}`, await bookingServiceOptions());
+    return response.data?.data?.addonRemaining ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+function logGymFulfillmentError(error) {
+  console.error('Could not sync coaching gym fulfillment', error.code || error.response?.status || error.name);
+}
+
+export async function retryGymFulfillment(userId) {
+  const rows = await prisma.coachingFulfillment.findMany({
+    where: { kind: GYM_ENTITLEMENT_SYNC, status: 'PENDING', ...(userId ? { userId } : {}) },
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], take: 50,
+  });
+  await Promise.all(rows.map(async row => {
+    const where = { id: row.id, status: 'PENDING' };
+    try {
+      await coachingGymEntitlement(row.details);
+      await prisma.coachingFulfillment.updateMany({ where, data: { status: 'COMPLETED' } });
+    } catch (error) {
+      logGymFulfillmentError(error);
+      await prisma.coachingFulfillment.updateMany({ where, data: { updatedAt: new Date() } });
+    }
+  }));
 }
 export async function notifyCoachingFulfillment(userId) {
   const url = process.env.COACHING_FULFILLMENT_WEBHOOK_URL;
@@ -133,7 +198,7 @@ export async function notifyCoachingFulfillment(userId) {
     await prisma.coachingFulfillment.update({ where: { id: row.id }, data: { notificationDeliveredAt: new Date() } });
   }
 }
-export async function membershipView(userId) {
+export async function membershipView(userId, { includeGymBalance = true } = {}) {
   const row = await refreshMembership(userId), now = new Date();
   const account = row ? await coachingAccount(userId).catch(() => null) : null;
   if (row && account) {
@@ -163,10 +228,11 @@ export async function membershipView(userId) {
     trial_cleared: !!row?.trialEndsAt && row.trialEndsAt <= now,
     trainer_sessions_remaining: guided ? row.trainerSessionsRemaining ?? 0 : 0,
     nutritionist_sessions_remaining: guided ? row.nutritionistSessionsRemaining ?? 0 : 0,
-    gym_sessions_remaining: guided ? row.gymSessionsRemaining ?? 0 : 0,
+    gym_sessions_remaining: includeGymBalance && guided && v2 && row.offerSnapshot.region === 'GURUGRAM'
+      ? await bookingGymAddonRemaining(userId) : 0,
     clearanceRequired: guided && v2 && row.offerSnapshot.family === 'medical' && await medicalClearanceRequired(userId),
     scheduled_renewal: renewal ? { product: renewal.product, orderId: renewal.orderId, startsAt: renewal.termStartsAt, status: renewal.status } : null,
-    fulfillment: await prisma.coachingFulfillment.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, take: 30 }),
+    fulfillment: await prisma.coachingFulfillment.findMany({ where: { userId, kind: { not: GYM_ENTITLEMENT_SYNC } }, orderBy: { createdAt: 'desc' }, take: 30 }),
   };
 }
 
@@ -302,7 +368,12 @@ async function grantV2Addon(tx, order, member) {
   const offer = order.offerSnapshot;
   const { quantity } = offer.price;
   const balance = V2_ADDON_BALANCES[offer.kind];
-  if (balance) {
+  if (offer.kind === 'gym_session') {
+    await queueGymFulfillment(tx, order, 'addon', {
+      customerId: order.userId, termOrderRef: termOrderRef(member.activeOrderId),
+      idempotencyKey: `coaching-gym-addon-${order.id}`, sessions: quantity, expiresAt: member.planEndsAt.toISOString(),
+    });
+  } else if (balance) {
     await tx.coachingMembership.update({ where: { userId: order.userId }, data: { [balance]: { increment: quantity } } });
   } else {
     await tx.coachingFulfillment.create({ data: {
@@ -375,6 +446,7 @@ export async function settleCoachingPayment(orderId, paymentId) {
   }
   const latest = await prisma.coachingOrder.findUnique({ where: { orderId } });
   if (latest.status === 'DUPLICATE_REFUND') await refundCoachingOrder(latest.id);
+  if (isV2(settled?.offerSnapshot)) await retryGymFulfillment(order.userId).catch(logGymFulfillmentError);
   await notifyCoachingFulfillment(order.userId).catch(() => {});
   return true;
 }
@@ -422,10 +494,19 @@ export async function refundCoachingOrder(id) {
   }
   await prisma.$transaction(async tx => {
     await locked(tx, order.userId);
-    await tx.coachingOrder.update({ where: { id }, data: { refundId: refund.id, status: 'REFUNDED' } });
+    const { count } = await tx.coachingOrder.updateMany({
+      where: { id, status: { not: 'REFUNDED' } }, data: { refundId: refund.id, status: 'REFUNDED' },
+    });
+    if (!count) return;
     await tx.coachingMembership.updateMany({ where: { userId: order.userId, activeOrderId: id }, data: { planStatus: 'REFUNDED', freeDelightSessionsRemaining: 0, labCreditsRemaining: 0, gymPassStatus: 'CANCELLED', ...emptyV2Balances } });
     await tx.coachingMembership.updateMany({ where: { userId: order.userId, scheduledOrderId: id }, data: { scheduledOrderId: null } });
+    if (isV2(order.offerSnapshot) && !order.offerSnapshot.kind) {
+      await queueGymFulfillment(tx, order, 'cancel', { orderRef: termOrderRef(id) });
+    }
   });
+  if (isV2(order.offerSnapshot) && !order.offerSnapshot.kind) {
+    await retryGymFulfillment(order.userId).catch(logGymFulfillmentError);
+  }
 }
 export async function requestCoachingRefund(userId, orderId) {
   if (orderId !== undefined && (typeof orderId !== 'string' || !orderId)) fail('Choose a coaching order');

@@ -7,7 +7,7 @@ import { membershipBenefits } from '../services/coachingCatalog.js';
 import { loadCoachingCatalog, loadCoachingCatalogV2 } from '../services/coachingOfferService.js';
 import { getCoachingConfig, saveCoachingConfig, coachingConfigHistory } from '../services/coachingConfigService.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
-import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
+import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment, retryGymFulfillment, GYM_ENTITLEMENT_SYNC } from '../services/coachingService.js';
 const router = Router();
 const run = fn => async (req, res) => { try { res.json({ data: await fn(req) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? e.message : 'Could not complete this request right now. Please try again.' }); } };
 router.get('/mine', requireRole('customer'), run(async req => {
@@ -47,12 +47,13 @@ router.post('/labs', requireRole('customer'), run(async req => {
   await notifyCoachingFulfillment(req.userId).catch(() => {});
   return record;
 }));
-router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId))));
+router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId), { includeGymBalance: false })));
 router.post('/internal/reconcile', requireInternal, run(async () => {
+  await activateDueCoachingRenewals();
+  await retryGymFulfillment();
   const users = await prisma.coachingOrder.findMany({ where: { status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } }, select: { userId: true }, distinct: ['userId'], orderBy: { updatedAt: 'asc' }, take: 100 });
   let reconciled = 0;
   for (const { userId } of users) { await reconcileCoaching(userId); reconciled++; }
-  await activateDueCoachingRenewals();
   await notifyCoachingFulfillment();
   return { reconciled };
 }));
@@ -80,7 +81,7 @@ router.patch('/admin/requests/:id', requireRole('gobhi'), run(async req => {
   if (!['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(req.body.status)) throw Object.assign(new Error('Choose a fulfillment status'), { status: 400 });
   return prisma.$transaction(async tx => {
     const row = await tx.coachingFulfillment.findUnique({ where: { id: Number(req.params.id) } });
-    if (!row) throw Object.assign(new Error('Request not found'), { status: 404 });
+    if (!row || row.kind === GYM_ENTITLEMENT_SYNC) throw Object.assign(new Error('Request not found'), { status: 404 });
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(${row.userId}::bigint)`;
     const current = await tx.coachingFulfillment.findUnique({ where: { id: row.id } });
     if (current.status === 'CANCELLED' || current.status === 'COMPLETED') return current;

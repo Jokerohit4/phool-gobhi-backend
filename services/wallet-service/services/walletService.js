@@ -607,13 +607,43 @@ export async function getCustomerIdsWithPurchasedSubscriptionService(customerIds
 // bank transfer) stays a manual, off-platform admin action — same posture
 // as the existing wallet payoutWalletService below, just a different ledger.
 
-export async function recordPendingBankSettlementService({ partnerId, gymId, bookingId, subscriptionId, amount }) {
+export async function recordPendingBankSettlementService({ partnerId, gymId, bookingId, subscriptionId, entitlementId, addonBalanceId, amount }) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw { status: 400, error: 'amount must be a positive finite number' };
   }
-  return prisma.partnerBankSettlement.create({
-    data: { partnerId, gymId, bookingId, subscriptionId, amount },
+  const references = [subscriptionId, entitlementId, addonBalanceId].filter(value => value != null);
+  if (references.length !== 1 || ![...references, partnerId, gymId, bookingId].every(id => Number.isInteger(id) && id > 0)) {
+    throw { status: 400, error: 'Valid settlement identifiers and one coverage reference are required' };
+  }
+  try {
+    return await prisma.partnerBankSettlement.create({
+      data: { partnerId, gymId, bookingId, subscriptionId, entitlementId, addonBalanceId, amount },
+    });
+  } catch (err) {
+    if (err.code !== 'P2002' || subscriptionId != null) throw err;
+    const existing = await prisma.partnerBankSettlement.findFirst({ where: { bookingId, subscriptionId: null } });
+    if (!existing) throw err;
+    if (existing.partnerId !== partnerId || existing.gymId !== gymId || Number(existing.amount) !== amount ||
+        existing.entitlementId !== (entitlementId ?? null) || existing.addonBalanceId !== (addonBalanceId ?? null)) {
+      throw { status: 409, error: 'Settlement details differ from the existing booking payout' };
+    }
+    return existing;
+  }
+}
+
+export async function reverseNetworkBankSettlementService(bookingId) {
+  if (!Number.isInteger(bookingId) || bookingId <= 0) throw { status: 400, error: 'Invalid booking id' };
+  const where = { bookingId, subscriptionId: null };
+  const reversedAt = new Date();
+  const { count } = await prisma.partnerBankSettlement.updateMany({
+    where: { ...where, settledAt: null, reversedAt: null },
+    data: { reversedAt },
   });
+  if (count) return { reversedAt };
+  const existing = await prisma.partnerBankSettlement.findFirst({ where });
+  if (!existing) throw { status: 404, error: 'Bank settlement not found' };
+  if (existing.reversedAt) return { reversedAt: existing.reversedAt };
+  throw { status: 409, error: 'This bank settlement has already been transferred' };
 }
 
 // Gobhi-only: every partner's pending (not yet settled) bank-settlement
@@ -621,7 +651,7 @@ export async function recordPendingBankSettlementService({ partnerId, gymId, boo
 // but for this separate ledger.
 export async function getPendingBankSettlementsService() {
   const rows = await prisma.partnerBankSettlement.findMany({
-    where: { settledAt: null },
+    where: { settledAt: null, reversedAt: null },
   });
   const byPartner = new Map();
   for (const row of rows) {
@@ -640,7 +670,7 @@ export async function getPendingBankSettlementsService() {
 // settlement for a multi-gym partner.
 export async function settleBankSettlementsService(partnerId, gymId) {
   const result = await prisma.partnerBankSettlement.updateMany({
-    where: { partnerId, settledAt: null, ...(gymId ? { gymId } : {}) },
+    where: { partnerId, settledAt: null, reversedAt: null, ...(gymId ? { gymId } : {}) },
     data: { settledAt: new Date() },
   });
   return { settledCount: result.count };
@@ -653,7 +683,7 @@ export async function getMyBankSettlementsService(partnerId, gymId) {
     where: { partnerId, ...(gymId ? { gymId } : {}) },
     orderBy: { createdAt: 'desc' },
   });
-  const pending = rows.filter((r) => r.settledAt == null);
+  const pending = rows.filter((r) => r.settledAt == null && r.reversedAt == null);
   const settled = rows.filter((r) => r.settledAt != null);
   return {
     pendingAmount: Math.round(pending.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
@@ -661,6 +691,7 @@ export async function getMyBankSettlementsService(partnerId, gymId) {
     history: rows.map((r) => ({
       id: r.id, gymId: r.gymId, amount: Number(r.amount),
       settledAt: r.settledAt, createdAt: r.createdAt,
+      ...(r.reversedAt ? { reversedAt: r.reversedAt } : {}),
     })),
     totalSettled: Math.round(settled.reduce((sum, r) => sum + Number(r.amount), 0) * 100) / 100,
   };

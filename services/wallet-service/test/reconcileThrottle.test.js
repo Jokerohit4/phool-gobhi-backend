@@ -73,6 +73,7 @@ test('setup', async (t) => {
       updateWalletTopupConfig: noOp, getSubscriptionSummaryByGymService: noOp,
       getCustomerIdsWithPurchasedSubscriptionService: noOp, getSubscriptionsForGymService: noOp,
       assertPartnerOwnsGym: noOp, recordPendingBankSettlementService: noOp,
+      reverseNetworkBankSettlementService: noOp,
       getPendingBankSettlementsService: noOp, settleBankSettlementsService: noOp,
       getMyBankSettlementsService: noOp, computeAttendanceSaasBillService: noOp,
       computeAttendanceSaasBillsService: noOp, applyAttendanceSaasBillService: noOp,

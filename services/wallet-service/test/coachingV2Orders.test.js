@@ -9,6 +9,7 @@ const userId = 7;
 const day = 86400000;
 let api, configApi, router, extractUser, account, context, config, history, member, orders, grants, records, events, providerOrders, refunds, trackingFailure;
 let transactions;
+let bookingRequests, bookingUnavailable;
 
 const copy = value => structuredClone(value ?? null);
 function matches(row, where) {
@@ -46,6 +47,7 @@ before(async t => {
     coachingOrder: {
       findUnique: async ({ where }) => copy(orders.find(row => matches(row, where))),
       findFirst: async ({ where }) => copy(orders.find(row => matches(row, where))),
+      findMany: async ({ where }) => copy(orders.filter(row => matches(row, where))),
       create: async ({ data }) => {
         const row = { id: orders.length + 1, status: 'PENDING', ...copy(data) };
         orders.push(row);
@@ -71,15 +73,36 @@ before(async t => {
     },
     coachingFulfillment: {
       findUnique: async ({ where }) => copy(records.find(row => matches(row, where))),
-      findMany: async () => copy(records),
-      create: async ({ data }) => { records.push(copy(data)); return data; },
+      findMany: async ({ where }) => copy(records.filter(row => matches(row, where))),
+      create: async ({ data }) => {
+        const row = { id: records.length + 1, status: 'REQUESTED', ...copy(data) };
+        records.push(row);
+        return copy(row);
+      },
+      updateMany: async ({ where, data }) => {
+        const rows = records.filter(row => matches(row, where));
+        for (const row of rows) update(row, data);
+        return { count: rows.length };
+      },
     },
   };
   t.mock.module('../db/prisma.js', { exports: { default: db } });
   t.mock.module('../utils/googleIdToken.js', { exports: { googleIdTokenHeader: async () => ({}) } });
-  t.mock.module('axios', { exports: { default: { get: async url => ({
-    data: { data: url.includes('/guidance/internal/') ? context : account },
-  }) } } });
+  t.mock.module('axios', { exports: { default: {
+    get: async url => {
+      if (url.includes('/internal/entitlements/')) {
+        const addonRemaining = bookingRequests.filter(row => row.path.endsWith('/addon-balance') && row.delivered)
+          .reduce((total, row) => total + row.body.sessions, 0);
+        return { data: { data: { addonRemaining } } };
+      }
+      return { data: { data: url.includes('/guidance/internal/') ? context : account } };
+    },
+    post: async (url, body) => {
+      bookingRequests.push({ path: new URL(url).pathname, body: copy(body), delivered: !bookingUnavailable });
+      if (bookingUnavailable) throw new Error('booking service unavailable');
+      return { data: { data: {} } };
+    },
+  } } });
   t.mock.module('../utils/analytics.js', { exports: { track: (...args) => {
     events.push(args);
     if (trackingFailure === 'sync') throw new Error('analytics down');
@@ -116,6 +139,8 @@ beforeEach(() => {
   context = { hasUploadedReport: false, confirmedDetails: { name: 'Private Name' } };
   config = member = trackingFailure = null;
   orders = []; grants = []; records = []; events = []; providerOrders = []; refunds = []; history = [];
+  bookingRequests = [];
+  bookingUnavailable = false;
   transactions = Promise.resolve();
   process.env.COACHING_COUPONS_JSON = JSON.stringify({ SAVE10: { percentOff: 10, products: ['ADDON_TRAINER', 'MED_30'] } });
 });
@@ -211,12 +236,18 @@ test('add-ons need a matching active family and region and apply medical-only tr
   assert.deepEqual(records.find(row => row.kind === 'LAB_ADDON').details, {
     quantity: 2, region: 'GURUGRAM', availableAt: member.planEndsAt.toISOString(), membershipOrderId: member.activeOrderId,
   });
-  await buy('ADDON_GYM', { quantity: 2 });
-  assert.equal((await api.coachingGymEntitlement(userId)).sessionsRemaining, 2);
+  const gymAddon = await buy('ADDON_GYM', { quantity: 2 });
+  assert.deepEqual(bookingRequests.find(row => row.path.endsWith('/addon-balance')).body, {
+    customerId: userId, termOrderRef: `coaching-term-${member.activeOrderId}`,
+    sessions: 2, expiresAt: member.planEndsAt.toISOString(),
+    idempotencyKey: `coaching-gym-addon-${orders.find(row => row.orderId === gymAddon.orderId).id}`,
+  });
+  assert.equal((await api.membershipView(userId)).gym_sessions_remaining, 2);
+  assert.equal(member.gymSessionsRemaining, undefined);
   member.planEndsAt = new Date(0);
   await buy('WELL_TRAINER_GYM_NUTRI');
   assert.equal(member.nutritionistSessionsRemaining, 2);
-  assert.equal(member.gymSessionsRemaining, 0);
+  assert.equal(member.gymSessionsRemaining, undefined);
   assert.equal((await quote('ADDON_TRAINER', { quantity: 4 })).amountPaise, 200000);
   await assert.rejects(quote('ADDON_LAB_TEST'), { status: 403 });
 });
@@ -327,17 +358,78 @@ test('delayed capture of an add-on for an expired term refunds the payment and l
   assert.ok(!events.some(([name]) => name === 'addon_purchased'));
 });
 
-test('medical RED clearance blocks trainer and gym access while allowing nutritionist sessions', async () => {
+test('medical RED clearance blocks trainer sessions and flags the gym entitlement for booking', async () => {
   await buy('MED_30', { statedCondition: 'diabetes' });
   await buy('ADDON_NUTRITIONIST');
   context.riskBucket = 'RED';
   await assert.rejects(api.consumeSession(userId, 'TRAINER_SESSION', 91, 'trainer-0001'), { status: 409 });
   assert.equal((await api.membershipView(userId)).clearanceRequired, true);
-  assert.equal(await api.coachingGymEntitlement(userId), null);
+  assert.equal(bookingRequests.find(row => row.path === '/internal/entitlements').body.requiresClearance, true);
+  assert.equal((await api.membershipView(userId)).fulfillment.some(row => row.kind === api.GYM_ENTITLEMENT_SYNC), false);
   await api.consumeSession(userId, 'NUTRITIONIST_SESSION', 91, 'nutrition-0001');
   context.clinicalStatus = 'CLEARED';
+  assert.equal((await api.membershipView(userId)).clearanceRequired, false);
   await api.consumeSession(userId, 'TRAINER_SESSION', 91, 'trainer-0001');
   assert.equal(member.trainerSessionsRemaining, 3);
+});
+
+test('booking-service failure leaves the payment successful and internal reconcile retries fulfillment', async t => {
+  const originalKey = process.env.INTERNAL_API_KEY;
+  process.env.INTERNAL_API_KEY = 'test-reconcile-key';
+  t.after(() => {
+    if (originalKey === undefined) delete process.env.INTERNAL_API_KEY;
+    else process.env.INTERNAL_API_KEY = originalKey;
+  });
+  bookingUnavailable = true;
+  const order = await buy('WELL_GYM');
+  assert.equal(orders.find(row => row.orderId === order.orderId).status, 'SUCCESS');
+  const fulfillment = records.find(row => row.kind === api.GYM_ENTITLEMENT_SYNC);
+  assert.equal(fulfillment.status, 'PENDING');
+
+  bookingUnavailable = false;
+  const app = express();
+  app.use(express.json(), router);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    const url = `http://127.0.0.1:${server.address().port}/internal/reconcile`;
+    assert.equal((await fetch(url, { method: 'POST' })).status, 403);
+    const response = await fetch(url, { method: 'POST', headers: { 'x-internal-key': 'test-reconcile-key' } });
+    assert.equal(response.status, 200);
+    assert.equal(fulfillment.status, 'COMPLETED');
+    assert.deepEqual(bookingRequests.map(row => row.delivered), [false, true]);
+    assert.deepEqual(bookingRequests[0].body, bookingRequests[1].body);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('scheduled gym renewal activates only when due and a refunded term queues cancellation', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-26T09:00:00Z') });
+  await buy('WELL_GYM');
+  const termEnd = member.planEndsAt;
+  t.mock.timers.setTime(+termEnd - day);
+  const renewal = await buy('MED_30', { statedCondition: 'diabetes' });
+  assert.equal(bookingRequests.length, 1);
+  t.mock.timers.setTime(+termEnd);
+  await api.activateDueCoachingRenewals();
+  const [activation, nextActivation] = bookingRequests;
+  assert.equal(activation.body.source, 'purchase');
+  assert.equal(nextActivation.body.source, 'renewal');
+  assert.equal(nextActivation.body.startsAt, termEnd.toISOString());
+  assert.equal(nextActivation.body.requiresClearance, true);
+
+  bookingUnavailable = true;
+  await api.requestCoachingRefund(userId, renewal.orderId);
+  assert.equal(orders.find(row => row.orderId === renewal.orderId).status, 'REFUNDED');
+  const cancel = records.find(row => row.details?.action === 'cancel');
+  assert.equal(cancel.status, 'PENDING');
+  bookingUnavailable = false;
+  await api.retryGymFulfillment();
+  assert.equal(cancel.status, 'COMPLETED');
+  assert.deepEqual(bookingRequests.at(-1), {
+    path: '/internal/entitlements/cancel', body: { orderRef: nextActivation.body.orderRef }, delivered: true,
+  });
 });
 
 test('v2 events use the required props once and synchronous and asynchronous tracking failures are harmless', async t => {

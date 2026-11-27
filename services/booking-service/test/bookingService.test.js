@@ -39,6 +39,27 @@ let axiosGetLog = []; // { kind, url, opts }
 let siblingBarrier = null; // { arrive(), reached }
 let onDebit = null; // hook run inside the wallet debit (simulates a concurrent change)
 let gymGate = null; // Promise gating the lookup of gym 77 (cancel city test)
+const entitlements = new Map();
+const cancelledTerms = new Set();
+const addonGrants = new Set();
+let addonBalance;
+let addonDebitBarrier;
+let clearance;
+let payoutConfig;
+let walletCreditAttempts = [];
+let bankRecords = [];
+let trackingFailure;
+
+function matchesWhere(row, where) {
+  return Object.entries(where).every(([key, value]) => {
+    if (key === 'OR') return value.some(branch => matchesWhere(row, branch));
+    if (value?.in) return value.in.includes(row[key]);
+    if (value && Object.hasOwn(value, 'not')) return row[key] !== value.not;
+    if (value?.gt !== undefined) return row[key] > value.gt;
+    if (value?.lte !== undefined) return row[key] <= value.lte;
+    return row[key] === value;
+  });
+}
 
 function makeBooking(overrides) {
   return {
@@ -63,6 +84,11 @@ function makeBooking(overrides) {
     cancellationReason: null,
     nextVisitIntent: null,
     walletTxId: null,
+    coverage: null,
+    payoutTiming: 'completion',
+    payoutCreditedAt: null,
+    payoutReversedAt: null,
+    payoutAmount: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -89,9 +115,17 @@ function resetFakes() {
   siblingBarrier = null;
   gymGate = null;
   onDebit = null;
+  entitlements.clear();
+  cancelledTerms.clear();
+  addonGrants.clear();
+  addonBalance = addonDebitBarrier = payoutConfig = trackingFailure = null;
+  clearance = false;
+  walletCreditAttempts = [];
+  bankRecords = [];
 }
 
 let createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym;
+let selfCheckIn, verifyAttendance, retryOwedPayouts, reverseCheckinPayout, membership;
 
 test('setup: mock dependencies once, import bookingService once', async (t) => {
   t.mock.module('@prisma/client', {
@@ -100,22 +134,9 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
         constructor() {
           this.booking = {
             findUnique: async ({ where: { id } }) => bookingRows.get(id) ?? null,
-            findFirst: async ({ where }) => {
-              for (const row of bookingRows.values()) {
-                if (where.status && where.status.not && row.status === where.status.not) continue;
-                if (where.customerId && row.customerId !== where.customerId) continue;
-                if (where.gymId && row.gymId !== where.gymId) continue;
-                if (where.date && row.date !== where.date) continue;
-                if (where.startTime && row.startTime !== where.startTime) continue;
-                if (where.status && typeof where.status === 'string' && row.status !== where.status) continue;
-                if (where.status && where.status.in && !where.status.in.includes(row.status)) continue;
-                if (where.subscriptionId !== undefined && row.subscriptionId !== where.subscriptionId) continue;
-                if (where.classId !== undefined && row.classId !== where.classId) continue;
-                return row;
-              }
-              return null;
-            },
+            findFirst: async ({ where }) => [...bookingRows.values()].find(row => matchesWhere(row, where)) ?? null,
             findMany: async ({ where }) => {
+              if (where.OR) return [...bookingRows.values()].filter(row => matchesWhere(row, where));
               let results = [...bookingRows.values()];
               if (where.gymId !== undefined) results = results.filter(r => r.gymId === where.gymId);
               if (where.date !== undefined) results = results.filter(r => r.date === where.date);
@@ -146,7 +167,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
               return results.length;
             },
             create: async ({ data }) => {
-              const row = { id: bookingNextId++, createdAt: new Date(), updatedAt: new Date(), ...data };
+              const row = makeBooking({ commissionPct: null, ...data });
               bookingRows.set(row.id, row);
               return row;
             },
@@ -167,6 +188,9 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
                 if (where.status && typeof where.status === 'string' && row.status !== where.status) match = false;
                 if (where.status && where.status.in && !where.status.in.includes(row.status)) match = false;
                 if (where.customerId !== undefined && row.customerId !== where.customerId) match = false;
+                if (where.attendedAt === null && row.attendedAt !== null) match = false;
+                if (where.payoutCreditedAt === null && row.payoutCreditedAt !== null) match = false;
+                if (where.payoutReversedAt === null && row.payoutReversedAt !== null) match = false;
                 if (match) {
                   Object.assign(row, data);
                   count++;
@@ -198,6 +222,60 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
           this.trainerAttendance = { upsert: async ({ create }) => ({ ...create }), findMany: async () => [] };
           this.trainingSession = { upsert: async ({ create }) => ({ ...create }), findMany: async () => [] };
           this.attendanceWarning = { create: async ({ data }) => data };
+          this.gymPresenceEvent = { create: async ({ data }) => data };
+          this.gymEntitlement = {
+            findUnique: async ({ where }) => entitlements.get(where.orderRef) ?? null,
+            findFirst: async ({ where }) => [...entitlements.values()].find(row => matchesWhere(row, where)) ?? null,
+            create: async ({ data }) => {
+              const row = { id: entitlements.size + 1, status: 'active', ...data };
+              entitlements.set(row.orderRef, row);
+              return row;
+            },
+            updateMany: async ({ where, data }) => {
+              const existing = entitlements.get(where.orderRef);
+              if (existing && matchesWhere(existing, where)) Object.assign(existing, data);
+            },
+          };
+          this.gymEntitlementCancellation = {
+            findUnique: async ({ where }) => cancelledTerms.has(where.orderRef) ? where : null,
+            upsert: async ({ where }) => cancelledTerms.add(where.orderRef),
+          };
+          this.gymAddonGrant = {
+            createMany: async ({ data: { idempotencyKey } }) => {
+              if (addonGrants.has(idempotencyKey)) return { count: 0 };
+              addonGrants.add(idempotencyKey);
+              return { count: 1 };
+            },
+          };
+          this.gymAddonBalance = {
+            findFirst: async ({ where }) => addonBalance && matchesWhere(addonBalance, where) ? { ...addonBalance } : null,
+            findMany: async ({ where }) => addonBalance && matchesWhere(addonBalance, where) ? [{ ...addonBalance }] : [],
+            upsert: async ({ create, update }) => {
+              if (addonBalance) addonBalance.remaining += update.remaining.increment;
+              else addonBalance = { id: 1, cancelledAt: null, ...create };
+              return { ...addonBalance };
+            },
+            updateMany: async ({ where, data }) => {
+              if (data.remaining?.decrement && addonDebitBarrier) await addonDebitBarrier.arrive();
+              if (!addonBalance || !matchesWhere(addonBalance, where)) return { count: 0 };
+              if (data.remaining?.decrement) addonBalance.remaining -= data.remaining.decrement;
+              else Object.assign(addonBalance, data);
+              return { count: 1 };
+            },
+          };
+          this.membershipPayoutConfig = {
+            findUnique: async () => payoutConfig,
+            upsert: async ({ create, update }) => {
+              payoutConfig = { ...(payoutConfig ? { ...payoutConfig, ...update } : create), updatedAt: new Date() };
+              return payoutConfig;
+            },
+            updateMany: async ({ where, data }) => {
+              if (+payoutConfig?.updatedAt !== +where.updatedAt) return { count: 0 };
+              payoutConfig = { ...payoutConfig, ...data };
+              return { count: 1 };
+            },
+          };
+          this.$queryRaw = async () => [];
           this.$transaction = async (fn) => fn(this);
         }
       },
@@ -223,7 +301,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
           }
           if (kind === 'subscription') {
             if (subMode === 'error') throw new Error('wallet-service down');
-            if (subMode === 'active') return { data: { data: { active: true, subscription: { id: 5 } } } };
+            if (subMode === 'active') return { data: { data: { active: true, subscription: { id: 5, partnerShare: 900, days: 30 } } } };
             return { data: { data: null } };
           }
           if (url.endsWith('/internal/77')) {
@@ -236,25 +314,33 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
             return { data: { name: 'Test User', dateOfBirth: '1995-01-01' } };
           }
           if (url.includes('wallet-service')) {
+            if (url.includes('/coaching/internal/')) {
+              if (clearance === 'outage') throw new Error('wallet-service down');
+              return { data: { data: { clearanceRequired: clearance } } };
+            }
             return { data: { data: null } };
           }
           if (gymLookupThrows) throw new Error('gym not found');
           if (gymOverride) return { data: { data: gymOverride } };
           if (url.includes(`/internal/${GYM.id}`)) return { data: { data: GYM } };
+          if (url.includes('/internal/11?')) return { data: { data: { ...GYM, id: 11 } } };
           throw new Error(`unexpected axios.get: ${url}`);
         },
         post: async (url, body, _opts) => {
           if (url.includes('/debit')) {
             if (walletDebitFails) throw { response: { data: { error: 'Insufficient wallet balance' } } };
-            walletDebitCalls.push(body);
+            if (!body.allowNegative || !walletDebitCalls.some(row => row.idempotencyKey === body.idempotencyKey)) walletDebitCalls.push(body);
             if (onDebit) await onDebit();
             return { data: { success: true } };
           }
           if (url.includes('/credit')) {
-            if (walletCreditFails) throw new Error('wallet-service down');
-            walletCreditCalls.push(body);
+            walletCreditAttempts.push(body.idempotencyKey);
+            if (walletCreditFails === true) throw new Error('wallet-service down');
+            if (!walletCreditCalls.some(row => row.idempotencyKey === body.idempotencyKey)) walletCreditCalls.push(body);
+            if (walletCreditFails === 'lost-response') throw new Error('Response lost after credit');
             return { data: { success: true } };
           }
+          if (url.endsWith('/internal/bank-settlements/record')) bankRecords.push(body);
           return { data: {} };
         },
       },
@@ -286,7 +372,13 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
   });
 
   t.mock.module(new URL('../utils/analytics.js', import.meta.url).href, {
-    exports: { track: (...args) => { trackCalls.push(args); } },
+    exports: { track: (...args) => {
+      trackCalls.push(args);
+      if (args[0].startsWith('membership_')) {
+        if (trackingFailure === 'sync') throw new Error('Analytics unavailable');
+        if (trackingFailure === 'async') return Promise.reject(new Error('Analytics unavailable'));
+      }
+    } },
   });
 
   t.mock.module(new URL('../utils/slotTiming.js', import.meta.url).href, {
@@ -316,8 +408,10 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
     },
   });
 
-  ({ createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym } =
+  ({ createBooking, cancelBooking, completeBooking, confirmBooking, getSlotCounts, cancelBookingByGym,
+    selfCheckIn, verifyAttendance, retryOwedPayouts, reverseCheckinPayout } =
     await import('../services/bookingService.js'));
+  membership = await import('../services/membershipService.js');
   assert.equal(typeof createBooking, 'function');
 });
 
@@ -1025,4 +1119,239 @@ test('getSlotCountsRange: grouped counts by date and start time, same filters as
   for (const date of Object.keys(range)) {
     assert.deepEqual(await getSlotCounts(GYM.id, date), range[date]);
   }
+});
+
+const TERM = {
+  customerId: CUSTOMER, orderRef: 'coaching-term-1', offerKey: 'WELL_GYM', region: 'GURUGRAM',
+  startsAt: '2026-09-14T00:00:00.000Z', endsAt: '2026-10-14T00:00:00.000Z',
+};
+const ADDON = {
+  customerId: CUSTOMER, termOrderRef: TERM.orderRef, sessions: 1, expiresAt: TERM.endsAt,
+  idempotencyKey: 'gym-addon-1',
+};
+
+function membershipTest(t) {
+  resetFakes();
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-14T03:00:00Z') });
+  gymOverride = { ...GYM, attendanceSaasOptedOut: true, lat: 28.45, lng: 77.02 };
+}
+
+test('network entitlement grants 30 visits, with one covered visit per gym per date', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  await membership.grantGymAddon(ADDON);
+  subMode = 'active';
+  for (let day = 0; day < 30; day++) {
+    const date = new Date(+new Date(TERM.startsAt) + day * 86400000).toISOString().slice(0, 10);
+    const visit = await createBooking(CUSTOMER, { ...BOOK, date });
+    assert.equal(visit.coverage, 'entitlement');
+    assert.equal(visit.subscriptionId, null);
+    assert.equal(visit.amount, 0);
+    assert.equal(visit.partnerShare, 75);
+  }
+  assert.equal(walletDebitCalls.length, 0);
+  assert.equal((await membership.getCustomerEntitlement(CUSTOMER)).addonRemaining, 1);
+  const extraAtSameGym = await createBooking(CUSTOMER, { ...BOOK, startTime: '12:00', endTime: '13:00' });
+  assert.equal(extraAtSameGym.coverage, null);
+  assert.equal(extraAtSameGym.subscriptionId, null);
+  assert.equal(walletDebitCalls[0].amount, 500);
+  gymOverride = { ...gymOverride, id: 11 };
+  const sameDayOtherGym = await createBooking(CUSTOMER, { ...BOOK, gymId: 11 });
+  assert.equal(sameDayOtherGym.coverage, 'entitlement');
+});
+
+test('payout config defaults to 7500 paise and rejects a stale admin edit', async t => {
+  membershipTest(t);
+  assert.equal((await membership.getMembershipPayoutConfig()).payoutPaise, 7500);
+  const first = await membership.updateMembershipPayoutConfig(8000, 9);
+  const expected = first.updatedAt.toISOString();
+  const second = await membership.updateMembershipPayoutConfig(8500, 10, expected);
+  await assert.rejects(() => membership.updateMembershipPayoutConfig(9000, 11, expected), {
+    status: 409, errorCode: 'CONFIG_CONFLICT', currentUpdatedAt: second.updatedAt.toISOString(),
+  });
+  assert.equal((await membership.getMembershipPayoutConfig()).payoutPaise, 8500);
+});
+
+test('a concurrent last add-on session can cover only one booking', async t => {
+  membershipTest(t);
+  gymOverride = null;
+  await membership.grantGymAddon(ADDON);
+  assert.deepEqual(await membership.grantGymAddon(ADDON), { applied: false });
+  let arrivals = 0;
+  let release;
+  const ready = new Promise(resolve => { release = resolve; });
+  addonDebitBarrier = {
+    async arrive() {
+      if (++arrivals === 2) release();
+      await ready;
+    },
+  };
+  const bookings = await Promise.all([
+    createBooking(CUSTOMER, BOOK),
+    createBooking(CUSTOMER, { ...BOOK, gymId: 11 }),
+  ]);
+  assert.equal(arrivals, 2);
+  assert.deepEqual(bookings.map(b => b.coverage).sort(), ['addon', null]);
+  assert.equal((await membership.getCustomerEntitlement(CUSTOMER)).addonRemaining, 0);
+  assert.equal(addonBalance.remaining, 0);
+  assert.equal(walletDebitCalls.length, 1);
+  assert.equal(trackCalls.filter(([name]) => name === 'membership_addon_visit_consumed').length, 1);
+});
+
+test('a required clearance check denies blocked, unavailable and malformed responses', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement({ ...TERM, requiresClearance: true });
+  for (const value of [true, 'outage', undefined]) {
+    clearance = value;
+    await assert.rejects(() => createBooking(CUSTOMER, BOOK), { status: 409, code: 'CLEARANCE_REQUIRED' });
+    assert.equal(bookingRows.size, 0);
+  }
+  clearance = false;
+  assert.equal((await createBooking(CUSTOMER, BOOK)).coverage, 'entitlement');
+  assert.equal(walletDebitCalls.length, 0);
+});
+
+test('an expired entitlement leaves legacy coverage and paid booking amounts unchanged', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement({ ...TERM, startsAt: '2026-08-14T00:00:00Z', endsAt: TERM.startsAt });
+  subMode = 'active';
+  const legacy = await createBooking(CUSTOMER, BOOK);
+  assert.equal(legacy.coverage, null);
+  assert.equal(legacy.subscriptionId, 5);
+  assert.equal(legacy.partnerShare, 30);
+  assert.equal(walletDebitCalls.length, 0);
+  subMode = 'none';
+  const paid = await createBooking(CUSTOMER, { ...BOOK, startTime: '12:00', endTime: '13:00' });
+  assert.equal(paid.coverage, null);
+  assert.equal(paid.amount, 500);
+  assert.equal(paid.partnerShare, 400);
+  assert.equal(walletDebitCalls[0].amount, 500);
+});
+
+test('available network and add-on coverage are restricted to Gurugram', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  await membership.grantGymAddon(ADDON);
+  gymOverride = { ...gymOverride, city: 'Delhi' };
+  const paid = await createBooking(CUSTOMER, BOOK);
+  assert.equal(paid.coverage, null);
+  assert.equal(walletDebitCalls.length, 1);
+  assert.equal(addonBalance.remaining, 1);
+});
+
+test('entitlement creation is idempotent, including after term cancellation', async t => {
+  membershipTest(t);
+  trackingFailure = 'sync';
+  const first = await membership.createGymEntitlement(TERM);
+  assert.equal((await membership.createGymEntitlement(TERM)).id, first.id);
+  assert.equal(trackCalls.filter(([name]) => name === 'membership_activated').length, 1);
+  await membership.grantGymAddon(ADDON);
+  await membership.cancelGymEntitlement(TERM.orderRef);
+  assert.equal((await membership.createGymEntitlement(TERM)).status, 'cancelled');
+  assert.deepEqual(await membership.getCustomerEntitlement(CUSTOMER), {
+    active: false, unlimited: false, expiresAt: null, addonRemaining: 0, clearanceRequired: false,
+  });
+  await membership.cancelGymEntitlement('refund-first');
+  assert.equal(await membership.createGymEntitlement({ ...TERM, orderRef: 'refund-first' }), null);
+  assert.deepEqual(await membership.grantGymAddon({ ...ADDON, termOrderRef: 'refund-first', idempotencyKey: 'late' }), { applied: false });
+});
+
+test('repeating a geofenced check-in after a lost response and completing it credit once', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  payoutConfig = { payoutPaise: 8150 };
+  const booking = await createBooking(CUSTOMER, BOOK);
+  payoutConfig = { payoutPaise: 9000 };
+  walletCreditFails = 'lost-response';
+  trackingFailure = 'async';
+  const checkedIn = await selfCheckIn(GYM.id, CUSTOMER, gymOverride.lat, gymOverride.lng);
+  assert.equal(checkedIn.attendanceMethod, 'qr_geofence_self');
+  assert.equal(bookingRows.get(booking.id).payoutTiming, 'checkin');
+  assert.equal(bookingRows.get(booking.id).payoutCreditedAt, null);
+  walletCreditFails = false;
+  const retry = await selfCheckIn(GYM.id, CUSTOMER, gymOverride.lat, gymOverride.lng);
+  assert.equal(retry.alreadyVerified, true);
+  assert.ok(bookingRows.get(booking.id).payoutCreditedAt);
+  await completeBooking(booking.id, GYM.id, PARTNER);
+  assert.deepEqual(walletCreditAttempts, Array(2).fill(`checkin-payout-${booking.id}`));
+  assert.deepEqual(walletCreditCalls, [{
+    amount: 81.5, description: 'Network visit payout', gymId: GYM.id, userType: 'partner',
+    idempotencyKey: `checkin-payout-${booking.id}`,
+  }]);
+  assert.equal(trackCalls.filter(([name]) => name === 'membership_visit_checked_in').length, 1);
+});
+
+test('completion of an unpaid QR check-in leaves its credit to the check-in retry sweep', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  const booking = await createBooking(CUSTOMER, BOOK);
+  walletCreditFails = true;
+  const checkedIn = await verifyAttendance(booking.id, GYM.id, PARTNER, { qrToken: booking.qrToken });
+  assert.equal(checkedIn.attendanceMethod, 'qr_scan');
+  await completeBooking(booking.id, GYM.id, PARTNER);
+  assert.deepEqual(walletCreditAttempts, [`checkin-payout-${booking.id}`]);
+  walletCreditFails = false;
+  assert.deepEqual(await retryOwedPayouts(), { owed: 1, paid: 1 });
+  assert.equal(walletCreditCalls[0].idempotencyKey, `checkin-payout-${booking.id}`);
+  assert.deepEqual(await retryOwedPayouts(), { owed: 0, paid: 0 });
+});
+
+test('the sweep credits a failed check-in while the visit is still started', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  const booking = await createBooking(CUSTOMER, BOOK);
+  walletCreditFails = true;
+  await verifyAttendance(booking.id, GYM.id, PARTNER, { qrToken: booking.qrToken });
+  walletCreditFails = false;
+  assert.equal(bookingRows.get(booking.id).status, 'started');
+  assert.deepEqual(await retryOwedPayouts(), { owed: 1, paid: 1 });
+  assert.deepEqual(walletCreditAttempts, Array(2).fill(`checkin-payout-${booking.id}`));
+});
+
+test('manual membership verification pays at completion using the completion key', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  const booking = await createBooking(CUSTOMER, BOOK);
+  const verified = await verifyAttendance(booking.id, GYM.id, PARTNER);
+  assert.equal(verified.attendanceMethod, 'manual_verify');
+  assert.equal(walletCreditCalls.length, 0);
+  await completeBooking(booking.id, GYM.id, PARTNER);
+  assert.equal(bookingRows.get(booking.id).payoutTiming, 'completion');
+  assert.equal(walletCreditCalls[0].idempotencyKey, `booking-payout-${booking.id}`);
+  assert.equal(walletCreditCalls[0].amount, 75);
+});
+
+test('an attendance-SaaS-only gym records a network payout in the bank ledger at check-in', async t => {
+  membershipTest(t);
+  gymOverride = { ...gymOverride, marketplaceEnabled: false, attendanceSaasOptedOut: false };
+  const term = await membership.createGymEntitlement(TERM);
+  const booking = await createBooking(CUSTOMER, BOOK);
+  await verifyAttendance(booking.id, GYM.id, PARTNER, { qrToken: booking.qrToken });
+  assert.equal(walletCreditCalls.length, 0);
+  assert.deepEqual(bankRecords, [{
+    partnerId: PARTNER, gymId: GYM.id, bookingId: booking.id, amount: 75,
+    entitlementId: term.id, addonBalanceId: undefined,
+  }]);
+  await completeBooking(booking.id, GYM.id, PARTNER);
+  assert.equal(bankRecords.length, 1);
+});
+
+test('reversal debits once and cancelling before attendance leaves no payout', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  const cancelled = await createBooking(CUSTOMER, BOOK);
+  await cancelBooking(cancelled.id, CUSTOMER);
+  assert.equal(walletCreditAttempts.length, 0);
+  await assert.rejects(() => reverseCheckinPayout(cancelled.id), { status: 409 });
+
+  const booking = await createBooking(CUSTOMER, BOOK);
+  await verifyAttendance(booking.id, GYM.id, PARTNER, { qrToken: booking.qrToken });
+  const [first, second] = await Promise.all([reverseCheckinPayout(booking.id), reverseCheckinPayout(booking.id)]);
+  assert.deepEqual(first, second);
+  assert.deepEqual(await reverseCheckinPayout(booking.id), first);
+  assert.deepEqual(walletDebitCalls, [{
+    amount: 75, description: 'Network visit payout reversal', gymId: GYM.id,
+    idempotencyKey: `checkin-payout-reversal-${booking.id}`, allowNegative: true,
+  }]);
+  assert.equal(trackCalls.filter(([name]) => name === 'membership_visit_payout_reversed').length, 1);
 });

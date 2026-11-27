@@ -4,7 +4,6 @@ import { MAX_COACHING_ADDON_QUANTITY, MAX_COACHING_AMOUNT_PAISE } from './coachi
 export const V2_ADDON_BALANCES = {
   trainer_session: 'trainerSessionsRemaining',
   nutritionist_session: 'nutritionistSessionsRemaining',
-  gym_session: 'gymSessionsRemaining',
 };
 
 export function priceCoachingV2Order(offer, selection, family) {

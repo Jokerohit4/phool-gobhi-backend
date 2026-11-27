@@ -20,6 +20,7 @@ import * as checkinDaysService from './checkinDaysService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 import { pageArgs, finishPage } from '../utils/pagination.js';
 import { createTtlCache } from '../utils/ttlCache.js';
+import { consumeGymAddon, findVisitEntitlement, getMembershipPayoutConfig, isMembershipCity, trackMembershipEvent } from './membershipService.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -138,6 +139,7 @@ export async function emitMemberAttendanceSignals({ customerId, attendanceId, gy
 }
 
 const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
+const MEMBERSHIP_PAYOUT_TIMEOUT_MS = 3000;
 // Upper bound on the small sibling reads createBooking fans out (profile,
 // slot blocks, subscription candidate).
 const SIBLING_CALL_TIMEOUT_MS = 3000;
@@ -421,6 +423,7 @@ function debitIdempotencyKey(bookingId) {
 async function reconcileStalePendingBooking(booking) {
   if (!isStalePending(booking)) return booking;
 
+  if (booking.coverage) return normalizeBookingMoney(await confirmReservation(prisma, booking));
   if (booking.subscriptionId) {
     return prisma.booking.update({ where: { id: booking.id }, data: { status: 'confirmed' } })
       .then(normalizeBookingMoney).catch(() => null);
@@ -477,7 +480,21 @@ function bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subsc
   return { commissionPct, partnerShare, isAttendanceSaas: false };
 }
 
-async function reserveBookingSlot({ customerId, gymId, classId = null, date, startTime, endTime, amount, capacity, candidateSubscription = null, gymCommissionPct = null }) {
+const NEEDS_CLEARANCE_CHECK = Symbol('needs clearance check');
+
+export async function membershipClearanceRequired(customerId) {
+  try {
+    const response = await axios.get(
+      `${WALLET_SERVICE_URL}/coaching/internal/${customerId}`,
+      { ...(await internalHeadersFor(WALLET_SERVICE_URL)), timeout: SIBLING_CALL_TIMEOUT_MS },
+    );
+    return response.data?.data?.clearanceRequired !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function reserveBookingSlot({ customerId, gymId, classId = null, date, startTime, endTime, amount, capacity, candidateSubscription = null, gym }) {
   // A class booking's "duplicate" and "capacity" identity is scoped by
   // classId instead of startTime — two different classes (or a class and a
   // walk-in slot) can legitimately share the same startTime at the same
@@ -490,6 +507,9 @@ async function reserveBookingSlot({ customerId, gymId, classId = null, date, sta
     ? { customerId, classId, date, status: { not: 'cancelled' } }
     : { customerId, gymId, date, startTime, classId: null, status: { not: 'cancelled' } };
   const duplicateError = classId ? 'You already have a booking for this class' : 'You already have a booking for this slot';
+  const visit = new Date(`${date}T${startTime}:00+05:30`);
+  const networkEligible = !classId && isMembershipCity(gym.city) && Number.isFinite(+visit);
+  let clearanceVerified = false;
 
   for (let attempt = 1; attempt <= RESERVE_MAX_ATTEMPTS; attempt++) {
     // Reconcile a stale pending duplicate BEFORE opening the transaction —
@@ -525,7 +545,7 @@ async function reserveBookingSlot({ customerId, gymId, classId = null, date, sta
           throw { status: 409, error: 'Slot is full' };
         }
 
-        // Decide subscription coverage in the SAME serializable transaction
+        // Decide coverage in the same serializable transaction
         // as the insert — otherwise two concurrent requests for two
         // different slots at the same gym/day can each read "not used
         // today" before either commits, granting two free sessions in one
@@ -540,26 +560,61 @@ async function reserveBookingSlot({ customerId, gymId, classId = null, date, sta
         // all (candidateSubscription is never passed for one).
         let subscriptionId = null;
         let subscription = null;
-        if (candidateSubscription) {
+        let entitlement = null;
+        let addon = null;
+        if (networkEligible || candidateSubscription) {
           const usedToday = await tx.booking.findFirst({
-            where: { customerId, gymId, date, subscriptionId: { not: null }, status: { not: 'cancelled' } },
+            where: {
+              customerId, gymId, date, status: { not: 'cancelled' },
+              OR: [{ subscriptionId: { not: null } }, { coverage: { not: null } }],
+            },
             select: { id: true },
           });
           if (!usedToday) {
-            subscription = candidateSubscription;
-            subscriptionId = subscription.id;
+            if (networkEligible) {
+              const now = new Date();
+              entitlement = await findVisitEntitlement(tx, customerId, now, visit);
+              if (entitlement?.requiresClearance && !clearanceVerified) throw NEEDS_CLEARANCE_CHECK;
+              if (!entitlement) addon = await consumeGymAddon(tx, customerId, visit > now ? visit : now);
+            }
+            if (!entitlement && !addon) {
+              subscription = candidateSubscription;
+              subscriptionId = subscription?.id ?? null;
+            }
           }
         }
 
-        return tx.booking.create({
+        const coverage = entitlement ? 'entitlement' : addon ? 'addon' : null;
+        if (gym.marketplaceEnabled === false && !coverage) throw { status: 404, error: 'Gym not found' };
+        const commission = coverage
+          ? { partnerShare: (await getMembershipPayoutConfig(tx)).payoutPaise / 100, isAttendanceSaas: gym.attendanceSaasOptedOut !== true }
+          : bookingCommissionFields(amount, subscriptionId, gym.commissionPct, subscription);
+        const booking = await tx.booking.create({
           data: {
-            customerId, gymId, classId, date, startTime, endTime, amount, status: 'pending', subscriptionId,
-            ...bookingCommissionFields(amount, subscriptionId, gymCommissionPct, subscription),
+            customerId, gymId, classId, date, startTime, endTime, amount: coverage ? 0 : amount, status: 'pending', subscriptionId,
+            ...(coverage ? { coverage, entitlementId: entitlement?.id, addonBalanceId: addon?.id } : {}),
+            ...commission,
           },
         });
+        return { booking, addonRemaining: addon ? addon.remaining - 1 : null };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-      return normalizeBookingMoney(created);
+      if (created.addonRemaining !== null) {
+        trackMembershipEvent(() => track('membership_addon_visit_consumed', customerId, {
+          gym_id: gymId, remaining: created.addonRemaining,
+        }));
+      }
+      return normalizeBookingMoney(created.booking);
     } catch (err) {
+      // Learn the customer's current clearance outside the database
+      // transaction, then decide coverage again in a fresh snapshot.
+      if (err === NEEDS_CLEARANCE_CHECK) {
+        if (await membershipClearanceRequired(customerId)) {
+          throw { status: 409, error: 'Medical clearance is required before booking a gym visit', code: 'CLEARANCE_REQUIRED' };
+        }
+        clearanceVerified = true;
+        attempt--;
+        continue;
+      }
       // Business-rule rejection (duplicate slot / full slot) — surface immediately, don't retry.
       if (err && err.status) throw err;
 
@@ -591,7 +646,7 @@ async function reserveBookingSlot({ customerId, gymId, classId = null, date, sta
 async function notifyOnConfirmation(booking, { customerId, gymId, date, startTime, subscriptionId, city }) {
   track('booking_confirmed', customerId, {
     booking_id: booking.id, gym_id: gymId, amount: booking.amount, date, start_time: startTime,
-    via: subscriptionId ? 'subscription' : 'wallet', city,
+    via: subscriptionId || booking.coverage ? 'subscription' : 'wallet', city,
   });
 
   notifyPartner(gymId, booking).catch(() => {});
@@ -682,17 +737,9 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       throw { status: 404, error: 'Gym not found' };
     }
 
-    // A gym that's opted out of the marketplace business model entirely
-    // (SaaS-only) never accepts new pay-per-session bookings — same
-    // "gym not found" posture as an unapproved/deactivated gym, since it's
-    // invisible everywhere else in the marketplace too (see gym-service's
-    // listGyms/getGymById). Explicit `=== false` (not `!gym.marketplaceEnabled`)
-    // is deliberate: this field is new, and gym-service/booking-service
-    // deploy independently, so a version-skew window where gym-service
-    // hasn't rolled out yet and this key is simply absent from the response
-    // must fail OPEN here, not closed — unlike isActive/isApproved, which
-    // have always been present.
-    if (gym.marketplaceEnabled === false) {
+    // SaaS-only gyms can take network visits in Gurugram. The reservation
+    // transaction verifies coverage before admitting a booking there.
+    if (gym.marketplaceEnabled === false && (classId || !isMembershipCity(gym.city))) {
       throw { status: 404, error: 'Gym not found' };
     }
 
@@ -828,7 +875,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       reservation = await reserveBookingSlot({
         customerId, gymId, classId: classId || null, date,
         startTime: effectiveStartTime, endTime: effectiveEndTime,
-        amount, capacity, candidateSubscription, gymCommissionPct: gym.commissionPct,
+        amount, capacity, candidateSubscription, gym,
       });
     } catch (err) {
       if (err?.status === 409 && err.error === 'Slot is full') {
@@ -867,13 +914,9 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
       ).catch(() => {});
     }
 
-    // 4. Debit customer wallet — skipped entirely when this booking is
-    // covered by an active subscription (subscriptionId set above), which
-    // for a class only ever happens on the "included" (price null) path —
-    // a priced class always reaches this branch since it never sets
-    // subscriptionId. The reservation above already committed locally, so
-    // this network call never runs inside an open DB transaction.
-    if (!subscriptionId) {
+    // Debit the customer only for an uncovered booking. Reserve the slot
+    // first so the call stays outside the database transaction.
+    if (!subscriptionId && !reservation.coverage) {
       try {
         await axios.post(`${WALLET_SERVICE_URL}/${customerId}/debit`, {
           amount,
@@ -947,7 +990,7 @@ export async function createBooking(customerId, { gymId, date, startTime, endTim
     // cancel in those two minutes got a different refund than one after.
     track('booking_created', customerId, {
       booking_id: reservation.id, gym_id: gymId, class_id: classId || undefined, amount: reservation.amount, date, start_time: effectiveStartTime,
-      via: subscriptionId ? 'subscription' : 'wallet', city: gym.city,
+      via: subscriptionId || reservation.coverage ? 'subscription' : 'wallet', city: gym.city,
     });
 
     // One round trip on the normal path: update() with the same status guard
@@ -1323,44 +1366,139 @@ export async function retryOwedRefunds() {
   return { owed: owed.length, refunded };
 }
 
-// Credits one completion's partner share to the partner's wallet and stamps
-// payoutCreditedAt. Keyed on the booking (booking-payout-<id>), so the manual
-// completion path and every retry by the sweep credit it most once. Never
-// throws; returns whether the payout is now settled.
-async function creditBookingPayout({ id, gymId, partnerId, amount }) {
+// Credit the partner wallet with the booking's payout key. Legacy payouts
+// stamp here and return false on failure. Network payouts share a stamp
+// and failure telemetry with the bank channel.
+async function creditBookingPayout({ id, gymId, partnerId, amount, coverage, payoutTiming }) {
   if (!partnerId) return false;
   try {
+    const options = await internalHeadersFor(WALLET_SERVICE_URL);
+    if (coverage) options.timeout = MEMBERSHIP_PAYOUT_TIMEOUT_MS;
     await axios.post(`${WALLET_SERVICE_URL}/${partnerId}/credit`, {
       amount,
-      description: 'Gym session payout',
+      description: coverage ? 'Network visit payout' : 'Gym session payout',
       userType: 'partner',
       gymId,
       // One payout per session, whichever path completed it. The status flip
       // is already race-guarded; this makes a retried credit safe too.
-      idempotencyKey: `booking-payout-${id}`,
-    }, await internalHeadersFor(WALLET_SERVICE_URL));
+      idempotencyKey: payoutTiming === 'checkin' ? `checkin-payout-${id}` : `booking-payout-${id}`,
+    }, options);
   } catch (err) {
+    if (coverage) throw err;
     console.error('Partner payout failed for booking', id, err.message);
     return false;
   }
+  // Network wallet and bank payouts share the same conditional stamp.
+  if (coverage) return true;
   await prisma.booking.update({ where: { id }, data: { payoutCreditedAt: new Date() } })
     .catch((err) => console.error('payoutCreditedAt stamp failed for booking', id, err.message));
   return true;
 }
 
-// Retries every completion payout that is owed but not yet credited. Run by the
-// hourly settlement sweep (POST /internal/auto-complete) alongside refunds and
-// auto-completion. Safe to run any number of times: the credit is keyed on
-// booking-payout-<id>, so a payout whose stamp was lost is not paid twice.
+async function settleMembershipVisitPayout(booking) {
+  if (booking.payoutCreditedAt) return true;
+  const { id, gymId, customerId, payoutPartnerId: partnerId } = booking;
+  const amount = Number(booking.payoutAmount);
+  const channel = booking.isAttendanceSaas ? 'bank' : 'wallet';
+  const eventProps = { gym_id: gymId, amount_paise: Math.round(amount * 100), channel };
+  try {
+    if (!partnerId || !Number.isFinite(amount) || amount <= 0) throw new Error('Missing payout recipient or amount');
+    if (channel === 'bank') {
+      await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
+        partnerId, gymId, bookingId: id, amount,
+        entitlementId: booking.entitlementId, addonBalanceId: booking.addonBalanceId,
+      }, { ...(await internalHeadersFor(WALLET_SERVICE_URL)), timeout: MEMBERSHIP_PAYOUT_TIMEOUT_MS });
+    } else {
+      await creditBookingPayout({ id, gymId, partnerId, amount, coverage: booking.coverage, payoutTiming: booking.payoutTiming });
+    }
+    const { count } = await prisma.booking.updateMany({
+      where: { id, payoutCreditedAt: null }, data: { payoutCreditedAt: new Date() },
+    });
+    if (count) trackMembershipEvent(() => track('membership_visit_payout_credited', customerId, eventProps));
+    return true;
+  } catch (err) {
+    console.error('Network visit payout failed for booking', id, err.message);
+    trackMembershipEvent(() => track('membership_visit_payout_failed', customerId, eventProps));
+    return false;
+  }
+}
+
+function membershipCheckinPayoutData(booking, partnerId) {
+  return { payoutTiming: 'checkin', payoutAmount: booking.partnerShare, payoutPartnerId: partnerId };
+}
+
+async function settleMembershipCheckin(booking, { recorded = false } = {}) {
+  if (!booking.coverage || !booking.attendedAt) return;
+  if (recorded) {
+    trackMembershipEvent(() => track('membership_visit_checked_in', booking.customerId, {
+      gym_id: booking.gymId, covered_by: booking.coverage,
+    }));
+  }
+  if (booking.payoutTiming === 'checkin' && !booking.payoutCreditedAt) {
+    await settleMembershipVisitPayout(booking);
+  }
+}
+
+export async function reverseCheckinPayout(bookingId) {
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking) throw { status: 404, error: 'Booking not found' };
+  if (!booking.coverage || booking.payoutTiming !== 'checkin' || !booking.payoutCreditedAt) {
+    throw { status: 409, error: 'This booking has no settled check-in payout' };
+  }
+  if (booking.payoutReversedAt) return { reversedAt: booking.payoutReversedAt };
+
+  const idempotencyKey = `checkin-payout-reversal-${bookingId}`;
+  const amount = Number(booking.payoutAmount);
+  const channel = booking.isAttendanceSaas ? 'bank' : 'wallet';
+  try {
+    if (channel === 'bank') {
+      await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/reverse`, {
+        bookingId,
+      }, await internalHeadersFor(WALLET_SERVICE_URL));
+    } else {
+      await axios.post(`${WALLET_SERVICE_URL}/${booking.payoutPartnerId}/debit`, {
+        amount, description: 'Network visit payout reversal', gymId: booking.gymId, idempotencyKey, allowNegative: true,
+      }, await internalHeadersFor(WALLET_SERVICE_URL));
+    }
+  } catch (err) {
+    if (channel === 'bank' && err.response?.status === 409) {
+      throw { status: 409, error: 'This bank settlement has already been transferred' };
+    }
+    console.error('Network visit payout reversal failed for booking', bookingId, err.message);
+    throw { status: 502, error: 'Could not reverse this check-in payout. Please try again.' };
+  }
+  const reversedAt = new Date();
+  const { count } = await prisma.booking.updateMany({
+    where: { id: bookingId, payoutReversedAt: null }, data: { payoutReversedAt: reversedAt },
+  });
+  if (!count) {
+    const current = await prisma.booking.findUnique({ where: { id: bookingId } });
+    return { reversedAt: current.payoutReversedAt };
+  }
+  trackMembershipEvent(() => track('membership_visit_payout_reversed', booking.customerId, {
+    gym_id: booking.gymId, amount_paise: Math.round(amount * 100), channel,
+  }));
+  return { reversedAt };
+}
+
+// The hourly sweep retries both check-in and completion payouts using the
+// original wallet key or bank ledger receipt.
 export async function retryOwedPayouts() {
   const owed = await prisma.booking.findMany({
-    where: { status: 'completed', payoutAmount: { not: null }, payoutCreditedAt: null },
+    where: {
+      OR: [{ status: 'completed' }, { payoutTiming: 'checkin', attendedAt: { not: null } }],
+      payoutAmount: { not: null }, payoutCreditedAt: null,
+    },
     orderBy: { id: 'asc' },
     take: 200,
   });
   const gyms = new Map();
   let paid = 0;
   for (const booking of owed) {
+    if (booking.coverage) {
+      if (await settleMembershipVisitPayout(booking)) paid++;
+      continue;
+    }
     let partnerId = null;
     try {
       if (!gyms.has(booking.gymId)) {
@@ -1425,7 +1563,13 @@ async function settleCompletedBooking({ booking, updatedBooking, gym, gymId, com
   // Everything else — one-off marketplace bookings, and subscriptions at
   // an opted-out gym — keeps crediting the wallet exactly as before.
   const isSaasBankSettlement = booking.subscriptionId && booking.isAttendanceSaas && booking.partnerShare != null;
-  if (isSaasBankSettlement) {
+  if (updatedBooking.coverage) {
+    // QR attendance owns its payout even when the credit or stamp needs to
+    // be retried. Completion keys are reserved for manual attendance.
+    if (updatedBooking.payoutTiming !== 'checkin' && !updatedBooking.payoutCreditedAt) {
+      await settleMembershipVisitPayout(updatedBooking);
+    }
+  } else if (isSaasBankSettlement) {
     try {
       if (gym.partnerId) {
         await axios.post(`${WALLET_SERVICE_URL}/internal/bank-settlements/record`, {
@@ -1599,8 +1743,15 @@ export async function completeBooking(bookingId, gymId, partnerId, { override = 
       ? null
       : (booking.partnerShare ?? booking.amount);
     const { count } = await prisma.booking.updateMany({
-      where: { id: bookingId, status: { in: ['confirmed', 'started'] } },
-      data: { status: 'completed', ...attendanceData, payoutAmount: payoutOwed }
+      where: {
+        id: bookingId, status: { in: ['confirmed', 'started'] },
+        ...(booking.coverage && !booking.attendedAt ? { attendedAt: null } : {}),
+      },
+      data: {
+        status: 'completed', ...attendanceData, payoutAmount: payoutOwed,
+        ...(booking.coverage && booking.payoutTiming !== 'checkin' && !booking.payoutPartnerId
+          ? { payoutPartnerId: gym.partnerId } : {}),
+      },
     });
     if (count === 0) {
       throw { status: 400, error: 'Booking cannot be completed' };
@@ -1695,7 +1846,11 @@ export async function autoCompleteEndedSessions({ nowMs = Date.now() } = {}) {
         : (booking.partnerShare ?? booking.amount);
       const { count } = await prisma.booking.updateMany({
         where: { id: booking.id, status: 'started' },
-        data: { status: 'completed', payoutAmount: payoutOwed },
+        data: {
+          status: 'completed', payoutAmount: payoutOwed,
+          ...(booking.coverage && booking.payoutTiming !== 'checkin' && !booking.payoutPartnerId
+            ? { payoutPartnerId: gym.partnerId } : {}),
+        },
       });
       if (count === 0) continue; // completed or cancelled by someone else meanwhile
 
@@ -1828,6 +1983,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
     // already-verified booking must never fail just because the window has
     // since closed.
     if (booking.attendedAt) {
+      await settleMembershipCheckin(booking);
       return {
         bookingId: booking.id,
         attendedAt: booking.attendedAt,
@@ -1866,19 +2022,11 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
       slotShift = proposed;
     }
 
-    // A real camera scan must present a valid signed token — a bare gymId is
-    // no longer enough to prove a scan actually happened. There used to be a
-    // 'manual' fallback with no corroborating signal at all (partner-web has
-    // no camera) — removed, since it let a partner mark any confirmed
-    // booking as attended with the customer never having been there, which
-    // directly gated that partner's own payout. Attendance can only be
-    // verified by a real signed QR scan now, or by the customer themselves
-    // via self-check-in's GPS geofence.
-    const check = verifyQrToken(qrToken, bookingId, gymId);
-    if (!check.valid) {
+    const manualMembershipVerify = !!booking.coverage && qrToken == null;
+    if (!manualMembershipVerify && !verifyQrToken(qrToken, bookingId, gymId).valid) {
       throw { status: 400, error: 'This QR code could not be verified — please rescan.', code: 'INVALID_QR' };
     }
-    const attendanceMethod = 'qr_scan';
+    const attendanceMethod = manualMembershipVerify ? 'manual_verify' : 'qr_scan';
 
     // updateMany + a status guard, not update() — the idempotency check
     // above read `booking` before this point, so two truly concurrent
@@ -1895,6 +2043,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
           attendedAt: new Date(),
           attendanceMethod,
           attendanceVerifiedBy: partnerId,
+          ...(booking.coverage && !manualMembershipVerify ? membershipCheckinPayoutData(booking, partnerId) : {}),
           ...(slotShift
             ? { startTime: slotShift.newStartTime, endTime: slotShift.newEndTime, slotShiftWarning: true }
             : {}),
@@ -1922,6 +2071,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
       // now-committed state as already-verified rather than erroring, since
       // attendance IS recorded, just not by this particular request.
       const current = await prisma.booking.findUnique({ where: { id: bookingId } });
+      await settleMembershipCheckin(current);
       return {
         bookingId: current.id,
         attendedAt: current.attendedAt,
@@ -1932,6 +2082,7 @@ export async function verifyAttendance(bookingId, gymId, partnerId, { qrToken, c
     }
 
     const updated = await prisma.booking.findUnique({ where: { id: bookingId } });
+    await settleMembershipCheckin(updated, { recorded: true });
 
     // This booking was just marked attended — auth may need to flip the
     // customer's GymLink.firstVerifiedCheckinAt (roster visibility, B2).
@@ -2041,6 +2192,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
     }
 
     if (booking.attendedAt) {
+      await settleMembershipCheckin(booking);
       return {
         bookingId: booking.id,
         attendedAt: booking.attendedAt,
@@ -2096,7 +2248,7 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
     // attendanceVerifiedBy deliberately left null — that field means "which
     // partner recorded this"; self-check-in has no verifying partner, and
     // attendanceMethod='qr_geofence_self' already says who/how.
-    const updated = await prisma.$transaction(async (tx) => {
+    const { updated, recorded } = await prisma.$transaction(async (tx) => {
       // Conditioned on still being 'confirmed'. The status was read before the
       // geofence and slot-shift checks; a cancel landing in between used to be
       // overwritten here, turning a cancelled-and-refunded booking into a
@@ -2107,12 +2259,17 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
           status: 'started',
           attendedAt: new Date(),
           attendanceMethod: 'qr_geofence_self',
+          ...(booking.coverage ? membershipCheckinPayoutData(booking, gym.partnerId) : {}),
           ...(slotShift
             ? { startTime: slotShift.newStartTime, endTime: slotShift.newEndTime, slotShiftWarning: true }
             : {}),
         },
       });
       if (count === 0) {
+        if (booking.coverage) {
+          const current = await tx.booking.findUnique({ where: { id: booking.id } });
+          if (current?.attendedAt) return { updated: current, recorded: false };
+        }
         throw { status: 409, error: 'This booking was cancelled or already checked in' };
       }
       const result = await tx.booking.findUnique({ where: { id: booking.id } });
@@ -2130,8 +2287,16 @@ export async function selfCheckIn(gymId, customerId, lat, lng, confirmEarly = fa
           },
         });
       }
-      return result;
+      return { updated: result, recorded: true };
     });
+
+    await settleMembershipCheckin(updated, { recorded });
+    if (!recorded) {
+      return {
+        bookingId: updated.id, attendedAt: updated.attendedAt, attendanceMethod: updated.attendanceMethod,
+        alreadyVerified: true,
+      };
+    }
 
     track(slotShift ? 'attendance_slot_mismatch_confirmed' : 'attendance_verified', customerId, {
       booking_id: booking.id, gym_id: gymId, method: 'qr_geofence_self', city: gym?.city ?? null,
