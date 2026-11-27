@@ -283,6 +283,15 @@ model MembershipPayoutConfig {
   @@schema("booking")
 }
 
+model GymMembershipPayout {
+  gymId       Int      @id
+  payoutPaise Int
+  updatedAt   DateTime @updatedAt
+  updatedBy   Int?
+
+  @@schema("booking")
+}
+
 enum BookingCoverage {
   entitlement
   addon

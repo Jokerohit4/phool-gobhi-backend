@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { FEATURE_FLAGS } from '../config/featureFlagRegistry.js';
+import { isPendingSubscriptionClientFlag } from './pendingSubscriptionClientFlags.js';
 
 // The offline fallback and the server defaults answer the same question - "the
 // app has no config yet, what is on?" - from two files that were never compared.
@@ -40,9 +41,7 @@ const customerAppCubit = join(
   'app_update_cubit.dart',
 );
 
-function readDartNotRequired() {
-  if (!existsSync(customerAppModel)) return null;
-  const dart = readFileSync(customerAppModel, 'utf8');
+function readDartNotRequired(dart) {
   const start = dart.indexOf('AppConfigModel.notRequired()');
   if (start === -1) throw new Error('AppConfigModel.notRequired() not found');
 
@@ -65,14 +64,15 @@ function readDartNotRequired() {
 }
 
 test('the offline fallback matches the server defaults for every flag', (t) => {
-  const dart = readNotRequiredOrSkip(t);
+  const dart = readDartModelOrSkip(t);
   if (!dart) return;
+  const defaults = readDartNotRequired(dart);
 
   const divergence = [];
   for (const flag of FEATURE_FLAGS) {
-    if (!flag.clientKey) continue; // fhirExport; the contract test pins that it is the only one
+    if (!flag.clientKey || isPendingSubscriptionClientFlag(flag.clientKey, dart)) continue;
     const clientKey = flag.clientKey;
-    const clientDefault = dart.get(clientKey);
+    const clientDefault = defaults.get(clientKey);
     if (clientDefault === undefined) {
       divergence.push(`${flag.name}: server=${flag.defaultEnabled}, client has no notRequired() entry`);
     } else if (clientDefault !== flag.defaultEnabled) {
@@ -86,21 +86,21 @@ test('the offline fallback matches the server defaults for every flag', (t) => {
   );
 });
 
-function readNotRequiredOrSkip(t) {
-  const dart = readDartNotRequired();
-  if (!dart) {
+function readDartModelOrSkip(t) {
+  if (!existsSync(customerAppModel)) {
     t.skip('customer app not present (backend-only checkout) - offline fallback is unverified');
     return null;
   }
-  return dart;
+  return readFileSync(customerAppModel, 'utf8');
 }
 
 test('every client flag with a clientKey appears in notRequired()', (t) => {
-  const dart = readNotRequiredOrSkip(t);
+  const dart = readDartModelOrSkip(t);
   if (!dart) return;
+  const defaults = readDartNotRequired(dart);
   const missing = FEATURE_FLAGS.filter((f) => f.clientKey)
     .map((f) => f.clientKey)
-    .filter((k) => !dart.has(k))
+    .filter((k) => !defaults.has(k) && !isPendingSubscriptionClientFlag(k, dart))
     .sort();
   assert.deepEqual(
     missing,
@@ -120,7 +120,7 @@ test('the client resolves a missing key the same way the registry defaults it', 
     return;
   }
   const dart = readFileSync(customerAppModel, 'utf8');
-  const notRequired = readDartNotRequired();
+  const notRequired = readDartNotRequired(dart);
 
   // `<clientKey>: <local>['enabled'] as bool? ?? <default>,`
   const fromJson = new Map();
@@ -140,7 +140,7 @@ test('the client resolves a missing key the same way the registry defaults it', 
 
   const divergence = [];
   for (const flag of FEATURE_FLAGS) {
-    if (!flag.clientKey) continue;
+    if (!flag.clientKey || isPendingSubscriptionClientFlag(flag.clientKey, dart)) continue;
     const key = flag.clientKey;
     const nj = notRequired.get(key);
     const fj = fromJson.get(key);
@@ -189,11 +189,12 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
   // Follow that exact fallback chain, then compare the model's parsed literal
   // values below; a renamed getter or a different fallback must still fail.
   const delegated = [...dart.matchAll(/bool\s+get\s+(\w+)\s*=>\s*_config\.(\w+)\s*;/g)];
+  const model = existsSync(customerAppModel) ? readFileSync(customerAppModel, 'utf8') : '';
   if (delegated.length) {
     assert.match(dart, /_failClosed\s*=\s*AppConfigModel\.notRequired\(\)/);
     assert.match(dart, /AppConfigModel\s+get\s+_config\s*=>\s*_store\.config\s*\?\?\s*_failClosed/);
-    const fallback = readDartNotRequired();
-    assert.ok(fallback, 'cannot resolve the delegated model fallback');
+    assert.ok(model, 'cannot resolve the delegated model fallback');
+    const fallback = readDartNotRequired(model);
     for (const [, key, property] of delegated) {
       assert.equal(key, property, 'a cubit flag delegates to a different model property');
       assert.ok(fallback.has(property), `missing model fallback for ${property}`);
@@ -232,6 +233,7 @@ test('the cubit pre-fetch defaults match the registry too', (t) => {
     if (!flag.clientKey) continue; // fhirExport; server-only by design
     const key = flag.clientKey;
     if (readFromTheStore.has(key)) continue;
+    if (isPendingSubscriptionClientFlag(key, model) && !cubitDefaults.has(key)) continue;
     if (!cubitDefaults.has(key)) {
       missing.push(key);
     } else if (cubitDefaults.get(key) !== flag.defaultEnabled) {

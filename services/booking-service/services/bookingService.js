@@ -20,7 +20,7 @@ import * as checkinDaysService from './checkinDaysService.js';
 import { leaderboardIdentity } from '../utils/leaderboardIdentity.js';
 import { pageArgs, finishPage } from '../utils/pagination.js';
 import { createTtlCache } from '../utils/ttlCache.js';
-import { consumeGymAddon, findVisitEntitlement, getMembershipPayoutConfig, isMembershipCity, trackMembershipEvent } from './membershipService.js';
+import { consumeGymAddon, findVisitEntitlement, isMembershipCity, resolveMembershipPayoutPaise, trackMembershipEvent } from './membershipService.js';
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -587,7 +587,7 @@ async function reserveBookingSlot({ customerId, gymId, classId = null, date, sta
         const coverage = entitlement ? 'entitlement' : addon ? 'addon' : null;
         if (gym.marketplaceEnabled === false && !coverage) throw { status: 404, error: 'Gym not found' };
         const commission = coverage
-          ? { partnerShare: (await getMembershipPayoutConfig(tx)).payoutPaise / 100, isAttendanceSaas: gym.attendanceSaasOptedOut !== true }
+          ? { partnerShare: (await resolveMembershipPayoutPaise(tx, gymId)) / 100, isAttendanceSaas: gym.attendanceSaasOptedOut !== true }
           : bookingCommissionFields(amount, subscriptionId, gym.commissionPct, subscription);
         const booking = await tx.booking.create({
           data: {
@@ -653,7 +653,7 @@ async function notifyOnConfirmation(booking, { customerId, gymId, date, startTim
   notifyCustomer(customerId, {
     title: 'Booking confirmed',
     // A plan-covered session charges nothing; "₹299 debited" there was false.
-    body: subscriptionId
+    body: subscriptionId || booking.coverage
       ? `Your session on ${booking.date} at ${formatSlotTime(booking.startTime)} is confirmed. Covered by your plan.`
       : `Your session on ${booking.date} at ${formatSlotTime(booking.startTime)} is confirmed. ₹${booking.amount} paid from your wallet.`,
     data: { type: 'booking_confirmed', bookingId: booking.id, date: booking.date },
@@ -1160,7 +1160,7 @@ export async function cancelBooking(bookingId, customerId, feedback = {}) {
     // for the plan, not this session, so `amount` is the slot's list price.
     // Returning amount * rate here used to tell them "₹299 refunded" for a
     // refund that never happened.
-    const refundAmount = booking.subscriptionId
+    const refundAmount = booking.subscriptionId || booking.coverage
       ? 0
       : Math.round(booking.amount * refundRate * 100) / 100;
 
@@ -1282,7 +1282,7 @@ export async function cancelBookingByGym(bookingId, gymId, partnerId, { reason }
     }
 
     const note = typeof reason === 'string' ? reason.trim().slice(0, 200) : '';
-    const refundAmount = booking.subscriptionId ? 0 : booking.amount;
+    const refundAmount = booking.subscriptionId || booking.coverage ? 0 : booking.amount;
 
     const { count } = await prisma.booking.updateMany({
       where: { id: bookingId, gymId, status: { in: ['pending', 'confirmed'] } },

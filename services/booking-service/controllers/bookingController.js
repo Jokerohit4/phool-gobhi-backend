@@ -39,9 +39,20 @@ function membershipHandler(handle) {
 export const createGymEntitlement = membershipHandler(req => membership.createGymEntitlement(req.body ?? {}));
 export const cancelGymEntitlement = membershipHandler(req => membership.cancelGymEntitlement(req.body?.orderRef));
 export const grantGymAddon = membershipHandler(req => membership.grantGymAddon(req.body ?? {}));
-export const getMembershipPayoutConfig = membershipHandler(() => membership.getMembershipPayoutConfig());
+export const getMembershipPayoutConfig = membershipHandler(async () => {
+  const [config, overrides] = await Promise.all([
+    membership.getMembershipPayoutConfig(),
+    membership.listGymMembershipPayouts(),
+  ]);
+  return { ...config, overrides };
+});
 export const updateMembershipPayoutConfig = membershipHandler(req =>
   membership.updateMembershipPayoutConfig(req.body?.payoutPaise, req.userId, req.body?.expectedUpdatedAt));
+export const listGymMembershipPayouts = membershipHandler(() => membership.listGymMembershipPayouts());
+export const updateGymMembershipPayout = membershipHandler(req =>
+  membership.updateGymMembershipPayout(Number(req.params.gymId), req.body?.payoutPaise, req.userId, req.body?.expectedUpdatedAt));
+export const deleteGymMembershipPayout = membershipHandler(req =>
+  membership.deleteGymMembershipPayout(Number(req.params.gymId), req.body?.expectedUpdatedAt));
 
 export const getMyEntitlement = membershipHandler(async req => {
   const result = await membership.getCustomerEntitlement(req.userId);

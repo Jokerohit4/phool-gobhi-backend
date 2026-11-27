@@ -406,11 +406,6 @@ export async function buildFullExportService(userId) {
       prisma.healthCondition.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       prisma.doctorAppointment.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
       prisma.foodPhotoRequestLog.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
-      // Foods this person could not find, and what they typed instead. It is
-      // their data and it is erased with the account, so it is exported with it
-      // - the invariant this block is built on, that we never delete on request
-      // something we never showed on request.
-      prisma.foodRequest.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
 
       // Medical documents are the one slice NOT unconditionally exported: they
       // sit behind a second, independent consent scope, and including them in a
@@ -430,6 +425,8 @@ export async function buildFullExportService(userId) {
       prisma.healthProfile.findUnique({ where: { userId } }),
       prisma.medicationReminder.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       prisma.healthProfileConsent.findUnique({ where: { userId } }),
+      // Foods the customer could not find, and what they typed instead.
+      prisma.foodRequest.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
 
       // Coach journey (Gobhi the Coach, 2026-10): water logs, supplement
       // schedules and logs, journey progress, and coach consent. Erased with

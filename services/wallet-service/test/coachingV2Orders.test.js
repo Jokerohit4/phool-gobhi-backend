@@ -10,9 +10,14 @@ const userId = 7;
 const day = 86400000;
 let api, configApi, router, extractUser, account, context, config, history, member, orders, grants, records, events, providerOrders, refunds, trackingFailure;
 let coupons, redemptions, locks, failedPayments, beforeProviderOrder, db;
-let bookingRequests, bookingUnavailable, sessionLogs;
+let bookingRequests, bookingUnavailable, sessionLogs, guidanceWrites, otherGuidanceProfiles;
 
 const copy = value => structuredClone(value ?? null);
+function guidanceFor(id) {
+  if (id === userId) return context;
+  if (!otherGuidanceProfiles.has(id)) otherGuidanceProfiles.set(id, { hasCondition: null });
+  return otherGuidanceProfiles.get(id);
+}
 function matches(row, where) {
   return Object.entries(where).every(([key, value]) => {
     if (key === 'NOT') return !matches(row, value);
@@ -179,7 +184,22 @@ before(async t => {
           .reduce((total, row) => total + row.body.sessions, 0);
         return { data: { data: { addonRemaining } } };
       }
-      return { data: { data: url.includes('/guidance/internal/') ? context : account } };
+      const guidance = new URL(url).pathname.match(/^\/guidance\/internal\/(\d+)$/);
+      return { data: { data: guidance ? guidanceFor(Number(guidance[1])) : account } };
+    },
+    put: async (url, { region, statedCondition }) => {
+      const match = new URL(url).pathname.match(/^\/guidance\/internal\/(\d+)\/condition$/);
+      assert.ok(match);
+      guidanceWrites.push({ region, statedCondition });
+      const profile = guidanceFor(Number(match[1]));
+      if (statedCondition && profile.conditionSource === 'report' && statedCondition !== profile.conditionType) {
+        throw { response: { status: 409, data: { error: 'Your report set this answer. Contact support to change it.' } } };
+      }
+      profile.region = region;
+      if (statedCondition && profile.conditionSource !== 'report') {
+        Object.assign(profile, { hasCondition: true, conditionType: statedCondition, conditionSource: 'self_declared' });
+      }
+      return { data: { data: { ...profile } } };
     },
     post: async (url, body) => {
       bookingRequests.push({ path: new URL(url).pathname, body: copy(body), delivered: !bookingUnavailable });
@@ -220,7 +240,9 @@ before(async t => {
 
 beforeEach(() => {
   account = { dateOfBirth: '1995-01-01', isActive: true, name: 'Private Name', phone: '1234567890' };
-  context = { hasUploadedReport: false, confirmedDetails: { name: 'Private Name' } };
+  context = { hasCondition: null, hasUploadedReport: false, confirmedDetails: { name: 'Private Name' } };
+  guidanceWrites = [];
+  otherGuidanceProfiles = new Map();
   config = member = trackingFailure = null;
   orders = []; grants = []; records = []; events = []; providerOrders = []; refunds = []; history = [];
   bookingRequests = [];
@@ -257,32 +279,69 @@ test('HTTP routes keep the legacy catalog and pass v2 quote and checkout inputs 
   try {
     const legacy = await fetch(`${url}/catalog?city=Gurgaon`, { headers });
     assert.deepEqual((await legacy.json()).data, coachingCatalog('Gurgaon'));
-    const catalog = await fetch(`${url}/catalog/v2?city=Mumbai`, { headers });
-    assert.deepEqual((await catalog.json()).data, coachingCatalogV2('Mumbai'));
+    for (const [hasCondition, suggestedFamily] of [[null, null], [false, 'wellness'], [true, 'medical']]) {
+      context.hasCondition = hasCondition;
+      const catalog = await fetch(`${url}/catalog/v2?city=Mumbai`, { headers });
+      assert.deepEqual((await catalog.json()).data, { ...coachingCatalogV2('Mumbai'), eligibility: { hasCondition, suggestedFamily } });
+    }
+    context.hasCondition = false;
     const input = { product: 'MED_30', ...selection('MED_30', 'Mumbai'), statedCondition: 'prediabetes' };
     const post = body => fetch(`${url}/orders`, { method: 'POST', headers, body: JSON.stringify(body) });
+    const refused = await post({ ...input, statedCondition: undefined });
+    assert.equal(refused.status, 403);
+    assert.deepEqual(await refused.json(), {
+      error: 'Answer the health condition question in your profile or choose a wellness plan.', errorCode: 'MEDICAL_CONDITION_REQUIRED',
+    });
     const quoted = await post({ ...input, quoteOnly: true });
     assert.equal((await quoted.json()).data.amountPaise, 500000);
+    assert.equal(context.conditionType, 'prediabetes');
+    assert.equal(context.conditionSource, 'self_declared');
+    assert.deepEqual(guidanceWrites.at(-1), { region: 'REST_INDIA', statedCondition: 'prediabetes' });
     assert.equal((await post({ ...input, expectedAmountPaise: 99 })).status, 409);
+    context.hasCondition = false;
+    context.conditionType = null;
     const created = await post({ ...input, expectedAmountPaise: 500000 });
     assert.equal(created.status, 200);
+    assert.equal(context.hasCondition, true);
+    assert.equal(context.conditionType, 'prediabetes');
     const order = (await created.json()).data;
     await settle(order);
     assert.equal(member.offerSnapshot.region, 'REST_INDIA');
     assert.equal(member.offerSnapshot.components.trainer.mode, 'online');
+    member.planEndsAt = new Date(0);
+    context.conditionSource = 'report';
+    context.conditionType = null;
+    const locked = await post({ ...input, quoteOnly: true });
+    assert.equal(locked.status, 409);
+    assert.deepEqual(await locked.json(), { error: 'Your report set this answer. Contact support to change it.' });
+    assert.equal((await post({ ...input, statedCondition: undefined, quoteOnly: true })).status, 200);
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
 });
 
-test('medical checkout requires an adult and an uploaded report or valid stated condition', async () => {
-  await assert.rejects(quote('MED_30'), { status: 403 });
-  await assert.rejects(checkout('MED_30'), { status: 403 });
+test('medical checkout requires an adult and a true profile answer; wellness accepts every answer', async () => {
+  for (const hasCondition of [null, false, true]) {
+    context.hasCondition = hasCondition;
+    context.hasUploadedReport = true;
+    if (hasCondition !== true) {
+      const error = {
+        status: 403, errorCode: 'MEDICAL_CONDITION_REQUIRED',
+        message: 'Answer the health condition question in your profile or choose a wellness plan.',
+      };
+      await assert.rejects(quote('MED_30'), error);
+      await assert.rejects(checkout('MED_30'), error);
+    }
+    assert.ok((await quote('WELL_GYM')).amountPaise > 0);
+  }
   await assert.rejects(quote('MED_30', { statedCondition: 'other' }), { status: 400 });
-  context.hasUploadedReport = true;
-  assert.equal((await quote('MED_90')).amountPaise, 1300000);
   context.hasUploadedReport = false;
+  assert.equal((await quote('MED_90')).amountPaise, 1300000);
+  context.hasCondition = null;
   assert.equal((await quote('MED_30', { statedCondition: 'diabetes' })).amountPaise, 500000);
+  assert.equal(context.hasCondition, true);
+  assert.equal(context.conditionType, 'diabetes');
+  assert.equal(context.region, 'GURUGRAM');
   account.dateOfBirth = new Date().toISOString();
   await assert.rejects(quote('WELL_GYM'), { status: 403 });
   await assert.rejects(checkout('MED_30', { statedCondition: 'diabetes' }), { status: 403 });
@@ -496,6 +555,47 @@ test('booking-service failure leaves the payment successful and internal reconci
     });
     assert.equal(standalone.status, 200);
     assert.deepEqual((await standalone.json()).data, { autoConfirmed: 1 });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('scheduler reconcile requires a local key or a direct Cloud Run call and can be repeated', async t => {
+  const original = { INTERNAL_API_KEY: process.env.INTERNAL_API_KEY, K_SERVICE: process.env.K_SERVICE };
+  t.after(() => {
+    for (const [name, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  process.env.INTERNAL_API_KEY = 'test-reconcile-key';
+  delete process.env.K_SERVICE;
+  const addOverdue = () => db.coachingSessionLog.create({
+    data: { userId, kind: 'trainer', mode: 'online', createdAt: new Date(Date.now() - 3 * day) },
+  });
+  await addOverdue();
+  const app = express();
+  app.use('/coaching', router);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}/coaching/internal`;
+    const reconcile = headers => fetch(`${base}/scheduler/reconcile`, { method: 'POST', headers });
+    assert.equal((await reconcile()).status, 403);
+    assert.equal((await reconcile({ 'x-internal-key': 'test-reconcile-bad' })).status, 403);
+    assert.equal(sessionLogs[0].status, 'logged');
+    assert.deepEqual(await (await reconcile({ 'x-internal-key': 'test-reconcile-key' })).json(), { data: { reconciled: 0 } });
+    assert.equal(sessionLogs[0].status, 'auto_confirmed');
+
+    process.env.K_SERVICE = 'wallet-service';
+    await addOverdue();
+    assert.equal((await reconcile({ 'x-user-id': String(userId), 'x-user-role': 'customer' })).status, 403);
+    assert.equal((await fetch(`${base}/reconcile`, { method: 'POST' })).status, 403);
+    assert.equal(sessionLogs[1].status, 'logged');
+    assert.deepEqual(await (await reconcile()).json(), { data: { reconciled: 0 } });
+    assert.equal(sessionLogs[1].status, 'auto_confirmed');
+    assert.equal((await reconcile()).status, 200);
+    assert.equal(events.filter(([name]) => name === 'coaching_session_confirmed').length, 2);
   } finally {
     await new Promise(resolve => server.close(resolve));
   }

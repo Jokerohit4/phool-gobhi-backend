@@ -2554,6 +2554,11 @@ model FoodPhotoSharingPreference {
 
 model GuidanceProfile {
   userId Int @id
+  hasCondition Boolean?
+  conditionType String?
+  conditionSource String?
+  conditionDeclaredAt DateTime?
+  region String?
   sourceReportId Int?
   confirmedDetails Json @default("{}")
   confirmedMarkers Json @default("{}")

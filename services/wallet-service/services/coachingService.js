@@ -152,10 +152,17 @@ async function refreshMembership(userId) {
   if (activated) await retryGymFulfillment(userId).catch(logGymFulfillmentError);
   return member;
 }
-export async function guidanceContext(userId) {
+export async function guidanceContext(userId, checkout) {
   const url = process.env.HEALTH_SERVICE_URL || 'http://health-service:5009';
-  const res = await axios.get(`${url}/guidance/internal/${userId}`, { timeout: 15000, headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...(await googleIdTokenHeader(url)) } });
-  return res.data.data;
+  const path = `${url}/guidance/internal/${userId}`;
+  const options = { timeout: 15000, headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...(await googleIdTokenHeader(url)) } };
+  try {
+    const res = checkout ? await axios.put(`${path}/condition`, checkout, options) : await axios.get(path, options);
+    return res.data.data;
+  } catch (error) {
+    if (checkout && error.response?.status === 409) fail(error.response.data?.error || 'Your profile answer could not be changed.', 409);
+    throw error;
+  }
 }
 const requiresClearance = context => context?.clinicalStatus === 'NOT_CLEARED' ||
   (context?.riskBucket === 'RED' && context.clinicalStatus !== 'CLEARED');
@@ -281,8 +288,11 @@ async function prepareV2Checkout(userId, product, selection, member) {
   const term = v2CheckoutTerm(member, offer, new Date());
   const { statedCondition } = selection;
   if (statedCondition !== undefined && !['diabetes', 'prediabetes'].includes(statedCondition)) fail('Choose diabetes or prediabetes');
-  if (offer.family === 'medical' && !statedCondition && !(await guidanceContext(userId))?.hasUploadedReport) {
-    fail('Upload a report or state diabetes or prediabetes to choose a medical plan', 403);
+  const context = await guidanceContext(userId, { region: offer.region, statedCondition });
+  if (offer.family === 'medical' && context?.hasCondition !== true) {
+    throw Object.assign(new Error('Answer the health condition question in your profile or choose a wellness plan.'), {
+      status: 403, errorCode: 'MEDICAL_CONDITION_REQUIRED',
+    });
   }
   const code = requestedCouponCode(selection.couponCode, !!offer.kind);
   const coupon = await loadCoachingCoupon(prisma, code);
