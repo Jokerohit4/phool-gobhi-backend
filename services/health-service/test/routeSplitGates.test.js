@@ -274,6 +274,7 @@ const MUST_STAY_UNGATED = [
   // withdrawing cannot be what strands data.
   "router.delete('/runs/consent'",
   "router.delete('/biometrics/consent'",
+  "router.delete('/model-training/consent'",
   // Seeing and erasing your own onboarding answers can never depend on a
   // feature switch — these run at signup, for every user, while the flags are
   // mostly off.
