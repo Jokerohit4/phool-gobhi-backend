@@ -46,17 +46,22 @@ beforeEach(() => resetReminderStateForTests());
 
 // ---- schedule ----------------------------------------------------------
 
-test('the day has exactly the 11 requested slots, in order', () => {
+test('the day has exactly the 10 slots, in order', () => {
   assert.deepEqual(SLOTS.map((s) => s.time), [
-    '07:00', '08:00', '10:00', '12:00', '14:00', '16:00', '17:30', '18:00', '20:00', '21:30', '22:00',
+    '07:00', '08:00', '10:00', '11:30', '14:00', '15:30', '17:30', '18:00', '19:30', '21:30',
   ]);
 });
 
-test('water runs every 2 hours from 08:00 to 22:00 and nothing is scheduled after 22:00', () => {
-  assert.deepEqual(SLOTS.filter((s) => s.water).map((s) => s.time), [
-    '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00',
-  ]);
-  assert.ok(SLOTS.every((s) => s.time <= '22:00'));
+test('water is four pushes a day (half of the old eight): 08:00, 11:30, 15:30, 19:30', () => {
+  assert.deepEqual(SLOTS.filter((s) => s.water).map((s) => s.time), ['08:00', '11:30', '15:30', '19:30']);
+});
+
+test('no water push is within an hour of a meal push (either side)', () => {
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const meals = SLOTS.filter((s) => s.meal).map((s) => toMin(s.time));
+  for (const water of SLOTS.filter((s) => s.water).map((s) => toMin(s.time))) {
+    for (const meal of meals) assert.ok(Math.abs(water - meal) > 60, `water at ${water} is within an hour of meal at ${meal}`);
+  }
 });
 
 test('meals: breakfast 10:00, lunch 14:00, snack 18:00, dinner 21:30; workouts 07:00 and 17:30', () => {
@@ -75,9 +80,10 @@ test('IST conversion and due-slot window (10 minutes)', () => {
   assert.equal(findDueSlot(ist('07:09'))?.time, '07:00');
   assert.equal(findDueSlot(ist('07:10')), null);
   assert.equal(findDueSlot(ist('06:59')), null);
+  assert.equal(findDueSlot(ist('11:30'))?.time, '11:30');
   assert.equal(findDueSlot(ist('17:30'))?.time, '17:30');
   assert.equal(findDueSlot(ist('21:30'))?.time, '21:30');
-  assert.equal(findDueSlot(ist('22:00'))?.time, '22:00');
+  assert.equal(findDueSlot(ist('22:00')), null);
   assert.equal(findDueSlot(ist('23:00')), null);
   assert.equal(findDueSlot(ist('09:00')), null);
 });
@@ -90,28 +96,26 @@ test('copy per slot with everything on', () => {
   assert.equal(m('08:00').title, 'Good morning \u{1F4A7}');
   assert.equal(m('08:00').body, 'Start your day with a glass of water.');
   assert.equal(m('08:00').data.type, 'water_reminder');
-  // bundled slots are ONE message mentioning water, typed as the meal reminder
-  for (const [t, meal] of [['10:00', 'breakfast'], ['14:00', 'lunch'], ['18:00', 'snack']]) {
+  // meal pushes are plain: no water line any more
+  for (const [t, meal] of [['10:00', 'breakfast'], ['14:00', 'lunch'], ['18:00', 'snack'], ['21:30', 'dinner']]) {
     const x = m(t);
     assert.equal(x.pushType, `meal_reminder:${meal}`);
-    assert.match(x.body, /water/);
+    assert.doesNotMatch(x.body, /water/);
     assert.deepEqual(x.data, { type: 'health_nudge', route: 'quick_log' });
   }
-  assert.equal(m('21:30').pushType, 'meal_reminder:dinner');
-  assert.doesNotMatch(m('21:30').body, /water/);
-  assert.equal(m('12:00').title, 'Water break \u{1F4A7}');
-  assert.equal(m('22:00').title, 'Last glass of the day \u{1F4A7}');
+  assert.equal(m('11:30').title, 'Water break \u{1F4A7}');
+  assert.equal(m('15:30').title, 'Water break \u{1F4A7}');
+  assert.equal(m('19:30').title, 'Water break \u{1F4A7}');
   assert.equal(m('17:30').pushType, 'workout_reminder');
   assert.equal(m('17:30').data.type, 'workout_reminder');
 });
 
-test('category switches: a bundled slot degrades to whatever is still on', () => {
+test('category switches: a meal slot degrades to nothing when meal reminders are off, and water still works', () => {
   const ten = SLOTS.find((s) => s.time === '10:00');
-  assert.equal(buildSlotMessage(ten, { water: true, meal: false, workout: true }).pushType, 'water_reminder');
-  const mealOnly = buildSlotMessage(ten, { water: false, meal: true, workout: true });
-  assert.equal(mealOnly.pushType, 'meal_reminder:breakfast');
-  assert.doesNotMatch(mealOnly.body, /water/);
-  assert.equal(buildSlotMessage(ten, { water: false, meal: false, workout: true }), null);
+  assert.equal(buildSlotMessage(ten, { water: true, meal: false, workout: true }), null);
+  assert.equal(buildSlotMessage(ten, { water: false, meal: true, workout: true }).pushType, 'meal_reminder:breakfast');
+  assert.equal(buildSlotMessage(SLOTS.find((s) => s.time === '11:30'), { water: true, meal: false, workout: true }).pushType, 'water_reminder');
+  assert.equal(buildSlotMessage(SLOTS.find((s) => s.time === '11:30'), { water: false, meal: true, workout: true }), null);
   assert.equal(buildSlotMessage(SLOTS.find((s) => s.time === '17:30'), { water: true, meal: true, workout: false }), null);
   assert.equal(buildSlotMessage(SLOTS.find((s) => s.time === '21:30'), { water: true, meal: false, workout: true }), null);
 });
@@ -124,12 +128,12 @@ test('only the exact string "true" enables a category', () => {
 
 // ---- service: dry runs ---------------------------------------------------
 
-test('dry run "all" previews all 11 slots and counts recipients without sending, even when disabled', async () => {
+test('dry run "all" previews all 10 slots and counts recipients without sending, even when disabled', async () => {
   const deps = fakeDeps(users(600));
   const out = await runReminderService({ dryRun: true, slot: 'all', now: ist('03:00'), env: {}, deps });
   assert.equal(out.dryRun, true);
   assert.equal(out.recipients, 600);
-  assert.equal(out.slots.length, 11);
+  assert.equal(out.slots.length, 10);
   assert.ok(out.slots.every((s) => s.enabled === false)); // everything off in this env
   assert.equal(deps.calls.sent.length, 0);
   const onOut = await runReminderService({ dryRun: true, slot: 'all', now: ist('03:00'), env: ALL_ON, deps });
@@ -164,7 +168,7 @@ test('all categories off: the slot is skipped as disabled', async () => {
   assert.equal(deps.calls.sent.length, 0);
 });
 
-test('10:00 sends ONE bundled breakfast+water push per recipient with receipt keys', async () => {
+test('10:00 sends ONE breakfast push per recipient with receipt keys', async () => {
   const deps = fakeDeps(users(3));
   const now = ist('10:00');
   const out = await runReminderService({ now, env: ALL_ON, deps });
@@ -199,7 +203,7 @@ test('a dry run does not consume the slot', async () => {
 
 test('pagination: more than one page is fully sent', async () => {
   const deps = fakeDeps(users(600));
-  const out = await runReminderService({ now: ist('12:00'), env: ALL_ON, deps });
+  const out = await runReminderService({ now: ist('11:30'), env: ALL_ON, deps });
   assert.equal(out.recipients, 600);
   assert.equal(out.sent, 600);
 });
@@ -211,7 +215,7 @@ test('failures are counted by FCM error code, with no tokens in the summary', as
         i === 1 ? { success: false, error: { code: 'messaging/registration-token-not-registered' } } : { success: true },
       ),
   });
-  const out = await runReminderService({ now: ist('16:00'), env: ALL_ON, deps });
+  const out = await runReminderService({ now: ist('15:30'), env: ALL_ON, deps });
   assert.equal(out.sent, 3);
   assert.equal(out.failed, 1);
   assert.deepEqual(out.failures, { 'messaging/registration-token-not-registered': 1 });
@@ -230,7 +234,7 @@ test('a token FCM says is dead is cleared; other failures are not; a cleanup err
       ),
   });
   deps.clearTokens = async (pairs) => { cleared.push(...pairs); return pairs.length; };
-  const out = await runReminderService({ now: ist('12:00'), env: ALL_ON, deps });
+  const out = await runReminderService({ now: ist('11:30'), env: ALL_ON, deps });
   assert.equal(out.sent, 1);
   assert.equal(out.failed, 3);
   assert.deepEqual(cleared, [{ id: 2, token: 'tok-2' }, { id: 4, token: 'tok-4' }]); // not the internal-error one
@@ -239,23 +243,23 @@ test('a token FCM says is dead is cleared; other failures are not; a cleanup err
   resetReminderStateForTests();
   const failing = fakeDeps(users(2), { sendResult: (m) => m.map(() => ({ success: false, error: { code: 'messaging/registration-token-not-registered' } })) });
   failing.clearTokens = async () => { throw new Error('db down'); };
-  const out2 = await runReminderService({ now: ist('12:00'), env: ALL_ON, deps: failing });
+  const out2 = await runReminderService({ now: ist('11:30'), env: ALL_ON, deps: failing });
   assert.equal(out2.failed, 2);
   assert.equal(out2.tokensCleared, 0);
   resetReminderStateForTests();
   const clean = fakeDeps(users(2));
   let called = false;
   clean.clearTokens = async () => { called = true; return 0; };
-  await runReminderService({ now: ist('12:00'), env: ALL_ON, deps: clean });
+  await runReminderService({ now: ist('11:30'), env: ALL_ON, deps: clean });
   assert.equal(called, false);
 });
 
 test('FCM unavailable is reported as failed and the slot stays retryable', async () => {
   const bad = fakeDeps(users(3), { sendResult: () => null });
-  const out = await runReminderService({ now: ist('20:00'), env: ALL_ON, deps: bad });
+  const out = await runReminderService({ now: ist('19:30'), env: ALL_ON, deps: bad });
   assert.equal(out.sent, 0);
   assert.equal(out.failures.fcm_unavailable, 3);
-  const retry = await runReminderService({ now: ist('20:05'), env: ALL_ON, deps: fakeDeps(users(3)) });
+  const retry = await runReminderService({ now: ist('19:35'), env: ALL_ON, deps: fakeDeps(users(3)) });
   assert.equal(retry.sent, 3);
 });
 

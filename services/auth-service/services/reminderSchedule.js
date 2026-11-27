@@ -2,29 +2,29 @@
 // Pure data + functions so the exact slots and wording can be reviewed and tested
 // without a database or Firebase.
 //
-// Slots are bundled: when a water reminder and a meal reminder fall at the same
-// time they go out as ONE push (see buildSlotMessage), so the day is 11 pushes,
-// not 14.
+// Water is four pushes a day (half of the previous eight, cut because users found
+// it too much). Every water push is more than an hour from every meal push, so a
+// water nudge never lands right before or after a meal nudge. Meal pushes no longer
+// carry a water line.
 //
-//   07:00 workout            08:00 water            10:00 breakfast + water
-//   12:00 water              14:00 lunch + water     16:00 water
-//   17:30 workout            18:00 snack + water     20:00 water
-//   21:30 dinner             22:00 water
+//   07:00 workout            08:00 water            10:00 breakfast
+//   11:30 water              14:00 lunch            15:30 water
+//   17:30 workout            18:00 snack            19:30 water
+//   21:30 dinner
 
 export const TOLERANCE_MINUTES = 10; // a slot is "due" for this long after its time
 
 export const SLOTS = [
   { time: '07:00', workout: true },
   { time: '08:00', water: true, first: true },
-  { time: '10:00', meal: 'breakfast', water: true },
-  { time: '12:00', water: true },
-  { time: '14:00', meal: 'lunch', water: true },
-  { time: '16:00', water: true },
+  { time: '10:00', meal: 'breakfast' },
+  { time: '11:30', water: true },
+  { time: '14:00', meal: 'lunch' },
+  { time: '15:30', water: true },
   { time: '17:30', workout: true },
-  { time: '18:00', meal: 'snack', water: true },
-  { time: '20:00', water: true },
+  { time: '18:00', meal: 'snack' },
+  { time: '19:30', water: true },
   { time: '21:30', meal: 'dinner' },
-  { time: '22:00', water: true, last: true },
 ];
 
 const minutesOf = (time) => {
@@ -48,10 +48,10 @@ export function findSlotByTime(time, slots = SLOTS) {
 }
 
 const MEAL_COPY = {
-  breakfast: { title: 'Breakfast time \u{1F373}', withWater: 'Log your meal and have a glass of water \u{1F4A7}.', plain: 'Log your meal to keep your day on track.' },
-  lunch: { title: 'Lunch time \u{1F37D}\u{FE0F}', withWater: 'Log your meal and have a glass of water \u{1F4A7}.', plain: 'Log your meal to keep your day on track.' },
-  snack: { title: 'Snack time \u{1F34E}', withWater: 'Pick something light, log it, and drink some water \u{1F4A7}.', plain: 'Pick something light and log it.' },
-  dinner: { title: 'Dinner time \u{1F372}', withWater: 'Log your dinner and have a glass of water \u{1F4A7}.', plain: 'Log your dinner to wrap up the day.' },
+  breakfast: { title: 'Breakfast time \u{1F373}', body: 'Log your meal to keep your day on track.' },
+  lunch: { title: 'Lunch time \u{1F37D}\u{FE0F}', body: 'Log your meal to keep your day on track.' },
+  snack: { title: 'Snack time \u{1F34E}', body: 'Pick something light and log it.' },
+  dinner: { title: 'Dinner time \u{1F372}', body: 'Log your dinner to wrap up the day.' },
 };
 
 // enabled = { water, meal, workout } booleans (per-category kill switches).
@@ -70,7 +70,7 @@ export function buildSlotMessage(slot, enabled) {
     const copy = MEAL_COPY[meal];
     return {
       title: copy.title,
-      body: water ? copy.withWater : copy.plain,
+      body: copy.body,
       data: { type: 'health_nudge', route: 'quick_log' },
       pushType: `meal_reminder:${meal}`,
     };
@@ -80,14 +80,6 @@ export function buildSlotMessage(slot, enabled) {
       return {
         title: 'Good morning \u{1F4A7}',
         body: 'Start your day with a glass of water.',
-        data: { type: 'water_reminder' },
-        pushType: 'water_reminder',
-      };
-    }
-    if (slot.last) {
-      return {
-        title: 'Last glass of the day \u{1F4A7}',
-        body: 'Wind down with a glass of water.',
         data: { type: 'water_reminder' },
         pushType: 'water_reminder',
       };
