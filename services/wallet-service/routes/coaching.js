@@ -10,6 +10,7 @@ import { createCoachingCoupon, listCoachingCoupons, updateCoachingCoupon } from 
 import { errorBody } from '../utils/configConcurrency.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
 import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, markCoachingPaymentFailed, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment, retryGymFulfillment, GYM_ENTITLEMENT_SYNC } from '../services/coachingService.js';
+import { logCoachingSession, listOwnCoachingSessions, confirmCoachingSession, disputeCoachingSession, listDisputedCoachingSessions, resolveCoachingSession, autoConfirmCoachingSessions } from '../services/coachingService.js';
 const router = Router();
 const run = fn => async (req, res) => {
   try { res.json({ data: await fn(req) }); }
@@ -59,7 +60,9 @@ router.post('/labs', requireRole('customer'), run(async req => {
   return record;
 }));
 router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId), { includeGymBalance: false })));
+router.post('/internal/auto-confirm', requireInternal, run(() => autoConfirmCoachingSessions()));
 router.post('/internal/reconcile', requireInternal, run(async () => {
+  await autoConfirmCoachingSessions();
   await activateDueCoachingRenewals();
   await retryGymFulfillment();
   const users = await prisma.coachingOrder.findMany({ where: { status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } }, select: { userId: true }, distinct: ['userId'], orderBy: { updatedAt: 'asc' }, take: 100 });
@@ -82,6 +85,12 @@ router.get('/admin/fulfillment', requireRole('gobhi'), run(async () => {
   }));
 }));
 router.post('/admin/fulfillment/:userId/sessions', requireRole('gobhi'), run(req => consumeSession(Number(req.params.userId), req.body.kind, req.userId, req.body.idempotencyKey)));
+router.post('/admin/fulfillment/:userId/session-log', requireRole('gobhi'), run(req => logCoachingSession(req.params.userId, req.userId, req.body ?? {})));
+router.get('/sessions/mine', requireRole('customer'), run(req => listOwnCoachingSessions(req.userId, req.query)));
+router.post('/sessions/:id/confirm', requireRole('customer'), run(req => confirmCoachingSession(req.userId, req.params.id)));
+router.post('/sessions/:id/dispute', requireRole('customer'), run(req => disputeCoachingSession(req.userId, req.params.id, req.body?.reason)));
+router.get('/admin/sessions/disputed', requireRole('gobhi'), run(req => listDisputedCoachingSessions(req.query)));
+router.post('/admin/sessions/:id/resolve', requireRole('gobhi'), run(req => resolveCoachingSession(req.params.id, req.userId, req.body?.resolution)));
 router.patch('/admin/fulfillment/:userId/gym', requireRole('gobhi'), run(async req => {
   const member = await prisma.coachingMembership.findUnique({ where: { userId: Number(req.params.userId) } });
   if (!member || !membershipBenefits(member).gymAccess) throw Object.assign(new Error('Gym access is not included in this regional plan'), { status: 409 });

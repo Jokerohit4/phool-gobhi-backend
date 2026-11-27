@@ -17,6 +17,14 @@ const BOOKING_SERVICE_URL = process.env.BOOKING_SERVICE_URL || 'http://booking-s
 const provider = () => new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_SECRET });
 const emptyV2Balances = { trainerSessionsRemaining: 0, nutritionistSessionsRemaining: 0 };
 const sessionBalances = new Map([['TRAINER_SESSION', 'trainerSessionsRemaining'], ['NUTRITIONIST_SESSION', 'nutritionistSessionsRemaining']]);
+const loggedSessionKinds = new Map([['trainer', 'TRAINER_SESSION'], ['nutritionist', 'NUTRITIONIST_SESSION']]);
+const sessionKeyPattern = /^[\w-]{8,100}$/;
+const maxInt = 2147483647;
+const customerSessionFields = {
+  id: true, kind: true, mode: true, heldAt: true, durationMinutes: true, note: true,
+  status: true, confirmedAt: true, disputeReason: true, resolution: true, resolvedAt: true,
+  createdAt: true, updatedAt: true,
+};
 const isV2 = offer => offer?.schemaVersion === 2;
 export const GYM_ENTITLEMENT_SYNC = 'GYM_ENTITLEMENT_SYNC';
 const termOrderRef = id => `coaching-term-${id}`;
@@ -39,12 +47,14 @@ async function withCouponTelemetry(userId, run) {
   }
 }
 export async function eraseCoachingPersonalData(userId) {
-  await prisma.$transaction([
-    prisma.coachingFulfillment.updateMany({ where: { userId }, data: { details: {}, status: 'CANCELLED' } }),
-    prisma.coachingMembership.updateMany({ where: { userId }, data: { planStatus: 'INACTIVE', hasExistingGym: false, gymPassStatus: 'CANCELLED', freeDelightSessionsRemaining: 0, labCreditsRemaining: 0, scheduledOrderId: null, ...emptyV2Balances } }),
-    prisma.coachingAddonGrant.updateMany({ where: { userId }, data: { remaining: 0 } }),
-    prisma.coachingSubscription.updateMany({ where: { userId }, data: { userName: null, phone: null, riskBucket: 'UNSET', worksOut: null, hasExistingGym: false, hasNutritionist: false } }),
-  ]);
+  await prisma.$transaction(async tx => {
+    await locked(tx, userId);
+    await tx.coachingSessionLog.deleteMany({ where: { userId } });
+    await tx.coachingFulfillment.updateMany({ where: { userId }, data: { details: {}, status: 'CANCELLED' } });
+    await tx.coachingMembership.updateMany({ where: { userId }, data: { planStatus: 'INACTIVE', hasExistingGym: false, gymPassStatus: 'CANCELLED', freeDelightSessionsRemaining: 0, labCreditsRemaining: 0, scheduledOrderId: null, ...emptyV2Balances } });
+    await tx.coachingAddonGrant.updateMany({ where: { userId }, data: { remaining: 0 } });
+    await tx.coachingSubscription.updateMany({ where: { userId }, data: { userName: null, phone: null, riskBucket: 'UNSET', worksOut: null, hasExistingGym: false, hasNutritionist: false } });
+  });
   return { erased: true, financialRecordsRetained: true };
 }
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }); };
@@ -654,27 +664,26 @@ export async function requestLab(userId, address, idempotencyKey) {
     return tx.coachingFulfillment.create({ data: { userId, kind: 'LAB', idempotencyKey: `lab:${userId}:${idempotencyKey}`, details: { address: address.trim(), panel: isRetest ? 'RETEST' : 'BASELINE', membershipOrderId: m.activeOrderId } } });
   });
 }
-export async function consumeSession(userId, kind, actor, key) {
+async function prepareSessionConsumption(userId, kind, key) {
   if (!eligibleCoachingAccount(await coachingAccount(userId))) fail('An active adult account is required', 403);
   const v2Balance = sessionBalances.get(kind);
-  if ((!v2Balance && !['FREE_SESSION', 'ADDON_SESSION'].includes(kind)) || typeof key !== 'string' || !/^[\w-]{8,100}$/.test(key)) fail('Choose a session and request identifier');
+  if ((!v2Balance && !['FREE_SESSION', 'ADDON_SESSION'].includes(kind)) || typeof key !== 'string' || !sessionKeyPattern.test(key)) fail('Choose a session and request identifier');
   if (!v2Balance && requiresClearance(await guidanceContext(userId))) fail('Clinical clearance is required before guided gym sessions', 409);
   const assessed = kind === 'TRAINER_SESSION' ? await refreshMembership(userId) : null;
   const blocked = assessed?.offerSnapshot?.family === 'medical' && await medicalClearanceRequired(userId);
-  return prisma.$transaction(async tx => {
-    await locked(tx, userId);
-    const idempotencyKey = `session:${userId}:${key}`;
-    const prior = await tx.coachingFulfillment.findUnique({ where: { idempotencyKey } });
-    if (prior) return prior;
-    const member = await currentMembership(tx, userId);
-    if (!hasGuidance(member)) fail('The guided plan is not active', 409);
-    if (v2Balance) {
-      if (kind === 'TRAINER_SESSION' && member.offerSnapshot?.family === 'medical' &&
-        (blocked || assessed?.activeOrderId !== member.activeOrderId)) fail('Clinical clearance is required before trainer sessions', 409);
-      if (!(member[v2Balance] > 0)) fail('No sessions of this kind remain', 409);
-      await tx.coachingMembership.update({ where: { userId }, data: { [v2Balance]: { decrement: 1 } } });
-      return tx.coachingFulfillment.create({ data: { userId, kind, status: 'COMPLETED', completedBy: actor, idempotencyKey } });
-    }
+  return { v2Balance, assessed, blocked };
+}
+
+const sessionKey = (userId, key) => 'session:' + userId + ':' + key;
+
+async function recordSessionConsumption(tx, member, { userId, kind, actor, idempotencyKey, v2Balance, assessed, blocked }) {
+  if (!hasGuidance(member)) fail('The guided plan is not active', 409);
+  if (v2Balance) {
+    if (kind === 'TRAINER_SESSION' && member.offerSnapshot?.family === 'medical' &&
+      (blocked || assessed?.activeOrderId !== member.activeOrderId)) fail('Clinical clearance is required before trainer sessions', 409);
+    if (!(member[v2Balance] > 0)) fail('No sessions of this kind remain', 409);
+    await tx.coachingMembership.update({ where: { userId }, data: { [v2Balance]: { decrement: 1 } } });
+  } else {
     if (!membershipBenefits(member).trainerFloorSessions) fail('Trainer floor sessions are not included in this regional plan', 403);
     if (kind === 'FREE_SESSION') {
       if (member.freeDelightSessionsRemaining < 1) fail('No free sessions remain', 409);
@@ -684,6 +693,139 @@ export async function consumeSession(userId, kind, actor, key) {
       if (!grant) fail('No unexpired add-on sessions remain', 409);
       await tx.coachingAddonGrant.update({ where: { id: grant.id }, data: { remaining: { decrement: 1 } } });
     }
-    return tx.coachingFulfillment.create({ data: { userId, kind, status: 'COMPLETED', completedBy: actor, idempotencyKey } });
+  }
+  return tx.coachingFulfillment.create({ data: { userId, kind, status: 'COMPLETED', completedBy: actor, idempotencyKey } });
+}
+
+export async function consumeSession(userId, kind, actor, key) {
+  const checks = await prepareSessionConsumption(userId, kind, key);
+  const idempotencyKey = sessionKey(userId, key);
+  return prisma.$transaction(async tx => {
+    await locked(tx, userId);
+    const prior = await tx.coachingFulfillment.findUnique({ where: { idempotencyKey } });
+    if (prior) return prior;
+    const member = await currentMembership(tx, userId);
+    return recordSessionConsumption(tx, member, { userId, kind, actor, idempotencyKey, ...checks });
   });
+}
+
+function positiveSessionInt(value, label, max = maxInt) {
+  const number = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  if (!Number.isInteger(number) || number < 1 || number > max) fail('Invalid ' + label);
+  return number;
+}
+
+export async function logCoachingSession(userId, actor, body) {
+  userId = positiveSessionInt(userId, 'customer ID');
+  const { kind, mode, heldAt, durationMinutes, note, idempotencyKey: key } = body;
+  if (typeof key !== 'string' || !sessionKeyPattern.test(key)) fail('A request identifier is required');
+  const idempotencyKey = sessionKey(userId, key);
+  const where = { idempotencyKey };
+  const prior = await prisma.coachingSessionLog.findUnique({ where });
+  if (prior) return prior;
+
+  const consumptionKind = loggedSessionKinds.get(kind);
+  if (!consumptionKind) fail('Choose trainer or nutritionist');
+  if (!['online', 'in_person'].includes(mode)) fail('Choose online or in_person');
+  const held = typeof heldAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(heldAt)
+    ? new Date(heldAt) : null;
+  if (!held || !Number.isFinite(+held) || +held > Date.now() ||
+    new Date(heldAt.slice(0, 10) + 'T00:00:00Z').toISOString().slice(0, 10) !== heldAt.slice(0, 10)) {
+    fail('Enter a valid past session time with a time zone');
+  }
+  if (durationMinutes != null && (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > maxInt)) fail('Duration must be a positive whole number of minutes');
+  if (note != null && (typeof note !== 'string' || note.length > 500 || note.includes('\0'))) fail('Note must be text of at most 500 characters');
+  const checks = await prepareSessionConsumption(userId, consumptionKind, key);
+
+  const { row, created } = await prisma.$transaction(async tx => {
+    await locked(tx, userId);
+    const existing = await tx.coachingSessionLog.findUnique({ where });
+    if (existing) return { row: existing, created: false };
+    if (await tx.coachingFulfillment.findUnique({ where })) fail('This request identifier was already used for session fulfillment', 409);
+    const member = await currentMembership(tx, userId);
+    if (!hasGuidance(member) || !member.activeOrderId) fail('The guided plan is not active', 409);
+    if (mode === 'in_person' && member.offerSnapshot?.region !== 'GURUGRAM') fail('In-person sessions are available only in Gurugram', 409);
+    await recordSessionConsumption(tx, member, { userId, kind: consumptionKind, actor, idempotencyKey, ...checks });
+    const row = await tx.coachingSessionLog.create({ data: {
+      userId, kind, mode, heldAt: held, durationMinutes: durationMinutes ?? null,
+      note: note?.trim() || null, loggedBy: actor, idempotencyKey, membershipOrderId: member.activeOrderId,
+    } });
+    return { row, created: true };
+  });
+  if (created) trackCoachingEvent(() => track('coaching_session_logged', userId, { kind: row.kind, mode: row.mode }));
+  return row;
+}
+
+async function listCoachingSessions(where, query, select) {
+  const limit = positiveSessionInt(query.limit ?? 20, 'page size', 100);
+  const page = positiveSessionInt(query.page ?? 1, 'page', Math.floor(maxInt / limit));
+  const [sessions, total] = await Promise.all([
+    prisma.coachingSessionLog.findMany({ where, select, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * limit, take: limit }),
+    prisma.coachingSessionLog.count({ where }),
+  ]);
+  return { sessions, total, page, limit };
+}
+
+export const listOwnCoachingSessions = (userId, query) => listCoachingSessions({ userId }, query, customerSessionFields);
+export const listDisputedCoachingSessions = query => listCoachingSessions({ status: 'disputed', resolution: null }, query);
+
+async function respondToCoachingSession(userId, id, data) {
+  id = positiveSessionInt(id, 'session ID');
+  const where = { id, userId };
+  const [row] = await prisma.coachingSessionLog.updateManyAndReturn({
+    where: { ...where, status: 'logged' }, data, select: customerSessionFields,
+  });
+  if (row) return row;
+  if (!await prisma.coachingSessionLog.findUnique({ where, select: { id: true } })) fail('Session not found', 404);
+  fail('Only a logged session can be confirmed or disputed', 409);
+}
+
+export async function confirmCoachingSession(userId, id) {
+  const row = await respondToCoachingSession(userId, id, { status: 'confirmed', confirmedAt: new Date() });
+  trackCoachingEvent(() => track('coaching_session_confirmed', userId, { kind: row.kind, mode: row.mode }));
+  return row;
+}
+
+export async function disputeCoachingSession(userId, id, reason) {
+  if (typeof reason !== 'string' || reason.length > 500 || !reason.trim() || reason.includes('\0')) fail('Enter a dispute reason of at most 500 characters');
+  const row = await respondToCoachingSession(userId, id, { status: 'disputed', disputeReason: reason.trim() });
+  trackCoachingEvent(() => track('coaching_session_disputed', userId, { kind: row.kind, mode: row.mode }));
+  return row;
+}
+
+export async function resolveCoachingSession(id, actor, resolution) {
+  id = positiveSessionInt(id, 'session ID');
+  if (!['upheld', 'recredited'].includes(resolution)) fail('Choose upheld or recredited');
+  const where = { id };
+  const prior = await prisma.coachingSessionLog.findUnique({ where, select: { userId: true } });
+  if (!prior) fail('Session not found', 404);
+  return prisma.$transaction(async tx => {
+    await locked(tx, prior.userId);
+    const row = await tx.coachingSessionLog.findUnique({ where });
+    if (!row) fail('Session not found', 404);
+    if (row.resolution === resolution) return row;
+    if (row.status !== 'disputed' || row.resolution) fail('Only an unresolved dispute can be resolved', 409);
+    const now = new Date();
+    if (resolution === 'recredited') {
+      const balance = sessionBalances.get(loggedSessionKinds.get(row.kind));
+      const { count } = await tx.coachingMembership.updateMany({
+        where: { userId: row.userId, activeOrderId: row.membershipOrderId, planStatus: { in: ['TRIAL_72H', 'ACTIVE', 'EXPIRED'] } },
+        data: { [balance]: { increment: 1 } },
+      });
+      if (!count) fail('This session can only be re-credited to its original, unrevoked membership', 409);
+    }
+    return tx.coachingSessionLog.update({ where, data: { resolution, resolvedAt: now, resolvedBy: actor } });
+  });
+}
+
+export async function autoConfirmCoachingSessions(now = new Date()) {
+  const rows = await prisma.coachingSessionLog.updateManyAndReturn({
+    where: { status: 'logged', createdAt: { lt: new Date(+now - 48 * HOUR) } },
+    data: { status: 'auto_confirmed', confirmedAt: now },
+    select: { userId: true, kind: true, mode: true },
+  });
+  for (const { userId, kind, mode } of rows) {
+    trackCoachingEvent(() => track('coaching_session_confirmed', userId, { kind, mode }));
+  }
+  return { autoConfirmed: rows.length };
 }
