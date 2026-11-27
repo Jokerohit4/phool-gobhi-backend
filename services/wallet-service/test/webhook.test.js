@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 let handleRazorpayWebhook;
 let mockGetOrder, mockClaimOrder, mockCredit, mockUpdateStatus, mockTrack;
 let mockCapture = async () => true;
+let mockCoachingFailure = async () => {};
 
 // State-driven crypto mock — avoids read-only ESM reassignment.
 // timingSafeEqualResult controls signature validity; throwOnHmac simulates
@@ -27,7 +28,10 @@ const digestValue = 'abc123456';
 const noOp = async () => {};
 
 test('setup: mock dependencies and import webhook handler', async (t) => {
-  t.mock.module('../services/coachingService.js', { exports: { settleCoachingPayment: async () => false } });
+  t.mock.module('../services/coachingService.js', { exports: {
+    settleCoachingPayment: async () => false,
+    markCoachingPaymentFailed: orderId => mockCoachingFailure(orderId),
+  } });
   t.mock.module('crypto', {
     exports: {
       default: {
@@ -211,6 +215,22 @@ test('payment.failed: marks order FAILED and returns 200', async () => {
   assert.equal(r.statusCode, 200);
   assert.deepEqual(r.body, { received: true });
   assert.deepEqual(updateCaptured, { id: orderId, status: 'FAILED' });
+});
+
+test('payment.failed: delegates direct coaching orders to the coaching failure handler', async t => {
+  process.env.RAZORPAY_WEBHOOK_SECRET = 'whsec_test';
+  timingSafeEqualResult = true;
+  throwOnHmac = false;
+  mockGetOrder = async () => null;
+  const calls = [];
+  mockCoachingFailure = async orderId => calls.push(orderId);
+  t.after(() => { mockCoachingFailure = async () => {}; });
+  const response = mkRes();
+  await handleRazorpayWebhook(mkReq({
+    body: { event: 'payment.failed', payload: { payment: { entity: { order_id: 'coaching_order' } } } },
+  }), response);
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(calls, ['coaching_order']);
 });
 
 // =========================================================================

@@ -308,7 +308,37 @@ model CoachingOrder {
   refundRequestedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  couponRedemption CouponRedemption?
   @@index([userId, status])
+  @@schema("wallet")
+}
+model Coupon {
+  id Int @id @default(autoincrement())
+  code String @unique @db.VarChar(32)
+  kind String
+  value Int
+  offerKeys Json?
+  activeFrom DateTime?
+  activeTo DateTime?
+  maxRedemptions Int?
+  perCustomerLimit Int?
+  enabled Boolean @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
+  redemptions CouponRedemption[]
+  @@schema("wallet")
+}
+model CouponRedemption {
+  id Int @id @default(autoincrement())
+  couponId Int
+  userId Int
+  orderId String @unique
+  status String @default("reserved")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  order CoachingOrder @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
+  @@index([couponId, status, userId])
   @@schema("wallet")
 }
 model CoachingAddonGrant {

@@ -6,10 +6,18 @@ import prisma from '../db/prisma.js';
 import { membershipBenefits } from '../services/coachingCatalog.js';
 import { loadCoachingCatalog, loadCoachingCatalogV2 } from '../services/coachingOfferService.js';
 import { getCoachingConfig, saveCoachingConfig, coachingConfigHistory } from '../services/coachingConfigService.js';
+import { createCoachingCoupon, listCoachingCoupons, updateCoachingCoupon } from '../services/coachingCouponAdmin.js';
+import { errorBody } from '../utils/configConcurrency.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
-import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment, retryGymFulfillment, GYM_ENTITLEMENT_SYNC } from '../services/coachingService.js';
+import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, markCoachingPaymentFailed, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment, retryGymFulfillment, GYM_ENTITLEMENT_SYNC } from '../services/coachingService.js';
 const router = Router();
-const run = fn => async (req, res) => { try { res.json({ data: await fn(req) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? e.message : 'Could not complete this request right now. Please try again.' }); } };
+const run = fn => async (req, res) => {
+  try { res.json({ data: await fn(req) }); }
+  catch (e) {
+    const body = e.status && e.status < 500 ? errorBody(e) : { error: 'Could not complete this request right now. Please try again.' };
+    res.status(e.status || 500).json(body);
+  }
+};
 router.get('/mine', requireRole('customer'), run(async req => {
   // Provider failure must not hide an already granted membership. Pending
   // payments remain visible and can be reconciled on the next read/webhook.
@@ -26,6 +34,9 @@ router.get('/catalog', requireRole('customer'), run(req => loadCoachingCatalog(r
 router.get('/catalog/v2', requireRole('customer'), run(req => loadCoachingCatalogV2(req.query.city)));
 router.get('/admin/config', requireRole('gobhi'), run(async () => ({ ...(await getCoachingConfig()), history: await coachingConfigHistory() })));
 router.put('/admin/config', requireRole('gobhi'), run(req => saveCoachingConfig(req.body.config, req.body.expectedVersion, req.userId)));
+router.get('/admin/coupons', requireRole('gobhi'), run(() => listCoachingCoupons()));
+router.post('/admin/coupons', requireRole('gobhi'), run(req => createCoachingCoupon(req.body ?? {}, req.userId)));
+router.patch('/admin/coupons/:code', requireRole('gobhi'), run(req => updateCoachingCoupon(req.params.code, req.body ?? {}, req.userId)));
 router.post('/orders', requireRole('customer'), run(req => {
   const { product, city, offerId, couponCode, expectedAmountPaise, quoteOnly, quantity, statedCondition } = req.body;
   const selection = { city, offerId, couponCode, expectedAmountPaise, quantity, statedCondition };
@@ -102,6 +113,7 @@ router.post('/webhook', run(async req => {
   if (!expected || !/^[a-f\d]{64}$/i.test(supplied) || !crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(supplied, 'hex'))) throw Object.assign(new Error('Invalid webhook signature'), { status: 400 });
   const payment = req.body.payload?.payment?.entity;
   if (['payment.authorized', 'payment.captured'].includes(req.body.event) && payment?.order_id) await settleCoachingPayment(payment.order_id, payment.id);
+  if (req.body.event === 'payment.failed') await markCoachingPaymentFailed(payment?.order_id);
   return { received: true };
 }));
 export default router;
