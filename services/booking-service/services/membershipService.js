@@ -1,9 +1,13 @@
 import prisma from '../db/prisma.js';
+import axios from 'axios';
 import { track } from '../utils/analytics.js';
-import { parseExpectedUpdatedAt, writeSingleton } from '../utils/configConcurrency.js';
+import { configConflictError, parseExpectedUpdatedAt, writeConfigRow, writeSingleton } from '../utils/configConcurrency.js';
+import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 
 const REGION = 'GURUGRAM';
 const DEFAULT_PAYOUT_PAISE = 7500;
+const GYM_SERVICE_URL = process.env.GYM_SERVICE_URL || 'http://gym-service:5004';
+const INTERNAL_API_KEY = (process.env.INTERNAL_API_KEY || '').trim();
 const isId = value => Number.isInteger(value) && value > 0 && value <= 2147483647;
 const isKey = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 160;
 
@@ -139,10 +143,54 @@ export async function getMembershipPayoutConfig(db = prisma) {
     { id: 1, payoutPaise: DEFAULT_PAYOUT_PAISE, updatedAt: null, updatedBy: null };
 }
 
-export async function updateMembershipPayoutConfig(payoutPaise, updatedBy, expectedUpdatedAt) {
+export async function resolveMembershipPayoutPaise(db, gymId) {
+  const override = await db.gymMembershipPayout.findUnique({ where: { gymId } });
+  return override?.payoutPaise ?? (await getMembershipPayoutConfig(db)).payoutPaise;
+}
+
+export function listGymMembershipPayouts() {
+  return prisma.gymMembershipPayout.findMany({ orderBy: { gymId: 'asc' } });
+}
+
+function validatePayoutPaise(payoutPaise) {
   if (!isId(payoutPaise)) throw { status: 400, error: 'payoutPaise must be a positive integer' };
+}
+
+export async function updateMembershipPayoutConfig(payoutPaise, updatedBy, expectedUpdatedAt) {
+  validatePayoutPaise(payoutPaise);
   const data = { payoutPaise, updatedBy };
   return writeSingleton(prisma.membershipPayoutConfig, {
     create: data, update: data, expected: parseExpectedUpdatedAt(expectedUpdatedAt),
   });
+}
+
+export async function updateGymMembershipPayout(gymId, payoutPaise, updatedBy, expectedUpdatedAt) {
+  if (!isId(gymId)) throw { status: 400, error: 'Invalid gym id' };
+  validatePayoutPaise(payoutPaise);
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  try {
+    await axios.get(`${GYM_SERVICE_URL}/internal/${gymId}`, {
+      headers: { 'x-internal-key': INTERNAL_API_KEY, ...(await googleIdTokenHeader(GYM_SERVICE_URL)) },
+      timeout: 3000,
+    });
+  } catch (err) {
+    if (err.response?.status === 404) throw { status: 404, error: 'Gym not found' };
+    throw { status: 503, error: 'Unable to verify gym' };
+  }
+  const data = { payoutPaise, updatedBy };
+  return writeConfigRow(prisma.gymMembershipPayout, { gymId }, { create: data, update: data, expected });
+}
+
+export async function deleteGymMembershipPayout(gymId, expectedUpdatedAt) {
+  if (!isId(gymId)) throw { status: 400, error: 'Invalid gym id' };
+  const expected = parseExpectedUpdatedAt(expectedUpdatedAt);
+  const delegate = prisma.gymMembershipPayout;
+  const { count } = await delegate.deleteMany({
+    where: { gymId, ...(expected && { updatedAt: expected }) },
+  });
+  if (!count && expected) {
+    const current = await delegate.findUnique({ where: { gymId } });
+    throw configConflictError(current?.updatedAt);
+  }
+  return { gymId, deleted: count === 1 };
 }

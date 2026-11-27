@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { isPendingSubscriptionClientFlag, pendingSubscriptionClientFlags } from './pendingSubscriptionClientFlags.js';
 import {
   FEATURE_FLAGS,
   FLAG_SCHEMA_VERSION,
@@ -85,6 +86,17 @@ test('defaultFeatures covers every registered flag', () => {
   assert.deepEqual(Object.keys(defaults).sort(), flagNames().slice().sort());
 });
 
+test('WP10 flags default off and the plan families depend on the offers switch', () => {
+  for (const clientKey of pendingSubscriptionClientFlags) {
+    const name = clientKey.slice(0, -'Enabled'.length);
+    const flag = FEATURE_FLAGS.find((entry) => entry.name === name);
+    assert.equal(flag?.clientKey, clientKey);
+    assert.equal(flag.defaultEnabled, false);
+    const isPlanFamily = ['subscriptionMedical', 'subscriptionWellness'].includes(name);
+    assert.deepEqual(flag.deps, isPlanFamily ? ['subscriptionOffers'] : []);
+  }
+});
+
 test('only referral is live enough to default on', () => {
   // referral is live, so a missing or unknown flag must resolve to enabled
   // rather than hide a shipped feature. Buddy now fails CLOSED — a missing or
@@ -165,7 +177,7 @@ test('the customer app can read every flag the registry declares', (t) => {
   }
   const dart = readFileSync(customerAppModel, 'utf8');
   const missing = FEATURE_FLAGS.filter((f) => f.clientKey).filter(
-    (f) => !dart.includes(f.clientKey),
+    (f) => !dart.includes(f.clientKey) && !isPendingSubscriptionClientFlag(f.clientKey, dart),
   );
   assert.deepEqual(
     missing.map((f) => `${f.name} -> ${f.clientKey}`),

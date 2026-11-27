@@ -46,6 +46,7 @@ let addonBalance;
 let addonDebitBarrier;
 let clearance;
 let payoutConfig;
+const gymPayouts = new Map();
 let walletCreditAttempts = [];
 let bankRecords = [];
 let trackingFailure;
@@ -119,6 +120,7 @@ function resetFakes() {
   cancelledTerms.clear();
   addonGrants.clear();
   addonBalance = addonDebitBarrier = payoutConfig = trackingFailure = null;
+  gymPayouts.clear();
   clearance = false;
   walletCreditAttempts = [];
   bankRecords = [];
@@ -275,6 +277,28 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
               return { count: 1 };
             },
           };
+          this.gymMembershipPayout = {
+            findUnique: async ({ where: { gymId } }) => gymPayouts.get(gymId) ?? null,
+            findMany: async () => [...gymPayouts.values()].sort((a, b) => a.gymId - b.gymId),
+            upsert: async ({ where: { gymId }, create, update }) => {
+              const current = gymPayouts.get(gymId);
+              const row = { ...(current ? { ...current, ...update } : create), updatedAt: new Date() };
+              gymPayouts.set(gymId, row);
+              return row;
+            },
+            updateMany: async ({ where: { gymId, updatedAt }, data }) => {
+              const current = gymPayouts.get(gymId);
+              if (!current || +current.updatedAt !== +updatedAt) return { count: 0 };
+              gymPayouts.set(gymId, { ...current, ...data });
+              return { count: 1 };
+            },
+            deleteMany: async ({ where: { gymId, updatedAt } }) => {
+              const current = gymPayouts.get(gymId);
+              if (!current || (updatedAt && +current.updatedAt !== +updatedAt)) return { count: 0 };
+              gymPayouts.delete(gymId);
+              return { count: 1 };
+            },
+          };
           this.$queryRaw = async () => [];
           this.$transaction = async (fn) => fn(this);
         }
@@ -321,6 +345,7 @@ test('setup: mock dependencies once, import bookingService once', async (t) => {
             return { data: { data: null } };
           }
           if (gymLookupThrows) throw new Error('gym not found');
+          if (url.endsWith('/internal/999')) throw { response: { status: 404 } };
           if (gymOverride) return { data: { data: gymOverride } };
           if (url.includes(`/internal/${GYM.id}`)) return { data: { data: GYM } };
           if (url.includes('/internal/11?')) return { data: { data: { ...GYM, id: 11 } } };
@@ -1172,6 +1197,70 @@ test('payout config defaults to 7500 paise and rejects a stale admin edit', asyn
   assert.equal((await membership.getMembershipPayoutConfig()).payoutPaise, 8500);
 });
 
+test('a gym payout override wins only at its gym and deleting it restores the global default', async t => {
+  membershipTest(t);
+  await membership.createGymEntitlement(TERM);
+  await membership.updateMembershipPayoutConfig(8000, 9);
+  const override = await membership.updateGymMembershipPayout(GYM.id, 8250, 10);
+  assert.deepEqual(await membership.listGymMembershipPayouts(), [override]);
+  const firstVisit = await createBooking(CUSTOMER, BOOK);
+  assert.equal(firstVisit.partnerShare, 82.5);
+  assert.match(notifyCustomerCalls.at(-1)[1].body, /Covered by your plan\.$/);
+  const revised = await membership.updateGymMembershipPayout(GYM.id, 8750, 10, override.updatedAt.toISOString());
+  assert.equal(bookingRows.get(firstVisit.id).partnerShare, 82.5);
+  assert.equal((await createBooking(CUSTOMER, { ...BOOK, date: '2026-09-15' })).partnerShare, 87.5);
+
+  gymOverride = { ...gymOverride, id: 11 };
+  assert.equal((await createBooking(CUSTOMER, { ...BOOK, gymId: 11 })).partnerShare, 80);
+  gymOverride = { ...gymOverride, id: GYM.id };
+  assert.deepEqual(await membership.deleteGymMembershipPayout(GYM.id, revised.updatedAt.toISOString()),
+    { gymId: GYM.id, deleted: true });
+  assert.deepEqual(await membership.deleteGymMembershipPayout(GYM.id), { gymId: GYM.id, deleted: false });
+  assert.deepEqual(await membership.listGymMembershipPayouts(), []);
+  const nextVisit = await createBooking(CUSTOMER, { ...BOOK, date: '2026-09-16' });
+  assert.equal(nextVisit.partnerShare, 80);
+});
+
+test('gym payout edits and deletes reject a stale timestamp', async t => {
+  membershipTest(t);
+  const first = await membership.updateGymMembershipPayout(GYM.id, 8000, 9);
+  const expected = first.updatedAt.toISOString();
+  const second = await membership.updateGymMembershipPayout(GYM.id, 8500, 10, expected);
+  const conflict = { status: 409, errorCode: 'CONFIG_CONFLICT', currentUpdatedAt: second.updatedAt.toISOString() };
+  await assert.rejects(() => membership.updateGymMembershipPayout(GYM.id, 9000, 11, expected), conflict);
+  await assert.rejects(() => membership.deleteGymMembershipPayout(GYM.id, expected), conflict);
+  assert.deepEqual(await membership.listGymMembershipPayouts(), [second]);
+});
+
+test('gym payout validation uses the global range and verifies the gym', async t => {
+  membershipTest(t);
+  for (const value of [0, -1, 1.5, '7500', 2147483648]) {
+    await assert.rejects(() => membership.updateGymMembershipPayout(GYM.id, value, 9), { status: 400 });
+  }
+  assert.equal(axiosGetLog.length, 0);
+  const result = await membership.updateGymMembershipPayout(GYM.id, 2147483647, 9);
+  assert.equal(result.updatedBy, 9);
+  assert.match(axiosGetLog.at(-1).url, new RegExp(`/internal/${GYM.id}$`));
+  await assert.rejects(() => membership.updateGymMembershipPayout(999, 7500, 9), { status: 404 });
+  gymLookupThrows = true;
+  await assert.rejects(() => membership.updateGymMembershipPayout(GYM.id, 7500, 9), { status: 503 });
+  assert.deepEqual(await membership.listGymMembershipPayouts(), [result]);
+});
+
+test('customer and gym cancellations omit refund wording for covered bookings', async () => {
+  resetFakes();
+  const entitlement = makeBooking({ coverage: 'entitlement', amount: 0 });
+  const addon = makeBooking({ coverage: 'addon', amount: 0 });
+  bookingRows.set(entitlement.id, entitlement);
+  bookingRows.set(addon.id, addon);
+  await cancelBooking(entitlement.id, CUSTOMER);
+  await cancelBookingByGym(addon.id, GYM.id, PARTNER);
+  assert.equal(walletCreditCalls.length, 0);
+  const pushes = notifyCustomerCalls.filter(([, push]) => push.data.type === 'booking_cancelled');
+  assert.equal(pushes.length, 2);
+  for (const [, push] of pushes) assert.doesNotMatch(push.body, /wallet|refund/i);
+});
+
 test('a concurrent last add-on session can cover only one booking', async t => {
   membershipTest(t);
   gymOverride = null;
@@ -1192,6 +1281,9 @@ test('a concurrent last add-on session can cover only one booking', async t => {
   ]);
   assert.equal(arrivals, 2);
   assert.deepEqual(bookings.map(b => b.coverage).sort(), ['addon', null]);
+  const covered = bookings.find(b => b.coverage === 'addon');
+  const [, push] = notifyCustomerCalls.find(([, item]) => item.data.bookingId === covered.id);
+  assert.match(push.body, /Covered by your plan\.$/);
   assert.equal((await membership.getCustomerEntitlement(CUSTOMER)).addonRemaining, 0);
   assert.equal(addonBalance.remaining, 0);
   assert.equal(walletDebitCalls.length, 1);
@@ -1219,6 +1311,7 @@ test('an expired entitlement leaves legacy coverage and paid booking amounts unc
   assert.equal(legacy.coverage, null);
   assert.equal(legacy.subscriptionId, 5);
   assert.equal(legacy.partnerShare, 30);
+  assert.match(notifyCustomerCalls.at(-1)[1].body, /Covered by your plan\.$/);
   assert.equal(walletDebitCalls.length, 0);
   subMode = 'none';
   const paid = await createBooking(CUSTOMER, { ...BOOK, startTime: '12:00', endTime: '13:00' });
@@ -1226,6 +1319,7 @@ test('an expired entitlement leaves legacy coverage and paid booking amounts unc
   assert.equal(paid.amount, 500);
   assert.equal(paid.partnerShare, 400);
   assert.equal(walletDebitCalls[0].amount, 500);
+  assert.match(notifyCustomerCalls.at(-1)[1].body, /₹500 paid from your wallet\.$/);
 });
 
 test('available network and add-on coverage are restricted to Gurugram', async t => {
