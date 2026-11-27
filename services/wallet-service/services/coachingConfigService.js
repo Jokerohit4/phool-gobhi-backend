@@ -1,17 +1,25 @@
 import prisma from '../db/prisma.js';
 import { defaultCoachingConfig, validateCoachingConfig } from './coachingDefaults.js';
+import { defaultCoachingV2Config } from './coachingV2Config.js';
 
 export async function getCoachingConfig() {
   const row = await prisma.coachingCatalogConfig.findUnique({ where: { id: 1 } });
   return row ? { version: row.version, config: row.config, updatedAt: row.updatedAt, updatedBy: row.updatedBy }
-    : { version: 0, config: defaultCoachingConfig(), updatedAt: null, updatedBy: null };
+    : { version: 0, config: { ...defaultCoachingConfig(), ...defaultCoachingV2Config() }, updatedAt: null, updatedBy: null };
 }
 export async function saveCoachingConfig(input, expectedVersion, actor) {
-  const config = validateCoachingConfig(input);
+  const validated = validateCoachingConfig(input);
   if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 0) throw Object.assign(new Error('Reload the plan editor before saving'), { status: 400 });
   try {
     return await prisma.$transaction(async tx => {
       const version = expectedVersion + 1;
+      const previous = expectedVersion > 0 ? (await tx.coachingCatalogConfig.findUnique({ where: { id: 1 } }))?.config : null;
+      // The v1 editor can still publish its region settings without replacing v2 offers.
+      const config = {
+        ...(previous?.schemaVersion === 2 ? previous : defaultCoachingV2Config()),
+        ...validated,
+        regions: validated.regions ?? previous?.regions ?? defaultCoachingConfig().regions,
+      };
       if (expectedVersion === 0) await tx.coachingCatalogConfig.create({ data: { id: 1, version, config, updatedBy: actor } });
       else {
         const saved = await tx.coachingCatalogConfig.updateMany({ where: { id: 1, version: expectedVersion }, data: { config, version, updatedBy: actor } });

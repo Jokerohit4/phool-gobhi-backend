@@ -216,7 +216,14 @@ router.post('/guidance/requests', requireRole('customer'), run(async req => {
   const existing = await prisma.guidanceRequest.findFirst({ where: { userId: req.userId, kind, status: 'REQUESTED', message, preferredAt } });
   return existing || prisma.guidanceRequest.create({ data: { userId: req.userId, kind, message, preferredAt } });
 }));
-router.get('/guidance/internal/:userId', requireInternal, run(async req => prisma.guidanceProfile.findUnique({ where: { userId: Number(req.params.userId) } })));
+router.get('/guidance/internal/:userId', requireInternal, run(async req => {
+  const userId = Number(req.params.userId);
+  const [profile, report] = await Promise.all([
+    prisma.guidanceProfile.findUnique({ where: { userId } }),
+    prisma.healthReport.findFirst({ where: { userId }, select: { id: true } }),
+  ]);
+  return { ...profile, hasUploadedReport: !!report };
+}));
 router.get('/guidance/admin', requireRole('gobhi'), run(async () => ({ profiles: await prisma.guidanceProfile.findMany({ orderBy: { updatedAt: 'desc' }, take: 200 }), requests: await prisma.guidanceRequest.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }) })));
 router.get('/guidance/admin/reports', requireRole('gobhi'), run(async (req, res) => {
   res.set('Cache-Control', 'no-store');

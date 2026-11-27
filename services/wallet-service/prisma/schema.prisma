@@ -260,10 +260,14 @@ model CoachingMembership {
   planEndsAt DateTime?
   purchasedAt DateTime?
   freeDelightSessionsRemaining Int @default(0)
+  trainerSessionsRemaining Int @default(0)
+  nutritionistSessionsRemaining Int @default(0)
+  gymSessionsRemaining Int @default(0)
   labCreditsRemaining Int @default(0)
   gymPassStatus String @default("NOT_ISSUED")
   hasExistingGym Boolean @default(false)
   activeOrderId Int? @unique
+  scheduledOrderId Int? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@schema("wallet")
@@ -290,6 +294,9 @@ model CoachingOrder {
   userId Int
   product String
   amountPaise Int
+  isAddon Boolean @default(false)
+  isRenewal Boolean @default(false)
+  termStartsAt DateTime?
   orderId String @unique
   paymentId String? @unique
   status String @default("PENDING")

@@ -4,10 +4,10 @@ import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import prisma from '../db/prisma.js';
 import { membershipBenefits } from '../services/coachingCatalog.js';
-import { loadCoachingCatalog } from '../services/coachingOfferService.js';
+import { loadCoachingCatalog, loadCoachingCatalogV2 } from '../services/coachingOfferService.js';
 import { getCoachingConfig, saveCoachingConfig, coachingConfigHistory } from '../services/coachingConfigService.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
-import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
+import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
 const router = Router();
 const run = fn => async (req, res) => { try { res.json({ data: await fn(req) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? e.message : 'Could not complete this request right now. Please try again.' }); } };
 router.get('/mine', requireRole('customer'), run(async req => {
@@ -23,12 +23,13 @@ router.put('/mine', requireRole('customer'), run(async req => {
   return membershipView(req.userId);
 }));
 router.get('/catalog', requireRole('customer'), run(req => loadCoachingCatalog(req.query.city)));
+router.get('/catalog/v2', requireRole('customer'), run(req => loadCoachingCatalogV2(req.query.city)));
 router.get('/admin/config', requireRole('gobhi'), run(async () => ({ ...(await getCoachingConfig()), history: await coachingConfigHistory() })));
 router.put('/admin/config', requireRole('gobhi'), run(req => saveCoachingConfig(req.body.config, req.body.expectedVersion, req.userId)));
 router.post('/orders', requireRole('customer'), run(req => {
-  const { product, city, offerId, couponCode, expectedAmountPaise, quoteOnly } = req.body;
-  const selection = { city, offerId, couponCode, expectedAmountPaise };
-  return quoteOnly === true ? quoteCoachingOrder(product, selection) : createCoachingOrder(req.userId, product, selection);
+  const { product, city, offerId, couponCode, expectedAmountPaise, quoteOnly, quantity, statedCondition } = req.body;
+  const selection = { city, offerId, couponCode, expectedAmountPaise, quantity, statedCondition };
+  return quoteOnly === true ? quoteCoachingOrder(product, selection, req.userId) : createCoachingOrder(req.userId, product, selection);
 }));
 router.post('/verify', requireRole('customer'), run(async req => {
   const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
@@ -40,7 +41,7 @@ router.post('/verify', requireRole('customer'), run(async req => {
   const settled = await prisma.coachingOrder.findUnique({ where: { orderId } });
   return { ...(await membershipView(req.userId)), payment_status: settled.status };
 }));
-router.post('/refund', requireRole('customer'), run(req => requestCoachingRefund(req.userId)));
+router.post('/refund', requireRole('customer'), run(req => requestCoachingRefund(req.userId, req.body?.orderId)));
 router.post('/labs', requireRole('customer'), run(async req => {
   const record = await requestLab(req.userId, req.body.address, req.body.idempotencyKey);
   await notifyCoachingFulfillment(req.userId).catch(() => {});
@@ -51,6 +52,7 @@ router.post('/internal/reconcile', requireInternal, run(async () => {
   const users = await prisma.coachingOrder.findMany({ where: { status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } }, select: { userId: true }, distinct: ['userId'], orderBy: { updatedAt: 'asc' }, take: 100 });
   let reconciled = 0;
   for (const { userId } of users) { await reconcileCoaching(userId); reconciled++; }
+  await activateDueCoachingRenewals();
   await notifyCoachingFulfillment();
   return { reconciled };
 }));
