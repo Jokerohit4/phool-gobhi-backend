@@ -34,6 +34,7 @@ import {
   getSubscriptionsForGym,
   getSubscriptionsForGymForPartner,
   recordPendingBankSettlement,
+  reverseNetworkBankSettlement,
   getPendingBankSettlements,
   settleBankSettlements,
   getMyBankSettlements,
@@ -98,7 +99,8 @@ router.post('/internal/subscriptions/has-purchased-batch', requireInternal, getC
 // this money never credits the partner's in-app wallet. Literal paths
 // (mine, admin/pending) registered before the /admin/:partnerId/settle
 // param route, same convention as elsewhere in this file.
-router.post('/internal/bank-settlements/record', requireInternal, recordPendingBankSettlement); // booking-service, at completion of a SaaS subscription visit
+router.post('/internal/bank-settlements/record', requireInternal, recordPendingBankSettlement);
+router.post('/internal/bank-settlements/reverse', requireInternal, reverseNetworkBankSettlement);
 router.get('/bank-settlements/mine', requireRole('partner'), getMyBankSettlements); // Partner's own pending total + history (optional ?gymId=)
 router.get('/bank-settlements/admin/pending', requireRole('gobhi'), getPendingBankSettlements); // Admin: every partner's pending total
 router.post('/bank-settlements/admin/:partnerId/settle', requireRole('gobhi'), settleBankSettlements); // Admin: mark a partner's pending rows settled (optional body {gymId})

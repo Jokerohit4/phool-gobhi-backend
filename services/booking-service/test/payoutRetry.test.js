@@ -12,7 +12,10 @@ let creditFails = false;
 let gymLookupFails = false;
 
 const matches = (b, where) => {
+  if (where.OR && !where.OR.some(branch => matches(b, branch))) return false;
   if (where.status != null && b.status !== where.status) return false;
+  if (where.payoutTiming != null && b.payoutTiming !== where.payoutTiming) return false;
+  if (where.attendedAt?.not === null && b.attendedAt == null) return false;
   if (where.payoutCreditedAt === null && b.payoutCreditedAt != null) return false;
   if (where.payoutAmount && where.payoutAmount.not === null && b.payoutAmount == null) return false;
   return true;
@@ -99,7 +102,7 @@ test('retries a completed-but-unpaid payout, credits it once, and stamps it', as
   assert.equal(posts.length, 0);
 });
 
-test('skips rows that are settled, unowed, or not completed', async () => {
+test('skips rows that are settled, unowed, or neither completed nor checked in', async () => {
   rows.clear();
   posts.length = 0;
   creditFails = false;

@@ -7,6 +7,7 @@ import { invalidateBlendedScore } from './ledger/blendedScoreCache.js';
 import { istDateString } from '../utils/sessionDay.js';
 import { classifyFailure, isStalledReport, STALL_MS } from '../utils/reportFailure.js';
 import { PATIENT_DETAILS_VERSION } from '../utils/guidanceExtraction.js';
+import { lockGuidanceCondition, recordReportCondition } from './guidanceConditionService.js';
 
 
 /**
@@ -94,29 +95,35 @@ export async function findExistingReport(userId, fileSha256) {
   });
 }
 
-export async function createReportService({ userId, storagePath, fileName, sizeBytes = null, mimeType = null, reportDate = null, fileSha256 = null }) {
+export async function createReportService({ userId, storagePath, fileName, sizeBytes = null, mimeType = null, reportDate = null, fileSha256 = null, readConsentAt = null }) {
   // Before the try, not inside it. A bad date from the upload form is a client
   // error and must not be laundered into the 500 below, which would tell a user
   // their upload failed rather than that they mistyped the date.
   const parsedReportDate = parseReportDate(reportDate);
 
   try {
-    const report = await prisma.healthReport.create({
-      data: {
-        userId,
-        storagePath,
-        fileName,
-        status: 'PENDING',
-        reportDate: parsedReportDate,
-        mimeType: mimeType || 'application/pdf',
-        fileSha256,
-      },
+    const report = await prisma.$transaction(async tx => {
+      await lockGuidanceCondition(tx, userId);
+      const row = await tx.healthReport.create({
+        data: {
+          userId,
+          storagePath,
+          fileName,
+          status: 'PENDING',
+          reportDate: parsedReportDate,
+          mimeType: mimeType || 'application/pdf',
+          fileSha256,
+          readConsentAt,
+        },
+      });
+      await recordReportCondition(tx, userId);
+      return row;
     });
 
     // No path, no filename and no size in the event. The fact that a report was
     // uploaded is the only thing worth a funnel; a lab report's filename and
     // byte count are nobody's business.
-    track('health_report_uploaded', userId, { status: 'PENDING' });
+    void Promise.resolve().then(() => track('health_report_uploaded', userId, { status: 'PENDING' })).catch(() => {});
     return report;
   } catch (err) {
     console.error('createReportService error:', err);
@@ -255,73 +262,39 @@ function isIsoDay(value) {
 
 export async function verifyExtractionService({ extractionId, userId, confirmedValue }) {
   try {
-    const extraction = await prisma.reportExtraction.findUnique({
-      where: { id: extractionId },
-    });
+    await prisma.$transaction(async tx => {
+      await lockGuidanceCondition(tx, userId);
+      const extraction = await tx.reportExtraction.findUnique({ where: { id: extractionId } });
+      if (!extraction) throw { status: 404, error: 'Extraction record not found' };
+      const report = await tx.healthReport.findUnique({ where: { id: extraction.reportId } });
+      if (!report || report.userId !== userId) throw { status: 403, error: 'Forbidden' };
 
-    if (!extraction) throw { status: 404, error: 'Extraction record not found' };
-    
-    // Security check: ensure the extraction belongs to a report owned by the user
-    const report = await prisma.healthReport.findUnique({
-      where: { id: extraction.reportId },
-    });
-    if (!report || report.userId !== userId) {
-      throw { status: 403, error: 'Forbidden' };
-    }
+      await tx.reportExtraction.update({
+        where: { id: extractionId },
+        data: { isVerified: true, normalizedValue: confirmedValue },
+      });
 
-    // 1. Update the extraction as verified
-    await prisma.reportExtraction.update({
-      where: { id: extractionId },
-      data: { 
-        isVerified: true,
-        normalizedValue: confirmedValue // User might have corrected the AI's value
-      },
-    });
-
-    // 2. Sync to the main BiometricEntry table (The la la land of biological data)
-    // This ensures the value is now part of the user's health history
-    //
-    // The date is the REPORT's date, not today's. A lab report is a reading of a
-    // past moment - somebody uploads a blood panel from three months ago, and
-    // every value in it was measured then. Dating the entry today puts a
-    // March measurement in an August trend, which makes a real change look like
-    // a sudden one and a steady one look like a cliff.
-    //
-    // This matters more than it sounds because of the upsert key. userId +
-    // metric + localDate is unique, so verifying two reports on the same day
-    // with today's date would overwrite the first one: upload an old panel and
-    // today's manual entry, confirm both, and the second silently replaces the
-    // first. Keyed on the report's own date, they are two different days and
-    // both survive - which is the entire point of keeping a history.
-    //
-    // `report.createdAt` is the best date available: it is when the report was
-    // uploaded, which is not when the blood was drawn. It is right whenever the
-    // report is entered soon after the test, and closer to right than "now"
-    // when it is not. The honest fix is a date printed on the report, which
-    // means OCR or asking the user - so this is the fallback, not the answer,
-    // and `reportDate` below is where the real one will arrive.
-    const localDate = reportDate(report);
-
-    await prisma.biometricEntry.upsert({
-      where: {
-        userId_metric_localDate: {
+      // The report's measurement date keeps old results in their own history slot.
+      const localDate = reportDate(report);
+      const data = { value: confirmedValue, source: 'manual' };
+      await tx.biometricEntry.upsert({
+        where: {
+          userId_metric_localDate: {
+            userId,
+            metric: extraction.metric,
+            localDate,
+          },
+        },
+        update: data,
+        create: {
           userId,
           metric: extraction.metric,
           localDate,
+          ...data,
+          unit: extraction.unit || 'unknown',
         },
-      },
-      update: {
-        value: confirmedValue,
-        source: 'manual', // Marked as manual because the user verified/corrected it
-      },
-      create: {
-        userId,
-        metric: extraction.metric,
-        value: confirmedValue,
-        unit: extraction.unit || 'unknown',
-        source: 'manual',
-        localDate,
-      },
+      });
+      await recordReportCondition(tx, userId);
     });
 
     await invalidateBlendedScore(userId);
@@ -425,10 +398,18 @@ export async function deleteReportService({ reportId, userId }) {
 
   // ReportExtraction is onDelete: Cascade from the schema, so the extractions
   // go with the row and there is nothing to enumerate here.
-  await prisma.$transaction([
-    prisma.guidanceProfile.deleteMany({ where: { userId, sourceReportId: report.id } }),
-    prisma.healthReport.delete({ where: { id: report.id } }),
-  ]);
+  await prisma.$transaction(async tx => {
+    await lockGuidanceCondition(tx, userId);
+    await tx.guidanceProfile.updateMany({
+      where: { userId, sourceReportId: report.id },
+      data: {
+        sourceReportId: null, confirmedDetails: {}, confirmedMarkers: {}, liverFlag: false,
+        riskBucket: 'UNSET', confirmedAt: null, clinicalStatus: 'PENDING', clinicalNote: null,
+        clinicianName: null, clinicianRegistration: null, reviewedBy: null, reviewedAt: null, agreedActions: [],
+      },
+    });
+    await tx.healthReport.deleteMany({ where: { id: report.id, userId } });
+  });
 
   const { deleteObjects } = await import('./ledger/medicalDocumentStorage.js');
   const { failed } = await deleteObjects([report.storagePath]).catch((err) => {

@@ -188,9 +188,12 @@ model PartnerBankSettlement {
   partnerId      Int
   gymId          Int
   bookingId      Int
-  subscriptionId Int
+  subscriptionId Int?
+  entitlementId  Int?
+  addonBalanceId Int?
   amount         Decimal   @db.Decimal(19, 2)
   settledAt      DateTime?
+  reversedAt     DateTime?
   createdAt      DateTime  @default(now())
 
   @@index([partnerId, settledAt])
@@ -260,10 +263,14 @@ model CoachingMembership {
   planEndsAt DateTime?
   purchasedAt DateTime?
   freeDelightSessionsRemaining Int @default(0)
+  trainerSessionsRemaining Int @default(0)
+  nutritionistSessionsRemaining Int @default(0)
+  gymSessionsRemaining Int @default(0)
   labCreditsRemaining Int @default(0)
   gymPassStatus String @default("NOT_ISSUED")
   hasExistingGym Boolean @default(false)
   activeOrderId Int? @unique
+  scheduledOrderId Int? @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@schema("wallet")
@@ -290,6 +297,9 @@ model CoachingOrder {
   userId Int
   product String
   amountPaise Int
+  isAddon Boolean @default(false)
+  isRenewal Boolean @default(false)
+  termStartsAt DateTime?
   orderId String @unique
   paymentId String? @unique
   status String @default("PENDING")
@@ -298,7 +308,62 @@ model CoachingOrder {
   refundRequestedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  couponRedemption CouponRedemption?
+  sessionLogs CoachingSessionLog[]
   @@index([userId, status])
+  @@schema("wallet")
+}
+model Coupon {
+  id Int @id @default(autoincrement())
+  code String @unique @db.VarChar(32)
+  kind String
+  value Int
+  offerKeys Json?
+  activeFrom DateTime?
+  activeTo DateTime?
+  maxRedemptions Int?
+  perCustomerLimit Int?
+  enabled Boolean @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy Int?
+  redemptions CouponRedemption[]
+  @@schema("wallet")
+}
+model CouponRedemption {
+  id Int @id @default(autoincrement())
+  couponId Int
+  userId Int
+  orderId String @unique
+  status String @default("reserved")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  order CoachingOrder @relation(fields: [orderId], references: [orderId], onDelete: Restrict)
+  @@index([couponId, status, userId])
+  @@schema("wallet")
+}
+model CoachingSessionLog {
+  id Int @id @default(autoincrement())
+  userId Int
+  kind String
+  mode String
+  heldAt DateTime
+  durationMinutes Int?
+  note String? @db.VarChar(500)
+  loggedBy Int
+  status String @default("logged")
+  confirmedAt DateTime?
+  disputeReason String? @db.VarChar(500)
+  resolution String?
+  resolvedAt DateTime?
+  resolvedBy Int?
+  idempotencyKey String @unique
+  membershipOrderId Int
+  membershipOrder CoachingOrder @relation(fields: [membershipOrderId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([userId, createdAt, id])
+  @@index([status, resolution, createdAt, id])
   @@schema("wallet")
 }
 model CoachingAddonGrant {

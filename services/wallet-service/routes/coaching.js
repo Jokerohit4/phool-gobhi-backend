@@ -4,12 +4,21 @@ import axios from 'axios';
 import { googleIdTokenHeader } from '../utils/googleIdToken.js';
 import prisma from '../db/prisma.js';
 import { membershipBenefits } from '../services/coachingCatalog.js';
-import { loadCoachingCatalog } from '../services/coachingOfferService.js';
+import { loadCoachingCatalog, loadCoachingCatalogV2 } from '../services/coachingOfferService.js';
 import { getCoachingConfig, saveCoachingConfig, coachingConfigHistory } from '../services/coachingConfigService.js';
+import { createCoachingCoupon, listCoachingCoupons, updateCoachingCoupon } from '../services/coachingCouponAdmin.js';
+import { errorBody } from '../utils/configConcurrency.js';
 import { requireRole, requireInternal } from '../middleware/requireAuth.js';
-import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, reconcileCoaching, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment } from '../services/coachingService.js';
+import { membershipView, createCoachingOrder, quoteCoachingOrder, signatureMatches, settleCoachingPayment, markCoachingPaymentFailed, reconcileCoaching, activateDueCoachingRenewals, requestCoachingRefund, requestLab, consumeSession, guidanceContext, notifyCoachingFulfillment, retryGymFulfillment, GYM_ENTITLEMENT_SYNC } from '../services/coachingService.js';
+import { logCoachingSession, listOwnCoachingSessions, confirmCoachingSession, disputeCoachingSession, listDisputedCoachingSessions, resolveCoachingSession, autoConfirmCoachingSessions } from '../services/coachingService.js';
 const router = Router();
-const run = fn => async (req, res) => { try { res.json({ data: await fn(req) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? e.message : 'Could not complete this request right now. Please try again.' }); } };
+const run = fn => async (req, res) => {
+  try { res.json({ data: await fn(req) }); }
+  catch (e) {
+    const body = e.status && e.status < 500 ? errorBody(e) : { error: 'Could not complete this request right now. Please try again.' };
+    res.status(e.status || 500).json(body);
+  }
+};
 router.get('/mine', requireRole('customer'), run(async req => {
   // Provider failure must not hide an already granted membership. Pending
   // payments remain visible and can be reconciled on the next read/webhook.
@@ -23,12 +32,22 @@ router.put('/mine', requireRole('customer'), run(async req => {
   return membershipView(req.userId);
 }));
 router.get('/catalog', requireRole('customer'), run(req => loadCoachingCatalog(req.query.city)));
+router.get('/catalog/v2', requireRole('customer'), run(async req => {
+  const catalog = await loadCoachingCatalogV2(req.query.city);
+  const context = await guidanceContext(req.userId);
+  const hasCondition = context?.hasCondition ?? null;
+  const suggestedFamily = hasCondition === null ? null : hasCondition ? 'medical' : 'wellness';
+  return { ...catalog, eligibility: { hasCondition, suggestedFamily } };
+}));
 router.get('/admin/config', requireRole('gobhi'), run(async () => ({ ...(await getCoachingConfig()), history: await coachingConfigHistory() })));
 router.put('/admin/config', requireRole('gobhi'), run(req => saveCoachingConfig(req.body.config, req.body.expectedVersion, req.userId)));
+router.get('/admin/coupons', requireRole('gobhi'), run(() => listCoachingCoupons()));
+router.post('/admin/coupons', requireRole('gobhi'), run(req => createCoachingCoupon(req.body ?? {}, req.userId)));
+router.patch('/admin/coupons/:code', requireRole('gobhi'), run(req => updateCoachingCoupon(req.params.code, req.body ?? {}, req.userId)));
 router.post('/orders', requireRole('customer'), run(req => {
-  const { product, city, offerId, couponCode, expectedAmountPaise, quoteOnly } = req.body;
-  const selection = { city, offerId, couponCode, expectedAmountPaise };
-  return quoteOnly === true ? quoteCoachingOrder(product, selection) : createCoachingOrder(req.userId, product, selection);
+  const { product, city, offerId, couponCode, expectedAmountPaise, quoteOnly, quantity, statedCondition } = req.body;
+  const selection = { city, offerId, couponCode, expectedAmountPaise, quantity, statedCondition };
+  return quoteOnly === true ? quoteCoachingOrder(product, selection, req.userId) : createCoachingOrder(req.userId, product, selection);
 }));
 router.post('/verify', requireRole('customer'), run(async req => {
   const { orderId, razorpayPaymentId, razorpaySignature } = req.body;
@@ -40,20 +59,32 @@ router.post('/verify', requireRole('customer'), run(async req => {
   const settled = await prisma.coachingOrder.findUnique({ where: { orderId } });
   return { ...(await membershipView(req.userId)), payment_status: settled.status };
 }));
-router.post('/refund', requireRole('customer'), run(req => requestCoachingRefund(req.userId)));
+router.post('/refund', requireRole('customer'), run(req => requestCoachingRefund(req.userId, req.body?.orderId)));
 router.post('/labs', requireRole('customer'), run(async req => {
   const record = await requestLab(req.userId, req.body.address, req.body.idempotencyKey);
   await notifyCoachingFulfillment(req.userId).catch(() => {});
   return record;
 }));
-router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId))));
-router.post('/internal/reconcile', requireInternal, run(async () => {
+router.get('/internal/:userId', requireInternal, run(req => membershipView(Number(req.params.userId), { includeGymBalance: false })));
+router.post('/internal/auto-confirm', requireInternal, run(() => autoConfirmCoachingSessions()));
+const runReconciliation = run(async () => {
+  await autoConfirmCoachingSessions();
+  await activateDueCoachingRenewals();
+  await retryGymFulfillment();
   const users = await prisma.coachingOrder.findMany({ where: { status: { in: ['PENDING', 'FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUND_PROCESSING', 'DUPLICATE_REFUND'] } }, select: { userId: true }, distinct: ['userId'], orderBy: { updatedAt: 'asc' }, take: 100 });
   let reconciled = 0;
   for (const { userId } of users) { await reconcileCoaching(userId); reconciled++; }
   await notifyCoachingFulfillment();
   return { reconciled };
-}));
+});
+router.post('/internal/reconcile', requireInternal, runReconciliation);
+router.post('/internal/scheduler/reconcile', (req, res, next) => {
+  if (!process.env.K_SERVICE) return requireInternal(req, res, next);
+  // The gateway supplies its own Cloud Run identity and sets a customer or staff user header.
+  // Only direct IAM invocations may use the scheduler endpoint.
+  if (req.get('x-user-id') !== undefined) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}, runReconciliation);
 router.get('/admin/fulfillment', requireRole('gobhi'), run(async () => {
   const users = await prisma.coachingMembership.findMany({ where: { planType: { not: 'FREE' } }, orderBy: { updatedAt: 'desc' }, take: 200 });
   const authUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:5001';
@@ -68,6 +99,12 @@ router.get('/admin/fulfillment', requireRole('gobhi'), run(async () => {
   }));
 }));
 router.post('/admin/fulfillment/:userId/sessions', requireRole('gobhi'), run(req => consumeSession(Number(req.params.userId), req.body.kind, req.userId, req.body.idempotencyKey)));
+router.post('/admin/fulfillment/:userId/session-log', requireRole('gobhi'), run(req => logCoachingSession(req.params.userId, req.userId, req.body ?? {})));
+router.get('/sessions/mine', requireRole('customer'), run(req => listOwnCoachingSessions(req.userId, req.query)));
+router.post('/sessions/:id/confirm', requireRole('customer'), run(req => confirmCoachingSession(req.userId, req.params.id)));
+router.post('/sessions/:id/dispute', requireRole('customer'), run(req => disputeCoachingSession(req.userId, req.params.id, req.body?.reason)));
+router.get('/admin/sessions/disputed', requireRole('gobhi'), run(req => listDisputedCoachingSessions(req.query)));
+router.post('/admin/sessions/:id/resolve', requireRole('gobhi'), run(req => resolveCoachingSession(req.params.id, req.userId, req.body?.resolution)));
 router.patch('/admin/fulfillment/:userId/gym', requireRole('gobhi'), run(async req => {
   const member = await prisma.coachingMembership.findUnique({ where: { userId: Number(req.params.userId) } });
   if (!member || !membershipBenefits(member).gymAccess) throw Object.assign(new Error('Gym access is not included in this regional plan'), { status: 409 });
@@ -78,7 +115,7 @@ router.patch('/admin/requests/:id', requireRole('gobhi'), run(async req => {
   if (!['CONFIRMED', 'COMPLETED', 'CANCELLED'].includes(req.body.status)) throw Object.assign(new Error('Choose a fulfillment status'), { status: 400 });
   return prisma.$transaction(async tx => {
     const row = await tx.coachingFulfillment.findUnique({ where: { id: Number(req.params.id) } });
-    if (!row) throw Object.assign(new Error('Request not found'), { status: 404 });
+    if (!row || row.kind === GYM_ENTITLEMENT_SYNC) throw Object.assign(new Error('Request not found'), { status: 404 });
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(${row.userId}::bigint)`;
     const current = await tx.coachingFulfillment.findUnique({ where: { id: row.id } });
     if (current.status === 'CANCELLED' || current.status === 'COMPLETED') return current;
@@ -99,6 +136,7 @@ router.post('/webhook', run(async req => {
   if (!expected || !/^[a-f\d]{64}$/i.test(supplied) || !crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(supplied, 'hex'))) throw Object.assign(new Error('Invalid webhook signature'), { status: 400 });
   const payment = req.body.payload?.payment?.entity;
   if (['payment.authorized', 'payment.captured'].includes(req.body.event) && payment?.order_id) await settleCoachingPayment(payment.order_id, payment.id);
+  if (req.body.event === 'payment.failed') await markCoachingPaymentFailed(payment?.order_id);
   return { received: true };
 }));
 export default router;

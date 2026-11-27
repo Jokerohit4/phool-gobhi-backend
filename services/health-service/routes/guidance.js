@@ -16,18 +16,24 @@ import { invalidateBlendedScore } from '../services/ledger/blendedScoreCache.js'
 import { listAdminReports, adminReportLink } from '../services/adminReportsService.js';
 import { notifyUser } from '../utils/notifyUser.js';
 import { riskNoticeFor } from '../utils/reportRiskNotice.js';
+import { conditionAnswer, conditionView, checkoutCondition, lockGuidanceCondition, recordReportCondition, saveGuidanceCondition } from '../services/guidanceConditionService.js';
 
 const router = Router();
 const run = fn => async (req, res) => { try { res.json({ data: await fn(req, res) }); } catch (e) { res.status(e.status || 500).json({ error: e.status && e.status < 500 ? (e.error || e.message) : 'Could not complete this request right now. Please try again.' }); } };
 const bad = message => { throw Object.assign(new Error(message), { status: 400 }); };
 const cap = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : null;
+function profileUserId(value) {
+  const userId = Number(value);
+  if (!Number.isInteger(userId) || userId < 1 || userId > 2147483647) bad('Invalid user ID');
+  return userId;
+}
 export async function coachingEntitlement(userId) {
   const url = process.env.WALLET_SERVICE_URL || 'http://wallet-service:5003';
   const res = await axios.get(`${url}/coaching/internal/${userId}`, { timeout: 15000, headers: { 'x-internal-key': (process.env.INTERNAL_API_KEY || '').trim(), ...(await googleIdTokenHeader(url)) } });
   return res.data.data;
 }
-async function ownReport(userId, id) {
-  const row = await prisma.healthReport.findFirst({ where: { id: Number(id) || -1, userId }, include: { extractions: true } });
+async function ownReport(userId, id, db = prisma) {
+  const row = await db.healthReport.findFirst({ where: { id: Number(id) || -1, userId }, include: { extractions: true } });
   if (!row) throw Object.assign(new Error('Report not found'), { status: 404 });
   return row;
 }
@@ -66,6 +72,10 @@ router.get('/guidance/me', requireAuth, run(async req => ({
   requests: await prisma.guidanceRequest.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 30 }),
   reports: (await prisma.healthReport.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' }, take: 10, select: SUMMARY_FIELDS })).map(reportSummary),
 })));
+router.get('/guidance/profile/condition', requireRole('customer'), run(async req =>
+  conditionView(await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } }))));
+router.put('/guidance/profile/condition', requireRole('customer'), run(req =>
+  saveGuidanceCondition(req.userId, { answer: conditionAnswer(req.body ?? {}) })));
 router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('reportSubscription'), uploadMedicalDocumentMiddleware, run(async req => {
   if (req.body?.readConsent !== 'true' && req.body?.readConsent !== true) bad('Confirm permission to read your report');
   if (!req.file || !['application/pdf', 'image/jpeg', 'image/png'].includes(req.file.mimetype)) bad('Choose a PDF, JPEG or PNG report');
@@ -81,8 +91,7 @@ router.post('/guidance/reports', requireRole('customer'), requireFeatureFlag('re
   const path = await saveDocument({ buffer: req.file.buffer, mimeType: req.file.mimetype, userId: req.userId });
   let report;
   try {
-    report = await createReportService({ userId: req.userId, storagePath: path, fileName: cap(req.file.originalname, 160) || 'Blood report', mimeType: req.file.mimetype, fileSha256 });
-    await prisma.healthReport.update({ where: { id: report.id }, data: { readConsentAt: new Date() } });
+    report = await createReportService({ userId: req.userId, storagePath: path, fileName: cap(req.file.originalname, 160) || 'Blood report', mimeType: req.file.mimetype, fileSha256, readConsentAt: new Date() });
   } catch (e) { await deleteObjects([path]).catch(() => {}); throw e; }
   // Await the reader: Cloud Run can suspend background work after a response.
   // A failed read still returns its stored report so the user can retry or continue.
@@ -115,37 +124,38 @@ router.post('/guidance/reports/:id/retry', requireRole('customer'), requireFeatu
   return reportView(await ownReport(req.userId, row.id));
 }));
 router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async req => {
-  const report = await ownReport(req.userId, req.params.id);
-  if (report.status !== 'COMPLETED') bad('Wait for the report to finish reading');
-  if (req.body?.belongsToMe !== true) bad('Confirm that this is your report');
-  const input = req.body.details || {};
-  const details = { name: cap(input.name, 120), address: cap(input.address, 500), gender: input.gender || null, age: input.age == null || input.age === '' ? null : Number(input.age) };
-  if (details.gender && !['male', 'female', 'other', 'prefer_not_to_say'].includes(details.gender)) bad('Check gender');
-  if (details.age != null && (!Number.isInteger(details.age) || details.age < 0 || details.age > 120)) bad('Check age');
-  const typedMarkers = validateMarkers(req.body.markers);
-  const readings = req.body.readings === undefined ? undefined : validateReportReadings(req.body.readings);
-  const confirmedReadings = readings ?? report.confirmedReadings ?? null;
-  // The readings the person just reviewed are the source of truth. A typed value
-  // the client sent wins (they edited it), but a marker the list carries and the
-  // form left empty is filled from the list, so the two can no longer disagree.
-  const reviewed = confirmedReadings ?? report.proposedReadings;
-  const markers = { ...valuesFromReadings(reviewed, MARKER_KEYS), ...typedMarkers };
-  if (!Object.keys(markers).length && !reviewed?.some(reading => String(reading.value ?? '').trim())) {
-    bad('Add a report value before confirming, or continue without the report');
-  }
-  const biometrics = { ...valuesFromReadings(reviewed, BIOMETRIC_KEYS), ...Object.fromEntries(['hba1c', 'triglycerides'].filter(key => markers[key] != null).map(key => [key, markers[key]])) };
-  const liverFlag = req.body.liverFlag === true;
-  const reportDate = parseReportDate(req.body.reportDate);
-  const previous = await prisma.guidanceProfile.findUnique({ where: { userId: req.userId } });
-  const canonical = obj => JSON.stringify(Object.fromEntries(Object.entries(obj || {}).sort(([a], [b]) => a.localeCompare(b))));
-  const existingReadings = Array.isArray(report.confirmedReadings) ? report.confirmedReadings : [];
-  const readingsUnchanged = readings === undefined || (
-    readings.length === existingReadings.length &&
-    readings.every((reading, index) => canonical(reading) === canonical(existingReadings[index]))
-  );
-  if (previous?.sourceReportId === report.id && canonical(previous.confirmedDetails) === canonical(details) && canonical(previous.confirmedMarkers) === canonical(markers) && previous.liverFlag === liverFlag && (!reportDate || reportDate === report.reportDate) && readingsUnchanged) return { ...previous, confirmedReadings };
-  const data = { sourceReportId: report.id, confirmedDetails: details, confirmedMarkers: markers, liverFlag, riskBucket: riskBucket(markers, liverFlag), confirmedAt: new Date(), clinicalStatus: 'PENDING', clinicalNote: null, clinicianName: null, clinicianRegistration: null, reviewedBy: null, reviewedAt: null, agreedActions: [] };
-  const result = await prisma.$transaction(async tx => {
+  const { previous, result, replay, confirmedReadings } = await prisma.$transaction(async tx => {
+    await lockGuidanceCondition(tx, req.userId);
+    const report = await ownReport(req.userId, req.params.id, tx);
+    if (report.status !== 'COMPLETED') bad('Wait for the report to finish reading');
+    if (req.body?.belongsToMe !== true) bad('Confirm that this is your report');
+    const input = req.body.details || {};
+    const details = { name: cap(input.name, 120), address: cap(input.address, 500), gender: input.gender || null, age: input.age == null || input.age === '' ? null : Number(input.age) };
+    if (details.gender && !['male', 'female', 'other', 'prefer_not_to_say'].includes(details.gender)) bad('Check gender');
+    if (details.age != null && (!Number.isInteger(details.age) || details.age < 0 || details.age > 120)) bad('Check age');
+    const typedMarkers = validateMarkers(req.body.markers);
+    const readings = req.body.readings === undefined ? undefined : validateReportReadings(req.body.readings);
+    const confirmedReadings = readings ?? report.confirmedReadings ?? null;
+    // Prefer a value the customer typed. Fill blank markers from the reviewed readings.
+    const reviewed = confirmedReadings ?? report.proposedReadings;
+    const markers = { ...valuesFromReadings(reviewed, MARKER_KEYS), ...typedMarkers };
+    if (!Object.keys(markers).length && !reviewed?.some(reading => String(reading.value ?? '').trim())) {
+      bad('Add a report value before confirming, or continue without the report');
+    }
+    const biometrics = { ...valuesFromReadings(reviewed, BIOMETRIC_KEYS), ...Object.fromEntries(['hba1c', 'triglycerides'].filter(key => markers[key] != null).map(key => [key, markers[key]])) };
+    const liverFlag = req.body.liverFlag === true;
+    const reportDate = parseReportDate(req.body.reportDate);
+    const canonical = obj => JSON.stringify(Object.fromEntries(Object.entries(obj || {}).sort(([a], [b]) => a.localeCompare(b))));
+    const existingReadings = Array.isArray(report.confirmedReadings) ? report.confirmedReadings : [];
+    const readingsUnchanged = readings === undefined || (
+      readings.length === existingReadings.length &&
+      readings.every((reading, index) => canonical(reading) === canonical(existingReadings[index]))
+    );
+    const previous = await recordReportCondition(tx, req.userId);
+    if (previous.sourceReportId === report.id && canonical(previous.confirmedDetails) === canonical(details) && canonical(previous.confirmedMarkers) === canonical(markers) && previous.liverFlag === liverFlag && (!reportDate || reportDate === report.reportDate) && readingsUnchanged) {
+      return { result: previous, confirmedReadings, replay: true };
+    }
+    const data = { sourceReportId: report.id, confirmedDetails: details, confirmedMarkers: markers, liverFlag, riskBucket: riskBucket(markers, liverFlag), confirmedAt: new Date(), clinicalStatus: 'PENDING', clinicalNote: null, clinicianName: null, clinicianRegistration: null, reviewedBy: null, reviewedAt: null, agreedActions: [] };
     if (reportDate || readings !== undefined) {
       await tx.healthReport.update({
         where: { id: report.id, userId: req.userId, status: 'COMPLETED' },
@@ -179,8 +189,10 @@ router.post('/guidance/reports/:id/confirm', requireRole('customer'), run(async 
       if (!bounds || value < bounds[0] || value > bounds[1]) continue;
       await tx.biometricEntry.upsert({ where: { userId_metric_localDate: { userId: req.userId, metric, localDate } }, create: { userId: req.userId, metric, value, unit: metric === 'hba1c' ? '%' : 'mg/dL', source: 'manual', localDate }, update: { value, source: 'manual' } });
     }
-    return tx.guidanceProfile.upsert({ where: { userId: req.userId }, create: { userId: req.userId, ...data }, update: data });
+    const result = await tx.guidanceProfile.update({ where: { userId: req.userId }, data });
+    return { previous, result, confirmedReadings };
   });
+  if (replay) return { ...result, confirmedReadings };
   await invalidateBlendedScore(req.userId);
   // Best effort and never awaited: the person already has their answer, so a
   // slow or failed push must not hold up or fail the confirm.
@@ -216,7 +228,18 @@ router.post('/guidance/requests', requireRole('customer'), run(async req => {
   const existing = await prisma.guidanceRequest.findFirst({ where: { userId: req.userId, kind, status: 'REQUESTED', message, preferredAt } });
   return existing || prisma.guidanceRequest.create({ data: { userId: req.userId, kind, message, preferredAt } });
 }));
-router.get('/guidance/internal/:userId', requireInternal, run(async req => prisma.guidanceProfile.findUnique({ where: { userId: Number(req.params.userId) } })));
+router.get('/guidance/internal/:userId', requireInternal, run(async req => {
+  const userId = profileUserId(req.params.userId);
+  const [profile, report] = await Promise.all([
+    prisma.guidanceProfile.findUnique({ where: { userId } }),
+    prisma.healthReport.findFirst({ where: { userId }, select: { id: true } }),
+  ]);
+  return { ...profile, ...conditionView(profile), hasUploadedReport: !!report };
+}));
+router.put('/guidance/internal/:userId/condition', requireInternal, run(req =>
+  saveGuidanceCondition(profileUserId(req.params.userId), checkoutCondition(req.body ?? {}))));
+router.put('/guidance/admin/:userId/condition', requireRole('gobhi'), run(req =>
+  saveGuidanceCondition(profileUserId(req.params.userId), { answer: conditionAnswer(req.body ?? {}), staff: true })));
 router.get('/guidance/admin', requireRole('gobhi'), run(async () => ({ profiles: await prisma.guidanceProfile.findMany({ orderBy: { updatedAt: 'desc' }, take: 200 }), requests: await prisma.guidanceRequest.findMany({ orderBy: { createdAt: 'desc' }, take: 200 }) })));
 router.get('/guidance/admin/reports', requireRole('gobhi'), run(async (req, res) => {
   res.set('Cache-Control', 'no-store');

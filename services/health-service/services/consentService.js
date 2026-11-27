@@ -1,5 +1,6 @@
 import prisma from '../db/prisma.js';
 import { emitJourneyInvalidate } from '../utils/journeyCacheBus.js';
+import { lockGuidanceCondition } from './guidanceConditionService.js';
 
 // The consent record that gates the OS-level HealthKit/Health Connect
 // permission prompt — a fresh grant always overwrites revokedAt/policyVersion
@@ -56,7 +57,9 @@ export async function getConsentStatusService(userId) {
 // Custom exercises the user created are deleted too — their personal data,
 // not the seeded shared library.
 export async function deleteAllDataService(userId) {
-  await prisma.$transaction([    prisma.workoutSession.deleteMany({ where: { userId } }),
+  await prisma.$transaction([
+    lockGuidanceCondition(prisma, userId),
+    prisma.workoutSession.deleteMany({ where: { userId } }),
     prisma.workoutTemplate.deleteMany({ where: { userId } }),
     prisma.exercise.deleteMany({ where: { createdByUserId: userId } }),
     prisma.exerciseRecord.deleteMany({ where: { userId } }),
@@ -97,6 +100,7 @@ export async function deleteAllDataService(userId) {
     // In-app ledger choices are independent from OS health access, but are
     // still per-user consent records and must be erased with the account.
     prisma.ledgerConsent.deleteMany({ where: { userId } }),
+    prisma.modelTrainingConsent.deleteMany({ where: { userId } }),
     // The body-numbers consent row goes with the account like the device one.
     // It carries no values - only that consent was given and when - but it is
     // a per-person record and has no purpose once the person is gone.

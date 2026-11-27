@@ -1,4 +1,4 @@
-import { settleCoachingPayment } from '../services/coachingService.js';
+import { settleCoachingPayment, markCoachingPaymentFailed } from '../services/coachingService.js';
 import {
   createWalletService,
   getWalletService,
@@ -33,6 +33,7 @@ import {
   getSubscriptionsForGymService,
   assertPartnerOwnsGym,
   recordPendingBankSettlementService,
+  reverseNetworkBankSettlementService,
   getPendingBankSettlementsService,
   settleBankSettlementsService,
   getMyBankSettlementsService,
@@ -185,11 +186,13 @@ export const creditWallet = async (req, res) => {
 export const debitWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, description, idempotencyKey, gymId } = req.body;
+    const { amount, description, idempotencyKey, gymId, allowNegative } = req.body;
     if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({ error: 'amount must be a positive finite number' });
     }
-    const result = await debitWalletService(Number(userId), amount, description, idempotencyKey, gymId ?? null);
+    const result = await debitWalletService(
+      Number(userId), amount, description, idempotencyKey, gymId ?? null, { allowNegative: allowNegative === true },
+    );
     res.json({ data: result });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -303,13 +306,25 @@ export const payoutPartner = async (req, res) => {
 // crediting the wallet, for a subscription-linked, isAttendanceSaas booking.
 export const recordPendingBankSettlement = async (req, res) => {
   try {
-    const { partnerId, gymId, bookingId, subscriptionId, amount } = req.body;
+    const { partnerId, gymId, bookingId, subscriptionId, entitlementId, addonBalanceId, amount } = req.body;
     const settlement = await recordPendingBankSettlementService({
       partnerId: Number(partnerId), gymId: Number(gymId),
-      bookingId: Number(bookingId), subscriptionId: Number(subscriptionId),
+      bookingId: Number(bookingId),
+      subscriptionId: subscriptionId == null ? null : Number(subscriptionId),
+      entitlementId: entitlementId == null ? null : Number(entitlementId),
+      addonBalanceId: addonBalanceId == null ? null : Number(addonBalanceId),
       amount: Number(amount),
     });
     res.json({ data: settlement });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
+  }
+};
+
+export const reverseNetworkBankSettlement = async (req, res) => {
+  try {
+    const result = await reverseNetworkBankSettlementService(Number(req.body?.bookingId));
+    res.json({ data: result });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.error || err.message || 'Server error' });
   }
@@ -821,6 +836,7 @@ export const handleRazorpayWebhook = async (req, res) => {
     } else if (event === 'payment.failed') {
       const { order_id: orderId } = req.body.payload.payment.entity;
       const order = await getRazorpayOrderService(orderId);
+      if (!order || order.purpose === 'coaching') await markCoachingPaymentFailed(orderId);
 
       if (order) {
         const claimed = await claimRazorpayOrderService(orderId);

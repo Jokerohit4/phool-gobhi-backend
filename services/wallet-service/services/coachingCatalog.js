@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { defaultCoachingConfig } from './coachingDefaults.js';
+import { defaultCoachingV2Config } from './coachingV2Config.js';
 
 const invalid = message => { throw Object.assign(new Error(message), { status: 400 }); };
 export function coachingRegion(city) {
@@ -8,6 +9,9 @@ export function coachingRegion(city) {
 }
 export function membershipBenefits(row) {
   const snapshot = row?.offerSnapshot || {}, local = !snapshot.region || snapshot.region === 'GURUGRAM';
+  if (snapshot.schemaVersion === 2) {
+    return { gymAccess: local && snapshot.components.gym === 'unlimited', trainerFloorSessions: false, doorstepLabs: false };
+  }
   const benefits = snapshot.benefits || {};
   return {
     gymAccess: local && (benefits.gymAccess ?? true),
@@ -17,7 +21,7 @@ export function membershipBenefits(row) {
 }
 const quote = offer => ({ ...offer, offerId: crypto.createHash('sha256').update(JSON.stringify(offer)).digest('hex') });
 export function trainerAddonOffer(configuration = defaultCoachingConfig()) {
-  const a = configuration.regions.GURUGRAM.addon;
+  const a = (configuration.regions ?? defaultCoachingConfig().regions).GURUGRAM.addon;
   return quote({ ...a, product: 'TRAINER_ADDON_1499', region: 'GURUGRAM', currency: 'INR', available: a.enabled });
 }
 function publicPlan(p, region, addon) {
@@ -63,10 +67,37 @@ function publicPlan(p, region, addon) {
     unavailableReason: !p.enabled ? 'This plan is currently unavailable' : p.amountPaise === null ? 'Pricing to be announced' : null };
 }
 export function coachingCatalog(city, configuration = defaultCoachingConfig()) {
-  const region = coachingRegion(city), config = configuration.regions[region], addon = trainerAddonOffer(configuration);
+  const region = coachingRegion(city), config = (configuration.regions ?? defaultCoachingConfig().regions)[region];
+  const addon = trainerAddonOffer(configuration);
   return { region, city: region === 'GURUGRAM' ? 'Gurugram' : city.trim(), label: config.label,
     plans: config.plans.map(plan => publicPlan(plan, region, addon)),
     addon: region === 'GURUGRAM' ? addon : null };
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function coachingCatalogV2(city, configuration) {
+  const region = coachingRegion(city);
+  const { offers, addons } = configuration?.schemaVersion === 2 ? configuration : defaultCoachingV2Config();
+  const inRegion = item => item.regions.includes(region);
+  const render = (item, resolved) => {
+    const offerId = crypto.createHash('sha256').update(canonicalJson({ item, region })).digest('hex');
+    return { ...resolved, schemaVersion: 2, offerId, currency: 'INR', region };
+  };
+  return {
+    schemaVersion: 2, region, city: region === 'GURUGRAM' ? 'Gurugram' : city.trim(),
+    offers: offers.filter(item => item.enabled === true && inRegion(item)).map(item => {
+      const { regionOverrides, ...offer } = item;
+      return render(item, { ...offer, components: regionOverrides?.[region]?.components ?? offer.components });
+    }),
+    addons: addons.filter(item => item.enabled !== false && inRegion(item)).map(item => render(item, item)),
+  };
 }
 export function coachingOffer(product, city, offerId, configuration = defaultCoachingConfig()) {
   const offer = coachingCatalog(city, configuration).plans.find(plan => plan.product === product);

@@ -50,19 +50,23 @@ export function errorBody(err, fallback = 'Server error') {
 
 // Writes the singleton row (id = 1). `delegate` is the Prisma model delegate
 // (e.g. prisma.otpProviderSetting). Returns the saved row.
-export async function writeSingleton(delegate, { create, update, expected }) {
+export function writeSingleton(delegate, changes) {
+  return writeConfigRow(delegate, { id: 1 }, changes);
+}
+
+export async function writeConfigRow(delegate, key, { create, update, expected }) {
   if (expected === undefined) {
-    return delegate.upsert({ where: { id: 1 }, create: { id: 1, ...create }, update });
+    return delegate.upsert({ where: key, create: { ...key, ...create }, update });
   }
   // Always move updatedAt forward by at least 1ms so two saves can never share
   // a timestamp, and set it explicitly so the response needs no second read
   // (which could observe somebody else's later write).
   const next = new Date(Math.max(Date.now(), expected.getTime() + 1));
   const { count } = await delegate.updateMany({
-    where: { id: 1, updatedAt: expected },
+    where: { ...key, updatedAt: expected },
     data: { ...update, updatedAt: next },
   });
-  if (count === 1) return { id: 1, ...update, updatedAt: next };
-  const current = await delegate.findUnique({ where: { id: 1 } });
+  if (count === 1) return { ...key, ...update, updatedAt: next };
+  const current = await delegate.findUnique({ where: key });
   throw configConflictError(current?.updatedAt);
 }

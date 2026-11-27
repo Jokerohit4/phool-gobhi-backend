@@ -47,7 +47,7 @@
 /** Bumped whenever the flag SET changes shape, so a client can tell a flag that
  * is off from a server that predates the flag existing. Emitted as
  * `schemaVersion` on GET /api/auth/app-config. */
-export const FLAG_SCHEMA_VERSION = 6;
+export const FLAG_SCHEMA_VERSION = 7;
 
 /**
  * Ordering within a group is only for the admin portal's render order. `deps`
@@ -56,6 +56,76 @@ export const FLAG_SCHEMA_VERSION = 6;
  * pretending it does something.
  */
 const featureDefinitions = [
+  {
+    name: 'subscriptionOffers',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'subscriptionOffersEnabled',
+    group: 'subscriptions',
+    dataClass: 'none',
+    blastRadius: 'Subscription offers, quotes, and membership screens',
+    rationale: 'Keeps the subscription screens off until their customer rollout is ready.',
+  },
+  {
+    name: 'subscriptionMedical',
+    defaultEnabled: false,
+    deps: ['subscriptionOffers'],
+    clientKey: 'subscriptionMedicalEnabled',
+    group: 'subscriptions',
+    dataClass: 'medical',
+    blastRadius: 'Medical plan offers and quotes',
+    rationale: 'Lets the medical family roll out independently within the subscription screens.',
+  },
+  {
+    name: 'subscriptionWellness',
+    defaultEnabled: false,
+    deps: ['subscriptionOffers'],
+    clientKey: 'subscriptionWellnessEnabled',
+    group: 'subscriptions',
+    dataClass: 'none',
+    blastRadius: 'Wellness plan offers and quotes',
+    rationale: 'Lets the wellness family roll out independently within the subscription screens.',
+  },
+  {
+    name: 'modelTrainingConsent',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'modelTrainingConsentEnabled',
+    group: 'health',
+    dataClass: 'health-derived',
+    blastRadius: 'Model-training consent prompt and controls',
+    rationale: 'Keeps model-training consent controls off until the consent flow is ready.',
+  },
+  {
+    name: 'firstLogPrompt',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'firstLogPromptEnabled',
+    group: 'onboarding',
+    dataClass: 'none',
+    blastRadius: 'First-log prompt',
+    rationale: 'Allows an independent rollout of the first-log prompt.',
+  },
+  {
+    name: 'planCoveredBooking',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'planCoveredBookingEnabled',
+    group: 'subscriptions',
+    dataClass: 'none',
+    blastRadius: 'Plan-covered booking flow',
+    rationale: 'Allows the customer booking flow to roll out independently of offer discovery.',
+  },
+  {
+    name: 'coachingSessionConfirm',
+    defaultEnabled: false,
+    deps: [],
+    clientKey: 'coachingSessionConfirmEnabled',
+    group: 'coach',
+    dataClass: 'none',
+    blastRadius: 'Customer confirmation of coaching sessions',
+    rationale: 'Allows the coaching-session confirmation flow to roll out independently.',
+  },
   {
     name: 'exploreFoodFinds',
     defaultEnabled: false,

@@ -39,7 +39,7 @@ function reset() {
 }
 
 test('setup', async (t) => {
-  t.mock.module('../services/coachingService.js', { exports: { settleCoachingPayment: async () => false } });
+  t.mock.module('../services/coachingService.js', { exports: { settleCoachingPayment: async () => false, markCoachingPaymentFailed: async () => {} } });
   t.mock.module('crypto', {
     exports: { default: { createHmac: () => ({ update() {}, digest: () => 'sig' }), timingSafeEqual: () => true } },
   });
@@ -73,6 +73,7 @@ test('setup', async (t) => {
       updateWalletTopupConfig: noOp, getSubscriptionSummaryByGymService: noOp,
       getCustomerIdsWithPurchasedSubscriptionService: noOp, getSubscriptionsForGymService: noOp,
       assertPartnerOwnsGym: noOp, recordPendingBankSettlementService: noOp,
+      reverseNetworkBankSettlementService: noOp,
       getPendingBankSettlementsService: noOp, settleBankSettlementsService: noOp,
       getMyBankSettlementsService: noOp, computeAttendanceSaasBillService: noOp,
       computeAttendanceSaasBillsService: noOp, applyAttendanceSaasBillService: noOp,

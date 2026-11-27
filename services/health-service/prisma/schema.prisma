@@ -61,6 +61,16 @@ model LedgerConsent {
   @@schema("health")
 }
 
+// Optional permission to use health data for model training.
+model ModelTrainingConsent {
+  userId        Int       @id
+  grantedAt     DateTime
+  revokedAt     DateTime?
+  policyVersion String
+
+  @@schema("health")
+}
+
 enum MuscleGroup {
   chest
   back
@@ -2544,6 +2554,11 @@ model FoodPhotoSharingPreference {
 
 model GuidanceProfile {
   userId Int @id
+  hasCondition Boolean?
+  conditionType String?
+  conditionSource String?
+  conditionDeclaredAt DateTime?
+  region String?
   sourceReportId Int?
   confirmedDetails Json @default("{}")
   confirmedMarkers Json @default("{}")

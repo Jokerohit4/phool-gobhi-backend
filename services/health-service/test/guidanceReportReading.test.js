@@ -40,6 +40,7 @@ const db = {
   guidanceProfile: {
     findUnique: async () => profile,
     upsert: async ({ create, update }) => (profile = profile ? { ...profile, ...update } : create),
+    update: async ({ data }) => profile = { ...profile, ...data },
   },
   guidanceRequest: { findMany: async () => [] },
   reportExtraction: {
@@ -49,6 +50,7 @@ const db = {
   biometricEntry: { upsert: async ({ create }) => { upserts.push([create.metric, create.value]); } },
 };
 db.$transaction = async fn => fn(db);
+db.$executeRaw = async () => {};
 
 before(async t => {
   t.mock.module('../db/prisma.js', { exports: { default: db } });
@@ -96,6 +98,7 @@ test('the same file uploaded again is answered from the existing report with no 
   assert.equal(first.status, 200);
   assert.equal(created.length, 1);
   assert.match(created[0].fileSha256, /^[0-9a-f]{64}$/);
+  assert.ok(created[0].readConsentAt instanceof Date);
   assert.equal(stored.length, 1);
 
   existingBySha = { sha: created[0].fileSha256, row: { id: 1 } };

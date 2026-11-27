@@ -425,11 +425,7 @@ export async function buildFullExportService(userId) {
       prisma.healthProfile.findUnique({ where: { userId } }),
       prisma.medicationReminder.findMany({ where: { userId }, orderBy: { id: 'asc' } }),
       prisma.healthProfileConsent.findUnique({ where: { userId } }),
-      // Foods this person could not find, and what they typed instead. It is
-      // their data and it is erased with the account, so it is exported with it
-      // - the invariant this block is built on, that we never delete on request
-      // something we never showed on request. Position matters: this must stay
-      // in the same slot as `foodRequests` in the destructuring above.
+      // Foods the customer could not find, and what they typed instead.
       prisma.foodRequest.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
 
       // Coach journey (Gobhi the Coach, 2026-10): water logs, supplement
